@@ -2,9 +2,9 @@
 # import discord
 import asyncio
 import requests
-import distutils.util
 import os
 import platform
+from str2bool import str2bool
 
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -41,7 +41,7 @@ class RF():
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'])
         stt_name = await self.edit_name(meta)
-        if meta['anon'] == 0 and bool(distutils.util.strtobool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
+        if meta['anon'] == 0 and bool(str2bool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
             anon = 0
         else:
             anon = 1

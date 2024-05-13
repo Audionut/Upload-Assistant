@@ -4,7 +4,7 @@ import asyncio
 from torf import Torrent
 import requests
 from src.console import console
-import distutils.util
+from str2bool import str2bool
 from pprint import pprint
 import os
 import traceback
@@ -54,7 +54,7 @@ class BHDTV():
         # region_id = await common.unit3d_region_ids(meta.get('region'))
         # distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         if meta['anon'] == 0 and bool(
-                distutils.util.strtobool(self.config['TRACKERS'][self.tracker].get('anon', "False"))) == False:
+                str2bool(self.config['TRACKERS'][self.tracker].get('anon', "False"))) == False:
             anon = 0
         else:
             anon = 1

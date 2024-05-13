@@ -3,7 +3,7 @@
 import asyncio
 import requests
 from difflib import SequenceMatcher
-import distutils.util
+from str2bool import str2bool
 import json
 import tmdbsimple as tmdb
 import os
@@ -36,7 +36,7 @@ class R4E():
         type_id = await self.get_type_id(meta['resolution'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         name = await self.edit_name(meta)
-        if meta['anon'] == 0 and bool(distutils.util.strtobool(str(self.config['TRACKERS']['R4E'].get('anon', "False")))) == False:
+        if meta['anon'] == 0 and bool(str2bool(str(self.config['TRACKERS']['R4E'].get('anon', "False")))) == False:
             anon = 0
         else:
             anon = 1

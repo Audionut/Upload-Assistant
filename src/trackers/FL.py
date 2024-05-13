@@ -3,7 +3,7 @@ import asyncio
 import re
 import os
 from pathlib import Path
-import distutils.util
+from str2bool import str2bool
 import json
 import glob
 import pickle
@@ -98,7 +98,7 @@ class FL():
         fl_name = fl_name.replace('DTS7.1', 'DTS').replace('DTS5.1', 'DTS').replace('DTS2.0', 'DTS').replace('DTS1.0', 'DTS')
         fl_name = fl_name.replace('Dubbed', '').replace('Dual-Audio', '')
         fl_name = ' '.join(fl_name.split())
-        fl_name = re.sub("[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", fl_name)
+        fl_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", fl_name)
         fl_name = fl_name.replace(' ', '.').replace('..', '.')
         return fl_name 
 
@@ -161,7 +161,7 @@ class FL():
             if int(meta.get('imdb_id', '').replace('tt', '')) != 0:
                 data['imdbid'] = meta.get('imdb_id', '').replace('tt', '')
                 data['description'] = meta['imdb_info'].get('genres', '')
-            if self.uploader_name not in ("", None) and bool(distutils.util.strtobool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
+            if self.uploader_name not in ("", None) and bool(str2bool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
                 data['epenis'] = self.uploader_name
             if has_ro_audio:
                 data['materialro'] = 'on'
@@ -319,7 +319,7 @@ class FL():
             desc = bbcode.convert_code_to_quote(desc)
             desc = bbcode.convert_comparison_to_centered(desc, 900)
             desc = desc.replace('[img]', '[img]').replace('[/img]', '[/img]')
-            desc = re.sub("(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+            desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
             if meta['is_disc'] != 'BDMV':
                 url = "https://up.img4k.net/api/description"
                 data = {

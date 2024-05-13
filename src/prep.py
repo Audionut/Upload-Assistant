@@ -17,8 +17,8 @@ try:
     import re
     import math
     import sys
-    import distutils.util
     import asyncio
+    from str2bool import str2bool
     from guessit import guessit
     import ntpath
     from pathlib import Path
@@ -97,7 +97,7 @@ class Prep():
             meta['filelist'] = []
             try:
                 guess_name = bdinfo['title'].replace('-',' ')
-                filename = guessit(re.sub("[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]})['title']
+                filename = guessit(re.sub(r"[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]})['title']
                 untouched_filename = bdinfo['title']
                 try:
                     meta['search_year'] = guessit(bdinfo['title'])['year']
@@ -105,7 +105,7 @@ class Prep():
                     meta['search_year'] = ""
             except Exception:
                 guess_name = bdinfo['label'].replace('-',' ')
-                filename = guessit(re.sub("[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]})['title']
+                filename = guessit(re.sub(r"[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]})['title']
                 untouched_filename = bdinfo['label']
                 try:
                     meta['search_year'] = guessit(bdinfo['label'])['year']
@@ -164,7 +164,7 @@ class Prep():
             videopath, meta['filelist'] = self.get_video(videoloc, meta.get('mode', 'discord')) 
             video, meta['scene'], meta['imdb'] = self.is_scene(videopath, meta.get('imdb', None))
             guess_name = ntpath.basename(video).replace('-',' ')
-            filename = guessit(re.sub("[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes" : ["country", "language"]})["title"])
+            filename = guessit(re.sub(r"[^0-9a-zA-Z\[\]]+", " ", guess_name), {"excludes" : ["country", "language"]}).get("title", guessit(re.sub(r"[^0-9a-zA-Z]+", " ", guess_name), {"excludes" : ["country", "language"]})["title"])
             untouched_filename = os.path.basename(video)
             try:
                 meta['search_year'] = guessit(video)['year']
@@ -359,8 +359,8 @@ class Prep():
         
         meta['edition'], meta['repack'] = self.get_edition(meta['path'], bdinfo, meta['filelist'], meta.get('manual_edition'))
         if "REPACK" in meta.get('edition', ""):
-            meta['repack'] = re.search("REPACK[\d]?", meta['edition'])[0]
-            meta['edition'] = re.sub("REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
+            meta['repack'] = re.search(r"REPACK[\d]?", meta['edition'])[0]
+            meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
         
         
         
@@ -1369,7 +1369,7 @@ class Prep():
             result = {'title' : {}}
             difference = 0
             for anime in media:
-                search_name = re.sub("[^0-9a-zA-Z\[\]]+", "", tmdb_name.lower().replace(' ', ''))
+                search_name = re.sub(r"[^0-9a-zA-Z\[\]]+", "", tmdb_name.lower().replace(' ', ''))
                 for title in anime['title'].values():
                     if title != None:
                         title = re.sub(u'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)
@@ -1906,7 +1906,7 @@ class Prep():
             repack = "RERIP"
         # if "HYBRID" in video.upper() and "HYBRID" not in title.upper():
         #     edition = "Hybrid " + edition
-        edition = re.sub("(REPACK\d?)?(RERIP)?(PROPER)?", "", edition, flags=re.IGNORECASE).strip()
+        edition = re.sub(r"(REPACK\d?)?(RERIP)?(PROPER)?", "", edition, flags=re.IGNORECASE).strip()
         bad = ['internal', 'limited', 'retail']
 
         if edition.lower() in bad:
@@ -2010,7 +2010,7 @@ class Prep():
         cli_ui.info_progress("Hashing...", pieces_done, pieces_total)
 
     def create_random_torrents(self, base_dir, uuid, num, path):
-        manual_name = re.sub("[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(path))
+        manual_name = re.sub(r"[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(path))
         base_torrent = Torrent.read(f"{base_dir}/tmp/{uuid}/BASE.torrent")
         for i in range(1, int(num) + 1):
             new_torrent = base_torrent
@@ -2020,7 +2020,6 @@ class Prep():
     def create_base_from_existing_torrent(self, torrentpath, base_dir, uuid):
         if os.path.exists(torrentpath):
             base_torrent = Torrent.read(torrentpath)
-            base_torrent.creation_date = datetime.now()
             base_torrent.trackers = ['https://fake.tracker']
             base_torrent.comment = "Created by L4G's Upload Assistant"
             base_torrent.created_by = "Created by L4G's Upload Assistant"
@@ -2491,8 +2490,8 @@ class Prep():
                                     for lang, names in values.items():
                                         if lang == "jp":
                                             for name in names:
-                                                romaji_check = re.sub("[^0-9a-zA-Z\[\]]+", "", romaji.lower().replace(' ', ''))
-                                                name_check = re.sub("[^0-9a-zA-Z\[\]]+", "", name.lower().replace(' ', ''))
+                                                romaji_check = re.sub(r"[^0-9a-zA-Z\[\]]+", "", romaji.lower().replace(' ', ''))
+                                                name_check = re.sub(r"[^0-9a-zA-Z\[\]]+", "", name.lower().replace(' ', ''))
                                                 diff = SequenceMatcher(None, romaji_check, name_check).ratio()
                                                 if romaji_check in name_check:
                                                     if diff >= difference:
@@ -2505,8 +2504,8 @@ class Prep():
                                                         difference = diff
                                         if lang == "us":
                                             for name in names:
-                                                eng_check = re.sub("[^0-9a-zA-Z\[\]]+", "", eng_title.lower().replace(' ', ''))
-                                                name_check = re.sub("[^0-9a-zA-Z\[\]]+", "", name.lower().replace(' ', ''))
+                                                eng_check = re.sub(r"[^0-9a-zA-Z\[\]]+", "", eng_title.lower().replace(' ', ''))
+                                                name_check = re.sub(r"[^0-9a-zA-Z\[\]]+", "", name.lower().replace(' ', ''))
                                                 diff = SequenceMatcher(None, eng_check, name_check).ratio()
                                                 if eng_check in name_check:
                                                     if diff >= difference:
@@ -2623,7 +2622,7 @@ class Prep():
             }
         
         
-        video_name = re.sub("[.()]", " ", video.replace(tag, '').replace(guess_title, ''))
+        video_name = re.sub(r"[.()]", " ", video.replace(tag, '').replace(guess_title, ''))
         if "DTS-HD MA" in audio:
             video_name = video_name.replace("DTS-HD.MA.", "").replace("DTS-HD MA ", "")
         for key, value in services.items():
@@ -2772,7 +2771,7 @@ class Prep():
                         else:
                             pass
                     elif key == 'personalrelease':
-                        meta[key] = bool(distutils.util.strtobool(str(value.get(key, 'False'))))
+                        meta[key] = bool(str2bool(str(value.get(key, 'False'))))
                     elif key == 'template':
                         meta['desc_template'] = value.get(key)
                     else:
@@ -2827,7 +2826,7 @@ class Prep():
                 generic.write(f"\nThumbnail Image:\n")
                 for each in meta['image_list']:
                     generic.write(f"{each['img_url']}\n")
-        title = re.sub("[^0-9a-zA-Z\[\]]+", "", meta['title'])
+        title = re.sub(r"[^0-9a-zA-Z\[\]]+", "", meta['title'])
         archive = f"{meta['base_dir']}/tmp/{meta['uuid']}/{title}"
         torrent_files = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}","*.torrent")
         if isinstance(torrent_files, list) and len(torrent_files) > 1:
@@ -2837,7 +2836,7 @@ class Prep():
         try:
             if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"):
                 base_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
-                manual_name = re.sub("[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(meta['path']))
+                manual_name = re.sub(r"[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(meta['path']))
                 Torrent.copy(base_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{manual_name}.torrent", overwrite=True)
                 # shutil.copy(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"), os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['name'].replace(' ', '.')}.torrent").replace(' ', '.'))
             filebrowser = self.config['TRACKERS'].get('MANUAL', {}).get('filebrowser', None)

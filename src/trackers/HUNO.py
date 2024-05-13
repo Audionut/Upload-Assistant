@@ -3,7 +3,7 @@
 import asyncio
 import requests
 from difflib import SequenceMatcher
-import distutils.util
+from str2bool import str2bool
 import os
 import re
 import platform
@@ -37,7 +37,7 @@ class HUNO():
         cat_id = await self.get_cat_id(meta['category'])
         type_id = await self.get_type_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])
-        if meta['anon'] == 0 and bool(distutils.util.strtobool(self.config['TRACKERS']['HUNO'].get('anon', "False"))) == False:
+        if meta['anon'] == 0 and bool(str2bool(self.config['TRACKERS']['HUNO'].get('anon', "False"))) == False:
             anon = 0
         else:
             anon = 1

@@ -192,7 +192,7 @@ class HDB():
         hdb_name = hdb_name.replace('Dubbed', '').replace('Dual-Audio', '')
         hdb_name = hdb_name.replace('REMUX', 'Remux')
         hdb_name = ' '.join(hdb_name.split())
-        hdb_name = re.sub("[^0-9a-zA-ZÀ-ÿ. :&+'\-\[\]]+", "", hdb_name)
+        hdb_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. :&+'\-\[\]]+", "", hdb_name)
         hdb_name = hdb_name.replace(' .', '.').replace('..', '.')
 
         return hdb_name 
@@ -431,7 +431,7 @@ class HDB():
             desc = bbcode.convert_code_to_quote(desc)
             desc = bbcode.convert_spoiler_to_hide(desc)
             desc = bbcode.convert_comparison_to_centered(desc, 1000)
-            desc = re.sub("(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+            desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
             descfile.write(desc)
             if self.rehost_images == True:
                 console.print("[green]Rehosting Images...")

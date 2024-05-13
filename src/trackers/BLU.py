@@ -2,9 +2,9 @@
 # import discord
 import asyncio
 import requests
-import distutils.util
 import os
 import platform
+from str2bool import str2bool
 
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -49,7 +49,7 @@ class BLU():
         resolution_id = await self.get_res_id(meta['resolution'])
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if meta['anon'] == 0 and bool(distutils.util.strtobool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
+        if meta['anon'] == 0 and bool(str2bool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
             anon = 0
         else:
             anon = 1

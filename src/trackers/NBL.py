@@ -2,9 +2,9 @@
 # import discord
 import asyncio
 import requests
-import distutils.util
 import os
 from guessit import guessit 
+from str2bool import str2bool
 
 from src.trackers.COMMON import COMMON
 from src.console import console

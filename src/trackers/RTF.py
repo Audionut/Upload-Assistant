@@ -54,7 +54,7 @@ class RTF():
             # 'description' : meta['overview'] + "\n\n" + desc + "\n\n" + "Uploaded by L4G Upload Assistant",
             'description': "this is a description",
             # editing mediainfo so that instead of 1 080p its 1,080p as site mediainfo parser wont work other wise.
-            'mediaInfo': re.sub("(\d+)\s+(\d+)", r"\1,\2", mi_dump) if bd_dump == None else f"{bd_dump}",
+            'mediaInfo': re.sub(r"(\d+)\s+(\d+)", r"\1,\2", mi_dump) if bd_dump == None else f"{bd_dump}",
             "nfo": "",
             "url": "https://www.imdb.com/title/" + (meta['imdb_id'] if str(meta['imdb_id']).startswith("tt") else "tt" + meta['imdb_id']) + "/",
             # auto pulled from IMDB

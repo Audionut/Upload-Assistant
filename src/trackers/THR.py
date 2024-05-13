@@ -49,7 +49,7 @@ class THR():
                     return
                 else:
                     thr_name = thr_name_manually
-        torrent_name = re.sub("[^0-9a-zA-Z. '\-\[\]]+", " ", thr_name)
+        torrent_name = re.sub(r"[^0-9a-zA-Z. '\-\[\]]+", " ", thr_name)
 
 
         if meta.get('is_disc', '') == 'BDMV':

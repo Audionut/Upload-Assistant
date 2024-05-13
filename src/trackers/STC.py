@@ -2,7 +2,7 @@
 import asyncio
 import requests
 from difflib import SequenceMatcher
-import distutils.util
+from str2bool import str2bool
 import json
 import os
 import platform
@@ -36,7 +36,7 @@ class STC():
         type_id = await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('sd', 0), meta.get('category', ""))
         resolution_id = await self.get_res_id(meta['resolution'])
         stc_name = await self.edit_name(meta)
-        if meta['anon'] == 0 and bool(distutils.util.strtobool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
+        if meta['anon'] == 0 and bool(str2bool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) == False:
             anon = 0
         else:
             anon = 1
