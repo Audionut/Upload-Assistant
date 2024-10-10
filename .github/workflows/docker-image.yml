@@ -5,7 +5,7 @@ on:
     branches:
       - master
       - develop
-      - aither-naming
+      - mtv-vaildate
 
 env:
   REGISTRY: ghcr.io

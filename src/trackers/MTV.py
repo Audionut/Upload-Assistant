@@ -114,6 +114,16 @@ class MTV():
 
             torrent_filename = "MTV"
 
+        # Validate session and re-login if necessary before proceeding with upload
+        vcookie = await self.validate_cookies(meta, cookiefile)
+        if not vcookie:
+            console.print("[yellow]Session expired or invalid. Trying to log in.")
+            await self.login(cookiefile)
+            vcookie = await self.validate_cookies(meta, cookiefile)
+            if not vcookie:
+                console.print("[red]Re-login failed. Cannot proceed with the upload.")
+                return
+
         await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
 
         cat_id = await self.get_cat_id(meta)
