@@ -23,6 +23,7 @@ class COMMON():
                     new_torrent.metainfo.pop(each, None)
             new_torrent.metainfo['announce'] = self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
             new_torrent.metainfo['info']['source'] = source_flag
+            new_torrent.metainfo['comment'] = 'Uploaded to ' + tracker
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent", overwrite=True)
 
     # used to add tracker url, comment and source flag to torrent file
@@ -69,11 +70,23 @@ class COMMON():
             descfile.write(desc)
             images = meta['image_list']
             if len(images) > 0:
+                try:
+                    thumbsize = self.config['DEFAULT']['thumbnail_size']
+                except Exception:
+                    thumbsize = "350"
+
+                try:
+                    screenheader = self.config['DEFAULT']['screenshot_header']
+                except Exception:
+                    screenheader = None
+                if screenheader is not None:
+                    descfile.write(screenheader + '\n')
+
                 descfile.write("[center]")
                 for each in range(len(images[:int(meta['screens'])])):
                     web_url = images[each]['web_url']
                     raw_url = images[each]['raw_url']
-                    descfile.write(f"[url={web_url}][img=350]{raw_url}[/img][/url]")
+                    descfile.write(f"[url={web_url}][img={thumbsize}]{raw_url}[/img][/url] ")
                 descfile.write("[/center]")
 
             if signature is not None:
