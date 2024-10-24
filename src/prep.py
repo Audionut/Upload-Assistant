@@ -1441,19 +1441,22 @@ class Prep():
                     # No manual frames provided, generate random times
                     # console.print("[yellow]No manual frames provided. Generating random frames.")
                     ss_times = self.valid_ss_time(ss_times, num_screens, length)
+                    console.print(f"ss_times {ss_times}")
 
                 for i in range(num_screens):
                     image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{filename}-{i}.png")
+                    console.print(f"image_path {image_path}")
                     if not os.path.exists(image_path) or retake is not False:
+                        console.print("Hit retry=false")
                         retake = False
                         try:
-                            # console.print(f"Taking screenshot at time (s): {ss_times[i]}")
+                            console.print(f"Taking screenshot at time (s): {ss_times[i]}")
                             ff = ffmpeg.input(path, ss=ss_times[i])
 
                             if w_sar != 1 or h_sar != 1:
                                 ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
 
-                            # console.print(f"Saving screenshot to {image_path}")
+                            console.print(f"Saving screenshot to {image_path}")
                             (
                                 ff
                                 .output(image_path, vframes=1, pix_fmt="rgb24")
