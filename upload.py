@@ -43,6 +43,7 @@ from src.trackers.TIK import TIK
 from src.trackers.TVC import TVC
 from src.trackers.PSS import PSS
 from src.trackers.ULCX import ULCX
+from src.trackers.SPD import SPD
 import json
 from pathlib import Path
 import asyncio
@@ -238,13 +239,13 @@ async def do_the_thing(base_dir):
         common = COMMON(config=config)
         api_trackers = ['BLU', 'AITHER', 'STC', 'R4E', 'STT', 'RF', 'ACM', 'LCD', 'HUNO', 'LT', 'JPTV', 'TDC', 'OE',
                         'OTW', 'FNP', 'CBR', 'UTP', 'AL', 'SHRI', 'LST', 'TIK', 'PSS', 'ULCX', 'BHD']
-        other_api_trackers = ['SN', 'NBL', 'ANT', 'BHDTV', 'RTF', 'TL', 'TVC']
+        other_api_trackers = ['SN', 'NBL', 'ANT', 'BHDTV', 'RTF', 'TL', 'TVC', 'SPD']
         http_trackers = ['HDB', 'TTG', 'FL', 'PTER', 'HDT', 'MTV']
         tracker_class_map = {
             'BLU': BLU, 'BHD': BHD, 'AITHER': AITHER, 'STC': STC, 'R4E': R4E, 'THR': THR, 'STT': STT, 'HP': HP, 'PTP': PTP, 'RF': RF, 'SN': SN, 'TIK': TIK, 'TVC': TVC,
             'ACM': ACM, 'HDB': HDB, 'LCD': LCD, 'TTG': TTG, 'LST': LST, 'HUNO': HUNO, 'FL': FL, 'LT': LT, 'NBL': NBL, 'ANT': ANT, 'PTER': PTER, 'JPTV': JPTV,
             'TL': TL, 'TDC': TDC, 'HDT': HDT, 'MTV': MTV, 'OE': OE, 'BHDTV': BHDTV, 'RTF': RTF, 'OTW': OTW, 'FNP': FNP, 'CBR': CBR, 'UTP': UTP, 'AL': AL,
-            'SHRI': SHRI, 'PSS': PSS, 'ULCX': ULCX}
+            'SHRI': SHRI, 'PSS': PSS, 'ULCX': ULCX, 'SPD': SPD}
 
         tracker_capabilities = {
             'LST': {'mod_q': True, 'draft': True},
