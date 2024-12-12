@@ -693,7 +693,14 @@ class Prep():
                 meta['tag'] = f"-{meta['tag']}"
         meta = await self.get_season_episode(video, meta)
         meta = await self.tag_override(meta)
-
+        if meta.get('tag') == "-SubsPlease": # SubsPlease-specific
+            tracks = meta.get('mediainfo').get('media', {}).get('track', []) # Get all tracks
+            bitrate = tracks[1].get('BitRate', '') # Get video bitrate
+            bitrate_oldMediaInfo = tracks[0].get('OverallBitRate', '') # For old MediaInfo (< 24.x where video bitrate is empty, use 'OverallBitRate' instead)
+            if bitrate == "8000000" or bitrate_oldMediaInfo >= "8000000": 
+                meta['service'] = "CR"
+            else:
+                meta['service'] = "HIDI"
         meta['video'] = video
         meta['audio'], meta['channels'], meta['has_commentary'] = self.get_audio_v2(mi, meta, bdinfo)
         if meta['tag'][1:].startswith(meta['channels']):
