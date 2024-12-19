@@ -18,6 +18,7 @@ from src.exceptions import *  # noqa F403
 from src.console import console
 from torf import Torrent
 from datetime import datetime
+from tempfile import NamedTemporaryFile
 
 
 class PTP():
@@ -347,25 +348,51 @@ class PTP():
             console.print("[red]An error has occured trying to find existing releases")
         return existing
 
-    async def ptpimg_url_rehost(self, image_url):
-        payload = {
-            'format': 'json',
-            'api_key': self.config["DEFAULT"]["ptpimg_api"],
-            'link-upload': image_url
+    async def pixhost_url_rehost(self, image_url):
+        url = "https://api.pixhost.to/images"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+            "Accept": "application/json",
         }
-        headers = {'referer': 'https://ptpimg.me/index.php'}
-        url = "https://ptpimg.me/upload.php"
-
-        response = requests.post(url, headers=headers, data=payload)
+        data = {
+            'content_type': '0',
+            'max_th_size': 350
+        }
         try:
-            response = response.json()
-            ptpimg_code = response[0]['code']
-            ptpimg_ext = response[0]['ext']
-            img_url = f"https://ptpimg.me/{ptpimg_code}.{ptpimg_ext}"
-        except Exception:
-            console.print("[red]PTPIMG image rehost failed")
+            with NamedTemporaryFile(delete=False) as temp_file:
+                response = requests.get(image_url, stream=True)
+                if response.status_code != 200:
+                    console.print(f"[red]Failed to download image from URL: {image_url}")
+                    return image_url
+
+                for chunk in response.iter_content(1024):
+                    temp_file.write(chunk)
+
+                temp_file_path = temp_file.name
+
+            with open(temp_file_path, 'rb') as image_file:
+                files = {
+                    'img': ('file-upload[0]', image_file)
+                }
+                response = requests.post(url, headers=headers, data=data, files=files, timeout=30)
+
+                if response.status_code == 200:
+                    response_data = response.json()
+                    raw_url = response_data['th_url'].replace('https://t', 'https://img').replace('/thumbs/', '/images/')
+                    img_url = raw_url
+                    console.print(f"[green]Image successfully uploaded to Pixhost: {img_url}")
+                else:
+                    console.print(f"[red]Pixhost API returned an error: {response.status_code}")
+                    img_url = image_url
+
+        except Exception as e:
+            console.print(f"[red]Pixhost image rehost failed: {str(e)}")
             img_url = image_url
-            # img_url = ptpimg_upload(image_url, ptpimg_api)
+
+        finally:
+            if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+
         return img_url
 
     def get_type(self, imdb_info, meta):
@@ -935,11 +962,11 @@ class PTP():
             if cover is None:
                 cover = meta.get('poster')
             if cover is not None and "ptpimg" not in cover:
-                cover = await self.ptpimg_url_rehost(cover)
+                cover = await self.pixhost_url_rehost(cover)
             while cover is None:
                 cover = cli_ui.ask_string("No Poster was found. Please input a link to a poster: \n", default="")
                 if "ptpimg" not in str(cover) and str(cover).endswith(('.jpg', '.png')):
-                    cover = await self.ptpimg_url_rehost(cover)
+                    cover = await self.pixhost_url_rehost(cover)
             new_data = {
                 "title": tinfo.get("title", meta["imdb_info"].get("title", meta["title"])),
                 "year": tinfo.get("year", meta["imdb_info"].get("year", meta["year"])),

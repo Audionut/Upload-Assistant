@@ -8,19 +8,18 @@ config = {
 
         "tmdb_api": "tmdb_api key",
         "imgbb_api": "imgbb api key",
-        "ptpimg_api": "ptpimg api key",
         "lensdump_api": "lensdump api key",
         "ptscreens_api": "ptscreens api key",
         "oeimg_api": "oeimg api key",
 
         # Order of image hosts, and backup image hosts
         "img_host_1": "imgbb",
-        "img_host_2": "ptpimg",
-        "img_host_3": "imgbox",
-        "img_host_4": "pixhost",
+        "img_host_2": "imgbox",
+        "img_host_3": "pixhost",
+        "img_host_4": "oeimg",
         "img_host_5": "lensdump",
         "img_host_6": "ptscreens",
-        "img_host_7": "oeimg",
+        
 
         # Number of screenshots to capture
         "screens": "6",
