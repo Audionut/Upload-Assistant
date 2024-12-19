@@ -245,12 +245,15 @@ class AITHER():
             response = requests.get(url=self.search_url, params=params)
             response = response.json()
             for each in response['data']:
-                result = [each][0]['attributes']['name']
-                # difference = SequenceMatcher(None, meta['clean_name'], result).ratio()
-                # if difference >= 0.05:
-                dupes.append(result)
-        except Exception:
+                # Extract the relevant data
+                result = {
+                    'name': each['attributes']['name'],
+                    'size': each['attributes']['size']
+                }
+                dupes.append(result)  # Append the dictionary to `dupes`
+        except Exception as e:
             console.print('[bold red]Unable to search for existing torrents on site. Either the site is down or your API key is incorrect')
+            console.print(f'[bold red]Error details: {e}')
             await asyncio.sleep(5)
 
         return dupes

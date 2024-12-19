@@ -432,20 +432,29 @@ class BHD():
                 data['pack'] = 1
             data['search'] = f"{meta.get('season', '')}{meta.get('episode', '')}"
         url = f"https://beyond-hd.me/api/torrents/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
+
         try:
             response = requests.post(url=url, data=data)
             response = response.json()
             if response.get('status_code') == 1:
                 for each in response['results']:
-                    result = each['name']
-                    difference = SequenceMatcher(None, meta['clean_name'].replace('DD+', 'DDP'), result).ratio()
+                    result = {
+                        'name': each['name'],
+                        'size': each['size']
+                    }
+                    difference = SequenceMatcher(
+                        None,
+                        meta['clean_name'].replace('DD+', 'DDP'),
+                        result['name']
+                    ).ratio()
                     if difference >= 0.05:
                         dupes.append(result)
             else:
                 console.print(f"[yellow]{response.get('status_message')}")
                 await asyncio.sleep(5)
-        except Exception:
-            console.print('[bold red]Unable to search for existing torrents on site. Most likely the site is down.')
+        except Exception as e:
+            console.print('[bold red]Unable to search for existing torrents on site. Either the site is down or your API key is incorrect')
+            console.print(f'[bold red]Error details: {e}')
             await asyncio.sleep(5)
 
         return dupes

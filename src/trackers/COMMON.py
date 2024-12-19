@@ -627,6 +627,11 @@ class COMMON():
             console.log("[cyan]Pre-filtered dupes")
             console.log(dupes)
 
+        processed_dupes = [
+            {'name': d, 'size': None} if isinstance(d, str) else {'name': d['name'], 'size': d['size']}
+            for d in dupes
+        ]
+
         new_dupes = []
 
         has_repack_in_uuid = "repack" in meta.get('uuid', '').lower()
@@ -636,6 +641,9 @@ class COMMON():
             normalized_encoder = self.normalize_filename(has_encoder_in_name)
         else:
             normalized_encoder = False
+        if not meta['is_disc'] == "BDMV":
+            tracks = meta.get('mediainfo').get('media', {}).get('track', [])
+            fileSize = tracks[0].get('FileSize', '')
         has_is_disc = bool(meta.get('is_disc', False))
         target_hdr = self.refine_hdr_terms(meta.get("hdr"))
         target_season = meta.get("season")
@@ -681,11 +689,13 @@ class COMMON():
             if meta['debug']:
                 console.log(f"[yellow]Excluding result due to {reason}: {item}")
 
-        def process_exclusion(each):
+        def process_exclusion(entry):
             """
             Determine if an entry should be excluded.
             Returns True if the entry should be excluded, otherwise allowed as dupe.
             """
+            each = entry['name']
+            sized = entry['size']
             normalized = self.normalize_filename(each)
             file_hdr = self.refine_hdr_terms(normalized)
 
@@ -695,6 +705,7 @@ class COMMON():
                 console.log(f"[debug] File HDR terms: {file_hdr}")
                 console.log(f"[debug] Target HDR terms: {target_hdr}")
                 console.log(f"[debug] TAG: {tag}")
+                console.log(f"[debug] Enoder: {video_encode}")
                 console.log("[debug] Evaluating repack condition:")
                 console.log(f"  has_repack_in_uuid: {has_repack_in_uuid}")
                 console.log(f"  'repack' in each.lower(): {'repack' in each.lower()}")
@@ -710,6 +721,25 @@ class COMMON():
 
             if not is_dvd:
                 if target_resolution and target_resolution not in each:
+                    log_exclusion(f"resolution '{target_resolution}' mismatch", each)
+                    return True
+
+                if len(dupes) == 1 and meta.get('is_disc') != "BDMV":
+                    if fileSize and "1080" in target_resolution:
+                        target_size = fileSize
+                        size = sized
+
+                        if size is not None and target_size is not None:
+                            target_size = int(target_size)
+                            size_difference = abs(size - target_size) / target_size
+                            if meta['debug']:
+                                console.print(f"Actual size: {size}, Target size: {target_size}, Size difference: {size_difference:.4f}")
+                            if size_difference > 0.02:
+                                log_exclusion(f"size difference too large ({size_difference * 100:.2f}%)", each)
+                                return True
+
+            if is_dvd:
+                if any(str(res) in each for res in [1080, 720, 2160]):
                     log_exclusion(f"resolution '{target_resolution}' mismatch", each)
                     return True
 
@@ -735,14 +765,15 @@ class COMMON():
                 log_exclusion("season/episode mismatch", each)
                 return True
 
-            if normalized_encoder and normalized_encoder in normalized:
-                log_exclusion(f"Encoder '{has_encoder_in_name}' mismatch", each)
-                return False
+            if not is_dvd:
+                if normalized_encoder and normalized_encoder in normalized:
+                    log_exclusion(f"Encoder '{has_encoder_in_name}' mismatch", each)
+                    return False
 
             console.log(f"[debug] Passed all checks: {each}")
             return False
 
-        for each in dupes:
+        for each in processed_dupes:
             console.log(f"[debug] Evaluating dupe: {each}")
             if not process_exclusion(each):
                 new_dupes.append(each)
@@ -753,12 +784,12 @@ class COMMON():
         return new_dupes
 
     def normalize_filename(self, filename):
-        """
-        Normalize a filename for easier matching.
-        Retain season/episode information in the format SxxExx.
-        """
-        normalized = filename.lower().replace("-", " -").replace(" ", " ").replace(".", " ")
+        if isinstance(filename, dict):
+            filename = filename.get('name', '')  # Use an empty string as a fallback
 
+        if not isinstance(filename, str):
+            raise ValueError(f"Expected a string or a dictionary with a 'name' key, but got: {type(filename)}")
+        normalized = filename.lower().replace("-", " -").replace(" ", " ").replace(".", " ")
         return normalized
 
     def is_season_episode_match(self, filename, target_season, target_episode):
