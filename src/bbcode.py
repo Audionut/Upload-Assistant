@@ -185,7 +185,7 @@ class BBCODE:
             desc = desc.replace(comp, f"COMPARISON_PLACEHOLDER-{i} ")
             comp_placeholders.append(comp)
 
-        # Remove Images in IMG tags:
+        # Remove Images in IMG tags
         desc = re.sub(r"\[img\][\s\S]*?\[\/img\]", "", desc, flags=re.IGNORECASE)
         desc = re.sub(r"\[img=[\s\S]*?\]", "", desc, flags=re.IGNORECASE)
 
@@ -277,6 +277,7 @@ class BBCODE:
             "https://i.ibb.co/2NVWb0c/uploadrr.webp",
             "https://blutopia/favicon.ico",
             "https://ptpimg.me/606tk4.png",
+            "https://github.com/edge20200/Only-Uploader"
             # Add any other known bot image URLs here
         ]
         imagelist = [

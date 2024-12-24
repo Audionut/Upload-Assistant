@@ -307,16 +307,19 @@ class HUNO():
         if meta.get('edition', "") != "":
             params['name'] + meta['edition']
         try:
-            response = requests.get(url=self.search_url, params=params)
+            response = requests.get(url=self.search_url, params=params, timeout=8)
             response = response.json()
             for each in response['data']:
                 result = [each][0]['attributes']['name']
-                # difference = SequenceMatcher(None, meta['clean_name'], result).ratio()
-                # if difference >= 0.05:
                 dupes.append(result)
-        except Exception:
-            console.print('[bold red]Unable to search for existing torrents on site. Either the site is down or your API key is incorrect')
-            await asyncio.sleep(5)
+        except requests.exceptions.Timeout:
+            console.print('[bold red]Request timed out while searching for existing torrents on site.')
+        except Exception as e:
+            meta['skipping'] = "HUNO"
+            console.print('[bold red]Unable to search for existing torrents on site. Either the site is down or your API key is incorrect.')
+            console.print(f'[bold red]{e}')
+        finally:
+            await asyncio.sleep(1)
 
         return dupes
 

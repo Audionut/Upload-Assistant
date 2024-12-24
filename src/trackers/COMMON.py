@@ -7,11 +7,11 @@ import click
 import sys
 import glob
 from pymediainfo import MediaInfo
-import multiprocessing
-import asyncio
 
 from src.bbcode import BBCODE
 from src.console import console
+from src.uploadscreens import upload_screens
+from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 
 
 class COMMON():
@@ -40,10 +40,8 @@ class COMMON():
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent", overwrite=True)
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header=""):
-        from src.prep import Prep
-        prep = Prep(screens=meta['screens'], img_host=meta['imghost'], config=self.config)
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8').read()
-        multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
+        multi_screens = max(1, int(self.config['DEFAULT'].get('multiScreens', 2)) - 1)
         char_limit = int(self.config['DEFAULT'].get('charLimit', 14000))
         file_limit = int(self.config['DEFAULT'].get('fileLimit', 5))
         thumb_size = int(self.config['DEFAULT'].get('pack_thumb_size', '300'))
@@ -156,20 +154,20 @@ class COMMON():
                                 # Run prep.screenshots if no screenshots are present
                                 if each['type'] == "BDMV":
                                     use_vs = meta.get('vapoursynth', False)
-                                    s = multiprocessing.Process(target=prep.disc_screenshots, args=(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True))
-                                    s.start()
-                                    while s.is_alive():
-                                        await asyncio.sleep(1)
+                                    try:
+                                        disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                    except Exception as e:
+                                        print(f"Error during BDMV screenshot capture: {e}")
                                     new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                 elif each['type'] == "DVD":
-                                    s = multiprocessing.Process(target=prep.dvd_screenshots, args=(meta, i, multi_screens, True))
-                                    s.start()
-                                    while s.is_alive() is True:
-                                        await asyncio.sleep(1)
+                                    try:
+                                        dvd_screenshots(meta, i, multi_screens, True)
+                                    except Exception as e:
+                                        print(f"Error during DVD screenshot capture: {e}")
                                     new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
 
-                            if new_screens:
-                                uploaded_images, _ = prep.upload_screens(meta, multi_screens, 1, 0, 2, new_screens, {new_images_key: meta[new_images_key]})
+                            if new_screens and not meta.get('skip_imghost_upload', False):
+                                uploaded_images, _ = upload_screens(meta, multi_screens, 1, 0, 2, new_screens, {new_images_key: meta[new_images_key]})
 
                                 # Append each uploaded image's data to `meta[new_images_key]`
                                 for img in uploaded_images:
@@ -237,16 +235,16 @@ class COMMON():
                             if not new_screens:
                                 if meta['debug']:
                                     console.print(f"[yellow]No existing screenshots for {new_images_key}; generating new ones.")
-                                s = multiprocessing.Process(target=prep.screenshots, args=(file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, None))
-                                s.start()
-                                while s.is_alive():
-                                    await asyncio.sleep(1)
+                            try:
+                                screenshots(file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, None)
+                            except Exception as e:
+                                print(f"Error during generic screenshot capture: {e}")
 
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
 
                             # Upload generated screenshots
-                            if new_screens:
-                                uploaded_images, _ = prep.upload_screens(meta, multi_screens, 1, 0, 2, new_screens, {new_images_key: meta[new_images_key]})
+                            if new_screens and not meta.get('skip_imghost_upload', False):
+                                uploaded_images, _ = upload_screens(meta, multi_screens, 1, 0, 2, new_screens, {new_images_key: meta[new_images_key]})
                                 meta[new_images_key] = []
                                 for img in uploaded_images:
                                     meta[new_images_key].append({
