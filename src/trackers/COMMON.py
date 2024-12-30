@@ -7,7 +7,7 @@ import click
 import sys
 import glob
 from pymediainfo import MediaInfo
-
+import aiofiles
 from src.bbcode import BBCODE
 from src.console import console
 from src.uploadscreens import upload_screens
@@ -20,27 +20,55 @@ class COMMON():
         self.parser = self.MediaInfoParser()
         pass
 
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE"):
-        if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"):
-            new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent")
-            for each in list(new_torrent.metainfo):
-                if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
-                    new_torrent.metainfo.pop(each, None)
-            new_torrent.metainfo['announce'] = self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
-            new_torrent.metainfo['info']['source'] = source_flag
-            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent", overwrite=True)
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
+        output_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent"
+        if not await self.file_exists_async(torrent_path):
+            print(f"Torrent file not found: {torrent_path}")
+            return
+
+        new_torrent = Torrent.read(torrent_path)
+        for each in list(new_torrent.metainfo):
+            if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
+                new_torrent.metainfo.pop(each, None)
+
+        new_torrent.metainfo['announce'] = self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
+        new_torrent.metainfo['info']['source'] = source_flag
+        async with aiofiles.open(output_path, mode='wb') as f:
+            await f.write(new_torrent.dump())
 
     # used to add tracker url, comment and source flag to torrent file
     async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment):
-        if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"):
-            new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
-            new_torrent.metainfo['announce'] = new_tracker
-            new_torrent.metainfo['comment'] = comment
-            new_torrent.metainfo['info']['source'] = source_flag
-            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent", overwrite=True)
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+        output_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent"
+        if not await self.file_exists_async(torrent_path):
+            print(f"Torrent file not found: {torrent_path}")
+            return
+
+        new_torrent = Torrent.read(torrent_path)
+        new_torrent.metainfo['announce'] = new_tracker
+        new_torrent.metainfo['comment'] = comment
+        new_torrent.metainfo['info']['source'] = source_flag
+
+        async with aiofiles.open(output_path, mode='wb') as f:
+            await f.write(new_torrent.dump())
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header=""):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8').read()
+        base = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        try:
+            async with aiofiles.open(base, mode='rb') as f:
+                base = await f.read()
+                base = base.decode('utf-8')
+        except FileNotFoundError:
+            print(f"Torrent file not found: {base}")
+            return
         multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
         char_limit = int(self.config['DEFAULT'].get('charLimit', 14000))
         file_limit = int(self.config['DEFAULT'].get('fileLimit', 5))
@@ -707,7 +735,7 @@ class COMMON():
                 await log_exclusion("file extension mismatch (is_disc=True)", each)
                 return True
 
-            if not is_dvd or not target_source.includes("DVD"):
+            if not is_dvd or "DVD" not in target_source:
                 skip_resolution_check = True
             else:
                 skip_resolution_check = False

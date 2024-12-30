@@ -2,9 +2,9 @@
 # import discord
 import os
 import asyncio
-import requests
 import platform
 import httpx
+import aiofiles
 from str2bool import str2bool
 from pymediainfo import MediaInfo
 from pathlib import Path
@@ -40,6 +40,13 @@ class ANT():
         self.signature = None
         pass
 
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
+
     async def get_flags(self, meta):
         flags = []
         for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']:
@@ -66,7 +73,7 @@ class ANT():
         common = COMMON(config=self.config)
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-        torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
+        torrent_file_size_kib = await asyncio.to_thread(os.path.getsize, torrent_path) / 1024
 
         # Trigger regeneration automatically if size constraints aren't met
         if torrent_file_size_kib > 250:  # 250 KiB
@@ -83,7 +90,8 @@ class ANT():
             anon = 1
 
         if meta['bdinfo'] is not None:
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as file:
+                bd_dump = await file.read()
             bd_dump = f'[spoiler=BDInfo][pre]{bd_dump}[/pre][/spoiler]'
             path = os.path.join(meta['bdinfo']['path'], 'STREAM')
             longest_file = max(
@@ -92,12 +100,22 @@ class ANT():
             )
             file_name = longest_file['file'].lower()
             m2ts = os.path.join(path, file_name)
-            media_info_output = str(MediaInfo.parse(m2ts, output="text", full=False))
+            media_info_output = await asyncio.to_thread(
+                lambda: str(MediaInfo.parse(m2ts, output="text", full=False))
+            )
             mi_dump = media_info_output.replace('\r\n', '\n')
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent", 'rb')
-        files = {'file_input': open_torrent}
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        file_exists = await self.file_exists_async(torrent_file_path)
+        if not file_exists:
+            meta['not_uploading'] = True
+            return
+
+        async with aiofiles.open(torrent_file_path, 'rb') as open_torrent:
+            file_content = await open_torrent.read()
+        files = {'file_input': ('torrent_file.torrent', file_content)}
         data = {
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
@@ -122,20 +140,26 @@ class ANT():
 
         try:
             if not meta['debug']:
-                response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
-                if response.status_code in [200, 201]:
-                    response_data = response.json()
-                else:
-                    response_data = {
-                        "error": f"Unexpected status code: {response.status_code}",
-                        "response_content": response.text  # or use response.json() if JSON is expected
-                    }
-                console.print(response_data)
+                async with httpx.AsyncClient() as client:
+                    try:
+                        response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
+                        if response.status_code in [200, 201]:
+                            response_data = response.json()
+                        else:
+                            meta['not_uploading'] = True
+                            response_data = {
+                                "error": f"Unexpected status code: {response.status_code}",
+                                "response_content": response.text  # or use response.json() if JSON is expected
+                            }
+                        console.print(response_data)
+                    except httpx.RequestError as exc:
+                        meta['not_uploading'] = True
+                        console.print(f"[red]An error occurred while making the request: {exc}")
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
         finally:
-            open_torrent.close()
+            await open_torrent.close()
 
     async def edit_desc(self, meta):
         return

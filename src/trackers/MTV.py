@@ -1,4 +1,3 @@
-import requests
 import asyncio
 from src.console import console
 import traceback
@@ -9,11 +8,13 @@ import os
 import cli_ui
 import pickle
 import re
+import pyotp
 from pathlib import Path
 from str2bool import str2bool
 from src.trackers.COMMON import COMMON
 from datetime import datetime
 import glob
+import aiofiles
 from urllib.parse import urlparse
 from src.torrentcreate import CustomTorrent, torf_cb
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
@@ -43,6 +44,13 @@ class MTV():
         ]
         pass
 
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
+
     def match_host(self, hostname, approved_hosts):
         for approved_host in approved_hosts:
             if hostname == approved_host or hostname.endswith(f".{approved_host}"):
@@ -56,48 +64,56 @@ class MTV():
 
     async def upload_with_retry(self, meta, cookiefile, common, img_host_index=1):
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
-        if not os.path.exists(torrent_file_path):
-            torrent_filename = "BASE"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-            torrent = Torrent.read(torrent_path)
+        file_exists = await self.file_exists_async(torrent_file_path)
+        if not file_exists:
+            meta['not_uploading'] = True
+            return
 
-            if torrent.piece_size > 8388608:
-                tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-                if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
-                    console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
+        torrent_filename = "BASE"
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
 
-                    meta['max_piece_size'] = '8'
-                    if meta['is_disc']:
-                        include = []
-                        exclude = []
-                    else:
-                        include = ["*.mkv", "*.mp4", "*.ts"]
-                        exclude = ["*.*", "*sample.mkv", "!sample*.*"]
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_content = await torrent_file.read()
+        # Assuming Torrent.read is a function, you need to call it with the content
+        torrent = Torrent.read(torrent_content)
 
-                    new_torrent = CustomTorrent(
-                        meta=meta,
-                        path=Path(meta['path']),
-                        trackers=["https://fake.tracker"],
-                        source="L4G",
-                        private=True,
-                        exclude_globs=exclude,  # Ensure this is always a list
-                        include_globs=include,  # Ensure this is always a list
-                        creation_date=datetime.now(),
-                        comment="Created by L4G's Upload Assistant",
-                        created_by="L4G's Upload Assistant"
-                    )
+        if torrent.piece_size > 8388608:
+            tracker_config = self.config['TRACKERS'].get(self.tracker, {})
+            if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
+                console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
 
-                    new_torrent.piece_size = 8 * 1024 * 1024
-                    new_torrent.validate_piece_size()
-                    new_torrent.generate(callback=torf_cb, interval=5)
-                    new_torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/MTV.torrent", overwrite=True)
-
-                    torrent_filename = "MTV"
-
+                meta['max_piece_size'] = '8'
+                if meta['is_disc']:
+                    include = []
+                    exclude = []
                 else:
-                    console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
-                    return
-            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+                    include = ["*.mkv", "*.mp4", "*.ts"]
+                    exclude = ["*.*", "*sample.mkv", "!sample*.*"]
+
+                new_torrent = CustomTorrent(
+                    meta=meta,
+                    path=Path(meta['path']),
+                    trackers=["https://fake.tracker"],
+                    source="L4G",
+                    private=True,
+                    exclude_globs=exclude,  # Ensure this is always a list
+                    include_globs=include,  # Ensure this is always a list
+                    creation_date=datetime.now(),
+                    comment="Created by L4G's Upload Assistant",
+                    created_by="L4G's Upload Assistant"
+                )
+
+                new_torrent.piece_size = 8 * 1024 * 1024
+                new_torrent.validate_piece_size()
+                new_torrent.generate(callback=torf_cb, interval=5)
+                new_torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/MTV.torrent", overwrite=True)
+
+                torrent_filename = "MTV"
+
+            else:
+                console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
+                return
+        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
 
         approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         url_host_mapping = {
@@ -157,12 +173,10 @@ class MTV():
 
         anon = 1 if meta['anon'] != 0 or bool(str2bool(str(self.config['TRACKERS'][self.tracker].get('anon', "False")))) else 0
 
-        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        desc = open(desc_path, 'r', encoding='utf-8').read()
-
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
-        with open(torrent_file_path, 'rb') as f:
-            tfile = f.read()
+        desc = None
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as file:
+            desc = await file.read()
+        tfile = await aiofiles.open(torrent_file_path, 'rb')
 
         files = {
             'file_input': (f"{meta['name']}.torrent", tfile)
@@ -189,24 +203,29 @@ class MTV():
         }
 
         if not meta['debug']:
-            with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                response = session.post(url=self.upload_url, data=data, files=files)
+            async with httpx.AsyncClient() as client:
                 try:
+                    # Load cookies from the cookie file
+                    with open(cookiefile, 'rb') as cf:
+                        client.cookies = pickle.load(cf)
+                    response = await client.post(url=self.upload_url, data=data, files=files)
                     if "torrents.php" in response.url:
                         console.print(response.url)
+                    elif "authkey.php" in response.url:
+                        meta['not_uploading'] = True
+                        console.print("[red]No DL link in response, it may have uploaded. Check manually.")
                     else:
-                        if "authkey.php" in response.url:
-                            console.print("[red]No DL link in response, It may have uploaded, check manually.")
-                        else:
-                            console.print("[red]Upload Failed. Either you are not logged in......")
-                            console.print("[red]You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?")
-                            console.print("[red]Or you hit some other error with the torrent upload.")
-                except Exception:
+                        meta['not_uploading'] = True
+                        console.print("[red]Upload Failed. Either you are not logged in...")
+                        console.print("[red]You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?")
+                        console.print("[red]Or you hit some other error with the torrent upload.")
+                except Exception as exc:
+                    meta['not_uploading'] = True
                     console.print("[red]It may have uploaded, check manually.")
-                    print(traceback.print_exc())
+                    console.print(f"[red]Error: {exc}")
+                    traceback.print_exc()
         else:
+            # Debug mode: Print the request data
             console.print("[cyan]Request Data:")
             console.print(data)
         return
@@ -588,27 +607,36 @@ class MTV():
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
         try:
-            r = requests.get(url, params=params)
-            if not r.ok:
-                if "unauthorized api key" in r.text.lower():
-                    console.print("[red]Invalid API Key")
-                return False
-            return True
-        except Exception:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params)
+                if not response.is_success:
+                    if "unauthorized api key" in response.text.lower():
+                        console.print("[red]Invalid API Key")
+                    return False
+                return True
+        except Exception as e:
+            console.print(f"[red]An error occurred: {e}")
             return False
 
     async def validate_cookies(self, meta, cookiefile):
         url = "https://www.morethantv.me/index.php"
         if os.path.exists(cookiefile):
-            with requests.Session() as session:
+            async with httpx.AsyncClient() as client:
+                # Load cookies from the file
                 with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                    cookies = pickle.load(cf)
+                client.cookies.update(cookies)
+
+                # Perform the GET request
+                response = await client.get(url)
+
                 if meta['debug']:
                     console.log('[cyan]Validate Cookies:')
-                    console.log(session.cookies.get_dict())
-                    console.log(resp.url)
-                if resp.text.find("Logout") != -1:
+                    console.log(client.cookies.jar)  # For inspecting cookies in httpx
+                    console.log(response.url)
+
+                # Check for "Logout" in the response text
+                if "Logout" in response.text:
                     return True
                 else:
                     return False
@@ -618,16 +646,25 @@ class MTV():
     async def get_auth(self, cookiefile):
         url = "https://www.morethantv.me/index.php"
         if os.path.exists(cookiefile):
-            with requests.Session() as session:
+            async with httpx.AsyncClient() as client:
+                # Load cookies from the file
                 with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
-                auth = resp.text.rsplit('authkey=', 1)[1][:32]
+                    cookies = pickle.load(cf)
+                client.cookies.update(cookies)
+
+                # Perform the GET request
+                response = await client.get(url)
+
+                # Extract `authkey` from the response text
+                auth = response.text.rsplit('authkey=', 1)[1][:32]
                 return auth
 
     async def login(self, cookiefile):
-        with requests.Session() as session:
-            url = 'https://www.morethantv.me/login'
+        async with httpx.AsyncClient() as client:
+            login_url = 'https://www.morethantv.me/login'
+            twofactor_url = 'https://www.morethantv.me/twofactor/login'
+
+            # Initial payload
             payload = {
                 'username': self.config['TRACKERS'][self.tracker].get('username'),
                 'password': self.config['TRACKERS'][self.tracker].get('password'),
@@ -635,19 +672,20 @@ class MTV():
                 'cinfo': '1920|1080|24|0',
                 'submit': 'login',
                 'iplocked': 1,
-                # 'ssl' : 'yes'
             }
-            res = session.get(url="https://www.morethantv.me/login")
-            token = res.text.rsplit('name="token" value="', 1)[1][:48]
-            # token and CID from cookie needed for post to login
-            payload["token"] = token
-            resp = session.post(url=url, data=payload)
 
-            # handle 2fa
+            # Fetch login page to get the token
+            res = await client.get(login_url)
+            token = res.text.rsplit('name="token" value="', 1)[1][:48]
+            payload['token'] = token
+
+            # Submit login form
+            resp = await client.post(login_url, data=payload)
+
+            # Handle 2FA
             if resp.url.endswith('twofactor/login'):
                 otp_uri = self.config['TRACKERS'][self.tracker].get('otp_uri')
                 if otp_uri:
-                    import pyotp
                     mfa_code = pyotp.parse_uri(otp_uri).now()
                 else:
                     mfa_code = console.input('[yellow]MTV 2FA Code: ')
@@ -655,14 +693,16 @@ class MTV():
                 two_factor_payload = {
                     'token': resp.text.rsplit('name="token" value="', 1)[1][:48],
                     'code': mfa_code,
-                    'submit': 'login'
+                    'submit': 'login',
                 }
-                resp = session.post(url="https://www.morethantv.me/twofactor/login", data=two_factor_payload)
-            # checking if logged in
+                resp = await client.post(twofactor_url, data=two_factor_payload)
+
+            # Check if logged in
             if 'authkey=' in resp.text:
                 console.print('[green]Successfully logged in to MTV')
+                # Save cookies to file
                 with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                    pickle.dump(client.cookies.jar, cf)
             else:
                 console.print('[bold red]Something went wrong while trying to log into MTV')
                 await asyncio.sleep(1)

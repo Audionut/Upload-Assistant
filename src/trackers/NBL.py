@@ -3,7 +3,7 @@ import asyncio
 import requests
 from guessit import guessit
 import httpx
-
+import aiofiles
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -43,16 +43,32 @@ class NBL():
         # Leave this in so manual works
         return
 
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
 
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()[:-65].strip()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent", 'rb')
-        files = {'file_input': open_torrent}
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        file_exists = await self.file_exists_async(torrent_file_path)
+        if not file_exists:
+            meta['not_uploading'] = True
+            return
+
+        async with aiofiles.open(torrent_file_path, 'rb') as open_torrent:
+            file_content = await open_torrent.read()
+        files = {'file_input': ('torrent_file.torrent', file_content)}
         data = {
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
@@ -77,7 +93,7 @@ class NBL():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
-        open_torrent.close()
+        await open_torrent.close()
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':

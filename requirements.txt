@@ -26,3 +26,5 @@ Pillow
 tqdm
 urllib3
 httpx
+pyotp
+aiofiles

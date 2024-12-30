@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
 from difflib import SequenceMatcher
 from str2bool import str2bool
 import os
@@ -10,6 +9,7 @@ import bencodepy
 import glob
 import httpx
 import re
+import aiofiles
 from urllib.parse import urlparse
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -39,6 +39,13 @@ class BHD():
             if hostname == approved_host or hostname.endswith(f".{approved_host}"):
                 return approved_host
         return hostname
+
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
@@ -111,18 +118,28 @@ class BHD():
             anon = 1
 
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8')
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
 
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        torrent_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as file:
+            desc = await file.read()
+
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        file_exists = await self.file_exists_async(torrent_file_path)
+        if not file_exists:
+            meta['not_uploading'] = True
+            return
+
+        async with aiofiles.open(torrent_file_path, 'rb') as open_torrent:
+            file_content = await open_torrent.read()
+
         files = {
-            'mediainfo': mi_dump,
+            'mediainfo': ('mediainfo.xml', mi_dump, 'application/xml'),  # MIME type for mediainfo
+            'file': ('file_name.torrent', file_content, 'application/x-bittorrent')  # MIME type for torrent file
         }
-        if os.path.exists(torrent_file):
-            open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent", 'rb')
-            files['file'] = open_torrent.read()
 
         data = {
             'name': bhd_name,
@@ -150,8 +167,6 @@ class BHD():
             data['pack'] = 1
         if meta.get('season', None) == "S00":
             data['special'] = 1
-        if meta.get('region', "") != "":
-            data['region'] = meta['region']
         if custom is True:
             data['custom_edition'] = edition
         elif edition != "":
@@ -165,50 +180,56 @@ class BHD():
         url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()
         details_link = {}
         if meta['debug'] is False:
-            response = requests.post(url=url, files=files, data=data, headers=headers)
-            try:
-                response = response.json()
-                if int(response['status_code']) == 0:
-                    console.print(f"[red]{response['status_message']}")
-                    if response['status_message'].startswith('Invalid imdb_id'):
-                        console.print('[yellow]RETRYING UPLOAD')
-                        data['imdb_id'] = 1
-                        response = requests.post(url=url, files=files, data=data, headers=headers)
-                        response = response.json()
-                    elif response['status_message'].startswith('Invalid name value'):
-                        console.print(f"[bold yellow]Submitted Name: {bhd_name}")
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.post(url=url, files=files, data=data, headers=headers)
+                    response_data = response.json()
 
-                if 'status_message' in response:
-                    match = re.search(r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.", response['status_message'])
-                    if match:
-                        torrent_id = match.group(1)
-                        details_link = f"https://beyond-hd.me/details/{torrent_id}"
-                    else:
-                        console.print("[yellow]No valid details link found in status_message.")
+                    if int(response_data.get('status_code', -1)) == 0:
+                        console.print(f"[red]{response_data.get('status_message', 'Unknown error')}")
 
-                console.print(response)
-            except Exception as e:
-                console.print("It may have uploaded, go check")
-                console.print(f"Error: {e}")
-                return
+                        if response_data['status_message'].startswith('Invalid imdb_id'):
+                            console.print('[yellow]RETRYING UPLOAD')
+                            data['imdb_id'] = 1
+                            response = await client.post(url=url, files=files, data=data, headers=headers)
+                            response_data = response.json()
+                        elif response_data['status_message'].startswith('Invalid name value'):
+                            meta['not_uploading'] = True
+                            console.print(f"[bold yellow]Submitted Name: {bhd_name}")
+
+                    details_link = None
+                    if 'status_message' in response_data:
+                        match = re.search(
+                            r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.",
+                            response_data['status_message']
+                        )
+                        if match:
+                            torrent_id = match.group(1)
+                            details_link = f"https://beyond-hd.me/details/{torrent_id}"
+                        else:
+                            console.print("[yellow]No valid details link found in status_message.")
+
+                    console.print(response_data)
+
+                except Exception as e:
+                    meta['not_uploading'] = True
+                    console.print("[red]It may have uploaded, go check")
+                    console.print(f"[red]Error: {e}")
+
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
 
         if details_link:
             try:
-                open_torrent.seek(0)
-                torrent_data = open_torrent.read()
-                torrent = bencodepy.decode(torrent_data)
-                torrent[b'comment'] = details_link.encode('utf-8')
-                with open(torrent_file, 'wb') as updated_torrent_file:
-                    updated_torrent_file.write(bencodepy.encode(torrent))
+                torrent_data = bencodepy.decode(file_content)
+                torrent_data[b'comment'] = details_link.encode('utf-8')
+                async with aiofiles.open(torrent_file_path, mode='wb') as updated_torrent_file:
+                    await updated_torrent_file.write(bencodepy.encode(torrent_data))
 
                 console.print(f"Torrent file updated with comment: {details_link}")
             except Exception as e:
                 console.print(f"Error while editing the torrent file: {e}")
-
-        open_torrent.close()
 
     async def handle_image_upload(self, meta, img_host_index=1, approved_image_hosts=None, file=None):
         if approved_image_hosts is None:

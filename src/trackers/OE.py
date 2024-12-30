@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
 from str2bool import str2bool
 import platform
 import re
@@ -11,6 +10,7 @@ from src.bbcode import BBCODE
 from src.trackers.COMMON import COMMON
 from src.console import console
 import httpx
+import aiofiles
 
 
 class OE():
@@ -46,6 +46,13 @@ class OE():
         ]
         pass
 
+    async def file_exists_async(self, file_path):
+        try:
+            async with aiofiles.open(file_path, 'r'):
+                return True
+        except FileNotFoundError:
+            return False
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
@@ -63,15 +70,27 @@ class OE():
         else:
             anon = 1
         if meta['bdinfo'] is not None:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as file:
+                bd_dump = await file.read()
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
             bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+
+        desc = None
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as file:
+            desc = await file.read()
+
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
-        open_torrent = open(torrent_file_path, 'rb')
-        files = {'torrent': open_torrent}
+        file_exists = await self.file_exists_async(torrent_file_path)
+        if not file_exists:
+            meta['not_uploading'] = True
+            return
+
+        async with aiofiles.open(torrent_file_path, 'rb') as open_torrent:
+            file_content = await open_torrent.read()
+        files = {'torrent': ('torrent_file.torrent', file_content, 'application/x-bittorrent')}
         data = {
             'name': oe_name,
             'description': desc,
@@ -117,19 +136,29 @@ class OE():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-            try:
-                console.print(response.json())
-                # adding torrent link to comment of torrent file
-                t_id = response.json()['data'].split(".")[1].split("/")[3]
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://onlyencodes.cc/torrents/" + t_id)
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                    if response.status_code in [200, 201]:
+                        response_data = response.json()
+                        console.print(response_data)
+                        try:
+                            t_id = response_data['data'].split(".")[1].split("/")[3]
+                            await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://onlyencodes.cc/torrents/" + t_id)
+                        except KeyError:
+                            meta['not_uploading'] = True
+                            console.print("[red]Error extracting torrent ID from response data.")
+                    else:
+                        meta['not_uploading'] = True
+                        console.print(f"[red]Unexpected status code: {response.status_code}")
+                        console.print(f"[red]Response Content: {response.text}")
+                except httpx.RequestError as exc:
+                    meta['not_uploading'] = True
+                    console.print(f"[red]An error occurred during the request: {exc}")
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
-        open_torrent.close()
+        await open_torrent.close()
 
     async def edit_name(self, meta):
         oe_name = meta.get('name')
@@ -320,6 +349,10 @@ class OE():
     async def search_existing(self, meta, disctype):
         if 'concert' in meta['keywords']:
             console.print('[bold red]Concerts not allowed at OE.')
+            meta['skipping'] = "OE"
+            return
+        if meta['is_disc'] == "DVD":
+            console.print('[bold red]Skipping DVD')
             meta['skipping'] = "OE"
             return
         dupes = []

@@ -63,7 +63,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(f"(draft: {draft})")
                 console.print(f"Uploading to {tracker_class.tracker}")
                 await tracker_class.upload(meta, disctype)
-                await client.add_to_client(meta, tracker_class.tracker)
+                if 'not_uploading' not in meta or meta.get("not_uploading", False) is False:
+                    await client.add_to_client(meta, tracker_class.tracker)
+                else:
+                    meta['not_uploading'] = False
 
         elif tracker in other_api_trackers:
             tracker_class = tracker_class_map[tracker](config=config)
@@ -79,7 +82,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                         if tracker == 'SN':
                             await asyncio.sleep(16)
-                        await client.add_to_client(meta, tracker_class.tracker)
+                        if 'not_uploading' not in meta or meta.get("not_uploading", False) is False:
+                            await client.add_to_client(meta, tracker_class.tracker)
+                        else:
+                            meta['not_uploading'] = False
 
         elif tracker in http_trackers:
             tracker_class = tracker_class_map[tracker](config=config)
@@ -89,7 +95,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                 console.print(f"Uploading to {tracker}")
                 if await tracker_class.validate_credentials(meta) is True:
                     await tracker_class.upload(meta, disctype)
-                    await client.add_to_client(meta, tracker_class.tracker)
+                    if 'not_uploading' not in meta or meta.get("not_uploading", False) is False:
+                        await client.add_to_client(meta, tracker_class.tracker)
+                    else:
+                        meta['not_uploading'] = False
 
         elif tracker == "MANUAL":
             if meta['unattended']:
@@ -123,7 +132,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         console.print("[yellow]Logging in to THR")
                         session = thr.login(session)
                         await thr.upload(session, meta, disctype)
-                        await client.add_to_client(meta, "THR")
+                        if 'not_uploading' not in meta or meta.get("not_uploading", False) is False:
+                            await client.add_to_client(meta, "THR")
+                        else:
+                            meta['not_uploading'] = False
                 except Exception:
                     console.print(traceback.format_exc())
 
@@ -136,8 +148,12 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                 groupID = meta.get('ptp_groupID', None)
                 ptpUrl, ptpData = await ptp.fill_upload_form(groupID, meta)
                 await ptp.upload(meta, ptpUrl, ptpData, disctype)
-                await asyncio.sleep(5)
-                await client.add_to_client(meta, "PTP")
+                if 'not_uploading' not in meta or meta.get("not_uploading", False) is False:
+                    await asyncio.sleep(5)
+                    await client.add_to_client(meta, "PTP")
+                else:
+                    meta['not_uploading'] = False
+
 
     # Process all trackers concurrently
     tasks = [process_single_tracker(tracker) for tracker in enabled_trackers]

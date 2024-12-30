@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
 import base64
 import re
 import datetime
 import httpx
-
+import aiofiles
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -34,10 +33,12 @@ class RTF():
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
         if meta['bdinfo'] is not None:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as file:
+                bd_dump = await file.read()
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as file:
+                mi_dump = await file.read()
             bd_dump = None
 
         screenshots = []
@@ -62,11 +63,9 @@ class RTF():
             'isAnonymous': self.config['TRACKERS'][self.tracker]["anon"],
         }
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent", 'rb') as binary_file:
-            binary_file_data = binary_file.read()
-            base64_encoded_data = base64.b64encode(binary_file_data)
-            base64_message = base64_encoded_data.decode('utf-8')
-            json_data['file'] = base64_message
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        base64_message = await self.read_and_encode_file(torrent_path)
+        json_data['file'] = base64_message
 
         headers = {
             'accept': 'application/json',
@@ -75,19 +74,35 @@ class RTF():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, json=json_data, headers=headers)
-            try:
-                console.print(response.json())
-
-                t_id = response.json()['torrent']['id']
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://retroflix.club/browse/t/" + str(t_id))
-
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.post(url=self.upload_url, json=json_data, headers=headers)
+                    if response.status_code in [200, 201]:
+                        response_data = response.json()
+                        console.print(response_data)
+                        try:
+                            t_id = response.json()['torrent']['id']
+                            await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://retroflix.club/browse/t/" + str(t_id))
+                        except KeyError:
+                            meta['not_uploading'] = True
+                            console.print("[red]Error extracting torrent ID from response data.")
+                    else:
+                        meta['not_uploading'] = True
+                        console.print(f"[red]Unexpected status code: {response.status_code}")
+                        console.print(f"[red]Response Content: {response.text}")
+                except httpx.RequestError as exc:
+                    meta['not_uploading'] = True
+                    console.print(f"[red]An error occurred during the request: {exc}")
         else:
             console.print("[cyan]Request Data:")
             console.print(json_data)
+
+    async def read_and_encode_file(self, torrent_path):
+        with open(torrent_path, 'rb') as binary_file:
+            binary_file_data = binary_file.read()
+            base64_encoded_data = base64.b64encode(binary_file_data)
+            base64_message = base64_encoded_data.decode('utf-8')
+        return base64_message
 
     async def search_existing(self, meta, disctype):
         disallowed_keywords = {'XXX', 'Erotic'}
@@ -143,13 +158,14 @@ class RTF():
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
 
-        response = requests.get('https://retroflix.club/api/test', headers=headers)
+        async with httpx.AsyncClient() as client:
+            response = await client.get('https://retroflix.club/api/test', headers=headers)
 
-        if response.status_code != 200:
-            console.print('[bold red]Your API key is incorrect SO generating a new one')
-            await self.generate_new_api(meta)
-        else:
-            return
+            if response.status_code != 200:
+                console.print('[bold red]Your API key is incorrect SO generating a new one')
+                await self.generate_new_api(meta)
+            else:
+                return
 
     async def generate_new_api(self, meta):
         headers = {
