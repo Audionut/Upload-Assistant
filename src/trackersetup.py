@@ -81,7 +81,16 @@ class TRACKER_SETUP:
         if not await self.should_update(file_path):
             return file_path
 
-        url = f'https://{tracker}.cc/api/blacklists/releasegroups'
+        url = None
+        if tracker.upper() == "AITHER":
+            url = f'https://{tracker}.cc/api/blacklists/releasegroups'
+        elif tracker.upper() == "LST":
+            url = f"https://{tracker}.gg/api/bannedReleaseGroups"
+
+        if not url:
+            console.print(f"Error: Tracker '{tracker}' is not supported.")
+            return None
+
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
             'Content-Type': 'application/json',
@@ -95,12 +104,14 @@ class TRACKER_SETUP:
                     data = response.json()
                     await self.write_banned_groups_to_file(file_path, data)
                     return file_path
+                elif response.status_code == 404:
+                    console.print(f"Error: Tracker '{tracker}' returned 404 for the banned groups API.")
                 else:
-                    console.print(f"Error: Received status code {response.status_code}")
-                    return None
+                    console.print(f"Error: Received status code {response.status_code} for tracker '{tracker}'.")
             except httpx.RequestError as e:
-                console.print(f"HTTP Request failed: {e}")
-                return None
+                console.print(f"HTTP Request failed for tracker '{tracker}': {e}")
+
+        return None
 
     async def write_banned_groups_to_file(self, file_path, json_data):
         try:
@@ -137,28 +148,26 @@ class TRACKER_SETUP:
             result = False
             return result
 
-        if tracker.upper() == "AITHER":
-            # Dynamically fetch banned groups for AITHER
+        if tracker.upper() in ("AITHER", "LST"):
             file_path = await self.get_banned_groups(meta, tracker)
             if not file_path:
                 console.print(f"[bold red]Failed to load banned groups for '{tracker}'.")
-                result = False
-                return result
+                return result  # Early exit with False
 
-            # Load the banned groups from the file
+            # Try to load the banned groups from the file
             try:
                 async with aiofiles.open(file_path, mode='r') as file:
                     content = await file.read()
                     data = json.loads(content)
-                    banned_group_list.extend(data.get("banned_groups", "").split(", "))
+                    banned_groups = data.get("banned_groups", "")
+                    if banned_groups:
+                        banned_group_list.extend(banned_groups.split(", "))
             except FileNotFoundError:
                 console.print(f"[bold red]Banned group file for '{tracker}' not found.")
-                result = False
-                return result
+                return result  # File not found, return False
             except json.JSONDecodeError:
                 console.print(f"[bold red]Failed to parse banned group file for '{tracker}'.")
-                result = False
-                return result
+                return result  # Invalid JSON, return False
 
         for tag in banned_group_list:
             if isinstance(tag, list):
@@ -172,7 +181,6 @@ class TRACKER_SETUP:
                     console.print(f"[bold yellow]{meta['tag'][1:]}[/bold yellow][bold red] was found on [bold yellow]{tracker}'s[/bold yellow] list of banned groups.")
                     await asyncio.sleep(5)
                     result = True
-
         return result
 
     async def write_internal_claims_to_file(self, file_path, data):
@@ -224,8 +232,7 @@ class TRACKER_SETUP:
 
         # Check if we need to update
         if not await self.should_update(file_path):
-            await self.check_tracker_claims(meta, tracker)
-            return False  # No update needed, assume no match
+            return await self.check_tracker_claims(meta, tracker)
 
         url = f'https://{tracker}.cc/api/internals/claim'
         headers = {

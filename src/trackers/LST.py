@@ -27,12 +27,7 @@ class LST():
         self.search_url = 'https://lst.gg/api/torrents/filter'
         self.torrent_url = 'https://lst.gg/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = ['aXXo', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'DNL', 'FaNGDiNG0', 'HD2DVD', 'HDTime', 'ION10', 'iPlanet', 'KiNGDOM',
-                              'mHD', 'mSD', 'nHD', 'nikt0', 'nSD', 'NhaNc3', 'OFT', 'PRODJi', 'SANTi', 'STUTTERSHIT', 'ViSION', 'VXT', 'WAF',
-                              'x0r', 'YIFY', 'Sicario', 'RARBG', 'MeGusta', 'TSP', 'TSPxL', 'GalaxyTV', 'TGALAXY', 'TORRENTGALAXY', 'NaNi',
-                              'BONE', 'dAV1nci', 'iHYTECH', 'LAMA', 'Rifftrax', 'SasukeducK', 'ShAaNiG', 'WKS', 'YTS', 'HDT', 'FGT',
-                              ['EVO', 'Raw Content Only'],
-                              ]
+        self.banned_groups = []
         pass
 
     async def get_cat_id(self, category_name, keywords, service):
