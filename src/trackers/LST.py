@@ -39,12 +39,7 @@ class LST():
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-            'Anime': '6',
         }.get(category_name, '0')
-        if category_name == 'TV' and 'anime' in keywords:
-            category_id = '6'
-        elif category_name == 'TV' and 'hentai' in service:
-            category_id = '8'
         return category_id
 
     async def get_type_id(self, type):
