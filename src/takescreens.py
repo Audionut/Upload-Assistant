@@ -8,7 +8,9 @@ import json
 import platform
 import asyncio
 import oxipng
-from multiprocessing import Pool
+import psutil
+import sys
+import concurrent.futures
 from pymediainfo import MediaInfo
 from src.console import console
 from data.config import config  # Import here to avoid dependency issues
@@ -161,12 +163,27 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         if meta['debug']:
             console.print(f"Using {num_workers} worker(s) for {len(valid_images)} image(s)")
 
-        with Pool(processes=num_workers) as pool:
-            optimized_results = pool.map(optimize_image_task, valid_images)
+        # Use ProcessPoolExecutor for CPU-bound tasks
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_workers)
 
-        optimized_results = [res for res in optimized_results if not res.startswith("Error")]
+        try:
+            optimized_results = await asyncio.gather(
+                *[worker_wrapper(image, executor) for image in valid_images]
+            )
+        except KeyboardInterrupt:
+            print("\n[red]CTRL+C detected. Cancelling tasks...[/red]")
+            executor.shutdown(wait=False)  # Forcefully stop processes
+            await kill_all_child_processes()
+            print("[red]All tasks cancelled. Exiting.[/red]")
+            sys.exit(1)
 
+        optimized_results = [res for res in optimized_results if not isinstance(res, str) or not res.startswith("Error")]
+
+        if meta['debug']:
+            console.print("Optimized results:", optimized_results)
         console.print(f"[green]Successfully optimized {len(optimized_results)} images.")
+
+        executor.shutdown(wait=True)  # Ensure cleanup
 
         valid_results = []
         remaining_retakes = []
@@ -432,13 +449,27 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         if meta['debug']:
             console.print(f"Using {num_workers} worker(s) for {num_tasks} image(s)")
 
-        # Set up multiprocessing pool with the determined number of workers
-        with Pool(processes=num_workers) as pool:
-            optimized_results = pool.map(optimize_image_task, valid_images)
+        # Use ProcessPoolExecutor for CPU-bound tasks
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_workers)
+
+        try:
+            optimized_results = await asyncio.gather(
+                *[worker_wrapper(image, executor) for image in valid_images]
+            )
+        except KeyboardInterrupt:
+            print("\n[red]CTRL+C detected. Cancelling tasks...[/red]")
+            executor.shutdown(wait=False)  # Forcefully stop processes
+            await kill_all_child_processes()
+            print("[red]All tasks cancelled. Exiting.[/red]")
+            sys.exit(1)
 
         optimized_results = [res for res in optimized_results if not isinstance(res, str) or not res.startswith("Error")]
 
+        if meta['debug']:
+            console.print("Optimized results:", optimized_results)
         console.print(f"[green]Successfully optimized {len(optimized_results)} images.")
+
+        executor.shutdown(wait=True)  # Ensure cleanup
 
         valid_results = []
         remaining_retakes = []
@@ -680,15 +711,27 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         if meta['debug']:
             console.print(f"Using {num_workers} worker(s) for {num_tasks} image(s)")
 
-        # Set up multiprocessing pool with the determined number of workers
-        with Pool(processes=num_workers) as pool:
-            optimized_results = pool.map(optimize_image_task, valid_images)
+        # Use ProcessPoolExecutor for CPU-bound tasks
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_workers)
+
+        try:
+            optimized_results = await asyncio.gather(
+                *[worker_wrapper(image, executor) for image in valid_images]
+            )
+        except KeyboardInterrupt:
+            print("\n[red]CTRL+C detected. Cancelling tasks...[/red]")
+            executor.shutdown(wait=False)  # Forcefully stop processes
+            await kill_all_child_processes()
+            print("[red]All tasks cancelled. Exiting.[/red]")
+            sys.exit(1)
 
         optimized_results = [res for res in optimized_results if not isinstance(res, str) or not res.startswith("Error")]
 
         if meta['debug']:
             console.print("Optimized results:", optimized_results)
         console.print(f"[green]Successfully optimized {len(optimized_results)} images.")
+
+        executor.shutdown(wait=True)  # Ensure cleanup
 
         valid_results = []
         remaining_retakes = []
@@ -800,12 +843,15 @@ async def capture_screenshot(args):
         )
 
         process = await asyncio.create_subprocess_exec(*command.compile(), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        console.print(f"[blue]Spawned FFmpeg process with PID: {process.pid}")
         stdout, stderr = await process.communicate()
         if process.returncode == 0:
             return (index, image_path)
         else:
             console.print(f"[red]FFmpeg error capturing screenshot: {stderr.decode()}")
             return (index, None)  # Ensure tuple format
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -842,6 +888,29 @@ async def valid_ss_time(ss_times, num_screens, length, frame_rate, exclusion_zon
     result_times = sorted(result_times)
 
     return result_times
+
+
+async def worker_wrapper(image, executor):
+    """ Async wrapper to run optimize_image_task in a separate process """
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(executor, optimize_image_task, image)  # Use ProcessPoolExecutor explicitly
+    except KeyboardInterrupt:
+        print(f"[red]Worker interrupted while processing {image}[/red]")
+        return None
+    except Exception as e:
+        print(f"[red]Worker error on {image}: {e}[/red]")
+        return f"Error: {e}"
+
+
+async def kill_all_child_processes():
+    """ Ensure that any lingering child processes are killed """
+    parent = psutil.Process(os.getpid())
+    for child in parent.children(recursive=True):
+        try:
+            child.terminate()
+        except psutil.NoSuchProcess:
+            pass  # Process already exited
 
 
 def optimize_image_task(image):

@@ -12,7 +12,6 @@ import shutil
 import cli_ui
 import traceback
 import time
-
 from src.trackersetup import tracker_class_map, api_trackers, other_api_trackers, http_trackers
 from src.trackerhandle import process_trackers
 from src.queuemanage import handle_queue
@@ -24,7 +23,7 @@ from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
-
+running_subprocesses = set()
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 try:
@@ -87,7 +86,7 @@ async def process_meta(meta, base_dir):
     meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await prep.get_name(meta)
     parser = Args(config)
     helper = UploadHelper()
-    if meta.get('trackers', None) is not None:
+    if meta.get('trackers'):
         trackers = meta['trackers']
     else:
         default_trackers = config['TRACKERS'].get('default_trackers', '')
@@ -304,7 +303,6 @@ async def do_the_thing(base_dir):
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
             await process_meta(meta, base_dir)
-            console.print("Finished processing metadata")
 
             if 'we_are_uploading' not in meta:
                 console.print("we are not uploading.......")
@@ -316,7 +314,6 @@ async def do_the_thing(base_dir):
                             await save_processed_file(log_file, path)
 
             else:
-                console.print("let's upload.......")
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
@@ -342,14 +339,96 @@ async def do_the_thing(base_dir):
         if not sys.stdin.closed:
             reset_terminal()
 
-if __name__ == '__main__':
+
+def check_python_version():
     pyver = platform.python_version_tuple()
     if int(pyver[0]) != 3 or int(pyver[1]) < 9:
         console.print("[bold red]Python version is too low. Please use Python 3.9 or higher.")
         sys.exit(1)
 
+
+async def cleanup():
+    """Ensure all running tasks and subprocesses are properly cleaned up before exiting."""
+    console.print("[yellow]Cleaning up tasks before exiting...[/yellow]")
+
+    # Terminate all tracked subprocesses
+    while running_subprocesses:
+        proc = running_subprocesses.pop()
+        if proc.returncode is None:  # If still running
+            console.print(f"[yellow]Terminating subprocess {proc.pid}...[/yellow]")
+            proc.terminate()  # Send SIGTERM first
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3)  # Wait for process to exit
+            except asyncio.TimeoutError:
+                console.print(f"[red]Subprocess {proc.pid} did not exit in time, force killing.[/red]")
+                proc.kill()  # Force kill if it doesn't exit
+
+        # Close process streams safely
+        if proc.stdout:
+            try:
+                proc.stdout.close()
+            except Exception:
+                pass
+        if proc.stderr:
+            try:
+                proc.stderr.close()
+            except Exception:
+                pass
+        if proc.stdin:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+
+    # Give some time for subprocess transport cleanup
+    await asyncio.sleep(0.1)
+
+    # Cancel all running asyncio tasks **gracefully**
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    console.print(f"[yellow]Cancelling {len(tasks)} remaining tasks...[/yellow]")
+
+    for task in tasks:
+        task.cancel()
+
+    # Stage 1: Give tasks a moment to cancel themselves
+    await asyncio.sleep(0.1)  # Ensures task loop unwinds properly
+
+    # Stage 2: Gather tasks with exception handling
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+            console.print(f"[red]Error during cleanup: {result}[/red]")
+
+    console.print("[green]Cleanup completed. Exiting safely.[/green]")
+
+
+async def main():
     try:
-        asyncio.run(do_the_thing(base_dir))  # Pass the correct base_dir value here
-    except (KeyboardInterrupt):
-        console.print("[bold red]Program interrupted. Exiting.")
+        await do_the_thing(base_dir)  # Ensure base_dir is correctly defined
+    except asyncio.CancelledError:
+        console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+    except KeyboardInterrupt:
+        console.print("[bold red]Program interrupted. Exiting safely.[/bold red]")
+    except Exception as e:
+        console.print(f"[bold red]Unexpected error: {e}[/bold red]")
+    finally:
+        await cleanup()
         reset_terminal()
+
+
+if __name__ == "__main__":
+    check_python_version()
+
+    try:
+        # Use ProactorEventLoop for Windows subprocess handling
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+        asyncio.run(main())  # Ensures proper loop handling and cleanup
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    except BaseException as e:
+        console.print(f"[bold red]Critical error: {e}[/bold red]")
+    finally:
+        sys.exit(0)
