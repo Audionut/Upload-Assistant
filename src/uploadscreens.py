@@ -10,6 +10,7 @@ import time
 import re
 import gc
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 
 def upload_image_task(args):
@@ -300,6 +301,10 @@ def upload_image_task(args):
         }
 
 
+# Global Thread Pool Executor for better thread control
+thread_pool = ThreadPoolExecutor(max_workers=10)
+
+
 async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=False, max_retries=3):
     if meta['debug']:
         upload_start_time = time.time()
@@ -312,6 +317,7 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
     if 'image_sizes' not in meta:
         meta['image_sizes'] = {}
 
+    # Handle image selection
     if using_custom_img_list:
         image_glob = custom_img_list
         existing_images = []
@@ -326,10 +332,10 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         image_glob = [file for file in image_glob if file not in unwanted_files]
         image_glob = list(set(image_glob))
 
-        # Sort `image_glob` by numeric suffix to ensure correct order
+        # Sort images by numeric suffix
         def extract_numeric_suffix(filename):
             match = re.search(r"-(\d+)\.png$", filename)
-            return int(match.group(1)) if match else float('inf')  # Place non-matching files at the end
+            return int(match.group(1)) if match else float('inf')
 
         image_glob.sort(key=extract_numeric_suffix)
 
@@ -339,13 +345,11 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         existing_images = [img for img in meta['image_list'] if img.get('img_url') and img.get('web_url')]
         existing_count = len(existing_images)
 
-    if not retry_mode:
-        images_needed = max(0, total_screens - existing_count)
-    else:
-        images_needed = total_screens
+    # Determine images needed
+    images_needed = total_screens - existing_count if not retry_mode else total_screens
 
     if existing_count >= total_screens and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
-        console.print(f"[yellow]Skipping upload because enough images are already uploaded to {img_host}. Existing images: {existing_count}, Required: {total_screens}")
+        console.print(f"[yellow]Skipping upload: {existing_count} existing, {total_screens} required.")
         return meta['image_list'], total_screens
 
     upload_tasks = [
@@ -353,77 +357,101 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         for index, image in enumerate(image_glob[:images_needed])
     ]
 
+    # Concurrency Control
     default_pool_size = len(upload_tasks)
     host_limits = {"oeimg": 6, "ptscreens": 1, "lensdump": 1}
     pool_size = host_limits.get(img_host, default_pool_size)
     max_workers = min(len(upload_tasks), pool_size)
-
-    results = []
     semaphore = asyncio.Semaphore(max_workers)
 
+    # Track running tasks for cancellation
+    running_tasks = set()
+
     async def async_upload(task):
-        """Wrapper function to run upload_image_task with concurrency control."""
+        """Upload image with concurrency control."""
         index, *task_args = task
         async with semaphore:
             try:
-                result = await asyncio.to_thread(upload_image_task, task_args)
+                future = asyncio.create_task(asyncio.to_thread(upload_image_task, task_args))
+                running_tasks.add(future)
+                result = await future
+                running_tasks.discard(future)
 
                 if result.get('status') == 'success':
                     return (index, result)
                 else:
                     console.print(f"[red]{result}")
                     return None
+            except asyncio.CancelledError:
+                console.print(f"[red]Upload task {index} cancelled.")
+                return None
             except Exception as e:
                 console.print(f"[red]Error during upload: {str(e)}")
                 return None
 
-    upload_results = await asyncio.gather(*[async_upload(task) for task in upload_tasks])
-    results = [res for res in upload_results if res is not None]
-    results.sort(key=lambda x: x[0])
+    try:
+        upload_results = await asyncio.gather(*[async_upload(task) for task in upload_tasks])
+        results = [res for res in upload_results if res is not None]
+        results.sort(key=lambda x: x[0])
 
-    successfully_uploaded = [(index, result) for index, result in results if result['status'] == 'success']
+        successfully_uploaded = [(index, result) for index, result in results if result['status'] == 'success']
 
-    if len(successfully_uploaded) < meta.get('cutoff', 1) and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
-        img_host_num += 1
-        if f'img_host_{img_host_num}' in config['DEFAULT']:
-            meta['imghost'] = config['DEFAULT'][f'img_host_{img_host_num}']
-            console.print(f"[cyan]Switching to the next image host: {config['DEFAULT'][f'img_host_{img_host_num}']}[/cyan]")
+        # Ensure we only switch hosts if necessary
+        if (len(successfully_uploaded) + len(meta['image_list'])) < meta.get('cutoff', 1) and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
+            img_host_num += 1
+            if f'img_host_{img_host_num}' in config['DEFAULT']:
+                meta['imghost'] = config['DEFAULT'][f'img_host_{img_host_num}']
+                console.print(f"[cyan]Switching to the next image host: {meta['imghost']}[/cyan]")
 
-            gc.collect()
+                gc.collect()
+                return await upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
+            else:
+                console.print("[red]No more image hosts available. Aborting upload process.")
+                return meta['image_list'], len(meta['image_list'])
 
-            return await upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
+        # Process and store successfully uploaded images
+        new_images = []
+        for index, upload in successfully_uploaded:
+            raw_url = upload['raw_url']
+            new_image = {
+                'img_url': upload['img_url'],
+                'raw_url': raw_url,
+                'web_url': upload['web_url']
+            }
+            new_images.append(new_image)
+            if not using_custom_img_list and raw_url not in {img['raw_url'] for img in meta['image_list']}:
+                if meta['debug']:
+                    console.print(f"[blue]Adding {raw_url} to image_list")
+                meta['image_list'].append(new_image)
+                local_file_path = upload.get('local_file_path')
+                if local_file_path:
+                    image_size = os.path.getsize(local_file_path)
+                    meta['image_sizes'][raw_url] = image_size
 
-        else:
-            console.print("[red]No more image hosts available. Aborting upload process.")
-            return meta['image_list'], len(meta['image_list'])
+        console.print(f"[green]Successfully uploaded {len(new_images)} images.")
 
-    new_images = []
-    for index, upload in successfully_uploaded:
-        raw_url = upload['raw_url']
-        new_image = {
-            'img_url': upload['img_url'],
-            'raw_url': raw_url,
-            'web_url': upload['web_url']
-        }
-        new_images.append(new_image)
-        if not using_custom_img_list and raw_url not in {img['raw_url'] for img in meta['image_list']}:
-            if meta['debug']:
-                console.print(f"[blue]Adding {raw_url} to image_list")
-            meta['image_list'].append(new_image)
-            local_file_path = upload.get('local_file_path')
-            if local_file_path:
-                image_size = os.path.getsize(local_file_path)
-                meta['image_sizes'][raw_url] = image_size
+        if meta['debug']:
+            console.print(f"Screenshot uploads processed in {time.time() - upload_start_time:.4f} seconds")
 
-    console.print(f"[green]Successfully uploaded {len(new_images)} images.")
+        return new_images if using_custom_img_list else (meta['image_list'], len(successfully_uploaded))
 
-    if meta['debug']:
-        console.print(f"Screenshot uploads processed in {time.time() - upload_start_time:.4f} seconds")
+    except asyncio.CancelledError:
+        console.print("\n[red]Upload process interrupted! Cancelling tasks...[/red]")
 
-    if using_custom_img_list:
-        return new_images, len(new_images)
+        # Cancel running tasks
+        for task in running_tasks:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
-    return meta['image_list'], len(successfully_uploaded)
+        return meta['image_list'], len(meta['image_list'])
+
+    finally:
+        # Cleanup
+        thread_pool.shutdown(wait=True)
+        gc.collect()
 
 
 async def imgbox_upload(chdir, image_glob, meta, return_dict):
