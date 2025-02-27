@@ -4,7 +4,7 @@ import urllib.parse
 import os
 import datetime
 import sys
-
+import json
 from src.console import console
 
 
@@ -108,8 +108,45 @@ class Args():
         parser.add_argument('-dm', '--delete-meta', action='store_true', required=False, dest='delete_meta', help="Delete only meta.json from tmp directory")
         parser.add_argument('-fl', '--freeleech', nargs='*', required=False, help="Freeleech Percentage", default=0, dest="freeleech")
         parser.add_argument('--infohash', nargs='*', required=False, help="V1 Info Hash")
+        console.print("Before parsing, received editargs:", args)
+
         args, before_args = parser.parse_known_args(input)
-        args = vars(args)
+        args = vars(args)  # Convert to dictionary
+
+        console.print("After argparse parsing, args:", args)  # Print parsed arguments
+        console.print("After argparse parsing, before_args:", before_args)  # Print unknown arguments
+
+        # Check if before_args contains unexpected values
+        if before_args:
+            console.print("[yellow]Warning: before_args contains unrecognized arguments:", before_args)
+
+            i = 0
+            while i < len(before_args):
+                arg = before_args[i]
+
+                # Handle boolean flags
+                if arg.startswith("--"):
+                    flag_name = arg.lstrip("-")
+                    console.print(f"[cyan]Setting missing boolean flag: {flag_name} = True")
+                    args[flag_name] = True
+                # Handle standalone file paths
+                elif os.path.exists(arg):
+                    console.print(f"[cyan]Detected file path: {arg}, assigning to `path`")
+                    if "path" in args and isinstance(args["path"], list):
+                        args["path"].append(arg)
+                    else:
+                        args["path"] = [arg]
+                else:
+                    console.print(f"[red]Unrecognized argument in before_args: {arg}")
+
+                i += 1
+
+        console.print("[green]Final parsed arguments after merging before_args:", args)
+
+        if "edit" not in meta and not meta.get('edit'):
+            user_args = {k: v for k, v in args.items() if v not in (None, [], '', 0)}
+            with open("user_args.json", "w", encoding="utf-8") as f:
+                json.dump(user_args, f, indent=4)
         # console.print(args)
         if meta.get('manual_frames') is not None:
             try:
@@ -122,15 +159,17 @@ class Args():
                 sys.exit(1)
         else:
             meta['manual_frames'] = None  # Explicitly set it to None if not provided
-        if len(before_args) >= 1 and not os.path.exists(' '.join(args['path'])):
-            for each in before_args:
-                args['path'].append(each)
-                if os.path.exists(' '.join(args['path'])):
-                    if any(".mkv" in x for x in before_args):
-                        if ".mkv" in ' '.join(args['path']):
+        if "path" in args and args["path"]:
+            file_path = ' '.join(args["path"]) if isinstance(args["path"], list) else args["path"]
+            if len(before_args) >= 1 and not os.path.exists(file_path):
+                for each in before_args:
+                    args['path'].append(each)
+                    if os.path.exists(' '.join(args['path'])):
+                        if any(".mkv" in x for x in before_args):
+                            if ".mkv" in ' '.join(args['path']):
+                                break
+                        else:
                             break
-                    else:
-                        break
 
         if meta.get('tmdb_manual') is not None or meta.get('imdb') is not None:
             meta['tmdb_manual'] = meta['imdb'] = None
@@ -287,8 +326,13 @@ class Args():
                 meta[key] = value
             else:
                 meta[key] = meta.get(key, None)
-            if key in ('trackers'):
-                meta[key] = value
+            if key == 'trackers':
+                if isinstance(value, list):
+                    meta[key] = [item for sublist in value for item in (sublist.split() if isinstance(sublist, str) else [sublist])]
+                elif isinstance(value, str):
+                    meta[key] = value.split()
+                else:
+                    meta[key] = []
             # if key == 'help' and value == True:
                 # parser.print_help()
         return meta, parser, before_args
