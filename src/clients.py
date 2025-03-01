@@ -661,16 +661,27 @@ class Clients():
             torrent_client = self.config['DEFAULT']['default_torrent_client']
         else:
             torrent_client = meta['client']
-        local_path = list_local_path = self.config['TORRENT_CLIENTS'][torrent_client].get('local_path', '/LocalPath')
-        remote_path = list_remote_path = self.config['TORRENT_CLIENTS'][torrent_client].get('remote_path', '/RemotePath')
-        if isinstance(local_path, list):
-            for i in range(len(local_path)):
-                if os.path.normpath(local_path[i]).lower() in meta['path'].lower():
-                    list_local_path = local_path[i]
-                    list_remote_path = remote_path[i]
+
+        local_paths = self.config['TORRENT_CLIENTS'][torrent_client].get('local_path', ['/LocalPath'])
+        remote_paths = self.config['TORRENT_CLIENTS'][torrent_client].get('remote_path', ['/RemotePath'])
+
+        if not isinstance(local_paths, list):
+            local_paths = [local_paths]
+        if not isinstance(remote_paths, list):
+            remote_paths = [remote_paths]
+
+        list_local_path = local_paths[0]
+        list_remote_path = remote_paths[0]
+
+        for i in range(len(local_paths)):
+            if os.path.normpath(local_paths[i]).lower() in meta['path'].lower():
+                list_local_path = local_paths[i]
+                list_remote_path = remote_paths[i]
+                break
 
         local_path = os.path.normpath(list_local_path)
         remote_path = os.path.normpath(list_remote_path)
+
         if local_path.endswith(os.sep):
             remote_path = remote_path + os.sep
 
