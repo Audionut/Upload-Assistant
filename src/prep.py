@@ -1156,9 +1156,9 @@ class Prep():
             repack = "REPACK3"
         if "PROPER" in (video or edition.upper()):
             repack = "PROPER"
-        if "PROPER" in (video or edition.upper()):
+        if "PROPER2" in (video or edition.upper()):
             repack = "PROPER2"
-        if "PROPER" in (video or edition.upper()):
+        if "PROPER3" in (video or edition.upper()):
             repack = "PROPER3"
         if "RERIP" in (video or edition.upper()):
             repack = "RERIP"
