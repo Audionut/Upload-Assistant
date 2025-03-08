@@ -170,7 +170,7 @@ async def tmdb_other_meta(meta):
             else:
                 imdb_id_clean = imdb_id.lstrip('t')  # Remove 'tt' prefix safely
                 if imdb_id_clean.isdigit():  # Ensure it's a valid numeric string
-                    meta['imdb_id'] = int(imdb_id_clean)
+                    meta['imdb_id'] = f"{int(imdb_id_clean):07d}"  # Store as a zero-padded string
                 else:
                     console.print(f"[bold red]Invalid IMDb ID returned: {imdb_id}[/bold red]")
                     meta['imdb_id'] = 0  # Default to 0 if invalid
@@ -235,7 +235,7 @@ async def tmdb_other_meta(meta):
             else:
                 imdb_id_clean = imdb_id.lstrip('t')  # Remove 'tt' prefix safely
                 if imdb_id_clean.isdigit():  # Ensure it's a valid numeric string
-                    meta['imdb_id'] = int(imdb_id_clean)
+                    meta['imdb_id'] = f"{int(imdb_id_clean):07d}"  # Store as a zero-padded string
                 else:
                     console.print(f"[bold red]Invalid IMDb ID returned: {imdb_id}[/bold red]")
                     meta['imdb_id'] = 0  # Default to 0 if invalid
