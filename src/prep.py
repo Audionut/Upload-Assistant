@@ -31,6 +31,8 @@ try:
     import time
     import itertools
     import aiohttp
+    import asyncio
+    from difflib import SequenceMatcher
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
     console.print('[bold red]Missing Module Found. Please reinstall required dependancies.')
@@ -292,11 +294,11 @@ class Prep():
 
         if meta['debug']:
             console.print("ID inputs into prep")
-            console.print("imdb_id:", meta.get("imdb_id"))
-            console.print("tvdb_id:", meta.get("tvdb_id"))
-            console.print("tmdb_id:", meta.get("tmdb_id"))
-            console.print("mal_id:", meta.get("mal_id"))
             console.print("category:", meta.get("category"))
+            console.print(f"Raw TVDB ID: {repr(meta['tvdb_id'])}")
+            console.print(f"Raw IMDb ID: {repr(meta['imdb_id'])}")
+            console.print(f"Raw TMDb ID: {repr(meta['tmdb_id'])}")
+            console.print(f"Raw MAL ID: {repr(meta['mal_id'])}")
         console.print("[yellow]Building meta data.....")
         if meta['debug']:
             meta_start_time = time.time()
@@ -307,27 +309,114 @@ class Prep():
             meta['category'] = await self.get_cat(video)
         else:
             meta['category'] = meta['category'].upper()
+        # Check if both IMDb and TVDB IDs are present first
+        if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
+            results = await asyncio.gather(
+                get_tmdb_from_imdb(
+                    meta['imdb_id'],
+                    meta.get('tvdb_id'),
+                    meta.get('search_year'),
+                    filename,
+                    debug=meta.get('debug', False),
+                    mode=meta.get('mode', 'discord')
+                ),
+                search_tvmaze(
+                    filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
+                    manual_date=meta.get('manual_date'),
+                    tvmaze_manual=meta.get('tvmaze_manual'),
+                    debug=meta.get('debug', False),
+                    return_full_tuple=False
+                ),
+                get_imdb_info_api(
+                    meta['imdb_id'],
+                    manual_language=meta.get('manual_language'),
+                    debug=meta.get('debug', False)
+                ),
+                return_exceptions=True
+            )
+
+            tmdb_result, tvmaze_id, imdb_info_result = results
+
+            if isinstance(tmdb_result, tuple) and len(tmdb_result) == 3:
+                meta['category'], meta['tmdb_id'], meta['original_language'] = tmdb_result
+
+            meta['tvmaze_id'] = tvmaze_id if isinstance(tvmaze_id, int) else 0
+
+            if isinstance(imdb_info_result, dict):
+                meta['imdb_info'] = imdb_info_result
+                meta['tv_year'] = imdb_info_result.get('tv_year', None)
+            elif isinstance(imdb_info_result, Exception):
+                console.print(f"[red]IMDb API call failed: {imdb_info_result}[/red]")
+                meta['imdb_info'] = meta.get('imdb_info', {})  # Keep previous IMDb info if it exists
+            else:
+                console.print("[red]Unexpected IMDb response, setting imdb_info to empty.[/red]")
+                meta['imdb_info'] = {}
+
+        # Get TMDB and IMDb metadata only if IDs are still missing
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
-            meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id'])
+            meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
+                mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
+            )
+
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
             meta = await get_tmdb_id(filename, meta['search_year'], meta, meta['category'], untouched_filename)
         elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
-            meta = await get_tmdb_from_imdb(meta, filename)
-        # Get tmdb data
+            category, tmdb_id, original_language = await get_tmdb_from_imdb(
+                meta['imdb_id'],
+                meta.get('tvdb_id'),
+                meta.get('search_year'),
+                filename,
+                debug=meta.get('debug', False),
+                mode=meta.get('mode', 'discord')
+            )
+
+            meta['category'] = category
+            meta['tmdb_id'] = tmdb_id
+            meta['original_language'] = original_language
+
+        # Fetch TMDB metadata if available
         if int(meta['tmdb_id']) != 0:
             meta = await tmdb_other_meta(meta)
-        # Search tvmaze
+
+        # Search TVMaze only if it's a TV category and tvmaze_id is still missing
         if meta['category'] == "TV":
-            meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0), meta)
+            if meta.get('tvmaze_id', 0) == 0:
+                meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(
+                    filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
+                    manual_date=meta.get('manual_date'),
+                    tvmaze_manual=meta.get('tvmaze_manual'),
+                    debug=meta.get('debug', False),
+                    return_full_tuple=True
+                )
         else:
             meta.setdefault('tvmaze_id', 0)
+
         meta['tvmaze'] = meta.get('tvmaze_id', 0)
-        # If no imdb, search for it
+
+        # If no IMDb ID, search for it
         if meta.get('imdb_id') == 0:
             meta['imdb_id'] = await search_imdb(filename, meta['search_year'])
-        # Get imdb data
+        # Ensure IMDb info is retrieved if it wasn't already fetched
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
-            meta['imdb_info'] = await get_imdb_info_api(meta['imdb_id'], meta)
+            imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+            meta['imdb_info'] = imdb_info
+            meta['tv_year'] = imdb_info.get('tv_year', None)
+
+        aka = meta.get('imdb_info', {}).get('aka', "").strip()
+        title = meta.get('title', "").strip().lower()
+        year = str(meta.get('year', ""))
+
+        if aka:
+            aka_trimmed = aka[5:].strip().lower() if len(aka) > 5 else aka.lower()
+            difference = SequenceMatcher(None, title, aka_trimmed).ratio()
+            if difference >= 0.9 or not aka_trimmed or aka_trimmed in title:
+                aka = ""
+
+            if f"({year})" in aka:
+                aka = aka.replace(f"({year})", "").strip()
+
+            meta['aka'] = aka
+
         if meta.get('tag', None) is None:
             meta['tag'] = await self.get_tag(video, meta)
         else:
