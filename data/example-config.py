@@ -439,6 +439,15 @@ config = {
             # only set qBitTorrent torrent_storage_dir if API searching does not work
             # "torrent_storage_dir": "path/to/BT_backup folder"  ## use double-backslash on windows eg: "C:\\client\\backup"
 
+            # here you can chose to use either symbolic or hard links or leave uncommented to use original path
+            # use either "symlink" or "hardlink"
+            # "linking": "symlink",
+
+            # a folder or list of folders to use for linking. when hardlinking, will attempt to drive match
+            # folder from this list with the path of content
+            # "linked_folder": "D:\\MY_UA_LINKS"
+
+
             # Remote path mapping (docker/etc.) CASE SENSITIVE
             # "local_path": "/LocalPath",
             # "remote_path": "/RemotePath"
