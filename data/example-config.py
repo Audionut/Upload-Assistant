@@ -128,6 +128,9 @@ config = {
         # set true to use mkbrr for torrent creation
         "mkbrr": False,
 
+        # set true to use argument overrides from data/templates/user-args.json
+        "user_overrides": False,
+
     },
 
     # these are used for DB links on AR

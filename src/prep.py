@@ -589,6 +589,9 @@ class Prep():
                     else:
                         meta['episode_title'] = episode_details['name']
         meta = await self.tag_override(meta)
+        user_overrides = config['DEFAULT'].get('user_overrides', False)
+        if user_overrides:
+            meta = await self.get_source_override(meta)
         if meta.get('tag') == "-SubsPlease":  # SubsPlease-specific
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])  # Get all tracks
             bitrate = tracks[1].get('BitRate', '') if len(tracks) > 1 and not isinstance(tracks[1].get('BitRate', ''), dict) else ''  # Check that bitrate is not a dict
@@ -1799,3 +1802,124 @@ class Prep():
                         languages.append(extracted.lower())
 
         return languages
+
+    async def get_source_override(self, meta):
+        try:
+            with open(f"{meta['base_dir']}/data/templates/user-args.json", 'r', encoding="utf-8") as f:
+                user_args = json.load(f)
+
+            current_tmdb_id = meta.get('tmdb_id', 0)
+
+            # Convert to int for comparison if it's a string
+            if isinstance(current_tmdb_id, str) and current_tmdb_id.isdigit():
+                current_tmdb_id = int(current_tmdb_id)
+
+            for entry in user_args.get('entries', []):
+                entry_tmdb_id = entry.get('tmdb_id')
+                args = entry.get('args', [])
+
+                if not entry_tmdb_id:
+                    continue
+
+                # Parse the entry's TMDB ID from the user-args.json file
+                entry_category, entry_normalized_id = await self.parse_tmdb_id(entry_tmdb_id)
+                if entry_category != meta['category']:
+                    if meta['debug']:
+                        console.print(f"Skipping user entry because override category {entry_category} does not match UA category {meta['category']}:")
+                    continue
+
+                # Check if IDs match
+                if entry_normalized_id == current_tmdb_id:
+                    console.print(f"[green]Found matching override for TMDb ID: {entry_normalized_id}")
+                    console.print(f"[yellow]Applying arguments: {' '.join(args)}")
+
+                    meta = await self.apply_args_to_meta(meta, args)
+                    break
+
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            console.print(f"[red]Error loading user-args.json: {e}")
+
+        return meta
+
+    async def parse_tmdb_id(self, tmdb_id, category=None):
+        if tmdb_id is None:
+            return category, 0
+
+        tmdb_id = str(tmdb_id).strip().lower()
+        if not tmdb_id or tmdb_id == 0:
+            return category, 0
+
+        if '/' in tmdb_id:
+            parts = tmdb_id.split('/')
+            if len(parts) >= 2:
+                prefix = parts[0]
+                id_part = parts[1]
+
+                if prefix == 'tv':
+                    category = 'TV'
+                elif prefix == 'movie':
+                    category = 'MOVIE'
+
+                try:
+                    normalized_id = int(id_part)
+                    return category, normalized_id
+                except ValueError:
+                    return category, 0
+
+        try:
+            normalized_id = int(tmdb_id)
+            return category, normalized_id
+        except ValueError:
+            return category, 0
+
+    async def apply_args_to_meta(self, meta, args):
+        from src.args import Args
+
+        try:
+            arg_keys_to_track = set()
+
+            i = 0
+            while i < len(args):
+                arg = args[i]
+                if arg.startswith('--'):
+                    # Remove '--' prefix and convert dashes to underscores
+                    key = arg[2:].replace('-', '_')
+                    arg_keys_to_track.add(key)
+                    if i + 1 < len(args) and not args[i + 1].startswith('--'):
+                        i += 1
+                i += 1
+
+            if meta['debug']:
+                console.print(f"[Debug] Tracking changes for keys: {', '.join(arg_keys_to_track)}")
+
+            # Create a new Args instance and process the arguments
+            arg_processor = Args(self.config)
+            full_args = ['upload.py'] + args
+            updated_meta, _, _ = arg_processor.parse(full_args, meta.copy())
+            updated_meta['path'] = meta.get('path')
+            modified_keys = []
+
+            for key in arg_keys_to_track:
+                if key in updated_meta and key in meta:
+                    # Skip path to preserve original
+                    if key == 'path':
+                        continue
+
+                    new_value = updated_meta[key]
+                    old_value = meta[key]
+                    # Only update if the value actually changed
+                    if new_value != old_value:
+                        meta[key] = new_value
+                        modified_keys.append(key)
+                        if meta['debug']:
+                            console.print(f"[Debug] Override: {key} changed from {old_value} to {new_value}")
+            if meta['debug'] and modified_keys:
+                console.print(f"[Debug] Applied overrides for: {', '.join(modified_keys)}")
+
+        except Exception as e:
+            console.print(f"[red]Error processing arguments: {e}")
+            if meta['debug']:
+                import traceback
+                console.print(traceback.format_exc())
+
+        return meta

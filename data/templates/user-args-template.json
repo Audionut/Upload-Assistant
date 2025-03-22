@@ -1,0 +1,23 @@
+## This is just a template file. Replace with your own values and rename to user-args.json
+## Currently only tmdb_id is supported, and this file is parsed after metadata processing
+## Changing category or season or episode for instance, is ill advised as these are used in metadata processing
+
+{
+    "entries": [
+      {
+        "tmdb_id": "tv/12345",
+        "args": [
+          "--no-aka",
+          "--screens", "4"
+        ]
+      },
+      {
+        "tmdb_id": "movie/54321",
+        "args": [
+          "--no-year",
+          "--personalrelease",
+          "--descfile", "path_do_desc_file"
+        ]
+      }
+    ]
+  }
