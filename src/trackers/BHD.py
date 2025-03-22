@@ -63,12 +63,13 @@ class BHD():
             mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8')
 
         desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        torrent_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        torrent_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         files = {
             'mediainfo': mi_dump,
         }
+        open_torrent = None
         if os.path.exists(torrent_file):
-            open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent", 'rb')
+            open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
             files['file'] = open_torrent.read()
 
         data = {
@@ -155,7 +156,8 @@ class BHD():
             except Exception as e:
                 console.print(f"Error while editing the torrent file: {e}")
 
-        open_torrent.close()
+        if open_torrent is not None:
+            open_torrent.close()
 
     async def get_cat_id(self, category_name):
         category_id = {

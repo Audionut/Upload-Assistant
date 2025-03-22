@@ -259,7 +259,8 @@ async def process_meta(meta, base_dir):
             create_torrent(meta, Path(meta['path']), "BASE")
 
         if int(meta.get('randomized', 0)) >= 1:
-            create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
+            if not meta['mkbrr']:
+                create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
         if 'saved_description' in meta and meta['saved_description'] is False:
             meta = await prep.gen_desc(meta)

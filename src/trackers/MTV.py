@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from src.trackers.COMMON import COMMON
 from datetime import datetime
-from src.torrentcreate import CustomTorrent, torf_cb
+from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
 from src.rehostimages import check_hosts
 
 
@@ -42,7 +42,7 @@ class MTV():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         if not os.path.exists(torrent_file_path):
             torrent_filename = "BASE"
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
@@ -52,40 +52,51 @@ class MTV():
                 tracker_config = self.config['TRACKERS'].get(self.tracker, {})
                 if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                     console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
+                    if meta.get('mkbrr', False):
+                        from data.config import config
+                        tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
 
-                    meta['max_piece_size'] = '8'
-                    if meta['is_disc']:
-                        include = []
-                        exclude = []
+                        # Create the torrent with the tracker URL
+                        torrent_create = f"[{self.tracker}]"
+                        create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
+                        torrent_filename = "[MTV]"
+
+                        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
                     else:
-                        include = ["*.mkv", "*.mp4", "*.ts"]
-                        exclude = ["*.*", "*sample.mkv", "!sample*.*"]
+                        meta['max_piece_size'] = '8'
+                        if meta['is_disc']:
+                            include = []
+                            exclude = []
+                        else:
+                            include = ["*.mkv", "*.mp4", "*.ts"]
+                            exclude = ["*.*", "*sample.mkv", "!sample*.*"]
 
-                    new_torrent = CustomTorrent(
-                        meta=meta,
-                        path=Path(meta['path']),
-                        trackers=["https://fake.tracker"],
-                        source="Audionut UA",
-                        private=True,
-                        exclude_globs=exclude,  # Ensure this is always a list
-                        include_globs=include,  # Ensure this is always a list
-                        creation_date=datetime.now(),
-                        comment="Created by Audionut's Upload Assistant",
-                        created_by="Audionut's Upload Assistant"
-                    )
+                        new_torrent = CustomTorrent(
+                            meta=meta,
+                            path=Path(meta['path']),
+                            trackers=["https://fake.tracker"],
+                            source="L4G",
+                            private=True,
+                            exclude_globs=exclude,  # Ensure this is always a list
+                            include_globs=include,  # Ensure this is always a list
+                            creation_date=datetime.now(),
+                            comment="Created by L4G's Upload Assistant",
+                            created_by="L4G's Upload Assistant"
+                        )
 
-                    new_torrent.piece_size = 8 * 1024 * 1024
-                    new_torrent.validate_piece_size()
-                    new_torrent.generate(callback=torf_cb, interval=5)
-                    new_torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/MTV.torrent", overwrite=True)
+                        new_torrent.piece_size = 8 * 1024 * 1024
+                        new_torrent.validate_piece_size()
+                        new_torrent.generate(callback=torf_cb, interval=5)
+                        new_torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/MTV.torrent", overwrite=True)
 
-                    torrent_filename = "MTV"
+                        torrent_filename = "[MTV]"
+                        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
 
                 else:
                     console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                     return
-            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-
+            else:
+                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
         approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         url_host_mapping = {
             "ibb.co": "imgbb",
@@ -111,7 +122,7 @@ class MTV():
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         desc = open(desc_path, 'r', encoding='utf-8').read()
 
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         with open(torrent_file_path, 'rb') as f:
             tfile = f.read()
 
@@ -456,74 +467,128 @@ class MTV():
     async def validate_cookies(self, meta, cookiefile):
         url = "https://www.morethantv.me/index.php"
         if os.path.exists(cookiefile):
-            with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
-                if meta['debug']:
-                    console.log('[cyan]Validate Cookies:')
-                    console.log(session.cookies.get_dict())
-                    console.log(resp.url)
-                if resp.text.find("Logout") != -1:
-                    return True
-                else:
-                    return False
+            try:
+                with requests.Session() as session:
+                    # Add a timeout to prevent hanging indefinitely
+                    session.timeout = 10  # 10 seconds timeout
+
+                    with open(cookiefile, 'rb') as cf:
+                        session.cookies.update(pickle.load(cf))
+
+                    # Add error handling for the request
+                    try:
+                        resp = session.get(url=url, timeout=10)
+                        if meta['debug']:
+                            console.log('[cyan]Validate Cookies:')
+                            console.log(session.cookies.get_dict())
+                            console.log(resp.url)
+
+                        if resp.text.find("Logout") != -1:
+                            return True
+                        else:
+                            console.print("[yellow]Valid session not found in cookies")
+                            return False
+
+                    except requests.exceptions.Timeout:
+                        console.print(f"[red]Connection to {url} timed out. The site may be down or unreachable.")
+                        return False
+                    except requests.exceptions.ConnectionError:
+                        console.print(f"[red]Failed to connect to {url}. The site may be down or your connection is blocked.")
+                        return False
+                    except Exception as e:
+                        console.print(f"[red]Error connecting to MTV: {str(e)}")
+                        return False
+            except Exception as e:
+                console.print(f"[red]Error loading cookies: {str(e)}")
+                return False
         else:
+            console.print("[yellow]Cookie file not found")
             return False
 
     async def get_auth(self, cookiefile):
         url = "https://www.morethantv.me/index.php"
-        if os.path.exists(cookiefile):
-            with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
-                auth = resp.text.rsplit('authkey=', 1)[1][:32]
-                return auth
+        try:
+            if os.path.exists(cookiefile):
+                with requests.Session() as session:
+                    with open(cookiefile, 'rb') as cf:
+                        session.cookies.update(pickle.load(cf))
+                    try:
+                        resp = session.get(url=url, timeout=10)
+                        if "authkey=" in resp.text:
+                            auth = resp.text.rsplit('authkey=', 1)[1][:32]
+                            return auth
+                        else:
+                            console.print("[yellow]Auth key not found in response")
+                            return ""
+                    except requests.exceptions.RequestException as e:
+                        console.print(f"[red]Error getting auth key: {str(e)}")
+                        return ""
+            else:
+                console.print("[yellow]Cookie file not found for auth key retrieval")
+                return ""
+        except Exception as e:
+            console.print(f"[red]Unexpected error retrieving auth key: {str(e)}")
+            return ""
 
     async def login(self, cookiefile):
-        with requests.Session() as session:
-            url = 'https://www.morethantv.me/login'
-            payload = {
-                'username': self.config['TRACKERS'][self.tracker].get('username'),
-                'password': self.config['TRACKERS'][self.tracker].get('password'),
-                'keeploggedin': 1,
-                'cinfo': '1920|1080|24|0',
-                'submit': 'login',
-                'iplocked': 1,
-                # 'ssl' : 'yes'
-            }
-            res = session.get(url="https://www.morethantv.me/login")
-            token = res.text.rsplit('name="token" value="', 1)[1][:48]
-            # token and CID from cookie needed for post to login
-            payload["token"] = token
-            resp = session.post(url=url, data=payload)
+        try:
+            with requests.Session() as session:
+                # Add a timeout to all requests
+                session.timeout = 15
 
-            # handle 2fa
-            if resp.url.endswith('twofactor/login'):
-                otp_uri = self.config['TRACKERS'][self.tracker].get('otp_uri')
-                if otp_uri:
-                    import pyotp
-                    mfa_code = pyotp.parse_uri(otp_uri).now()
-                else:
-                    mfa_code = console.input('[yellow]MTV 2FA Code: ')
-
-                two_factor_payload = {
-                    'token': resp.text.rsplit('name="token" value="', 1)[1][:48],
-                    'code': mfa_code,
-                    'submit': 'login'
+                url = 'https://www.morethantv.me/login'
+                payload = {
+                    'username': self.config['TRACKERS'][self.tracker].get('username'),
+                    'password': self.config['TRACKERS'][self.tracker].get('password'),
+                    'keeploggedin': 1,
+                    'cinfo': '1920|1080|24|0',
+                    'submit': 'login',
+                    'iplocked': 1,
                 }
-                resp = session.post(url="https://www.morethantv.me/twofactor/login", data=two_factor_payload)
-            # checking if logged in
-            if 'authkey=' in resp.text:
-                console.print('[green]Successfully logged in to MTV')
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
-            else:
-                console.print('[bold red]Something went wrong while trying to log into MTV')
-                await asyncio.sleep(1)
-                console.print(resp.url)
-        return
+
+                try:
+                    res = session.get(url="https://www.morethantv.me/login", timeout=15)
+                    token = res.text.rsplit('name="token" value="', 1)[1][:48]
+                    # token and CID from cookie needed for post to login
+                    payload["token"] = token
+                    resp = session.post(url=url, data=payload, timeout=10)
+
+                    # handle 2fa
+                    if resp.url.endswith('twofactor/login'):
+                        otp_uri = self.config['TRACKERS'][self.tracker].get('otp_uri')
+                        if otp_uri:
+                            import pyotp
+                            mfa_code = pyotp.parse_uri(otp_uri).now()
+                        else:
+                            mfa_code = console.input('[yellow]MTV 2FA Code: ')
+
+                        two_factor_payload = {
+                            'token': resp.text.rsplit('name="token" value="', 1)[1][:48],
+                            'code': mfa_code,
+                            'submit': 'login'
+                        }
+                        resp = session.post(url="https://www.morethantv.me/twofactor/login", data=two_factor_payload)
+                    # checking if logged in
+                    if 'authkey=' in resp.text:
+                        console.print('[green]Successfully logged in to MTV')
+                        with open(cookiefile, 'wb') as cf:
+                            pickle.dump(session.cookies, cf)
+                    else:
+                        console.print('[bold red]Something went wrong while trying to log into MTV')
+                        await asyncio.sleep(1)
+                        console.print(resp.url)
+                except requests.exceptions.Timeout:
+                    console.print("[red]Connection to MTV timed out. The site may be down or unreachable.")
+                    return False
+                except requests.exceptions.ConnectionError:
+                    console.print("[red]Failed to connect to MTV. The site may be down or your connection is blocked.")
+                    return False
+                except Exception as e:
+                    console.print(f"[red]Error during MTV login: {str(e)}")
+                    return False
+        except Exception as e:
+            console.print(f"[red]Unexpected error during login: {str(e)}")
+        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []

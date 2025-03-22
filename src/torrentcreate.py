@@ -122,7 +122,7 @@ class CustomTorrent(torf.Torrent):
         self.metainfo['info']['piece length'] = self.piece_size  # Ensure 'piece length' is set
 
 
-def create_torrent(meta, path, output_filename):
+def create_torrent(meta, path, output_filename, tracker_url=None):
     if meta['debug']:
         start_time = time.time()
 
@@ -153,7 +153,31 @@ def create_torrent(meta, path, output_filename):
             if not sys.platform.startswith("win"):
                 os.chmod(mkbrr_binary, 0o755)
 
-            cmd = [mkbrr_binary, "create", path, "-o", output_path]
+            cmd = [mkbrr_binary, "create", path]
+
+            if tracker_url is not None:
+                cmd.extend(["-t", tracker_url])
+
+            if int(meta.get('randomized', 0)) >= 1:
+                cmd.extend(["-e"])
+
+            if meta.get('max_piece_size') and tracker_url is None:
+                try:
+                    max_size_bytes = int(meta['max_piece_size']) * 1024 * 1024
+
+                    # Calculate the appropriate power of 2 (log2)
+                    # We want the largest power of 2 that's less than or equal to max_size_bytes
+                    import math
+                    power = min(27, max(16, math.floor(math.log2(max_size_bytes))))
+
+                    cmd.extend(["-l", str(power)])
+                    console.print(f"[yellow]Setting mkbrr piece length to 2^{power} ({(2**power) / (1024 * 1024):.2f} MiB)")
+                except (ValueError, TypeError):
+                    console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
+
+            cmd.extend(["-o", output_path])
+            console.print('mkbrr cmd:', cmd)
+
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
             total_pieces = 100  # Default to 100% for scaling progress
@@ -164,7 +188,7 @@ def create_torrent(meta, path, output_filename):
                 line = line.strip()
 
                 # Detect hashing progress, speed, and percentage
-                match = re.search(r"Hashing pieces.*?\[(\d+\.\d+ MB/s)\]\s+(\d+)%", line)
+                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:MB|MiB)/s)\]\s+(\d+)%", line)
                 if match:
                     speed = match.group(1)  # Extract speed (e.g., "12734.21 MB/s")
                     pieces_done = int(match.group(2))  # Extract percentage (e.g., "60")

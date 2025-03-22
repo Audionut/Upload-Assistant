@@ -13,7 +13,7 @@ from src.exceptions import *  # noqa F403
 from src.console import console
 from datetime import datetime
 from torf import Torrent
-from src.torrentcreate import CustomTorrent, torf_cb
+from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
 
 
 class HDB():
@@ -200,7 +200,6 @@ class HDB():
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
         hdb_name = await self.edit_name(meta)
         cat_id = await self.get_type_category_id(meta)
@@ -219,42 +218,56 @@ class HDB():
 
         # Download new .torrent from site
         hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         torrent = Torrent.read(torrent_path)
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
+            if meta.get('mkbrr', False):
+                from data.config import config
+                tracker_url = config['TRACKERS']['HDB'].get('announce_url', "https://fake.tracker").strip()
 
-            if meta['is_disc']:
-                include = []
-                exclude = []
+                # Create the torrent with the tracker URL
+                torrent_create = f"[{self.tracker}]"
+                create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
+                torrent_filename = "[HDB]"
+
+                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
             else:
-                include = ["*.mkv", "*.mp4", "*.ts"]
-                exclude = ["*.*", "*sample.mkv", "!sample*.*"]
+                if meta['is_disc']:
+                    include = []
+                    exclude = []
+                else:
+                    include = ["*.mkv", "*.mp4", "*.ts"]
+                    exclude = ["*.*", "*sample.mkv", "!sample*.*"]
 
-            # Create a new torrent with piece size explicitly set to 16 MiB
-            new_torrent = CustomTorrent(
-                meta=meta,
-                path=Path(meta['path']),
-                trackers=["https://fake.tracker"],
-                source="Audionut UA",
-                private=True,
-                exclude_globs=exclude,  # Ensure this is always a list
-                include_globs=include,  # Ensure this is always a list
-                creation_date=datetime.now(),
-                comment="Created by Audionut's Upload Assistant",
-                created_by="Audionut's Upload Assistant"
-            )
+                # Create a new torrent with piece size explicitly set to 16 MiB
+                new_torrent = CustomTorrent(
+                    meta=meta,
+                    path=Path(meta['path']),
+                    trackers=["https://fake.tracker"],
+                    source="Audionut",
+                    private=True,
+                    exclude_globs=exclude,  # Ensure this is always a list
+                    include_globs=include,  # Ensure this is always a list
+                    creation_date=datetime.now(),
+                    comment="Created by Audionut's Upload Assistant",
+                    created_by="Audionut's Upload Assistant"
+                )
 
-            # Explicitly set the piece size and update metainfo
-            new_torrent.piece_size = 16777216  # 16 MiB in bytes
-            new_torrent.metainfo['info']['piece length'] = 16777216  # Ensure 'piece length' is set
+                # Explicitly set the piece size and update metainfo
+                new_torrent.piece_size = 16777216  # 16 MiB in bytes
+                new_torrent.metainfo['info']['piece length'] = 16777216  # Ensure 'piece length' is set
 
-            # Validate and write the new torrent
-            new_torrent.validate_piece_size()
-            new_torrent.generate(callback=torf_cb, interval=5)
-            new_torrent.write(torrent_path, overwrite=True)
+                # Validate and write the new torrent
+                new_torrent.validate_piece_size()
+                new_torrent.generate(callback=torf_cb, interval=5)
+                new_torrent.write(torrent_path, overwrite=True)
+                torrent_filename = "[HDB]"
+                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+        else:
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
 
         # Proceed with the upload process
         with open(torrent_path, 'rb') as torrentFile:

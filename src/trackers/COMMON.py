@@ -30,7 +30,7 @@ class COMMON():
             new_torrent.metainfo['info']['source'] = source_flag
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
-            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{meta['clean_name']}.torrent", overwrite=True)
+            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
 
     # used to add tracker url, comment and source flag to torrent file
     async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment):
