@@ -83,10 +83,6 @@ class COMMON():
             # Handle single disc case
             if len(discs) == 1:
                 each = discs[0]
-                if each['type'] == "DVD":
-                    descfile.write("[center]")
-                    descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]\n\n")
-                    descfile.write("[/center]")
                 if screenheader is not None:
                     descfile.write(screenheader + '\n')
                 descfile.write("[center]")
@@ -173,10 +169,6 @@ class COMMON():
                         descfile.write("[center]")
                         if each['type'] == "BDMV":
                             descfile.write(f"{each.get('name', 'BDINFO')}\n\n")
-                        elif each['type'] == "DVD":
-                            descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]")
-                            descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
                         # For the first disc, use images from `meta['image_list']` and add screenheader if applicable
                         if meta['debug']:
                             console.print("[yellow]Using original uploaded images for first disc")
