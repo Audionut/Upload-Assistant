@@ -780,12 +780,28 @@ class Clients():
             console.print("[red]Torrent addition timed out.")
             return
 
-        # Resume and tag torrent
+        # Resume torrent
         qbt_client.torrents_resume(torrent.infohash)
+
+        # Avoid duplicates
+        tags = set()
+
+        # Add the default tag
         if client.get('qbit_tag'):
-            qbt_client.torrents_add_tags(tags=client['qbit_tag'], torrent_hashes=torrent.infohash)
+            tags.add(client['qbit_tag'])
         if meta.get('qbit_tag'):
-            qbt_client.torrents_add_tags(tags=meta['qbit_tag'], torrent_hashes=torrent.infohash)
+            tags.add(meta['qbit_tag'])
+
+        # Add the tracker specific tag
+        if client.get('tracker_qbit_tag'):
+            tags.add(client['tracker_qbit_tag'])
+        if meta.get('tracker_qbit_tag'):
+            tags.add(meta['tracker_qbit_tag'])
+        if self.config['TRACKERS'].get(tracker, {}).get('tracker_qbit_tag'):
+            tags.add(self.config['TRACKERS'][tracker]['tracker_qbit_tag'])
+
+        if tags:
+            qbt_client.torrents_add_tags(tags=', '.join(tags), torrent_hashes=torrent.infohash)
 
         if meta['debug']:
             info = qbt_client.torrents_info(torrent_hashes=torrent.infohash)

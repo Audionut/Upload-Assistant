@@ -179,6 +179,7 @@ config = {
             "api_key": "ACM api key",
             "announce_url": "https://eiga.moi/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "ACM",
 
             # FOR INTERNAL USE ONLY:
             # "internal" : True,
@@ -189,17 +190,20 @@ config = {
             "api_key": "AITHER api key",
             "announce_url": "https://aither.cc/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "AITHER",
             # "modq" : False  ## Not working yet
         },
         "AL": {
             "api_key": "AL api key",
             "announce_url": "https://animelovers.club/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "AL",
         },
         "ANT": {
             "api_key": "ANT api key",
             "announce_url": "https://anthelion.me/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "ANT",
         },
         "AR": {
             "username": "<USERNAME>",
@@ -207,6 +211,7 @@ config = {
             "announce_url": "http://tracker.alpharatio.cc:2710/PASSKEY/announce",
             # anon is not an option when uplaoding you need to change your privacy settings.
             # "anon" : "False"
+            # "tracker_qbit_tag": "AR",
         },
         "BHD": {
             # set api/rss keys above if using BHD for automatic ID searching or torrent_id searching
@@ -215,6 +220,7 @@ config = {
             "announce_url": "https://beyond-hd.me/announce/customannounceurl",
             "draft_default": "True",  # Send to drafts
             # "anon" : False
+            # "tracker_qbit_tag": "BHD",
         },
         "BHDTV": {
             "api_key": "found under https://www.bit-hdtv.com/my.php",
@@ -222,33 +228,39 @@ config = {
             # passkey found under https://www.bit-hdtv.com/my.php
             "my_announce_url": "https://trackerr.bit-hdtv.com/passkey/announce",
             # "anon" : "False"
+            # "tracker_qbit_tag": "BHDTV",
         },
         "BLU": {
             "useAPI": False,  # Set to True if using BLU for automatic ID searching or description parsing
             "api_key": "BLU api key",
             "announce_url": "https://blutopia.cc/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "BLU",
             # "modq" : False  ## Not working yet
         },
         "CBR": {
             "api_key": "CBR api key",
             "announce_url": "https://capybarabr.com/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "CBR",
         },
         "FL": {
             "username": "FL username",
             "passkey": "FL passkey",
             "uploader_name": "https://filelist.io/Custom_Announce_URL",
             # "anon": False,
+            # "tracker_qbit_tag": "FL",
         },
         "FNP": {
             "api_key": "FNP api key",
             "announce_url": "https://fearnopeer.com/announce/customannounceurl",
             # "anon" : "False"
+            # "tracker_qbit_tag": "FNP",
         },
         "FRIKI": {
             "api_key": "FRIKI API KEY",
             "announce_url": "https://frikibar.com/announce/<PASSKEY>",
+            # "tracker_qbit_tag": "FRIKI",
         },
         # for HDB you must have been granted uploading approval via Offers
         "HDB": {
@@ -257,6 +269,7 @@ config = {
             "passkey": "HDB passkey",
             "announce_url": "https://hdbits.org/announce/Custom_Announce_URL",
             # "anon": False,
+            # "tracker_qbit_tag": "HDB",
             "img_rehost": True,
         },
         # for HDT to work you need to export cookies from https://hd-torrent.net/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
@@ -266,33 +279,39 @@ config = {
             "password": "password",
             "my_announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
             # "anon" : "False"
+            # "tracker_qbit_tag": "HDT",
             "announce_url": "https://hdts-announce.ru/announce.php",  # DO NOT EDIT THIS LINE
         },
         "HUNO": {
             "api_key": "HUNO api key",
             "announce_url": "https://hawke.uno/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "HUNO",
         },
         "ITT": {
             "api_key": "ITT api key",
             "announce_url": "https://itatorrents.xyz/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "ITT",
         },
         "JPTV": {
             "api_key": "JPTV api key",
             "announce_url": "https://jptv.club/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "JPTV",
         },
         "LCD": {
             "api_key": "LCD api key",
             "announce_url": "https://locadora.cc/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "LCD",
         },
         "LST": {
             "useAPI": False,  # Set to True if using LST for automatic ID searching or description parsing
             "api_key": "LST api key",
             "announce_url": "https://lst.gg/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "LST",
             # "modq" : False,  # Send to modq for staff approval
             # "draft" : False  # Send to drafts
         },
@@ -300,6 +319,7 @@ config = {
             "api_key": "LT api key",
             "announce_url": "https://lat-team.com/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "LT",
         },
         "MTV": {
             'api_key': 'get from security page',
@@ -307,6 +327,7 @@ config = {
             'password': '<PASSWORD>',
             'announce_url': "get from https://www.morethantv.me/upload.php",
             # 'anon': False,
+            # "tracker_qbit_tag": "MTV",
             # 'otp_uri' : 'OTP URI, read the following for more information https://github.com/google/google-authenticator/wiki/Key-Uri-Format'
             'skip_if_rehash': False,  # Skip uploading to MTV if it would require a torrent rehash because existing piece size > 8 MiB
             'prefer_mtv_torrent': False,  # Iterate over found torrents and prefer MTV suitable torrents if found.
@@ -314,22 +335,26 @@ config = {
         "NBL": {
             "api_key": "NBL api key",
             "announce_url": "https://tracker.nebulance.io/insertyourpasskeyhere/announce",
+            # "tracker_qbit_tag": "NBL",
         },
         "OE": {
             "useAPI": False,  # Set to True if using OE for automatic ID searching or description parsing
             "api_key": "OE api key",
             "announce_url": "https://onlyencodes.cc/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "OE",
         },
         "OTW": {
             "api_key": "OTW api key",
             "announce_url": "https://oldtoons.world/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "OTW",
         },
         "PSS": {
             "api_key": "PSS api key",
             "announce_url": "https://privatesilverscreen.cc/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "PSS",
         },
         "PTER": {  # Does not appear to be working at all
             "passkey": 'passkey',
@@ -338,6 +363,7 @@ config = {
             "password": "",
             "ptgen_api": "",
             # "anon": True,
+            # "tracker_qbit_tag": "PTER",
         },
         "PTP": {
             "useAPI": False,  # Set to True if using PTP for automatic ID searching or description parsing
@@ -347,21 +373,25 @@ config = {
             "username": "",
             "password": "",
             "announce_url": ""
+            # "tracker_qbit_tag": "PTP",
         },
         "PTT": {
             "api_key": "PTT api key",
             "announce_url": "https://polishtorrent.top/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "PTT",
         },
         "R4E": {
             "api_key": "R4E api key",
             "announce_url": "https://racing4everyone.eu/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "R4E",
         },
         "RF": {
             "api_key": "RF api key",
             "announce_url": "https://reelflix.xyz/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "RF",
         },
         "RTF": {
             "username": "username",
@@ -369,28 +399,34 @@ config = {
             "api_key": 'get_it_by_running_/api/ login command from https://retroflix.club/api/doc',
             "announce_url": "get from upload page",
             # "anon": True
+            # "tracker_qbit_tag": "RTF",
         },
         "SHRI": {
             "api_key": "SHRI api key",
             "announce_url": "https://shareisland.org/announce/customannounceurl",
             # "anon" : "False"
+            # "tracker_qbit_tag": "SHRI",
         },
         "SN": {
             "api_key": "SN",
             "announce_url": "https://tracker.swarmazon.club:8443/<YOUR_PASSKEY>/announce",
+            # "tracker_qbit_tag": "SN",
         },
         "SP": {
             "api_key": "SeedPool API KEY",
             "announce_url": "https://seedpool.org/announce/<PASSKEY>",
+            # "tracker_qbit_tag": "SP",
         },
         "SPD": {
             "api_key": "SPEEDAPP API KEY",
             "announce_url": "https://ramjet.speedapp.io/<PASSKEY>/announce",
+            # "tracker_qbit_tag": "SPD",
         },
         "STC": {
             "api_key": "STC",
             "announce_url": "https://skipthecommericals.xyz/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "STC",
         },
         "THR": {
             "username": "username",
@@ -401,21 +437,25 @@ config = {
             "pronfo_theme": "pronfo theme code",
             "pronfo_rapi_id": "pronfo remote api id",
             # "anon" : False
+            # "tracker_qbit_tag": "THR",
         },
         "TIK": {
             "useAPI": False,  # Set to True if using TIK for automatic ID searching, won't work great until folder searching is added to UNIT3D API
             "api_key": "TIK api key",
             "announce_url": "https://cinematik.net/announce/",
             # "anon": False,
+            # "tracker_qbit_tag": "TIK",
             # "modq": True, # Not working for now, ignored unless correct class
         },
         "TL": {
             "announce_key": "TL announce key",
+            # "tracker_qbit_tag": "TL",
         },
         "TOCA": {
             "api_key": "TOCA api key",
             "announce_url": "https://tocashare.biz/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "TOCA",
         },
         "TTG": {
             "username": "username",
@@ -425,37 +465,44 @@ config = {
             "user_id": "user_id",
             "announce_url": "https://totheglory.im/announce/",
             # "anon" : False
+            # "tracker_qbit_tag": "TTG",
         },
         "TVC": {
             "api_key": "TVC API Key",
             "announce_url": "https://tvchaosuk.com/announce/<PASSKEY>",
             # "anon": "False"
+            # "tracker_qbit_tag": "TVC",
         },
         "ULCX": {
             "api_key": "ULCX api key",
             "announce_url": "https://upload.cx/announce/customannounceurl",
             # "anon" : False,
+            # "tracker_qbit_tag": "ULCX",
         },
         # "UNIT3D_TEMPLATE": {
         #    "api_key": "UNIT3D_TEMPLATE api key",
         #    "announce_url": "https://domain.tld/announce/customannounceurl",
         #    # "anon" : False,
         #    # "modq" : False  ## Not working yet
+        #    # "tracker_qbit_tag": "UNIT3D_TEMPLATE",
         # },
         "UTP": {
             "api_key": "UTP api key",
             "announce_url": "https://UTP/announce/customannounceurl",
             # "anon" : False
+            # "tracker_qbit_tag": "UTP",
         },
         "YOINK": {
             "api_key": "YOINK api key",
             "announce_url": "https://yoinked.org/announce/customannounceurl",
             # "anon" : "False"
+            # "tracker_qbit_tag": "YOINK",
         },
         "YUS": {
             "api_key": "YUS api key",
             "announce_url": "https://yu-scene.net/announce/customannounceurl",
             # "anon" : "False"
+            # "tracker_qbit_tag": "YUS",
         },
     },
 
