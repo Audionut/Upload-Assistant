@@ -9,7 +9,7 @@ from src.imdb import get_imdb_info_api, search_imdb
 from src.trackermeta import update_metadata_from_tracker
 from src.tmdb import tmdb_other_meta, get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, get_episode_details
 from src.region import get_region, get_distributor, get_service
-from src.exportmi import exportInfo, mi_resolution
+from src.exportmi import exportInfo, mi_resolution, combine_dvd_mediainfo
 from src.getseasonep import get_season_episode
 from src.btnid import get_btn_torrents, get_bhd_torrents
 from src.tvdb import get_tvdb_episode_data, get_tvdb_series_episodes
@@ -146,11 +146,13 @@ class Prep():
                 meta['search_year'] = guessit(meta['discs'][0]['path'])['year']
             except Exception:
                 meta['search_year'] = ""
-            if not meta.get('edit', False):
-                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], export_text=False)
-                meta['mediainfo'] = mi
-            else:
-                mi = meta['mediainfo']
+            try:
+                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.json", 'r', encoding='utf-8') as f:
+                    mi = json.load(f)
+                    meta['mediainfo'] = mi
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                console.print(f"[red]Error loading MediaInfo JSON: {e}")
+                mi = None
             meta['resolution'] = await self.get_resolution(guessit(video), meta['uuid'], base_dir)
             meta['sd'] = await self.is_sd(meta['resolution'])
 
@@ -878,17 +880,68 @@ class Prep():
                 discs, bdinfo = await parse.get_bdinfo(meta, meta['discs'], meta['uuid'], meta['base_dir'], meta['discs'])
         elif is_disc == "DVD":
             discs = await parse.get_dvdinfo(discs)
-            export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')
-            export.write(discs[0]['ifo_mi'])
-            export.close()
-            export_clean = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8')
-            export_clean.write(discs[0]['ifo_mi'])
-            export_clean.close()
+
+            # Get the path to the MediaInfo output file
+            mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+            mediainfo_ifo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_IFO.txt"
+            mediainfo_vob_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_VOB.txt"
+
+            # First, write the individual MediaInfo files
+            with open(mediainfo_ifo_path, 'w', newline="", encoding='utf-8') as export:
+                export.write(discs[0]['ifo_mi'])
+
+            with open(mediainfo_vob_path, 'w', newline="", encoding='utf-8') as export:
+                export.write(discs[0]['vob_mi'])
+
+            # Now combine them
+            await combine_dvd_mediainfo(
+                vob_mi=discs[0]['vob_mi'],
+                ifo_mi=discs[0]['ifo_mi'],
+                output_path=mediainfo_path,
+                disc_size=discs[0].get('disc_size')
+            )
+
+            # Create a clean path version by removing file paths
+            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_clean:
+                with open(mediainfo_path, 'r', encoding='utf-8') as source:
+                    content = source.read()
+                    # Replace actual file paths with just the filenames
+                    for disc in discs:
+                        content = content.replace(disc['path'], os.path.basename(disc['path']))
+                    export_clean.write(content)
         elif is_disc == "HDDVD":
             discs = await parse.get_hddvd_info(discs, meta)
-            export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')
-            export.write(discs[0]['evo_mi'])
-            export.close()
+
+            console.print("[yellow]Exporting MediaInfo for HD-DVD...")
+
+            # Create a clean path version
+            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export_clean:
+                # Replace paths with basename
+                clean_content = discs[0]['evo_mi']
+                for evo_data in discs[0].get('evo_files', []):
+                    original_path = evo_data['path']
+                    new_path = f"{meta['uuid']}"
+                    clean_content = clean_content.replace(original_path, new_path)
+                export_clean.write(clean_content)
+                export_clean.flush()
+
+            # Write individual MediaInfo files for each EVO file
+            if 'evo_files' in discs[0]:
+                for evo_data in discs[0]['evo_files']:
+                    filename = evo_data['file']
+                    sanitized_filename = filename.replace(' ', '_').replace('.', '_')
+                    evo_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_{sanitized_filename}.txt"
+
+                    with open(evo_mi_path, 'w', newline="", encoding='utf-8') as export:
+                        clean_content = evo_data['mediainfo']
+                        clean_content = clean_content.replace(evo_data['path'], os.path.basename(evo_data['path']))
+                        for path_segment in os.path.dirname(evo_data['path']).split(os.sep):
+                            if path_segment and len(path_segment) > 3:  # Skip very short segments (like drive letters)
+                                cleaned_content = clean_content.replace(path_segment, "***")
+
+                        export.write(cleaned_content)
+
+                    console.print(f"[green]MediaInfo for {filename} exported with paths sanitized.")
         discs = sorted(discs, key=lambda d: d['name'])
         return is_disc, videoloc, bdinfo, discs
 
