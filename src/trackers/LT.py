@@ -91,9 +91,6 @@ class LT():
             audios = [
                 audio for audio in meta['mediainfo']['media']['track'][2:]
                 if audio.get('@type') == 'Audio'
-                and audio.get('Language') in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co',
-                                              'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
-                                              'es-py', 'es-pe', 'es-pr', 'es-uy'}
                 and "commentary" not in str(audio.get('Title', '')).lower()
                 ]
             if len(audios) > 0:  # If there is at least 1 audio spanish
