@@ -304,6 +304,7 @@ class Prep():
         meta['imdb_manual'] = meta.get('imdb_manual') or 0
         meta['mal_manual'] = meta.get('mal_manual') or 0
         meta['tvdb_manual'] = meta.get('tvdb_manual') or 0
+        meta['tvmaze_manual'] = meta.get('tvmaze_manual') or 0
 
         # Set tmdb_id
         try:
@@ -313,7 +314,7 @@ class Prep():
 
         # Set imdb_id with proper handling for 'tt' prefix
         try:
-            if not meta['imdb_id']:
+            if not meta.get('imdb_id'):
                 imdb_value = meta['imdb_manual']
                 if imdb_value:
                     if str(imdb_value).startswith('tt'):
@@ -336,6 +337,11 @@ class Prep():
             meta['tvdb_id'] = int(meta['tvdb_manual'])
         except (ValueError, TypeError):
             meta['tvdb_id'] = 0
+
+        try:
+            meta['tvmaze_id'] = int(meta['tvmaze_manual'])
+        except (ValueError, TypeError):
+            meta['tvmaze_id'] = 0
 
         if meta.get('category', None) is not None:
             meta['category'] = meta['category'].upper()
@@ -456,8 +462,185 @@ class Prep():
         meta['we_checked_tvdb'] = False
         meta['we_checked_tmdb'] = False
 
+        # if we have all of the ids, search everything all at once
+        if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
+            # Create a list of all tasks to run in parallel
+            all_tasks = [
+                # Core metadata tasks
+                tmdb_other_meta(
+                    tmdb_id=meta['tmdb_id'],
+                    path=meta.get('path'),
+                    search_year=meta.get('search_year'),
+                    category=meta.get('category'),
+                    imdb_id=meta.get('imdb_id', 0),
+                    manual_language=meta.get('manual_language'),
+                    anime=meta.get('anime', False),
+                    mal_manual=meta.get('mal_manual'),
+                    aka=meta.get('aka', ''),
+                    original_language=meta.get('original_language'),
+                    poster=meta.get('poster'),
+                    debug=meta.get('debug', False),
+                    mode=meta.get('mode', 'cli'),
+                    tvdb_id=meta.get('tvdb_id', 0)
+                ),
+                get_imdb_info_api(
+                    meta['imdb_id'],
+                    manual_language=meta.get('manual_language'),
+                    debug=meta.get('debug', False)
+                )
+            ]
+
+            # Add episode-specific tasks if this is a TV show with episodes
+            if (meta['category'] == 'TV' and not meta.get('tv_pack', False) and
+                    'season_int' in meta and 'episode_int' in meta and meta.get('episode_int') != 0):
+
+                # Add TVDb task if we have credentials
+                if tvdb_api and tvdb_token:
+                    all_tasks.append(
+                        get_tvdb_episode_data(
+                            meta['base_dir'],
+                            tvdb_token,
+                            meta.get('tvdb_id'),
+                            meta.get('season_int'),
+                            meta.get('episode_int'),
+                            api_key=tvdb_api,
+                            debug=meta.get('debug', False)
+                        )
+                    )
+
+                # Add TMDb episode details task
+                all_tasks.append(
+                    get_episode_details(
+                        meta.get('tmdb_id'),
+                        meta.get('season_int'),
+                        meta.get('episode_int'),
+                        debug=meta.get('debug', False)
+                    )
+                )
+
+                # Add TVMaze episode data task
+                all_tasks.append(
+                    get_tvmaze_episode_data(
+                        meta.get('tvmaze_id'),
+                        meta.get('season_int'),
+                        meta.get('episode_int')
+                    )
+                )
+
+            # Execute all tasks in parallel
+            results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+            # Process core metadata results
+            tmdb_metadata, imdb_info = results[0:2]
+            result_index = 2  # Start processing episode data from this index
+
+            # Process TMDB metadata
+            if not isinstance(tmdb_metadata, Exception) and tmdb_metadata:
+                meta.update(tmdb_metadata)
+            else:
+                console.print("[yellow]Warning: Could not get TMDB metadata")
+
+            # Process IMDB info
+            if isinstance(imdb_info, dict):
+                meta['imdb_info'] = imdb_info
+                meta['tv_year'] = imdb_info.get('tv_year', None)
+            elif isinstance(imdb_info, Exception):
+                console.print(f"[red]IMDb API call failed: {imdb_info}[/red]")
+                meta['imdb_info'] = meta.get('imdb_info', {})  # Keep previous IMDb info if it exists
+            else:
+                console.print("[red]Unexpected IMDb response, setting imdb_info to empty.[/red]")
+                meta['imdb_info'] = {}
+
+            # Process episode data if this is a TV show
+            if meta['category'] == 'TV' and not meta.get('tv_pack', False) and meta.get('episode_int', 0) != 0:
+                # Process TVDb episode data (if included)
+                if tvdb_api and tvdb_token:
+                    tvdb_episode_data = results[result_index]
+                    result_index += 1
+
+                    if tvdb_episode_data and not isinstance(tvdb_episode_data, Exception):
+                        console.print("[green]TVDB episode data retrieved successfully.[/green]")
+                        meta['tvdb_episode_data'] = tvdb_episode_data
+                        meta['we_checked_tvdb'] = True
+
+                        # Process episode name
+                        if meta['tvdb_episode_data'].get('episode_name'):
+                            episode_name = meta['tvdb_episode_data'].get('episode_name')
+                            if episode_name and isinstance(episode_name, str) and episode_name.strip():
+                                if 'episode' in episode_name.lower():
+                                    meta['auto_episode_title'] = None
+                                    meta['tvdb_episode_title'] = None
+                                else:
+                                    meta['tvdb_episode_title'] = episode_name.strip()
+                                    meta['auto_episode_title'] = episode_name.strip()
+                            else:
+                                meta['auto_episode_title'] = None
+
+                        # Process overview
+                        if meta['tvdb_episode_data'].get('overview') and meta.get('original_language') == "en":
+                            overview = meta['tvdb_episode_data'].get('overview')
+                            if overview and isinstance(overview, str) and overview.strip():
+                                meta['overview_meta'] = overview.strip()
+                            else:
+                                meta['overview_meta'] = None
+                        else:
+                            meta['overview_meta'] = None
+
+                        # Process season and episode numbers
+                        if meta['tvdb_episode_data'].get('season_name'):
+                            meta['tvdb_season_name'] = meta['tvdb_episode_data'].get('season_name')
+
+                        if meta['tvdb_episode_data'].get('season_number'):
+                            meta['tvdb_season_number'] = meta['tvdb_episode_data'].get('season_number')
+
+                        if meta['tvdb_episode_data'].get('episode_number'):
+                            meta['tvdb_episode_number'] = meta['tvdb_episode_data'].get('episode_number')
+                    elif isinstance(tvdb_episode_data, Exception):
+                        console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episode_data}")
+
+                # Process TMDb episode data
+                tmdb_episode_data = results[result_index]
+                result_index += 1
+
+                if not isinstance(tmdb_episode_data, Exception) and tmdb_episode_data:
+                    meta['tmdb_episode_data'] = tmdb_episode_data
+                    meta['we_checked_tmdb'] = True
+
+                    # Only set title if not already set
+                    if meta.get('auto_episode_title') is None and tmdb_episode_data.get('name') is not None:
+                        if 'episode' in tmdb_episode_data.get('name', '').lower():
+                            meta['auto_episode_title'] = None
+                        else:
+                            meta['auto_episode_title'] = tmdb_episode_data['name']
+
+                    # Only set overview if not already set
+                    if meta.get('overview_meta') is None and tmdb_episode_data.get('overview') is not None:
+                        meta['overview_meta'] = tmdb_episode_data.get('overview', None)
+                elif isinstance(tmdb_episode_data, Exception):
+                    console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}")
+
+                # Process TVMaze episode data
+                if result_index < len(results):
+                    tvmaze_episode_data = results[result_index]
+
+                    if not isinstance(tvmaze_episode_data, Exception) and tvmaze_episode_data:
+                        meta['tvmaze_episode_data'] = tvmaze_episode_data
+
+                        # Only set title if not already set
+                        if meta.get('auto_episode_title') is None and tvmaze_episode_data.get('name') is not None:
+                            if 'episode' in tvmaze_episode_data.get('name', '').lower():
+                                meta['auto_episode_title'] = None
+                            else:
+                                meta['auto_episode_title'] = tvmaze_episode_data['name']
+
+                        # Only set overview if not already set
+                        if meta.get('overview_meta') is None and tvmaze_episode_data.get('summary') is not None:
+                            meta['overview_meta'] = tvmaze_episode_data.get('summary', None)
+                    elif isinstance(tvmaze_episode_data, Exception):
+                        console.print(f"[yellow]TVMaze episode data retrieval failed: {tvmaze_episode_data}")
+
         # Check if both IMDb and TVDB IDs are present first
-        if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
+        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
             tasks = [
                 get_tmdb_from_imdb(
                     meta['imdb_id'],
