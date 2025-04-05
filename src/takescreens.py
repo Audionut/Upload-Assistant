@@ -1041,6 +1041,15 @@ async def capture_screenshot(args):
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
+            # Get the resolution and convert it to integer
+            resol = int(''.join(filter(str.isdigit, meta.get('resolution','1080p'))))
+            # Assess the font size from the resolution
+            font_size = round(24*resol/1080)
+            x_all = round(10*resol/1080)
+            y_number = round(10*resol/1080)
+            y_type = round(40*resol/1080)
+            y_hdr = round(70*resol/1080)
+
             # Use the filtered output with frame info
             base_text = ff
 
@@ -1048,9 +1057,9 @@ async def capture_screenshot(args):
             base_text = base_text.filter('drawtext',
                                          text=f"Frame Number: {frame_number}",
                                          fontcolor='white',
-                                         fontsize=24,
-                                         x=10,
-                                         y=10,
+                                         fontsize=font_size,
+                                         x=x_all,
+                                         y=y_number,
                                          box=1,
                                          boxcolor='black@0.5'
                                          )
@@ -1059,9 +1068,9 @@ async def capture_screenshot(args):
             base_text = base_text.filter('drawtext',
                                          text=f"Frame Type: {frame_type}",
                                          fontcolor='white',
-                                         fontsize=24,
-                                         x=10,
-                                         y=40,
+                                         fontsize=font_size,
+                                         x=x_all,
+                                         y=y_type,
                                          box=1,
                                          boxcolor='black@0.5'
                                          )
@@ -1071,9 +1080,9 @@ async def capture_screenshot(args):
                 base_text = base_text.filter('drawtext',
                                              text="Tonemapped HDR",
                                              fontcolor='white',
-                                             fontsize=24,
-                                             x=10,
-                                             y=70,
+                                             fontsize=font_size,
+                                             x=x_all,
+                                             y=y_hdr,
                                              box=1,
                                              boxcolor='black@0.5'
                                              )
