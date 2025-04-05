@@ -190,19 +190,25 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                 line = line.strip()
 
                 # Detect hashing progress, speed, and percentage
-                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:MB|MiB)/s)\]\s+(\d+)%", line)
+                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
                 if match:
-                    speed = match.group(1)  # Extract speed (e.g., "12734.21 MB/s")
-                    pieces_done = int(match.group(2))  # Extract percentage (e.g., "60")
+                    speed = match.group(1)  # Extract speed
+                    pieces_done = int(match.group(2))  # Extract percentage
 
-                    # Estimate ETA (Time Remaining)
-                    elapsed_time = time.time() - mkbrr_start_time
-                    if pieces_done > 0:
-                        estimated_total_time = elapsed_time / (pieces_done / 100)
-                        eta_seconds = max(0, estimated_total_time - elapsed_time)
+                    # ETA extraction
+                    eta_match = re.search(r'\[(\d+)s:(\d+)s\]', line)
+                    if eta_match:
+                        eta_seconds = int(eta_match.group(2))
                         eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
                     else:
-                        eta = "--:--"  # Placeholder if we can't estimate yet
+                        # Fallback to calculating ETA if not directly available
+                        elapsed_time = time.time() - mkbrr_start_time
+                        if pieces_done > 0:
+                            estimated_total_time = elapsed_time / (pieces_done / 100)
+                            eta_seconds = max(0, estimated_total_time - elapsed_time)
+                            eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
+                        else:
+                            eta = "--:--"  # Placeholder if we can't estimate yet
 
                     cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
 
