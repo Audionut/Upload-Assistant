@@ -1,6 +1,8 @@
 ## This is just a template file. Replace with your own values and rename to user-args.json
-## Currently only tmdb_id is supported, and this file is parsed after metadata processing
+## 'entries' are tmdb only and update args **after** metadata processing
 ## Changing category or season or episode for instance, is ill advised as these are used in metadata processing
+## 'other_ids' are for tvdb or imdb and update args before metadata processing
+## all args with 'other_ids' should be quite safe
 ## Not throughly tested, for args try using a list instead of a string or vice versa if you encounter issues
 
 {
@@ -21,5 +23,25 @@
           "--manual_frames=100,200,300,400,500,600,700"
         ]
       }
-    ]
-  }
+      ],
+      "other_ids": [
+        {
+          "imdb_id": "12345",
+          "args": [
+            "--no-aka",
+            "--not-anime",
+            "--category", "tv"
+          ]
+        },
+        {
+          "tvdb_id": "45678",
+          "args": [
+            "--no-aka",
+            "--not-anime",
+            "--category", "tv",
+            "--tmdb", "12345",
+            "--tvmaze", "12345"
+          ]
+        }
+      ]
+    }

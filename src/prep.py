@@ -426,12 +426,18 @@ class Prep():
         else:
             console.print("Skipping existing search as meta already populated")
 
+        user_overrides = config['DEFAULT'].get('user_overrides', False)
+        if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0):
+            meta = await self.get_source_override(meta, other_id=True)
+            meta['no_override'] = True
+
         if meta['debug']:
             console.print("ID inputs into prep")
             console.print("category:", meta.get("category"))
             console.print(f"Raw TVDB ID: {meta['tvdb_id']} (type: {type(meta['tvdb_id']).__name__})")
             console.print(f"Raw IMDb ID: {meta['imdb_id']} (type: {type(meta['imdb_id']).__name__})")
             console.print(f"Raw TMDb ID: {meta['tmdb_id']} (type: {type(meta['tmdb_id']).__name__})")
+            console.print(f"Raw TVMAZE ID: {meta['tvmaze_id']} (type: {type(meta['tvmaze_id']).__name__})")
             console.print(f"Raw MAL ID: {meta['mal_id']} (type: {type(meta['mal_id']).__name__})")
         console.print("[yellow]Building meta data.....")
         if meta['debug']:
@@ -839,8 +845,8 @@ class Prep():
                         meta['episode'] = "E" + str(meta['episode_int']).zfill(2)
 
         meta = await self.tag_override(meta)
-        user_overrides = config['DEFAULT'].get('user_overrides', False)
-        if user_overrides:
+
+        if user_overrides and not meta.get('no_override', False):
             meta = await self.get_source_override(meta)
         if meta.get('tag') == "-SubsPlease":  # SubsPlease-specific
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])  # Get all tracks
@@ -2099,38 +2105,71 @@ class Prep():
 
         return languages
 
-    async def get_source_override(self, meta):
+    async def get_source_override(self, meta, other_id=False):
         try:
             with open(f"{meta['base_dir']}/data/templates/user-args.json", 'r', encoding="utf-8") as f:
+                console.print("[green]Found user-args.json")
                 user_args = json.load(f)
 
             current_tmdb_id = meta.get('tmdb_id', 0)
+            current_imdb_id = meta.get('imdb_id', 0)
+            current_tvdb_id = meta.get('tvdb_id', 0)
 
             # Convert to int for comparison if it's a string
             if isinstance(current_tmdb_id, str) and current_tmdb_id.isdigit():
                 current_tmdb_id = int(current_tmdb_id)
 
-            for entry in user_args.get('entries', []):
-                entry_tmdb_id = entry.get('tmdb_id')
-                args = entry.get('args', [])
+            if isinstance(current_imdb_id, str) and current_imdb_id.isdigit():
+                current_imdb_id = int(current_imdb_id)
 
-                if not entry_tmdb_id:
-                    continue
+            if isinstance(current_tvdb_id, str) and current_tvdb_id.isdigit():
+                current_tvdb_id = int(current_tvdb_id)
 
-                # Parse the entry's TMDB ID from the user-args.json file
-                entry_category, entry_normalized_id = await self.parse_tmdb_id(entry_tmdb_id)
-                if entry_category != meta['category']:
-                    if meta['debug']:
-                        console.print(f"Skipping user entry because override category {entry_category} does not match UA category {meta['category']}:")
-                    continue
+            if not other_id:
+                for entry in user_args.get('entries', []):
+                    entry_tmdb_id = entry.get('tmdb_id')
+                    args = entry.get('args', [])
 
-                # Check if IDs match
-                if entry_normalized_id == current_tmdb_id:
-                    console.print(f"[green]Found matching override for TMDb ID: {entry_normalized_id}")
-                    console.print(f"[yellow]Applying arguments: {' '.join(args)}")
+                    if not entry_tmdb_id:
+                        continue
 
-                    meta = await self.apply_args_to_meta(meta, args)
-                    break
+                    # Parse the entry's TMDB ID from the user-args.json file
+                    entry_category, entry_normalized_id = await self.parse_tmdb_id(entry_tmdb_id)
+                    if entry_category != meta['category']:
+                        if meta['debug']:
+                            console.print(f"Skipping user entry because override category {entry_category} does not match UA category {meta['category']}:")
+                        continue
+
+                    # Check if IDs match
+                    if entry_normalized_id == current_tmdb_id:
+                        console.print(f"[green]Found matching override for TMDb ID: {entry_normalized_id}")
+                        console.print(f"[yellow]Applying arguments: {' '.join(args)}")
+
+                        meta = await self.apply_args_to_meta(meta, args)
+                        break
+
+            else:
+                for entry in user_args.get('other_ids', []):
+                    # Check for TVDB ID match
+                    if 'tvdb_id' in entry and str(entry['tvdb_id']) == str(current_tvdb_id) and current_tvdb_id != 0:
+                        args = entry.get('args', [])
+                        console.print(f"[green]Found matching override for TVDb ID: {current_tvdb_id}")
+                        console.print(f"[yellow]Applying arguments: {' '.join(args)}")
+                        meta = await self.apply_args_to_meta(meta, args)
+                        break
+
+                    # Check for IMDB ID match (without tt prefix)
+                    if 'imdb_id' in entry:
+                        entry_imdb = entry['imdb_id']
+                        if str(entry_imdb).startswith('tt'):
+                            entry_imdb = entry_imdb[2:]
+
+                        if str(entry_imdb) == str(current_imdb_id) and current_imdb_id != 0:
+                            args = entry.get('args', [])
+                            console.print(f"[green]Found matching override for IMDb ID: {current_imdb_id}")
+                            console.print(f"[yellow]Applying arguments: {' '.join(args)}")
+                            meta = await self.apply_args_to_meta(meta, args)
+                            break
 
         except (FileNotFoundError, json.JSONDecodeError) as e:
             console.print(f"[red]Error loading user-args.json: {e}")
@@ -2173,6 +2212,7 @@ class Prep():
 
         try:
             arg_keys_to_track = set()
+            arg_values = {}
 
             i = 0
             while i < len(args):
@@ -2181,7 +2221,10 @@ class Prep():
                     # Remove '--' prefix and convert dashes to underscores
                     key = arg[2:].replace('-', '_')
                     arg_keys_to_track.add(key)
+
+                    # Store the value if it exists
                     if i + 1 < len(args) and not args[i + 1].startswith('--'):
+                        arg_values[key] = args[i + 1]  # Store the value with its key
                         i += 1
                 i += 1
 
@@ -2195,8 +2238,36 @@ class Prep():
             updated_meta['path'] = meta.get('path')
             modified_keys = []
 
+            # Handle ID arguments specifically
+            id_mappings = {
+                'tmdb': ['tmdb_id', 'tmdb', 'tmdb_manual'],
+                'tvmaze': ['tvmaze_id', 'tvmaze', 'tvmaze_manual'],
+                'imdb': ['imdb_id', 'imdb', 'imdb_manual'],
+                'tvdb': ['tvdb_id', 'tvdb', 'tvdb_manual'],
+            }
+
             for key in arg_keys_to_track:
-                if key in updated_meta and key in meta:
+                # Special handling for ID fields
+                if key in id_mappings:
+                    if key in arg_values:  # Check if we have a value for this key
+                        value = arg_values[key]
+                        # Convert to int if possible
+                        try:
+                            if isinstance(value, str) and value.isdigit():
+                                value = int(value)
+                            elif isinstance(value, str) and key == 'imdb' and value.startswith('tt'):
+                                value = int(value[2:])  # Remove 'tt' prefix and convert to int
+                        except ValueError:
+                            pass
+
+                        # Update all related keys
+                        for related_key in id_mappings[key]:
+                            meta[related_key] = value
+                            modified_keys.append(related_key)
+                            if meta['debug']:
+                                console.print(f"[Debug] Override: {related_key} changed from {meta.get(related_key)} to {value}")
+                # Handle regular fields
+                elif key in updated_meta and key in meta:
                     # Skip path to preserve original
                     if key == 'path':
                         continue
