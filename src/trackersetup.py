@@ -30,6 +30,7 @@ from src.trackers.R4E import R4E
 from src.trackers.RAS import RAS
 from src.trackers.RF import RF
 from src.trackers.RTF import RTF
+from src.trackers.SAM import SAM
 from src.trackers.SHRI import SHRI
 from src.trackers.SN import SN
 from src.trackers.SP import SP
@@ -41,6 +42,7 @@ from src.trackers.TL import TL
 from src.trackers.TOCA import TOCA
 from src.trackers.TTG import TTG
 from src.trackers.TVC import TVC
+from src.trackers.UHD import UHD
 from src.trackers.ULCX import ULCX
 from src.trackers.UTP import UTP
 from src.trackers.YOINK import YOINK
@@ -448,13 +450,13 @@ tracker_class_map = {
     'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'BHD': BHD, 'BHDTV': BHDTV, 'BLU': BLU, 'CBR': CBR, 'DP': DP,
     'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT, 'LCD': LCD,
     'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PSS': PSS, 'PTP': PTP, 'PTER': PTER,
-    'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
-    'TIK': TIK, 'TL': TL, 'TOCA': TOCA, 'TVC': TVC, 'TTG': TTG, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
+    'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
+    'TIK': TIK, 'TL': TL, 'TOCA': TOCA, 'TVC': TVC, 'TTG': TTG, 'UHD': UHD, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
 }
 
 api_trackers = {
     'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'ITT', 'LCD', 'LST', 'LT',
-    'OE', 'OTW', 'PSS', 'RAS', 'RF', 'R4E', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'ULCX', 'UTP', 'YOINK', 'YUS'
+    'OE', 'OTW', 'PSS', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 
 other_api_trackers = {
