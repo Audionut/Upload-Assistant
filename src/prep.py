@@ -292,6 +292,13 @@ class Prep():
         client = Clients(config=config)
         only_id = config['DEFAULT'].get('only_id', False) if not meta.get('only_id') else False
 
+        meta['skip_auto_torrent'] = config['DEFAULT'].get('skip_auto_torrent', False)
+        hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
+        tracker_ids = ['ptp', 'bhd', 'hdb', 'blu', 'btn', 'oe', 'aither', 'lst']
+
+        if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids):
+            await client.get_pathed_torrents(meta['path'], meta)
+
         # Ensure all manual IDs have proper default values
         meta['tmdb_manual'] = meta.get('tmdb_manual') or 0
         meta['imdb_manual'] = meta.get('imdb_manual') or 0
@@ -339,7 +346,7 @@ class Prep():
         if meta.get('category', None) is not None:
             meta['category'] = meta['category'].upper()
 
-        if meta.get('infohash') is not None:
+        if meta.get('infohash') is not None and 'base_torrent_created' in meta and not meta['base_torrent_created']:
             meta = await client.get_ptp_from_hash(meta)
         if not meta.get('image_list') and not meta.get('edit', False):
             # Reuse information from trackers with fallback
@@ -420,6 +427,73 @@ class Prep():
 
                 if not found_match:
                     console.print("[yellow]No matches found on any trackers.[/yellow]")
+
+                if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV":
+                    from src.trackers.COMMON import COMMON
+                    common = COMMON(config)
+
+                    # Prioritize trackers in this order
+                    tracker_order = ["BLU", "AITHER", "LST", "OE", "TIK"]
+
+                    # Check if we have stored torrent comments
+                    if meta.get('torrent_comments'):
+                        # Try to extract tracker IDs from stored comments
+                        for tracker_name in tracker_order:
+                            # Skip if we already have region and distributor
+                            if meta.get('region') and meta.get('distributor'):
+                                break
+
+                            tracker_id = None
+                            tracker_key = tracker_name.lower()
+                            # Check each stored comment for matching tracker URL
+                            for comment_data in meta.get('torrent_comments', []):
+                                comment = comment_data.get('comment', '')
+
+                                if "blutopia.cc" in comment and tracker_name == "BLU":
+                                    match = re.search(r'/(\d+)$', comment)
+                                    if match:
+                                        tracker_id = match.group(1)
+                                        meta[tracker_key] = tracker_id
+                                        break
+                                elif "aither.cc" in comment and tracker_name == "AITHER":
+                                    match = re.search(r'/(\d+)$', comment)
+                                    if match:
+                                        tracker_id = match.group(1)
+                                        meta[tracker_key] = tracker_id
+                                        break
+                                elif "lst.gg" in comment and tracker_name == "LST":
+                                    match = re.search(r'/(\d+)$', comment)
+                                    if match:
+                                        tracker_id = match.group(1)
+                                        meta[tracker_key] = tracker_id
+                                        break
+                                elif "onlyencodes.cc" in comment and tracker_name == "OE":
+                                    match = re.search(r'/(\d+)$', comment)
+                                    if match:
+                                        tracker_id = match.group(1)
+                                        meta[tracker_key] = tracker_id
+                                        break
+                                elif "cinematik.net" in comment and tracker_name == "TIK":
+                                    match = re.search(r'/(\d+)$', comment)
+                                    if match:
+                                        tracker_id = match.group(1)
+                                        meta[tracker_key] = tracker_id
+                                        break
+
+                            # If we found a tracker ID, try to get region/distributor data
+                            if tracker_id:
+                                if meta.get('debug', False):
+                                    console.print(f"[cyan]Using {tracker_name} ID {tracker_id} to get region/distributor info[/cyan]")
+                                # Get the tracker instance
+                                tracker_instance = tracker_class_map[tracker_name](config=config)
+                                # Try to get region/distributor data
+                                await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, tracker_id)
+                                # Stop if we found both region and distributor
+                                if meta.get('region') and meta.get('distributor'):
+                                    if meta.get('debug', False):
+                                        console.print(f"[green]Successfully found region and distributor from {tracker_name}[/green]")
+                                    break
+
             else:
                 console.print("[yellow]Warning: No valid search term available, skipping tracker updates.[/yellow]")
         else:

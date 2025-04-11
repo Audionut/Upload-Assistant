@@ -671,6 +671,34 @@ class COMMON():
             return True
         return False
 
+    async def unit3d_region_distributor(self, meta, tracker, torrent_url, id=None):
+        params = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
+        url = f"{torrent_url}{id}"
+        response = requests.get(url=url, params=params)
+        try:
+            json_response = response.json()
+        except ValueError:
+            return
+        try:
+            data = json_response.get('data', [])
+            if data == "404":
+                console.print("[yellow]No data found (404). Returning None.[/yellow]")
+                return
+            if data and isinstance(data, list):
+                attributes = data[0].get('attributes', {})
+                if not meta.get('region') and attributes.get('region_id'):
+                    meta['region'] = attributes.get('region')
+                if not meta.get('distributor') and attributes.get('distributor_id'):
+                    meta['distributor'] = attributes.get('distributor')
+                if meta['debug']:
+                    console.print(f"[blue]Region ID: {attributes['region_id']}[/blue]")
+                    console.print(f"[blue]Distributor ID: {attributes['distributor_id']}[/blue]")
+                return
+        except Exception as e:
+            console.print_exception()
+            console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
+            return
+
     async def unit3d_torrent_info(self, tracker, torrent_url, search_url, meta, id=None, file_name=None, only_id=False):
         tmdb = imdb = tvdb = description = category = infohash = mal = files = None  # noqa F841
         imagelist = []
@@ -724,6 +752,10 @@ class COMMON():
                 tvdb = 0 if tvdb == 0 else tvdb
                 mal = 0 if mal == 0 else mal
                 imdb = 0 if imdb == 0 else imdb
+                if not meta.get('region') and attributes.get('region_id'):
+                    meta['region'] = attributes.get('region')
+                if not meta.get('distributor') and attributes.get('distributor_id'):
+                    meta['distributor'] = attributes.get('distributor')
             else:
                 # Handle response when searching by ID
                 if id and not data:
@@ -741,6 +773,10 @@ class COMMON():
                     tvdb = 0 if tvdb == 0 else tvdb
                     mal = 0 if mal == 0 else mal
                     imdb = 0 if imdb == 0 else imdb
+                    if not meta.get('region') and attributes.get('region_id'):
+                        meta['region'] = attributes.get('region')
+                    if not meta.get('distributor') and attributes.get('distributor_id'):
+                        meta['distributor'] = attributes.get('distributor')
                     # Handle file name extraction
                     files = attributes.get('files', [])
                     if files:
