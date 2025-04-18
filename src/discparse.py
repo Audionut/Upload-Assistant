@@ -14,11 +14,20 @@ from langcodes import Language
 from collections import defaultdict
 from src.console import console
 from data.config import config
+from src.exportmi import combine_hddvd_mediainfo
 
 
 class DiscParse():
     def __init__(self):
         self.config = config
+        # Map of non-standard language codes to ISO 639-1 codes
+        self.language_code_map = {
+            "jp": "ja",  # Japanese
+            "se": "sv",  # Swedish
+            "dk": "da",  # Danish
+            "br": "pt",  # Brazilian Portuguese
+            "cz": "cs",  # Czech
+        }
         pass
 
     """
@@ -432,6 +441,7 @@ class DiscParse():
             each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
 
             size = sum(os.path.getsize(f) for f in os.listdir('.') if os.path.isfile(f)) / float(1 << 30)
+            each['disc_size'] = round(size, 2)
             if size <= 7.95:
                 dvd_size = "DVD9"
                 if size <= 4.37:
@@ -545,144 +555,417 @@ class DiscParse():
                 evo_files = selected_playlist["evoFiles"]
                 total_size = selected_playlist["totalSize"]
 
+                try:
+                    os.makedirs(f"{meta['base_dir']}/tmp/{meta['uuid']}", exist_ok=True)
+
+                    # Get the original XML string by reading the file
+                    with open(playlist_file, 'r', encoding='utf-8') as f:
+                        xml_content = f.read()
+
+                    # Format the selected playlist for the description, including the XML
+                    playlist_description = self.format_playlist_for_description(
+                        [selected_playlist],
+                        include_xml=True,
+                        xml_string=xml_content
+                    )
+
+                    header = f"{os.path.basename(meta['path'])}\n\n"
+
+                    full_description = header + playlist_description
+                    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.nfo", 'w', encoding='utf-8', newline="") as f:
+                        f.write(full_description)
+
+                    console.print("[green]Generated description file from HD DVD playlist")
+
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Failed to generate description file: {e}")
+                    console.print(traceback.format_exc())
+
                 # Overwrite mediainfo File size and Duration
                 if evo_files:
                     # Filter out non-existent files
                     existing_evo_files = [evo for evo in evo_files if os.path.exists(evo)]
 
-                    if len(existing_evo_files) >= 2:
-                        # Select the second .EVO file
-                        selected_evo_path = existing_evo_files[1]
-                    else:
-                        # Fallback to the largest file
-                        selected_evo_path = max(
-                            existing_evo_files,
-                            key=os.path.getsize
+                    if existing_evo_files:
+                        # Create a list to store MediaInfo data for each EVO file
+                        mediainfo_data = []
+
+                        # Generate MediaInfo for each EVO file
+                        for evo_file in existing_evo_files:
+                            evo_filename = os.path.basename(evo_file)
+                            console.print(f"[yellow]Generating MediaInfo for {evo_filename}...")
+
+                            # Generate MediaInfo
+                            evo_mediainfo = MediaInfo.parse(evo_file, output='STRING', full=False)
+
+                            # Add to the list
+                            mediainfo_data.append({
+                                'file': evo_filename,
+                                'path': evo_file,
+                                'mediainfo': evo_mediainfo
+                            })
+
+                        # Store the MediaInfo data in the disc object
+                        each['evo_files'] = mediainfo_data
+
+                        # Combine all MediaInfo files
+                        console.print("[yellow]Combining MediaInfo from all EVO files...")
+                        combined_mediainfo = await combine_hddvd_mediainfo(
+                            mediainfo_data,
+                            total_size,
+                            self.format_duration(selected_playlist['titleDuration'])
                         )
 
-                    if not os.path.exists(selected_evo_path):
-                        raise FileNotFoundError(f"Selected .EVO file {selected_evo_path} does not exist.")
+                        # Now modify the combined MediaInfo with additional details
+                        modified_mediainfo = combined_mediainfo
 
-                    # Parse MediaInfo for the largest .EVO file
-                    original_mediainfo = MediaInfo.parse(selected_evo_path, output='STRING', full=False)
+                        # Split MediaInfo into blocks for easier manipulation
+                        mediainfo_blocks = modified_mediainfo.replace("\r\n", "\n").split("\n\n")
 
-                    modified_mediainfo = re.sub(
-                        r"File size\s+:\s+[^\r\n]+",
-                        f"File size                                : {total_size / (1024 ** 3):.2f} GiB",
-                        original_mediainfo
-                    )
-                    modified_mediainfo = re.sub(
-                        r"Duration\s+:\s+[^\r\n]+",
-                        f"Duration                                 : {self.format_duration(selected_playlist['titleDuration'])}",
-                        modified_mediainfo
-                    )
+                        # Add language details to the correct "Audio #X" block
+                        for audio_track in selected_playlist.get('audioTracks', []):
+                            track_number = int(audio_track.get('track', '1'))
+                            language = audio_track.get('language', '')
+                            langcode = audio_track.get('langcode', '')
+                            description = audio_track.get('description', '')
 
-                    # Split MediaInfo into blocks for easier manipulation
-                    mediainfo_blocks = modified_mediainfo.replace("\r\n", "\n").split("\n\n")
+                            # Debugging: Print the current audio track information
+                            console.print(f"[Debug] Processing Audio Track: {track_number}")
+                            console.print(f"        Language: {language}")
+                            console.print(f"        Langcode: {langcode}")
 
-                    # Add language details to the correct "Audio #X" block
-                    audio_tracks = selected_playlist.get("audioTracks", [])
-                    for audio_track in audio_tracks:
-                        # Extract track information from the playlist
-                        track_number = int(audio_track.get("track", "1"))  # Ensure track number is an integer
-                        language = audio_track.get("language", "")
-                        langcode = audio_track.get("langcode", "")
-                        description = audio_track.get("description", "")
+                            # Find the corresponding audio block in MediaInfo
+                            found_block = False
+                            for i, block in enumerate(mediainfo_blocks):
+                                # Check for both "Audio #X" format and plain "Audio" (when there's only one track)
+                                if (re.match(rf"^\s*Audio #\s*{track_number}\b.*", block) or
+                                        (track_number == 1 and block.strip().startswith("Audio") and not block.strip().startswith("Audio #"))):
 
-                        # Debugging: Print the current audio track information
-                        console.print(f"[Debug] Processing Audio Track: {track_number}")
-                        console.print(f"        Language: {language}")
-                        console.print(f"        Langcode: {langcode}")
+                                    found_block = True
+                                    console.print(f"[Debug] Found matching MediaInfo block for Audio Track {track_number}.")
 
-                        # Find the corresponding "Audio #X" block in MediaInfo
-                        found_block = False
+                                    # Check if Language is already present
+                                    if language and not re.search(rf"Language\s+:\s+{re.escape(language)}", block):
+                                        # Locate "Compression mode" line
+                                        compression_mode_index = block.find("Compression mode")
+                                        if compression_mode_index != -1:
+                                            # Find the end of the "Compression mode" line
+                                            line_end = block.find("\n", compression_mode_index)
+                                            if line_end == -1:
+                                                line_end = len(block)  # If no newline, append to the end of the block
+
+                                            # Construct the new Language entry
+                                            language_entry = f"\nLanguage                                 : {language}"
+
+                                            # Insert the new entry
+                                            updated_block = (
+                                                block[:line_end]  # Up to the end of the "Compression mode"
+                                                + language_entry
+                                                + block[line_end:]  # Rest of the block
+                                            )
+                                            mediainfo_blocks[i] = updated_block
+                                            console.print(f"[Debug] Updated MediaInfo Block for Audio Track {track_number}:")
+                                            console.print(updated_block)
+                                    break  # Stop processing once the correct block is modified
+
+                            # Debugging: Log if no matching block was found
+                            if not found_block:
+                                console.print(f"[Debug] No matching MediaInfo block found for Audio Track {track_number}.")
+
+                        # Add subtitle track languages to the correct "Text #X" block
+                        for subtitle_track in selected_playlist.get("subtitleTracks", []):
+                            track_number = int(subtitle_track.get("track", "1"))  # Ensure track number is an integer
+                            language = subtitle_track.get("language", "")
+                            langcode = subtitle_track.get("langcode", "")
+
+                            # Debugging: Print current subtitle track info
+                            console.print(f"[Debug] Processing Subtitle Track: {track_number}")
+                            console.print(f"        Language: {language}")
+                            console.print(f"        Langcode: {langcode}")
+
+                            # Find the corresponding Text block in MediaInfo
+                            found_block = False
+                            for i, block in enumerate(mediainfo_blocks):
+                                # Check for both "Text #X" format and plain "Text" (when there's only one track)
+                                if (re.match(rf"^\s*Text #\s*{track_number}\b", block) or
+                                        (track_number == 1 and block.strip().startswith("Text") and not block.strip().startswith("Text #"))):
+
+                                    found_block = True
+                                    console.print(f"[Debug] Found matching MediaInfo block for Subtitle Track {track_number}.")
+
+                                    # Insert Language details if not already present
+                                    if language and not re.search(rf"Language\s+:\s+{re.escape(language)}", block):
+                                        # Locate the "Format" line
+                                        format_index = block.find("Format")
+                                        if format_index != -1:
+                                            # Find the end of the "Format" line
+                                            insertion_point = block.find("\n", format_index)
+                                            if insertion_point == -1:
+                                                insertion_point = len(block)  # If no newline, append to the end of the block
+
+                                            # Construct the new Language entry
+                                            language_entry = f"\nLanguage                                 : {language}"
+
+                                            # Insert the new entry
+                                            updated_block = (
+                                                block[:insertion_point]  # Up to the end of the "Format" line
+                                                + language_entry
+                                                + block[insertion_point:]  # Rest of the block
+                                            )
+                                            mediainfo_blocks[i] = updated_block
+                                            console.print(f"[Debug] Updated MediaInfo Block for Subtitle Track {track_number}:")
+                                            console.print(updated_block)
+                                    break  # Stop processing once the correct block is modified
+
+                            # Debugging: Log if no matching block was found
+                            if not found_block:
+                                console.print(f"[Debug] No matching MediaInfo block found for Subtitle Track {track_number}.")
+
+                        chapters = selected_playlist.get("chapters", [])
+                        console.print(f"[Debug] Found {len(chapters)} chapters in the playlist.")
+                        if chapters:
+                            console.print("[yellow]Adding chapter information to MediaInfo...")
+
+                            # Find the Menu block or create a new one if it doesn't exist
+                            menu_block_index = -1
+                            for i, block in enumerate(mediainfo_blocks):
+                                if block.strip().startswith("Menu"):
+                                    menu_block_index = i
+                                    break
+
+                            # Create the Menu block content
+                            menu_content = "Menu"
+                            menu_content += "\nFormat                                   : HD DVD-Video"
+                            menu_content += "\n"  # Ensure there's a newline
+
+                            # Format and add each chapter
+                            for chapter in chapters:
+                                chapter_time = chapter.get("titleTimeBegin", "00:00:00:00")
+                                chapter_name = chapter.get("displayName", "")
+
+                                # Convert chapter time from HH:MM:SS:FF to HH:MM:SS.mmm format for MediaInfo
+                                parts = chapter_time.split(":")
+                                if len(parts) == 4:
+                                    hours, minutes, seconds, frames = map(int, parts)
+                                    # Convert frames to milliseconds (assuming 24 frames per second)
+                                    milliseconds = int((frames / 24) * 1000)
+
+                                    # Format with exactly 3 digits for milliseconds to ensure proper alignment
+                                    formatted_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+
+                                    # Create properly spaced chapter entry - exactly 42 characters before the colon
+                                    chapter_entry = formatted_time.ljust(42)
+
+                                    # Add formatted chapter entry
+                                    if chapter_name:
+                                        menu_content += f"{chapter_entry}: {chapter_name}\n"
+                                    else:
+                                        menu_content += f"{chapter_entry}: Chapter {chapters.index(chapter) + 1}\n"
+
+                            # If a Menu block was found, update it
+                            if menu_block_index != -1:
+                                mediainfo_blocks[menu_block_index] = menu_content
+                            else:
+                                # If no Menu block exists, add it to the end of the mediainfo_blocks
+                                mediainfo_blocks.append(menu_content)
+
+                            # Add more debug output to confirm chapter creation
+                            console.print(f"[Debug] Created Menu block with {len(chapters)} chapters")
+                            console.print("[Debug] First few chapter entries:")
+                            chapter_entries = menu_content.strip().split('\n')[2:5]  # Skip header lines, show first 3 chapters
+                            for entry in chapter_entries:
+                                console.print(f"[Debug]   {entry}")
+
+                        # Rejoin the modified MediaInfo blocks
+                        # Get all Audio sections in their original order
+                        audio_sections = []
                         for i, block in enumerate(mediainfo_blocks):
-                            # console.print(mediainfo_blocks)
-                            if re.match(rf"^\s*Audio #\s*{track_number}\b.*", block):  # Match the correct Audio # block
-                                found_block = True
-                                console.print(f"[Debug] Found matching MediaInfo block for Audio Track {track_number}.")
+                            if block.strip().startswith("Audio"):
+                                # Extract track number from "Audio #X" format
+                                track_match = re.search(r"Audio #(\d+)", block)
+                                if track_match:
+                                    track_num = int(track_match.group(1))
+                                else:
+                                    # For "Audio" without a number, assume it's track 1
+                                    track_num = 1
 
-                                # Check if Language is already present
-                                if language and not re.search(rf"Language\s+:\s+{re.escape(language)}", block):
-                                    # Locate "Compression mode" line
-                                    compression_mode_index = block.find("Compression mode")
-                                    if compression_mode_index != -1:
-                                        # Find the end of the "Compression mode" line
-                                        line_end = block.find("\n", compression_mode_index)
-                                        if line_end == -1:
-                                            line_end = len(block)  # If no newline, append to the end of the block
+                                audio_sections.append((track_num, block))
 
-                                        # Construct the new Language entry
-                                        language_entry = f"\nLanguage                                 : {language}"
-
-                                        # Insert the new entry
-                                        updated_block = (
-                                            block[:line_end]  # Up to the end of the "Compression mode"
-                                            + language_entry
-                                            + block[line_end:]  # Rest of the block
-                                        )
-                                        mediainfo_blocks[i] = updated_block
-                                        console.print(f"[Debug] Updated MediaInfo Block for Audio Track {track_number}:")
-                                        console.print(updated_block)
-                                break  # Stop processing once the correct block is modified
-
-                        # Debugging: Log if no matching block was found
-                        if not found_block:
-                            console.print(f"[Debug] No matching MediaInfo block found for Audio Track {track_number}.")
-
-                    # Add subtitle track languages to the correct "Text #X" block
-                    subtitle_tracks = selected_playlist.get("subtitleTracks", [])
-                    for subtitle_track in subtitle_tracks:
-                        track_number = int(subtitle_track.get("track", "1"))  # Ensure track number is an integer
-                        language = subtitle_track.get("language", "")
-                        langcode = subtitle_track.get("langcode", "")
-
-                        # Debugging: Print current subtitle track info
-                        console.print(f"[Debug] Processing Subtitle Track: {track_number}")
-                        console.print(f"        Language: {language}")
-                        console.print(f"        Langcode: {langcode}")
-
-                        # Find the corresponding "Text #X" block
-                        found_block = False
+                        # Get all Text sections with track numbers
+                        text_sections = []
                         for i, block in enumerate(mediainfo_blocks):
-                            if re.match(rf"^\s*Text #\s*{track_number}\b", block):  # Match the correct Text # block
-                                found_block = True
-                                console.print(f"[Debug] Found matching MediaInfo block for Subtitle Track {track_number}.")
+                            if block.strip().startswith("Text"):
+                                # Extract track number from "Text #X" format
+                                track_match = re.search(r"Text #(\d+)", block)
+                                if track_match:
+                                    track_num = int(track_match.group(1))
+                                else:
+                                    # For "Text" without a number, assume it's track 1
+                                    track_num = 1
 
-                                # Insert Language details if not already present
-                                if language and not re.search(rf"Language\s+:\s+{re.escape(language)}", block):
-                                    # Locate the "Format" line
-                                    format_index = block.find("Format")
-                                    if format_index != -1:
-                                        # Find the end of the "Format" line
-                                        insertion_point = block.find("\n", format_index)
-                                        if insertion_point == -1:
-                                            insertion_point = len(block)  # If no newline, append to the end of the block
+                                text_sections.append((track_num, block))
 
-                                        # Construct the new Language entry
-                                        language_entry = f"\nLanguage                                 : {language}"
+                        # Find Menu section
+                        menu_section = None
+                        for block in mediainfo_blocks:
+                            if block.strip().startswith("Menu"):
+                                menu_section = block
+                                break
 
-                                        # Insert the new entry
-                                        updated_block = (
-                                            block[:insertion_point]  # Up to the end of the "Format" line
-                                            + language_entry
-                                            + block[insertion_point:]  # Rest of the block
-                                        )
-                                        mediainfo_blocks[i] = updated_block
-                                        console.print(f"[Debug] Updated MediaInfo Block for Subtitle Track {track_number}:")
-                                        console.print(updated_block)
-                                break  # Stop processing once the correct block is modified
+                        # Other blocks that don't fit the above categories
+                        other_blocks = []
+                        for i, block in enumerate(mediainfo_blocks):
+                            if (not block.strip().startswith("General") and
+                                    not block.strip().startswith("Video") and
+                                    not block.strip().startswith("Audio") and
+                                    not block.strip().startswith("Text") and
+                                    not block.strip().startswith("Menu")):
+                                other_blocks.append(block)
 
-                        # Debugging: Log if no matching block was found
-                        if not found_block:
-                            console.print(f"[Debug] No matching MediaInfo block found for Subtitle Track {track_number}.")
+                        # Define the standard MediaInfo section order
+                        standard_section_order = ["General", "Video"]
 
-                    # Rejoin the modified MediaInfo blocks
-                    modified_mediainfo = "\n\n".join(mediainfo_blocks)
+                        # Build ordered MediaInfo blocks based on standard order
+                        ordered_blocks = []
 
-                    # Update the dictionary with the modified MediaInfo and file path
-                    each['evo_mi'] = modified_mediainfo
-                    each['largest_evo'] = selected_evo_path
+                        # First add sections in the standard order
+                        for section_type in standard_section_order:
+                            for block in mediainfo_blocks:
+                                if block.strip().startswith(section_type):
+                                    ordered_blocks.append(block)
+
+                        # Then add Audio sections in their original order
+                        for _, block in sorted(audio_sections, key=lambda x: x[0]):
+                            ordered_blocks.append(block)
+
+                        # Add Text sections in numerical track order
+                        for _, block in sorted(text_sections, key=lambda x: x[0]):
+                            ordered_blocks.append(block)
+
+                        # Add Menu section if it exists
+                        if menu_section:
+                            ordered_blocks.append(menu_section)
+
+                        # Add any other sections
+                        for block in other_blocks:
+                            ordered_blocks.append(block)
+
+                        # Replace mediainfo_blocks with the ordered blocks
+                        mediainfo_blocks = ordered_blocks
+
+                        # Rejoin the modified MediaInfo blocks
+                        modified_mediainfo = "\n\n".join(mediainfo_blocks)
+
+                        # Add a final verification
+                        menu_in_result = "Menu" in modified_mediainfo
+
+                        # Quick check of the actual content - first 100 chars of the Menu section if found
+                        if menu_in_result:
+                            menu_start = modified_mediainfo.find("Menu")
+                            menu_extract = modified_mediainfo[menu_start:menu_start+200].replace('\n', '\\n')
+                            console.print(f"[Debug] Menu section preview: {menu_extract}")
+
+                        # Update the dictionary with the modified MediaInfo and file path
+                        each['evo_mi'] = modified_mediainfo
+                        each['largest_evo'] = existing_evo_files[0]
+
+                        # Now create a JSON version of the MediaInfo
+                        try:
+                            # Parse the combined MediaInfo text back to JSON format
+                            json_mediainfo = MediaInfo.parse(existing_evo_files[0], output='JSON')
+                            json_data = json.loads(json_mediainfo)
+
+                            # Create a copy of the parsed data to modify
+                            combined_json = json_data.copy()
+
+                            # Update the general track with combined size and duration
+                            for track in combined_json.get('media', {}).get('track', []):
+                                if track.get('@type') == 'General':
+                                    # Update file size
+                                    track['FileSize'] = str(total_size)
+
+                                    # Update duration if available in the playlist
+                                    if 'titleDuration' in selected_playlist:
+                                        duration_str = self.format_duration(selected_playlist['titleDuration'])
+                                        # Convert to milliseconds for JSON format
+                                        try:
+                                            h, m, s = map(int, duration_str.split(':'))
+                                            duration_ms = ((h * 60 + m) * 60 + s) * 1000
+                                            track['Duration'] = str(duration_ms)
+                                        except ValueError:
+                                            pass
+
+                                    # Add source file information
+                                    file_list = [os.path.basename(evo['path']) for evo in mediainfo_data]
+                                    track['SourceFiles'] = ', '.join(file_list)
+                                    break
+
+                            # Add language information to audio tracks
+                            for audio_track in selected_playlist.get('audioTracks', []):
+                                track_number = int(audio_track.get('track', '1'))
+                                language = audio_track.get('language', '')
+
+                                # Find matching track in JSON
+                                for track in combined_json.get('media', {}).get('track', []):
+                                    if track.get('@type') == 'Audio':
+                                        # For the first audio track, StreamOrder might be missing or "0"
+                                        track_stream_order = track.get('StreamOrder')
+                                        if (track_stream_order is None and track_number == 1) or \
+                                                (track_stream_order is not None and int(track_stream_order) == track_number - 1):
+                                            if language:
+                                                track['Language'] = language
+                                            break
+
+                            # Add language information to subtitle tracks
+                            for subtitle_track in selected_playlist.get('subtitleTracks', []):
+                                track_number = int(subtitle_track.get('track', '1'))
+                                language = subtitle_track.get('language', '')
+
+                                # Find matching track in JSON
+                                for track in combined_json.get('media', {}).get('track', []):
+                                    if track.get('@type') == 'Text' and int(track.get('StreamOrder', '0')) == track_number - 1:
+                                        if language:
+                                            track['Language'] = language
+
+                            # Add chapter information
+                            if selected_playlist.get('chapters'):
+                                chapters_track = {
+                                    '@type': 'Menu',
+                                    'Format': 'HD DVD-Video',
+                                    'Chapters': []
+                                }
+
+                                for chapter in selected_playlist.get('chapters', []):
+                                    chapter_time = chapter.get('titleTimeBegin', '00:00:00:00')
+                                    chapter_name = chapter.get('displayName', '') or f"Chapter {selected_playlist['chapters'].index(chapter) + 1}"
+
+                                    # Convert HH:MM:SS:FF to milliseconds
+                                    parts = chapter_time.split(':')
+                                    if len(parts) == 4:
+                                        hours, minutes, seconds, frames = map(int, parts)
+                                        milliseconds = ((hours * 60 + minutes) * 60 + seconds) * 1000 + int((frames / 24) * 1000)
+
+                                        chapters_track['Chapters'].append({
+                                            'time': milliseconds,
+                                            'name': chapter_name
+                                        })
+
+                                # Add chapters track if it has entries
+                                if chapters_track['Chapters']:
+                                    combined_json['media']['track'].append(chapters_track)
+
+                            # Write JSON MediaInfo to file
+                            json_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.json"
+                            with open(json_path, 'w', encoding='utf-8') as json_file:
+                                json.dump(combined_json, json_file, indent=2)
+
+                            console.print(f"[green]MediaInfo JSON exported to {json_path}")
+
+                        except Exception as e:
+                            console.print(f"[red]Error creating JSON MediaInfo: {str(e)}")
+
+                    else:
+                        console.print("[bold red]No valid EVO files found in the playlist.")
 
                 # Save playlist information in meta under HDDVD_PLAYLIST
                 meta["HDDVD_PLAYLIST"] = selected_playlist
@@ -732,127 +1015,316 @@ class DiscParse():
             tree = ET.parse(file_path)
             root = tree.getroot()
 
-            # Extract namespace
-            namespace = {'ns': 'http://www.dvdforum.org/2005/HDDVDVideo/Playlist'}
+            # Extract namespace - handle both with and without namespace
+            namespace = {}
+            if root.tag.startswith('{'):
+                # Extract namespace from the root tag if it exists
+                ns_uri = root.tag.split('}')[0][1:]
+                namespace = {'ns': ns_uri}
+                find_title_path = ".//ns:Title"
+            else:
+                # No namespace, use direct path
+                find_title_path = ".//Title"
 
-            for title in root.findall(".//ns:Title", namespaces=namespace):
-                title_duration = title.get("titleDuration", "00:00:00:00")
-                duration_seconds = self.timecode_to_seconds(title_duration)
+            # Try different approaches to find Title elements
+            title_elements = []
+            try:
+                # First try with namespace if available
+                if namespace:
+                    title_elements = root.findall(find_title_path, namespaces=namespace)
+                else:
+                    title_elements = root.findall(find_title_path)
 
-                # Skip titles with a duration of 10 minutes or less
-                if duration_seconds <= 600:
-                    continue
+                # If no titles found, try alternative approaches
+                if not title_elements:
+                    # Try direct TitleSet/Title path for TOSHIBA format
+                    title_elements = root.findall(".//TitleSet/Title")
+            except Exception as e:
+                console.print(f"[yellow]Initial title search failed: {e}. Trying alternative methods...")
 
-                title_data = {
-                    "titleNumber": title.get("titleNumber"),
-                    "id": title.get("id"),
-                    "description": title.get("description"),
-                    "titleDuration": title_duration,
-                    "displayName": title.get("displayName"),
-                    "onEnd": title.get("onEnd"),
-                    "alternativeSDDisplayMode": title.get("alternativeSDDisplayMode"),
-                    "primaryClips": [],
-                    "chapters": [],
-                    "audioTracks": [],
-                    "subtitleTracks": [],
-                    "applicationSegments": [],
-                }
+                # Fallback method: search for any element with "Title" in the name
+                for elem in root.iter():
+                    tag = elem.tag
+                    if isinstance(tag, str) and 'Title' in tag.split('}')[-1]:
+                        title_elements.append(elem)
 
-                # Extract PrimaryAudioVideoClip details
-                for clip in title.findall(".//ns:PrimaryAudioVideoClip", namespaces=namespace):
-                    clip_data = {
-                        "src": clip.get("src"),
-                        "titleTimeBegin": clip.get("titleTimeBegin"),
-                        "titleTimeEnd": clip.get("titleTimeEnd"),
-                        "seamless": clip.get("seamless"),
+            console.print(f"[Debug] Found {len(title_elements)} title elements in playlist")
+
+            for title in title_elements:
+                try:
+                    # Get title attributes with fallbacks
+                    title_duration = title.get("titleDuration", "00:00:00:00")
+                    duration_seconds = self.timecode_to_seconds(title_duration)
+
+                    # Skip titles with a duration of 10 minutes or less
+                    if duration_seconds <= 600:
+                        continue
+
+                    title_data = {
+                        "titleNumber": title.get("titleNumber"),
+                        "id": title.get("id"),
+                        "description": title.get("description"),
+                        "titleDuration": title_duration,
+                        "displayName": title.get("displayName"),
+                        "onEnd": title.get("onEnd"),
+                        "alternativeSDDisplayMode": title.get("alternativeSDDisplayMode"),
+                        "primaryClips": [],
+                        "chapters": [],
                         "audioTracks": [],
                         "subtitleTracks": [],
+                        "applicationSegments": [],
                     }
 
-                    # Extract Audio tracks within PrimaryAudioVideoClip
-                    for audio in clip.findall(".//ns:Audio", namespaces=namespace):
-                        clip_data["audioTracks"].append({
-                            "track": audio.get("track"),
-                            "streamNumber": audio.get("streamNumber"),
-                            "mediaAttr": audio.get("mediaAttr"),
-                            "description": audio.get("description"),
-                        })
+                    # Extract PrimaryAudioVideoClip details - handle both namespaced and non-namespaced
+                    clips = []
+                    try:
+                        if namespace:
+                            clips = title.findall(".//ns:PrimaryAudioVideoClip", namespaces=namespace)
+                        else:
+                            clips = title.findall(".//PrimaryAudioVideoClip")
+                    except Exception:
+                        # Try direct search without path
+                        for child in title.iter():
+                            if child.tag.endswith('PrimaryAudioVideoClip'):
+                                clips.append(child)
 
-                    # Extract Subtitle tracks within PrimaryAudioVideoClip
-                    for subtitle in clip.findall(".//ns:Subtitle", namespaces=namespace):
-                        clip_data["subtitleTracks"].append({
-                            "track": subtitle.get("track"),
-                            "streamNumber": subtitle.get("streamNumber"),
-                            "mediaAttr": subtitle.get("mediaAttr"),
-                            "description": subtitle.get("description"),
-                        })
+                    for clip in clips:
+                        clip_data = {
+                            "src": clip.get("src"),
+                            "titleTimeBegin": clip.get("titleTimeBegin"),
+                            "titleTimeEnd": clip.get("titleTimeEnd"),
+                            "seamless": clip.get("seamless"),
+                            "audioTracks": [],
+                            "subtitleTracks": [],
+                        }
 
-                    title_data["primaryClips"].append(clip_data)
+                        # Extract Audio tracks within PrimaryAudioVideoClip
+                        audio_tracks = []
+                        try:
+                            if namespace:
+                                audio_tracks = clip.findall(".//ns:Audio", namespaces=namespace)
+                            else:
+                                audio_tracks = clip.findall(".//Audio")
+                        except Exception:
+                            # Try direct search
+                            for child in clip.iter():
+                                if child.tag.endswith('Audio'):
+                                    audio_tracks.append(child)
 
-                # Extract ChapterList details
-                for chapter in title.findall(".//ns:ChapterList/ns:Chapter", namespaces=namespace):
-                    title_data["chapters"].append({
-                        "displayName": chapter.get("displayName"),
-                        "titleTimeBegin": chapter.get("titleTimeBegin"),
-                    })
+                        for audio in audio_tracks:
+                            clip_data["audioTracks"].append({
+                                "track": audio.get("track"),
+                                "streamNumber": audio.get("streamNumber"),
+                                "mediaAttr": audio.get("mediaAttr"),
+                                "description": audio.get("description"),
+                            })
 
-                # Extract TrackNavigationList details (AudioTracks and SubtitleTracks)
-                for audio_track in title.findall(".//ns:TrackNavigationList/ns:AudioTrack", namespaces=namespace):
-                    langcode = audio_track.get("langcode", "")
-                    # Extract the 2-letter language code before the colon
-                    langcode_short = langcode.split(":")[0] if ":" in langcode else langcode
-                    # Convert the short language code to the full language name
-                    language_name = Language.get(langcode_short).display_name()
+                        # Extract Subtitle tracks - similar approach
+                        subtitle_tracks = []
+                        try:
+                            if namespace:
+                                subtitle_tracks = clip.findall(".//ns:Subtitle", namespaces=namespace)
+                            else:
+                                subtitle_tracks = clip.findall(".//Subtitle")
+                        except Exception:
+                            for child in clip.iter():
+                                if child.tag.endswith('Subtitle'):
+                                    subtitle_tracks.append(child)
 
-                    title_data["audioTracks"].append({
-                        "track": audio_track.get("track"),
-                        "langcode": langcode_short,
-                        "language": language_name,
-                        "description": audio_track.get("description"),
-                        "selectable": audio_track.get("selectable"),
-                    })
+                        for subtitle in subtitle_tracks:
+                            clip_data["subtitleTracks"].append({
+                                "track": subtitle.get("track"),
+                                "streamNumber": subtitle.get("streamNumber"),
+                                "mediaAttr": subtitle.get("mediaAttr"),
+                                "description": subtitle.get("description"),
+                            })
 
-                for subtitle_track in title.findall(".//ns:TrackNavigationList/ns:SubtitleTrack", namespaces=namespace):
-                    langcode = subtitle_track.get("langcode", "")
-                    # Extract the 2-letter language code before the colon
-                    langcode_short = langcode.split(":")[0] if ":" in langcode else langcode
-                    # Convert the short language code to the full language name
-                    language_name = Language.get(langcode_short).display_name()
+                        title_data["primaryClips"].append(clip_data)
 
-                    title_data["subtitleTracks"].append({
-                        "track": subtitle_track.get("track"),
-                        "langcode": langcode_short,
-                        "language": language_name,
-                        "selectable": subtitle_track.get("selectable"),
-                    })
+                    # Extract chapter details with error handling
+                    try:
+                        chapters = []
+                        if namespace:
+                            chapters = title.findall(".//ns:ChapterList/ns:Chapter", namespaces=namespace)
+                        else:
+                            chapters = title.findall(".//ChapterList/Chapter")
 
-                # Extract ApplicationSegment details
-                for app_segment in title.findall(".//ns:ApplicationSegment", namespaces=namespace):
-                    app_data = {
-                        "src": app_segment.get("src"),
-                        "titleTimeBegin": app_segment.get("titleTimeBegin"),
-                        "titleTimeEnd": app_segment.get("titleTimeEnd"),
-                        "sync": app_segment.get("sync"),
-                        "zOrder": app_segment.get("zOrder"),
-                        "resources": [],
-                    }
+                        if not chapters:
+                            # Try alternative paths
+                            chapters = []
+                            for node in title.iter():
+                                if node.tag.endswith('Chapter'):
+                                    chapters.append(node)
 
-                    # Extract ApplicationResource details
-                    for resource in app_segment.findall(".//ns:ApplicationResource", namespaces=namespace):
-                        app_data["resources"].append({
-                            "src": resource.get("src"),
-                            "size": resource.get("size"),
-                            "priority": resource.get("priority"),
-                            "multiplexed": resource.get("multiplexed"),
-                        })
+                        for chapter in chapters:
+                            title_data["chapters"].append({
+                                "displayName": chapter.get("displayName", ""),
+                                "titleTimeBegin": chapter.get("titleTimeBegin", "00:00:00:00"),
+                            })
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Error extracting chapters: {e}")
 
-                    title_data["applicationSegments"].append(app_data)
+                    # Extract TrackNavigationList details with error handling
+                    try:
+                        # Audio tracks in TrackNavigationList
+                        audio_nav_tracks = []
+                        if namespace:
+                            audio_nav_tracks = title.findall(".//ns:TrackNavigationList/ns:AudioTrack", namespaces=namespace)
+                        else:
+                            audio_nav_tracks = title.findall(".//TrackNavigationList/AudioTrack")
 
-                # Add the fully extracted title data to the list
-                titles.append(title_data)
+                        if not audio_nav_tracks:
+                            # Try alternative path
+                            for node in title.iter():
+                                if node.tag.endswith('AudioTrack') and node.tag != 'Audio':
+                                    audio_nav_tracks.append(node)
+
+                        for audio_track in audio_nav_tracks:
+                            try:
+                                langcode = audio_track.get("langcode", "")
+                                # Extract the 2-letter language code before the colon or asterisk
+                                if ":" in langcode:
+                                    langcode_short = langcode.split(":")[0]
+                                elif "*" in langcode:
+                                    langcode_short = "und"  # undefined for asterisk
+                                else:
+                                    langcode_short = langcode
+
+                                # Try to convert the language code, with fallback for invalid codes
+                                try:
+                                    if langcode_short in self.language_code_map:
+                                        langcode_short = self.language_code_map[langcode_short]
+
+                                    if langcode_short and langcode_short != "*" and langcode_short != "und":
+                                        try:
+                                            language_name = Language.get(langcode_short).display_name()
+                                        except (KeyError, ValueError):
+                                            language_name = langcode_short.upper()
+                                    else:
+                                        language_name = "Undefined"
+                                except Exception:
+                                    language_name = "Unknown"
+
+                                title_data["audioTracks"].append({
+                                    "track": audio_track.get("track"),
+                                    "langcode": langcode_short,
+                                    "language": language_name,
+                                    "description": audio_track.get("description", ""),
+                                    "selectable": audio_track.get("selectable", "true"),
+                                })
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Error processing audio track: {e}")
+
+                        # Subtitle tracks in TrackNavigationList
+                        subtitle_nav_tracks = []
+                        if namespace:
+                            subtitle_nav_tracks = title.findall(".//ns:TrackNavigationList/ns:SubtitleTrack", namespaces=namespace)
+                        else:
+                            subtitle_nav_tracks = title.findall(".//TrackNavigationList/SubtitleTrack")
+
+                        if not subtitle_nav_tracks:
+                            # Alternative search
+                            for node in title.iter():
+                                if node.tag.endswith('SubtitleTrack'):
+                                    subtitle_nav_tracks.append(node)
+
+                        for subtitle_track in subtitle_nav_tracks:
+                            try:
+                                langcode = subtitle_track.get("langcode", "")
+                                if ":" in langcode:
+                                    langcode_short = langcode.split(":")[0]
+                                elif "*" in langcode:
+                                    langcode_short = "und"
+                                else:
+                                    langcode_short = langcode
+
+                                try:
+                                    if langcode_short in self.language_code_map:
+                                        langcode_short = self.language_code_map[langcode_short]
+
+                                    if langcode_short and langcode_short != "*" and langcode_short != "und":
+                                        try:
+                                            language_name = Language.get(langcode_short).display_name()
+                                        except (KeyError, ValueError):
+                                            language_name = langcode_short.upper()
+                                    else:
+                                        language_name = "Undefined"
+                                except Exception:
+                                    language_name = "Unknown"
+
+                                title_data["subtitleTracks"].append({
+                                    "track": subtitle_track.get("track"),
+                                    "langcode": langcode_short,
+                                    "language": language_name,
+                                    "selectable": subtitle_track.get("selectable", "true"),
+                                })
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Error processing subtitle track: {e}")
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Error extracting track navigation list: {e}")
+
+                    # Extract ApplicationSegment with error handling
+                    try:
+                        app_segments = []
+                        if namespace:
+                            app_segments = title.findall(".//ns:ApplicationSegment", namespaces=namespace)
+                        else:
+                            app_segments = title.findall(".//ApplicationSegment")
+
+                        if not app_segments:
+                            for node in title.iter():
+                                if node.tag.endswith('ApplicationSegment'):
+                                    app_segments.append(node)
+
+                        for app_segment in app_segments:
+                            app_data = {
+                                "src": app_segment.get("src", ""),
+                                "titleTimeBegin": app_segment.get("titleTimeBegin", ""),
+                                "titleTimeEnd": app_segment.get("titleTimeEnd", ""),
+                                "sync": app_segment.get("sync", ""),
+                                "zOrder": app_segment.get("zOrder", ""),
+                                "resources": [],
+                            }
+
+                            # Extract ApplicationResource details
+                            resources = []
+                            if namespace:
+                                resources = app_segment.findall(".//ns:ApplicationResource", namespaces=namespace)
+                            else:
+                                resources = app_segment.findall(".//ApplicationResource")
+
+                            if not resources:
+                                for node in app_segment.iter():
+                                    if node.tag.endswith('ApplicationResource'):
+                                        resources.append(node)
+
+                            for resource in resources:
+                                app_data["resources"].append({
+                                    "src": resource.get("src", ""),
+                                    "size": resource.get("size", ""),
+                                    "priority": resource.get("priority", ""),
+                                    "multiplexed": resource.get("multiplexed", ""),
+                                })
+
+                            title_data["applicationSegments"].append(app_data)
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Error extracting application segments: {e}")
+
+                    # Add the fully extracted title data to the list
+                    titles.append(title_data)
+
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Error processing title: {e}")
+                    continue
 
         except ET.ParseError as e:
-            print(f"Error parsing XPL file: {e}")
+            console.print(f"[red]Error parsing XPL file: {e}")
+        except Exception as e:
+            console.print(f"[red]Unexpected error parsing HD DVD playlist: {e}")
+            import traceback
+            console.print(traceback.format_exc())
+
+        console.print(f"[green]Successfully parsed {len(titles)} valid titles from playlist")
         return titles
 
     def timecode_to_seconds(self, timecode):
@@ -861,3 +1333,40 @@ class DiscParse():
             return 0
         hours, minutes, seconds, frames = map(int, parts)
         return hours * 3600 + minutes * 60 + seconds
+
+    def format_playlist_for_description(self, playlist_data, include_xml=True, xml_string=None):
+        """Format playlist data for description - raw XML only mode."""
+        output = []
+
+        # Get the selected title ID to extract only that portion
+        if playlist_data and len(playlist_data) > 0:
+            selected_title_id = playlist_data[0].get("id")
+            selected_title_number = playlist_data[0].get("titleNumber")
+
+            # If we have the XML content and a title ID to look for
+            if include_xml and xml_string and (selected_title_id or selected_title_number):
+                # Try to find and extract just the XML for this specific title
+                try:
+                    # Look for the title element with matching ID or number
+                    id_pattern = rf'<Title[^>]*\bid="{selected_title_id}".*?</Title>'
+                    number_pattern = rf'<Title[^>]*\btitleNumber="{selected_title_number}".*?</Title>'
+
+                    # Try to match the title by ID first, then by number
+                    title_match = re.search(id_pattern, xml_string, re.DOTALL)
+                    if not title_match and selected_title_number:
+                        title_match = re.search(number_pattern, xml_string, re.DOTALL)
+
+                    # If we found a match, just use that title's XML
+                    if title_match:
+                        output.append(title_match.group(0))
+                    else:
+                        # If no specific match found, include the whole XML
+                        output.append(xml_string)
+                except Exception:
+                    # Fallback to the full XML on any error
+                    output.append(xml_string)
+            elif include_xml and xml_string:
+                # No specific title info, include the whole XML
+                output.append(xml_string)
+
+        return "\n".join(output)

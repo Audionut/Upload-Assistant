@@ -264,7 +264,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text):
             export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
         console.print("[bold green]MediaInfo Exported.")
 
-    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json.txt"):
+    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json"):
         media_info_json = MediaInfo.parse(video, output="JSON")
         media_info_dict = json.loads(media_info_json)
         filtered_info = filter_mediainfo(media_info_dict)
@@ -275,3 +275,380 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text):
         mi = json.load(f)
 
     return mi
+
+
+async def combine_dvd_mediainfo(vob_mi, ifo_mi, output_path, disc_size=None):
+    # Parse the MediaInfo texts into structured sections
+    def parse_mediainfo(mi_text):
+        sections = {}
+        current_section = None
+        current_content = []
+
+        lines = mi_text.splitlines()
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Skip empty lines
+            if not line:
+                i += 1
+                continue
+
+            # Check if this is a section header
+            if ":" not in line and line and not line.startswith(" "):
+                if current_section:
+                    # Store previous section
+                    sections[current_section] = current_content
+
+                # Start new section
+                current_section = line
+                current_content = []
+            else:
+                # Add content to current section
+                if current_section:
+                    current_content.append(line)
+
+            i += 1
+
+        # Add the last section
+        if current_section:
+            sections[current_section] = current_content
+
+        return sections
+
+    # Parse both MediaInfo outputs
+    vob_sections = parse_mediainfo(vob_mi)
+    ifo_sections = parse_mediainfo(ifo_mi)
+
+    # Merge sections
+    merged_sections = {}
+
+    # Special handling for General section - use IFO as primary
+    if "General" in ifo_sections:
+        merged_sections["General"] = ifo_sections["General"].copy()
+
+        # Find and modify File size line (don't remove it)
+        if disc_size is not None:
+            for i, line in enumerate(merged_sections["General"]):
+                if line.strip().startswith("File size"):
+                    # Replace the File size line with the disc size value
+                    merged_sections["General"][i] = f"File size                                : {disc_size} GiB"
+                    break
+            # If no File size found, add it
+            if not any(line.strip().startswith("File size") for line in merged_sections["General"]):
+                merged_sections["General"].append(f"File size                                : {disc_size} GiB")
+
+        # Always take "Overall bit rate" from VOB if available
+        if "General" in vob_sections:
+            # Find Overall bit rate in VOB
+            overall_bit_rate = None
+            for line in vob_sections["General"]:
+                if line.strip().startswith("Overall bit rate"):
+                    overall_bit_rate = line
+                    break
+
+            # Add Overall bit rate from VOB if found
+            if overall_bit_rate:
+                # First remove any existing Overall bit rate
+                merged_sections["General"] = [line for line in merged_sections["General"]
+                                              if not line.strip().startswith("Overall bit rate")]
+                # Then add the VOB version
+                merged_sections["General"].append(overall_bit_rate)
+
+            # Add other VOB General info that's not in IFO
+            ifo_lines = [line.split(':', 1)[0].strip() for line in merged_sections["General"]]
+            for vob_line in vob_sections["General"]:
+                if not vob_line:
+                    continue
+
+                if ':' in vob_line:
+                    vob_key = vob_line.split(':', 1)[0].strip()
+                    # Skip File size as we've already handled it
+                    if vob_key not in ifo_lines and vob_key != "File size":
+                        merged_sections["General"].append(vob_line)
+
+    # For VOB General section when no IFO is available:
+    elif "General" in vob_sections:
+        # If no IFO General section, use VOB
+        merged_sections["General"] = vob_sections["General"].copy()
+
+        # Update File size with disc size value if provided
+        if disc_size is not None:
+            for i, line in enumerate(merged_sections["General"]):
+                if line.strip().startswith("File size"):
+                    # Replace the File size line with the disc size value
+                    merged_sections["General"][i] = f"File size                                : {disc_size} GiB"
+                    break
+            # If no File size found, add it
+            if not any(line.strip().startswith("File size") for line in merged_sections["General"]):
+                merged_sections["General"].append(f"File size                                : {disc_size} GiB")
+
+    # For all other sections, add VOB sections first
+    for section, content in vob_sections.items():
+        if section != "General":  # Skip General section as it's handled above
+            merged_sections[section] = content.copy()
+
+    # Then add IFO information not present in VOB for non-General sections
+    for section, ifo_content in ifo_sections.items():
+        if section == "General":
+            continue  # Skip General section as it's handled above
+
+        # Extract the base section name (e.g., "Audio #1" -> "Audio")
+        base_section = section.split(' #')[0] if ' #' in section else section
+        section_num = section.split(' #')[1] if ' #' in section else ""
+
+        if section in merged_sections:
+            # Section exists in both - add lines from IFO that aren't in VOB
+            vob_content = merged_sections[section]
+            vob_lines = [line.split(':', 1)[0].strip() for line in vob_content]
+
+            for ifo_line in ifo_content:
+                if not ifo_line:
+                    continue
+
+                # Only add lines that aren't already present
+                if ':' in ifo_line:
+                    ifo_key = ifo_line.split(':', 1)[0].strip()
+                    if ifo_key not in vob_lines:
+                        merged_sections[section].append(ifo_line)
+        elif section_num and any(s.startswith(f"{base_section} #{section_num}") for s in merged_sections.keys()):
+            # Find the matching section number in VOB
+            matching_section = next(s for s in merged_sections.keys() if s.startswith(f"{base_section} #{section_num}"))
+
+            # Add lines from IFO that aren't in the matching VOB section
+            vob_content = merged_sections[matching_section]
+            vob_lines = [line.split(':', 1)[0].strip() for line in vob_content]
+
+            for ifo_line in ifo_content:
+                if not ifo_line:
+                    continue
+
+                # Only add lines that aren't already present
+                if ':' in ifo_line:
+                    ifo_key = ifo_line.split(':', 1)[0].strip()
+                    if ifo_key not in vob_lines:
+                        merged_sections[matching_section].append(ifo_line)
+        else:
+            # Section only exists in IFO - add it to merged_sections
+            merged_sections[section] = ifo_content.copy()
+
+    # Build the combined MediaInfo text
+    combined_text = []
+
+    # Standard section order
+    section_order = [
+        "General",
+        "Video"
+    ]
+
+    # Add audio, text, and other sections in order
+    audio_sections = sorted([s for s in merged_sections.keys() if s.startswith("Audio")])
+    text_sections = sorted([s for s in merged_sections.keys() if s.startswith("Text")])
+
+    section_order.extend(audio_sections)
+    section_order.extend(text_sections)
+    section_order.append("Menu")
+
+    # Other sections not in standard order
+    other_sections = [s for s in merged_sections.keys() if s not in section_order and s in merged_sections]
+    section_order.extend(other_sections)
+
+    # Build output text in order
+    for section in section_order:
+        if section in merged_sections:
+            combined_text.append(section)
+            combined_text.extend(merged_sections[section])
+            combined_text.append("")  # Empty line between sections
+
+    # Write to file
+    with open(output_path, 'w', newline="", encoding='utf-8') as f:
+        f.write('\n'.join(combined_text))
+
+    return '\n'.join(combined_text)
+
+
+async def combine_hddvd_mediainfo(evo_mediainfo_list, total_size, duration):
+    # Parse MediaInfo texts into structured sections
+    def parse_mediainfo(mi_text):
+        sections = {}
+        current_section = None
+        current_content = []
+
+        lines = mi_text.splitlines()
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Skip empty lines
+            if not line:
+                i += 1
+                continue
+
+            # Check if this is a section header
+            if ":" not in line and line and not line.startswith(" "):
+                if current_section:
+                    # Store previous section
+                    sections[current_section] = current_content
+
+                # Start new section
+                current_section = line
+                current_content = []
+            else:
+                # Add content to current section
+                if current_section:
+                    current_content.append(line)
+
+            i += 1
+
+        # Add the last section
+        if current_section:
+            sections[current_section] = current_content
+
+        return sections
+
+    # Use the first EVO file's MediaInfo as base
+    first_mi = evo_mediainfo_list[0]['mediainfo']
+
+    # Parse sections from base MediaInfo
+    base_sections = parse_mediainfo(first_mi)
+
+    # Parse each additional EVO MediaInfo
+    additional_sections = []
+    for evo_data in evo_mediainfo_list[1:]:
+        additional_sections.append(parse_mediainfo(evo_data['mediainfo']))
+
+    # Modify the General section to use the total size and duration
+    if "General" in base_sections:
+        # Replace file size with total size
+        base_sections["General"] = [line for line in base_sections["General"]
+                                    if not line.strip().startswith("File size")]
+        base_sections["General"].append(f"File size                                : {total_size / (1024 ** 3):.2f} GiB")
+
+        # Replace duration with the playlist duration
+        base_sections["General"] = [line for line in base_sections["General"]
+                                    if not line.strip().startswith("Duration")]
+        # Format duration for MediaInfo style
+        formatted_duration = duration
+        base_sections["General"].append(f"Duration                                 : {formatted_duration}")
+
+    # Add unique audio/subtitle tracks from other EVO files
+    for sections in additional_sections:
+        for section, content in sections.items():
+            # Skip General section as it's already handled
+            if section == "General" or section == "Video":
+                continue
+
+            # If it's a new section type, add it
+            if section not in base_sections:
+                base_sections[section] = content
+                continue
+
+            # For existing section types, check if it's a new instance
+            if section.startswith("Audio") or section.startswith("Text"):
+                # Extract ID or other uniquely identifying information
+                section_id = None
+                for line in content:
+                    if line.strip().startswith("ID"):
+                        section_id = line
+                        break
+
+                # Check if this ID already exists in base_sections
+                exists = False
+                for existing_content in base_sections.values():
+                    for line in existing_content:
+                        if line == section_id:
+                            exists = True
+                            break
+                    if exists:
+                        break
+
+                # If it's a new ID, create a new section
+                if not exists and section_id:
+                    # Find the highest existing section number
+                    section_prefix = section.split(" #")[0]
+                    existing_sections = [s for s in base_sections.keys() if s.startswith(section_prefix)]
+                    max_num = 0
+                    for s in existing_sections:
+                        try:
+                            num = int(s.split(" #")[1])
+                            max_num = max(max_num, num)
+                        except (IndexError, ValueError):
+                            pass
+
+                    # Create a new section with the next number
+                    new_section = f"{section_prefix} #{max_num + 1}"
+                    base_sections[new_section] = content
+
+    for section_name, content in list(base_sections.items()):
+        if section_name.startswith("Audio"):
+            # Check if the section has a Maximum bit rate but no Bit rate
+            has_max_bitrate = False
+            max_bitrate_value = None
+            has_bitrate = False
+
+            console.print(f"[yellow]Checking audio section: {section_name}")
+
+            # First pass: detect if we have Maximum bit rate but no Bit rate
+            for line in content:
+                line_text = line.strip()
+                if "Maximum bit rate" in line_text:
+                    has_max_bitrate = True
+                    # Extract the Maximum bit rate value
+                    try:
+                        max_bitrate_value = line_text.split(':', 1)[1].strip()
+                        console.print(f"[yellow]Found Maximum bit rate: {max_bitrate_value}")
+                    except IndexError:
+                        console.print(f"[red]Invalid Maximum bit rate line format: {line_text}")
+                elif "Bit rate" in line_text and "mode" not in line_text.lower():
+                    has_bitrate = True
+                    console.print("[yellow]Found Bit rate already exists")
+
+            # Second pass: add Bit rate line if needed
+            if has_max_bitrate and not has_bitrate and max_bitrate_value:
+                console.print(f"[green]Adding Bit rate line to {section_name} using value: {max_bitrate_value}")
+
+                # Create a new Bit rate line with proper spacing
+                bitrate_line = f"Bit rate                                 : {max_bitrate_value}"
+
+                # Add the new Bit rate line at an appropriate position
+                insertion_point = 0
+                for i, line in enumerate(content):
+                    if "Maximum bit rate" in line.strip():
+                        insertion_point = i + 1
+                        break
+
+                # Insert the new line
+                base_sections[section_name].insert(insertion_point, bitrate_line)
+                console.print(f"[green]Added Bit rate line to {section_name}")
+
+    # Build the combined MediaInfo text
+    combined_text = []
+
+    # Standard section order
+    section_order = [
+        "General",
+        "Video"
+    ]
+
+    # Add audio, text, and other sections in order
+    audio_sections = sorted([s for s in base_sections.keys() if s.startswith("Audio")])
+    text_sections = sorted([s for s in base_sections.keys() if s.startswith("Text")])
+
+    section_order.extend(audio_sections)
+    section_order.extend(text_sections)
+    section_order.append("Menu")
+
+    # Other sections not in standard order
+    other_sections = [s for s in base_sections.keys() if s not in section_order and s in base_sections]
+    section_order.extend(other_sections)
+
+    # Build output text in order
+    for section in section_order:
+        if section in base_sections:
+            combined_text.append(section)
+            combined_text.extend(base_sections[section])
+            combined_text.append("")  # Empty line between sections
+
+    return '\n'.join(combined_text)
