@@ -117,6 +117,8 @@ class Args():
         parser.add_argument('-hdb', '--hdb', nargs=1, required=False, help="HDB torrent id/link", type=str)
         parser.add_argument('-btn', '--btn', nargs=1, required=False, help="BTN torrent id/link", type=str)
         parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD infohash or torrent_id", type=str)
+        parser.add_argument('-huno', '--huno', nargs=1, required=False, help="HUNO torrent id/link", type=str)
+        parser.add_argument('-ulcx', '--ulcx', nargs=1, required=False, help="ULCX torrent id/link", type=str)
         parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.")
         parser.add_argument('--foreign', dest='foreign', action='store_true', required=False, help="Set for TIK Foreign category")
         parser.add_argument('--opera', dest='opera', action='store_true', required=False, help="Set for TIK Opera & Musical category")
@@ -271,19 +273,19 @@ class Args():
                                 console.print('[red]Continuing without --oe')
                         else:
                             meta['oe'] = value2
-                    elif key == 'tik':
+                    elif key == 'ulcx':
                         if value2.startswith('http'):
                             parsed = urllib.parse.urlparse(value2)
                             try:
-                                tikpath = parsed.path
-                                if tikpath.endswith('/'):
-                                    tikpath = tikpath[:-1]
-                                meta['tik'] = tikpath.split('/')[-1]
+                                ulcxpath = parsed.path
+                                if ulcxpath.endswith('/'):
+                                    ulcxpath = ulcxpath[:-1]
+                                meta['ulcx'] = ulcxpath.split('/')[-1]
                             except Exception:
                                 console.print('[red]Unable to parse id from url')
-                                console.print('[red]Continuing without --tik')
+                                console.print('[red]Continuing without --ulcx')
                         else:
-                            meta['tik'] = value2
+                            meta['ulcx'] = value2
                     elif key == 'hdb':
                         if value2.startswith('http'):
                             parsed = urllib.parse.urlparse(value2)
@@ -329,6 +331,20 @@ class Args():
                                 console.print('[red]Continuing without --bhd')
                         else:
                             meta['bhd'] = value2
+
+                    elif key == 'huno':
+                        if value2.startswith('http'):
+                            parsed = urllib.parse.urlparse(value2)
+                            try:
+                                hunopath = parsed.path
+                                if hunopath.endswith('/'):
+                                    hunopath = hunopath[:-1]
+                                meta['huno'] = hunopath.split('/')[-1]
+                            except Exception:
+                                console.print('[red]Unable to parse id from url')
+                                console.print('[red]Continuing without --huno')
+                        else:
+                            meta['huno'] = value2
 
                     else:
                         meta[key] = value2

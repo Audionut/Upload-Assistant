@@ -607,8 +607,8 @@ class COMMON():
             console.print(f"[bold red]Error saving image links: {e}[/bold red]")
             return None
 
-    async def unit3d_region_ids(self, region):
-        region_id = {
+    async def unit3d_region_ids(self, region, reverse=False, region_id=None):
+        region_map = {
             'AFG': 1, 'AIA': 2, 'ALA': 3, 'ALG': 4, 'AND': 5, 'ANG': 6, 'ARG': 7, 'ARM': 8, 'ARU': 9,
             'ASA': 10, 'ATA': 11, 'ATF': 12, 'ATG': 13, 'AUS': 14, 'AUT': 15, 'AZE': 16, 'BAH': 17,
             'BAN': 18, 'BDI': 19, 'BEL': 20, 'BEN': 21, 'BER': 22, 'BES': 23, 'BFA': 24, 'BHR': 25,
@@ -640,11 +640,20 @@ class COMMON():
             'UKR': 226, 'UMI': 227, 'URU': 228, 'USA': 229, 'UZB': 230, 'VAN': 231, 'VAT': 232, 'VEN': 233,
             'VGB': 234, 'VIE': 235, 'VIN': 236, 'VIR': 237, 'WAL': 238, 'WLF': 239, 'YEM': 240, 'ZAM': 241,
             'ZIM': 242, 'EUR': 243
-        }.get(region, 0)
-        return region_id
+        }
 
-    async def unit3d_distributor_ids(self, distributor):
-        distributor_id = {
+        if reverse:
+            # Reverse lookup: Find region code by ID
+            for code, id_value in region_map.items():
+                if id_value == region_id:
+                    return code
+            return None
+        else:
+            # Forward lookup: Find region ID by code
+            return region_map.get(region, 0)
+
+    async def unit3d_distributor_ids(self, distributor, reverse=False, distributor_id=None):
+        distributor_map = {
             '01 DISTRIBUTION': 1, '100 DESTINATIONS TRAVEL FILM': 2, '101 FILMS': 3, '1FILMS': 4, '2 ENTERTAIN VIDEO': 5, '20TH CENTURY FOX': 6, '2L': 7, '3D CONTENT HUB': 8, '3D MEDIA': 9, '3L FILM': 10, '4DIGITAL': 11, '4DVD': 12, '4K ULTRA HD MOVIES': 13, '4K UHD': 13, '8-FILMS': 14, '84 ENTERTAINMENT': 15, '88 FILMS': 16, '@ANIME': 17, 'ANIME': 17, 'A CONTRACORRIENTE': 18, 'A CONTRACORRIENTE FILMS': 19, 'A&E HOME VIDEO': 20, 'A&E': 20, 'A&M RECORDS': 21, 'A+E NETWORKS': 22, 'A+R': 23, 'A-FILM': 24, 'AAA': 25, 'AB VIDÉO': 26, 'AB VIDEO': 26, 'ABC - (AUSTRALIAN BROADCASTING CORPORATION)': 27, 'ABC': 27, 'ABKCO': 28, 'ABSOLUT MEDIEN': 29, 'ABSOLUTE': 30, 'ACCENT FILM ENTERTAINMENT': 31, 'ACCENTUS': 32, 'ACORN MEDIA': 33, 'AD VITAM': 34, 'ADA': 35, 'ADITYA VIDEOS': 36, 'ADSO FILMS': 37, 'AFM RECORDS': 38, 'AGFA': 39, 'AIX RECORDS': 40, 'ALAMODE FILM': 41, 'ALBA RECORDS': 42, 'ALBANY RECORDS': 43, 'ALBATROS': 44, 'ALCHEMY': 45, 'ALIVE': 46, 'ALL ANIME': 47, 'ALL INTERACTIVE ENTERTAINMENT': 48, 'ALLEGRO': 49, 'ALLIANCE': 50, 'ALPHA MUSIC': 51, 'ALTERDYSTRYBUCJA': 52, 'ALTERED INNOCENCE': 53, 'ALTITUDE FILM DISTRIBUTION': 54, 'ALUCARD RECORDS': 55, 'AMAZING D.C.': 56, 'AMAZING DC': 56, 'AMMO CONTENT': 57, 'AMUSE SOFT ENTERTAINMENT': 58, 'ANCONNECT': 59, 'ANEC': 60, 'ANIMATSU': 61, 'ANIME HOUSE': 62, 'ANIME LTD': 63, 'ANIME WORKS': 64, 'ANIMEIGO': 65, 'ANIPLEX': 66, 'ANOLIS ENTERTAINMENT': 67, 'ANOTHER WORLD ENTERTAINMENT': 68, 'AP INTERNATIONAL': 69, 'APPLE': 70, 'ARA MEDIA': 71, 'ARBELOS': 72, 'ARC ENTERTAINMENT': 73, 'ARP SÉLECTION': 74, 'ARP SELECTION': 74, 'ARROW': 75, 'ART SERVICE': 76, 'ART VISION': 77, 'ARTE ÉDITIONS': 78, 'ARTE EDITIONS': 78, 'ARTE VIDÉO': 79, 'ARTE VIDEO': 79, 'ARTHAUS MUSIK': 80, 'ARTIFICIAL EYE': 81, 'ARTSPLOITATION FILMS': 82, 'ARTUS FILMS': 83, 'ASCOT ELITE HOME ENTERTAINMENT': 84, 'ASIA VIDEO': 85, 'ASMIK ACE': 86, 'ASTRO RECORDS & FILMWORKS': 87, 'ASYLUM': 88, 'ATLANTIC FILM': 89, 'ATLANTIC RECORDS': 90, 'ATLAS FILM': 91, 'AUDIO VISUAL ENTERTAINMENT': 92, 'AURO-3D CREATIVE LABEL': 93, 'AURUM': 94, 'AV VISIONEN': 95, 'AV-JET': 96, 'AVALON': 97, 'AVENTI': 98, 'AVEX TRAX': 99, 'AXIOM': 100, 'AXIS RECORDS': 101, 'AYNGARAN': 102, 'BAC FILMS': 103, 'BACH FILMS': 104, 'BANDAI VISUAL': 105, 'BARCLAY': 106, 'BBC': 107, 'BRITISH BROADCASTING CORPORATION': 107, 'BBI FILMS': 108, 'BBI': 108, 'BCI HOME ENTERTAINMENT': 109, 'BEGGARS BANQUET': 110, 'BEL AIR CLASSIQUES': 111, 'BELGA FILMS': 112, 'BELVEDERE': 113, 'BENELUX FILM DISTRIBUTORS': 114, 'BENNETT-WATT MEDIA': 115, 'BERLIN CLASSICS': 116, 'BERLINER PHILHARMONIKER RECORDINGS': 117, 'BEST ENTERTAINMENT': 118, 'BEYOND HOME ENTERTAINMENT': 119, 'BFI VIDEO': 120, 'BFI': 120, 'BRITISH FILM INSTITUTE': 120, 'BFS ENTERTAINMENT': 121, 'BFS': 121, 'BHAVANI': 122, 'BIBER RECORDS': 123, 'BIG HOME VIDEO': 124, 'BILDSTÖRUNG': 125, 'BILDSTORUNG': 125, 'BILL ZEBUB': 126, 'BIRNENBLATT': 127, 'BIT WEL': 128, 'BLACK BOX': 129, 'BLACK HILL PICTURES': 130, 'BLACK HILL': 130, 'BLACK HOLE RECORDINGS': 131, 'BLACK HOLE': 131, 'BLAQOUT': 132, 'BLAUFIELD MUSIC': 133, 'BLAUFIELD': 133, 'BLOCKBUSTER ENTERTAINMENT': 134, 'BLOCKBUSTER': 134, 'BLU PHASE MEDIA': 135, 'BLU-RAY ONLY': 136, 'BLU-RAY': 136, 'BLURAY ONLY': 136, 'BLURAY': 136, 'BLUE GENTIAN RECORDS': 137, 'BLUE KINO': 138, 'BLUE UNDERGROUND': 139, 'BMG/ARISTA': 140, 'BMG': 140, 'BMGARISTA': 140, 'BMG ARISTA': 140, 'ARISTA':
             140, 'ARISTA/BMG': 140, 'ARISTABMG': 140, 'ARISTA BMG': 140, 'BONTON FILM': 141, 'BONTON': 141, 'BOOMERANG PICTURES': 142, 'BOOMERANG': 142, 'BQHL ÉDITIONS': 143, 'BQHL EDITIONS': 143, 'BQHL': 143, 'BREAKING GLASS': 144, 'BRIDGESTONE': 145, 'BRINK': 146, 'BROAD GREEN PICTURES': 147, 'BROAD GREEN': 147, 'BUSCH MEDIA GROUP': 148, 'BUSCH': 148, 'C MAJOR': 149, 'C.B.S.': 150, 'CAICHANG': 151, 'CALIFÓRNIA FILMES': 152, 'CALIFORNIA FILMES': 152, 'CALIFORNIA': 152, 'CAMEO': 153, 'CAMERA OBSCURA': 154, 'CAMERATA': 155, 'CAMP MOTION PICTURES': 156, 'CAMP MOTION': 156, 'CAPELIGHT PICTURES': 157, 'CAPELIGHT': 157, 'CAPITOL': 159, 'CAPITOL RECORDS': 159, 'CAPRICCI': 160, 'CARGO RECORDS': 161, 'CARLOTTA FILMS': 162, 'CARLOTTA': 162, 'CARLOTA': 162, 'CARMEN FILM': 163, 'CASCADE': 164, 'CATCHPLAY': 165, 'CAULDRON FILMS': 166, 'CAULDRON': 166, 'CBS TELEVISION STUDIOS': 167, 'CBS': 167, 'CCTV': 168, 'CCV ENTERTAINMENT': 169, 'CCV': 169, 'CD BABY': 170, 'CD LAND': 171, 'CECCHI GORI': 172, 'CENTURY MEDIA': 173, 'CHUAN XUN SHI DAI MULTIMEDIA': 174, 'CINE-ASIA': 175, 'CINÉART': 176, 'CINEART': 176, 'CINEDIGM': 177, 'CINEFIL IMAGICA': 178, 'CINEMA EPOCH': 179, 'CINEMA GUILD': 180, 'CINEMA LIBRE STUDIOS': 181, 'CINEMA MONDO': 182, 'CINEMATIC VISION': 183, 'CINEPLOIT RECORDS': 184, 'CINESTRANGE EXTREME': 185, 'CITEL VIDEO': 186, 'CITEL': 186, 'CJ ENTERTAINMENT': 187, 'CJ': 187, 'CLASSIC MEDIA': 188, 'CLASSICFLIX': 189, 'CLASSICLINE': 190, 'CLAUDIO RECORDS': 191, 'CLEAR VISION': 192, 'CLEOPATRA': 193, 'CLOSE UP': 194, 'CMS MEDIA LIMITED': 195, 'CMV LASERVISION': 196, 'CN ENTERTAINMENT': 197, 'CODE RED': 198, 'COHEN MEDIA GROUP': 199, 'COHEN': 199, 'COIN DE MIRE CINÉMA': 200, 'COIN DE MIRE CINEMA': 200, 'COLOSSEO FILM': 201, 'COLUMBIA': 203, 'COLUMBIA PICTURES': 203, 'COLUMBIA/TRI-STAR': 204, 'TRI-STAR': 204, 'COMMERCIAL MARKETING': 205, 'CONCORD MUSIC GROUP': 206, 'CONCORDE VIDEO': 207, 'CONDOR': 208, 'CONSTANTIN FILM': 209, 'CONSTANTIN': 209, 'CONSTANTINO FILMES': 210, 'CONSTANTINO': 210, 'CONSTRUCTIVE MEDIA SERVICE': 211, 'CONSTRUCTIVE': 211, 'CONTENT ZONE': 212, 'CONTENTS GATE': 213, 'COQUEIRO VERDE': 214, 'CORNERSTONE MEDIA': 215, 'CORNERSTONE': 215, 'CP DIGITAL': 216, 'CREST MOVIES': 217, 'CRITERION': 218, 'CRITERION COLLECTION':
             218, 'CC': 218, 'CRYSTAL CLASSICS': 219, 'CULT EPICS': 220, 'CULT FILMS': 221, 'CULT VIDEO': 222, 'CURZON FILM WORLD': 223, 'D FILMS': 224, "D'AILLY COMPANY": 225, 'DAILLY COMPANY': 225, 'D AILLY COMPANY': 225, "D'AILLY": 225, 'DAILLY': 225, 'D AILLY': 225, 'DA CAPO': 226, 'DA MUSIC': 227, "DALL'ANGELO PICTURES": 228, 'DALLANGELO PICTURES': 228, "DALL'ANGELO": 228, 'DALL ANGELO PICTURES': 228, 'DALL ANGELO': 228, 'DAREDO': 229, 'DARK FORCE ENTERTAINMENT': 230, 'DARK FORCE': 230, 'DARK SIDE RELEASING': 231, 'DARK SIDE': 231, 'DAZZLER MEDIA': 232, 'DAZZLER': 232, 'DCM PICTURES': 233, 'DCM': 233, 'DEAPLANETA': 234, 'DECCA': 235, 'DEEPJOY': 236, 'DEFIANT SCREEN ENTERTAINMENT': 237, 'DEFIANT SCREEN': 237, 'DEFIANT': 237, 'DELOS': 238, 'DELPHIAN RECORDS': 239, 'DELPHIAN': 239, 'DELTA MUSIC & ENTERTAINMENT': 240, 'DELTA MUSIC AND ENTERTAINMENT': 240, 'DELTA MUSIC ENTERTAINMENT': 240, 'DELTA MUSIC': 240, 'DELTAMAC CO. LTD.': 241, 'DELTAMAC CO LTD': 241, 'DELTAMAC CO': 241, 'DELTAMAC': 241, 'DEMAND MEDIA': 242, 'DEMAND': 242, 'DEP': 243, 'DEUTSCHE GRAMMOPHON': 244, 'DFW': 245, 'DGM': 246, 'DIAPHANA': 247, 'DIGIDREAMS STUDIOS': 248, 'DIGIDREAMS': 248, 'DIGITAL ENVIRONMENTS': 249, 'DIGITAL': 249, 'DISCOTEK MEDIA': 250, 'DISCOVERY CHANNEL': 251, 'DISCOVERY': 251, 'DISK KINO': 252, 'DISNEY / BUENA VISTA': 253, 'DISNEY': 253, 'BUENA VISTA': 253, 'DISNEY BUENA VISTA': 253, 'DISTRIBUTION SELECT': 254, 'DIVISA': 255, 'DNC ENTERTAINMENT': 256, 'DNC': 256, 'DOGWOOF': 257, 'DOLMEN HOME VIDEO': 258, 'DOLMEN': 258, 'DONAU FILM': 259, 'DONAU': 259, 'DORADO FILMS': 260, 'DORADO': 260, 'DRAFTHOUSE FILMS': 261, 'DRAFTHOUSE': 261, 'DRAGON FILM ENTERTAINMENT': 262, 'DRAGON ENTERTAINMENT': 262, 'DRAGON FILM': 262, 'DRAGON': 262, 'DREAMWORKS': 263, 'DRIVE ON RECORDS': 264, 'DRIVE ON': 264, 'DRIVE-ON': 264, 'DRIVEON': 264, 'DS MEDIA': 265, 'DTP ENTERTAINMENT AG': 266, 'DTP ENTERTAINMENT': 266, 'DTP AG': 266, 'DTP': 266, 'DTS ENTERTAINMENT': 267, 'DTS': 267, 'DUKE MARKETING': 268, 'DUKE VIDEO DISTRIBUTION': 269, 'DUKE': 269, 'DUTCH FILMWORKS': 270, 'DUTCH': 270, 'DVD INTERNATIONAL': 271, 'DVD': 271, 'DYBEX': 272, 'DYNAMIC': 273, 'DYNIT': 274, 'E1 ENTERTAINMENT': 275, 'E1': 275, 'EAGLE ENTERTAINMENT': 276, 'EAGLE HOME ENTERTAINMENT PVT.LTD.':
@@ -666,8 +675,15 @@ class COMMON():
             896, 'UNIVERSAL ENTERTAINMENT': 896, 'UNIVERSAL HOME': 896, 'UNIVERSAL STUDIOS': 897, 'UNIVERSAL': 897, 'UNIVERSE LASER & VIDEO CO.': 898, 'UNIVERSE LASER AND VIDEO CO.': 898, 'UNIVERSE LASER & VIDEO CO': 898, 'UNIVERSE LASER AND VIDEO CO': 898, 'UNIVERSE LASER CO.': 898, 'UNIVERSE LASER CO': 898, 'UNIVERSE LASER': 898, 'UNIVERSUM FILM': 899, 'UNIVERSUM': 899, 'UTV': 900, 'VAP': 901, 'VCI': 902, 'VENDETTA FILMS': 903, 'VENDETTA': 903, 'VERSÁTIL HOME VIDEO': 904, 'VERSÁTIL VIDEO': 904, 'VERSÁTIL HOME': 904, 'VERSÁTIL': 904, 'VERSATIL HOME VIDEO': 904, 'VERSATIL VIDEO': 904, 'VERSATIL HOME': 904, 'VERSATIL': 904, 'VERTICAL ENTERTAINMENT': 905, 'VERTICAL': 905, 'VÉRTICE 360º': 906, 'VÉRTICE 360': 906, 'VERTICE 360o': 906, 'VERTICE 360': 906, 'VERTIGO BERLIN': 907, 'VÉRTIGO FILMS': 908, 'VÉRTIGO': 908, 'VERTIGO FILMS': 908, 'VERTIGO': 908, 'VERVE PICTURES': 909, 'VIA VISION ENTERTAINMENT': 910, 'VIA VISION': 910, 'VICOL ENTERTAINMENT': 911, 'VICOL': 911, 'VICOM': 912, 'VICTOR ENTERTAINMENT': 913, 'VICTOR': 913, 'VIDEA CDE': 914, 'VIDEO FILM EXPRESS': 915, 'VIDEO FILM': 915, 'VIDEO EXPRESS': 915, 'VIDEO MUSIC, INC.': 916, 'VIDEO MUSIC, INC': 916, 'VIDEO MUSIC INC.': 916, 'VIDEO MUSIC INC': 916, 'VIDEO MUSIC': 916, 'VIDEO SERVICE CORP.': 917, 'VIDEO SERVICE CORP': 917, 'VIDEO SERVICE': 917, 'VIDEO TRAVEL': 918, 'VIDEOMAX': 919, 'VIDEO MAX': 919, 'VII PILLARS ENTERTAINMENT': 920, 'VII PILLARS': 920, 'VILLAGE FILMS': 921, 'VINEGAR SYNDROME': 922, 'VINEGAR': 922, 'VS': 922, 'VINNY MOVIES': 923, 'VINNY': 923, 'VIRGIL FILMS & ENTERTAINMENT': 924, 'VIRGIL FILMS AND ENTERTAINMENT': 924, 'VIRGIL ENTERTAINMENT': 924, 'VIRGIL FILMS': 924, 'VIRGIL': 924, 'VIRGIN RECORDS': 925, 'VIRGIN': 925, 'VISION FILMS': 926, 'VISION': 926, 'VISUAL ENTERTAINMENT GROUP': 927, 'VISUAL GROUP': 927, 'VISUAL ENTERTAINMENT': 927, 'VISUAL': 927, 'VIVENDI VISUAL ENTERTAINMENT': 928, 'VIVENDI VISUAL': 928, 'VIVENDI': 928, 'VIZ PICTURES': 929, 'VIZ': 929, 'VLMEDIA': 930, 'VL MEDIA': 930, 'VL': 930, 'VOLGA': 931, 'VVS FILMS': 932,
             'VVS': 932, 'VZ HANDELS GMBH': 933, 'VZ HANDELS': 933, 'WARD RECORDS': 934, 'WARD': 934, 'WARNER BROS.': 935, 'WARNER BROS': 935, 'WARNER ARCHIVE': 935, 'WARNER ARCHIVE COLLECTION': 935, 'WAC': 935, 'WARNER': 935, 'WARNER MUSIC': 936, 'WEA': 937, 'WEINSTEIN COMPANY': 938, 'WEINSTEIN': 938, 'WELL GO USA': 939, 'WELL GO': 939, 'WELTKINO FILMVERLEIH': 940, 'WEST VIDEO': 941, 'WEST': 941, 'WHITE PEARL MOVIES': 942, 'WHITE PEARL': 942,
             'WICKED-VISION MEDIA': 943, 'WICKED VISION MEDIA': 943, 'WICKEDVISION MEDIA': 943, 'WICKED-VISION': 943, 'WICKED VISION': 943, 'WICKEDVISION': 943, 'WIENERWORLD': 944, 'WILD BUNCH': 945, 'WILD EYE RELEASING': 946, 'WILD EYE': 946, 'WILD SIDE VIDEO': 947, 'WILD SIDE': 947, 'WME': 948, 'WOLFE VIDEO': 949, 'WOLFE': 949, 'WORD ON FIRE': 950, 'WORKS FILM GROUP': 951, 'WORLD WRESTLING': 952, 'WVG MEDIEN': 953, 'WWE STUDIOS': 954, 'WWE': 954, 'X RATED KULT': 955, 'X-RATED KULT': 955, 'X RATED CULT': 955, 'X-RATED CULT': 955, 'X RATED': 955, 'X-RATED': 955, 'XCESS': 956, 'XLRATOR': 957, 'XT VIDEO': 958, 'XT': 958, 'YAMATO VIDEO': 959, 'YAMATO': 959, 'YASH RAJ FILMS': 960, 'YASH RAJS': 960, 'ZEITGEIST FILMS': 961, 'ZEITGEIST': 961, 'ZENITH PICTURES': 962, 'ZENITH': 962, 'ZIMA': 963, 'ZYLO': 964, 'ZYX MUSIC': 965, 'ZYX': 965
-        }.get(distributor, 0)
-        return distributor_id
+        }
+
+        if reverse:
+            for name, id_value in distributor_map.items():
+                if id_value == distributor_id:
+                    return name
+            return None
+        else:
+            return distributor_map.get(distributor, 0)
 
     async def prompt_user_for_id_selection(self, meta, tmdb=None, imdb=None, tvdb=None, mal=None, filename=None, tracker_name=None):
         if not tracker_name:
@@ -708,6 +724,76 @@ class COMMON():
         if response == '' or response == 'y':
             return True
         return False
+
+    async def unit3d_region_distributor(self, meta, tracker, torrent_url, id=None):
+        """Get region and distributor information from API response"""
+        params = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
+        url = f"{torrent_url}{id}"
+        response = requests.get(url=url, params=params)
+        try:
+            json_response = response.json()
+        except ValueError:
+            return
+        try:
+            data = json_response.get('data', [])
+            if data == "404":
+                console.print("[yellow]No data found (404). Returning None.[/yellow]")
+                return
+            if data and isinstance(data, list):
+                attributes = data[0].get('attributes', {})
+
+                region_id = attributes.get('region_id')
+                distributor_id = attributes.get('distributor_id')
+
+                if meta['debug']:
+                    console.print(f"[blue]Region ID: {region_id}[/blue]")
+                    console.print(f"[blue]Distributor ID: {distributor_id}[/blue]")
+
+                # use reverse to reverse map the id to the name
+                if not meta.get('region') and region_id:
+                    region_name = await self.unit3d_region_ids(None, reverse=True, region_id=region_id)
+                    if region_name:
+                        meta['region'] = region_name
+                        if meta['debug']:
+                            console.print(f"[green]Mapped region_id {region_id} to '{region_name}'[/green]")
+
+                # use reverse to reverse map the id to the name
+                if not meta.get('distributor') and distributor_id:
+                    distributor_name = await self.unit3d_distributor_ids(None, reverse=True, distributor_id=distributor_id)
+                    if distributor_name:
+                        meta['distributor'] = distributor_name
+                        if meta['debug']:
+                            console.print(f"[green]Mapped distributor_id {distributor_id} to '{distributor_name}'[/green]")
+                return
+
+            else:
+                # Handle direct attributes from JSON response (when not in a list)
+                attributes = json_response.get('attributes', {})
+                if attributes:
+                    region_id = attributes.get('region_id')
+                    distributor_id = attributes.get('distributor_id')
+
+                    if meta['debug']:
+                        console.print(f"[blue]Region ID: {region_id}[/blue]")
+                        console.print(f"[blue]Distributor ID: {distributor_id}[/blue]")
+
+                    if not meta.get('region') and region_id:
+                        region_name = await self.unit3d_region_ids(None, reverse=True, region_id=region_id)
+                        if region_name:
+                            meta['region'] = region_name
+                            if meta['debug']:
+                                console.print(f"[green]Mapped region_id {region_id} to '{region_name}'[/green]")
+
+                    if not meta.get('distributor') and distributor_id:
+                        distributor_name = await self.unit3d_distributor_ids(None, reverse=True, distributor_id=distributor_id)
+                        if distributor_name:
+                            meta['distributor'] = distributor_name
+                            if meta['debug']:
+                                console.print(f"[green]Mapped distributor_id {distributor_id} to '{distributor_name}'[/green]")
+        except Exception as e:
+            console.print_exception()
+            console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
+            return
 
     async def unit3d_torrent_info(self, tracker, torrent_url, search_url, meta, id=None, file_name=None, only_id=False):
         tmdb = imdb = tvdb = description = category = infohash = mal = files = None  # noqa F841
@@ -762,6 +848,10 @@ class COMMON():
                 tvdb = 0 if tvdb == 0 else tvdb
                 mal = 0 if mal == 0 else mal
                 imdb = 0 if imdb == 0 else imdb
+                if not meta.get('region') and attributes.get('region_id'):
+                    meta['region'] = attributes.get('region')
+                if not meta.get('distributor') and attributes.get('distributor_id'):
+                    meta['distributor'] = attributes.get('distributor')
             else:
                 # Handle response when searching by ID
                 if id and not data:
@@ -779,6 +869,10 @@ class COMMON():
                     tvdb = 0 if tvdb == 0 else tvdb
                     mal = 0 if mal == 0 else mal
                     imdb = 0 if imdb == 0 else imdb
+                    if not meta.get('region') and attributes.get('region_id'):
+                        meta['region'] = attributes.get('region')
+                    if not meta.get('distributor') and attributes.get('distributor_id'):
+                        meta['distributor'] = attributes.get('distributor')
                     # Handle file name extraction
                     files = attributes.get('files', [])
                     if files:
@@ -808,7 +902,7 @@ class COMMON():
                 console.print(f"[green]Successfully grabbed description from {tracker}")
                 console.print(f"Extracted description: {description}", markup=False)
 
-                if meta.get('unattended') or (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('tik')):
+                if meta.get('unattended') or (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')):
                     meta['description'] = description
                     meta['saved_description'] = True
                 else:

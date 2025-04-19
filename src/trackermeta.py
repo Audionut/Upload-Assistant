@@ -220,7 +220,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
             if valid_images:
                 meta['image_list'] = valid_images
                 if meta.get('image_list'):  # Double-check if image_list is set before handling it
-                    if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('tik')) or meta['unattended']:
+                    if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
                         await handle_image_list(meta, tracker_name, valid_images)
 
     if filename:
@@ -234,37 +234,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
     manual_key = f"{tracker_key}_manual"
     found_match = False
 
-    if tracker_name in ["BLU", "AITHER", "LST", "OE", "TIK"]:
-        if meta.get(tracker_key) is not None:
-            console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
-            tracker_data = await COMMON(config).unit3d_torrent_info(
-                tracker_name,
-                tracker_instance.torrent_url,
-                tracker_instance.search_url,
-                meta,
-                id=meta[tracker_key],
-                only_id=only_id
-            )
-        else:
-            console.print(f"[yellow]No ID found in meta for {tracker_name}, searching by file name[/yellow]")
-            tracker_data = await COMMON(config).unit3d_torrent_info(
-                tracker_name,
-                tracker_instance.torrent_url,
-                tracker_instance.search_url,
-                meta,
-                file_name=search_term,
-                only_id=only_id
-            )
-
-        if any(item not in [None, '0'] for item in tracker_data[:3]):  # Check for valid tmdb, imdb, or tvdb
-            console.print(f"[green]Valid data found on {tracker_name}, setting meta values[/green]")
-            await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
-            found_match = True
-        else:
-            console.print(f"[yellow]No valid data found on {tracker_name}[/yellow]")
-            found_match = False
-
-    elif tracker_name == "PTP":
+    if tracker_name == "PTP":
         imdb_id = None
         if meta.get('ptp') is None:
             imdb_id, ptp_torrent_id, ptp_torrent_hash = await tracker_instance.get_ptp_id_imdb(search_term, search_file_folder, meta)
@@ -337,53 +307,6 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                             console.print("[green]PTP images added to metadata.[/green]")
             else:
                 console.print(f"[yellow]Could not find IMDb ID using PTP ID: {ptp_torrent_id}[/yellow]")
-                found_match = False
-
-    elif tracker_name == "HDB":
-        if meta.get('hdb') is not None:
-            meta[manual_key] = meta[tracker_key]
-            console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
-
-            # Use get_info_from_torrent_id function if ID is found in meta
-            imdb, tvdb_id, hdb_name, meta['ext_torrenthash'] = await tracker_instance.get_info_from_torrent_id(meta[tracker_key])
-
-            if imdb or tvdb_id:
-                meta['imdb_id'] = imdb if imdb else 0
-                meta['tvdb_id'] = tvdb_id if tvdb_id else 0
-                meta['hdb_name'] = hdb_name
-                found_match = True
-                console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
-            else:
-                console.print(f"[yellow]{tracker_name} data not found for ID: {meta[tracker_key]}[/yellow]")
-                found_match = False
-        else:
-            console.print("[yellow]No ID found in meta for HDB, searching by file name[/yellow]")
-
-            # Use search_filename function if ID is not found in meta
-            imdb, tvdb_id, hdb_name, meta['ext_torrenthash'], tracker_id = await tracker_instance.search_filename(search_term, search_file_folder, meta)
-            meta['hdb_name'] = hdb_name
-            if tracker_id:
-                meta[tracker_key] = tracker_id
-
-            if imdb or tvdb_id:
-                if not meta['unattended']:
-                    console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
-                    if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
-                        console.print(f"[green]{tracker_name} data retained.[/green]")
-                        meta['imdb_id'] = imdb if imdb else meta.get('imdb_id')
-                        meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id')
-                        found_match = True
-                    else:
-                        console.print(f"[yellow]{tracker_name} data discarded.[/yellow]")
-                        meta[tracker_key] = None
-                        meta['tvdb_id'] = meta.get('tvdb_id') if meta.get('tvdb_id') else 0
-                        meta['imdb_id'] = meta.get('imdb_id') if meta.get('imdb_id') else 0
-                        meta['hdb_name'] = None
-                        found_match = False
-                else:
-                    console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {hdb_name}[/green]")
-                    found_match = True
-            else:
                 found_match = False
 
     elif tracker_name == "BHD":
@@ -507,6 +430,83 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 found_match = True
         else:
             found_match = False
+
+    elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX"]:
+        if meta.get(tracker_key) is not None:
+            console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
+            tracker_data = await COMMON(config).unit3d_torrent_info(
+                tracker_name,
+                tracker_instance.torrent_url,
+                tracker_instance.search_url,
+                meta,
+                id=meta[tracker_key],
+                only_id=only_id
+            )
+        else:
+            console.print(f"[yellow]No ID found in meta for {tracker_name}, searching by file name[/yellow]")
+            tracker_data = await COMMON(config).unit3d_torrent_info(
+                tracker_name,
+                tracker_instance.torrent_url,
+                tracker_instance.search_url,
+                meta,
+                file_name=search_term,
+                only_id=only_id
+            )
+
+        if any(item not in [None, '0'] for item in tracker_data[:3]):  # Check for valid tmdb, imdb, or tvdb
+            console.print(f"[green]Valid data found on {tracker_name}, setting meta values[/green]")
+            await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
+            found_match = True
+        else:
+            console.print(f"[yellow]No valid data found on {tracker_name}[/yellow]")
+            found_match = False
+
+    elif tracker_name == "HDB":
+        if meta.get('hdb') is not None:
+            meta[manual_key] = meta[tracker_key]
+            console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
+
+            # Use get_info_from_torrent_id function if ID is found in meta
+            imdb, tvdb_id, hdb_name, meta['ext_torrenthash'] = await tracker_instance.get_info_from_torrent_id(meta[tracker_key])
+
+            if imdb or tvdb_id:
+                meta['imdb_id'] = imdb if imdb else 0
+                meta['tvdb_id'] = tvdb_id if tvdb_id else 0
+                meta['hdb_name'] = hdb_name
+                found_match = True
+                console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
+            else:
+                console.print(f"[yellow]{tracker_name} data not found for ID: {meta[tracker_key]}[/yellow]")
+                found_match = False
+        else:
+            console.print("[yellow]No ID found in meta for HDB, searching by file name[/yellow]")
+
+            # Use search_filename function if ID is not found in meta
+            imdb, tvdb_id, hdb_name, meta['ext_torrenthash'], tracker_id = await tracker_instance.search_filename(search_term, search_file_folder, meta)
+            meta['hdb_name'] = hdb_name
+            if tracker_id:
+                meta[tracker_key] = tracker_id
+
+            if imdb or tvdb_id:
+                if not meta['unattended']:
+                    console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
+                    if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
+                        console.print(f"[green]{tracker_name} data retained.[/green]")
+                        meta['imdb_id'] = imdb if imdb else meta.get('imdb_id')
+                        meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id')
+                        found_match = True
+                    else:
+                        console.print(f"[yellow]{tracker_name} data discarded.[/yellow]")
+                        meta[tracker_key] = None
+                        meta['tvdb_id'] = meta.get('tvdb_id') if meta.get('tvdb_id') else 0
+                        meta['imdb_id'] = meta.get('imdb_id') if meta.get('imdb_id') else 0
+                        meta['hdb_name'] = None
+                        found_match = False
+                else:
+                    console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {hdb_name}[/green]")
+                    found_match = True
+            else:
+                found_match = False
 
     return meta, found_match
 

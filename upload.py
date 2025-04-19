@@ -572,13 +572,6 @@ async def do_the_thing(base_dir):
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
-            meta['skip_auto_torrent'] = config['DEFAULT'].get('skip_auto_torrent', False)
-            hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
-            tracker_ids = ['ptp', 'bhd', 'hdb', 'blu', 'btn', 'oe', 'aither', 'lst']
-
-            if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids):
-                await client.get_pathed_torrents(path, meta)
-
             await process_meta(meta, base_dir)
 
             if 'we_are_uploading' not in meta:
