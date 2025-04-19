@@ -180,6 +180,14 @@ config = {
         # set true to not delete existing meta.json file before running
         "keep_meta": False,
 
+        # If processing a bluray disc, get bluray information from bluray.com
+        # This will add a bluray.com link to the description and set region and distribution info
+        "get_bluray_info": False,
+        # A release with 100% score will have complete matching details with the bdinfo
+        # Setting 95% will allow for one not matching audio or subtitle track from bdinfo
+        # Most useful in unattended mode. If not unattended you may wish to lower this value to check more releases
+        "bluray_score": 95,
+
     },
 
     # these are used for DB links on AR
