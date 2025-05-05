@@ -150,8 +150,11 @@ async def process_meta(meta, base_dir):
         filename = meta.get('title', None)
         bdmv_filename = meta.get('filename', None)
         bdinfo = meta.get('bdinfo', None)
-        videopath = meta.get('filelist', [None])
-        videopath = videopath[0] if videopath else None
+        if meta.get('is_disc') == "HDDVD":
+            videopath = meta['discs'][0]['largest_evo']
+        else:
+            videopath = meta.get('filelist', [None])
+            videopath = videopath[0] if videopath else None
         console.print(f"Processing {filename} for upload")
         if 'manual_frames' not in meta:
             meta['manual_frames'] = {}
