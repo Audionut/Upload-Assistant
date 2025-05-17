@@ -1,7 +1,7 @@
 torf
 guessit
 ffmpeg-python
-pymediainfo==6.0.1
+pymediainfo
 anitopy
 cli-ui
 qbittorrent-api

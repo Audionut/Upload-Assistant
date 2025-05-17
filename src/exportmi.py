@@ -2,6 +2,7 @@ from src.console import console
 from pymediainfo import MediaInfo
 import json
 import os
+import platform
 
 
 async def mi_resolution(res, guess, width, scan, height, actual_height):
@@ -78,7 +79,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, export_text):
+async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False):
     def filter_mediainfo(data):
         filtered = {
             "creatingLibrary": data.get("creatingLibrary"),
@@ -249,24 +250,70 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text):
                 })
         return filtered
 
+    mediainfo_cmd = None
+    if is_dvd:
+        console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
+        if platform.system() == "Windows":
+            mediainfo_cmd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin", "MI", "windows", "mediainfo.exe")
+        else:
+            mediainfo_cmd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin", "MI", "linux", "mediainfo")
+
+        if not os.path.exists(mediainfo_cmd):
+            console.print("[bold red]Specialized MediaInfo binary not found, falling back to standard MediaInfo")
+            mediainfo_cmd = None
+        else:
+            console.print(f"[bold green]Using MediaInfo binary: {mediainfo_cmd}")
+
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") and export_text:
         console.print("[bold yellow]Exporting MediaInfo...")
         if not isdir:
             os.chdir(os.path.dirname(video))
-        media_info = MediaInfo.parse(video, output="STRING", full=False)
-        filtered_media_info = "\n".join(
-            line for line in media_info.splitlines()
-            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-        )
+
+        if mediainfo_cmd:
+            import subprocess
+            try:
+                result = subprocess.run([mediainfo_cmd, video], capture_output=True, text=True)
+                media_info = result.stdout
+            except Exception as e:
+                console.print(f"[bold red]Error using specialized MediaInfo binary: {e}")
+                console.print("[bold yellow]Falling back to standard MediaInfo...")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+        else:
+            media_info = MediaInfo.parse(video, output="STRING", full=False)
+
+        if isinstance(media_info, str):
+            filtered_media_info = "\n".join(
+                line for line in media_info.splitlines()
+                if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+            )
+        else:
+            filtered_media_info = "\n".join(
+                line for line in media_info.splitlines()
+                if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+            )
+
         with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
             export.write(filtered_media_info.replace(video, os.path.basename(video)))
         with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
             export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
         console.print("[bold green]MediaInfo Exported.")
 
-    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json.txt"):
-        media_info_json = MediaInfo.parse(video, output="JSON")
-        media_info_dict = json.loads(media_info_json)
+    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json"):
+        if mediainfo_cmd:
+            import subprocess
+            try:
+                result = subprocess.run([mediainfo_cmd, "--Output=JSON", video], capture_output=True, text=True)
+                media_info_json = result.stdout
+                media_info_dict = json.loads(media_info_json)
+            except Exception as e:
+                console.print(f"[bold red]Error getting JSON from specialized MediaInfo binary: {e}")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...")
+                media_info_json = MediaInfo.parse(video, output="JSON")
+                media_info_dict = json.loads(media_info_json)
+        else:
+            media_info_json = MediaInfo.parse(video, output="JSON")
+            media_info_dict = json.loads(media_info_json)
+
         filtered_info = filter_mediainfo(media_info_dict)
         with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
             json.dump(filtered_info, export, indent=4)
