@@ -6,7 +6,8 @@ config = config
 
 
 async def get_tvdb_episode_data(base_dir, token, tvdb_id, season, episode, api_key=None, retry_attempted=False, debug=False):
-    console.print(f"[cyan]Fetching TVDb episode data for S{season}E{episode}...[/cyan]")
+    if debug:
+        console.print(f"[cyan]Fetching TVDb episode data for S{season}E{episode}...[/cyan]")
 
     url = f"https://api4.thetvdb.com/v4/series/{tvdb_id}/episodes/default"
     params = {
@@ -175,7 +176,8 @@ async def get_tvdb_token(api_key, base_dir):
 
 
 async def get_tvdb_series_episodes(base_dir, token, tvdb_id, season, episode, api_key=None, retry_attempted=False, debug=False):
-    console.print(f"[cyan]Fetching episode list for series ID {tvdb_id}...[/cyan]")
+    if debug:
+        console.print(f"[cyan]Fetching episode list for series ID {tvdb_id}...[/cyan]")
 
     url = f"https://api4.thetvdb.com/v4/series/{tvdb_id}/extended?meta=episodes&short=false"
     headers = {

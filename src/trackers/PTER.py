@@ -292,13 +292,6 @@ class PTER():
                         image_list.append(image_dict)
         return image_list
 
-    async def get_anon(self, anon):
-        if anon == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 'no'
-        else:
-            anon = 'yes'
-        return anon
-
     async def edit_name(self, meta):
         pter_name = meta['name']
 
@@ -338,7 +331,10 @@ class PTER():
             await self.edit_desc(meta)
 
         pter_name = await self.edit_name(meta)
-
+        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 'no'
+        else:
+            anon = 'yes'
         if meta['bdinfo'] is not None:
             mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
         else:
@@ -372,7 +368,7 @@ class PTER():
                 "type": await self.get_type_category_id(meta),
                 "source_sel": await self.get_type_medium_id(meta),
                 "team_sel": await self.get_area_id(meta),
-                "uplver": await self.get_anon(meta['anon']),
+                "uplver": anon,
                 "zhongzi": await self.is_zhongzi(meta)
             }
 

@@ -98,18 +98,16 @@ class TTG():
             # 60 = TV Shows
         return type_id
 
-    async def get_anon(self, anon):
-        if anon == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 'no'
-        else:
-            anon = 'yes'
-        return anon
-
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
         ttg_name = await self.edit_name(meta)
+
+        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 'no'
+        else:
+            anon = 'yes'
 
         # FORM
         # type = category dropdown
@@ -145,7 +143,7 @@ class TTG():
                 'type': await self.get_type_id(meta),
                 'descr': ttg_desc.rstrip(),
 
-                'anonymity': await self.get_anon(meta['anon']),
+                'anonymity': anon,
                 'nodistr': 'no',
 
             }

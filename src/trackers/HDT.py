@@ -160,7 +160,7 @@ class HDT():
                 data['season'] = 'false'
 
             # Anonymous check
-            if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+            if not self.config['TRACKERS'][self.tracker].get('anon', False):
                 data['anonymous'] = 'false'
             else:
                 data['anonymous'] = 'true'

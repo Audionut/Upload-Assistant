@@ -1227,7 +1227,9 @@ class Clients():
                         if match:
                             meta['btn'] = match.group(1)
                     elif "https://beyond-hd.me" in comment:
-                        meta['bhd'] = info_hash_v1
+                        match = re.search(r'details/(\d+)', comment)
+                        if match:
+                            meta['bhd'] = match.group(1)
                     elif "/torrents/" in comment:
                         match = re.search(r'/(\d+)$', comment)
                         if match:
@@ -1374,7 +1376,9 @@ class Clients():
                 if match:
                     meta['btn'] = match.group(1)
             elif "https://beyond-hd.me" in comment:
-                meta['bhd'] = info_hash_v1
+                match = re.search(r'details/(\d+)', comment)
+                if match:
+                    meta['bhd'] = match.group(1)
 
             # If we found a tracker ID, log it
             for tracker in ['ptp', 'bhd', 'btn', 'blu', 'aither', 'lst', 'oe', 'hdb']:

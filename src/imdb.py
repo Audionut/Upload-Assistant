@@ -184,6 +184,22 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                 total
                 }}
             }}
+            runtimes(first: 10) {{
+                edges {{
+                    node {{
+                        id
+                        seconds
+                        displayableProperty {{
+                            value {{
+                                plainText
+                            }}
+                        }}
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+            }}
             akas(first: 100) {{
             edges {{
                 node {{
@@ -248,6 +264,36 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                     if name_id.startswith('nm'):
                         imdb_info['directors'].append(name_id)
                 break
+
+    editions = await safe_get(title_data, ['runtimes', 'edges'], [])
+    if editions:
+        edition_list = []
+        imdb_info['edition_details'] = {}
+
+        for edge in editions:
+            node = await safe_get(edge, ['node'], {})
+            seconds = await safe_get(node, ['seconds'], 0)
+            minutes = seconds // 60 if seconds else 0
+            displayable_property = await safe_get(node, ['displayableProperty', 'value', 'plainText'], '')
+            attributes = await safe_get(node, ['attributes'], [])
+            attribute_texts = [attr.get('text') for attr in attributes if isinstance(attr, dict)] if attributes else []
+
+            edition_display = f"{displayable_property} ({minutes} min)"
+            if attribute_texts:
+                edition_display += f" [{', '.join(attribute_texts)}]"
+
+            if seconds and displayable_property:
+                edition_list.append(edition_display)
+
+                runtime_key = str(minutes)
+                imdb_info['edition_details'][runtime_key] = {
+                    'display_name': displayable_property,
+                    'seconds': seconds,
+                    'minutes': minutes,
+                    'attributes': attribute_texts
+                }
+
+        imdb_info['editions'] = ', '.join(edition_list)
 
     akas_edges = await safe_get(title_data, ['akas', 'edges'], default=[])
     imdb_info['akas'] = [

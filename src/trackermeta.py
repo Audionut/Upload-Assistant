@@ -325,13 +325,36 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 found_match = False
 
     elif tracker_name == "BHD":
-        bhd_api = config['DEFAULT'].get('bhd_api')
-        bhd_rss_key = config['DEFAULT'].get('bhd_rss_key')
+        bhd_main_api = config['TRACKERS']['BHD'].get('api_key')
+        bhd_other_api = config['DEFAULT'].get('bhd_api')
+        if bhd_main_api and len(bhd_main_api) < 25:
+            bhd_main_api = None
+        if bhd_other_api and len(bhd_other_api) < 25:
+            bhd_other_api = None
+        elif bhd_other_api and len(bhd_other_api) > 25:
+            console.print("[red]BHD API key is being retired from the DEFAULT config section. Only using api from the BHD tracker section instead.[/red]")
+            await asyncio.sleep(2)
+        bhd_api = bhd_main_api if bhd_main_api else bhd_other_api
+        bhd_main_rss = config['TRACKERS']['BHD'].get('bhd_rss_key')
+        bhd_other_rss = config['DEFAULT'].get('bhd_rss_key')
+        if bhd_main_rss and len(bhd_main_rss) < 25:
+            bhd_main_rss = None
+        if bhd_other_rss and len(bhd_other_rss) < 25:
+            bhd_other_rss = None
+        elif bhd_other_rss and len(bhd_other_rss) > 25:
+            console.print("[red]BHD RSS key is being retired from the DEFAULT config section. Only using rss key from the BHD tracker section instead.[/red]")
+            await asyncio.sleep(2)
+        bhd_rss_key = bhd_main_rss if bhd_main_rss else bhd_other_rss
+        if not bhd_api or not bhd_rss_key:
+            console.print("[red]BHD API or RSS key not found. Please check your configuration.[/red]")
+            return meta, False
         use_foldername = (meta.get('is_disc') is not None or
                           meta.get('keep_folder') is True or
                           meta.get('isdir') is True)
 
-        if use_foldername:
+        if meta.get('bhd'):
+            await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, torrent_id=meta['bhd'])
+        elif use_foldername:
             # Use folder name from path if available, fall back to UUID
             folder_path = meta.get('path', '')
             foldername = os.path.basename(folder_path) if folder_path else meta.get('uuid', '')

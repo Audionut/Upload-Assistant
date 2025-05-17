@@ -135,8 +135,6 @@ async def _make_tvmaze_request(url, params):
 
 
 async def get_tvmaze_episode_data(tvmaze_id, season, episode):
-    console.print(f"[cyan]Fetching TVMaze episode data for ID: {tvmaze_id} and S{season}E{episode}...[/cyan]")
-
     url = f"https://api.tvmaze.com/shows/{tvmaze_id}/episodebynumber"
     params = {
         "season": season,
@@ -180,12 +178,6 @@ async def get_tvmaze_episode_data(tvmaze_id, season, episode):
                     "image": data.get("image", {}).get("original", None) if data.get("image") else None,
                     "series_image": show_data.get("image", {}).get("original", None) if show_data.get("image") else None,
                 }
-
-                console.print(f"[green]Found episode: {result['series_name']} - S{result['season_number']}E{result['episode_number']} - {result['episode_name']}[/green]")
-                if result["air_date"]:
-                    console.print(f"[yellow]Air date: {result['air_date']}[/yellow]")
-                if result["overview"]:
-                    console.print(f"[yellow]Overview: {result['overview'][:100]}{'...' if len(result['overview']) > 100 else ''}[/yellow]")
 
                 return result
             else:

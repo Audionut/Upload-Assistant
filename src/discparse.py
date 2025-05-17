@@ -259,6 +259,7 @@ class DiscParse():
                                     user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
                                     if user_input:
                                         bdinfo['edition'] = user_input
+                                        selected_playlists[idx]['edition'] = user_input
                                         console.print(f"[bold green]Edition updated to: {bdinfo['edition']}")
                                 else:
                                     console.print("[bold yellow]Unattended mode: Custom edition not added.")
@@ -268,6 +269,27 @@ class DiscParse():
                                 discs[i]['summary'] = bd_summary.strip()
                                 discs[i]['bdinfo'] = bdinfo
                                 discs[i]['playlists'] = selected_playlists
+                                if valid_playlists and meta['unattended'] and not meta.get('unattended-confirm', False):
+                                    simplified_playlists = [{"file": p["file"], "duration": p["duration"]} for p in valid_playlists]
+                                    duration_map = {}
+
+                                    # Store simplified version with only file and duration, keeping only one per unique duration
+                                    for playlist in valid_playlists:
+                                        rounded_duration = round(playlist["duration"])
+                                        if rounded_duration in duration_map:
+                                            continue
+
+                                        duration_map[rounded_duration] = {
+                                            "file": playlist["file"],
+                                            "duration": playlist["duration"]
+                                        }
+
+                                    simplified_playlists = list(duration_map.values())
+                                    simplified_playlists.sort(key=lambda x: x["duration"], reverse=True)
+                                    discs[i]['all_valid_playlists'] = simplified_playlists
+
+                                    if meta['debug']:
+                                        console.print(f"[cyan]Stored {len(simplified_playlists)} unique playlists by duration (from {len(valid_playlists)} total)")
                             else:
                                 discs[i][f'summary_{idx}'] = bd_summary.strip()
                                 discs[i][f'bdinfo_{idx}'] = bdinfo

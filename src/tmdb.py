@@ -35,10 +35,9 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
                 response = await client.get(url, params=params, timeout=10)
                 response.raise_for_status()
                 return response.json()
-            except httpx.HTTPStatusError as e:
-                console.print(f"[bold red]TMDb API error: {e.response.status_code}[/bold red]")
-            except httpx.RequestError as e:
-                console.print(f"[bold red]Network error during TMDb request: {e}[/bold red]")
+            except Exception:
+                console.print(f"[bold red]Failed to fetch TMDb data: {response.status_code}[/bold red]")
+                return {}
 
         return {}
 
@@ -132,7 +131,8 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
 
 
 async def get_tmdb_id(filename, search_year, meta, category, untouched_filename="", attempted=0):
-    console.print("[bold cyan]Fetching TMDB ID...[/bold cyan]")
+    if meta['debug']:
+        console.print("[bold cyan]Fetching TMDB ID...[/bold cyan]")
 
     search_results = {"results": []}
     secondary_results = {"results": []}
@@ -155,8 +155,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     params["year"] = search_year
 
                 response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                response.raise_for_status()
-                search_results = response.json()
+                try:
+                    response.raise_for_status()
+                    search_results = response.json()
+                except Exception:
+                    console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
+                    return meta
 
             elif category == "TV":
                 if meta.get('debug', False):
@@ -173,8 +177,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     params["first_air_date_year"] = search_year
 
                 response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                response.raise_for_status()
-                search_results = response.json()
+                try:
+                    response.raise_for_status()
+                    search_results = response.json()
+                except Exception:
+                    console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
+                    return meta
 
             if meta.get('debug', False):
                 console.print(f"[yellow]Search results (primary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
@@ -218,8 +226,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                 }
 
                 response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                response.raise_for_status()
-                search_results = response.json()
+                try:
+                    response.raise_for_status()
+                    search_results = response.json()
+                except Exception:
+                    console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
+                    return meta
 
             elif category == "TV":
                 if meta.get('debug', False):
@@ -233,8 +245,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                 }
 
                 response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                response.raise_for_status()
-                search_results = response.json()
+                try:
+                    response.raise_for_status()
+                    search_results = response.json()
+                except Exception:
+                    console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
+                    return meta
 
             if meta.get('debug', False):
                 console.print(f"[yellow]Search results (secondary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
@@ -260,8 +276,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     }
 
                     response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                    response.raise_for_status()
-                    secondary_results = response.json()
+                    try:
+                        response.raise_for_status()
+                        secondary_results = response.json()
+                    except Exception:
+                        console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
+                        return meta
 
                 elif category == "TV":
                     if meta.get('debug', False):
@@ -275,8 +295,12 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     }
 
                     response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                    response.raise_for_status()
-                    secondary_results = response.json()
+                    try:
+                        response.raise_for_status()
+                        secondary_results = response.json()
+                    except Exception:
+                        console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
+                        return meta
 
                 if meta.get('debug', False):
                     console.print(f"[yellow]Secondary title search results: {json.dumps(secondary_results.get('results', [])[:2], indent=2)}[/yellow]")
@@ -425,8 +449,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/movie/{tmdb_id}",
                 params={"api_key": TMDB_API_KEY}
             )
-            response.raise_for_status()
-            movie_data = response.json()
+            try:
+                response.raise_for_status()
+                movie_data = response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
+                return {}
 
             if debug:
                 console.print(f"[cyan]TMDB Response: {json.dumps(movie_data, indent=2)[:600]}...")
@@ -444,8 +472,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/movie/{tmdb_id}/external_ids",
                 params={"api_key": TMDB_API_KEY}
             )
-            external_resp.raise_for_status()
-            external = external_resp.json()
+            try:
+                external_resp.raise_for_status()
+                external = external_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch external ids: {response.status_code}[/bold red]")
+                return {}
 
             if imdb_id == 0:
                 imdb_id_str = external.get('imdb_id', None)
@@ -498,8 +530,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/movie/{tmdb_id}/keywords",
                 params={"api_key": TMDB_API_KEY}
             )
-            keywords_resp.raise_for_status()
-            keywords_data = keywords_resp.json()
+            try:
+                keywords_resp.raise_for_status()
+                keywords_data = keywords_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch keywords: {response.status_code}[/bold red]")
+                return {}
             keywords = ', '.join([keyword['name'].replace(',', ' ') for keyword in keywords_data.get('keywords', [])])
 
             # Get genres
@@ -512,8 +548,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/movie/{tmdb_id}/credits",
                 params={"api_key": TMDB_API_KEY}
             )
-            credits_resp.raise_for_status()
-            credits_data = credits_resp.json()
+            try:
+                credits_resp.raise_for_status()
+                credits_data = credits_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch credits: {response.status_code}[/bold red]")
+                return {}
 
             directors = []
             for each in credits_data.get('cast', []) + credits_data.get('crew', []):
@@ -554,8 +594,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}",
                 params={"api_key": TMDB_API_KEY}
             )
-            response.raise_for_status()
-            tv_data = response.json()
+            try:
+                response.raise_for_status()
+                tv_data = response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
+                return {}
 
             if debug:
                 console.print(f"[cyan]TMDB Response: {json.dumps(tv_data, indent=2)[:600]}...")
@@ -573,8 +617,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/external_ids",
                 params={"api_key": TMDB_API_KEY}
             )
-            external_resp.raise_for_status()
-            external = external_resp.json()
+            try:
+                external_resp.raise_for_status()
+                external = external_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch external ids: {response.status_code}[/bold red]")
+                return {}
 
             if imdb_id == 0:
                 imdb_id_str = external.get('imdb_id', None)
@@ -603,8 +651,12 @@ async def tmdb_other_meta(
                     f"{TMDB_BASE_URL}/tv/{tmdb_id}/videos",
                     params={"api_key": TMDB_API_KEY}
                 )
-                videos_resp.raise_for_status()
-                videos = videos_resp.json()
+                try:
+                    videos_resp.raise_for_status()
+                    videos = videos_resp.json()
+                except Exception:
+                    console.print(f"[bold red]Failed to fetch videos: {response.status_code}[/bold red]")
+                    return {}
 
                 for each in videos.get('results', []):
                     if each.get('site', "") == 'YouTube' and each.get('type', "") == "Trailer":
@@ -627,8 +679,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/keywords",
                 params={"api_key": TMDB_API_KEY}
             )
-            keywords_resp.raise_for_status()
-            keywords_data = keywords_resp.json()
+            try:
+                keywords_resp.raise_for_status()
+                keywords_data = keywords_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch keywords: {response.status_code}[/bold red]")
+                return {}
             keywords = ', '.join([keyword['name'].replace(',', ' ') for keyword in keywords_data.get('results', [])])
 
             # Get genres
@@ -640,8 +696,12 @@ async def tmdb_other_meta(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/credits",
                 params={"api_key": TMDB_API_KEY}
             )
-            credits_resp.raise_for_status()
-            credits_data = credits_resp.json()
+            try:
+                credits_resp.raise_for_status()
+                credits_data = credits_resp.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch credits: {response.status_code}[/bold red]")
+                return {}
 
             directors = []
             for each in credits_data.get('cast', []) + credits_data.get('crew', []):
@@ -720,8 +780,12 @@ async def get_keywords(tmdb_id, category):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params={"api_key": TMDB_API_KEY})
-            response.raise_for_status()
-            data = response.json()
+            try:
+                response.raise_for_status()
+                data = response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch keywords: {response.status_code}[/bold red]")
+                return ""
 
             if category == "MOVIE":
                 keywords = [keyword['name'].replace(',', ' ') for keyword in data.get('keywords', [])]
@@ -765,8 +829,12 @@ async def get_directors(tmdb_id, category):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params={"api_key": TMDB_API_KEY})
-            response.raise_for_status()
-            data = response.json()
+            try:
+                response.raise_for_status()
+                data = response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch credits: {response.status_code}[/bold red]")
+                return []
 
             directors = []
             for each in data.get('cast', []) + data.get('crew', []):
@@ -938,9 +1006,13 @@ async def daily_to_tmdb_season_episode(tmdbid, date):
             f"{TMDB_BASE_URL}/tv/{tmdbid}",
             params={"api_key": TMDB_API_KEY}
         )
-        response.raise_for_status()
-        tv_data = response.json()
-        seasons = tv_data.get('seasons', [])
+        try:
+            response.raise_for_status()
+            tv_data = response.json()
+            seasons = tv_data.get('seasons', [])
+        except Exception:
+            console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
+            return 0, 0
 
         # Find the latest season that aired before or on the target date
         season = 1
@@ -957,9 +1029,13 @@ async def daily_to_tmdb_season_episode(tmdbid, date):
             f"{TMDB_BASE_URL}/tv/{tmdbid}/season/{season}",
             params={"api_key": TMDB_API_KEY}
         )
-        season_response.raise_for_status()
-        season_data = season_response.json()
-        season_info = season_data.get('episodes', [])
+        try:
+            season_response.raise_for_status()
+            season_data = season_response.json()
+            season_info = season_data.get('episodes', [])
+        except Exception:
+            console.print(f"[bold red]Failed to fetch season data: {season_response.status_code}[/bold red]")
+            return 0, 0
 
         # Find the episode that aired on the target date
         episode = 1
@@ -981,8 +1057,12 @@ async def get_episode_details(tmdb_id, season_number, episode_number, debug=Fals
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}",
                 params={"api_key": TMDB_API_KEY, "append_to_response": "images,credits,external_ids"}
             )
-            response.raise_for_status()
-            episode_data = response.json()
+            try:
+                response.raise_for_status()
+                episode_data = response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch episode data: {response.status_code}[/bold red]")
+                return {}
 
             if debug:
                 console.print(f"[cyan]Episode Data: {json.dumps(episode_data, indent=2)[:600]}...")
@@ -1064,8 +1144,12 @@ async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API
                 f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}/images",
                 params={"api_key": TMDB_API_KEY}
             )
-            image_response.raise_for_status()
-            image_data = image_response.json()
+            try:
+                image_response.raise_for_status()
+                image_data = image_response.json()
+            except Exception:
+                console.print(f"[bold red]Failed to fetch image data: {image_response.status_code}[/bold red]")
+                return ""
             if debug:
                 console.print(f"[cyan]Image Data: {json.dumps(image_data, indent=2)[:500]}...")
 

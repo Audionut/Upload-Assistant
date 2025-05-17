@@ -24,9 +24,6 @@ config = {
 
         # btn api key for infohash parsing
         "btn_api": "btn_api key",
-        # bhd api/rss keys for infohash parsing and auto torrent id/filename searching
-        "bhd_api": "bhd api key",
-        "bhd_rss_key": "bhd rss key",
 
         # image host api keys
         "imgbb_api": "imgbb api key",
@@ -274,6 +271,7 @@ config = {
             # set api/rss keys above if using BHD for automatic ID searching or torrent_id searching
             "useAPI": False,  # Set to True if using BHD for automatic file/foldername searching
             "api_key": "BHD api key",
+            "bhd_rss_key": "bhd rss key",
             "announce_url": "https://beyond-hd.me/announce/customannounceurl",
             "draft_default": "True",  # Send to drafts
             # "anon" : False

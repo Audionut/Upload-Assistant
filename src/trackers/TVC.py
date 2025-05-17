@@ -5,6 +5,7 @@ import requests
 import traceback
 import cli_ui
 import os
+import tmdbsimple as tmdb
 from src.bbcode import BBCODE
 import json
 import httpx
@@ -29,6 +30,7 @@ class TVC():
         self.search_url = 'https://tvchaosuk.com/api/torrents/filter'
         self.signature = ""
         self.banned_groups = []
+        tmdb.API_KEY = config['DEFAULT']['tmdb_api']
         self.images = {
             "imdb_75": 'https://i.imgur.com/Mux5ObG.png',
             "tmdb_75": 'https://i.imgur.com/r3QzUbk.png',
@@ -94,7 +96,7 @@ class TVC():
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
         await self.unit3d_edit_desc(meta, self.tracker, self.signature)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1

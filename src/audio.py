@@ -1,0 +1,291 @@
+import time
+import traceback
+from src.console import console
+
+
+async def get_audio_v2(mi, meta, bdinfo):
+    extra = dual = ""
+    has_commentary = False
+
+    # Get formats
+    if bdinfo is not None:  # Disks
+        format_settings = ""
+        format = bdinfo.get('audio', [{}])[0].get('codec', '')
+        commercial = format
+        additional = bdinfo.get('audio', [{}])[0].get('atmos_why_you_be_like_this', '')
+
+        # Channels
+        chan = bdinfo.get('audio', [{}])[0].get('channels', '')
+    else:
+        track_num = -1
+        tracks = mi.get('media', {}).get('track', [])
+        highest_channels = -1
+        original_language = meta.get('original_language', '')
+
+        # First try: Find highest channel count track in original language (if known)
+        if original_language:
+            for i, t in enumerate(tracks):
+                if t.get('@type') != "Audio":
+                    continue
+
+                # Skip commentary tracks
+                if "commentary" in (t.get('Title') or '').lower():
+                    continue
+
+                # Check if this is in the original language
+                audio_language = t.get('Language', '')
+                language_match = False
+
+                if isinstance(audio_language, str):
+                    if audio_language.startswith(original_language):
+                        language_match = True
+
+                    # For some language variants
+                    variants = ['zh', 'cn', 'cmn', 'no', 'nb']
+                    if any(audio_language.startswith(var) for var in variants) and any(original_language.startswith(var) for var in variants):
+                        language_match = True
+
+                # Only consider this track if it's in original language
+                if language_match:
+                    # Get channel count
+                    channels = t.get('Channels_Original', t.get('Channels', 0))
+                    try:
+                        if not str(channels).isnumeric():
+                            channels = t.get('Channels', 0)
+                        channels_float = float(str(channels).replace('.1', '.1'))
+                    except (ValueError, TypeError):
+                        channels_float = 0
+
+                    # Update if this has more channels than previous best
+                    if channels_float > highest_channels:
+                        highest_channels = channels_float
+                        track_num = i
+
+        # Second try: If no original language track found or original language not known,
+        # just find the track with highest channel count
+        if track_num == -1:
+            for i, t in enumerate(tracks):
+                if t.get('@type') != "Audio":
+                    continue
+
+                # Skip commentary tracks
+                if "commentary" in (t.get('Title') or '').lower():
+                    continue
+
+                # Get channel count
+                channels = t.get('Channels_Original', t.get('Channels', 0))
+                try:
+                    if not str(channels).isnumeric():
+                        channels = t.get('Channels', 0)
+                    channels_float = float(str(channels).replace('.1', '.1'))
+                except (ValueError, TypeError):
+                    channels_float = 0
+
+                if channels_float > highest_channels:
+                    highest_channels = channels_float
+                    track_num = i
+
+        # Fallback to first audio track if no valid track was found
+        if track_num == -1:
+            for i, t in enumerate(tracks):
+                if t.get('@type') == "Audio":
+                    track_num = i
+                    break
+
+        # If still no audio track found, use track 2 (common index for first audio track)
+        if track_num == -1:
+            track_num = 2
+
+        track = tracks[track_num] if len(tracks) > track_num else {}
+        format = track.get('Format', '')
+        commercial = track.get('Format_Commercial', '') or track.get('Format_Commercial_IfAny', '')
+
+        if track.get('Language', '') == "zxx":
+            meta['silent'] = True
+
+        additional = track.get('Format_AdditionalFeatures', '')
+
+        format_settings = track.get('Format_Settings', '')
+        if not isinstance(format_settings, str):
+            format_settings = ""
+        if format_settings in ['Explicit']:
+            format_settings = ""
+        format_profile = track.get('Format_Profile', '')
+        # Channels
+        channels = track.get('Channels_Original', track.get('Channels'))
+        if not str(channels).isnumeric():
+            channels = track.get('Channels')
+        try:
+            channel_layout = track.get('ChannelLayout', '') or track.get('ChannelLayout_Original', '') or track.get('ChannelPositions', '')
+        except Exception:
+            channel_layout = ''
+
+        if channel_layout and "LFE" in channel_layout:
+            chan = f"{int(channels) - 1}.1"
+        elif channel_layout == "":
+            if int(channels) <= 2:
+                chan = f"{int(channels)}.0"
+            else:
+                chan = f"{int(channels) - 1}.1"
+        else:
+            chan = f"{channels}.0"
+
+        if meta.get('dual_audio', False):
+            dual = "Dual-Audio"
+        else:
+            if not meta.get('original_language', '').startswith('en'):
+                eng, orig = False, False
+                try:
+                    for t in mi['media']['track']:
+                        if t.get('@type') != "Audio":
+                            continue
+
+                        audio_language = t.get('Language', '')
+
+                        if isinstance(audio_language, str):
+                            if audio_language.startswith("en") and "commentary" not in (t.get('Title') or '').lower():
+                                eng = True
+
+                            if not audio_language.startswith("en") and audio_language.startswith(meta.get('original_language')) and "commentary" not in (t.get('Title') or '').lower():
+                                orig = True
+
+                            variants = ['zh', 'cn', 'cmn', 'no', 'nb']
+                            if any(audio_language.startswith(var) for var in variants) and any(meta.get('original_language').startswith(var) for var in variants):
+                                orig = True
+
+                        if isinstance(audio_language, str) and audio_language and audio_language != meta.get('original_language') and not audio_language.startswith("en"):
+                            audio_language = "und" if audio_language == "" else audio_language
+                            console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
+                            time.sleep(5)
+
+                    if eng and orig:
+                        dual = "Dual-Audio"
+                    elif eng and not orig and meta.get('original_language') not in ['zxx', 'xx', None] and not meta.get('no_dub', False):
+                        dual = "Dubbed"
+                except Exception:
+                    console.print(traceback.format_exc())
+                    pass
+
+        for t in tracks:
+            if t.get('@type') != "Audio":
+                continue
+
+            if "commentary" in (t.get('Title') or '').lower():
+                has_commentary = True
+
+    # Convert commercial name to naming conventions
+    audio = {
+        "DTS": "DTS",
+        "AAC": "AAC",
+        "AAC LC": "AAC",
+        "AC-3": "DD",
+        "E-AC-3": "DD+",
+        "A_EAC3": "DD+",
+        "Enhanced AC-3": "DD+",
+        "MLP FBA": "TrueHD",
+        "FLAC": "FLAC",
+        "Opus": "Opus",
+        "Vorbis": "VORBIS",
+        "PCM": "LPCM",
+        "LPCM Audio": "LPCM",
+        "Dolby Digital Audio": "DD",
+        "Dolby Digital Plus Audio": "DD+",
+        "Dolby Digital Plus": "DD+",
+        "Dolby TrueHD Audio": "TrueHD",
+        "DTS Audio": "DTS",
+        "DTS-HD Master Audio": "DTS-HD MA",
+        "DTS-HD High-Res Audio": "DTS-HD HRA",
+        "DTS:X Master Audio": "DTS:X"
+    }
+    audio_extra = {
+        "XLL": "-HD MA",
+        "XLL X": ":X",
+        "ES": "-ES",
+    }
+    format_extra = {
+        "JOC": " Atmos",
+        "16-ch": " Atmos",
+        "Atmos Audio": " Atmos",
+    }
+    format_settings_extra = {
+        "Dolby Surround EX": "EX"
+    }
+
+    commercial_names = {
+        "Dolby Digital": "DD",
+        "Dolby Digital Plus": "DD+",
+        "Dolby TrueHD": "TrueHD",
+        "DTS-ES": "DTS-ES",
+        "DTS-HD High": "DTS-HD HRA",
+        "Free Lossless Audio Codec": "FLAC",
+        "DTS-HD Master Audio": "DTS-HD MA"
+    }
+
+    search_format = True
+
+    if isinstance(additional, dict):
+        additional = ""  # Set empty string if additional is a dictionary
+
+    if commercial:
+        for key, value in commercial_names.items():
+            if key in commercial:
+                codec = value
+                search_format = False
+            if "Atmos" in commercial or format_extra.get(additional, "") == " Atmos":
+                extra = " Atmos"
+
+    if search_format:
+        codec = audio.get(format, "") + audio_extra.get(additional, "")
+        extra = format_extra.get(additional, "")
+
+    format_settings = format_settings_extra.get(format_settings, "")
+    if format_settings == "EX" and chan == "5.1":
+        format_settings = "EX"
+    else:
+        format_settings = ""
+
+    if codec == "":
+        codec = format
+
+    if format.startswith("DTS"):
+        if additional and additional.endswith("X"):
+            codec = "DTS:X"
+            chan = f"{int(channels) - 1}.1"
+
+    if format == "MPEG Audio":
+        if format_profile == "Layer 2":
+            codec = "MP2"
+        elif format_profile == "Layer 3":
+            codec = "MP3"
+
+    if codec == "DD" and chan == "7.1":
+        console.print("[warning] Detected codec is DD but channel count is 7.1, correcting to DD+")
+        codec = "DD+"
+
+    audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
+    audio = ' '.join(audio.split())
+    return audio, chan, has_commentary
+
+
+async def get_audio_languages(mi, meta):
+    tracks = mi.get('media', {}).get('track', [])
+
+    languages = []
+
+    for i, t in enumerate(tracks):
+        if t.get('@type') != "Audio":
+            continue
+
+        language = t.get('Language', '')
+        if meta['debug']:
+            console.print(f"DEBUG: Track {i} Language = {language} ({type(language)})")
+
+        if isinstance(language, str):  # Normal case
+            languages.append(language.lower())
+        elif isinstance(language, dict):  # Handle unexpected dict case
+            if 'value' in language:  # Check if a known key exists
+                extracted = language['value']
+                if isinstance(extracted, str):
+                    languages.append(extracted.lower())
+
+    return languages

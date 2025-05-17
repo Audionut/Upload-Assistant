@@ -75,7 +75,7 @@ class ULCX():
         if region_id == "SKIPPED" or distributor_id == "SKIPPED":
             console.print("Region or Distributor ID not found; skipping ULCX upload.")
             return
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
