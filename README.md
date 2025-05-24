@@ -88,3 +88,4 @@ Built with updated BDInfoCLI from https://github.com/rokibhasansagar/BDInfoCLI-n
   <a href="https://thetvdb.com/"><img src="https://i.postimg.cc/Hs1KKqsS/logo1.png" alt="TheTVDB" height="40px;"></a>&nbsp;&nbsp;
   <a href="https://www.tvmaze.com/"><img src="https://i.postimg.cc/2jdRzkJp/tvm-header-logo.png" alt="TVmaze" height="40px"></a>
 </p>
+
