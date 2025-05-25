@@ -19,6 +19,8 @@ from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_v
 from src.tags import get_tag, tag_override
 from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
+from src.sonarr import get_sonar_from_id, extract_show_data
+from src.radarr import get_radarr_from_id, extract_movie_data
 
 try:
     import traceback
@@ -64,6 +66,8 @@ class Prep():
         meta['skip_auto_torrent'] = config['DEFAULT'].get('skip_auto_torrent', False)
         hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
         tracker_ids = ['ptp', 'bhd', 'btn', 'blu', 'aither', 'lst', 'oe', 'hdb', 'huno']
+        use_sonarr = config['DEFAULT'].get('use_sonarr', False)
+        use_radarr = config['DEFAULT'].get('use_radarr', False)
 
         # make sure these are set in meta
         meta['we_checked_tvdb'] = False
@@ -369,6 +373,37 @@ class Prep():
             await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'])
         else:
             console.print("Skipping existing search as meta already populated")
+
+        if meta['category'] == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0:
+            sonarr_data = await get_sonar_from_id(meta.get('tvdb_id', 0), debug=meta.get('debug', False))
+            ids = await extract_show_data(sonarr_data)
+            if meta['debug']:
+                console.print(f"TVDB ID: {ids['tvdb_id']}")
+                console.print(f"IMDB ID: {ids['imdb_id']}")
+                console.print(f"TVMAZE ID: {ids['tvmaze_id']}")
+                console.print(f"TMDB ID: {ids['tmdb_id']}")
+                console.print(f"Genres: {ids['genres']}")
+            if 'anime' not in [genre.lower() for genre in ids['genres']]:
+                meta['not_anime'] = True
+            if meta.get('tvdb_id', 0) == 0 and ids['tvdb_id'] is not None:
+                meta['tvdb_id'] = ids['tvdb_id']
+            if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                meta['imdb_id'] = ids['imdb_id']
+            if meta.get('tvmaze_id', 0) == 0 and ids['tvmaze_id'] is not None:
+                meta['tvmaze_id'] = ids['tvmaze_id']
+            if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                meta['tmdb_id'] = ids['tmdb_id']
+        elif meta['category'] == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) != 0 and meta.get('imdb_id', 0) == 0:
+            radarr_data = await get_radarr_from_id(meta.get('tmdb_id', 0), debug=meta.get('debug', False))
+            ids = await extract_movie_data(radarr_data)
+            if meta['debug']:
+                console.print(f"IMDB ID: {ids['imdb_id']}")
+                console.print(f"TMDB ID: {ids['tmdb_id']}")
+                console.print(f"Genres: {ids['genres']}")
+            if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                meta['imdb_id'] = ids['imdb_id']
+            if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                meta['tmdb_id'] = ids['tmdb_id']
 
         # if there's no region/distributor info, lets ping some unit3d trackers and see if we get it
         ping_unit3d_config = self.config['DEFAULT'].get('ping_unit3d', False)
