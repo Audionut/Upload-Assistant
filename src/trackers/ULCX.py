@@ -245,10 +245,18 @@ class ULCX():
                     data = response.json()
                     for each in data['data']:
                         attributes = each['attributes']
-                        result = {
-                            'name': attributes['name'],
-                            'size': attributes['size']
-                        }
+                        if not meta['is_disc']:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size'],
+                                'files': [file['name'] for file in attributes.get('files', []) if isinstance(file, dict) and 'name' in file],
+                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0
+                            }
+                        else:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size']
+                            }
                         dupes.append(result)
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
