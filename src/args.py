@@ -23,9 +23,10 @@ class ShortHelpFormatter(argparse.HelpFormatter):
         short_usage = "usage: upload.py [path...] [options]\n\n"
         short_options = """
 Common options:
-  -dm, --delete-meta         Deletes the cached meta file that stores arguments/processed data
   -tmdb, --tmdb              Specify the TMDb id to use with movie/ or tv/ prefix
   -imdb, --imdb              Specify the IMDb id to use
+  -tvmaze, --tvmaze          Specify the TVMaze id to use
+  -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
   -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
   -df, --descfile            Path to custom description file

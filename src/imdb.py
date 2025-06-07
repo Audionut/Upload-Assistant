@@ -341,11 +341,12 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year):
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False):
     import re
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
-    console.print(f"[yellow]Searching IMDb (GraphQL) for {filename} and year {search_year}...[/yellow]")
-    imdbID = 0
+    if debug:
+        console.print(f"[yellow]Searching IMDb for {filename} and year {search_year}...[/yellow]")
+    imdbID = imdb_id = 0
     url = "https://api.graphql.imdb.com/"
     query = {
         "query": f"""
@@ -391,35 +392,83 @@ async def search_imdb(filename, search_year):
         return 0
 
     results = await safe_get(data, ["data", "advancedTitleSearch", "edges"], [])
-    console.print(f"[yellow]Found {len(results)} results...[/yellow]")
 
-    for idx, edge in enumerate(results):
-        node = await safe_get(edge, ["node"], {})
-        title = await safe_get(node, ["title"], {})
-        title_text = await safe_get(title, ["titleText", "text"], "")
-        year = await safe_get(title, ["releaseYear", "year"], None)
-        imdb_id = await safe_get(title, ["id"], "")
-        title_type = await safe_get(title, ["titleType", "text"], "")
-        plot = await safe_get(title, ["plot", "plotText", "plainText"], "")
+    if debug:
+        console.print(f"[yellow]Found {len(results)} results...[/yellow]")
+        console.print(f"quickie: {quickie}, category: {category}, search_year: {search_year}")
 
-        console.print(f"[cyan]Result {idx+1}: {title_text} - ({year}) - {imdb_id} - Type: {title_type}[/cyan]")
-        if plot:
-            console.print(f"[green]Plot: {plot}[/green]")
+    if quickie:
+        if results:
+            first_result = results[0]
+            if debug:
+                console.print(f"[cyan]Quickie search result: {first_result}[/cyan]")
+            node = await safe_get(first_result, ["node"], {})
+            title = await safe_get(node, ["title"], {})
+            type_info = await safe_get(title, ["titleType"], {})
+            year = await safe_get(title, ["releaseYear", "year"], None)
+            imdb_id = await safe_get(title, ["id"], "")
 
-    if results:
-        console.print("[yellow]Enter the number of the correct entry, or 0 for none:[/yellow]")
-        try:
-            user_input = input("> ").strip()
-            if user_input.isdigit():
-                selection = int(user_input)
-                if 1 <= selection <= len(results):
-                    selected = results[selection - 1]
-                    imdb_id = await safe_get(selected, ["node", "title", "id"], "")
-                    if imdb_id:
+            type_matches = False
+            if type_info:
+                title_type = type_info.get("text", "").lower()
+                if category and category.lower() == "tv" and "tv series" in title_type:
+                    type_matches = True
+                elif category and category.lower() == "movie" and "tv series" not in title_type:
+                    type_matches = True
+
+            if imdb_id and type_matches:
+                if year and search_year:
+                    if year == search_year:
                         imdbID = int(imdb_id.replace('tt', '').strip())
                         return imdbID
-                # If 0 or invalid, fall through to return imdbID = 0
-        except Exception as e:
-            console.print(f"[red]Error reading input: {e}[/red]")
+                    else:
+                        if debug:
+                            console.print(f"[yellow]Year mismatch: found {year}, expected {search_year}[/yellow]")
+                        imdbID = 0
+                else:
+                    imdbID = int(imdb_id.replace('tt', '').strip())
+                    return imdbID
+            else:
+                if not imdb_id and debug:
+                    console.print("[yellow]No IMDb ID found in quickie result[/yellow]")
+                if not type_matches and debug:
+                    console.print(f"[yellow]Type mismatch: found {type_info.get('text', '')}, expected {category}[/yellow]")
+                imdbID = 0
+        else:
+            console.print("[yellow]No results found for quickie search[/yellow]")
+            imdbID = 0
+
+        return imdbID
+
+    else:
+        for idx, edge in enumerate(results):
+            node = await safe_get(edge, ["node"], {})
+            title = await safe_get(node, ["title"], {})
+            title_text = await safe_get(title, ["titleText", "text"], "")
+            year = await safe_get(title, ["releaseYear", "year"], None)
+            imdb_id = await safe_get(title, ["id"], "")
+            title_type = await safe_get(title, ["titleType", "text"], "")
+            plot = await safe_get(title, ["plot", "plotText", "plainText"], "")
+
+            console.print(f"[cyan]Result {idx+1}: {title_text} - ({year}) - {imdb_id} - Type: {title_type}[/cyan]")
+            if plot:
+                console.print(f"[green]Plot: {plot}[/green]")
+
+        if results:
+            console.print("[yellow]Enter the number of the correct entry, or 0 for none:[/yellow]")
+            try:
+                user_input = input("> ").strip()
+                if user_input.isdigit():
+                    selection = int(user_input)
+                    if 1 <= selection <= len(results):
+                        selected = results[selection - 1]
+                        imdb_id = await safe_get(selected, ["node", "title", "id"], "")
+                        if imdb_id:
+                            imdbID = int(imdb_id.replace('tt', '').strip())
+                            return imdbID
+
+            except Exception as e:
+                console.print(f"[red]Error reading input: {e}[/red]")
+                imdb_id = 0
 
     return imdbID
