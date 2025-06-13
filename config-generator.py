@@ -251,6 +251,7 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
     Returns a dict with the configured DEFAULT values.
     """
     print("\n====== DEFAULT CONFIGURATION ======")
+    print("\n[i] Press enter to accept the default values/skip, or input your own values.")
     config_defaults = {}
 
     # Settings that should only be prompted if a parent setting has a specific value
@@ -615,21 +616,61 @@ def configure_torrent_clients(existing_clients=None, example_clients=None, defau
         default_client_name = get_user_input("Enter the name of the torrent client to use",
                                              default="qbittorrent")
 
+    # Configure the default client
+    print(f"\nConfiguring default client: {default_client_name}")
+    config_clients = configure_single_client(default_client_name, existing_clients, example_clients, config_clients, config_comments)
+
+    # After configuring the default client, ask if the user wants to add additional clients
+    while True:
+        add_another = input("\n\n[i] Do you want to add configuration for another torrent client? (y/N): ").lower() == "y"
+        if not add_another:
+            break
+
+        # Show available clients not yet configured
+        available_clients = [c for c in example_clients if c not in config_clients]
+        if not available_clients:
+            print("All available clients from the example config have been configured.")
+            break
+
+        print("\nAvailable clients to configure:")
+        for client_name in available_clients:
+            print(f"  - {client_name}")
+
+        additional_client = get_user_input("Enter the name of the torrent client to configure")
+        if not additional_client:
+            print("No client name provided, skipping additional client configuration.")
+            continue
+
+        if additional_client in config_clients:
+            print(f"Client '{additional_client}' is already configured.")
+            continue
+
+        if additional_client not in example_clients:
+            print(f"Client '{additional_client}' not found in example config. Available clients: {', '.join(available_clients)}")
+            continue
+
+        # Configure the additional client
+        print(f"\nConfiguring additional client: {additional_client}")
+        config_clients = configure_single_client(additional_client, existing_clients, example_clients, config_clients, config_comments)
+
+    return config_clients, default_client_name
+
+
+def configure_single_client(client_name, existing_clients, example_clients, config_clients, config_comments):
+    """Helper function to configure a single torrent client"""
     # Use existing config for the selected client if present, else use example config
-    existing_client_config = existing_clients.get(default_client_name, {})
-    example_client_config = example_clients.get(default_client_name, {})
+    existing_client_config = existing_clients.get(client_name, {})
+    example_client_config = example_clients.get(client_name, {})
 
     if not example_client_config:
-        print(f"[!] No example config found for client '{default_client_name}'.")
+        print(f"[!] No example config found for client '{client_name}'.")
         if existing_client_config:
-            print(f"[i] Using existing config for '{default_client_name}'")
-            config_clients[default_client_name] = existing_client_config
-        return config_clients, default_client_name
-
-    print(f"\nConfiguring client: {default_client_name}")
+            print(f"[i] Using existing config for '{client_name}'")
+            config_clients[client_name] = existing_client_config
+        return config_clients
 
     # Set the client type from the example config
-    client_type = example_client_config.get("torrent_client", default_client_name)
+    client_type = example_client_config.get("torrent_client", client_name)
     client_config = {"torrent_client": client_type}
 
     # Process all other client settings
@@ -638,7 +679,7 @@ def configure_torrent_clients(existing_clients=None, example_clients=None, defau
         if key == "torrent_client":
             continue
 
-        comment_key = f"TORRENT_CLIENTS.{default_client_name}.{key}"
+        comment_key = f"TORRENT_CLIENTS.{client_name}.{key}"
         if comment_key in config_comments:
             print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
         elif key in config_comments:
@@ -660,8 +701,63 @@ def configure_torrent_clients(existing_clients=None, example_clients=None, defau
                 existing_value=existing_client_config.get(key)
             )
 
-    config_clients[default_client_name] = client_config
-    return config_clients, default_client_name
+    config_clients[client_name] = client_config
+    return config_clients
+
+
+def configure_discord(existing_discord, example_discord, config_comments):
+    """
+    Helper to configure the DISCORD section.
+    Returns a dict with the configured Discord settings.
+    """
+    print("\n====== DISCORD CONFIGURATION ======")
+    print("[i] Configure Discord bot settings for upload notifications")
+
+    discord_config = {}
+    existing_use_discord = existing_discord.get("use_discord", False)
+    enable_discord = get_user_input(
+        "Enable Discord bot functionality? (True/False)",
+        default="False",
+        existing_value=str(existing_use_discord)
+    )
+    discord_config["use_discord"] = enable_discord
+
+    # If Discord is disabled, set defaults and return
+    if enable_discord.lower() != "true":
+        print("[i] Discord disabled. Setting default values for other Discord settings.")
+        for key, default_value in example_discord.items():
+            if key != "use_discord":
+                discord_config[key] = default_value
+        return discord_config
+
+    # Configure other Discord settings if enabled
+    for key, default_value in example_discord.items():
+        if key == "use_discord":
+            continue
+
+        comment_key = f"DISCORD.{key}"
+        if comment_key in config_comments:
+            print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
+
+        if isinstance(default_value, bool):
+            default_str = str(default_value)
+            existing_value = str(existing_discord.get(key, default_value))
+            value = get_user_input(
+                f"Discord setting '{key}'? (True/False)",
+                default=default_str,
+                existing_value=existing_value
+            )
+            discord_config[key] = value
+        else:
+            is_password = key in ["discord_bot_token"]
+            discord_config[key] = get_user_input(
+                f"Discord setting '{key}'",
+                default=str(default_value) if default_value else "",
+                is_password=is_password,
+                existing_value=existing_discord.get(key)
+            )
+
+    return discord_config
 
 
 def generate_config_file(config_data, existing_path=None):
@@ -776,6 +872,9 @@ if __name__ == "__main__":
                 config_data["TORRENT_CLIENTS"] = client_configs
                 config_data["DEFAULT"]["default_torrent_client"] = default_client
 
+                example_discord = example_config.get("DISCORD", {})
+                config_data["DISCORD"] = configure_discord({}, example_discord, config_comments)
+
                 generate_config_file(config_data)
             else:
                 print("\n[i] Using existing configuration as a template.")
@@ -834,6 +933,17 @@ if __name__ == "__main__":
                     print("[i] Keeping existing TORRENT_CLIENTS section")
                     print()
 
+                # DISCORD section update
+                update_discord = input("Do you want to update something in the DISCORD section? (y/n): ").lower() == "y"
+                if update_discord:
+                    existing_discord = existing_config.get("DISCORD", {})
+                    example_discord = example_config.get("DISCORD", {})
+                    config_data["DISCORD"] = configure_discord(existing_discord, example_discord, config_comments)
+                else:
+                    print("[i] Keeping existing DISCORD section")
+                    print()
+
+                missing_discord_keys = []
                 missing_default_keys = []
                 if "DEFAULT" in example_config and "DEFAULT" in config_data:
                     def find_missing_default_keys(example_section, existing_section, path=""):
@@ -850,6 +960,35 @@ if __name__ == "__main__":
                     # Use empty dict for existing values so only defaults are shown
                     added_defaults = configure_default_section({}, missing_defaults, config_comments)
                     config_data["DEFAULT"].update(added_defaults)
+
+                if "DISCORD" in example_config:
+                    if "DISCORD" not in config_data:
+                        # Entire DISCORD section is missing
+                        print("\n[!] DISCORD section is missing from your config")
+                        add_discord = input("Do you want to add Discord configuration? (y/n): ").lower() == "y"
+                        if add_discord:
+                            example_discord = example_config.get("DISCORD", {})
+                            config_data["DISCORD"] = configure_discord({}, example_discord, config_comments)
+                        else:
+                            config_data["DISCORD"] = example_config["DISCORD"].copy()
+                    else:
+                        # Check for missing keys within DISCORD section
+                        def find_missing_discord_keys(example_section, existing_section):
+                            for key in example_section:
+                                if key not in existing_section:
+                                    missing_discord_keys.append(key)
+                        find_missing_discord_keys(example_config["DISCORD"], config_data["DISCORD"])
+
+                if missing_discord_keys:
+                    print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}")
+                    add_missing_discord = input("Do you want to configure the missing Discord settings? (y/n): ").lower() == "y"
+                    if add_missing_discord:
+                        missing_discord_config = {k: example_config["DISCORD"][k] for k in missing_discord_keys}
+                        added_discord = configure_discord({}, missing_discord_config, config_comments)
+                        config_data["DISCORD"].update(added_discord)
+                    else:
+                        for key in missing_discord_keys:
+                            config_data["DISCORD"][key] = example_config["DISCORD"][key]
 
                 # Generate the updated config file
                 generate_config_file(config_data, existing_path)
@@ -869,9 +1008,25 @@ if __name__ == "__main__":
 
                 # Only prompt for the missing keys
                 missing_defaults = {k: example_config["DEFAULT"][k] for k in missing_default_keys}
-                # Use empty dict for existing values so only defaults are shown
                 added_defaults = configure_default_section({}, missing_defaults, config_comments)
                 config_data["DEFAULT"].update(added_defaults)
+
+            if "DISCORD" not in config_data and "DISCORD" in example_config:
+                print("\n[!] DISCORD section is missing from your config")
+                config_data["DISCORD"] = example_config["DISCORD"].copy()
+                print("[i] Added DISCORD section with default values")
+            elif "DISCORD" in config_data and "DISCORD" in example_config:
+                # Check for missing DISCORD keys
+                missing_discord_keys = []
+                for key in example_config["DISCORD"]:
+                    if key not in config_data["DISCORD"]:
+                        missing_discord_keys.append(key)
+
+                if missing_discord_keys:
+                    print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}")
+                    for key in missing_discord_keys:
+                        config_data["DISCORD"][key] = example_config["DISCORD"][key]
+                    print("[i] Added missing DISCORD keys with default values")
 
             # Generate the updated config file
             generate_config_file(config_data, existing_path)
@@ -900,5 +1055,9 @@ if __name__ == "__main__":
         )
         config_data["TORRENT_CLIENTS"] = client_configs
         config_data["DEFAULT"]["default_torrent_client"] = default_client
+
+        # DISCORD section
+        example_discord = example_config.get("DISCORD", {})
+        config_data["DISCORD"] = configure_discord({}, example_discord, config_comments)
 
         generate_config_file(config_data)

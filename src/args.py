@@ -23,9 +23,10 @@ class ShortHelpFormatter(argparse.HelpFormatter):
         short_usage = "usage: upload.py [path...] [options]\n\n"
         short_options = """
 Common options:
-  -dm, --delete-meta         Deletes the cached meta file that stores arguments/processed data
   -tmdb, --tmdb              Specify the TMDb id to use with movie/ or tv/ prefix
   -imdb, --imdb              Specify the IMDb id to use
+  -tvmaze, --tvmaze          Specify the TVMaze id to use
+  -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
   -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
   -df, --descfile            Path to custom description file
@@ -122,7 +123,7 @@ class Args():
         parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD torrent_id/link", type=str)
         parser.add_argument('-huno', '--huno', nargs=1, required=False, help="HUNO torrent id/link", type=str)
         parser.add_argument('-ulcx', '--ulcx', nargs=1, required=False, help="ULCX torrent id/link", type=str)
-        parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.")
+        parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.", default=None)
         parser.add_argument('--foreign', dest='foreign', action='store_true', required=False, help="Set for TIK Foreign category")
         parser.add_argument('--opera', dest='opera', action='store_true', required=False, help="Set for TIK Opera & Musical category")
         parser.add_argument('--asian', dest='asian', action='store_true', required=False, help="Set for TIK Asian category")

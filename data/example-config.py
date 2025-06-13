@@ -775,6 +775,15 @@ config = {
             # /Path/To/Watch/Folder
             "watch_folder": "",
         },
-
+    },
+    "DISCORD": {
+        # Set to True to enable Discord bot functionality
+        "use_discord": False,
+        # Set to True to only run the bot in unattended mode
+        "only_unattended": True,
+        "discord_bot_token": "",
+        "discord_channel_id": "",
+        "discord_bot_description": "",
+        "command_prefix": "!"
     },
 }

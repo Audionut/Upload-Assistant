@@ -16,6 +16,7 @@ import gc
 import subprocess
 import re
 import requests
+import discord
 from packaging import version
 from src.trackersetup import tracker_class_map, api_trackers, other_api_trackers, http_trackers
 from src.trackerhandle import process_trackers
@@ -29,6 +30,7 @@ from src.cleanup import cleanup
 from src.add_comparison import add_comparison
 from src.get_name import get_name
 from src.get_desc import gen_desc
+from discordbot import send_discord_notification, send_upload_status_notification
 if os.name == "posix":
     import termios
 
@@ -51,6 +53,10 @@ except Exception:
 from src.prep import Prep  # noqa E402
 client = Clients(config=config)
 parser = Args(config)
+use_discord = False
+discord_config = config.get('discord')
+if discord_config:
+    use_discord = discord_config.get('use_discord', False)
 
 
 async def merge_meta(meta, saved_meta, path):
@@ -80,8 +86,11 @@ async def merge_meta(meta, saved_meta, path):
     return sanitized_saved_meta
 
 
-async def process_meta(meta, base_dir):
+async def process_meta(meta, base_dir, bot=None):
     """Process the metadata for each queued path."""
+
+    if use_discord and bot:
+        await send_discord_notification(config, bot, f"Starting upload process for: {meta['path']}", debug=meta.get('debug', False), meta=meta)
 
     if meta['imghost'] is None:
         meta['imghost'] = config['DEFAULT']['img_host_1']
@@ -491,7 +500,7 @@ async def update_notification(base_dir):
     return local_version
 
 
-async def do_the_thing(base_dir):
+async def do_the_thing(base_dir, bot):
     await asyncio.sleep(0.1)  # Ensure it's not racing
     meta = dict()
     paths = []
@@ -585,7 +594,7 @@ async def do_the_thing(base_dir):
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
-            await process_meta(meta, base_dir)
+            await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta:
                 console.print("we are not uploading.......")
@@ -599,6 +608,8 @@ async def do_the_thing(base_dir):
 
             else:
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
+                if use_discord and bot:
+                    await send_upload_status_notification(config, bot, meta)
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
                     if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
@@ -622,6 +633,9 @@ async def do_the_thing(base_dir):
                 finish_time = time.time()
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
 
+            if use_discord and bot:
+                await send_discord_notification(config, bot, f"Finsished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
+
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")
         console.print(traceback.format_exc())
@@ -640,8 +654,34 @@ def check_python_version():
 
 
 async def main():
+    bot = None
+    if use_discord and 'DISCORD' in config and config['DISCORD'].get('discord_bot_token'):
+        try:
+            console.print("[cyan]Starting Discord bot initialization...")
+            intents = discord.Intents.default()
+            intents.message_content = True
+            bot = discord.Client(intents=intents)
+            token = config['DISCORD']['discord_bot_token']
+            await asyncio.wait_for(bot.login(token), timeout=10)
+            connect_task = asyncio.create_task(bot.connect())
+
+            try:
+                await asyncio.wait_for(bot.wait_until_ready(), timeout=20)
+                console.print("[green]Bot is ready!")
+            except asyncio.TimeoutError:
+                console.print("[bold red]Bot failed to connect within timeout period.")
+                console.print("[yellow]Continuing without Discord integration...")
+                if 'connect_task' in locals():
+                    connect_task.cancel()
+        except discord.LoginFailure:
+            console.print("[bold red]Discord bot token is invalid. Please check your configuration.")
+        except discord.ClientException as e:
+            console.print(f"[bold red]Discord client exception: {e}")
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error during Discord bot initialization: {e}")
+
     try:
-        await do_the_thing(base_dir)  # Ensure base_dir is correctly defined
+        await do_the_thing(base_dir, bot)
     except asyncio.CancelledError:
         console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
     except KeyboardInterrupt:
@@ -649,6 +689,14 @@ async def main():
     except Exception as e:
         console.print(f"[bold red]Unexpected error: {e}[/bold red]")
     finally:
+        if bot is not None:
+            await bot.close()
+        if 'connect_task' in locals():
+            connect_task.cancel()
+            try:
+                await connect_task
+            except asyncio.CancelledError:
+                pass
         await cleanup()
         reset_terminal()
 

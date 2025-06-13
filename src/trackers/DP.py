@@ -202,7 +202,7 @@ class DP():
                 has_nordic_subtitle = False
                 if 'subtitles' in meta['bdinfo']:
                     for subtitle in meta['bdinfo']['subtitles']:
-                        if subtitle.lower() in (nordic_languages or english_languages):
+                        if subtitle.lower() in (nordic_languages + english_languages):
                             has_nordic_subtitle = True
                             break
 
@@ -238,7 +238,7 @@ class DP():
                     has_nordic_sub = False
                     for language in subtitle_section:
                         language = language.lower().strip()
-                        if language in (nordic_languages or english_languages):
+                        if language in (nordic_languages + english_languages):
                             has_nordic_sub = True
                             break
 

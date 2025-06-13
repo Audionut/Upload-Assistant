@@ -2,42 +2,46 @@ import asyncio
 import datetime
 import logging
 from pathlib import Path
-
+from src.console import console
 import discord
 from discord.ext import commands
 
 
-def config_load():
-    # Python Config
-    from data.config import config
-    return config
-
-
-async def run():
+async def run(config):
     """
-    Where the bot gets started. If you wanted to create an database connection pool or other session for the bot to use,
-    it's recommended that you create it here and pass it to the bot as a kwarg.
+    Starts the bot. If you want to create a database connection pool or other session for the bot to use,
+    create it here and pass it to the bot as a kwarg.
     """
-    config = config_load()
-    bot = Bot(config=config,
-              description=config['DISCORD']['discord_bot_description'])
+    intents = discord.Intents.default()
+    intents.message_content = True
+
+    bot = Bot(
+        config=config,
+        description=config['DISCORD']['discord_bot_description'],
+        intents=intents
+    )
+
     try:
         await bot.start(config['DISCORD']['discord_bot_token'])
     except KeyboardInterrupt:
-        await bot.logout()
+        await bot.close()
 
 
 class Bot(commands.Bot):
-    def __init__(self, **kwargs):
+    def __init__(self, *, config, description, intents):
         super().__init__(
             command_prefix=self.get_prefix_,
-            description=kwargs.pop('description')
+            description=description,
+            intents=intents
         )
         self.start_time = None
         self.app_info = None
-        self.config = config_load()
-        self.loop.create_task(self.track_start())
-        self.loop.create_task(self.load_all_extensions())
+        self.config = config
+
+    async def setup_hook(self):
+        # Called before the bot connects to Discord
+        asyncio.create_task(self.track_start())
+        await self.load_all_extensions()
 
     async def track_start(self):
         """
@@ -50,9 +54,6 @@ class Bot(commands.Bot):
     async def get_prefix_(self, bot, message):
         """
         A coroutine that returns a prefix.
-
-        I have made this a coroutine just to show that it can be done. If you needed async logic in here it can be done.
-        A good example of async logic would be retrieving a prefix from a database.
         """
         prefix = [self.config['DISCORD']['command_prefix']]
         return commands.when_mentioned_or(*prefix)(bot, message)
@@ -66,7 +67,7 @@ class Bot(commands.Bot):
         cogs = [x.stem for x in Path('cogs').glob('*.py')]
         for extension in cogs:
             try:
-                self.load_extension(f'cogs.{extension}')
+                await self.load_extension(f'cogs.{extension}')
                 print(f'loaded {extension}')
             except Exception as e:
                 error = f'{extension}\n {type(e).__name__} : {e}'
@@ -84,22 +85,111 @@ class Bot(commands.Bot):
               f'Owner: {self.app_info.owner}\n')
         print('-' * 10)
         channel = self.get_channel(int(self.config['DISCORD']['discord_channel_id']))
-        await channel.send(f'{self.user.name} is now online')
+        if channel:
+            await channel.send(f'{self.user.name} is now online')
 
     async def on_message(self, message):
         """
         This event triggers on every message received by the bot. Including one's that it sent itself.
-
-        If you wish to have multiple event listeners they can be added in other cogs. All on_message listeners should
-        always ignore bots.
         """
         if message.author.bot:
             return  # ignore all bots
         await self.process_commands(message)
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+async def send_discord_notification(config, bot, message, debug=False, meta=None):
+    """
+    Send a notification message to Discord channel.
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run())
+    Args:
+        bot: Discord bot instance (can be None)
+        message: Message string to send
+        meta: Optional meta dict for debug logging
+
+    Returns:
+        bool: True if message was sent successfully, False otherwise
+    """
+    only_unattended = config.get('DISCORD', {}).get('only_unattended', False)
+    if only_unattended and meta and not meta.get('unattended', False):
+        return False
+    if not bot or not hasattr(bot, 'is_ready') or not bot.is_ready():
+        if debug:
+            console.print("[yellow]Discord bot not ready - skipping notifications")
+        return False
+
+    try:
+        channel_id = int(config['DISCORD']['discord_channel_id'])
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(message)
+            if debug:
+                console.print(f"[green]Discord notification sent: {message}")
+            return True
+        else:
+            console.print("[yellow]Discord channel not found")
+            return False
+    except Exception as e:
+        console.print(f"[yellow]Discord notification error: {e}")
+        return False
+
+
+async def send_upload_status_notification(config, bot, meta):
+    """Send Discord notification with upload status including failed trackers."""
+    only_unattended = config.get('DISCORD', {}).get('only_unattended', False)
+    if only_unattended and meta and not meta.get('unattended', False):
+        return False
+    if not bot or not hasattr(bot, 'is_ready') or not bot.is_ready():
+        return False
+
+    tracker_status = meta.get('tracker_status', {})
+    if not tracker_status:
+        return False
+
+    # Get list of trackers where upload is True
+    successful_uploads = [
+        tracker for tracker, status in tracker_status.items()
+        if status.get('upload', False)
+    ]
+
+    # Get list of failed trackers with reasons
+    failed_trackers = []
+    for tracker, status in tracker_status.items():
+        if not status.get('upload', False):
+            if status.get('banned', False):
+                failed_trackers.append(f"{tracker} (banned)")
+            elif status.get('skipped', False):
+                failed_trackers.append(f"{tracker} (skipped)")
+            elif status.get('dupe', False):
+                failed_trackers.append(f"{tracker} (dupe)")
+
+    release_name = meta.get('name', meta.get('title', 'Unknown Release'))
+    message_parts = []
+
+    if successful_uploads:
+        message_parts.append(f"✅ **Uploaded to:** {', '.join(successful_uploads)} - {release_name}")
+
+    if failed_trackers:
+        message_parts.append(f"❌ **Failed:** {', '.join(failed_trackers)}")
+
+    if not message_parts:
+        return False
+
+    message = "\n".join(message_parts)
+
+    try:
+        channel_id = int(config['DISCORD']['discord_channel_id'])
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(message)
+            return True
+    except Exception as e:
+        console.print(f"[yellow]Discord notification error: {e}")
+
+    return False
+
+
+if __name__ == '__main__':
+    # Only used when running discordbot.py directly
+    from data.config import config
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(run(config))

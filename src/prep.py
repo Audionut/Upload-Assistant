@@ -26,6 +26,7 @@ try:
     import traceback
     import os
     import re
+    import asyncio
     from guessit import guessit
     import ntpath
     from pathlib import Path
@@ -510,31 +511,22 @@ class Prep():
         if meta.get("not_anime", False) and meta.get("category") == "TV":
             meta = await get_season_episode(video, meta)
 
-        # if we have all of the ids, search everything all at once
-        if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
-            meta = await all_ids(meta, tvdb_api, tvdb_token)
-
-        # Check if IMDb, TMDb, and TVDb IDs are all present
-        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0:
-            meta = await imdb_tmdb_tvdb(meta, filename, tvdb_api, tvdb_token)
-
-        # Check if both IMDb and TVDB IDs are present
-        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
-            meta = await imdb_tvdb(meta, filename, tvdb_api, tvdb_token)
-
-        # Check if both IMDb and TMDb IDs are present
-        elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0:
-            meta = await imdb_tmdb(meta, filename)
-
-        # Get TMDB and IMDb metadata only if IDs are still missing, first checking mediainfo
+        # Run a check against mediainfo to see if it has tmdb/imdb
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
             meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
                 mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
             )
 
-        # if we're still missing both ids, lets search with the filename
+        # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
-            meta = await get_tmdb_id(filename, meta['search_year'], meta, meta['category'], untouched_filename)
+            tmdb_task = get_tmdb_id(filename, meta.get('search_year', ''), meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=secondary_title)
+            imdb_task = search_imdb(filename, meta.get('search_year', ''), quickie=True, category=meta.get('category', None), debug=meta['debug'])
+            tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
+            tmdb_id, category = tmdb_result
+            meta['category'] = category
+            meta['tmdb_id'] = int(tmdb_id)
+            meta['imdb_id'] = int(imdb_result)
+            meta['quickie_search'] = True
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
         elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
@@ -551,6 +543,22 @@ class Prep():
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)
             meta['original_language'] = original_language
+
+        # if we have all of the ids, search everything all at once
+        if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
+            meta = await all_ids(meta, tvdb_api, tvdb_token)
+
+        # Check if IMDb, TMDb, and TVDb IDs are all present
+        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0:
+            meta = await imdb_tmdb_tvdb(meta, filename, tvdb_api, tvdb_token)
+
+        # Check if both IMDb and TVDB IDs are present
+        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
+            meta = await imdb_tvdb(meta, filename, tvdb_api, tvdb_token)
+
+        # Check if both IMDb and TMDb IDs are present
+        elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0:
+            meta = await imdb_tmdb(meta, filename)
 
         # we have tmdb id one way or another, so lets get data if needed
         if int(meta['tmdb_id']) != 0:
@@ -596,26 +604,16 @@ class Prep():
                     console.print(f"[bold red]{error_msg}[/bold red]")
                     raise RuntimeError(error_msg) from e
 
-        # Search TVMaze only if it's a TV category and tvmaze_id is still missing
-        if meta['category'] == "TV":
-            if meta.get('tvmaze_id', 0) == 0:
-                meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(
-                    filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
-                    manual_date=meta.get('manual_date'),
-                    tvmaze_manual=meta.get('tvmaze_manual'),
-                    debug=meta.get('debug', False),
-                    return_full_tuple=True
-                )
-        else:
-            meta.setdefault('tvmaze_id', 0)
+        if meta.get('retrieved_aka', None) is not None:
+            meta['aka'] = meta['retrieved_aka']
 
-        # If we got to here and still no IMDb ID, search for it
-        # bad filenames are bad
+        # if the quickie search and tmdb return didn't yield an IMDb ID, try again with prompts
         if meta.get('imdb_id') == 0:
-            meta['imdb_id'] = await search_imdb(filename, meta['search_year'])
+            meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=meta.get('debug', False))
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
-        if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
+        # rerun if imdb_mismatch, since it means tmdb return and quickie search did not match and we'll prefer tmdb return
+        if (meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0) or meta.get('imdb_mismatch'):
             imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
             meta['imdb_info'] = imdb_info
             meta['tv_year'] = imdb_info.get('tv_year', None)
@@ -641,6 +639,16 @@ class Prep():
             meta['aka'] = ""
 
         if meta['category'] == "TV":
+            if meta.get('tvmaze_id', 0) == 0:
+                meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(
+                    filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
+                    manual_date=meta.get('manual_date'),
+                    tvmaze_manual=meta.get('tvmaze_manual'),
+                    debug=meta.get('debug', False),
+                    return_full_tuple=True
+                )
+            else:
+                meta.setdefault('tvmaze_id', 0)
             # if it was skipped earlier, make sure we have the season/episode data
             if not meta.get('not_anime', False):
                 meta = await get_season_episode(video, meta)

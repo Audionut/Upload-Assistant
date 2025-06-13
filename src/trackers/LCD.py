@@ -195,6 +195,6 @@ class LCD():
 
     async def edit_name(self, meta):
 
-        name = meta['uuid'].replace('.mkv', '').replace('.mp4', '').replace(".", " ").replace("DDP2 0", "DDP2.0").replace("DDP5 1", "DDP5.1").replace("H 264", "H.264").replace("H 265", "H.264").replace("DD+7 1", "DD+7.1").replace("AAC2 0", "AAC2.0").replace('DD5 1', 'DD5.1').replace('DD2 0', 'DD2.0').replace('TrueHD 7 1', 'TrueHD 7.1').replace('DTS-HD MA 7 1', 'DTS-HD MA 7.1').replace('-C A A', '-C.A.A'),
+        name = meta['uuid'].replace('.mkv', '').replace('.mp4', '').replace(".", " ").replace("DDP2 0", "DDP2.0").replace("DDP5 1", "DDP5.1").replace("H 264", "H.264").replace("H 265", "H.265").replace("DD+7 1", "DDP7.1").replace("AAC2 0", "AAC2.0").replace('DD5 1', 'DD5.1').replace('DD2 0', 'DD2.0').replace('TrueHD 7 1', 'TrueHD 7.1').replace('DTS-HD MA 7 1', 'DTS-HD MA 7.1').replace('DTS-HD MA 5 1', 'DTS-HD MA 5.1').replace("TrueHD 5 1", "TrueHD 5.1").replace("DTS-X 7 1", "DTS-X 7.1").replace("DTS-X 5 1", "DTS-X 5.1").replace("FLAC 2 0", "FLAC 2.0").replace("FLAC 5 1", "FLAC 5.1").replace("DD1 0", "DD1.0").replace("DTS ES 5 1", "DTS ES 5.1").replace("DTS5 1", "DTS 5.1").replace("AAC1 0", "AAC1.0").replace("DD+5 1", "DDP5.1").replace("DD+2 0", "DDP2.0").replace("DD+1 0", "DDP1.0")
 
         return name

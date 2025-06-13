@@ -1,5 +1,5 @@
 from src.console import console
-from src.imdb import get_imdb_aka_api, get_imdb_info_api, search_imdb
+from src.imdb import get_imdb_aka_api, get_imdb_info_api
 from src.args import Args
 from data.config import config
 import re
@@ -131,10 +131,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     return category, tmdb_id, original_language
 
 
-async def get_tmdb_id(filename, search_year, meta, category, untouched_filename="", attempted=0):
-    if meta['debug']:
-        console.print("[bold cyan]Fetching TMDB ID...[/bold cyan]")
-
+async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None):
     search_results = {"results": []}
     secondary_results = {"results": []}
 
@@ -142,7 +139,7 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
         try:
             # Primary search attempt with year
             if category == "MOVIE":
-                if meta.get('debug', False):
+                if debug:
                     console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
                 params = {
@@ -160,11 +157,10 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     response.raise_for_status()
                     search_results = response.json()
                 except Exception:
-                    console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
-                    return meta
+                    console.print(f"[bold red]Failure with primary movie search: {response.status_code}[/bold red]")
 
             elif category == "TV":
-                if meta.get('debug', False):
+                if debug:
                     console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
                 params = {
@@ -182,31 +178,32 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     response.raise_for_status()
                     search_results = response.json()
                 except Exception:
-                    console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
-                    return meta
+                    console.print(f"[bold red]Failed with primary TV search: {response.status_code}[/bold red]")
 
-            if meta.get('debug', False):
+            if debug:
                 console.print(f"[yellow]Search results (primary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
 
             # Check if results were found
             if search_results.get('results'):
-                meta['tmdb_id'] = search_results['results'][0]['id']
-                return meta
+                tmdb_id = search_results['results'][0]['id']
+                return tmdb_id, category
 
             # If no results and we have a secondary title, try searching with that
-            if not search_results.get('results') and meta.get('secondary_title') and attempted < 3:
-                console.print(f"[yellow]No results found for primary title. Trying secondary title: {meta['secondary_title']}[/yellow]")
+            if not search_results.get('results') and secondary_title and attempted < 3:
+                console.print(f"[yellow]No results found for primary title. Trying secondary title: {secondary_title}[/yellow]")
                 secondary_meta = await get_tmdb_id(
-                    meta['secondary_title'],
+                    secondary_title,
                     search_year,
-                    meta,
                     category,
                     untouched_filename,
-                    attempted + 1
+                    attempted + 1,
+                    debug=debug,
+                    secondary_title=secondary_title
                 )
 
                 if secondary_meta.get('tmdb_id', 0) != 0:
-                    return secondary_meta
+                    tmdb_id = secondary_meta['tmdb_id']
+                    return tmdb_id, category
 
         except Exception as e:
             console.print(f"[bold red]TMDb search error:[/bold red] {e}")
@@ -216,7 +213,7 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
         console.print("[yellow]Retrying without year...[/yellow]")
         try:
             if category == "MOVIE":
-                if meta.get('debug', False):
+                if debug:
                     console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Without year)")
 
                 params = {
@@ -231,11 +228,10 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     response.raise_for_status()
                     search_results = response.json()
                 except Exception:
-                    console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
-                    return meta
+                    console.print(f"[bold red]Failed with secondary movie search: {response.status_code}[/bold red]")
 
             elif category == "TV":
-                if meta.get('debug', False):
+                if debug:
                     console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Without year)")
 
                 params = {
@@ -250,28 +246,27 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     response.raise_for_status()
                     search_results = response.json()
                 except Exception:
-                    console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
-                    return meta
+                    console.print(f"[bold red]Failed secondary TV search: {response.status_code}[/bold red]")
 
-            if meta.get('debug', False):
+            if debug:
                 console.print(f"[yellow]Search results (secondary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
 
             # Check if results were found
             if search_results.get('results'):
-                meta['tmdb_id'] = search_results['results'][0]['id']
-                return meta
+                tmdb_id = search_results['results'][0]['id']
+                return tmdb_id, category
 
             # Try with secondary title without year
-            if not search_results.get('results') and meta.get('secondary_title') and attempted < 3:
-                console.print(f"[yellow]No results found for primary title without year. Trying secondary title: {meta['secondary_title']}[/yellow]")
+            if not search_results.get('results') and secondary_title and attempted < 3:
+                console.print(f"[yellow]No results found for primary title without year. Trying secondary title: {secondary_title}[/yellow]")
 
                 if category == "MOVIE":
-                    if meta.get('debug', False):
-                        console.print(f"[green]Searching TMDb for movie with secondary title:[/] [cyan]{meta['secondary_title']}[/cyan] (Without year)")
+                    if debug:
+                        console.print(f"[green]Searching TMDb for movie with secondary title:[/] [cyan]{secondary_title}[/cyan] (Without year)")
 
                     params = {
                         "api_key": TMDB_API_KEY,
-                        "query": meta['secondary_title'],
+                        "query": secondary_title,
                         "language": "en-US",
                         "include_adult": "true"
                     }
@@ -281,16 +276,15 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                         response.raise_for_status()
                         secondary_results = response.json()
                     except Exception:
-                        console.print(f"[bold red]Failed to fetch movie data: {response.status_code}[/bold red]")
-                        return meta
+                        console.print(f"[bold red]Failed with secondary title movie search: {response.status_code}[/bold red]")
 
                 elif category == "TV":
-                    if meta.get('debug', False):
-                        console.print(f"[green]Searching TMDb for TV show with secondary title:[/] [cyan]{meta['secondary_title']}[/cyan] (Without year)")
+                    if debug:
+                        console.print(f"[green]Searching TMDb for TV show with secondary title:[/] [cyan]{secondary_title}[/cyan] (Without year)")
 
                     params = {
                         "api_key": TMDB_API_KEY,
-                        "query": meta['secondary_title'],
+                        "query": secondary_title,
                         "language": "en-US",
                         "include_adult": "true"
                     }
@@ -300,16 +294,14 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                         response.raise_for_status()
                         secondary_results = response.json()
                     except Exception:
-                        console.print(f"[bold red]Failed to fetch TV data: {response.status_code}[/bold red]")
-                        return meta
+                        console.print(f"[bold red]Failed with secondary title TV search: {response.status_code}[/bold red]")
 
-                if meta.get('debug', False):
+                if debug:
                     console.print(f"[yellow]Secondary title search results: {json.dumps(secondary_results.get('results', [])[:2], indent=2)}[/yellow]")
 
                 if secondary_results.get('results'):
-                    meta['tmdb_id'] = secondary_results['results'][0]['id']
-                    console.print(f"[green]Found match using secondary title: {meta['secondary_title']}[/green]")
-                    return meta
+                    tmdb_id = secondary_results['results'][0]['id']
+                    return tmdb_id, category
 
         except Exception as e:
             console.print(f"[bold red]Secondary search error:[/bold red] {e}")
@@ -318,7 +310,7 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, meta, new_category, untouched_filename, attempted + 1)
+            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title)
 
         # Last attempt: Try parsing a better title
         if attempted == 1:
@@ -327,38 +319,18 @@ async def get_tmdb_id(filename, search_year, meta, category, untouched_filename=
                     guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
                 )['anime_title']
                 console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
-                return await get_tmdb_id(parsed_title, search_year, meta, meta['category'], untouched_filename, attempted + 2)
+                return await get_tmdb_id(parsed_title, search_year, category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
 
         # No match found, prompt user if in CLI mode
         console.print(f"[bold red]Unable to find TMDb match for {filename}[/bold red]")
 
-        meta['imdb_id'] = await search_imdb(filename, meta['search_year'])
-        console.print(f"[yellow]IMDB ID: {meta['imdb_id']}[/yellow]")
-        if meta['imdb_id'] != 0:
-            category, tmdb_id, original_language = await get_tmdb_from_imdb(
-                meta['imdb_id'],
-                meta.get('tvdb_id'),
-                meta.get('search_year'),
-                filename,
-                debug=meta.get('debug', False),
-                mode=meta.get('mode', 'discord'),
-                category_preference=meta.get('category')
-            )
-            if tmdb_id != 0:
-                meta['tmdb_id'] = tmdb_id
-                meta['category'] = category
-                meta['original_language'] = original_language
-                return meta
+        tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+        parser = Args(config=config)
+        category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
-        if meta.get('mode', 'discord') == 'cli':
-            tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
-            parser = Args(config=config)
-            meta['category'], meta['tmdb_id'] = parser.parse_tmdb_id(id=tmdb_id, category=meta.get('category'))
-            meta['tmdb_manual'] = meta['tmdb_id']
-
-        return meta
+        return tmdb_id, category
 
 
 async def tmdb_other_meta(
@@ -375,7 +347,8 @@ async def tmdb_other_meta(
     poster=None,
     debug=False,
     mode="discord",
-    tvdb_id=0
+    tvdb_id=0,
+    quickie_search=False
 ):
     """
     Fetch metadata from TMDB for a movie or TV show.
@@ -402,6 +375,7 @@ async def tmdb_other_meta(
     tmdb_type = ""
     mal_id = 0
     demographic = ""
+    imdb_mismatch = False
 
     if tmdb_id == 0:
         try:
@@ -465,6 +439,11 @@ async def tmdb_other_meta(
             original_title = media_data.get('original_title', title)
             year = datetime.strptime(media_data['release_date'], '%Y-%m-%d').year if media_data['release_date'] else search_year
             runtime = media_data.get('runtime', 60)
+            if quickie_search or not imdb_id:
+                imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
+                if imdb_id and imdb_id_str and (int(imdb_id_str) != imdb_id):
+                    imdb_mismatch = True
+                imdb_id = int(imdb_id_str) if imdb_id_str.isdigit() else 0
             tmdb_type = 'Movie'
         else:  # TV show
             title = media_data['name']
@@ -540,11 +519,13 @@ async def tmdb_other_meta(
             try:
                 external = external_data.json()
                 # Process IMDB ID
-                if imdb_id == 0:
+                if quickie_search or imdb_id == 0:
                     imdb_id_str = external.get('imdb_id', None)
                     if imdb_id_str and imdb_id_str not in ["", " ", "None", None]:
                         imdb_id_clean = imdb_id_str.lstrip('t')
                         if imdb_id_clean.isdigit():
+                            if imdb_id_clean != imdb_id:
+                                imdb_mismatch = True
                             imdb_id = int(imdb_id_clean)
                 else:
                     imdb_id = int(imdb_id)
@@ -639,7 +620,7 @@ async def tmdb_other_meta(
     # Check if AKA is too similar to title and clear it if needed
     if retrieved_aka:
         difference = SequenceMatcher(None, title.lower(), retrieved_aka[5:].lower()).ratio()
-        if difference >= 0.9 or retrieved_aka[5:].strip() == "" or retrieved_aka[5:].strip().lower() in title.lower():
+        if difference >= 0.7 or retrieved_aka[5:].strip() == "" or retrieved_aka[5:].strip().lower() in title.lower():
             retrieved_aka = ""
         if year and f"({year})" in retrieved_aka:
             retrieved_aka = retrieved_aka.replace(f"({year})", "").strip()
@@ -668,7 +649,8 @@ async def tmdb_other_meta(
         'tmdb_type': tmdb_type,
         'runtime': runtime,
         'youtube': youtube,
-        'certification': certification
+        'certification': certification,
+        'imdb_mismatch': imdb_mismatch
     }
 
     return tmdb_metadata
