@@ -229,7 +229,7 @@ class ASC(COMMON):
 
         url_gerador_desc = f"{self.base_url}/search.php"
         payload = {
-            'imdb': f"tt{str(meta.get('imdb_id')).zfill(7)}",
+            'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
             'layout': '2'
         }
 
@@ -381,7 +381,7 @@ class ASC(COMMON):
             asc_data = None
             if meta.get('imdb_id'):
                 url_gerador_desc = f"{self.base_url}/search.php"
-                payload = {'imdb': f"tt{str(meta.get('imdb_id')).zfill(7)}", 'layout': '2'}
+                payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': '2'}
                 try:
                     cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
                     self.session.cookies.update(await self.parseCookieFile(cookie_file))
@@ -398,13 +398,33 @@ class ASC(COMMON):
                 if asc_data.get('poster_path'):
                     data['capa'] = asc_data.get('poster_path')
 
+                nome_base = asc_data.get('Title', '')
+                if meta.get('category') == 'TV':
+                    season_episode_str = ""
+                    if meta.get('tv_pack') == 1 and meta.get('season'):
+                        season_episode_str = f" - {meta.get('season')}"
+                    elif meta.get('tv_pack') == 0 and meta.get('season') and meta.get('episode'):
+                        season_episode_str = f" - {meta.get('season')}{meta.get('episode')}"
+                    data['name'] = f"{nome_base}{season_episode_str}"
+                else:
+                    data['name'] = nome_base
+
+                if asc_data.get('Year'):
+                    data['ano'] = asc_data.get('Year')
+
+                if asc_data.get('Genre'):
+                    data['genre'] = asc_data.get('Genre')
+
             else:
                 data['descr'] = await self._generate_description_manual(meta)
                 if meta.get('poster'):
                     data['capa'] = meta.get('poster')
+                data['name'] = self._get_torrent_name(meta)
+                if meta.get('year'):
+                    data['ano'] = meta.get('year')
+                if meta.get('genres'):
+                    data['genre'] = meta.get('genres')
 
-            data['name'] = self._get_torrent_name(meta)
-            data['descr'] = await self._generate_description(meta)
             data['type'] = self._get_category_type(meta)
             data['legenda'] = self._determine_subtitle_option(meta)
             data['qualidade'] = self._determine_quality(meta)
@@ -414,11 +434,8 @@ class ASC(COMMON):
             data['codecvideo'] = self._get_video_codec(meta)
 
             if meta.get('imdb_id'):
-                data['imdb'] = f"tt{str(meta.get('imdb_id')).zfill(7)}"
-            if meta.get('genres'):
-                data['genre'] = meta.get('genres')
-            if meta.get('year'):
-                data['ano'] = meta.get('year')
+                data['imdb'] = meta.get('imdb_info', {}).get('imdbID', '')
+
             if meta.get('youtube'):
                 data['tube'] = meta.get('youtube')
 
@@ -500,7 +517,6 @@ class ASC(COMMON):
             return f"{self.base_url}/enviar-series.php"
 
     async def _handle_successful_upload(self, response_text, meta):
-        console.print("[bold green]Upload para o ASC realizado com sucesso![/bold green]")
         try:
             soup = BeautifulSoup(response_text, 'html.parser')
             details_link_tag = soup.find('a', href=lambda href: href and "torrents-details.php?id=" in href)
