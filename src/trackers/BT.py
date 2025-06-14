@@ -332,38 +332,39 @@ class BT(COMMON):
         return "Legendado"
 
     def get_video_codec(self, meta):
-        codec_final = None
-
         video_encode_raw = meta.get('video_encode')
-        if video_encode_raw and isinstance(video_encode_raw, str):
-            clean_encode = video_encode_raw.strip().lower()
-            if '265' in clean_encode or 'hevc' in clean_encode:
-                codec_final = "H.265"
-            elif '264' in clean_encode or 'avc' in clean_encode:
-                codec_final = "H.264"
-
-        if not codec_final:
-            codec_final = meta.get('video_codec')
-
-        if not codec_final:
-            return "Outro"
-
+        codec_final = meta.get('video_codec')
         is_hdr = bool(meta.get('hdr'))
 
-        codec_lower = codec_final.lower()
+        if video_encode_raw and isinstance(video_encode_raw, str):
+            clean_encode = video_encode_raw.strip().lower()
+            if 'x265' in clean_encode:
+                return "x265 HDR" if is_hdr else "x265"
+            elif 'h.265' in clean_encode:
+                return "H.265 HDR" if is_hdr else "H.265"
+            elif 'x264' in clean_encode:
+                return "x264"
+            elif 'h.264' in clean_encode:
+                return "H.264"
+            elif 'vp9' in clean_encode:
+                return "VP9"
+            elif 'xvid' in clean_encode:
+                return "XviD"
 
-        if codec_lower in ('h.265', 'x265', 'hevc'):
-            return "x265 HDR" if is_hdr else "x265"
+        # Use 'video_codec' if 'video_encode' is not present
+        if codec_final:
+            codec_lower = codec_final.lower()
+            if 'hevc' in codec_lower:
+                return "x265 HDR" if is_hdr else "x265"
+            elif 'avc' in codec_lower:
+                return "x264"
+            elif 'mpeg-2' in codec_lower:
+                return "MPEG-2"
+            elif 'vc-1' in codec_lower:
+                return "VC-1"
 
-        if codec_lower in ('h.264', 'x264', 'avc'):
-            return "x264 HDR" if is_hdr else "x264"
-
-        valid_options = [
-            "DivX", "MPEG-1", "MPEG-2", "VC-1", "VP9", "XviD"
-        ]
-
-        if codec_final in valid_options:
-            return codec_final
+            if codec_final:
+                return codec_final
 
         return "Outro"
 
@@ -605,28 +606,6 @@ class BT(COMMON):
 
         return tv_info
 
-    def _formatar_tags(self, keywords_str: str) -> str:
-        if not keywords_str:
-            return ""
-
-        lista_tags = keywords_str.split(',')
-        tags_processadas = [tag.strip().replace(' ', '.') for tag in lista_tags]
-
-        tags_finais = []
-        for tag_atual in tags_processadas:
-            if not tag_atual:
-                continue
-
-            lista_temporaria = tags_finais + [tag_atual]
-            string_verificacao = ",".join(lista_temporaria)
-
-            if len(string_verificacao) <= 200:
-                tags_finais.append(tag_atual)
-            else:
-                break
-
-        return ",".join(tags_finais)
-
     async def _fetch_tracker_data(self, imdb_id, category_id):
         if category_id == '5':
             return None
@@ -675,11 +654,6 @@ class BT(COMMON):
             anon = 1
         tracker_data = await self._fetch_tracker_data(imdb_id, category_type)
 
-
-        if tracker_data:
-            import pprint
-            pprint.pprint(tracker_data)
-
         data = {
             'submit': 'true',
             'auth': self.auth_token,
@@ -699,9 +673,7 @@ class BT(COMMON):
             data['diretor'] = tracker_data.get('diretor', '')
             data['idioma_ori'] = tracker_data.get('idioma', '')
             data['sinopse'] = tracker_data.get('sinopse', '')
-
             data['tags'] = tracker_data.get('generos', '')
-
             duracao_str = tracker_data.get('duracao') or ''
             data['duracao'] = tracker_data.get('duracao', '')
 
@@ -722,7 +694,7 @@ class BT(COMMON):
                 'idioma_ori': details.get('idioma_ori', ''),
                 'sinopse': meta.get('imdb_info', {}).get('plot', 'Nenhuma sinopse disponível.'),
                 'duracao': f"{details.get('duracao', '')} min" if details.get('duracao') else '',
-                'tags': meta.get('keywords', '').replace('.', ' '),
+                'tags': meta.get('genres', '').replace(', ', ',').replace(' ', '.').lower(),
                 'image': meta.get('image_list', [{}])[0].get('raw_url', '')
             })
 
@@ -778,8 +750,11 @@ class BT(COMMON):
         if meta.get('debug', False):
             console.print("[yellow]MODO DEBUG ATIVADO. O upload não será realizado.[/yellow]")
             import pprint
+            if tracker_data:
+                pprint.pprint(tracker_data)
             pprint.pprint(data)
             return
+
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         if not os.path.exists(torrent_path):
             return
