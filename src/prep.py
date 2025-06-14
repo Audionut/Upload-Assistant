@@ -519,7 +519,7 @@ class Prep():
 
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
-            tmdb_task = get_tmdb_id(filename, meta.get('search_year', ''), meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=secondary_title)
+            tmdb_task = get_tmdb_id(filename, meta.get('search_year', ''), meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None))
             imdb_task = search_imdb(filename, meta.get('search_year', ''), quickie=True, category=meta.get('category', None), debug=meta['debug'])
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
