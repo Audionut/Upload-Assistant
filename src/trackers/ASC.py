@@ -159,36 +159,30 @@ class ASC(COMMON):
         return None
 
     def _get_audio_codec(self, meta):
-        cn = meta.get('clean_name', '').upper()
-        if "ATMOS" in cn:
-            return "43"
-        elif "DTS:X" in cn:
-            return "25"
-        elif "DTS-HD MA" in cn:
-            return "24"
-        elif "DTS-HD" in cn:
-            return "23"
-        elif "TRUEHD" in cn:
-            return "29"
-        elif "DD+" in cn:
-            return "26"
-        elif "AC-3" in cn or ("DD" in cn and "+" not in cn):
-            return "11"
-        elif "DTS" in cn:
-            return "12"
-        elif "FLAC" in cn:
-            return "13"
-        elif "LPCM" in cn:
-            return "21"
-        elif "PCM" in cn:
-            return "28"
-        elif "AAC" in cn:
-            return "10"
-        elif "OPUS" in cn:
-            return "27"
-        elif "MPEG" in cn:
-            return "17"
-        return None
+        audio_type = (meta.get('audio') or '').upper()
+
+        codec_map = {
+            "ATMOS": "43",
+            "DTS:X": "25",
+            "DTS-HD MA": "24",
+            "DTS-HD": "23",
+            "TRUEHD": "29",
+            "DD+": "26",
+            "DD": "11",
+            "DTS": "12",
+            "FLAC": "13",
+            "LPCM": "21",
+            "PCM": "28",
+            "AAC": "10",
+            "OPUS": "27",
+            "MPEG": "17"
+        }
+
+        for key, code in codec_map.items():
+            if key in audio_type:
+                return code
+
+        return "20"  # Outros
 
     def _get_video_codec(self, meta):
         codec_video_map = {
