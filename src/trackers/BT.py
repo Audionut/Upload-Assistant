@@ -85,12 +85,6 @@ class BT(COMMON):
                 for alias in aliases_tuple:
                     self.ultimate_lang_map[alias.lower()] = correct_id
 
-    async def _generate_description(self, meta):
-        description = ""
-        description += self.signature
-
-        return description.strip()
-
     async def search_existing(self, meta, disctype):
         imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
         if not imdb_id:
@@ -749,8 +743,8 @@ class BT(COMMON):
             'resolucao_2': resolution['resolucao_2'],
             'bitrate': self.get_bitrate(meta),
             'screen[]': self.get_screens(meta),
-            'desc': self.get_desc(meta),
-            'especificas': ''
+            'desc': '',
+            'especificas': self.get_desc(meta)
         })
         if 'subtitles[]' in subtitles_info: data['subtitles[]'] = subtitles_info['subtitles[]']
 
