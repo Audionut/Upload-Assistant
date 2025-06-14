@@ -283,7 +283,7 @@ class ASC(COMMON):
         imdb_id = asc_data.get('imdbID', '')
         ratings_lista = asc_data.get('Ratings', [])
         ratings = {rating.get('Source'): rating.get('Value') for rating in ratings_lista}
-        
+
         imdb_rating = ratings.get('Internet Movie Database', 'N/A')
         rotten_rating = ratings.get('Rotten Tomatoes', 'N/A')
         metacritic_rating = ratings.get('Metacritic', 'N/A')
@@ -388,7 +388,7 @@ class ASC(COMMON):
                     response = self.session.post(url_gerador_desc, data=payload, timeout=20)
                     response.raise_for_status()
                     asc_data = response.json().get('ASC')
-                except Exception as e:
+                except Exception:
                     asc_data = None
 
             if asc_data:
