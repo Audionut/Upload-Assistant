@@ -791,39 +791,27 @@ class BT(COMMON):
             try:
                 response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
-                # --- INÍCIO DAS NOVAS ALTERAÇÕES ---
-
-                # 1. Nova condição de sucesso: verifica se fomos redirecionados para a página do torrent.
-                #    A biblioteca 'requests'/'httpx' segue os redirecionamentos automaticamente, 
-                #    então response.url nos dá a URL final.
                 if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
                     final_url = str(response.url)
                     console.print(f"[bold green]Upload para '{self.tracker}' bem-sucedido! Redirecionado para: {final_url}[/bold green]")
-                    
-                    # 2. Extrai o ID do torrent diretamente da URL final.
+
                     id_match = re.search(r'id=(\d+)', final_url)
-                    
+
                     if id_match:
                         torrent_id = id_match.group(1)
-                        # 3. Monta a URL de detalhes com 'torrentid=', como solicitado originalmente.
-                        details_url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
-                        console.print(f"[green]Link da página de detalhes montado: {details_url}[/green]")
-                        
-                        # 4. Adiciona o tracker e o link de detalhes (source) ao arquivo .torrent
+                        details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
+
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
-                        console.print(f"[green]Link de detalhes adicionado ao arquivo .torrent com sucesso![/green]")
                     else:
                         console.print(f"[bold yellow]Redirecionamento para a página do torrent ocorreu, mas não foi possível extrair o ID da URL: {final_url}[/bold yellow]")
 
                 else:
-                    # A lógica de falha original ainda é útil se o redirecionamento não ocorrer.
                     console.print(f"[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red]")
                     failure_path = f"{self.tracker}_upload_failure_{meta['uuid']}.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
                     console.print(f"[yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]")
-                
-                # --- FIM DAS NOVAS ALTERAÇÕES ---
+
             except requests.exceptions.RequestException as e:
                 console.print(f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]")
