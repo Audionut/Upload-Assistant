@@ -2,6 +2,7 @@
 import os
 import requests
 import cli_ui
+from datetime import datetime
 from src.exceptions import UploadException
 from bs4 import BeautifulSoup
 from src.console import console
@@ -242,7 +243,6 @@ class ASC(COMMON):
 
             json_data = response.json()
 
-            # Chama uma função auxiliar para construir o BBCode a partir do JSON
             auto_description = self._build_description_from_json(json_data)
 
             if not auto_description:
@@ -262,21 +262,41 @@ class ASC(COMMON):
             return None
 
         barrinhas = {key: value for key, value in asc_data.items() if key.startswith('BARRINHA_')}
-        poster = asc_data.get('Poster', '')
-        sinopse = asc_data.get('overview', 'Sinopse não disponível.')
-        titulo_traduzido = asc_data.get('Title', '')
-        genero = asc_data.get('Genre', '')
-        lancamento = asc_data.get('Year', '')
-        duracao = asc_data.get('Runtime', '')
-        imdb_rating = asc_data.get('imdbRating', 'N/A')
 
-        elenco_lista = [ator.get('name') for ator in asc_data.get('cast', [])[:10]]
-        elenco_str = ', '.join(elenco_lista)
+        titulo = asc_data.get('Title', 'Título não disponível')
+        poster_path = asc_data.get('poster_path', '')
+        sinopse = asc_data.get('overview', 'Sinopse não disponível.')
+
+        duracao = asc_data.get('Runtime', 'N/A')
+        produtora = asc_data.get('Production', 'N/A')
+        pais = asc_data.get('Country', 'N/A')
+        generos = asc_data.get('Genre', 'N/A')
+        data_lancamento_str = asc_data.get('Released', '')
+
+        try:
+            data_lancamento_formatada = datetime.strptime(data_lancamento_str, '%Y-%m-%d').strftime('%d/%m/%Y')
+        except (ValueError, TypeError):
+            data_lancamento_formatada = 'N/A'
+
+        elenco_lista = asc_data.get('cast', [])
+
+        imdb_id = asc_data.get('imdbID', '')
+        ratings_lista = asc_data.get('Ratings', [])
+        ratings = {rating.get('Source'): rating.get('Value') for rating in ratings_lista}
+        
+        imdb_rating = ratings.get('Internet Movie Database', 'N/A')
+        rotten_rating = ratings.get('Rotten Tomatoes', 'N/A')
+        metacritic_rating = ratings.get('Metacritic', 'N/A')
 
         description = "[center]\n"
-        if barrinhas.get('BARRINHA_CAPA') and poster:
+
+        if barrinhas.get('BARRINHA_APRESENTA'):
+            description += f"[img]{barrinhas['BARRINHA_APRESENTA']}[/img]\n"
+            description += f"[size=3]{titulo}[/size]\n\n"
+
+        if barrinhas.get('BARRINHA_CAPA') and poster_path:
             description += f"[img]{barrinhas['BARRINHA_CAPA']}[/img]\n"
-            description += f"[img]{poster}[/img]\n\n"
+            description += f"[img]{poster_path}[/img]\n\n"
 
         if barrinhas.get('BARRINHA_SINOPSE') and sinopse:
             description += f"[img]{barrinhas['BARRINHA_SINOPSE']}[/img]\n"
@@ -284,18 +304,42 @@ class ASC(COMMON):
 
         if barrinhas.get('BARRINHA_FICHA_TECNICA'):
             description += f"[img]{barrinhas['BARRINHA_FICHA_TECNICA']}[/img]\n"
-            description += f"[b]» Título Traduzido:[/b] {titulo_traduzido}\n"
-            description += f"[b]» Gênero:[/b] {genero}\n"
-            description += f"[b]» Lançamento:[/b] {lancamento}\n"
-            description += f"[b]» Duração:[/b] {duracao}\n"
-            description += f"[b]» Nota IMDb:[/b] {imdb_rating}\n\n"
+            description += f"Tempo: {duracao}\n"
+            description += f"Produtora: {produtora}\n"
+            description += f"País de Origem: {pais}\n"
+            description += f"Gêneros: {generos}\n"
+            description += f"Data de Lançamento: {data_lancamento_formatada}\n\n"
 
-        if barrinhas.get('BARRINHA_ELENCO') and elenco_str:
+        if barrinhas.get('BARRINHA_ELENCO') and elenco_lista:
             description += f"[img]{barrinhas['BARRINHA_ELENCO']}[/img]\n"
-            description += f"{elenco_str}\n\n"
+            for ator in elenco_lista[:5]:
+                ator_id = ator.get('id')
+                profile_path = ator.get('profile_path')
+                nome = ator.get('name')
+                personagem = ator.get('character')
 
-        if barrinhas.get('BARRINHA_AGRADECA'):
-            description += f"[img]{barrinhas['BARRINHA_AGRADECA']}[/img]\n"
+                if all([ator_id, profile_path, nome, personagem]):
+                    tmdb_url = f"https://www.themoviedb.org/person/{ator_id}?language=pt-BR"
+                    foto_url = f"https://image.tmdb.org/t/p/w45{profile_path}"
+
+                    description += f"[url={tmdb_url}][img]{foto_url}[/img][/url]\n"
+                    description += f"[size=2][b]({nome}) como {personagem}[/b][/size]\n\n"
+
+        if barrinhas.get('BARRINHA_INFORMACOES'):
+            description += f"[img]{barrinhas['BARRINHA_INFORMACOES']}[/img]\n"
+            imdb_icon = "https://i.postimg.cc/Pr8Gv4RQ/IMDB.png"
+            rotten_icon = "https://i.postimg.cc/rppL76qC/rotten.png"
+            metacritic_icon = "https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png"
+
+            if imdb_id and imdb_rating != 'N/A':
+                imdb_page_url = f"https://www.imdb.com/title/{imdb_id}"
+                description += f"[img]{imdb_icon}[/img]\n[url={imdb_page_url}][b]{imdb_rating}[/b][/url]\n"
+
+            if rotten_rating != 'N/A':
+                description += f"[img]{rotten_icon}[/img]\n[b]{rotten_rating}[/b]\n"
+
+            if metacritic_rating != 'N/A':
+                description += f"[img]{metacritic_icon}[/img]\n[b]{metacritic_rating}[/b]\n"
 
         description += "[/center]"
 
@@ -334,6 +378,31 @@ class ASC(COMMON):
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': 2}
 
+            asc_data = None
+            if meta.get('imdb_id'):
+                url_gerador_desc = f"{self.base_url}/search.php"
+                payload = {'imdb': f"tt{str(meta.get('imdb_id')).zfill(7)}", 'layout': '2'}
+                try:
+                    cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
+                    self.session.cookies.update(await self.parseCookieFile(cookie_file))
+                    response = self.session.post(url_gerador_desc, data=payload, timeout=20)
+                    response.raise_for_status()
+                    asc_data = response.json().get('ASC')
+                except Exception as e:
+                    asc_data = None
+
+            if asc_data:
+                description = self._build_description_from_json({'ASC': asc_data})
+                data['descr'] = f"{description}\n\n{self.signature}".strip()
+
+                if asc_data.get('poster_path'):
+                    data['capa'] = asc_data.get('poster_path')
+
+            else:
+                data['descr'] = await self._generate_description_manual(meta)
+                if meta.get('poster'):
+                    data['capa'] = meta.get('poster')
+
             data['name'] = self._get_torrent_name(meta)
             data['descr'] = await self._generate_description(meta)
             data['type'] = self._get_category_type(meta)
@@ -350,8 +419,6 @@ class ASC(COMMON):
                 data['genre'] = meta.get('genres')
             if meta.get('year'):
                 data['ano'] = meta.get('year')
-            if meta.get('poster'):
-                data['capa'] = meta.get('poster')
             if meta.get('youtube'):
                 data['tube'] = meta.get('youtube')
 
