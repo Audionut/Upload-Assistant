@@ -20,7 +20,7 @@ class BT(COMMON):
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
         })
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload automatizado via Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
         target_site_ids = {
             'danish': '10', 'swedish': '11', 'norwegian': '12', 'romanian': '13',
@@ -541,8 +541,30 @@ class BT(COMMON):
 
         return screenshot_urls
 
-    def get_desc(self, meta):
-        return self.signature
+    async def edit_desc(self, meta):
+        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+
+        base_desc = ""
+        if os.path.exists(base_desc_path):
+            with open(base_desc_path, 'r', encoding='utf-8') as f:
+                base_desc = f.read()
+
+        description_parts = []
+
+        # Adiciona nota sobre a fonte para WEBDLs
+        if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
+            source_note = f"[center][quote]Este lançamento tem como fonte o serviço {meta['service_longname']}[/quote][/center]"
+            description_parts.append(source_note)
+
+        description_parts.append(base_desc)
+
+        if self.signature:
+            description_parts.append(self.signature)
+
+        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
+            final_description = "\n\n".join(filter(None, description_parts))
+            descfile.write(final_description)
 
     def get_3d(self, meta):
         if meta.get('3D'):
@@ -639,7 +661,7 @@ class BT(COMMON):
             return
 
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-
+        await self.edit_desc(meta)
         imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
         category_type = self.get_type(meta)
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
@@ -695,6 +717,7 @@ class BT(COMMON):
         tv_info = self.get_tv_info(meta)
         resolution = self.get_resolution(meta)
         subtitles_info = self.get_subtitles(meta)
+        bt_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
 
         data.update({
             'mediainfo': self.get_file_info(meta),
@@ -709,7 +732,7 @@ class BT(COMMON):
             'bitrate': self.get_bitrate(meta),
             'screen[]': self.get_screens(meta),
             'desc': '',
-            'especificas': self.get_desc(meta)
+            'especificas': bt_desc,
         })
         if 'subtitles[]' in subtitles_info: data['subtitles[]'] = subtitles_info['subtitles[]']
 
