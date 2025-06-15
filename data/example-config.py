@@ -368,6 +368,14 @@ config = {
             "announce_url": "https://hdbits.org/announce/Custom_Announce_URL",
             "img_rehost": True,
         },
+        "HDS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for HDS to work you need to export cookies from https://hd-space.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
+            "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
+            "anon": False,
+        },
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
