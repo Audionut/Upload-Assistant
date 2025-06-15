@@ -332,41 +332,40 @@ class BT(COMMON):
         return "Legendado"
 
     def get_video_codec(self, meta):
-        video_encode_raw = meta.get('video_encode')
-        codec_final = meta.get('video_codec')
+        video_encode = meta.get('video_encode', '').strip().lower()
+        codec_final = meta.get('video_codec', '')
         is_hdr = bool(meta.get('hdr'))
 
-        if video_encode_raw and isinstance(video_encode_raw, str):
-            clean_encode = video_encode_raw.strip().lower()
-            if 'x265' in clean_encode:
-                return "x265 HDR" if is_hdr else "x265"
-            elif 'h.265' in clean_encode:
-                return "H.265 HDR" if is_hdr else "H.265"
-            elif 'x264' in clean_encode:
-                return "x264"
-            elif 'h.264' in clean_encode:
-                return "H.264"
-            elif 'vp9' in clean_encode:
-                return "VP9"
-            elif 'xvid' in clean_encode:
-                return "XviD"
+        encode_map = {
+            'x265': 'x265',
+            'h.265': 'H.265',
+            'x264': 'x264',
+            'h.264': 'H.264',
+            'vp9': 'VP9',
+            'xvid': 'XviD',
+        }
+
+        for key, value in encode_map.items():
+            if key in video_encode:
+                if value in ['x265', 'H.265'] and is_hdr:
+                    return f"{value} HDR"
+                return value
 
         # Use 'video_codec' if 'video_encode' is not present
-        if codec_final:
-            codec_lower = codec_final.lower()
-            if 'hevc' in codec_lower:
-                return "x265 HDR" if is_hdr else "x265"
-            elif 'avc' in codec_lower:
-                return "x264"
-            elif 'mpeg-2' in codec_lower:
-                return "MPEG-2"
-            elif 'vc-1' in codec_lower:
-                return "VC-1"
+        codec_lower = codec_final.lower()
 
-            if codec_final:
-                return codec_final
+        codec_map = {
+            'hevc': 'x265',
+            'avc': 'x264',
+            'mpeg-2': 'MPEG-2',
+            'vc-1': 'VC-1',
+        }
 
-        return "Outro"
+        for key, value in codec_map.items():
+            if key in codec_lower:
+                return f"{value} HDR" if value == 'x265' and is_hdr else value
+
+        return codec_final if codec_final else "Outro"
 
     def get_audio_codec(self, meta):
         priority_order = [
@@ -453,26 +452,23 @@ class BT(COMMON):
 
     def get_edition(self, meta):
         edition_str = meta.get('edition', '').lower()
-
         if not edition_str:
             return ""
 
-        if "director's cut" in edition_str:
-            return "Director's Cut"
-        elif "theatrical" in edition_str:
-            return "Theatrical Cut"
-        elif "extended" in edition_str:
-            return "Extended"
-        elif "uncut" in edition_str:
-            return "Uncut"
-        elif "unrated" in edition_str:
-            return "Unrated"
-        elif "imax" in edition_str:
-            return "IMAX"
-        elif "noir" in edition_str:
-            return "Noir"
-        elif "remastered" in edition_str:
-            return "Remastered"
+        edition_map = {
+            "director's cut": "Director's Cut",
+            "theatrical": "Theatrical Cut",
+            "extended": "Extended",
+            "uncut": "Uncut",
+            "unrated": "Unrated",
+            "imax": "IMAX",
+            "noir": "Noir",
+            "remastered": "Remastered",
+        }
+
+        for keyword, label in edition_map.items():
+            if keyword in edition_str:
+                return label
 
         return ""
         
@@ -513,7 +509,6 @@ class BT(COMMON):
         keyword_map = {
             'remux': 'Remux',
             'webdl': 'WEB-DL',
-            'web-dl': 'WEB-DL',
             'webrip': 'WEBRip',
             'web': 'WEB',
             'encode': 'Encode',
@@ -521,7 +516,6 @@ class BT(COMMON):
             'brrip': 'BRRip',
             'blu-ray': 'Blu-ray',
             'bluray': 'Blu-ray',
-            'mhd': 'mHD',
             'hdtv': 'HDTV',
             'pdtv': 'PDTV',
             'sdtv': 'SDTV',
