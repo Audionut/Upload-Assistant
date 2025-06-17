@@ -87,7 +87,6 @@ class HDS(COMMON):
         search_url = f"{self.base_url}/index.php?page=torrents&search={imdb_id}&active=0&options=2"
         
         try:
-            console.print(f"Searching for duplicates on {self.tracker} with IMDb ID: {imdb_id}")
             response = self.session.get(search_url, timeout=20)
             response.raise_for_status()
             
@@ -97,11 +96,6 @@ class HDS(COMMON):
             if torrent_links:
                 for link in torrent_links:
                     dupes.append(link.get_text(strip=True))
-            
-            if dupes:
-                console.print(f"[bold yellow]Found {len(dupes)} duplicates on {self.tracker}.[/bold yellow]")
-            else:
-                console.print(f"No duplicates found on {self.tracker}.")
 
         except Exception as e:
             console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
@@ -217,9 +211,7 @@ class HDS(COMMON):
                         console.print(f"[bold red]Upload to {self.tracker} failed: The torrent already exists on the site.[/bold red]")
                         raise UploadException(f"Upload to {self.tracker} failed: Duplicate detected.", "red")
                     
-                    elif "Upload successful!" in response.text and "download.php?id=" in response.text:
-                        console.print(f"[green]Upload to {self.tracker} successful! (Anonymous: {is_anonymous})[/green]")
-                        
+                    elif "Upload successful!" in response.text and "download.php?id=" in response.text:                     
                         soup = BeautifulSoup(response.text, 'html.parser')
                         download_link_tag = soup.find('a', href=lambda href: href and "download.php?id=" in href)
                         
