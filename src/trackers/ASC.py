@@ -27,9 +27,9 @@ class ASC(COMMON):
         if meta.get('category') == 'TV':
             season = meta.get('season')
             episode = meta.get('episode')
-            
+
             if meta.get('tv_pack') == 1 and season:
-                return f"{season}", None 
+                return f"{season}", None
             elif meta.get('tv_pack') == 0 and season and episode:
                 return f"{season}", f"{episode}"
         return None, None
