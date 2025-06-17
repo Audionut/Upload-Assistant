@@ -717,7 +717,8 @@ class BT(COMMON):
         tv_info = self.get_tv_info(meta)
         resolution = self.get_resolution(meta)
         subtitles_info = self.get_subtitles(meta)
-        bt_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        
+        bt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
 
         data.update({
             'mediainfo': self.get_file_info(meta),
@@ -778,14 +779,13 @@ class BT(COMMON):
 
         upload_url = f"{self.base_url}/upload.php"
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'file_input': (f"{self.tracker}_placeholder.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
             try:
                 response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
                 if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
                     final_url = str(response.url)
-                    console.print(f"[bold green]Upload para '{self.tracker}' bem-sucedido! Redirecionado para: {final_url}[/bold green]")
 
                     id_match = re.search(r'id=(\d+)', final_url)
 
