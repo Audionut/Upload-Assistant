@@ -479,7 +479,7 @@ class ASC(COMMON):
         self.session.cookies.update(await self.parseCookieFile(cookie_file))
 
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'torrent': (f"{data['name']}.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'torrent': (f"ASC_placeholder.torrent", torrent_file, "application/x-bittorrent")}
             response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
         if "foi enviado com sucesso" in response.text:
@@ -620,28 +620,36 @@ class ASC(COMMON):
 
     async def search_existing(self, meta, disctype):
         search_url = None
-        # Animes não possuem IMDb, a busca tem que ser feita por nome
-        if meta.get('anime'):
+
+        # Séries de TV e Animes devem buscar por nome
+        if meta.get('anime') or meta.get('category') == 'TV':
             nome_base = meta.get('title')
             search_name = nome_base
-            if meta.get('category') == 'TV':
-                season_episode_str = ""
-                if meta.get('tv_pack') == 1 and meta.get('season'):
-                    season_episode_str = f" - {meta.get('season')}"
-                elif meta.get('tv_pack') == 0 and meta.get('season') and meta.get('episode'):
-                    season_episode_str = f" - {meta.get('season')}{meta.get('episode')}"
-                search_name = f"{nome_base}{season_episode_str}"
 
+            season_episode_str = ""
+            if meta.get('tv_pack') == 1 and meta.get('season'):
+                season_episode_str = f" - {meta.get('season')}"
+            elif meta.get('tv_pack') == 0 and meta.get('season') and meta.get('episode'):
+                season_episode_str = f" - {meta.get('season')}{meta.get('episode')}"
+
+            search_name = f"{nome_base}{season_episode_str}"
             search_query = search_name.replace(' ', '+')
-            search_url = f"https://cliente.amigos-share.club/torrents-search.php?search={search_query}&cat=0&free=2&sort=id&tipo=contenha&order=desc"
 
-        # Lógica para Filmes/Séries (pelo IMDb)
+            search_url = (
+                f"https://cliente.amigos-share.club/torrents-search.php?"
+                f"search={search_query}"
+            )
+
+        # Filmes devem buscar por IMDb
         else:
             if not meta.get('imdb_id'):
                 console.print("[yellow]IMDb ID não encontrado, não é possível buscar por duplicados no ASC.[/yellow]")
                 return []
-            imdb_id = f"tt{str(meta['imdb_id']).zfill(7)}"
-            search_url = f"https://cliente.amigos-share.club/busca-filmes.php?search=&imdb={imdb_id}&sort=size&order=desc"
+            imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
+            search_url = (
+                f"https://cliente.amigos-share.club/busca-filmes.php?"
+                f"search=&imdb={imdb_id}"
+            )
 
         return await self._perform_search_and_parse(search_url, meta)
 
