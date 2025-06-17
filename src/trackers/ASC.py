@@ -619,37 +619,20 @@ class ASC(COMMON):
         return dupes
 
     async def search_existing(self, meta, disctype):
-        search_url = None
-
-        # Séries de TV e Animes devem buscar por nome
+        # Animes não possuem cadastro de IMDb
+        # É possível buscar Séries por IMDb, porém pode haver centenas de resultados
         if meta.get('anime') or meta.get('category') == 'TV':
-            nome_base = meta.get('title')
-            search_name = nome_base
-
-            season_episode_str = ""
-            if meta.get('tv_pack') == 1 and meta.get('season'):
-                season_episode_str = f" - {meta.get('season')}"
-            elif meta.get('tv_pack') == 0 and meta.get('season') and meta.get('episode'):
-                season_episode_str = f" - {meta.get('season')}{meta.get('episode')}"
-
-            search_name = f"{nome_base}{season_episode_str}"
+            search_name = self._get_torrent_name(meta)
             search_query = search_name.replace(' ', '+')
+            search_url = f"https://cliente.amigos-share.club/torrents-search.php?search={search_query}"
 
-            search_url = (
-                f"https://cliente.amigos-share.club/torrents-search.php?"
-                f"search={search_query}"
-            )
-
-        # Filmes devem buscar por IMDb
+        # Filmes: busca por IMDb
         else:
-            if not meta.get('imdb_id'):
+            imdb_id = meta.get('imdb_info', {}).get('imdbID')
+            if not imdb_id:
                 console.print("[yellow]IMDb ID não encontrado, não é possível buscar por duplicados no ASC.[/yellow]")
                 return []
-            imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
-            search_url = (
-                f"https://cliente.amigos-share.club/busca-filmes.php?"
-                f"search=&imdb={imdb_id}"
-            )
+            search_url = f"https://cliente.amigos-share.club/busca-filmes.php?search=&imdb={imdb_id}"
 
         return await self._perform_search_and_parse(search_url, meta)
 
