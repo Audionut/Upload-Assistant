@@ -778,7 +778,7 @@ class BT(COMMON):
 
         upload_url = f"{self.base_url}/upload.php"
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'file_input': (f"{meta.get('name')}.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'file_input': (f"{self.tracker}_placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
             try:
                 response = self.session.post(upload_url, data=data, files=files, timeout=60)
