@@ -479,7 +479,7 @@ class ASC(COMMON):
         self.session.cookies.update(await self.parseCookieFile(cookie_file))
 
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'torrent': (f"ASC_placeholder.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'torrent': (f"{self.tracker}_placeholder.torrent", torrent_file, "application/x-bittorrent")}
             response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
         if "foi enviado com sucesso" in response.text:
