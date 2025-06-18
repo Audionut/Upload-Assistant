@@ -711,7 +711,7 @@ class BT(COMMON):
                 'sinopse': meta.get('imdb_info', {}).get('plot', 'Nenhuma sinopse disponível.'),
                 'duracao': f"{details.get('duracao', '')} min" if details.get('duracao') else '',
                 'tags': meta.get('genres', '').replace(', ', ',').replace(' ', '.').lower(),
-                'image': meta.get('image_list', [{}])[0].get('raw_url', '')
+                'image': meta.get('backdrop')
             })
 
         tv_info = self.get_tv_info(meta)
