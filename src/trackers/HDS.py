@@ -56,7 +56,6 @@ class HDS(COMMON):
                     bd_summary = f.read()
                 description += f"\n{bd_summary}\n\n\n"
 
-
         images = meta.get('image_list', [])
         if images:
             description += "\n[center][b]Screenshots[/b]\n"
@@ -128,7 +127,6 @@ class HDS(COMMON):
     async def get_category_id(self, meta):
         resolution = meta.get('resolution')
         category = meta.get('category')
-        source = meta.get('source', '').lower()
         type_ = meta.get('type')
         is_disc = meta.get('is_disc')
         genres = meta.get("genres", "").lower()
@@ -174,68 +172,68 @@ class HDS(COMMON):
         return 38
 
     async def upload(self, meta, disctype):
-            common = COMMON(config=self.config)
-            await common.edit_torrent(meta, self.tracker, self.source_flag)
+        common = COMMON(config=self.config)
+        await common.edit_torrent(meta, self.tracker, self.source_flag)
 
-            if not await self.validate_credentials(meta):
-                cli_ui.fatal(f"Failed to validate {self.tracker} credentials, aborting.")
-                return
+        if not await self.validate_credentials(meta):
+            cli_ui.fatal(f"Failed to validate {self.tracker} credentials, aborting.")
+            return
 
-            cat_id = await self.get_category_id(meta)
-            description = await self.generate_description(meta)
+        cat_id = await self.get_category_id(meta)
+        description = await self.generate_description(meta)
 
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-            tracker_anon_setting = self.config['TRACKERS'][self.tracker].get('anon', False)
-            is_anonymous = meta['anon'] != 0 or tracker_anon_setting is True
+        tracker_anon_setting = self.config['TRACKERS'][self.tracker].get('anon', False)
+        is_anonymous = meta['anon'] != 0 or tracker_anon_setting is True
 
-            data = {
-                'user_id': '', 'category': cat_id, 'filename': meta['name'],
-                'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
-                'youtube_video': meta.get('youtube_link', ''), 'info': description,
-                'anonymous': 'true' if is_anonymous else 'false',
-                't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
-                'req': 'false', 'nuk': 'false', 'nuk_rea': '', 'submit': 'Send'
-            }
-            if meta.get('genre'): data['genre'] = meta.get('genre')
+        data = {
+            'user_id': '', 'category': cat_id, 'filename': meta['name'],
+            'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
+            'youtube_video': meta.get('youtube_link', ''), 'info': description,
+            'anonymous': 'true' if is_anonymous else 'false',
+            't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
+            'req': 'false', 'nuk': 'false', 'nuk_rea': '', 'submit': 'Send'
+        }
+        if meta.get('genre'): data['genre'] = meta.get('genre')
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'torrent': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                self.session.headers.update({'Referer': f'{self.base_url}/index.php?page=upload'})
+        with open(torrent_path, 'rb') as torrent_file:
+            files = {'torrent': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
+            self.session.headers.update({'Referer': f'{self.base_url}/index.php?page=upload'})
 
-                if meta['debug'] is False:
-                    upload_url = f"{self.base_url}/index.php?page=upload"
-                    response = self.session.post(upload_url, data=data, files=files, timeout=60)
+            if meta['debug'] is False:
+                upload_url = f"{self.base_url}/index.php?page=upload"
+                response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
-                    if "This torrent may already exist in our database." in response.text:
-                        console.print(f"[bold red]Upload to {self.tracker} failed: The torrent already exists on the site.[/bold red]")
-                        raise UploadException(f"Upload to {self.tracker} failed: Duplicate detected.", "red")
+                if "This torrent may already exist in our database." in response.text:
+                    console.print(f"[bold red]Upload to {self.tracker} failed: The torrent already exists on the site.[/bold red]")
+                    raise UploadException(f"Upload to {self.tracker} failed: Duplicate detected.", "red")
 
-                    elif "Upload successful!" in response.text and "download.php?id=" in response.text:
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        download_link_tag = soup.find('a', href=lambda href: href and "download.php?id=" in href)
+                elif "Upload successful!" in response.text and "download.php?id=" in response.text:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    download_link_tag = soup.find('a', href=lambda href: href and "download.php?id=" in href)
 
-                        if download_link_tag:
-                            href = download_link_tag['href']
-                            id_match = re.search(r'id=([a-f0-9]+)', href)
+                    if download_link_tag:
+                        href = download_link_tag['href']
+                        id_match = re.search(r'id=([a-f0-9]+)', href)
 
-                            if id_match:
-                                torrent_id = id_match.group(1)
-                                details_url = f"{self.base_url}/index.php?page=torrent-details&id={torrent_id}"
+                        if id_match:
+                            torrent_id = id_match.group(1)
+                            details_url = f"{self.base_url}/index.php?page=torrent-details&id={torrent_id}"
 
-                                announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
-                            else:
-                                console.print("[bold red]Critical Error: Could not extract torrent ID from the download link.[/bold red]")
+                            announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                            await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                         else:
-                            console.print("[bold yellow]Warning: Upload was successful, but the torrent link could not be found on the response page.[/bold yellow]")
-
+                            console.print("[bold red]Critical Error: Could not extract torrent ID from the download link.[/bold red]")
                     else:
-                        console.print(f"[bold red]Upload to {self.tracker} failed.[/bold red]")
-                        console.print(f"Status: {response.status_code}")
-                        console.print(f"Response: {response.text[:800]}")
-                        raise UploadException(f"Upload to {self.tracker} failed, check the response.", "red")
+                        console.print("[bold yellow]Warning: Upload was successful, but the torrent link could not be found on the response page.[/bold yellow]")
+
                 else:
-                    console.print(f"[bold blue]Debug Mode: Upload to {self.tracker} was not sent.[/bold blue]")
-                    console.print("Headers:", self.session.headers)
-                    console.print("Payload (data):", data)
+                    console.print(f"[bold red]Upload to {self.tracker} failed.[/bold red]")
+                    console.print(f"Status: {response.status_code}")
+                    console.print(f"Response: {response.text[:800]}")
+                    raise UploadException(f"Upload to {self.tracker} failed, check the response.", "red")
+            else:
+                console.print(f"[bold blue]Debug Mode: Upload to {self.tracker} was not sent.[/bold blue]")
+                console.print("Headers:", self.session.headers)
+                console.print("Payload (data):", data)
