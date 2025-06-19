@@ -317,11 +317,11 @@ config = {
             "anon": False,
         },
         "BT": {
-        "link_dir_name": "",
-        # for BT to work you need to export cookies from https://brasiltracker.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
-        # cookies need to be in netscape format and need to be in data/cookies/BT.txt
-        "announce_url": "https://t.brasiltracker.org/<PASSKEY>/announce",
-        "anon": False,
+            "link_dir_name": "",
+            # for BT to work you need to export cookies from https://brasiltracker.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/BT.txt
+            "announce_url": "https://t.brasiltracker.org/<PASSKEY>/announce",
+            "anon": False,
         },
         "CBR": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
