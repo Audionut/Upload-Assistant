@@ -21,7 +21,7 @@ class HDS(COMMON):
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
         })
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionuts Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def _generate_description(self, meta):
         description = ""
@@ -66,7 +66,7 @@ class HDS(COMMON):
                 web_url = images[i]['web_url']
 
                 description += f"[url={web_url}][img]{img_url}[/img][/url] "
-            
+
             description += "[/center]\n"
 
         description += self.signature
@@ -83,23 +83,23 @@ class HDS(COMMON):
         if imdb_id == '0':
             cli_ui.info(f"IMDb ID not found, cannot search for duplicates on {self.tracker}.")
             return dupes
-            
+
         search_url = f"{self.base_url}/index.php?page=torrents&search={imdb_id}&active=0&options=2"
-        
+
         try:
             response = self.session.get(search_url, timeout=20)
             response.raise_for_status()
-            
+
             soup = BeautifulSoup(response.text, 'html.parser')
             torrent_links = soup.find_all('a', href=lambda href: href and 'page=torrent-details&id=' in href)
-            
+
             if torrent_links:
                 for link in torrent_links:
                     dupes.append(link.get_text(strip=True))
 
         except Exception as e:
             console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
-        
+
         return dupes
 
     async def validate_credentials(self, meta):
@@ -124,7 +124,7 @@ class HDS(COMMON):
         except Exception as e:
             console.print(f"[bold red]Error validating {self.tracker} credentials: {e}[/bold red]")
             return False
-        
+
     async def get_category_id(self, meta):
         resolution = meta.get('resolution')
         category = meta.get('category')
@@ -176,19 +176,19 @@ class HDS(COMMON):
     async def upload(self, meta, disctype):
             common = COMMON(config=self.config)
             await common.edit_torrent(meta, self.tracker, self.source_flag)
-            
+
             if not await self.validate_credentials(meta):
                 cli_ui.fatal(f"Failed to validate {self.tracker} credentials, aborting.")
                 return
 
             cat_id = await self.get_category_id(meta)
             description = await self._generate_description(meta)
-            
+
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-            
+
             tracker_anon_setting = self.config['TRACKERS'][self.tracker].get('anon', False)
             is_anonymous = meta['anon'] != 0 or tracker_anon_setting is True
-            
+
             data = {
                 'user_id': '', 'category': cat_id, 'filename': meta['name'],
                 'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
@@ -210,20 +210,18 @@ class HDS(COMMON):
                     if "This torrent may already exist in our database." in response.text:
                         console.print(f"[bold red]Upload to {self.tracker} failed: The torrent already exists on the site.[/bold red]")
                         raise UploadException(f"Upload to {self.tracker} failed: Duplicate detected.", "red")
-                    
-                    elif "Upload successful!" in response.text and "download.php?id=" in response.text:                     
+
+                    elif "Upload successful!" in response.text and "download.php?id=" in response.text:
                         soup = BeautifulSoup(response.text, 'html.parser')
                         download_link_tag = soup.find('a', href=lambda href: href and "download.php?id=" in href)
-                        
+
                         if download_link_tag:
                             href = download_link_tag['href']
                             id_match = re.search(r'id=([a-f0-9]+)', href)
-                            
+
                             if id_match:
                                 torrent_id = id_match.group(1)
                                 details_url = f"{self.base_url}/index.php?page=torrent-details&id={torrent_id}"
-                                
-                                console.print(f"[green]Details page link: {details_url}[/green]")
 
                                 announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
