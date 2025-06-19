@@ -340,7 +340,7 @@ class BT(COMMON):
 
         if meta.get('is_disc') == 'BDMV' and meta.get('bdinfo', {}).get('audio'):
             audio_tracks_raw = meta['bdinfo']['audio']
-            
+
         elif meta.get('is_disc') == 'DVD' and meta.get('discs'):
             for disc in meta.get('discs', []):
                 ifo_mi_text = disc.get('ifo_mi', '')
@@ -354,7 +354,7 @@ class BT(COMMON):
                         if match:
                             language = match.group(1).strip()
                             audio_tracks_raw.append({'language': language})
-            
+
         elif meta.get('mediainfo'):
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             audio_tracks_raw = [{'language': t.get('Language')} for t in tracks if t.get('@type') == 'Audio']
@@ -524,7 +524,7 @@ class BT(COMMON):
                 return label
 
         return ""
-        
+
     def get_bitrate(self, meta):
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
@@ -558,7 +558,7 @@ class BT(COMMON):
 
         if not source_type or not isinstance(source_type, str):
             return "Outro"
-        
+
         keyword_map = {
             'remux': 'Remux',
             'webdl': 'WEB-DL',
@@ -706,7 +706,7 @@ class BT(COMMON):
 
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
-        
+
         category_type = self.get_type(meta)
         imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
 
@@ -726,7 +726,7 @@ class BT(COMMON):
             'imdb_input': imdb_id,
             'adulto': '0'
         })
-        
+
         if tracker_data:
             all_possible_data.update({
                 'title': tracker_data.get('titulo', ''),
@@ -789,7 +789,7 @@ class BT(COMMON):
 
         if season_num:
             season_str = season_num
-            
+
             if episode_num:
                 episode_str = episode_num
                 ntorrent_value = f"{season_str}{episode_str}"
@@ -812,7 +812,7 @@ class BT(COMMON):
                 duracao_min = int(duracao_apenas_numeros.group(0))
         except (ValueError, TypeError):
             pass
-        
+
         all_possible_data.update({
             'releasedate': all_possible_data.get('year', ''),
             'rating': all_possible_data.get('nota_imdb', ''),
@@ -830,7 +830,7 @@ class BT(COMMON):
         for field in required_fields:
             if field in all_possible_data:
                 final_data[field] = all_possible_data[field]
-        
+
         if anon == 1:
             final_data['anonymous'] = '1'
 
