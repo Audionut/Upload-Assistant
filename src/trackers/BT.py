@@ -332,7 +332,6 @@ class BT(COMMON):
                 return "Outros"
         except (StopIteration, AttributeError, TypeError):
             return None
-        return None
 
     def get_audio(self, meta):
         audio_tracks_raw = []
