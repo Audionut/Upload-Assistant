@@ -128,7 +128,7 @@ class BT(COMMON):
             response = self.session.get(search_url)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
-            
+
             torrent_table = soup.find('table', id='torrent_table')
             if not torrent_table:
                 return []
@@ -559,7 +559,6 @@ class BT(COMMON):
         if not source_type or not isinstance(source_type, str):
             return "Outro"
         
-        # Corrigir essa função para usar 'source' em vez de 'type'
         keyword_map = {
             'remux': 'Remux',
             'webdl': 'WEB-DL',
@@ -569,16 +568,10 @@ class BT(COMMON):
             'bdrip': 'BDRip',
             'brrip': 'BRRip',
             'hdtv': 'HDTV',
-            'pdtv': 'PDTV',
             'sdtv': 'SDTV',
             'dvdrip': 'DVDRip',
             'hd-dvd': 'HD-DVD',
-            'hdrip': 'HDRip',
-            'hdtc': 'HDTC',
-            'hd-tc': 'HDTC',
-            'tc': 'TC',
             'tvrip': 'TVRip',
-            'vhsrip': 'VHSRip'
         }
 
         return keyword_map.get(source_type.lower(), "Outro")
