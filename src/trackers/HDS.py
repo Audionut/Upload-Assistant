@@ -23,7 +23,7 @@ class HDS(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-    async def _generate_description(self, meta):
+    async def generate_description(self, meta):
         description = ""
 
         if meta.get('is_disc') != 'BDMV':
@@ -182,7 +182,7 @@ class HDS(COMMON):
                 return
 
             cat_id = await self.get_category_id(meta)
-            description = await self._generate_description(meta)
+            description = await self.generate_description(meta)
 
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
