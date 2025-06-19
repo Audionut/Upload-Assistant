@@ -44,7 +44,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - If you receive an error about externally managed environment
       - Install virtual python environment `python3 -m venv venv`
       - Activate the virtual environment `source venv/bin/activate`
-      - Then install the requirements `pip install -r requirents.txt`
+      - Then install the requirements `pip install -r requirements.txt`
    - From the installation directory, run `python3 config-generator.py`
    - OR
    - Copy and Rename `data/example-config.py` to `data/config.py`
