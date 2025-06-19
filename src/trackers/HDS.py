@@ -195,7 +195,8 @@ class HDS(COMMON):
             't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
             'req': 'false', 'nuk': 'false', 'nuk_rea': '', 'submit': 'Send'
         }
-        if meta.get('genre'): data['genre'] = meta.get('genre')
+        if meta.get('genre'):
+            data['genre'] = meta.get('genre')
 
         with open(torrent_path, 'rb') as torrent_file:
             files = {'torrent': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
