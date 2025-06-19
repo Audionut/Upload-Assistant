@@ -318,6 +318,8 @@ class BT(COMMON):
     def get_format(self, meta):
         if meta.get('is_disc') == "BDMV":
             return "M2TS"
+        elif meta.get('is_disc') == "DVD":
+            return "VOB"
 
         try:
             general_track = next(t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'General')
@@ -326,8 +328,6 @@ class BT(COMMON):
                 return 'MKV'
             elif file_extension == 'mp4':
                 return 'MP4'
-            elif file_extension == 'vob':
-                return 'VOB'
             else:
                 return "Outros"
         except (StopIteration, AttributeError, TypeError):
@@ -340,6 +340,21 @@ class BT(COMMON):
 
         if meta.get('is_disc') == 'BDMV' and meta.get('bdinfo', {}).get('audio'):
             audio_tracks_raw = meta['bdinfo']['audio']
+            
+        elif meta.get('is_disc') == 'DVD' and meta.get('discs'):
+            for disc in meta.get('discs', []):
+                ifo_mi_text = disc.get('ifo_mi', '')
+                if not ifo_mi_text:
+                    continue
+
+                sections = ifo_mi_text.split('\n\n')
+                for section in sections:
+                    if section.strip().startswith('Audio'):
+                        match = re.search(r'Language\s+:\s+(.*)', section)
+                        if match:
+                            language = match.group(1).strip()
+                            audio_tracks_raw.append({'language': language})
+            
         elif meta.get('mediainfo'):
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             audio_tracks_raw = [{'language': t.get('Language')} for t in tracks if t.get('@type') == 'Audio']
@@ -376,7 +391,6 @@ class BT(COMMON):
                     return f"{value} HDR"
                 return value
 
-        # Use 'video_codec' if 'video_encode' is not present
         codec_lower = codec_final.lower()
 
         codec_map = {
@@ -437,6 +451,20 @@ class BT(COMMON):
             for sub_lang in meta['bdinfo']['subtitles']:
                 if sub_lang and isinstance(sub_lang, str):
                     found_language_strings.add(sub_lang.strip())
+
+        elif meta.get('is_disc') == 'DVD' and meta.get('discs'):
+            for disc in meta.get('discs', []):
+                ifo_mi_text = disc.get('ifo_mi', '')
+                if not ifo_mi_text:
+                    continue
+
+                sections = ifo_mi_text.split('\n\n')
+                for section in sections:
+                    if section.strip().startswith('Text'):
+                        match = re.search(r'Language\s+:\s+(.*)', section)
+                        if match:
+                            language = match.group(1).strip()
+                            found_language_strings.add(language)
 
         else:
             try:
@@ -521,31 +549,29 @@ class BT(COMMON):
                     return "BD25"
 
             elif is_disc_type == 'DVD':
-                disctype = meta.get('disctype')
-                if disctype in ["DVD9", "DVD5"]:
-                    return disctype
+                dvd_size = meta.get('dvd_size')
+                if dvd_size in ["DVD9", "DVD5"]:
+                    return dvd_size
                 return "DVD9"
 
         source_type = meta.get('type')
 
         if not source_type or not isinstance(source_type, str):
             return "Outro"
-
+        
+        # Corrigir essa função para usar 'source' em vez de 'type'
         keyword_map = {
             'remux': 'Remux',
             'webdl': 'WEB-DL',
             'webrip': 'WEBRip',
             'web': 'WEB',
-            'encode': 'Encode',
+            'encode': 'Blu-ray',
             'bdrip': 'BDRip',
             'brrip': 'BRRip',
-            'blu-ray': 'Blu-ray',
-            'bluray': 'Blu-ray',
             'hdtv': 'HDTV',
             'pdtv': 'PDTV',
             'sdtv': 'SDTV',
             'dvdrip': 'DVDRip',
-            'dvdscr': 'DVDScr',
             'hd-dvd': 'HD-DVD',
             'hdrip': 'HDRip',
             'hdtc': 'HDTC',
@@ -600,10 +626,10 @@ class BT(COMMON):
     def get_resolution(self, meta):
         width, height = "", ""
 
-        if meta.get('is_disc'):
+        if meta.get('is_disc') == 'BDMV':
             resolution_str = meta.get('resolution', '')
             try:
-                height_num = int(resolution_str.lower().replace('p', ''))
+                height_num = int(resolution_str.lower().replace('p', '').replace('i', ''))
                 height = str(height_num)
 
                 width_num = round((16 / 9) * height_num)
