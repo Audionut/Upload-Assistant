@@ -23,7 +23,7 @@ class ASC(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-    def get_season_episode_parts(self, meta):
+    def get_season_and_episode(self, meta):
         if meta.get('category') == 'TV':
             season = meta.get('season')
             episode = meta.get('episode')
@@ -34,7 +34,7 @@ class ASC(COMMON):
                 return f"{season}", f"{episode}"
         return None, None
 
-    def get_torrent_name(self, meta):
+    def get_title(self, meta):
         og_name = meta.get('title')
         ptbr_name = None
         try:
@@ -49,7 +49,7 @@ class ASC(COMMON):
         if ptbr_name and ptbr_name.lower() != og_name.lower():
             nome_base = f"{ptbr_name} ({og_name})"
 
-        season, episode = self.get_season_episode_parts(meta)
+        season, episode = self.get_season_and_episode(meta)
         season_episode_str = ""
         if season and not episode:
             season_episode_str = f" - {season}"
@@ -58,7 +58,7 @@ class ASC(COMMON):
 
         return f"{nome_base}{season_episode_str}"
 
-    def get_category_type(self, meta):
+    def get_cat_id(self, meta):
         if meta.get('anime'):
             if meta.get('category') == 'MOVIE':
                 return '116'  # Categoria Anime (Filme)
@@ -66,7 +66,7 @@ class ASC(COMMON):
                 return '118'  # Categoria Anime (Série)
         return None  # Retorna None se não for uma categoria de anime específica
 
-    def determine_subtitle_option(self, meta):
+    def get_subtitles(self, meta):
         subtitle_languages = []
         pt_variants = ["pt", "portuguese", "português", "pt-br"]
 
@@ -98,7 +98,7 @@ class ASC(COMMON):
         console.print("[green]Opção 'Sem Legenda' selecionada.[/green]")
         return '0'  # Sem Legenda
 
-    def get_resolution(self, meta):
+    def get_res_id(self, meta):
         if meta.get('is_disc') == 'BDMV':
             res_map = {'2160p': ('3840', '2160'), '1080p': ('1920', '1080'), '1080i': ('1920', '1080'), '720p': ('1280', '720')}
             return res_map.get(meta.get('resolution'))
@@ -108,7 +108,7 @@ class ASC(COMMON):
             return video_track.get('Width'), video_track.get('Height')
         return None, None
 
-    def determine_quality(self, meta):
+    def get_type_id(self, meta):
         qualidade_map_disc = {"BD25": "40", "BD50": "41", "BD66": "42", "BD100": "43"}
         qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDR": "10"}
 
@@ -132,7 +132,7 @@ class ASC(COMMON):
         else:
             return qualidade_map_files.get(meta.get('type'), "0")
 
-    def determine_audio_type(self, meta):
+    def get_dubs(self, meta):
         audio_tracks_raw = []
         pt_variants = ["pt", "portuguese", "português", "pt-br"]
 
@@ -154,7 +154,7 @@ class ASC(COMMON):
             return "3"  # Dublado
         return "1"  # Legendado
 
-    def get_file_extension(self, meta):
+    def get_container(self, meta):
         if meta.get('is_disc') == "BDMV":
             return "5"
 
@@ -228,9 +228,9 @@ class ASC(COMMON):
 
         return codec_id
 
-    async def generate_description(self, meta):
+    async def get_auto_description(self, meta):
         if not meta.get('imdb_id'):
-            return await self.generate_description_manual(meta)
+            return await self.fallback_description(meta)
 
         url_gerador_desc = f"{self.base_url}/search.php"
         payload = {
@@ -248,7 +248,7 @@ class ASC(COMMON):
 
             json_data = response.json()
 
-            auto_description = self.build_description_from_json(json_data)
+            auto_description = self.build_description(json_data)
 
             if not auto_description:
                 raise ValueError("Não foi possível construir a descrição automática.")
@@ -259,9 +259,9 @@ class ASC(COMMON):
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
             console.print("[yellow]Usando o método de descrição manual como fallback.[/yellow]")
-            return await self.generate_description_manual(meta)
+            return await self.fallback_description(meta)
 
-    def build_description_from_json(self, json_data):
+    def build_description(self, json_data):
         asc_data = json_data.get('ASC')
         if not asc_data:
             return None
@@ -350,7 +350,7 @@ class ASC(COMMON):
 
         return description
 
-    async def generate_description_manual(self, meta):
+    async def fallback_description(self, meta):
         description = ""
         mi_path = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
         mi_clean_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
@@ -397,7 +397,7 @@ class ASC(COMMON):
                     asc_data = None
 
             if asc_data:
-                description = self.build_description_from_json({'ASC': asc_data})
+                description = self.build_description({'ASC': asc_data})
                 data['descr'] = f"{description}\n\n{self.signature}".strip()
 
                 if asc_data.get('poster_path'):
@@ -405,7 +405,7 @@ class ASC(COMMON):
 
                 nome_base = asc_data.get('Title', '')
                 if meta.get('category') == 'TV':
-                    season, episode = self.get_season_episode_parts(meta)
+                    season, episode = self.get_season_and_episode(meta)
                     season_episode_str = ""
                     if season and not episode:
                         season_episode_str = f" - {season}"
@@ -422,20 +422,20 @@ class ASC(COMMON):
                     data['genre'] = asc_data.get('Genre')
 
             else:
-                data['descr'] = await self.generate_description_manual(meta)
+                data['descr'] = await self.fallback_description(meta)
                 if meta.get('poster'):
                     data['capa'] = meta.get('poster')
-                data['name'] = self.get_torrent_name(meta)
+                data['name'] = self.get_title(meta)
                 if meta.get('year'):
                     data['ano'] = meta.get('year')
                 if meta.get('genres'):
                     data['genre'] = meta.get('genres')
 
-            data['type'] = self.get_category_type(meta)
-            data['legenda'] = self.determine_subtitle_option(meta)
-            data['qualidade'] = self.determine_quality(meta)
-            data['audio'] = self.determine_audio_type(meta)
-            data['extencao'] = self.get_file_extension(meta)
+            data['type'] = self.get_cat_id(meta)
+            data['legenda'] = self.get_subtitles(meta)
+            data['qualidade'] = self.get_type_id(meta)
+            data['audio'] = self.get_dubs(meta)
+            data['extencao'] = self.get_container(meta)
             data['codecaudio'] = self.get_audio_codec(meta)
             data['codecvideo'] = self.get_video_codec(meta)
 
@@ -445,7 +445,7 @@ class ASC(COMMON):
             if meta.get('youtube'):
                 data['tube'] = meta.get('youtube')
 
-            largura, altura = self.get_resolution(meta)
+            largura, altura = self.get_res_id(meta)
             if largura:
                 data['largura'] = largura
             if altura:
@@ -467,7 +467,7 @@ class ASC(COMMON):
             raise
 
     async def upload(self, meta, disctype):
-        if not await self.check_and_handle_anonymous_upload(meta):
+        if not await self.anonymous_warning(meta):
             return
 
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
@@ -495,11 +495,11 @@ class ASC(COMMON):
             response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
         if "foi enviado com sucesso" in response.text:
-            await self.handle_successful_upload(response.text, meta)
+            await self.successful_upload(response.text, meta)
         else:
-            self.handle_failed_upload(response, meta)
+            self.failed_upload(response, meta)
 
-    async def check_and_handle_anonymous_upload(self, meta):
+    async def anonymous_warning(self, meta):
         if meta.get('anon'):
             console.print(f"[bold yellow]Aviso: Você solicitou um upload anônimo, mas o tracker '{self.tracker}' não suporta esta opção.[/bold yellow]")
 
@@ -522,7 +522,7 @@ class ASC(COMMON):
         else:
             return f"{self.base_url}/enviar-series.php"
 
-    async def handle_successful_upload(self, response_text, meta):
+    async def successful_upload(self, response_text, meta):
         try:
             soup = BeautifulSoup(response_text, 'html.parser')
             details_link_tag = soup.find('a', href=lambda href: href and "torrents-details.php?id=" in href)
@@ -536,16 +536,16 @@ class ASC(COMMON):
 
             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 
-            should_approve, reason = await self.should_auto_approve(meta)
+            should_approve, reason = await self.get_approval(meta)
             if should_approve:
-                await self.attempt_auto_approval(relative_url)
+                await self.auto_approval(relative_url)
             else:
                 console.print(f"[yellow]{reason}. A aprovação automática será ignorada.[/yellow]")
 
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no pós-processamento do upload: {e}[/bold red]")
 
-    async def attempt_auto_approval(self, relative_url):
+    async def auto_approval(self, relative_url):
         try:
             torrent_id = relative_url.split('id=')[-1]
             console.print(f"[cyan]Tentando realizar a aprovação automática para o torrent ID {torrent_id}...[/cyan]")
@@ -555,7 +555,7 @@ class ASC(COMMON):
         except Exception as e:
             console.print(f"[bold red]Erro durante a tentativa de aprovação automática: {e}[/bold red]")
 
-    def handle_failed_upload(self, response, meta):
+    def failed_upload(self, response, meta):
         response_save_path = f"{meta['base_dir']}/tmp/asc_upload_fail_{meta['uuid']}.html"
         with open(response_save_path, "w", encoding="utf-8") as f:
             f.write(response.text)
@@ -563,7 +563,7 @@ class ASC(COMMON):
         console.print(f"[yellow]A resposta foi salva em: {response_save_path}[/yellow]")
         raise UploadException("Falha no upload para o ASC: resposta inesperada do servidor.", 'red')
 
-    async def perform_search_and_parse(self, search_url, meta):
+    async def get_dupes(self, search_url, meta):
         dupes = []
         console.print(f"[cyan]Buscando duplicados em:[/cyan] {search_url}")
 
@@ -580,8 +580,6 @@ class ASC(COMMON):
 
         if not releases:
             return dupes
-
-        console.print(f"[cyan]Encontrados {len(releases)} releases. Analisando...[/cyan]")
 
         for release in releases:
             try:
@@ -615,7 +613,7 @@ class ASC(COMMON):
                         continue
 
                     torrent_id = details_link_tag['href'].split('id=')[-1]
-                    file_page_url = f"https://cliente.amigos-share.club/torrents-arquivos.php?id={torrent_id}"
+                    file_page_url = f"{self.base_url}/torrents-arquivos.php?id={torrent_id}"
                     file_page_response = self.session.get(file_page_url, timeout=15)
                     file_page_response.raise_for_status()
                     file_page_soup = BeautifulSoup(file_page_response.text, 'html.parser')
@@ -632,34 +630,34 @@ class ASC(COMMON):
 
     async def search_existing(self, meta, disctype):
         if meta.get('anime'):
-            search_name = self.get_torrent_name(meta)
+            search_name = self.get_title(meta)
             search_query = search_name.replace(' ', '+')
-            search_url = f"https://cliente.amigos-share.club/torrents-search.php?search={search_query}"
+            search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
 
         elif meta.get('category') == 'TV':
             imdb_id = meta.get('imdb_info', {}).get('imdbID')
 
             if imdb_id:
-                season, episode = self.get_season_episode_parts(meta)
+                season, episode = self.get_season_and_episode(meta)
                 search_param = ""
                 if season and not episode:
                     search_param = f"{season}"
                 elif season and episode:
                     search_param = f"{season}{episode}"
 
-                search_url = f"https://cliente.amigos-share.club/busca-series.php?search={search_param}&imdb={imdb_id}"
+                search_url = f"{self.base_url}/busca-series.php?search={search_param}&imdb={imdb_id}"
             else:
-                search_name = self.get_torrent_name(meta)
+                search_name = self.get_title(meta)
                 search_query = search_name.replace(' ', '+')
-                search_url = f"https://cliente.amigos-share.club/torrents-search.php?search={search_query}"
+                search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
 
         else:
             imdb_id = meta.get('imdb_info', {}).get('imdbID')
             if not imdb_id:
                 return []
-            search_url = f"https://cliente.amigos-share.club/busca-filmes.php?search=&imdb={imdb_id}"
+            search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={imdb_id}"
 
-        return await self.perform_search_and_parse(search_url, meta)
+        return await self.get_dupes(search_url, meta)
 
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
@@ -684,7 +682,7 @@ class ASC(COMMON):
             console.print(f"[bold red]Erro ao validar credenciais do {self.tracker}: {e}[/bold red]")
             return False
 
-    async def should_auto_approve(self, meta):
+    async def get_approval(self, meta):
         uploader_enabled = self.config['TRACKERS'][self.tracker].get('uploader_status', False)
         if not uploader_enabled:
             return False, f"A aprovação automática está desativada para o uploader no tracker {self.tracker}."
