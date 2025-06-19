@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import re
 import requests
 import cli_ui
 from datetime import datetime
@@ -70,7 +71,11 @@ class ASC(COMMON):
         subtitle_languages = []
         pt_variants = ["pt", "portuguese", "português", "pt-br"]
 
-        if meta.get('is_disc') == 'BDMV':
+        disc_type = meta.get('is_disc')
+        if not disc_type and meta.get('discs'):
+            disc_type = meta['discs'][0].get('type')
+
+        if disc_type == 'BDMV':
             try:
                 bdinfo_subs = meta.get('bdinfo', {}).get('subtitles', [])
                 for sub in bdinfo_subs:
@@ -78,6 +83,21 @@ class ASC(COMMON):
                     subtitle_languages.append(lang.lower())
             except Exception:
                 console.print("[bold yellow]Aviso: Falha ao ler dados de legenda do BDInfo.[/bold yellow]")
+
+        elif disc_type == 'DVD':
+            try:
+                for disc in meta.get('discs', []):
+                    if 'ifo_mi' in disc:
+                        ifo_text = disc['ifo_mi']
+                        text_sections = re.findall(r'Text #\d+.*?(?=Language\s*:\s*(.*))', ifo_text, re.DOTALL)
+                        matches = re.findall(r'Text #\d+.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
+
+                        for lang in matches:
+                            subtitle_languages.append(lang.strip().lower())
+
+            except Exception as e:
+                console.print(f"[bold yellow]Aviso: Falha ao ler dados de legenda do IFO do DVD: {e}[/bold yellow]")
+
         else:
             try:
                 tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
@@ -111,13 +131,20 @@ class ASC(COMMON):
     def get_type_id(self, meta):
         qualidade_map_disc = {"BD25": "40", "BD50": "41", "BD66": "42", "BD100": "43"}
         qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDR": "10"}
+        qualidade_map_dvd = {"DVD5": "45", "DVD9": "46"}
 
         if meta.get('type') == 'DISC':
+            if meta.get('is_disc') == 'DVD':
+                dvd_size = meta.get('dvd_size')
+                type_id = qualidade_map_dvd.get(dvd_size)
+                if type_id:
+                    return type_id
+
             disctype = meta.get('disctype')
             if disctype in qualidade_map_disc:
                 return qualidade_map_disc[disctype]
 
-            console.print("[bold yellow]Aviso: Não foi encontrado o tipo de disco.[/bold yellow]")
+            console.print("[bold yellow]Aviso: Não foi encontrado o tipo de disco Blu-ray.[/bold yellow]")
             if cli_ui.ask_yes_no("Deseja definir o tipo de disco pelo tamanho do arquivo?", default=True):
                 size = meta.get('torrent_comments', [{}])[0].get('size', 0)
                 if size > 66_000_000_000:
@@ -136,8 +163,25 @@ class ASC(COMMON):
         audio_tracks_raw = []
         pt_variants = ["pt", "portuguese", "português", "pt-br"]
 
-        if meta.get('is_disc') == 'BDMV' and meta.get('bdinfo', {}).get('audio'):
+        disc_type = meta.get('is_disc')
+        if not disc_type and meta.get('discs'):
+            disc_type = meta['discs'][0].get('type')
+
+        if disc_type == 'BDMV' and meta.get('bdinfo', {}).get('audio'):
             audio_tracks_raw = meta['bdinfo']['audio']
+
+        elif disc_type == 'DVD':
+            try:
+                for disc in meta.get('discs', []):
+                    if 'ifo_mi' in disc:
+                        ifo_text = disc['ifo_mi']
+                        matches = re.findall(r'Audio(?: #\d+)?.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
+                        
+                        for lang in matches:
+                            audio_tracks_raw.append({'language': lang.strip().lower()})
+            except Exception as e:
+                console.print(f"[bold yellow]Aviso: Falha ao ler dados de áudio do IFO do DVD: {e}[/bold yellow]")
+                
         elif meta.get('mediainfo'):
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             audio_tracks_raw = [{'language': t.get('Language')} for t in tracks if t.get('@type') == 'Audio']
@@ -157,6 +201,8 @@ class ASC(COMMON):
     def get_container(self, meta):
         if meta.get('is_disc') == "BDMV":
             return "5"
+        elif meta.get('is_disc') == "DVD":
+            return "15"
 
         try:
             general_track = next(t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'General')
@@ -431,7 +477,6 @@ class ASC(COMMON):
                 if meta.get('genres'):
                     data['genre'] = meta.get('genres')
 
-            data['type'] = self.get_cat_id(meta)
             data['legenda'] = self.get_subtitles(meta)
             data['qualidade'] = self.get_type_id(meta)
             data['audio'] = self.get_dubs(meta)
@@ -457,6 +502,7 @@ class ASC(COMMON):
             if meta.get('anime'):
                 idioma_map = {"de": "3", "zh": "9", "ko": "11", "es": "1", "en": "4", "ja": "8", "pt": "5", "ru": "2"}
                 data['idioma'] = idioma_map.get(meta.get('original_language', '').lower(), "6")
+                data['type'] = self.get_cat_id(meta)
 
             for i, img in enumerate(meta.get('image_list', [])[:4]):
                 data[f'screens{i+1}'] = img.get('raw_url')
@@ -584,12 +630,12 @@ class ASC(COMMON):
         for release in releases:
             try:
                 badges = release.find_all('span', class_='badge')
-                disc_types = ['BD25', 'BD50', 'BD66', 'BD100', 'ISO']
+                disc_types = ['BD25', 'BD50', 'BD66', 'BD100', 'DVD5', 'DVD9']
                 is_disc = any(badge.text.strip().upper() in disc_types for badge in badges)
 
                 if is_disc:
-                    name, year, resolution, disk_type, video_codec, audio_codec = meta.get('title'), "N/A", "N/A", "Blu-ray", "N/A", "N/A"
-                    video_codec_terms = ['H264', 'H265', 'HEVC', 'AVC', 'XVID', 'VC-1']
+                    name, year, resolution, disk_type, video_codec, audio_codec = meta.get('title'), "N/A", "N/A", "N/A", "N/A", "N/A"
+                    video_codec_terms = ['MPEG-4', 'AV1', 'AVC', 'H264', 'H265', 'HEVC', 'MPEG-1', 'MPEG-2', 'VC-1', 'VP6', 'VP9']
                     audio_codec_terms = ['DTS', 'AC3', 'DDP', 'E-AC-3', 'TRUEHD', 'ATMOS', 'LPCM', 'AAC', 'FLAC']
 
                     for badge in badges:
@@ -598,12 +644,14 @@ class ASC(COMMON):
 
                         if badge_text.isdigit() and len(badge_text) == 4:
                             year = badge_text
-                        elif badge_text_upper in ['4K', '2160P', '1080P', '720P', 'BDRIP']:
+                        elif badge_text_upper in ['4K', '2160P', '1080P', '720P', '480P']:
                             resolution = "2160p" if badge_text_upper == '4K' else badge_text
                         elif any(term in badge_text_upper for term in video_codec_terms):
                             video_codec = badge_text
                         elif any(term in badge_text_upper for term in audio_codec_terms):
                             audio_codec = badge_text
+                        elif any(term in badge_text_upper for term in disc_types):
+                            disk_type = badge_text
 
                     dupe_string = f"{name} {year} {resolution} {disk_type} {video_codec} {audio_codec}"
                     dupes.append(dupe_string)
