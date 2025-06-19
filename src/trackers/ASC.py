@@ -89,7 +89,6 @@ class ASC(COMMON):
                 for disc in meta.get('discs', []):
                     if 'ifo_mi' in disc:
                         ifo_text = disc['ifo_mi']
-                        text_sections = re.findall(r'Text #\d+.*?(?=Language\s*:\s*(.*))', ifo_text, re.DOTALL)
                         matches = re.findall(r'Text #\d+.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
 
                         for lang in matches:
@@ -176,12 +175,12 @@ class ASC(COMMON):
                     if 'ifo_mi' in disc:
                         ifo_text = disc['ifo_mi']
                         matches = re.findall(r'Audio(?: #\d+)?.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
-                        
+
                         for lang in matches:
                             audio_tracks_raw.append({'language': lang.strip().lower()})
             except Exception as e:
                 console.print(f"[bold yellow]Aviso: Falha ao ler dados de áudio do IFO do DVD: {e}[/bold yellow]")
-                
+
         elif meta.get('mediainfo'):
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             audio_tracks_raw = [{'language': t.get('Language')} for t in tracks if t.get('@type') == 'Audio']
