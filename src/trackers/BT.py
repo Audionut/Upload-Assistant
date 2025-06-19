@@ -3,7 +3,6 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote_plus
 from http.cookiejar import MozillaCookieJar
 from src.console import console
 from .COMMON import COMMON
@@ -96,7 +95,7 @@ class BT(COMMON):
                 "audio_c", "legenda", "3d", "resolucao_1", "resolucao_2", "bitrate",
                 "screen[]", "desc", "especificas", "subtitles[]"
             ],
-            # Anime
+            # Animes
             '5': [
                 "submit", "auth", "type", "title", "releasedate", "vote", "rating",
                 "year", "diretor", "horas", "minutos", "duracao", "tags", "image",
@@ -104,13 +103,6 @@ class BT(COMMON):
                 "temporada_e", "episodio", "mediainfo", "ntorrent", "idioma_ori",
                 "format", "bitrate", "audio", "video_c", "audio_c", "legenda",
                 "resolucao_1", "resolucao_2", "screen[]", "especificas", "subtitles[]"
-            ],
-            # Documentary
-            '7': [
-                "submit", "auth", "type", "title", "year", "diretor", "horas", "minutos",
-                "duracao", "idioma_ori", "format", "bitrate", "audio", "video_c", "audio_c",
-                "resolucao_1", "resolucao_2", "tags", "image", "youtube", "sinopse", "desc",
-                "screen[]", "especificas"
             ]
         }
 
@@ -121,15 +113,22 @@ class BT(COMMON):
                 for alias in aliases_tuple:
                     self.ultimate_lang_map[alias.lower()] = correct_id
 
-    async def execute_search(self, search_term, is_current_upload_a_tv_pack):
-        search_url = f"{self.base_url}/torrents.php?searchstr={search_term}"
+    async def search_existing(self, meta, disctype):
+        imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
+        if not imdb_id:
+            console.print("[yellow]Aviso: Nenhum IMDb ID fornecido, não é possível buscar por duplicatas.[/yellow]")
+            return []
+
+        is_current_upload_a_tv_pack = meta.get('tv_pack') == 1
+
+        search_url = f"{self.base_url}/torrents.php?searchstr={imdb_id}"
 
         found_items = []
         try:
             response = self.session.get(search_url)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
-
+            
             torrent_table = soup.find('table', id='torrent_table')
             if not torrent_table:
                 return []
@@ -139,7 +138,7 @@ class BT(COMMON):
                 link = group_row.find('a', href=re.compile(r'torrents\.php\?id=\d+'))
                 if link and 'torrentid' not in link.get('href', ''):
                     group_links.add(link['href'])
-            
+
             if not group_links:
                 return []
 
@@ -151,56 +150,43 @@ class BT(COMMON):
 
                 for torrent_row in group_soup.find_all('tr', id=re.compile(r'^torrent\d+$')):
                     desc_link = torrent_row.find('a', onclick=re.compile(r'gtoggle'))
-                    if not desc_link: continue
+                    if not desc_link:
+                        continue
                     description_text = " ".join(desc_link.get_text(strip=True).split())
 
                     torrent_id = torrent_row.get('id', '').replace('torrent', '')
                     file_div = group_soup.find('div', id=f'files_{torrent_id}')
-                    if not file_div: continue
+                    if not file_div:
+                        continue
 
                     is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
 
                     if is_existing_torrent_a_disc or is_current_upload_a_tv_pack:
                         path_div = file_div.find('div', class_='filelist_path')
-                        if path_div and (folder_name := path_div.get_text(strip=True).strip('/')):
-                            found_items.append(folder_name)
+                        if path_div:
+                            folder_name = path_div.get_text(strip=True).strip('/')
+                            if folder_name:
+                                found_items.append(folder_name)
                     else:
                         file_table = file_div.find('table', class_='filelist_table')
                         if file_table:
                             for row in file_table.find_all('tr'):
-                                if 'colhead_dark' not in row.get('class', []) and (cell := row.find('td')) and (filename := cell.get_text(strip=True)):
-                                    found_items.append(filename)
-                                    break
+                                if 'colhead_dark' not in row.get('class', []):
+                                    cell = row.find('td')
+                                    if cell:
+                                        filename = cell.get_text(strip=True)
+                                        if filename:
+                                            found_items.append(filename)
+                                            break
+
         except requests.exceptions.RequestException as e:
-            console.print(f"[bold red]Ocorreu um erro de rede durante a busca por '{search_term}': {e}[/bold red]")
+            console.print(f"[bold red]Ocorreu um erro de rede ao buscar por duplicatas: {e}[/bold red]")
+            return []
         except Exception as e:
-            console.print(f"[bold red]Ocorreu um erro inesperado ao processar a busca por '{search_term}': {e}[/bold red]")
+            console.print(f"[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]")
+            return []
 
         return found_items
-
-    async def search_existing(self, meta, disctype):
-        search_terms = []
-        imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
-        release_title = meta.get('title', '')
-
-        if imdb_id:
-            search_terms.append(imdb_id)
-
-        category_type = self.get_type(meta)
-        if category_type in ['5', '7']:
-            if release_title:
-                search_terms.append(quote_plus(release_title))
-
-        search_terms = list(set(search_terms))
-
-        all_found_items = set()
-        is_current_upload_a_tv_pack = meta.get('tv_pack') == 1
-
-        for term in search_terms:
-            results_for_term = await self.execute_search(term, is_current_upload_a_tv_pack)
-            all_found_items.update(results_for_term)
-
-        return list(all_found_items)
 
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -244,9 +230,6 @@ class BT(COMMON):
     def get_type(self, meta):
         if meta.get('anime', False):
             return '5'
-
-        if 'Documentary' in meta.get('genres', '') and meta.get('season') is None:
-            return '7'
 
         if meta.get('category') == 'TV' or meta.get('season') is not None:
             return '1'
@@ -665,7 +648,7 @@ class BT(COMMON):
         return tv_info
 
     async def _fetch_tracker_data(self, imdb_id, category_id):
-        if category_id in ('5', '7'):
+        if category_id == '5':
             return None
 
         if not imdb_id or not category_id:
