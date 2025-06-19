@@ -273,7 +273,7 @@ class BT(COMMON):
             else:
                 try:
                     details['youtube'] = youtube_url.split('/')[-1]
-                except:
+                except (AttributeError, IndexError):
                     details['youtube'] = ''
 
         return details
