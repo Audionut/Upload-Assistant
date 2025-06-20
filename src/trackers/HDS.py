@@ -78,7 +78,7 @@ class HDS(COMMON):
             cli_ui.fatal(f"Failed to validate {self.tracker} credentials, skipping duplicate check.")
             return dupes
 
-        imdb_id = meta.get('imdb_info', {}).get('imdbID', '')
+        imdb_id = meta.get('imdb_info', {}).get('imdbID', '').replace('tt', '')
         if imdb_id == '0':
             cli_ui.info(f"IMDb ID not found, cannot search for duplicates on {self.tracker}.")
             return dupes
@@ -189,8 +189,8 @@ class HDS(COMMON):
 
         data = {
             'user_id': '', 'category': cat_id, 'filename': meta['name'],
-            'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
-            'youtube_video': meta.get('youtube_link', ''), 'info': description,
+            'imdb': meta.get('imdb_info', {}).get('imdbID', '').replace('tt', ''),
+            'youtube_video': meta.get('youtube', ''), 'info': description,
             'anonymous': 'true' if is_anonymous else 'false',
             't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
             'req': 'false', 'nuk': 'false', 'nuk_rea': '', 'submit': 'Send'
