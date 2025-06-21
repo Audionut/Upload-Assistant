@@ -12,6 +12,7 @@ from src.trackers.FL import FL
 from src.trackers.FNP import FNP
 from src.trackers.FRIKI import FRIKI
 from src.trackers.HDB import HDB
+from src.trackers.HDS import HDS
 from src.trackers.HDT import HDT
 from src.trackers.HHD import HHD
 from src.trackers.HUNO import HUNO
@@ -462,7 +463,7 @@ class TRACKER_SETUP:
 
 tracker_class_map = {
     'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'BHD': BHD, 'BHDTV': BHDTV, 'BLU': BLU, 'CBR': CBR, 'DP': DP,
-    'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT, 'LCD': LCD,
+    'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT, 'LCD': LCD,
     'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PSS': PSS, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
     'TIK': TIK, 'TL': TL, 'TOCA': TOCA, 'TVC': TVC, 'TTG': TTG, 'UHD': UHD, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
@@ -478,5 +479,5 @@ other_api_trackers = {
 }
 
 http_trackers = {
-    'AR', 'FL', 'HDB', 'HDT', 'MTV', 'PTER', 'TTG'
+    'AR', 'FL', 'HDB', 'HDS', 'HDT', 'MTV', 'PTER', 'TTG'
 }
