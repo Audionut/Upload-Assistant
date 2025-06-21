@@ -242,7 +242,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, BHD, BHDTV, BLU, CBR, DP, FNP, FRIKI, HDB, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BLU, CBR, DP, FNP, FRIKI, HDB, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -285,6 +285,15 @@ config = {
             "username": "",
             "password": "",
             "announce_url": "http://tracker.alpharatio.cc:2710/PASSKEY/announce",
+        },
+        "ASC": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # Set uploader_status to True if you have uploader permissions to automatically approve your uploads
+            "uploader_status": False,
+            "announce_url": "https://amigos-share.club/announce.php?passkey=PASSKEY",
+            # for ASC to work you need to export cookies from https://cliente.amigos-share.club/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/ASC.txt
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
