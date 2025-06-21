@@ -242,7 +242,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, BHD, BHDTV, BLU, CBR, DP, FNP, FRIKI, HDB, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, BHD, BHDTV, BLU, BT, CBR, DP, FNP, FRIKI, HDB, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -314,6 +314,13 @@ config = {
             "useAPI": False,
             "api_key": "",
             "announce_url": "https://blutopia.cc/announce/customannounceurl",
+            "anon": False,
+        },
+        "BT": {
+            "link_dir_name": "",
+            # for BT to work you need to export cookies from https://brasiltracker.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/BT.txt
+            "announce_url": "https://t.brasiltracker.org/<PASSKEY>/announce",
             "anon": False,
         },
         "CBR": {
