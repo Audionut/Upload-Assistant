@@ -188,13 +188,20 @@ class HDS(COMMON):
         is_anonymous = meta['anon'] != 0 or tracker_anon_setting is True
 
         data = {
-            'user_id': '', 'category': cat_id, 'filename': meta['name'],
-            'imdb': meta.get('imdb_info', {}).get('imdbID', '').replace('tt', ''),
-            'youtube_video': meta.get('youtube', ''), 'info': description,
+            'user_id': '',
+            'category': cat_id,
+            'filename': meta['name'],
+            'imdb': meta.get('imdb', ''),
+            'youtube_video': meta.get('youtube', ''),
+            'info': description,
             'anonymous': 'true' if is_anonymous else 'false',
             't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
-            'req': 'false', 'nuk': 'false', 'nuk_rea': '', 'submit': 'Send'
+            'req': 'false',
+            'nuk': 'false',
+            'nuk_rea': '',
+            'submit': 'Send',
         }
+
         if meta.get('genre'):
             data['genre'] = meta.get('genre')
 
