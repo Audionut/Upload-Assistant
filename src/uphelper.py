@@ -17,16 +17,21 @@ class UploadHelper:
                 console.print()
                 dupe_text = "\n".join([d['name'] if isinstance(d, dict) else d for d in dupes])
                 console.print()
-                cli_ui.info_section(cli_ui.bold, f"Check if these are actually dupes from {tracker_name}!")
-                cli_ui.info(dupe_text)
-                console.print()
-                if meta.get('dupe', False) is False:
-                    print()
-                    upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                if meta.get('filename_match', False):
+                    console.print('[bold red]Exact filename matches found![/bold red]')
+                    upload = False
                     meta['we_asked'] = True
                 else:
-                    upload = True
-                    meta['we_asked'] = False
+                    cli_ui.info_section(cli_ui.bold, f"Check if these are actually dupes from {tracker_name}!")
+                    cli_ui.info(dupe_text)
+                    console.print()
+                    if meta.get('dupe', False) is False:
+                        print()
+                        upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                        meta['we_asked'] = True
+                    else:
+                        upload = True
+                        meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
                     console.print(f"[red]Found potential dupes on {tracker_name}. Aborting. If this is not a dupe, or you would like to upload anyways, pass --skip-dupe-check")
