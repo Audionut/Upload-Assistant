@@ -143,18 +143,17 @@ class ASC(COMMON):
             if disctype in qualidade_map_disc:
                 return qualidade_map_disc[disctype]
 
-            console.print("[bold yellow]Aviso: Não foi encontrado o tipo de disco Blu-ray.[/bold yellow]")
-            if cli_ui.ask_yes_no("Deseja definir o tipo de disco pelo tamanho do arquivo?", default=True):
-                size = meta.get('torrent_comments', [{}])[0].get('size', 0)
-                if size > 66_000_000_000:
+            bdinfo_size_gib = meta.get('bdinfo', {}).get('size')
+            if bdinfo_size_gib:
+                size_bytes = bdinfo_size_gib * 1_073_741_824
+                if size_bytes > 66_000_000_000:
                     return "43"  # BD100
-                elif size > 50_000_000_000:
+                elif size_bytes > 50_000_000_000:
                     return "42"  # BD66
-                elif size > 25_000_000_000:
+                elif size_bytes > 25_000_000_000:
                     return "41"  # BD50
-                return "40"  # BD25
-            else:
-                raise UploadException(f"Upload para o '{self.tracker}' cancelado pelo usuário.", 'yellow')
+                else:
+                    return "40"  # BD25
         else:
             return qualidade_map_files.get(meta.get('type'), "0")
 
