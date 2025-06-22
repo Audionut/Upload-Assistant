@@ -496,12 +496,18 @@ class ASC(COMMON):
                 data['altura'] = altura
 
             lang_map = {"en": "1", "fr": "2", "de": "3", "it": "4", "ja": "5", "es": "6", "ru": "7", "pt": "8", "zh": "10", "da": "12", "sv": "13", "fi": "14", "bg": "15", "no": "16", "nl": "17", "pl": "19", "ko": "20", "th": "21", "hi": "23", "tr": "25"}
-            data['lang'] = lang_map.get(meta.get('original_language', '').lower(), "11")
 
             if meta.get('anime'):
+                if '3' in data['audio'] or '2' in data['audio']:
+                    data['lang'] = "8"
+                else:
+                    data['lang'] = lang_map.get(meta.get('original_language', '').lower(), "11")
+
                 idioma_map = {"de": "3", "zh": "9", "ko": "11", "es": "1", "en": "4", "ja": "8", "pt": "5", "ru": "2"}
                 data['idioma'] = idioma_map.get(meta.get('original_language', '').lower(), "6")
                 data['type'] = self.get_cat_id(meta)
+            else:
+                data['lang'] = lang_map.get(meta.get('original_language', '').lower(), "11")
 
             for i, img in enumerate(meta.get('image_list', [])[:4]):
                 data[f'screens{i+1}'] = img.get('raw_url')
