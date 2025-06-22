@@ -388,6 +388,7 @@ def reset_terminal():
         if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
             try:
                 subprocess.run(["stty", "sane"], check=False)
+                subprocess.run(["stty", "erase", "^H"], check=False)  # explicitly restore backspace character
                 if hasattr(termios, 'tcflush'):
                     termios.tcflush(sys.stdin.fileno(), termios.TCIOFLUSH)
                 subprocess.run(["stty", "-ixon"], check=False)
@@ -500,7 +501,7 @@ async def update_notification(base_dir):
     return local_version
 
 
-async def do_the_thing(base_dir, bot):
+async def do_the_thing(base_dir):
     await asyncio.sleep(0.1)  # Ensure it's not racing
     meta = dict()
     paths = []
@@ -589,6 +590,33 @@ async def do_the_thing(base_dir, bot):
                 console.print(f"[red]Exception: '{path}': {e}")
                 reset_terminal()
 
+            bot = None
+            if use_discord and config['DISCORD'].get('discord_bot_token') and not meta['debug']:
+                if (config.get('DISCORD', {}).get('only_unattended', False) and meta.get('unattended', False)) or not config.get('DISCORD', {}).get('only_unattended', False):
+                    try:
+                        console.print("[cyan]Starting Discord bot initialization...")
+                        intents = discord.Intents.default()
+                        intents.message_content = True
+                        bot = discord.Client(intents=intents)
+                        token = config['DISCORD']['discord_bot_token']
+                        await asyncio.wait_for(bot.login(token), timeout=10)
+                        connect_task = asyncio.create_task(bot.connect())
+
+                        try:
+                            await asyncio.wait_for(bot.wait_until_ready(), timeout=20)
+                            console.print("[green]Bot is ready!")
+                        except asyncio.TimeoutError:
+                            console.print("[bold red]Bot failed to connect within timeout period.")
+                            console.print("[yellow]Continuing without Discord integration...")
+                            if 'connect_task' in locals():
+                                connect_task.cancel()
+                    except discord.LoginFailure:
+                        console.print("[bold red]Discord bot token is invalid. Please check your configuration.")
+                    except discord.ClientException as e:
+                        console.print(f"[bold red]Discord client exception: {e}")
+                    except Exception as e:
+                        console.print(f"[bold red]Unexpected error during Discord bot initialization: {e}")
+
             if meta['debug']:
                 start_time = time.time()
 
@@ -642,6 +670,14 @@ async def do_the_thing(base_dir, bot):
         reset_terminal()
 
     finally:
+        if bot is not None:
+            await bot.close()
+        if 'connect_task' in locals():
+            connect_task.cancel()
+            try:
+                await connect_task
+            except asyncio.CancelledError:
+                pass
         if not sys.stdin.closed:
             reset_terminal()
 
@@ -654,34 +690,8 @@ def check_python_version():
 
 
 async def main():
-    bot = None
-    if use_discord and 'DISCORD' in config and config['DISCORD'].get('discord_bot_token'):
-        try:
-            console.print("[cyan]Starting Discord bot initialization...")
-            intents = discord.Intents.default()
-            intents.message_content = True
-            bot = discord.Client(intents=intents)
-            token = config['DISCORD']['discord_bot_token']
-            await asyncio.wait_for(bot.login(token), timeout=10)
-            connect_task = asyncio.create_task(bot.connect())
-
-            try:
-                await asyncio.wait_for(bot.wait_until_ready(), timeout=20)
-                console.print("[green]Bot is ready!")
-            except asyncio.TimeoutError:
-                console.print("[bold red]Bot failed to connect within timeout period.")
-                console.print("[yellow]Continuing without Discord integration...")
-                if 'connect_task' in locals():
-                    connect_task.cancel()
-        except discord.LoginFailure:
-            console.print("[bold red]Discord bot token is invalid. Please check your configuration.")
-        except discord.ClientException as e:
-            console.print(f"[bold red]Discord client exception: {e}")
-        except Exception as e:
-            console.print(f"[bold red]Unexpected error during Discord bot initialization: {e}")
-
     try:
-        await do_the_thing(base_dir, bot)
+        await do_the_thing(base_dir)
     except asyncio.CancelledError:
         console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
     except KeyboardInterrupt:
@@ -689,14 +699,6 @@ async def main():
     except Exception as e:
         console.print(f"[bold red]Unexpected error: {e}[/bold red]")
     finally:
-        if bot is not None:
-            await bot.close()
-        if 'connect_task' in locals():
-            connect_task.cancel()
-            try:
-                await connect_task
-            except asyncio.CancelledError:
-                pass
         await cleanup()
         reset_terminal()
 

@@ -273,6 +273,8 @@ class BBCODE:
                 desc = desc.replace(f'__LINK_PLACEHOLDER_{i}__', link)
             return desc
 
+        links = []
+
         if is_disc == "DVD":
             desc = re.sub(r"\[mediainfo\][\s\S]*?\[\/mediainfo\]", "", desc)
 
