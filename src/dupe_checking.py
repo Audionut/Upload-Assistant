@@ -270,7 +270,7 @@ async def has_matching_hdr(file_hdr, target_hdr, meta, tracker=None):
             simplified.add("HDR")
         if "DV" in hdr_set or "DOVI" in hdr_set:
             simplified.add("DV")
-            if "framestor" in meta['tag'].lower():
+            if 'web' not in meta['type'].lower():
                 simplified.add("HDR")
             if tracker == "ANT":
                 simplified.add("HDR")
@@ -326,6 +326,7 @@ async def check_for_languages(meta, tracker):
                 return False
         if not await has_proper_stuff():
             meta['skipping'] = {tracker}
+            console.print(f"[red]No valid language found for {tracker}. Skipping upload.[/red]")
             return
 
     elif not meta['is_disc'] == "BDMV":
@@ -374,6 +375,7 @@ async def check_for_languages(meta, tracker):
 
             if not await has_language(media_info_text=media_info_text):
                 meta['skipping'] = {tracker}
+                console.print(f"[red]No valid language found for {tracker}. Skipping upload.[/red]")
                 return
         except (FileNotFoundError, KeyError) as e:
             print(f"Error processing MEDIAINFO.txt: {e}")

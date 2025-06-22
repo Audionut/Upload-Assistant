@@ -43,7 +43,11 @@ class OTW():
         }.get(category_name, '0')
         return category_id
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, type, meta):
+        if meta.get('is_disc') == "BDMV":
+            return '1'
+        elif meta.get('is_disc') and meta.get('is_disc') != "BDMV":
+            return '7'
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -75,10 +79,13 @@ class OTW():
         source = meta['source']
         resolution = meta['resolution']
         aka = meta.get('aka', '')
+        type = meta['type']
         if aka:
             otw_name = otw_name.replace(meta["aka"], '')
         if meta['is_disc'] == "DVD":
             otw_name = otw_name.replace(source, f"{source} {resolution}")
+        if meta['is_disc'] == "DVD" or type == "REMUX":
+            otw_name = otw_name.replace(meta['audio'], f"{meta.get('video_codec', '')} {meta['audio']}", 1)
         if meta['category'] == "TV":
             years = []
 
@@ -106,7 +113,7 @@ class OTW():
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(meta['category'])
         modq = await self.get_flag(meta, 'modq')
-        type_id = await self.get_type_id(meta['type'])
+        type_id = await self.get_type_id(meta['type'], meta)
         resolution_id = await self.get_res_id(meta['resolution'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
@@ -227,7 +234,7 @@ class OTW():
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
+            'types[]': await self.get_type_id(meta['type'], meta),
             'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }

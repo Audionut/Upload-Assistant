@@ -1047,6 +1047,8 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
         retake = False
         image_size = os.path.getsize(image_path)
+        if meta['debug']:
+            console.print(f"[yellow]Checking image {image_path} (size: {image_size} bytes) for image host: {img_host}[/yellow]")
         if not manual_frames:
             if image_size <= 75000:
                 console.print(f"[yellow]Image {image_path} is incredibly small, retaking.")
