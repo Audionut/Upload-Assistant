@@ -145,30 +145,33 @@ class DC(COMMON):
             return False
 
     async def search_existing(self, meta, disctype):
-        dupes = []
         if not self.auth_cookies:
             if not await self.login():
                 console.print(f"[bold red]Search failed on {self.tracker} because login failed.[/bold red]")
-                return dupes
+                return []
 
+        search_terms = [
+            meta['uuid'],
+            f"{meta['uuid']} [UNRAR]"
+        ]
+
+        all_found_torrents = []
         search_url = f"{self.api_base_url}/torrents_exact_search"
-        search_params = {'searchText': meta['uuid']}
 
-        try:
-            response = self.session.get(search_url, params=search_params, cookies=self.auth_cookies, timeout=15)
-            response.raise_for_status()
+        for term in search_terms:
+            search_params = {'searchText': term}
+            try:
+                response = self.session.get(search_url, params=search_params, cookies=self.auth_cookies, timeout=15)
+                response.raise_for_status()
 
-            if not response.text or response.text == '[]':
-                return dupes
+                if response.text and response.text != '[]':
+                    results = response.json()
+                    if results and isinstance(results, list):
+                        all_found_torrents.extend(results)
+            except Exception as e:
+                console.print(f"[bold red]Error searching for term '{term}' on {self.tracker}: {e}[/bold red]")
 
-            results = response.json()
-            if results and isinstance(results, list):
-                for torrent in results:
-                    dupes.append(torrent.get('name', ''))
-            return dupes
-        except Exception as e:
-            console.print(f"[bold red]Error searching on {self.tracker}: {e}[/bold red]")
-            return dupes
+        return all_found_torrents
 
     async def upload(self, meta, disctype):
         await self.edit_torrent(meta, self.tracker, self.source_flag)
@@ -204,30 +207,39 @@ class DC(COMMON):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         try:
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file': (f"{meta['uuid']}.torrent", torrent_file, "application/x-bittorrent")}
+            upload_filename = f"{meta['uuid']}.torrent"
+            existing_torrents = await self.search_existing(meta, disctype)
+            if existing_torrents:
+                unrar_version_exists = any(t.get('unrar', 0) != 0 for t in existing_torrents)
 
+                if unrar_version_exists:
+                    raise UploadException("An UNRAR duplicate torrent already exists on site.")
+                else:
+                    console.print(f"[bold yellow]Found a RAR version on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]")
+                    upload_filename = f"{meta['uuid']} [UNRAR].torrent"
+
+            with open(torrent_path, 'rb') as torrent_file:
+                files = {'file': (upload_filename, torrent_file, "application/x-bittorrent")}
                 upload_url = f"{self.api_base_url}/torrents/upload"
 
                 if meta['debug'] is False:
-                    if await self.search_existing(meta, disctype):
-                        raise UploadException(f"Upload to {self.tracker} failed: Duplicate torrent detected on site.", "red")
-
                     response = self.session.post(upload_url, data=data, files=files, cookies=self.auth_cookies, timeout=90)
                     response.raise_for_status()
-
                     json_response = response.json()
+
                     if response.status_code == 200 and json_response.get('id'):
                         torrent_id = json_response.get('id')
                         details_url = f"{self.base_url}/torrent/{torrent_id}/" if torrent_id else self.base_url
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                     else:
-                        raise UploadException(f"Upload to {self.tracker} failed: {json_response.get('message', 'Unknown API error.')}", "red")
+                        raise UploadException(f"{json_response.get('message', 'Unknown API error.')}")
                 else:
                     console.print(f"[bold blue]Debug Mode: Upload to {self.tracker} was not sent.[/bold blue]")
                     console.print("Headers:", self.session.headers)
                     console.print("Payload (data):", data)
 
+        except UploadException:
+            raise
         except Exception as e:
-            raise UploadException(f"An unexpected error occurred during upload to {self.tracker}: {e}", "red")
+            raise UploadException(f"An unexpected error occurred during upload to {self.tracker}: {e}")
