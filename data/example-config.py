@@ -242,7 +242,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BLU, BT, CBR, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -281,7 +281,7 @@ config = {
         "AR": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # anon is not an option when uplaoding you need to change your privacy settings.
+            # anon is not an option when uploading you need to change your privacy settings.
             "username": "",
             "password": "",
             "announce_url": "http://tracker.alpharatio.cc:2710/PASSKEY/announce",
@@ -340,6 +340,14 @@ config = {
             "anon": False,
             # Send uploads to CBR modq for staff approval
             "modq": False,
+        },
+        "DC": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "username": "",
+            "password": "",
+            "announce_url": "https://digitalcore.club/tracker.php/<PASSKEY>/announce",
+            "anon": False,
         },
         "DP": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
