@@ -209,6 +209,7 @@ class DC(COMMON):
         try:
             upload_filename = f"{meta['uuid']}.torrent"
             existing_torrents = await self.search_existing(meta, disctype)
+
             if existing_torrents:
                 unrar_version_exists = any(t.get('unrar', 0) != 0 for t in existing_torrents)
 
@@ -217,6 +218,10 @@ class DC(COMMON):
                 else:
                     console.print(f"[bold yellow]Found a RAR version on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]")
                     upload_filename = f"{meta['uuid']} [UNRAR].torrent"
+
+            elif meta['scene'] is True:
+                console.print("[bold yellow]This is a scene release. Appending [UNRAR] to filename.[/bold yellow]")
+                upload_filename = f"{meta['scene_name']} [UNRAR].torrent"
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file': (upload_filename, torrent_file, "application/x-bittorrent")}
