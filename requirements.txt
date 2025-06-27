@@ -1,7 +1,9 @@
 torf
 guessit
 ffmpeg-python
-pymediainfo
+pymediainfo; sys_platform == "win32"
+pymediainfo==6.0.1; sys_platform == "linux"
+pymediainfo==6.0.1; sys_platform == "darwin"
 anitopy
 cli-ui
 qbittorrent-api

@@ -1279,6 +1279,9 @@ class PTP():
                 tinfo = await self.get_torrent_info_tmdb(meta)
             else:
                 tinfo = await self.get_torrent_info(meta.get("imdb"), meta)
+            if meta.get('youtube', None) is None or "youtube" not in str(meta.get('youtube', '')):
+                youtube = "" if meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
+                meta['youtube'] = youtube
             cover = meta["imdb_info"].get("cover")
             if cover is None:
                 cover = meta.get('poster')

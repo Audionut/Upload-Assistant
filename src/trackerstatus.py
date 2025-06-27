@@ -66,20 +66,6 @@ async def process_all_trackers(meta):
                         else:
                             cli_ui.error("Invalid IMDB ID format. Expected format: tt1234567")
 
-            if tracker_name == "PTP":
-                if local_meta.get('imdb_id', 0) != 0:
-                    console.print("[yellow]Searching for Group ID on PTP")
-                    ptp = PTP(config=config)
-                    groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
-                    if groupID is None:
-                        console.print("[yellow]No Existing Group found")
-                        if local_meta.get('youtube', None) is None or "youtube" not in str(local_meta.get('youtube', '')):
-                            youtube = "" if local_meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
-                            local_meta['youtube'] = youtube
-                    meta['ptp_groupID'] = groupID
-                else:
-                    local_tracker_status['skipped'] = True
-
             result = await tracker_setup.check_banned_group(tracker_class.tracker, tracker_class.banned_groups, local_meta)
             if result:
                 local_tracker_status['banned'] = True
@@ -96,6 +82,8 @@ async def process_all_trackers(meta):
                 if tracker_name not in {"PTP", "TL"}:
                     dupes = await tracker_class.search_existing(local_meta, disctype)
                 elif tracker_name == "PTP":
+                    ptp = PTP(config=config)
+                    groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
                     dupes = await ptp.search_existing(groupID, local_meta, disctype)
 
                 if ('skipping' not in local_meta or local_meta['skipping'] is None) and tracker_name != "TL":

@@ -477,18 +477,11 @@ class DiscParse():
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE
                             )
-                        else:  # Linux or macOS
-                            process = await asyncio.create_subprocess_exec(
-                                "wine", mediainfo_binary, "--Output=JSON", ifo_file,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE
-                            )
                         stdout, stderr = await process.communicate()
 
                         if process.returncode == 0:
                             vob_set_mi = stdout.decode()
                         else:
-                            console.print(f"[yellow]DVD MediaInfo failed for {ifo_file}: {stderr.decode()}")
                             vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
 
                     except Exception as e:
@@ -535,16 +528,9 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "wine", mediainfo_binary, os.path.basename(vob),
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for VOB: {stderr.decode()}")
                         each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
@@ -559,16 +545,9 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "wine", mediainfo_binary, os.path.basename(ifo),
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for IFO: {stderr.decode()}")
                         each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
@@ -583,16 +562,9 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "wine", mediainfo_binary, vob,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for full VOB: {stderr.decode()}")
                         each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
@@ -607,16 +579,9 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "wine", mediainfo_binary, ifo,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for full IFO: {stderr.decode()}")
                         each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')

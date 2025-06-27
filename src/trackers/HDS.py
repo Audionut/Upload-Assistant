@@ -24,53 +24,84 @@ class HDS(COMMON):
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def generate_description(self, meta):
-        description = ""
+        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
 
+        description_parts = []
+
+        # MediaInfo/BDInfo
+        tech_info = ""
         if meta.get('is_disc') != 'BDMV':
             video_file = meta['filelist'][0]
             mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
-
             if os.path.exists(mi_template):
                 try:
                     media_info = MediaInfo.parse(video_file, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
-                    description += f"\n{media_info}\n\n\n"
-                except Exception as e:
-                    console.print(f"[bold red]An error occurred while processing the MediaInfo template: {e}[/bold red]")
+                    tech_info = str(media_info)
+                except Exception:
+                    console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
                     mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                     if os.path.exists(mi_file_path):
                         with open(mi_file_path, 'r', encoding='utf-8') as f:
-                            media_info = f.read()
-                        description += f"\n{media_info}\n\n\n"
+                            tech_info = f.read()
             else:
-                console.print("[bold yellow]Warning: MediaInfo template not found at 'data/templates/MEDIAINFO.txt'[/bold yellow]")
-                console.print("[yellow]Using the default MediaInfo output in the description.[/yellow]")
+                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
                 mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                 if os.path.exists(mi_file_path):
                     with open(mi_file_path, 'r', encoding='utf-8') as f:
-                        media_info = f.read()
-                    description += f"\n{media_info}\n\n\n"
+                        tech_info = f.read()
         else:
             bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(bd_summary_file):
                 with open(bd_summary_file, 'r', encoding='utf-8') as f:
-                    bd_summary = f.read()
-                description += f"\n{bd_summary}\n\n\n"
+                    tech_info = f.read()
 
+        if tech_info:
+            description_parts.append(tech_info)
+
+        if os.path.exists(base_desc_path):
+            with open(base_desc_path, 'r', encoding='utf-8') as f:
+                manual_desc = f.read()
+            description_parts.append(manual_desc)
+
+        # Screenshots
         images = meta.get('image_list', [])
         if images:
-            description += "\n[center][b]Screenshots[/b]\n"
-
+            screenshots_block = "[center][b]Screenshots[/b]\n"
             for i in range(min(4, len(images))):
                 img_url = images[i]['img_url']
                 web_url = images[i]['web_url']
+                screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
+            screenshots_block += "[/center]"
+            description_parts.append(screenshots_block)
 
-                description += f"[url={web_url}][img]{img_url}[/img][/url] "
+        if self.signature:
+            description_parts.append(self.signature)
 
-            description += "[/center]\n"
+        final_description = "\n\n".join(filter(None, description_parts))
+        from src.bbcode import BBCODE
+        bbcode = BBCODE()
+        desc = final_description
+        desc = desc.replace("[user]", "").replace("[/user]", "")
+        desc = desc.replace("[align=left]", "").replace("[/align]", "")
+        desc = desc.replace("[right]", "").replace("[/right]", "")
+        desc = desc.replace("[align=right]", "").replace("[/align]", "")
+        desc = desc.replace("[sup]", "").replace("[/sup]", "")
+        desc = desc.replace("[sub]", "").replace("[/sub]", "")
+        desc = desc.replace("[alert]", "").replace("[/alert]", "")
+        desc = desc.replace("[note]", "").replace("[/note]", "")
+        desc = desc.replace("[hr]", "").replace("[/hr]", "")
+        desc = desc.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
+        desc = desc.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
+        desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
+        desc = desc.replace("[ul]", "").replace("[/ul]", "")
+        desc = desc.replace("[ol]", "").replace("[/ol]", "")
+        desc = bbcode.convert_spoiler_to_hide(desc)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
 
-        description += self.signature
-
-        return description.strip()
+        with open(final_desc_path, 'w', encoding='utf-8') as f:
+            f.write(desc)
 
     async def search_existing(self, meta, disctype):
         dupes = []
@@ -78,7 +109,7 @@ class HDS(COMMON):
             cli_ui.fatal(f"Failed to validate {self.tracker} credentials, skipping duplicate check.")
             return dupes
 
-        imdb_id = meta.get('imdb_info', {}).get('imdbID', '').replace('tt', '')
+        imdb_id = meta.get('imdb', '')
         if imdb_id == '0':
             cli_ui.info(f"IMDb ID not found, cannot search for duplicates on {self.tracker}.")
             return dupes
@@ -180,7 +211,11 @@ class HDS(COMMON):
             return
 
         cat_id = await self.get_category_id(meta)
-        description = await self.generate_description(meta)
+
+        await self.generate_description(meta)
+        description_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        with open(description_path, 'r', encoding='utf-8') as f:
+            description = f.read()
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 

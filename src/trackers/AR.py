@@ -484,7 +484,7 @@ class AR():
                 base, ext = os.path.splitext(ar_name)
                 if ext.lower() in KNOWN_EXTENSIONS:
                     ar_name = base
-                ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '')
+                ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
 
             if meta['tag'] == "":
                 # replacing spaces with . as per rules
