@@ -209,24 +209,24 @@ class DC(COMMON):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         try:
-            if meta.get('scene_name'):
-                upload_filename = f"{meta['scene_name']} [UNRAR].torrent"
-            else:
-                upload_filename = f"{meta['uuid']}.torrent"
+            is_scene = bool(meta.get('scene_name'))
+            base_name = meta['scene_name'] if is_scene else meta['uuid']
 
             existing_torrents = await self.search_existing(meta, disctype)
+            needs_unrar_tag = False
 
             if existing_torrents:
                 unrar_version_exists = any(t.get('unrar', 0) != 0 for t in existing_torrents)
-
                 if unrar_version_exists:
                     raise UploadException("An UNRAR duplicate torrent already exists on site.")
                 else:
                     console.print(f"[bold yellow]Found a RAR version on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]")
-                    if meta.get('scene_name'):
-                        upload_filename = f"{meta['scene_name']} [UNRAR].torrent"
-                    else:
-                        upload_filename = f"{meta['uuid']} [UNRAR].torrent"
+                    needs_unrar_tag = True
+
+            if is_scene or needs_unrar_tag:
+                upload_filename = f"{base_name} [UNRAR].torrent"
+            else:
+                upload_filename = f"{base_name}.torrent"
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file': (upload_filename, torrent_file, "application/x-bittorrent")}
