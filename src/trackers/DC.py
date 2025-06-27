@@ -17,7 +17,7 @@ class DC(COMMON):
 
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
+        self.api_key = self.config['TRACKERS'][self.tracker].get('announce_url').replace('https://digitalcore.club/tracker.php/', '').replace('/announce', '')
         self.username = self.config['TRACKERS'][self.tracker].get('username')
         self.password = self.config['TRACKERS'][self.tracker].get('password')
         self.auth_cookies = None
