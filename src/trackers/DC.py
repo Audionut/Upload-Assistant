@@ -39,7 +39,7 @@ class DC(COMMON):
                     tech_info = f.read()
 
         if tech_info:
-            desc_parts.append(f"[nfo]{tech_info}[/nfo]")
+            desc_parts.append(f"[nfo]{tech_info}[/nfo]\n")
 
         if os.path.exists(base_desc):
             with open(base_desc, 'r', encoding='utf-8') as f:
@@ -60,7 +60,7 @@ class DC(COMMON):
         if self.signature:
             desc_parts.append(self.signature)
 
-        final_description = "\n\n".join(filter(None, desc_parts))
+        final_description = "\n".join(filter(None, desc_parts))
         from src.bbcode import BBCODE
         bbcode = BBCODE()
         desc = final_description
