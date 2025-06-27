@@ -61,6 +61,8 @@ class DC(COMMON):
             desc_parts.append(self.signature)
 
         final_description = "\n\n".join(filter(None, desc_parts))
+        from src.bbcode import BBCODE
+        bbcode = BBCODE()
         desc = final_description
         desc = desc.replace("[user]", "").replace("[/user]", "")
         desc = desc.replace("[align=left]", "").replace("[/align]", "")
@@ -78,6 +80,7 @@ class DC(COMMON):
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
         desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
         desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
 
         with open(dc_desc, 'w', encoding='utf-8') as f:
             f.write(desc)
