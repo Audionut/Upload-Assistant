@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import re
 import requests
 from src.exceptions import UploadException
 from src.console import console
@@ -38,7 +39,7 @@ class DC(COMMON):
                     tech_info = f.read()
 
         if tech_info:
-            desc_parts.append(tech_info)
+            desc_parts.append(f"[nfo]{tech_info}[/nfo]")
 
         if os.path.exists(base_desc):
             with open(base_desc, 'r', encoding='utf-8') as f:
@@ -60,9 +61,26 @@ class DC(COMMON):
             desc_parts.append(self.signature)
 
         final_description = "\n\n".join(filter(None, desc_parts))
+        desc = final_description
+        desc = desc.replace("[user]", "").replace("[/user]", "")
+        desc = desc.replace("[align=left]", "").replace("[/align]", "")
+        desc = desc.replace("[right]", "").replace("[/right]", "")
+        desc = desc.replace("[align=right]", "").replace("[/align]", "")
+        desc = desc.replace("[sup]", "").replace("[/sup]", "")
+        desc = desc.replace("[sub]", "").replace("[/sub]", "")
+        desc = desc.replace("[alert]", "").replace("[/alert]", "")
+        desc = desc.replace("[note]", "").replace("[/note]", "")
+        desc = desc.replace("[hr]", "").replace("[/hr]", "")
+        desc = desc.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
+        desc = desc.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
+        desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
+        desc = desc.replace("[ul]", "").replace("[/ul]", "")
+        desc = desc.replace("[ol]", "").replace("[/ol]", "")
+        desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+        desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
 
         with open(dc_desc, 'w', encoding='utf-8') as f:
-            f.write(final_description)
+            f.write(desc)
 
     async def get_category_id(self, meta):
         resolution = meta.get('resolution')
@@ -152,9 +170,6 @@ class DC(COMMON):
     async def upload(self, meta, disctype):
         await self.edit_torrent(meta, self.tracker, self.source_flag)
 
-        if await self.search_existing(meta, disctype):
-            raise UploadException(f"Upload to {self.tracker} failed: Duplicate torrent detected on site.", "red")
-
         cat_id = await self.get_category_id(meta)
 
         await self.generate_description(meta)
@@ -192,6 +207,9 @@ class DC(COMMON):
                 upload_url = f"{self.api_base_url}/torrents/upload"
 
                 if meta['debug'] is False:
+                    if await self.search_existing(meta, disctype):
+                        raise UploadException(f"Upload to {self.tracker} failed: Duplicate torrent detected on site.", "red")
+
                     response = self.session.post(upload_url, data=data, files=files, cookies=self.auth_cookies, timeout=90)
                     response.raise_for_status()
 
