@@ -49,9 +49,9 @@ class DC(COMMON):
         images = meta.get('image_list', [])
         if images:
             screenshots_block = "[center][b]Screenshots[/b]\n\n"
-            for i in range(min(4, len(images))):
-                img_url = images[i]['img_url']
-                web_url = images[i]['web_url']
+            for image in images:
+                img_url = image['img_url']
+                web_url = image['web_url']
                 screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
             screenshots_block += "[/center]"
             desc_parts.append(screenshots_block)
@@ -152,9 +152,8 @@ class DC(COMMON):
     async def upload(self, meta, disctype):
         await self.edit_torrent(meta, self.tracker, self.source_flag)
 
-        # A chamada de search_existing agora vai cuidar do login se necessário
-        # if await self.search_existing(meta, disctype):
-        #    raise UploadException(f"Upload to {self.tracker} failed: Duplicate torrent detected on site.", "red")
+        if await self.search_existing(meta, disctype):
+            raise UploadException(f"Upload to {self.tracker} failed: Duplicate torrent detected on site.", "red")
 
         cat_id = await self.get_category_id(meta)
 
@@ -197,9 +196,9 @@ class DC(COMMON):
                     response.raise_for_status()
 
                     json_response = response.json()
-                    if response.status_code in [200, 201] and json_response.get('success'):
-                        torrent_id = json_response.get('torrentId')
-                        details_url = f"{self.base_url}/t/{torrent_id}" if torrent_id else self.base_url
+                    if response.status_code == 200 and json_response.get('id'):
+                        torrent_id = json_response.get('id')
+                        details_url = f"{self.base_url}/torrent/{torrent_id}/" if torrent_id else self.base_url
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                     else:
