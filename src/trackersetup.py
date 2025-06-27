@@ -9,6 +9,7 @@ from src.trackers.BHDTV import BHDTV
 from src.trackers.BLU import BLU
 from src.trackers.BT import BT
 from src.trackers.CBR import CBR
+from src.trackers.DC import DC
 from src.trackers.DP import DP
 from src.trackers.FL import FL
 from src.trackers.FNP import FNP
@@ -477,7 +478,7 @@ api_trackers = {
 }
 
 other_api_trackers = {
-    'ANT', 'BHDTV', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
+    'ANT', 'BHDTV', 'DC', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
 }
 
 http_trackers = {
