@@ -39,7 +39,7 @@ class DC(COMMON):
                     tech_info = f.read()
 
         if tech_info:
-            desc_parts.append(f"[nfo]{tech_info}[/nfo]\n")
+            desc_parts.append(f"{tech_info}\n")
 
         if os.path.exists(base_desc):
             with open(base_desc, 'r', encoding='utf-8') as f:
@@ -78,6 +78,7 @@ class DC(COMMON):
         desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
+        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"[nfo]\1[/nfo]", desc, flags=re.DOTALL)
         desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
         desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
