@@ -225,7 +225,6 @@ class ULCX():
         await check_for_languages(meta, tracker)
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ULCX...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

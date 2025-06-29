@@ -175,7 +175,6 @@ class RF():
             meta['skipping'] = "RF"
             return
         dupes = []
-        console.print("[yellow]Searching for existing torrents on RF...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

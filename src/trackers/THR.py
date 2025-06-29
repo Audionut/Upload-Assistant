@@ -294,7 +294,6 @@ class THR():
         imdb_id = meta.get('imdb', '')
         base_search_url = f"https://www.torrenthr.org/browse.php?search={imdb_id}&blah=2&incldead=1"
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on THR using URL {base_search_url}")
 
         if not imdb_id:
             console.print("[red]No IMDb ID available for search", style="bold red")

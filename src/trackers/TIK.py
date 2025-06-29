@@ -561,7 +561,6 @@ class TIK():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on TIK...")
         disctype = meta.get('disctype', None)
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),

@@ -150,7 +150,6 @@ class YUS():
             meta['skipping'] = "YUS"
             return []
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on {self.tracker}...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

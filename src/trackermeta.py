@@ -320,7 +320,6 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
 
         else:
             ptp_torrent_id = meta['ptp']
-            console.print("[cyan]Using specified PTP ID to get IMDb ID[/cyan]")
             imdb_id, _, meta['ext_torrenthash'] = await tracker_instance.get_imdb_from_torrent_id(ptp_torrent_id)
             if imdb_id:
                 meta['imdb_id'] = imdb_id

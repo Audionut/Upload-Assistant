@@ -177,7 +177,6 @@ class TTG():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on TTG...")
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
         if not os.path.exists(cookiefile):
             console.print("[bold red]Cookie file not found: TTG.pkl")

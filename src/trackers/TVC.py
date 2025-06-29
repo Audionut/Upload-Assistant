@@ -304,7 +304,6 @@ class TVC():
             meta['skipping'] = "TVC"
             return []
 
-        console.print("[yellow]Searching for existing torrents on TVC...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],

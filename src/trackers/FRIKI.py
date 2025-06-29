@@ -145,7 +145,6 @@ class FRIKI():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on {self.tracker}...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

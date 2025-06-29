@@ -382,7 +382,6 @@ class HUNO():
             meta['skipping'] = "HUNO"
             return
         dupes = []
-        console.print("[yellow]Searching for existing torrents on HUNO...")
 
         params = {
             'api_token': self.config['TRACKERS']['HUNO']['api_key'].strip(),

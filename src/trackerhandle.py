@@ -53,8 +53,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     modq, draft = await check_mod_q_and_draft(tracker_class, meta, debug, disctype)
@@ -76,8 +74,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     if tracker == "RTF":
@@ -98,8 +94,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     if tracker == "AR":
@@ -138,8 +132,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         elif tracker == "THR":
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 thr = THR(config=config)
                 try:
@@ -152,8 +144,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         elif tracker == "PTP":
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     ptp = PTP(config=config)

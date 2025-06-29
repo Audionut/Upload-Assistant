@@ -146,7 +146,6 @@ class SN():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on SN...")
         params = {
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip()
         }

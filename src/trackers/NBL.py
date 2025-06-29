@@ -90,7 +90,6 @@ class NBL():
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on NBL...")
 
         if int(meta.get('tvmaze_id', 0)) != 0:
             search_term = {'tvmaze': int(meta['tvmaze_id'])}

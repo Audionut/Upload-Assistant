@@ -147,7 +147,6 @@ class R4E():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on R4E...")
         url = "https://racing4everyone.eu/api/torrents/filter"
         params = {
             'api_token': self.config['TRACKERS']['R4E']['api_key'].strip(),

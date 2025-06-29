@@ -596,7 +596,6 @@ class MTV():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on MTV...")
 
         # Build request parameters
         params = {

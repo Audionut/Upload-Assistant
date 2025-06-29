@@ -328,7 +328,6 @@ class BHD():
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on BHD...")
         category = meta['category']
         tmdbID = "movie" if category == 'MOVIE' else "tv"
         if category == 'MOVIE':

@@ -29,13 +29,10 @@ class UploadHelper:
                     meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
-                    console.print(f"[red]Found potential dupes on {tracker_name}. Aborting. If this is not a dupe, or you would like to upload anyways, pass --skip-dupe-check")
                     upload = False
                 else:
-                    console.print(f"[yellow]Found potential dupes on {tracker_name}. --skip-dupe-check was passed. Uploading anyways")
                     upload = True
 
-            console.print()
             if upload is False:
                 return meta, True
             else:
@@ -48,8 +45,8 @@ class UploadHelper:
 
     async def get_confirmation(self, meta):
         if meta['debug'] is True:
-            console.print("[bold red]DEBUG: True")
-        console.print(f"Prep material saved to {meta['base_dir']}/tmp/{meta['uuid']}")
+            console.print("[bold red]DEBUG: True - Will not actually upload!")
+            console.print(f"Prep material saved to {meta['base_dir']}/tmp/{meta['uuid']}")
         console.print()
         console.print("[bold yellow]Database Info[/bold yellow]")
         console.print(f"[bold]Title:[/bold] {meta['title']} ({meta['year']})")

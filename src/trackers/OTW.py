@@ -231,7 +231,6 @@ class OTW():
             meta['skipping'] = "OTW"
             return []
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OTW...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
