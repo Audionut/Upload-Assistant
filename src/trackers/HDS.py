@@ -97,10 +97,10 @@ class HDS(COMMON):
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
         desc = desc.replace("[hide]", "").replace("[/hide]", "")
-        desc = re.sub(r"\[spoiler(?:=[^\]]*)?\]", "", desc, flags=re.IGNORECASE)
-        desc = re.sub(r"\[/spoiler\]", "", desc, flags=re.IGNORECASE)
+        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"NFO:[code][pre]\1[/pre][/code]", desc, flags=re.DOTALL)
         desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = bbcode.remove_spoiler(desc)
 
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
