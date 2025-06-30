@@ -13,3 +13,4 @@ tmp/*
 .wdm/
 .DS_Store
 user-args.json
+/.vs

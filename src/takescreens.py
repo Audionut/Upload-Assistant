@@ -252,7 +252,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
@@ -283,7 +283,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         elif new_size > 75000 and new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                             console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                             valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                             console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                             valid_image = True
 
@@ -1059,7 +1059,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
             elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
@@ -1105,7 +1105,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
-                            elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+                            elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
 
@@ -1146,7 +1146,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             valid_image = True
                         elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                             valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg"] for host in img_host):
+                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage"] for host in img_host):
                             valid_image = True
 
                         if valid_image:

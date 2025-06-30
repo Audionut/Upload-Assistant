@@ -184,20 +184,20 @@ def upload_image_task(args):
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
 
-        elif img_host == "oeimg":
-            url = "https://imgoe.download/api/1/upload"
+        elif img_host == "onlyimage":
+            url = "https://onlyimage.org/api/1/upload"
             try:
                 data = {
                     'image': base64.b64encode(open(image, "rb").read()).decode('utf8')
                 }
                 headers = {
-                    'X-API-Key': config['DEFAULT']['oeimg_api'],
+                    'X-API-Key': config['DEFAULT']['onlyimage_api'],
                 }
                 response = requests.post(url, data=data, headers=headers, timeout=timeout)
                 response_data = response.json()
                 if response.status_code != 200 or not response_data.get('success'):
-                    console.print("[yellow]OEimg failed, trying next image host")
-                    return {'status': 'failed', 'reason': 'OEimg upload failed'}
+                    console.print("[yellow]OnlyImage failed, trying next image host")
+                    return {'status': 'failed', 'reason': 'OnlyImage upload failed'}
 
                 img_url = response_data['data']['image']['url']
                 raw_url = response_data['data']['image']['url']
@@ -450,7 +450,7 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
     # Concurrency Control
     default_pool_size = len(upload_tasks)
-    host_limits = {"oeimg": 6, "ptscreens": 1, "lensdump": 1, "passtheimage": 6}
+    host_limits = {"onlyimage": 6, "ptscreens": 1, "lensdump": 1, "passtheimage": 6}
     pool_size = host_limits.get(img_host, default_pool_size)
     max_workers = min(len(upload_tasks), pool_size)
     semaphore = asyncio.Semaphore(max_workers)

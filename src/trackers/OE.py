@@ -50,12 +50,12 @@ class OE():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'oeimg', 'ptscreens', "passtheimage"]
+        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
-            "imgoe.download": "oeimg",
+            "onlyimage.org": "onlyimage",
             "imagebam.com": "bam",
             "ptscreens.com": "ptscreens",
             "img.passtheima.ge": "passtheimage",

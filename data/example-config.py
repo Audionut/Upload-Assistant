@@ -33,7 +33,7 @@ config = {
         "ptpimg_api": "",
         "lensdump_api": "",
         "ptscreens_api": "",
-        "oeimg_api": "",
+        "onlyimage_api": "",
         "dalexni_api": "",
         "passtheima_ge_api": "",
         # custom zipline url
