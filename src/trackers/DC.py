@@ -214,15 +214,27 @@ class DC(COMMON):
             needs_unrar_tag = False
 
             if existing_torrents:
-                unrar_version_exists = any(t.get('unrar', 0) != 0 for t in existing_torrents)
-                if unrar_version_exists:
-                    raise UploadException("An UNRAR duplicate torrent already exists on site.")
-                else:
-                    console.print(f"[bold yellow]Found a RAR version on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]")
-                    needs_unrar_tag = True
+                current_release_identifiers = {meta['uuid']}
+                if is_scene:
+                    current_release_identifiers.add(meta['scene_name'])
 
-            if is_scene or needs_unrar_tag:
-                upload_filename = f"{base_name} [UNRAR].torrent"
+                relevant_torrents = [
+                    t for t in existing_torrents
+                    if t.get('name') in current_release_identifiers
+                ]
+
+                if relevant_torrents:
+                    unrar_version_exists = any(t.get('unrar', 0) != 0 for t in relevant_torrents)
+
+                    if unrar_version_exists:
+                        raise UploadException("An UNRAR duplicate of this specific release already exists on site.")
+                    else:
+                        console.print(f"[bold yellow]Found a RAR version of this release on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]")
+                        needs_unrar_tag = True
+
+            if needs_unrar_tag:
+                upload_base_name = meta['scene_name'] if is_scene else meta['uuid']
+                upload_filename = f"{upload_base_name} [UNRAR].torrent"
             else:
                 upload_filename = f"{base_name}.torrent"
 
