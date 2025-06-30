@@ -66,14 +66,17 @@ class HDS(COMMON):
 
         # Screenshots
         images = meta.get('image_list', [])
-        if images:
-            screenshots_block = "[center][b]Screenshots[/b]\n\n"
-            for image in images:
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
-            screenshots_block += "[/center]"
-            description_parts.append(screenshots_block)
+        if not images or len(images) < 3:
+            raise UploadException("[red]HDS requires at least 3 screenshots.[/red]")
+
+        screenshots_block = "[center][b]Screenshots[/b]\n\n"
+        for image in images:
+            img_url = image['img_url']
+            web_url = image['web_url']
+            screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
+        screenshots_block += "[/center]"
+
+        description_parts.append(screenshots_block)
 
         if self.signature:
             description_parts.append(self.signature)
