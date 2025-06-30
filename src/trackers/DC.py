@@ -151,12 +151,13 @@ class DC(COMMON):
                 console.print(f"[bold red]Search failed on {self.tracker} because login failed.[/bold red]")
                 return []
 
-        search_terms = [
-            meta['uuid'],
-            meta['scene_name'],
-            f"{meta['uuid']} [UNRAR]",
-            f"{meta['scene_name']} [UNRAR]"
-        ]
+        uuid = meta['uuid']
+        scene_name = meta.get('scene_name')
+
+        search_terms = [uuid, f"{uuid} [UNRAR]"]
+
+        if scene_name:
+            search_terms += [scene_name, f"{scene_name} [UNRAR]"]
 
         all_found_torrents = []
         search_url = f"{self.api_base_url}/torrents_exact_search"
