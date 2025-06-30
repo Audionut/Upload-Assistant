@@ -359,7 +359,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
         "ptpimg": "ptpimg_api",
         "lensdump": "lensdump_api",
         "ptscreens": "ptscreens_api",
-        "oeimg": "oeimg_api",
+        "onlyimage": "onlyimage_api",
         "dalexni": "dalexni_api",
         "ziplinestudio": ["zipline_url", "zipline_api_key"],
         "passtheimage": "passtheima_ge_api",

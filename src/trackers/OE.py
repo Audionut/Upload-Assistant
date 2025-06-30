@@ -50,12 +50,12 @@ class OE():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'oeimg', 'ptscreens', "passtheimage"]
+        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
-            "imgoe.download": "oeimg",
+            "onlyimage.org": "onlyimage",
             "imagebam.com": "bam",
             "ptscreens.com": "ptscreens",
             "img.passtheima.ge": "passtheimage",
@@ -69,7 +69,7 @@ class OE():
         cat_id = await self.get_cat_id(meta['category'])
         if meta.get('type') == "DVDRIP":
             meta['type'] = "ENCODE"
-        type_id = await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('video_codec'), meta.get('category', ""))
+        type_id = await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A'))
         resolution_id = await self.get_res_id(meta['resolution'])
         oe_name = await self.edit_name(meta)
         region_id = await common.unit3d_region_ids(meta.get('region'))
@@ -210,7 +210,7 @@ class OE():
         }.get(category_name, '0')
         return category_id
 
-    async def get_type_id(self, type, tv_pack, video_codec, category):
+    async def get_type_id(self, type, video_codec):
         type_id = {
             'DISC': '19',
             'REMUX': '20',
@@ -361,7 +361,7 @@ class OE():
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('sd', 0), meta.get('category', "")),
+            'types[]': await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A')),
             'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }

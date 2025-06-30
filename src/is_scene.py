@@ -7,6 +7,7 @@ from src.console import console
 
 async def is_scene(video, meta, imdb=None, lower=False):
     scene = False
+    is_all_lowercase = False
     base = os.path.basename(video)
     match = re.match(r"^(.+)\.[a-zA-Z0-9]{3}$", os.path.basename(video))
 

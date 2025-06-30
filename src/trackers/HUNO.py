@@ -202,7 +202,7 @@ class HUNO():
                     print("DEBUG: No Audio sections found in MEDIAINFO.txt.")
 
         if language == "zxx":
-            language = "Silent"
+            language = "NONE"
         elif not language:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
                 language = cli_ui.ask_string('No audio language present, you must enter one:')

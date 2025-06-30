@@ -125,6 +125,23 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
     exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
     include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
 
+    if meta.get('tv_pack'):
+        completeness = check_season_pack_completeness(meta)
+
+        if not completeness['complete']:
+            missing_list = [f"S{s:02d}E{e:02d}" for s, e in completeness['missing_episodes']]
+            console.print("[yellow]Warning: Season pack appears incomplete!")
+            console.print(f"[yellow]Missing episodes: {', '.join(missing_list)}")
+
+            if not meta.get('unattended'):
+                response = input("Continue with incomplete season pack? (y/N): ")
+                if response.lower() != 'y':
+                    console.print("[red]Aborting torrent creation due to incomplete season pack")
+                    sys.exit(1)
+        else:
+            if meta['debug']:
+                console.print("[green]Season pack completeness verified")
+
     # If using mkbrr, run the external application
     if meta.get('mkbrr'):
         try:
@@ -368,3 +385,69 @@ def get_mkbrr_path(meta):
         raise FileNotFoundError(f"mkbrr binary not found: {binary_path}")
 
     return binary_path
+
+
+def check_season_pack_completeness(meta):
+    if not meta.get('tv_pack'):
+        return {'complete': True, 'missing_episodes': [], 'found_episodes': []}
+
+    files = meta.get('filelist', [])
+    if not files:
+        return {'complete': True, 'missing_episodes': [], 'found_episodes': []}
+
+    found_episodes = []
+    season_numbers = set()
+
+    episode_pattern = r'[Ss](\d{1,2})[Ee](\d{1,3})'
+
+    for file_path in files:
+        filename = os.path.basename(file_path)
+        matches = re.findall(episode_pattern, filename)
+
+        for season_str, episode_str in matches:
+            season_num = int(season_str)
+            episode_num = int(episode_str)
+            found_episodes.append((season_num, episode_num))
+            season_numbers.add(season_num)
+
+    if not found_episodes:
+        console.print("[red]No episodes found in the season pack files.")
+        return {'complete': False, 'missing_episodes': [], 'found_episodes': []}
+
+    # Remove duplicates and sort
+    found_episodes = sorted(list(set(found_episodes)))
+
+    missing_episodes = []
+
+    # Check each season for completeness
+    for season in season_numbers:
+        season_episodes = [ep for s, ep in found_episodes if s == season]
+        if not season_episodes:
+            continue
+
+        min_ep = min(season_episodes)
+        max_ep = max(season_episodes)
+
+        # Check for missing episodes in the range
+        for ep_num in range(min_ep, max_ep + 1):
+            if ep_num not in season_episodes:
+                missing_episodes.append((season, ep_num))
+
+    is_complete = len(missing_episodes) == 0
+
+    result = {
+        'complete': is_complete,
+        'missing_episodes': missing_episodes,
+        'found_episodes': found_episodes,
+        'seasons': list(season_numbers)
+    }
+
+    if meta.get('debug'):
+        console.print("[cyan]Season pack completeness check:")
+        console.print(f"[cyan]Found episodes: {found_episodes}")
+        if missing_episodes:
+            console.print(f"[red]Missing episodes: {missing_episodes}")
+        else:
+            console.print("[green]Season pack appears complete")
+
+    return result

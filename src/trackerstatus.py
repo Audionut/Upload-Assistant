@@ -84,7 +84,12 @@ async def process_all_trackers(meta):
                 elif tracker_name == "PTP":
                     ptp = PTP(config=config)
                     groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
+                    meta['ptp_groupID'] = groupID
                     dupes = await ptp.search_existing(groupID, local_meta, disctype)
+
+                if tracker_name == "ASC" and meta.get('anon', 'false'):
+                    console.print("PT: [yellow]Aviso: Você solicitou um upload anônimo, mas o ASC não suporta essa opção.[/yellow][red] O envio não será anônimo.[/red]")
+                    console.print("EN: [yellow]Warning: You requested an anonymous upload, but ASC does not support this option.[/yellow][red] The upload will not be anonymous.[/red]")
 
                 if ('skipping' not in local_meta or local_meta['skipping'] is None) and tracker_name != "TL":
                     dupes = await filter_dupes(dupes, local_meta, tracker_name)

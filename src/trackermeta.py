@@ -312,6 +312,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         valid_images = await check_images_concurrently(ptp_imagelist, meta)
                         if valid_images:
                             meta['image_list'] = valid_images
+                    else:
+                        meta['image_list'] = []
             else:
                 console.print("[yellow]Skipping PTP as no match found[/yellow]")
                 found_match = False
@@ -337,6 +339,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                     if valid_images:
                         meta['image_list'] = valid_images
                         console.print("[green]PTP images added to metadata.[/green]")
+                else:
+                    meta['image_list'] = []
             else:
                 console.print(f"[yellow]Could not find IMDb ID using PTP ID: {ptp_torrent_id}[/yellow]")
                 found_match = False
@@ -550,6 +554,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                     if valid_images:
                         meta['image_list'] = valid_images
                         await handle_image_list(meta, tracker_name, valid_images)
+                else:
+                    meta['image_list'] = []
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
             else:
                 console.print(f"[yellow]{tracker_name} data not found for ID: {meta[tracker_key]}[/yellow]")

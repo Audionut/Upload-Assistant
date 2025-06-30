@@ -242,8 +242,10 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         if meta['debug']:
                             console.print(f"[bold green]Setting edition from BDMV playlist matches: {edition}[/bold green]")
 
-    if edition and (edition.lower() == "cut" or len(edition) < 6):
+    if edition and (edition.lower() in ["cut", "approximate"] or len(edition) < 6):
         edition = ""
+    if edition and "edition" in edition.lower():
+        edition = re.sub(r'\bedition\b', '', edition, flags=re.IGNORECASE).strip()
 
     if not edition:
         if video.lower().startswith('dc'):

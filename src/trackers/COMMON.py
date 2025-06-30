@@ -1010,6 +1010,8 @@ class COMMON():
                             console.print("[green]Keeping the original description.[/green]")
                             meta['description'] = description
                             meta['saved_description'] = True
+                    if not meta.get('keep_images'):
+                        imagelist = []
                 else:
                     description = ""
                     if not meta.get('keep_images'):
