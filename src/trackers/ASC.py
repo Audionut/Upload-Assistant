@@ -456,19 +456,28 @@ class ASC(COMMON):
             if poster_path:
                 data['capa'] = poster_path
 
-            # Name
-            nome_base = asc_data.get('Title') if asc_data and asc_data.get('Title') else self.get_title(meta)
+            # Title
+            # The site database is incompatible with non-ASCII characters in the title
+            def is_safe_ascii(text):
+                if not text:
+                    return False
+                return bool(re.match(r'^[ -~]+$', text))
 
-            if meta.get('category') == 'TV':
-                season, episode = self.get_season_and_episode(meta)
-                season_episode_str = ""
-                if season and not episode:
-                    season_episode_str = f" - {season}"
-                elif season and episode:
-                    season_episode_str = f" - {season}{episode}"
-                data['name'] = f"{nome_base}{season_episode_str}"
+            title_from_asc = asc_data.get('Title') if asc_data else None
+
+            if is_safe_ascii(title_from_asc):
+                nome_base = title_from_asc
+
+                if meta.get('category') == 'TV':
+                    season, episode = self.get_season_and_episode(meta)
+                    season_episode_str = ""
+                    if season:
+                        season_episode_str = f" - {season}{episode or ''}"
+                    data['name'] = f"{nome_base}{season_episode_str}"
+                else:
+                    data['name'] = nome_base
             else:
-                data['name'] = nome_base
+                data['name'] = self.get_title(meta)
 
             # Year
             ano = asc_data.get('Year') if asc_data and asc_data.get('Year') else meta.get('year')
@@ -528,9 +537,6 @@ class ASC(COMMON):
             raise
 
     async def upload(self, meta, disctype):
-        if not await self.anonymous_warning(meta):
-            return
-
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
 
         data = await self.prepare_form_data(meta)
@@ -552,28 +558,13 @@ class ASC(COMMON):
         self.session.cookies.update(await self.parseCookieFile(cookie_file))
 
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'torrent': (f"{self.tracker}_placeholder.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'torrent': (f"{self.tracker}.{meta.get('infohash', '')}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
             response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
         if "foi enviado com sucesso" in response.text:
             await self.successful_upload(response.text, meta)
         else:
             self.failed_upload(response, meta)
-
-    async def anonymous_warning(self, meta):
-        if meta.get('anon'):
-            console.print(f"[bold yellow]Aviso: Você solicitou um upload anônimo, mas o tracker '{self.tracker}' não suporta esta opção.[/bold yellow]")
-
-            should_continue = cli_ui.ask_yes_no(
-                "Deseja continuar com o upload de forma pública (não-anônima)?",
-                default=False
-            )
-
-            if not should_continue:
-                console.print(f"[red]Upload para o tracker '{self.tracker}' cancelado pelo usuário.[/red]")
-                return False
-
-        return True
 
     def get_upload_url(self, meta):
         if meta.get('anime'):
