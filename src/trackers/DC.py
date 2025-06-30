@@ -151,31 +151,27 @@ class DC(COMMON):
                 console.print(f"[bold red]Search failed on {self.tracker} because login failed.[/bold red]")
                 return []
 
-        uuid = meta['uuid']
-        scene_name = meta.get('scene_name')
+        imdb_id = meta.get('imdb_info', {}).get('imdbID')
+        if not imdb_id:
+            console.print(f"[bold yellow]Cannot perform search on {self.tracker}: IMDb ID not found in metadata.[/bold yellow]")
+            return []
 
-        search_terms = [uuid, f"{uuid} [UNRAR]"]
+        search_url = f"{self.api_base_url}/torrents"
+        search_params = {'searchText': imdb_id}
 
-        if scene_name:
-            search_terms += [scene_name, f"{scene_name} [UNRAR]"]
+        try:
+            response = self.session.get(search_url, params=search_params, cookies=self.auth_cookies, timeout=15)
+            response.raise_for_status()
 
-        all_found_torrents = []
-        search_url = f"{self.api_base_url}/torrents_exact_search"
+            if response.text and response.text != '[]':
+                results = response.json()
+                if results and isinstance(results, list):
+                    return results
 
-        for term in search_terms:
-            search_params = {'searchText': term}
-            try:
-                response = self.session.get(search_url, params=search_params, cookies=self.auth_cookies, timeout=15)
-                response.raise_for_status()
+        except Exception as e:
+            console.print(f"[bold red]Error searching for IMDb ID '{imdb_id}' on {self.tracker}: {e}[/bold red]")
 
-                if response.text and response.text != '[]':
-                    results = response.json()
-                    if results and isinstance(results, list):
-                        all_found_torrents.extend(results)
-            except Exception as e:
-                console.print(f"[bold red]Error searching for term '{term}' on {self.tracker}: {e}[/bold red]")
-
-        return all_found_torrents
+        return []
 
     async def upload(self, meta, disctype):
         await self.edit_torrent(meta, self.tracker, self.source_flag)
