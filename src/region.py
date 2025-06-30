@@ -113,7 +113,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'Netflix': 'NF', 'National Film Board': 'NFB', 'NFL': 'NFL', 'NFLN': 'NFLN', 'NFL Now': 'NFLN', 'NICK': 'NICK',
         'Nickelodeon': 'NICK', 'NOW': 'NOW', 'NOWTV': 'NOW', 'NRK': 'NRK', 'Norsk Rikskringkasting': 'NRK', 'OnDemandKorea': 'ODK', 'Opto': 'OPTO',
         'ORF': 'ORF', 'ORF ON': 'ORF', 'Oprah Winfrey Network': 'OWN', 'PA': 'PA', 'PBS': 'PBS', 'PBSK': 'PBSK', 'PBS Kids': 'PBSK',
-        'PCOK': 'PCOK', 'Peacock': 'PCOK', 'PLAY': 'PLAY', 'PLUZ': 'PLUZ', 'Pluzz': 'PLUZ', 'PMNP': 'PMNP', 'PMNT': 'PMNT',
+        'PCOK': 'PCOK', 'Peacock': 'PCOK', 'PLAY': 'PLAY', 'PLTV': 'PLTV', 'Pluto TV': 'PLTV', 'PLUZ': 'PLUZ', 'Pluzz': 'PLUZ', 'PMNP': 'PMNP', 'PMNT': 'PMNT',
         'PMTP': 'PMTP', 'POGO': 'POGO', 'PokerGO': 'POGO', 'PSN': 'PSN', 'Playstation Network': 'PSN', 'PUHU': 'PUHU', 'QIBI': 'QIBI',
         'RED': 'RED', 'YouTube Red': 'RED', 'RKTN': 'RKTN', 'Rakuten TV': 'RKTN', 'The Roku Channel': 'ROKU', 'RNET': 'RNET',
         'OBB Railnet': 'RNET', 'RSTR': 'RSTR', 'RTE': 'RTE', 'RTE One': 'RTE', 'RTLP': 'RTLP', 'RTL+': 'RTLP', 'RUUTU': 'RUUTU',
