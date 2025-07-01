@@ -247,7 +247,7 @@ class DC(COMMON):
                     response = self.session.post(upload_url, data=data, files=files, cookies=self.auth_cookies, timeout=90)
                     response.raise_for_status()
                     json_response = response.json()
-                    meta['tracker_status'][self.tracker]['status_message'] = response.json
+                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
 
                     if response.status_code == 200 and json_response.get('id'):
                         torrent_id = json_response.get('id')
