@@ -6,6 +6,7 @@ import json
 import click
 import sys
 import glob
+import cli_ui
 from pymediainfo import MediaInfo
 
 from src.bbcode import BBCODE
@@ -46,6 +47,65 @@ class COMMON():
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
+
+    async def process_desc_language(self, meta, desc, tracker):
+        if not meta['is_disc'] == "BDMV":
+            def process_languages(tracks):
+                audio_languages = []
+                subtitle_languages = []
+
+                for track in tracks:
+                    if track.get('@type') == 'Audio':
+                        language = track.get('Language')
+                        if not language or language is None:
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                audio_lang = cli_ui.ask_string('No audio language present, you must enter one:')
+                                if audio_lang:
+                                    audio_languages.append(audio_lang)
+                                else:
+                                    audio_languages = None
+                                    meta['tracker_status'][tracker]['skip_upload'] = True
+                            else:
+                                meta['tracker_status'][tracker]['skip_upload'] = True
+                        else:
+                            audio_languages = None
+                    if track.get('@type') == 'Text':
+                        language = track.get('Language')
+                        if not language or language is None:
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                subtitle_lang = cli_ui.ask_string('No subtitle language present, you must enter one:')
+                                if subtitle_lang:
+                                    subtitle_languages.append(subtitle_lang)
+                                else:
+                                    subtitle_languages = None
+                                    meta['tracker_status'][tracker]['skip_upload'] = True
+                            else:
+                                meta['tracker_status'][tracker]['skip_upload'] = True
+                        else:
+                            subtitle_languages = None
+
+                return audio_languages, subtitle_languages
+
+            media_data = meta.get('mediainfo', {})
+            if media_data:
+                tracks = media_data.get('media', {}).get('track', [])
+                if tracks:
+                    audio_languages, subtitle_languages = process_languages(tracks)
+                    if audio_languages or subtitle_languages:
+                        if audio_languages:
+                            await desc.write(f"[code]Audio Language: {', '.join(audio_languages)}[/code]\n")
+
+                        if subtitle_languages:
+                            await desc.write(f"[code]Subtitle Language: {', '.join(subtitle_languages)}[/code]\n")
+                        return desc
+                    else:
+                        return desc
+            else:
+                if meta['debug']:
+                    console.print("[red]No media information available in meta.[/red]")
+                return desc
+        else:
+            return desc
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None):
         if image_list is not None:
@@ -103,6 +163,7 @@ class COMMON():
                     descfile.write(desc_header + '\n')
                 else:
                     descfile.write(desc_header)
+            await self.process_desc_language(meta, descfile, tracker)
             add_logo_enabled = self.config["DEFAULT"].get("add_logo", False)
             if add_logo_enabled and 'logo' in meta:
                 logo = meta['logo']
@@ -969,8 +1030,12 @@ class COMMON():
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-                    # Skip the ID selection prompt if searching by ID
-                    console.print(f"[green]Valid IDs found: TMDb: {tmdb}, IMDb: {imdb}, TVDb: {tvdb}, MAL: {mal}[/green]")
+                    if imdb != 0:
+                        imdb_str = str(f'tt{imdb}').zfill(7)
+                    else:
+                        imdb_str = None
+
+                    console.print(f"[green]Valid IDs found from {tracker}: TMDb: {tmdb}, IMDb: {imdb_str}, TVDb: {tvdb}, MAL: {mal}[/green]")
 
             if tmdb or imdb or tvdb:
                 if not id:

@@ -165,7 +165,7 @@ class TTG():
                     mi_dump.close()
 
                     if up.url.startswith("https://totheglory.im/details.php?id="):
-                        console.print(f"[green]Uploaded to: [yellow]{up.url}[/yellow][/green]")
+                        meta['tracker_status'][self.tracker]['status_message'] = up.url
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(id, torrent_path)
                     else:
@@ -177,7 +177,6 @@ class TTG():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on TTG...")
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
         if not os.path.exists(cookiefile):
             console.print("[bold red]Cookie file not found: TTG.pkl")

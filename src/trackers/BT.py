@@ -859,6 +859,7 @@ class BT(COMMON):
 
                 if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
                     final_url = str(response.url)
+                    meta['tracker_status'][self.tracker]['status_message'] = final_url
                     id_match = re.search(r'id=(\d+)', final_url)
                     if id_match:
                         torrent_id = id_match.group(1)

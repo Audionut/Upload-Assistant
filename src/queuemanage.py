@@ -177,30 +177,32 @@ async def handle_queue(path, meta, paths, base_dir):
             processed_files = await load_processed_files(log_file_proccess)
             queued = [file for file in existing_queue if file not in processed_files]
             console.print(f"[bold yellow]Found an existing queue log file:[/bold yellow] [green]{log_file}[/green]")
-            console.print(f"[cyan]The queue log contains {len(existing_queue)} total items.[/cyan]")
-            console.print(f"[cyan]{len(queued)} items are unprocessed.[/cyan]")
-            console.print("[cyan]Do you want to edit, discard, or keep the existing queue?[/cyan]")
-            edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
+            console.print(f"[cyan]The queue log contains {len(existing_queue)} total items and {len(queued)} unprocessed items..[/cyan]")
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print("[yellow]Do you want to edit, discard, or keep the existing queue?[/yellow]")
+                edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
 
-            if edit_choice == 'e':
-                edited_content = click.edit(json.dumps(existing_queue, indent=4))
-                if edited_content:
-                    try:
-                        queue = json.loads(edited_content.strip())
-                        console.print("[bold green]Successfully updated the queue from the editor.")
-                        with open(log_file, 'w') as f:
-                            json.dump(queue, f, indent=4)
-                    except json.JSONDecodeError as e:
-                        console.print(f"[bold red]Failed to parse the edited content: {e}. Using the original queue.")
+                if edit_choice == 'e':
+                    edited_content = click.edit(json.dumps(existing_queue, indent=4))
+                    if edited_content:
+                        try:
+                            queue = json.loads(edited_content.strip())
+                            console.print("[bold green]Successfully updated the queue from the editor.")
+                            with open(log_file, 'w') as f:
+                                json.dump(queue, f, indent=4)
+                        except json.JSONDecodeError as e:
+                            console.print(f"[bold red]Failed to parse the edited content: {e}. Using the original queue.")
+                            queue = existing_queue
+                    else:
+                        console.print("[bold red]No changes were made. Using the original queue.")
                         queue = existing_queue
+                elif edit_choice == 'd':
+                    console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
+                    queue = []
                 else:
-                    console.print("[bold red]No changes were made. Using the original queue.")
+                    console.print("[bold green]Keeping the existing queue as is.")
                     queue = existing_queue
-            elif edit_choice == 'd':
-                console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
-                queue = []
             else:
-                console.print("[bold green]Keeping the existing queue as is.")
                 queue = existing_queue
         else:
             if os.path.exists(path):

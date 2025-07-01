@@ -229,6 +229,13 @@ config = {
         # NOT RECOMMENDED UNLESS YOU KNOW WHAT YOU ARE DOING
         # set true to not delete existing meta.json file before running
         "keep_meta": False,
+
+        # Set true to print the tracker api messages from uploads
+        "print_tracker_messages": False,
+
+        # Whether or not to print direct torrent links for the uploaded content
+        "print_tracker_links": True,
+
     },
 
     # these are used for DB links on AR

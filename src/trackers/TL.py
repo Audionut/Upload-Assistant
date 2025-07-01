@@ -106,7 +106,7 @@ class TL():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
             if not response.text.isnumeric():
-                console.print(f'[red]{response.text}')
+                meta['tracker_status'][self.tracker]['status_message'] = response.text
         else:
             console.print("[cyan]Request Data:")
             console.print(data)

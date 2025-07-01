@@ -183,7 +183,6 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
             total_pieces = 100  # Default to 100% for scaling progress
             pieces_done = 0
             mkbrr_start_time = time.time()
-            torrent_written = False
 
             for line in process.stdout:
                 line = line.strip()
@@ -212,9 +211,8 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                     cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
 
                 # Detect final output line
-                if "Wrote" in line and ".torrent" in line:
+                if "Wrote" in line and ".torrent" in line and meta['debug']:
                     console.print(f"[bold cyan]{line}")  # Print the final torrent file creation message
-                    torrent_written = True
 
             # Wait for the process to finish
             result = process.wait()
@@ -224,7 +222,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                 console.print(f"[bold red]mkbrr exited with non-zero status code: {result}")
                 raise RuntimeError(f"mkbrr exited with status code {result}")
 
-            if not torrent_written or not os.path.exists(output_path):
+            if not os.path.exists(output_path):
                 console.print("[bold red]mkbrr did not create a torrent file!")
                 raise FileNotFoundError(f"Expected torrent file {output_path} was not created")
             else:

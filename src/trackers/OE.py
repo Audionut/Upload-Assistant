@@ -64,7 +64,7 @@ class OE():
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         await self.edit_desc(meta, self.tracker, self.signature)
         if "oe_no_language" in meta:
-            console.print("[red]No language detected in MEDIAINFO.txt[/red]")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: oe_no_language"
             return
         cat_id = await self.get_cat_id(meta['category'])
         if meta.get('type') == "DVDRIP":
@@ -138,9 +138,10 @@ class OE():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://onlyencodes.cc/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -356,7 +357,6 @@ class OE():
         await check_for_languages(meta, tracker)
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OE...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

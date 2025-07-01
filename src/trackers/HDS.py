@@ -263,6 +263,7 @@ class HDS(COMMON):
                         if id_match:
                             torrent_id = id_match.group(1)
                             details_url = f"{self.base_url}/index.php?page=torrent-details&id={torrent_id}"
+                            meta['tracker_status'][self.tracker]['status_message'] = details_url
 
                             announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                             await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)

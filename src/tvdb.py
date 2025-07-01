@@ -120,7 +120,7 @@ async def get_tvdb_token(api_key, base_dir):
             if data.get("status") == "success" and data.get("data") and data["data"].get("token"):
                 token = data["data"]["token"]
                 console.print("[green]Successfully authenticated with TVDb[/green]")
-                console.print(f"[bold yellow]New TVDb token: {token}[/bold yellow]")
+                console.print(f"[bold yellow]New TVDb token: {token[:10]}...[/bold yellow]")
 
                 # Update the token in the in-memory configuration
                 config['DEFAULT']['tvdb_token'] = f'"{token}"'

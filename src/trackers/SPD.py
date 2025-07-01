@@ -93,6 +93,7 @@ class SPD():
                     try:
                         # torrent may not dl and may not provide error if machine is under load or network connection usage high.
                         if 'downloadUrl' in response.json():
+                            meta['tracker_status'][self.tracker]['status_message'] = response.json()['downloadUrl']
                             with requests.get(url=self.url + response.json()['downloadUrl'], stream=True, headers=headers) as r:
                                 # replacing L4g/torf created torrent so it will be added to the client.
                                 with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent",
@@ -131,7 +132,6 @@ class SPD():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on SPD...")
         headers = {
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),

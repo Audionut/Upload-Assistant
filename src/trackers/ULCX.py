@@ -69,6 +69,11 @@ class ULCX():
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'], meta['type'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
+        should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
+        if should_skip:
+            if meta['debug']:
+                console.print("[red]Skipping upload due to failed language checks.[/red]")
+            return
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         name, region_id, distributor_id = await self.edit_name(meta, region_id, distributor_id)
@@ -147,9 +152,10 @@ class ULCX():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://upload.cx/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -225,7 +231,6 @@ class ULCX():
         await check_for_languages(meta, tracker)
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ULCX...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

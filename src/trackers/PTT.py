@@ -26,6 +26,7 @@ class PTT():
         self.source_flag = 'PTT'
         self.upload_url = 'https://polishtorrent.top/api/torrents/upload'
         self.search_url = 'https://polishtorrent.top/api/torrents/filter'
+        self.torrent_url = 'https://polishtorrent.top/torrents/'
         self.signature = "\n[center]Created by Audionut's Upload Assistant[/center]"
         self.banned_groups = ['ViP', 'BiRD', 'M@RTiNU$', 'inTGrity', 'CiNEMAET', 'MusicET', 'TeamET', 'R2D2']
         pass
@@ -150,9 +151,10 @@ class PTT():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://polishtorrent.top/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -164,7 +166,6 @@ class PTT():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on PTT...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

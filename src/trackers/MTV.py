@@ -158,7 +158,7 @@ class MTV():
                 response = session.post(url=self.upload_url, data=data, files=files)
                 try:
                     if "torrents.php" in response.url:
-                        console.print(response.url)
+                        meta['tracker_status'][self.tracker]['status_message'] = response.url
                         await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), response.url)
                     else:
                         if "authkey.php" in response.url:
@@ -278,7 +278,6 @@ class MTV():
         mtv_name = ' '.join(mtv_name.split())
         mtv_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", mtv_name)
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')
-        console.print(f"[yellow]Sent this name: {mtv_name}[/yellow]")
         return mtv_name
 
     async def get_res_id(self, resolution):
@@ -596,7 +595,6 @@ class MTV():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on MTV...")
 
         # Build request parameters
         params = {

@@ -77,6 +77,8 @@ class Prep():
         tracker_ids = ['ptp', 'bhd', 'btn', 'blu', 'aither', 'lst', 'oe', 'hdb', 'huno']
         use_sonarr = config['DEFAULT'].get('use_sonarr', False)
         use_radarr = config['DEFAULT'].get('use_radarr', False)
+        meta['print_tracker_messages'] = config['DEFAULT'].get('print_tracker_messages', False)
+        meta['print_tracker_links'] = config['DEFAULT'].get('print_tracker_links', True)
 
         # make sure these are set in meta
         meta['we_checked_tvdb'] = False
@@ -147,7 +149,7 @@ class Prep():
             except Exception:
                 meta['search_year'] = ""
             if not meta.get('edit', False):
-                mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_1.VOB", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True)
+                mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_1.VOB", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta['debug'])
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']
@@ -170,7 +172,7 @@ class Prep():
             except Exception:
                 meta['search_year'] = ""
             if not meta.get('edit', False):
-                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], export_text=False)
+                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], export_text=False, debug=meta['debug'])
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']

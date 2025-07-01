@@ -27,7 +27,6 @@ async def process_all_trackers(meta):
         local_meta = copy.deepcopy(shared_meta)  # Ensure each task gets its own copy of meta
         local_tracker_status = {'banned': False, 'skipped': False, 'dupe': False, 'upload': False}
         disctype = local_meta.get('disctype', None)
-        console.print(f"\n[bold yellow]Processing Tracker: {tracker_name}[/bold yellow]")
 
         if local_meta['name'].endswith('DUPE?'):
             local_meta['name'] = local_meta['name'].replace(' DUPE?', '')
@@ -123,7 +122,8 @@ async def process_all_trackers(meta):
 
             if not local_meta['debug']:
                 if not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
-                    console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
+                    if not local_meta.get('unattended', False):
+                        console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
                     if (
                         not local_meta['unattended']
                         or (local_meta['unattended'] and local_meta.get('unattended-confirm', False))
@@ -145,14 +145,39 @@ async def process_all_trackers(meta):
         return tracker_name, local_tracker_status
 
     if meta.get('unattended', False):
+        searching_trackers = [name for name in meta['trackers'] if name in tracker_class_map]
+        if searching_trackers:
+            console.print(f"[yellow]Searching for existing torrents on: {', '.join(searching_trackers)}...")
         tasks = [process_single_tracker(tracker_name, meta) for tracker_name in meta['trackers']]
         results = await asyncio.gather(*tasks)
+
+        # Collect passed trackers and skip reasons
+        passed_trackers = []
+        dupe_trackers = []
+        skipped_trackers = []
+
         for tracker_name, status in results:
             tracker_status[tracker_name] = status
+            if not status['banned'] and not status['skipped'] and not status['dupe']:
+                passed_trackers.append(tracker_name)
+            elif status['dupe']:
+                dupe_trackers.append(tracker_name)
+            elif status['skipped']:
+                skipped_trackers.append(tracker_name)
+
+        if dupe_trackers:
+            console.print(f"[red]Found potential dupes on: [bold yellow]{', '.join(dupe_trackers)}[/bold yellow]. [red]Aborting. If this is not a dupe, or you would like to upload anyways, pass --skip-dupe-check")
+        if passed_trackers:
+            console.print(f"[bold green]Trackers passed all checks: [bold yellow]{', '.join(passed_trackers)}")
     else:
+        passed_trackers = []
         for tracker_name in meta['trackers']:
+            if tracker_name in tracker_class_map:
+                console.print(f"[yellow]Searching for existing torrents on {tracker_name}...")
             tracker_name, status = await process_single_tracker(tracker_name, meta)
             tracker_status[tracker_name] = status
+            if not status['banned'] and not status['skipped'] and not status['dupe']:
+                passed_trackers.append(tracker_name)
 
     if meta['debug']:
         console.print("\n[bold]Tracker Processing Summary:[/bold]")
@@ -163,6 +188,8 @@ async def process_all_trackers(meta):
             upload_status = 'Yes' if status['upload'] else 'No'
             console.print(f"Tracker: {t_name} | Banned: {banned_status} | Skipped: {skipped_status} | Dupe: {dupe_status} | [yellow]Upload:[/yellow] {upload_status}")
         console.print(f"\n[bold]Trackers Passed all Checks:[/bold] {successful_trackers}")
+        print()
+        console.print("[bold red]DEBUG MODE does not upload to sites")
 
     meta['tracker_status'] = tracker_status
     return successful_trackers

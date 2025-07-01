@@ -585,6 +585,7 @@ class ASC(COMMON):
             relative_url = details_link_tag['href']
             torrent_url = f"{self.base_url}/{relative_url}"
             announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+            meta['tracker_status'][self.tracker]['status_message'] = torrent_url
 
             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 

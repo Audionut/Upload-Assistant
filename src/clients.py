@@ -201,7 +201,7 @@ class Clients():
             # Reuse if disc and basename matches or --keep-folder was specified
             if meta.get('is_disc', None) is not None or (meta['keep_folder'] and meta['isdir']):
                 torrent_name = torrent.metainfo['info']['name']
-                if meta['uuid'] != torrent_name:
+                if meta['uuid'] != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")
                     valid = False
                 torrent_filepath = os.path.commonpath(torrent.files)
@@ -256,22 +256,28 @@ class Clients():
                     # Piece size and count validations
                     if not meta.get('prefer_small_pieces', False):
                         if reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608:
-                            console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size, regenerating")
+                            if meta['debug']:
+                                console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size")
                             valid = False
-                        elif reuse_torrent.pieces >= 5000 and reuse_torrent.piece_size < 4294304:
-                            console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size, regenerating")
+                        elif reuse_torrent.pieces >= 4000 and reuse_torrent.piece_size < 4294304:
+                            if meta['debug']:
+                                console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size")
                             valid = False
                     elif 'max_piece_size' not in meta and reuse_torrent.pieces >= 12000:
-                        console.print("[bold red]Torrent needs to have less than 12000 pieces to be valid, regenerating")
+                        if meta['debug']:
+                            console.print("[bold red]Torrent needs to have less than 12000 pieces to be valid")
                         valid = False
                     elif reuse_torrent.piece_size < 32768:
-                        console.print("[bold red]Piece size too small to reuse")
+                        if meta['debug']:
+                            console.print("[bold red]Piece size too small to reuse")
                         valid = False
                     elif 'max_piece_size' not in meta and torrent_file_size_kib > 250:
-                        console.print("[bold red]Torrent file size exceeds 250 KiB")
+                        if meta['debug']:
+                            console.log("[bold red]Torrent file size exceeds 250 KiB")
                         valid = False
                     elif wrong_file:
-                        console.print("[bold red]Provided .torrent has files that were not expected")
+                        if meta['debug']:
+                            console.log("[bold red]Provided .torrent has files that were not expected")
                         valid = False
                     else:
                         console.print(f"[bold green]REUSING .torrent with infohash: [bold yellow]{torrenthash}")
@@ -282,7 +288,8 @@ class Clients():
             if meta['debug']:
                 console.log(f"Final validity after piece checks: valid={valid}")
         else:
-            console.print("[bold yellow]Unwanted Files/Folders Identified")
+            if meta['debug']:
+                console.log("[bold yellow]Unwanted Files/Folders Identified")
 
         return valid, torrent_path
 
@@ -993,15 +1000,11 @@ class Clients():
                     auto_management = True
 
         qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
-
-        if meta['debug']:
-            console.print("qbt_category:", qbt_category)
-
         content_layout = client.get('content_layout', 'Original')
         if meta['debug']:
+            console.print("qbt_category:", qbt_category)
             console.print(f"Content Layout: {content_layout}")
-
-        console.print(f"[bold yellow]qBittorrent save path: {save_path}")
+            console.print(f"[bold yellow]qBittorrent save path: {save_path}")
 
         try:
             qbt_client.torrents_add(
@@ -1302,7 +1305,8 @@ class Clients():
                                 # Validate the .torrent file before saving as BASE.torrent
                                 valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
                                 if not valid:
-                                    console.print(f"[bold red]Validation failed for {torrent_file_path}")
+                                    if meta['debug']:
+                                        console.print(f"[bold red]Validation failed for {torrent_file_path}")
                                     os.remove(torrent_file_path)  # Remove invalid file
                                 else:
                                     from src.torrentcreate import create_base_from_existing_torrent
@@ -1712,7 +1716,8 @@ class Clients():
                         for tracker in best_match['tracker_urls']:
                             if tracker.get('id') and tracker.get('tracker_id'):
                                 meta[tracker['id']] = tracker['tracker_id']
-                                console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
+                                if meta['debug']:
+                                    console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
 
                     if not meta.get('base_torrent_created'):
                         default_torrent_client = self.config['DEFAULT']['default_torrent_client']
@@ -1763,12 +1768,14 @@ class Clients():
                                 except Exception as e:
                                     console.print(f"[bold red]Error creating BASE.torrent: {e}")
                             else:
-                                console.print(f"[bold red]Validation failed for best match torrent {torrent_file_path}")
+                                if meta['debug']:
+                                    console.print(f"[bold red]Validation failed for best match torrent {torrent_file_path}")
                                 if os.path.exists(torrent_file_path) and torrent_file_path.startswith(extracted_torrent_dir):
                                     os.remove(torrent_file_path)
 
                                 # Try other matches if the best match isn't valid
-                                console.print("[yellow]Trying other torrent matches...")
+                                if meta['debug']:
+                                    console.print("[yellow]Trying other torrent matches...")
                                 for torrent_match in matching_torrents[1:]:  # Skip the first one since we already tried it
                                     alt_torrent_hash = torrent_match['hash']
                                     alt_torrent_file_path = None
@@ -1823,7 +1830,8 @@ class Clients():
                                                 os.remove(alt_torrent_file_path)
 
                                 if not found_valid_torrent:
-                                    console.print("[bold red]No valid torrents found after checking all matches")
+                                    if meta['debug']:
+                                        console.print("[bold red]No valid torrents found after checking all matches")
                                     meta['we_checked_them_all'] = True
 
             # Display results summary
