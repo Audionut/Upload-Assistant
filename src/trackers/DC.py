@@ -13,6 +13,7 @@ class DC(COMMON):
         self.tracker = 'DC'
         self.source_flag = 'DigitalCore.club'
         self.base_url = "https://digitalcore.club"
+        self.torrent_url = f"{self.base_url}/torrent/"
         self.api_base_url = f"{self.base_url}/api/v1"
         self.banned_groups = [""]
 
@@ -246,10 +247,13 @@ class DC(COMMON):
                     response = self.session.post(upload_url, data=data, files=files, cookies=self.auth_cookies, timeout=90)
                     response.raise_for_status()
                     json_response = response.json()
+                    meta['tracker_status'][self.tracker]['status_message'] = response.json
 
                     if response.status_code == 200 and json_response.get('id'):
                         torrent_id = json_response.get('id')
                         details_url = f"{self.base_url}/torrent/{torrent_id}/" if torrent_id else self.base_url
+                        if torrent_id:
+                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                     else:
