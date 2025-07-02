@@ -298,6 +298,10 @@ config = {
             "link_dir_name": "",
             # Set uploader_status to True if you have uploader permissions to automatically approve your uploads
             "uploader_status": False,
+            # The custom layout default is 2
+            # If you have a custom layout, you'll need to inspect the element on the upload page to find the correct layout value
+            # Don't change it unless you know what you're doing
+            "custom_layout": '2',
             # anon is not an option when uploading to ASC
             # for ASC to work you need to export cookies from https://cliente.amigos-share.club/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
             # cookies need to be in netscape format and need to be in data/cookies/ASC.txt
