@@ -260,7 +260,8 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             mediainfo_cmd = mediainfo_binary
 
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") and export_text:
-        console.print("[bold yellow]Exporting MediaInfo...")
+        if debug:
+            console.print("[bold yellow]Exporting MediaInfo...")
         if not isdir:
             os.chdir(os.path.dirname(video))
 

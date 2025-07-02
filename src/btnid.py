@@ -190,10 +190,10 @@ async def parse_tmdb_id(tmdb_id, category):
     tmdb_id = str(tmdb_id).strip().lower()
 
     if tmdb_id.startswith('tv/') and '/' in tmdb_id:
-        tmdb_id = tmdb_id.split('/')[1]
+        tmdb_id = tmdb_id.split('/')[1].split('-')[0]
         category = 'TV'
     elif tmdb_id.startswith('movie/') and '/' in tmdb_id:
-        tmdb_id = tmdb_id.split('/')[1]
+        tmdb_id = tmdb_id.split('/')[1].split('-')[0]
         category = 'MOVIE'
 
     return category, tmdb_id

@@ -71,8 +71,7 @@ class ULCX():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
         should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
         if should_skip:
-            if meta['debug']:
-                console.print("[red]Skipping upload due to failed language checks.[/red]")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: ulcx_no_language"
             return
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
@@ -201,8 +200,8 @@ class ULCX():
 
     async def search_existing(self, meta, disctype):
         if 'concert' in meta['keywords']:
-            console.print('[bold red]Concerts not allowed at ULCX.')
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print('[bold red]Concerts not allowed at ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -212,8 +211,8 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
-            console.print('[bold red]This content might not fit HEVC rules for ULCX.')
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print('[bold red]This content might not fit HEVC rules for ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -223,7 +222,8 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
-            console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
+            if not meta['unattended']:
+                console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
             meta['skipping'] = "ULCX"
             return
 

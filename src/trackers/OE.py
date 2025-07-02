@@ -349,7 +349,8 @@ class OE():
     async def search_existing(self, meta, disctype):
         disallowed_keywords = {'XXX', 'softcore', 'concert'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Erotic not allowed at RF.')
+            if not meta['unattended']:
+                console.print('[bold red]Erotic not allowed at OE.')
             meta['skipping'] = "OE"
             return
 

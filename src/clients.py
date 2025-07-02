@@ -1444,7 +1444,8 @@ class Clients():
                     try:
                         from src.torrentcreate import create_base_from_existing_torrent
                         await create_base_from_existing_torrent(resolved_path, meta['base_dir'], meta['uuid'])
-                        console.print("[green]Created BASE.torrent from existing torrent")
+                        if meta['debug']:
+                            console.print("[green]Created BASE.torrent from existing torrent")
                     except Exception as e:
                         console.print(f"[bold red]Error creating BASE.torrent: {e}")
                         try:
@@ -1762,7 +1763,8 @@ class Clients():
                                 try:
                                     from src.torrentcreate import create_base_from_existing_torrent
                                     await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
-                                    console.print("[green]Created BASE.torrent from existing torrent")
+                                    if meta['debug']:
+                                        console.print("[green]Created BASE.torrent from existing torrent")
                                     meta['base_torrent_created'] = True
                                     found_valid_torrent = True
                                 except Exception as e:
@@ -1817,7 +1819,8 @@ class Clients():
                                             try:
                                                 from src.torrentcreate import create_base_from_existing_torrent
                                                 await create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
-                                                console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
+                                                if meta['debug']:
+                                                    console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
                                                 meta['infohash'] = alt_torrent_hash  # Update infohash to use the valid torrent
                                                 meta['base_torrent_created'] = True
                                                 found_valid_torrent = True

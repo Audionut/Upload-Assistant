@@ -79,12 +79,14 @@ class NBL():
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':
-            console.print("[red]Only TV Is allowed at NBL")
+            if not meta['unattended']:
+                console.print("[red]Only TV Is allowed at NBL")
             meta['skipping'] = "NBL"
             return []
 
         if meta.get('is_disc') is not None:
-            console.print('[bold red]NBL does not allow raw discs')
+            if not meta['unattended']:
+                console.print('[bold red]NBL does not allow raw discs')
             meta['skipping'] = "NBL"
             return []
 

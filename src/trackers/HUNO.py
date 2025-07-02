@@ -379,7 +379,8 @@ class HUNO():
 
     async def search_existing(self, meta, disctype):
         if meta['video_codec'] != "HEVC" and meta['type'] in {"ENCODE", "WEBRIP", "DVDRIP", "HDTV"}:
-            console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
+            if not meta['unattended']:
+                console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
             meta['skipping'] = "HUNO"
             return
         dupes = []

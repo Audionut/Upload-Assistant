@@ -173,7 +173,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         if meta.get('print_tracker_messages', False):
             for tracker, status in meta.get('tracker_status', {}).items():
                 if 'status_message' in status:
-                    print(redact_private_info(status['status_message']))
+                    print(f"{tracker}: {redact_private_info(status['status_message'])}")
         elif not meta.get('print_tracker_links', True):
             console.print("[green]All tracker uploads processed.[/green]")
     except Exception as e:
@@ -182,18 +182,26 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
     if meta.get('print_tracker_links', True):
         try:
             for tracker, status in meta.get('tracker_status', {}).items():
-                if tracker == "MTV" and 'status_message' in status:
+                if tracker == "MTV" and 'status_message' in status and "data error" not in status['status_message']:
                     console.print(f"[green]{status['status_message']}[/green]")
                 if 'torrent_id' in status:
                     tracker_class = tracker_class_map[tracker](config=config)
                     torrent_url = tracker_class.torrent_url
                     console.print(f"[green]{torrent_url}{status['torrent_id']}[/green]")
                 else:
-                    for tracker, status in meta.get('tracker_status', {}).items():
-                        if 'status_message' in status:
-                            print(redact_private_info(status['status_message']))
-                        else:
-                            console.print(f"{tracker} gave no useful message.")
+                    if (
+                        'status_message' in status
+                        and 'torrent_id' not in status
+                        and "data error" not in status['status_message']
+                        and tracker != "MTV"
+                    ):
+                        print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                    elif 'status_message' in status and "data error" in status['status_message']:
+                        console.print(f"[red]{tracker}: {status['status_message']}[/red]")
+                    else:
+                        if 'skipping' in status and not status['skipping']:
+                            console.print(f"[red]{tracker} gave no useful message.")
+            console.print("[green]All tracker uploads processed.[/green]")
         except Exception as e:
             console.print(f"[red]Error printing {tracker} data: {e}[/red]")
             pass

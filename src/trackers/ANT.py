@@ -137,7 +137,8 @@ class ANT():
 
     async def search_existing(self, meta, disctype):
         if meta.get('category') == "TV":
-            console.print('[bold red]ANT only ALLOWS Movies.')
+            if not meta['unattended']:
+                console.print('[bold red]ANT only ALLOWS Movies.')
             meta['skipping'] = "ANT"
             return []
         dupes = []
