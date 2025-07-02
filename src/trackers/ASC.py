@@ -18,6 +18,7 @@ class ASC(COMMON):
         self.source_flag = 'ASC'
         self.banned_groups = [""]
         self.base_url = "https://cliente.amigos-share.club"
+        self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
@@ -279,7 +280,7 @@ class ASC(COMMON):
         url_gerador_desc = f"{self.base_url}/search.php"
         payload = {
             'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
-            'layout': '2'
+            'layout': self.layout
         }
 
         try:
@@ -425,12 +426,12 @@ class ASC(COMMON):
 
     async def prepare_form_data(self, meta):
         try:
-            data = {'takeupload': 'yes', 'tresd': 2, 'layout': 2}
+            data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
 
             asc_data = None
             if meta.get('imdb_id'):
                 url_gerador_desc = f"{self.base_url}/search.php"
-                payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': '2'}
+                payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': self.layout}
                 try:
                     cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
                     self.session.cookies.update(await self.parseCookieFile(cookie_file))
