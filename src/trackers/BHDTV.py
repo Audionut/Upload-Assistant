@@ -89,7 +89,7 @@ class BHDTV():
             response = requests.post(url=self.upload_url, data=data, files=files)
             try:
                 # pprint(data)
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception:
                 console.print("[cyan]It may have uploaded, go check")
                 # cprint(f"Request Data:", 'cyan')

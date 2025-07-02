@@ -362,7 +362,7 @@ async def check_for_languages(meta, tracker):
                     if not has_sub:
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
                             console.print(f'[bold red]No required audio or subtitles found in MEDIAINFO required for {tracker}.')
-                            if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                            if cli_ui.ask_yes_no("Do you want to upload anyway? (Description language note can be added later)", default=False):
                                 return True
                             else:
                                 return False

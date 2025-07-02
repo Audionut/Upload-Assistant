@@ -50,12 +50,12 @@ class OE():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'oeimg', 'ptscreens', "passtheimage"]
+        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
-            "imgoe.download": "oeimg",
+            "onlyimage.org": "onlyimage",
             "imagebam.com": "bam",
             "ptscreens.com": "ptscreens",
             "img.passtheima.ge": "passtheimage",
@@ -64,12 +64,12 @@ class OE():
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         await self.edit_desc(meta, self.tracker, self.signature)
         if "oe_no_language" in meta:
-            console.print("[red]No language detected in MEDIAINFO.txt[/red]")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: oe_no_language"
             return
         cat_id = await self.get_cat_id(meta['category'])
         if meta.get('type') == "DVDRIP":
             meta['type'] = "ENCODE"
-        type_id = await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('video_codec'), meta.get('category', ""))
+        type_id = await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A'))
         resolution_id = await self.get_res_id(meta['resolution'])
         oe_name = await self.edit_name(meta)
         region_id = await common.unit3d_region_ids(meta.get('region'))
@@ -138,9 +138,10 @@ class OE():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://onlyencodes.cc/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -210,7 +211,7 @@ class OE():
         }.get(category_name, '0')
         return category_id
 
-    async def get_type_id(self, type, tv_pack, video_codec, category):
+    async def get_type_id(self, type, video_codec):
         type_id = {
             'DISC': '19',
             'REMUX': '20',
@@ -348,7 +349,8 @@ class OE():
     async def search_existing(self, meta, disctype):
         disallowed_keywords = {'XXX', 'softcore', 'concert'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Erotic not allowed at RF.')
+            if not meta['unattended']:
+                console.print('[bold red]Erotic not allowed at OE.')
             meta['skipping'] = "OE"
             return
 
@@ -356,12 +358,11 @@ class OE():
         await check_for_languages(meta, tracker)
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OE...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('sd', 0), meta.get('category', "")),
+            'types[]': await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A')),
             'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }

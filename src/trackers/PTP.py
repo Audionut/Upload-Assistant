@@ -1409,5 +1409,6 @@ class PTP():
 
                 # having UA add the torrent link as a comment.
                 if match:
+                    meta['tracker_status'][self.tracker]['status_message'] = response.url
                     common = COMMON(config=self.config)
                     await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), response.url)

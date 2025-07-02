@@ -153,10 +153,15 @@ async def get_audio_v2(mi, meta, bdinfo):
                             if any(audio_language.startswith(var) for var in variants) and any(meta.get('original_language').startswith(var) for var in variants):
                                 orig = True
 
-                        if isinstance(audio_language, str) and audio_language and audio_language != meta.get('original_language') and not audio_language.startswith("en"):
-                            audio_language = "und" if audio_language == "" else audio_language
-                            console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
-                            time.sleep(5)
+                        if isinstance(audio_language, str):
+                            audio_language = audio_language.strip().lower()
+                            orig_lang = meta.get('original_language', '').lower()
+                            if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en"):
+                                console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
+                                time.sleep(5)
+
+                        if not audio_language:
+                            audio_language = "und"
 
                     if eng and orig:
                         dual = "Dual-Audio"

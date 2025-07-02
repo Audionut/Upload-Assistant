@@ -28,6 +28,7 @@ class TVC():
         self.source_flag = 'TVCHAOS'
         self.upload_url = 'https://tvchaosuk.com/api/torrents/upload'
         self.search_url = 'https://tvchaosuk.com/api/torrents/filter'
+        self.torrent_url = 'https://tvchaosuk.com/torrents/'
         self.signature = ""
         self.banned_groups = []
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
@@ -218,10 +219,10 @@ class TVC():
                 # b'application/x-bittorrent\n{"success":true,"data":"https:\\/\\/tvchaosuk.com\\/torrent\\/download\\/164633.REDACTED","message":"Torrent uploaded successfully."}'
                 # so you need to convert text to json.
                 json_data = json.loads(response.text.strip('application/x-bittorrent\n'))
-                console.print(json_data)
-
-                # adding torrent link to torrent as comment
+                meta['tracker_status'][self.tracker]['status_message'] = json_data
+                # adding torrent link to comment of torrent file
                 t_id = json_data['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag,
                                                  self.config['TRACKERS'][self.tracker].get('announce_url'),
                                                  "https://tvchaosuk.com/torrents/" + t_id)
@@ -304,7 +305,6 @@ class TVC():
             meta['skipping'] = "TVC"
             return []
 
-        console.print("[yellow]Searching for existing torrents on TVC...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],

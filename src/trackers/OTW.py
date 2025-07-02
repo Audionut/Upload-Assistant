@@ -190,9 +190,10 @@ class OTW():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://oldtoons.world/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -211,8 +212,8 @@ class OTW():
 
     async def search_existing(self, meta, disctype):
         if not any(genre in meta['genres'] for genre in ['Animation', 'Family']):
-            console.print('[bold red]Genre does not match Animation or Family needed for OTW.')
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -223,15 +224,16 @@ class OTW():
                 return
         disallowed_keywords = {'XXX', 'Erotic', 'Porn', 'Hentai', 'Adult Animation', 'Orgy', 'softcore'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Adult animation not allowed at OTW.')
+            if not meta['unattended']:
+                console.print('[bold red]Adult animation not allowed at OTW.')
             meta['skipping'] = "OTW"
             return []
         if meta['sd'] and 'BluRay' in meta['source']:
-            console.print("[bold red]SD content from HD source not allowed at OTW")
+            if not meta['unattended']:
+                console.print("[bold red]SD content from HD source not allowed")
             meta['skipping'] = "OTW"
             return []
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OTW...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

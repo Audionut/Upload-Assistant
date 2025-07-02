@@ -155,20 +155,30 @@ class MTV():
             with requests.Session() as session:
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                response = session.post(url=self.upload_url, data=data, files=files)
+                response = session.post(url=self.upload_url, data=data, files=files, allow_redirects=True)
                 try:
-                    if "torrents.php" in response.url:
-                        console.print(response.url)
-                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), response.url)
+                    if "torrents.php" in str(response.url):
+                        meta['tracker_status'][self.tracker]['status_message'] = response.url
+                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+                    elif 'https://www.morethantv.me/upload.php' in str(response.url):
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error - Still on upload page - upload may have failed"
+                        if "error" in response.text.lower() or "failed" in response.text.lower():
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Upload failed - check form data"
+                    elif str(response.url) == "https://www.morethantv.me/" or str(response.url) == "https://www.morethantv.me/index.php":
+                        if "Project Luminance" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Not logged in - session may have expired"
+                        if "'GroupID' cannot be null" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?"
+                        elif "Integrity constraint violation" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Proper site bug"
                     else:
-                        if "authkey.php" in response.url:
-                            console.print("[red]No DL link in response, It may have uploaded, check manually.")
+                        if "authkey.php" in str(response.url):
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - No DL link in response, It may have uploaded, check manually."
                         else:
-                            console.print("[red]Upload Failed. Either you are not logged in......")
-                            console.print("[red]You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?")
-                            console.print("[red]Or you hit some other error with the torrent upload.")
+                            console.print(f"response URL: {response.url}")
+                            console.print(f"response status: {response.status_code}")
                 except Exception:
-                    console.print("[red]It may have uploaded, check manually.")
+                    meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
                     print(traceback.print_exc())
         else:
             console.print("[cyan]Request Data:")
@@ -278,7 +288,6 @@ class MTV():
         mtv_name = ' '.join(mtv_name.split())
         mtv_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", mtv_name)
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')
-        console.print(f"[yellow]Sent this name: {mtv_name}[/yellow]")
         return mtv_name
 
     async def get_res_id(self, resolution):
@@ -596,7 +605,6 @@ class MTV():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on MTV...")
 
         # Build request parameters
         params = {

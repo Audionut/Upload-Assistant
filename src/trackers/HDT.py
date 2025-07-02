@@ -185,7 +185,7 @@ class HDT():
                     if search:
                         id = search
                         # modding existing torrent for adding to client instead of downloading torrent from site.
-                        console.print(f"[green]{self.base_url}/details.php?id=" + id)
+                        meta['tracker_status'][self.tracker]['status_message'] = f"{self.base_url}/details.php?id=" + id
                         await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS']['HDT'].get('my_announce_url'), f"{self.base_url}/details.php?id=" + id)
                     else:
                         console.print("[cyan]Request Data:")

@@ -28,6 +28,7 @@ class BHD():
         self.tracker = 'BHD'
         self.source_flag = 'BHD'
         self.upload_url = 'https://beyond-hd.me/api/upload/'
+        self.torrent_url = 'https://beyond-hd.me/details/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
         pass
@@ -142,11 +143,12 @@ class BHD():
                     match = re.search(r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.", response['status_message'])
                     if match:
                         torrent_id = match.group(1)
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                         details_link = f"https://beyond-hd.me/details/{torrent_id}"
                     else:
                         console.print("[yellow]No valid details link found in status_message.")
 
-                console.print(response)
+                meta['tracker_status'][self.tracker]['status_message'] = response
             except Exception as e:
                 console.print("It may have uploaded, go check")
                 console.print(f"Error: {e}")
@@ -312,8 +314,8 @@ class BHD():
             "-ncmt", "-tdd", "-flux", "-crfw", "-sonny", "-zr-", "-mkvultra",
             "-rpg", "-w4nk3r", "-irobot", "-beyondhd"
         )):
-            console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -323,12 +325,12 @@ class BHD():
                 meta['skipping'] = "BHD"
                 return []
         if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
-            console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
+            if not meta['unattended']:
+                console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
             meta['skipping'] = "BHD"
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on BHD...")
         category = meta['category']
         tmdbID = "movie" if category == 'MOVIE' else "tv"
         if category == 'MOVIE':

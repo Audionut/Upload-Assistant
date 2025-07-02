@@ -366,7 +366,6 @@ class AR():
         return os.path.basename(path)
 
     async def search_existing(self, meta, DISCTYPE):
-        console.print("[yellow]Searching for existing torrents on AR...")
         dupes = {}
 
         # Combine title and year
@@ -526,7 +525,7 @@ class AR():
                                 async with session.post(self.upload_url, data=form, headers=headers) as response:
                                     if response.status == 200:
                                         # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
-                                        console.print(f"[green]{response.url}")
+                                        meta['tracker_status'][self.tracker]['status_message'] = response.url
                                         match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
                                         if match is None:
                                             await self.close_session()

@@ -25,6 +25,7 @@ class RTF():
         self.source_flag = 'sunshine'
         self.upload_url = 'https://retroflix.club/api/upload'
         self.search_url = 'https://retroflix.club/api/torrent'
+        self.torrent_url = 'https://retroflix.club/browse/t/'
         self.forum_link = 'https://retroflix.club/forums.php?action=viewtopic&topicid=3619'
         self.banned_groups = []
         pass
@@ -77,9 +78,11 @@ class RTF():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, json=json_data, headers=headers)
             try:
-                console.print(response.json())
+                response_json = response.json()
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
 
-                t_id = response.json()['torrent']['id']
+                t_id = response_json['torrent']['id']
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://retroflix.club/browse/t/" + str(t_id))
 
             except Exception:
@@ -104,7 +107,6 @@ class RTF():
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on RTF...")
         headers = {
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
@@ -174,7 +176,7 @@ class RTF():
                 token = response.json().get("token")
                 if token:
                     console.print('[bold green]Saving and using New API key generated for this upload')
-                    console.print(f'[bold yellow]{token}')
+                    console.print(f'[bold yellow]{token[:10]}...[/bold yellow]')
 
                     # Update the in-memory config dictionary
                     self.config['TRACKERS'][self.tracker]['api_key'] = token

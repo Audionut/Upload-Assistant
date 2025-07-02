@@ -33,7 +33,7 @@ config = {
         "ptpimg_api": "",
         "lensdump_api": "",
         "ptscreens_api": "",
-        "oeimg_api": "",
+        "onlyimage_api": "",
         "dalexni_api": "",
         "passtheima_ge_api": "",
         # custom zipline url
@@ -229,6 +229,13 @@ config = {
         # NOT RECOMMENDED UNLESS YOU KNOW WHAT YOU ARE DOING
         # set true to not delete existing meta.json file before running
         "keep_meta": False,
+
+        # Set true to print the tracker api messages from uploads
+        "print_tracker_messages": False,
+
+        # Whether or not to print direct torrent links for the uploaded content
+        "print_tracker_links": True,
+
     },
 
     # these are used for DB links on AR
@@ -291,6 +298,7 @@ config = {
             "link_dir_name": "",
             # Set uploader_status to True if you have uploader permissions to automatically approve your uploads
             "uploader_status": False,
+            # anon is not an option when uploading to ASC
             # for ASC to work you need to export cookies from https://cliente.amigos-share.club/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
             # cookies need to be in netscape format and need to be in data/cookies/ASC.txt
             "announce_url": "https://amigos-share.club/announce.php?passkey=PASSKEY",

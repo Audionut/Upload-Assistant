@@ -37,7 +37,7 @@ class HUNO():
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         huno_name, region_id, distributor_id = await self.get_name(meta, region_id=region_id, distributor_id=distributor_id)
         if (huno_name or region_id) == "SKIPPED":
-            console.print("[bold red]Skipping upload to HUNO due to missing audio language or region/distributor.")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: huno_missing_data"
             return
 
         url_host_mapping = {
@@ -118,13 +118,14 @@ class HUNO():
         if meta['debug'] is False:
             try:
                 response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception as e:
                 console.print(f"[bold red]Error uploading torrent: {e}")
                 return
             try:
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://hawke.uno/torrents/" + t_id)
             except Exception:
                 console.print("Error getting torrent ID from response.")
@@ -202,7 +203,7 @@ class HUNO():
                     print("DEBUG: No Audio sections found in MEDIAINFO.txt.")
 
         if language == "zxx":
-            language = "Silent"
+            language = "NONE"
         elif not language:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
                 language = cli_ui.ask_string('No audio language present, you must enter one:')
@@ -378,11 +379,11 @@ class HUNO():
 
     async def search_existing(self, meta, disctype):
         if meta['video_codec'] != "HEVC" and meta['type'] in {"ENCODE", "WEBRIP", "DVDRIP", "HDTV"}:
-            console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
+            if not meta['unattended']:
+                console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
             meta['skipping'] = "HUNO"
             return
         dupes = []
-        console.print("[yellow]Searching for existing torrents on HUNO...")
 
         params = {
             'api_token': self.config['TRACKERS']['HUNO']['api_key'].strip(),

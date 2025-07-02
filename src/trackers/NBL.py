@@ -65,10 +65,9 @@ class NBL():
             try:
                 if response.ok:
                     response = response.json()
-                    console.print(response.get('message', response))
+                    meta['tracker_status'][self.tracker]['status_message'] = response
                 else:
-                    console.print(response)
-                    console.print(response.text)
+                    meta['tracker_status'][self.tracker]['status_message'] = response.text
             except Exception:
                 console.print_exception()
                 console.print("[bold yellow]It may have uploaded, go check")
@@ -80,17 +79,18 @@ class NBL():
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':
-            console.print("[red]Only TV Is allowed at NBL")
+            if not meta['unattended']:
+                console.print("[red]Only TV Is allowed at NBL")
             meta['skipping'] = "NBL"
             return []
 
         if meta.get('is_disc') is not None:
-            console.print('[bold red]NBL does not allow raw discs')
+            if not meta['unattended']:
+                console.print('[bold red]NBL does not allow raw discs')
             meta['skipping'] = "NBL"
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on NBL...")
 
         if int(meta.get('tvmaze_id', 0)) != 0:
             search_term = {'tvmaze': int(meta['tvmaze_id'])}

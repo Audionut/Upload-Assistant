@@ -79,7 +79,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False):
+async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False, debug=False):
     def filter_mediainfo(data):
         filtered = {
             "creatingLibrary": data.get("creatingLibrary"),
@@ -252,14 +252,16 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
 
     mediainfo_cmd = None
     if is_dvd:
-        console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
+        if debug:
+            console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
         mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
 
         if platform.system() == "windows" and os.path.exists(mediainfo_binary):
             mediainfo_cmd = mediainfo_binary
 
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") and export_text:
-        console.print("[bold yellow]Exporting MediaInfo...")
+        if debug:
+            console.print("[bold yellow]Exporting MediaInfo...")
         if not isdir:
             os.chdir(os.path.dirname(video))
 
@@ -294,7 +296,8 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             export.write(filtered_media_info.replace(video, os.path.basename(video)))
         with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
             export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
-        console.print("[bold green]MediaInfo Exported.")
+        if debug:
+            console.print("[bold green]MediaInfo Exported.")
 
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json"):
         if mediainfo_cmd:

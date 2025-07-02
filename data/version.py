@@ -1,3 +1,24 @@
+__version__ = "5.1.1"
+
+"""
+Changelog for version 5.1.1 (2025-06-28):
+
+## What's Changed
+* HDT - screens and description changes by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/575
+* HDS - load custom descriptions by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/576
+* fix DVD processing on linux by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/574
+* ASC - improve fallback data by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/578
+* is_scene - Fix crash when is_all_lowercase is not defined by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/579
+* fixed the test run prints in the readme
+* OTW - add resolution to name with DVD type sources
+* BHD - nfo file uploads
+* ULCX - fix search_year: aka - year in title when tv and condition met
+* PTP - move the youtube check so that it only asks when actually uploading
+
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.0...5.1.1
+"""
+
 __version__ = "5.1.0"
 
 """

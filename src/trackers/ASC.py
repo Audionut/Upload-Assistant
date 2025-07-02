@@ -440,41 +440,56 @@ class ASC(COMMON):
                 except Exception:
                     asc_data = None
 
+            # Description
+            description = None
             if asc_data:
                 description = self.build_description({'ASC': asc_data})
-                data['descr'] = f"{description}\n\n{self.signature}".strip()
+            if not description:
+                description = await self.fallback_description(meta)
 
-                if asc_data.get('poster_path'):
-                    data['capa'] = asc_data.get('poster_path')
+            data['descr'] = f"{description}\n\n{self.signature}".strip()
 
-                nome_base = asc_data.get('Title', '')
+            # Poster
+            poster_path = asc_data.get('poster_path') if asc_data else None
+            if not poster_path:
+                poster_path = meta.get('poster')
+            if poster_path:
+                data['capa'] = poster_path
+
+            # Title
+            # The site database is incompatible with non-ASCII characters in the title
+            def is_safe_ascii(text):
+                if not text:
+                    return False
+                return bool(re.match(r'^[ -~]+$', text))
+
+            title_from_asc = asc_data.get('Title') if asc_data else None
+
+            if is_safe_ascii(title_from_asc):
+                nome_base = title_from_asc
+
                 if meta.get('category') == 'TV':
                     season, episode = self.get_season_and_episode(meta)
                     season_episode_str = ""
-                    if season and not episode:
-                        season_episode_str = f" - {season}"
-                    elif season and episode:
-                        season_episode_str = f" - {season}{episode}"
+                    if season:
+                        season_episode_str = f" - {season}{episode or ''}"
                     data['name'] = f"{nome_base}{season_episode_str}"
                 else:
                     data['name'] = nome_base
-
-                if asc_data.get('Year'):
-                    data['ano'] = asc_data.get('Year')
-
-                if asc_data.get('Genre'):
-                    data['genre'] = asc_data.get('Genre')
-
             else:
-                data['descr'] = await self.fallback_description(meta)
-                if meta.get('poster'):
-                    data['capa'] = meta.get('poster')
                 data['name'] = self.get_title(meta)
-                if meta.get('year'):
-                    data['ano'] = meta.get('year')
-                if meta.get('genres'):
-                    data['genre'] = meta.get('genres')
 
+            # Year
+            ano = asc_data.get('Year') if asc_data and asc_data.get('Year') else meta.get('year')
+            if ano:
+                data['ano'] = ano
+
+            # Genre
+            genre = asc_data.get('Genre') if asc_data and asc_data.get('Genre') else meta.get('genres')
+            if genre:
+                data['genre'] = genre
+
+            # File information
             data['legenda'] = self.get_subtitles(meta)
             data['qualidade'] = self.get_type_id(meta)
             data['audio'] = self.get_dubs(meta)
@@ -482,18 +497,22 @@ class ASC(COMMON):
             data['codecaudio'] = self.get_audio_codec(meta)
             data['codecvideo'] = self.get_video_codec(meta)
 
+            # IMDb
             if meta.get('imdb_id'):
                 data['imdb'] = meta.get('imdb_info', {}).get('imdbID', '')
 
+            # Trailer
             if meta.get('youtube'):
                 data['tube'] = meta.get('youtube')
 
+            # Resolution
             largura, altura = self.get_res_id(meta)
             if largura:
                 data['largura'] = largura
             if altura:
                 data['altura'] = altura
 
+            # Languages
             lang_map = {"en": "1", "fr": "2", "de": "3", "it": "4", "ja": "5", "es": "6", "ru": "7", "pt": "8", "zh": "10", "da": "12", "sv": "13", "fi": "14", "bg": "15", "no": "16", "nl": "17", "pl": "19", "ko": "20", "th": "21", "hi": "23", "tr": "25"}
 
             if meta.get('anime'):
@@ -508,6 +527,7 @@ class ASC(COMMON):
             else:
                 data['lang'] = lang_map.get(meta.get('original_language', '').lower(), "11")
 
+            # Screenshots
             for i, img in enumerate(meta.get('image_list', [])[:4]):
                 data[f'screens{i+1}'] = img.get('raw_url')
 
@@ -517,9 +537,6 @@ class ASC(COMMON):
             raise
 
     async def upload(self, meta, disctype):
-        if not await self.anonymous_warning(meta):
-            return
-
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
 
         data = await self.prepare_form_data(meta)
@@ -541,28 +558,13 @@ class ASC(COMMON):
         self.session.cookies.update(await self.parseCookieFile(cookie_file))
 
         with open(torrent_path, 'rb') as torrent_file:
-            files = {'torrent': (f"{self.tracker}_placeholder.torrent", torrent_file, "application/x-bittorrent")}
+            files = {'torrent': (f"{self.tracker}.{meta.get('infohash', '')}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
             response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
         if "foi enviado com sucesso" in response.text:
             await self.successful_upload(response.text, meta)
         else:
             self.failed_upload(response, meta)
-
-    async def anonymous_warning(self, meta):
-        if meta.get('anon'):
-            console.print(f"[bold yellow]Aviso: Você solicitou um upload anônimo, mas o tracker '{self.tracker}' não suporta esta opção.[/bold yellow]")
-
-            should_continue = cli_ui.ask_yes_no(
-                "Deseja continuar com o upload de forma pública (não-anônima)?",
-                default=False
-            )
-
-            if not should_continue:
-                console.print(f"[red]Upload para o tracker '{self.tracker}' cancelado pelo usuário.[/red]")
-                return False
-
-        return True
 
     def get_upload_url(self, meta):
         if meta.get('anime'):
@@ -583,6 +585,7 @@ class ASC(COMMON):
             relative_url = details_link_tag['href']
             torrent_url = f"{self.base_url}/{relative_url}"
             announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+            meta['tracker_status'][self.tracker]['status_message'] = torrent_url
 
             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 

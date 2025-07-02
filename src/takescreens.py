@@ -175,7 +175,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             except Exception as e:
                 console.print(f"[red]Error removing smallest image: {str(e)}")
 
-        if not force_screenshots:
+        if not force_screenshots and meta['debug']:
             console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
         optimized_results = []
@@ -229,7 +229,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             if meta['debug']:
                 console.print("Optimized results:", optimized_results)
 
-            if not force_screenshots:
+            if not force_screenshots and meta['debug']:
                 console.print(f"[green]Successfully optimized {len(optimized_results)} images.[/green]")
         else:
             optimized_results = valid_images
@@ -252,7 +252,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
@@ -283,7 +283,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         elif new_size > 75000 and new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                             console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                             valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                             console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                             valid_image = True
 
@@ -303,7 +303,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         if remaining_retakes:
             console.print(f"[red]The following images could not be retaken successfully: {remaining_retakes}[/red]")
 
-    if not force_screenshots:
+    if not force_screenshots and meta['debug']:
         console.print(f"[green]Successfully captured {len(valid_results)} screenshots.")
 
     if meta['debug']:
@@ -631,7 +631,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
             if meta['debug']:
                 console.print("Optimized results:", optimized_results)
-            if not retry_cap:
+            if not retry_cap and meta['debug']:
                 console.print(f"[green]Successfully optimized {len(optimized_results)} images.")
 
             executor.shutdown(wait=True)  # Ensure cleanup
@@ -706,7 +706,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         if remaining_retakes:
             console.print(f"[red]The following images could not be retaken successfully: {remaining_retakes}[/red]")
 
-    if not retry_cap:
+    if not retry_cap and meta['debug']:
         console.print(f"[green]Successfully captured {len(valid_results)} screenshots.")
     await cleanup()
 
@@ -994,7 +994,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         if meta['debug']:
             console.print("[yellow]All capture tasks finished. Cleaning up...[/yellow]")
 
-    if not force_screenshots:
+    if not force_screenshots and meta['debug']:
         console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
     optimized_results = []
@@ -1033,7 +1033,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
         # Filter out failed results
         optimized_results = [res for res in optimized_results if isinstance(res, str) and "Error" not in res]
-        if not force_screenshots:
+        if not force_screenshots and meta['debug']:
             console.print(f"[green]Successfully optimized {len(optimized_results)} images.[/green]")
     else:
         optimized_results = valid_images
@@ -1059,7 +1059,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
             elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
@@ -1105,7 +1105,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
-                            elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg", "dalexni", "zipline", "passtheimage"] for host in img_host):
+                            elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
 
@@ -1146,7 +1146,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             valid_image = True
                         elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
                             valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "oeimg"] for host in img_host):
+                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage"] for host in img_host):
                             valid_image = True
 
                         if valid_image:

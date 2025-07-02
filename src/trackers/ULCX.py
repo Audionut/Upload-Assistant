@@ -69,6 +69,10 @@ class ULCX():
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'], meta['type'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
+        should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
+        if should_skip:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: ulcx_no_language"
+            return
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         name, region_id, distributor_id = await self.edit_name(meta, region_id, distributor_id)
@@ -147,9 +151,10 @@ class ULCX():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://upload.cx/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -195,8 +200,8 @@ class ULCX():
 
     async def search_existing(self, meta, disctype):
         if 'concert' in meta['keywords']:
-            console.print('[bold red]Concerts not allowed at ULCX.')
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print('[bold red]Concerts not allowed at ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -206,8 +211,8 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
-            console.print('[bold red]This content might not fit HEVC rules for ULCX.')
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                console.print('[bold red]This content might not fit HEVC rules for ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -217,7 +222,8 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
-            console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
+            if not meta['unattended']:
+                console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
             meta['skipping'] = "ULCX"
             return
 
@@ -225,7 +231,6 @@ class ULCX():
         await check_for_languages(meta, tracker)
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ULCX...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

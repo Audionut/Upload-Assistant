@@ -181,6 +181,7 @@ class FL():
                     # Match url to verify successful upload
                     match = re.match(r".*?filelist\.io/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
                     if match:
+                        meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(session, id, torrent_path)
                     else:

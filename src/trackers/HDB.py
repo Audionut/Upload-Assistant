@@ -325,6 +325,7 @@ class HDB():
                     # Match url to verify successful upload
                     match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
                     if match:
+                        meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(id, torrent_path)
                     else:
@@ -336,7 +337,6 @@ class HDB():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on HDB...")
 
         url = "https://hdbits.org/api/torrents"
         data = {
