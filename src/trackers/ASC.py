@@ -280,7 +280,7 @@ class ASC(COMMON):
         }
 
         try:
-            await self._load_cookies(meta)
+            await self.load_cookies(meta)
 
             response = self.session.post(url_gerador_desc, data=payload, timeout=20)
             response.raise_for_status()
@@ -470,7 +470,7 @@ class ASC(COMMON):
                 url_gerador_desc = f"{self.base_url}/search.php"
                 payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': self.layout}
                 try:
-                    await self._load_cookies(meta)
+                    await self.load_cookies(meta)
                     response = self.session.post(url_gerador_desc, data=payload, timeout=20)
                     response.raise_for_status()
                     asc_data = response.json().get('ASC')
@@ -597,7 +597,7 @@ class ASC(COMMON):
 
     async def upload(self, meta, disctype):
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-        await self._load_cookies(meta)
+        await self.load_cookies(meta)
 
         data = await self.prepare_form_data(meta)
         if data is None:
@@ -673,7 +673,7 @@ class ASC(COMMON):
         console.print(f"[cyan]Buscando duplicados em:[/cyan] {search_url}")
 
         try:
-            await self._load_cookies(meta)
+            await self.load_cookies(meta)
             response = self.session.get(search_url, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -766,7 +766,7 @@ class ASC(COMMON):
         return await self.get_dupes(search_url, meta)
 
     async def validate_credentials(self, meta):
-        await self._load_cookies(meta)
+        await self.load_cookies(meta)
 
         try:
             test_url = f"{self.base_url}/gerador.php"
@@ -793,7 +793,7 @@ class ASC(COMMON):
 
         return True
 
-    async def _load_cookies(self, meta):
+    async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
         if os.path.exists(cookie_file):
             self.session.cookies.update(await self.parseCookieFile(cookie_file))
