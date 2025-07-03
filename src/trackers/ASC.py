@@ -280,9 +280,7 @@ class ASC(COMMON):
         }
 
         try:
-            cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
-            if os.path.exists(cookie_file):
-                self.session.cookies.update(await self.parseCookieFile(cookie_file))
+            await self._load_cookies(meta)
 
             response = self.session.post(url_gerador_desc, data=payload, timeout=20)
             response.raise_for_status()
@@ -290,237 +288,178 @@ class ASC(COMMON):
             json_data = response.json()
             auto_description = await self.build_description(json_data, meta)
 
-            if not auto_description:
-                raise ValueError("Não foi possível construir a descrição automática.")
-
             return auto_description.strip()
 
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
 
     async def build_description(self, json_data, meta):
-        description = ""
         fileinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{'BD_SUMMARY_00.txt' if meta.get('is_disc') == 'BDMV' else 'MEDIAINFO_CLEANPATH.txt'}"
         with open(fileinfo_path, 'r', encoding='utf-8') as f:
             fileinfo_dump = f.read()
 
         asc_data = json_data.get('ASC')
-        if asc_data:
-            tmdb_tv_data = None
-            tmdb_id = meta.get('tmdb')
-            api_key = self.config['DEFAULT'].get('tmdb_api')
-            category = meta.get('category', '').lower()
-
-            if tmdb_id and api_key and category == 'tv':
-                url = f"https://api.themoviedb.org/3/tv/{tmdb_id}?api_key={api_key}&language=pt-BR"
-
-                try:
-                    response = requests.get(url)
-
-                    if response.status_code == 200:
-                        tmdb_tv_data = response.json()
-
-                except requests.exceptions.RequestException as e:
-                    print(f"Ocorreu um erro ao fazer a requisição para o TMDB: {e}")
-
-            def format_image(url):
-                return f"[img]{url}[/img]" if url else ""
-
-            def format_date(date_str):
-                if not date_str or date_str == 'N/A':
-                    return 'N/A'
-                try:
-                    return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m/%Y')
-                except (ValueError, TypeError):
-                    try:
-                        return datetime.strptime(date_str, '%d %b %Y').strftime('%d/%m/%Y')
-                    except (ValueError, TypeError):
-                        return date_str
-
-            # Common data
-            tipo_media = asc_data.get('Type', 'movie')
-            titulo = asc_data.get('Title', 'Título não disponível')
-            poster_path = asc_data.get('poster_path', '')
-            sinopse = asc_data.get('overview', 'Sinopse não disponível.')
-            imdb_id = asc_data.get('imdbID', '')
-            website = asc_data.get('Website', 'N/A')
-            barrinhas = {key: value for key, value in asc_data.items() if key.startswith('BARRINHA_')}
-
-            description = "[center]\n"
-
-            # Custom top bars
-            for i in range(1, 4):
-                if barrinhas.get(f'BARRINHA_CUSTOM_T_{i}'):
-                    description += f"\n{format_image(barrinhas[f'BARRINHA_CUSTOM_T_{i}'])}"
-
-            # Movies
-            if tipo_media == 'movie':
-                # Presentation and Title
-                if barrinhas.get('BARRINHA_APRESENTA'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_APRESENTA'])}\n"
-                description += f"\n[size=3]{titulo}[/size]\n"
-
-                # Cover
-                if poster_path:
-                    if barrinhas.get('BARRINHA_CAPA'):
-                        description += f"\n{format_image(barrinhas['BARRINHA_CAPA'])}\n"
-                    description += f"\n{format_image(poster_path)}\n"
-
-                # Synopsis
-                if sinopse:
-                    if barrinhas.get('BARRINHA_SINOPSE'):
-                        description += f"\n{format_image(barrinhas['BARRINHA_SINOPSE'])}\n"
-                    description += f"\n{sinopse}\n"
-
-                # Technical Sheet
-                if barrinhas.get('BARRINHA_FICHA_TECNICA'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_FICHA_TECNICA'])}\n"
-                    description += f"\nTempo: {asc_data.get('Runtime', 'N/A')}"
-                    description += f"\nProdutora: {asc_data.get('Production', 'N/A')}"
-                    description += f"\nPaís de Origem: {asc_data.get('Country', 'N/A')}"
-                    description += f"\nGêneros: {asc_data.get('Genre', 'N/A')}"
-                    description += f"\nData de Lançamento: {format_date(asc_data.get('Released', 'N/A'))}"
-                    if website != "N/A":
-                        description += f"\nSite: [url={website}]Clique aqui[/url]"
-                    description += "\n"
-
-                # Cast
-                elenco_lista = asc_data.get('cast', [])
-                if elenco_lista and barrinhas.get('BARRINHA_ELENCO'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_ELENCO'])}\n"
-                    for ator in elenco_lista[:10]:
-                        profile_url = f"https://image.tmdb.org/t/p/w45{ator.get('profile_path')}" if ator.get('profile_path') else "https://i.imgur.com/eCCCtFA.png"
-                        tmdb_url = f"https://www.themoviedb.org/person/{ator.get('id')}?language=pt-BR"
-                        description += f"\n[url={tmdb_url}]{format_image(profile_url)}[/url]"
-                        description += f"\n[size=2][b]({ator.get('name', '')}) como {ator.get('character', '')}[/b][/size]\n"
-
-                # Reviews / Information
-                ratings_lista = asc_data.get('Ratings', [])
-                if ratings_lista:
-                    barrinha_criticas = barrinhas.get('BARRINHA_INFORMACOES') or barrinhas.get('BARRINHA_CRITICAS')
-                    if barrinha_criticas:
-                        description += f"\n{format_image(barrinha_criticas)}\n"
-
-                    for rating in ratings_lista:
-                        source = rating.get('Source')
-                        value = rating.get('Value', '').strip()
-                        if source == "Internet Movie Database":
-                            description += "\n[img]https://i.postimg.cc/Pr8Gv4RQ/IMDB.png[/img]"
-                            description += f"\n[url=https://www.imdb.com/title/{imdb_id}][b]{value}[/b][/url]\n"
-                        elif source == "Rotten Tomatoes":
-                            description += "\n[img]https://i.postimg.cc/rppL76qC/rotten.png[/img]"
-                            description += f"\n[b]{value}[/b]\n"
-                        elif source == "Metacritic":
-                            description += "\n[img]https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png[/img]"
-                            description += f"\n[b]{value}[/b]"
-                    description += "\n"
-
-            # TV Shows
-            elif tipo_media in ['series', 'episode']:
-                # Presentation and Main Cover
-                if barrinhas.get('BARRINHA_APRESENTA'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_APRESENTA'])}"
-                if poster_path:
-                    description += f"\n{format_image(poster_path)}\n"
-
-                # Episode cover (if applicable)
-                still_path = asc_data.get('still_path')
-                if still_path:
-                    if barrinhas.get('BARRINHA_CAPA'):
-                        description += f"\n{format_image(barrinhas['BARRINHA_CAPA'])}"
-                    description += f"\n{format_image(still_path)}\n"
-
-                # Synopsis
-                if sinopse:
-                    if barrinhas.get('BARRINHA_SINOPSE'):
-                        description += f"\n{format_image(barrinhas['BARRINHA_SINOPSE'])}"
-                    description += f"\n{sinopse}\n"
-
-                # Technical Sheet
-                if barrinhas.get('BARRINHA_FICHA_TECNICA'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_FICHA_TECNICA'])}"
-
-                description += f"\nPaís de Origem: {asc_data.get('Country', 'N/A')}"
-                generos = asc_data.get('Genre', 'N/A')
-                if tmdb_tv_data and tmdb_tv_data.get('genres'):
-                    generos = ', '.join([g['name'] for g in tmdb_tv_data.get('genres', [])])
-                description += f"\nGêneros: {generos}"
-                if website != "N/A":
-                    description += f"\nSite: [url={website}]Clique aqui[/url]\n"
-
-                # Production Companies
-                if tmdb_tv_data and tmdb_tv_data.get('production_companies'):
-                    description += "\n\n[size=4][b]Produtoras[/b][/size]"
-                    for p in tmdb_tv_data['production_companies']:
-                        logo_url = f"https://image.tmdb.org/t/p/w45{p.get('logo_path')}" if p.get('logo_path') else ""
-                        if logo_url:
-                            description += f"\n{format_image(logo_url)}[size=2] - [b]{p.get('name', '')}[/b][/size]"
-                        else:
-                            description += f"\n[size=2][b]{p.get('name', '')}[/b][/size]"
-                    description += "\n"
-
-                # Cast
-                elenco_lista = asc_data.get('cast', [])
-                if elenco_lista and barrinhas.get('BARRINHA_ELENCO'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_ELENCO'])}"
-                    for ator in elenco_lista[:10]:
-                        profile_url = f"https://image.tmdb.org/t/p/w45{ator.get('profile_path')}" if ator.get('profile_path') else "https://i.imgur.com/eCCCtFA.png"
-                        tmdb_url = f"https://www.themoviedb.org/person/{ator.get('id')}?language=pt-BR"
-                        description += f"\n[url={tmdb_url}]{format_image(profile_url)}[/url]"
-                        description += f"\n[size=2][b]({ator.get('name', '')}) como {ator.get('character', '')}[/b][/size]\n"
-
-                # Seasons
-                if tipo_media == 'series' and tmdb_tv_data and tmdb_tv_data.get('seasons'):
-                    if barrinhas.get('BARRINHA_EPISODIOS'):
-                        description += f"\n{format_image(barrinhas['BARRINHA_EPISODIOS'])}"
-
-                    for temporada in tmdb_tv_data['seasons']:
-                        nome_temporada = temporada.get('name', f"Temporada {temporada.get('season_number')}")
-                        description += f"\n\n[spoiler={nome_temporada.strip()}]"
-                        description += f"\nData: {format_date(temporada.get('air_date'))}"
-                        description += f"\nEpisódios: {temporada.get('episode_count')}"
-
-                        poster_temporada = f"https://image.tmdb.org/t/p/w185{temporada.get('poster_path')}" if temporada.get('poster_path') else ""
-                        if poster_temporada:
-                            description += f"\n{format_image(poster_temporada)}"
-
-                        overview_temporada = temporada.get('overview')
-                        if overview_temporada:
-                            description += f"\n\nSinopse:\n{overview_temporada}"
-
-                        description += "\n[/spoiler]"
-                    description += "\n"
-
-                # Ratings
-                ratings_lista = asc_data.get('Ratings', [])
-                if ratings_lista and barrinhas.get('BARRINHA_CRITICAS'):
-                    description += f"\n{format_image(barrinhas['BARRINHA_CRITICAS'])}"
-                    for rating in ratings_lista:
-                        source = rating.get('Source')
-                        value = rating.get('Value', '').strip()
-                        if source == "Internet Movie Database":
-                            description += f"\n[url=https://www.imdb.com/title/{imdb_id}][img]https://i.postimg.cc/Pr8Gv4RQ/IMDB.png[/img][/url] - [b]{value}[/b]"
-                        elif source == "Rotten Tomatoes":
-                            description += f"\n[img]https://i.postimg.cc/rppL76qC/rotten.png[/img] - [b]{value}[/b]"
-                        elif source == "Metacritic":
-                            description += f"\n[img]https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png[/img] - [b]{value}[/b]"
-                    description += "\n"
-
-            # Custom bottom bars
-            for i in range(1, 4):
-                if barrinhas.get(f'BARRINHA_CUSTOM_B_{i}'):
-                    description += f"\n{format_image(barrinhas[f'BARRINHA_CUSTOM_B_{i}'])}"
-
-            # Mediainfo / BDinfo
-            description += f"\n[spoiler=Informações do Arquivo]\n[left][font=Courier New]{fileinfo_dump}[/font][/left][/spoiler]\n"
-            description += "[/center]"
-
-        else:
+        if not asc_data:
             console.print("[yellow]Alerta:[/yellow] O ASC não conseguiu gerar uma descrição com base no código IMDb.")
             console.print("[yellow]Alerta:[/yellow] Usando informações do arquivo como descrição.")
-            description += f"\n[left][font=Courier New]{fileinfo_dump}[/font][/left]"
+            return f"\n[left][font=Courier New]{fileinfo_dump}[/font][/left]"
 
-        return description
+        def format_image(url):
+            return f"[img]{url}[/img]" if url else ""
+
+        def format_date(date_str):
+            if not date_str or date_str == 'N/A':
+                return 'N/A'
+            for fmt in ('%Y-%m-%d', '%d %b %Y'):
+                try:
+                    return datetime.strptime(date_str, fmt).strftime('%d/%m/%Y')
+                except (ValueError, TypeError):
+                    continue
+            return date_str
+
+        def append_section(parts, barrinha_key, content):
+            if content:
+                barrinha_url = barrinhas.get(barrinha_key)
+                if barrinha_url:
+                    parts.append(f"\n{format_image(barrinha_url)}")
+                parts.append(f"\n{content}\n")
+
+        def build_cast_section(cast_list):
+            if not cast_list:
+                return ""
+
+            cast_parts = []
+            for ator in cast_list[:10]:
+                profile_url = f"https://image.tmdb.org/t/p/w45{ator.get('profile_path')}" if ator.get('profile_path') else "https://i.imgur.com/eCCCtFA.png"
+                tmdb_url = f"https://www.themoviedb.org/person/{ator.get('id')}?language=pt-BR"
+                cast_parts.append(f"[url={tmdb_url}]{format_image(profile_url)}[/url]\n[size=2][b]({ator.get('name', '')}) como {ator.get('character', '')}[/b][/size]\n")
+            return "".join(cast_parts)
+
+        def build_ratings_section(ratings_list, imdb_id):
+            if not ratings_list:
+                return ""
+
+            ratings_map = {
+                "Internet Movie Database": "https://i.postimg.cc/Pr8Gv4RQ/IMDB.png",
+                "Rotten Tomatoes": "https://i.postimg.cc/rppL76qC/rotten.png",
+                "Metacritic": "https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png"
+            }
+            ratings_parts = []
+            for rating in ratings_list:
+                source = rating.get('Source')
+                value = rating.get('Value', '').strip()
+                img_url = ratings_map.get(source)
+
+                if not img_url:
+                    continue
+
+                if source == "Internet Movie Database" and imdb_id:
+                    ratings_parts.append(f"[url=https://www.imdb.com/title/{imdb_id}]{format_image(img_url)}[/url] - [b]{value}[/b]")
+                else:
+                    ratings_parts.append(f"{format_image(img_url)} - [b]{value}[/b]")
+
+            return "\n".join(ratings_parts)
+
+        tmdb_tv_data = None
+        if meta.get('category', '').lower() == 'tv' and meta.get('tmdb') and self.config['DEFAULT'].get('tmdb_api'):
+            url = f"https://api.themoviedb.org/3/tv/{meta['tmdb']}?api_key={self.config['DEFAULT']['tmdb_api']}&language=pt-BR"
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    tmdb_tv_data = response.json()
+            except requests.exceptions.RequestException as e:
+                print(f"Ocorreu um erro ao fazer a requisição para o TMDB: {e}")
+
+        tipo_media = asc_data.get('Type', 'movie')
+        imdb_id = asc_data.get('imdbID', '')
+        barrinhas = {key: value for key, value in asc_data.items() if key.startswith('BARRINHA_')}
+
+        description_parts = ["[center]"]
+
+        # Custom top bars
+        for i in range(1, 4):
+            description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_T_{i}')))
+
+        # Common data
+        if tipo_media == 'movie':
+            description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}\n")
+            description_parts.append(f"[size=3]{asc_data.get('Title', 'N/A')}[/size]\n")
+
+            append_section(description_parts, 'BARRINHA_CAPA', format_image(asc_data.get('poster_path')))
+            append_section(description_parts, 'BARRINHA_SINOPSE', asc_data.get('overview'))
+
+            # Technical Sheet
+            ficha_content = "\n".join([
+                f"Tempo: {asc_data.get('Runtime', 'N/A')}",
+                f"Produtora: {asc_data.get('Production', 'N/A')}",
+                f"País de Origem: {asc_data.get('Country', 'N/A')}",
+                f"Gêneros: {asc_data.get('Genre', 'N/A')}",
+                f"Data de Lançamento: {format_date(asc_data.get('Released', 'N/A'))}",
+                (f"Site: [url={asc_data.get('Website')}]Clique aqui[/url]" if asc_data.get('Website') != 'N/A' else "")
+            ])
+            append_section(description_parts, 'BARRINHA_FICHA_TECNICA', ficha_content)
+
+        elif tipo_media in ['series', 'episode']:
+            description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}")
+            description_parts.append(f"\n{format_image(asc_data.get('poster_path'))}\n")
+
+            append_section(description_parts, 'BARRINHA_CAPA', format_image(asc_data.get('still_path')))
+            append_section(description_parts, 'BARRINHA_SINOPSE', asc_data.get('overview'))
+
+            # Technical Sheet (TV)
+            generos = asc_data.get('Genre', 'N/A')
+            if tmdb_tv_data and tmdb_tv_data.get('genres'):
+                generos = ', '.join([g['name'] for g in tmdb_tv_data.get('genres', [])])
+
+            ficha_content = "\n".join(filter(None, [
+                f"País de Origem: {asc_data.get('Country', 'N/A')}",
+                f"Gêneros: {generos}",
+                (f"Site: [url={asc_data.get('Website')}]Clique aqui[/url]" if asc_data.get('Website') != 'N/A' else None)
+            ]))
+            append_section(description_parts, 'BARRINHA_FICHA_TECNICA', ficha_content)
+
+            # Production Companies (TV)
+            if tmdb_tv_data and tmdb_tv_data.get('production_companies'):
+                prod_parts = ["[size=4][b]Produtoras[/b][/size]"]
+                for p in tmdb_tv_data['production_companies']:
+                    logo = format_image(f"https://image.tmdb.org/t/p/w45{p['logo_path']}") if p.get('logo_path') else ''
+                    prod_parts.append(f"{logo}[size=2] - [b]{p.get('name', '')}[/b][/size]" if logo else f"[size=2][b]{p.get('name', '')}[/b][/size]")
+                description_parts.append("\n" + "\n".join(prod_parts) + "\n")
+
+        # Cast
+        cast_content = build_cast_section(asc_data.get('cast'))
+        append_section(description_parts, 'BARRINHA_ELENCO', cast_content)
+
+        # Seasons
+        if tipo_media == 'series' and tmdb_tv_data and tmdb_tv_data.get('seasons'):
+            seasons_content = []
+            for temp in tmdb_tv_data['seasons']:
+                nome_temporada = temp.get('name', f"Temporada {temp.get('season_number')}").strip()
+                poster_temp = format_image(f"https://image.tmdb.org/t/p/w185{temp.get('poster_path')}") if temp.get('poster_path') else ''
+                overview_temp = f"\n\nSinopse:\n{temp.get('overview')}" if temp.get('overview') else ''
+
+                inner_content = "\n".join([
+                    f"Data: {format_date(temp.get('air_date'))}",
+                    f"Episódios: {temp.get('episode_count')}",
+                    poster_temp,
+                    overview_temp
+                ])
+                seasons_content.append(f"\n[spoiler={nome_temporada}]{inner_content}\n[/spoiler]")
+            append_section(description_parts, 'BARRINHA_EPISODIOS', "".join(seasons_content))
+
+        # Ratings
+        ratings_content = build_ratings_section(asc_data.get('Ratings'), imdb_id)
+        barrinha_criticas_key = 'BARRINHA_INFORMACOES' if tipo_media == 'movie' and 'BARRINHA_INFORMACOES' in barrinhas else 'BARRINHA_CRITICAS'
+        append_section(description_parts, barrinha_criticas_key, ratings_content)
+
+        # Custom bottom bars
+        for i in range(1, 4):
+            description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_B_{i}')))
+
+        description_parts.append(f"\n[spoiler=Informações do Arquivo]\n[left][font=Courier New]{fileinfo_dump}[/font][/left][/spoiler]\n")
+        description_parts.append("[/center]")
+
+        return "".join(filter(None, description_parts))
 
     async def prepare_form_data(self, meta):
         try:
@@ -531,8 +470,7 @@ class ASC(COMMON):
                 url_gerador_desc = f"{self.base_url}/search.php"
                 payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': self.layout}
                 try:
-                    cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
-                    self.session.cookies.update(await self.parseCookieFile(cookie_file))
+                    await self._load_cookies(meta)
                     response = self.session.post(url_gerador_desc, data=payload, timeout=20)
                     response.raise_for_status()
                     asc_data = response.json().get('ASC')
@@ -659,6 +597,7 @@ class ASC(COMMON):
 
     async def upload(self, meta, disctype):
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+        await self._load_cookies(meta)
 
         data = await self.prepare_form_data(meta)
         if data is None:
@@ -675,8 +614,6 @@ class ASC(COMMON):
             return
 
         upload_url = self.get_upload_url(meta)
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
-        self.session.cookies.update(await self.parseCookieFile(cookie_file))
 
         with open(torrent_path, 'rb') as torrent_file:
             files = {'torrent': (f"{self.tracker}.{meta.get('infohash', '')}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
@@ -699,9 +636,6 @@ class ASC(COMMON):
         try:
             soup = BeautifulSoup(response_text, 'html.parser')
             details_link_tag = soup.find('a', href=lambda href: href and "torrents-details.php?id=" in href)
-            if not details_link_tag:
-                console.print("[bold yellow]Aviso: Não foi possível encontrar o link do torrent na página de sucesso.[/bold yellow]")
-                return
 
             relative_url = details_link_tag['href']
             torrent_url = f"{self.base_url}/{relative_url}"
@@ -710,11 +644,9 @@ class ASC(COMMON):
 
             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 
-            should_approve, reason = await self.get_approval(meta)
+            should_approve = await self.get_approval(meta)
             if should_approve:
                 await self.auto_approval(relative_url)
-            else:
-                console.print(f"[yellow]{reason}. A aprovação automática será ignorada.[/yellow]")
 
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no pós-processamento do upload: {e}[/bold red]")
@@ -722,7 +654,6 @@ class ASC(COMMON):
     async def auto_approval(self, relative_url):
         try:
             torrent_id = relative_url.split('id=')[-1]
-            console.print(f"[cyan]Tentando realizar a aprovação automática para o torrent ID {torrent_id}...[/cyan]")
             approval_url = f"{self.base_url}/uploader_app.php?id={torrent_id}"
             approval_response = self.session.get(approval_url, timeout=30)
             approval_response.raise_for_status()
@@ -730,7 +661,7 @@ class ASC(COMMON):
             console.print(f"[bold red]Erro durante a tentativa de aprovação automática: {e}[/bold red]")
 
     def failed_upload(self, response, meta):
-        response_save_path = f"{meta['base_dir']}/tmp/asc_upload_fail_{meta['uuid']}.html"
+        response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
         with open(response_save_path, "w", encoding="utf-8") as f:
             f.write(response.text)
         console.print("[bold red]Falha no upload para o ASC. A resposta do servidor não indicou sucesso.[/bold red]")
@@ -742,8 +673,7 @@ class ASC(COMMON):
         console.print(f"[cyan]Buscando duplicados em:[/cyan] {search_url}")
 
         try:
-            cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
-            self.session.cookies.update(await self.parseCookieFile(cookie_file))
+            await self._load_cookies(meta)
             response = self.session.get(search_url, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -836,13 +766,7 @@ class ASC(COMMON):
         return await self.get_dupes(search_url, meta)
 
     async def validate_credentials(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f"[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]")
-            return False
-
-        common = COMMON(config=self.config)
-        self.session.cookies.update(await common.parseCookieFile(cookie_file))
+        await self._load_cookies(meta)
 
         try:
             test_url = f"{self.base_url}/gerador.php"
@@ -859,12 +783,20 @@ class ASC(COMMON):
             return False
 
     async def get_approval(self, meta):
-        uploader_enabled = self.config['TRACKERS'][self.tracker].get('uploader_status', False)
-        if not uploader_enabled:
-            return False, f"A aprovação automática está desativada para o uploader no tracker {self.tracker}."
+        uploader = self.config['TRACKERS'][self.tracker].get('uploader_status', False)
+        if not uploader:
+            return False
 
-        send_to_mod_queue = meta.get('modq', False) or meta.get('mq', False)
-        if send_to_mod_queue:
-            return False, "A flag --modq ou --mq foi usada, enviando para a fila de moderação."
+        modq = meta.get('modq', False) or meta.get('mq', False)
+        if modq:
+            return False, "Enviando para a fila de moderação."
 
-        return True, "Critérios de aprovação automática atendidos."
+        return True
+
+    async def _load_cookies(self, meta):
+        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/ASC.txt")
+        if os.path.exists(cookie_file):
+            self.session.cookies.update(await self.parseCookieFile(cookie_file))
+        else:
+            console.print(f"[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]")
+            return False
