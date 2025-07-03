@@ -120,7 +120,7 @@ class HUNO():
                 response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
                 meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception as e:
-                console.print(f"[bold red]Error uploading torrent: {e}")
+                meta['tracker_status'][self.tracker]['status_message'] = f" data error - Error uploading torrent: {e}"
                 return
             try:
                 # adding torrent link to comment of torrent file

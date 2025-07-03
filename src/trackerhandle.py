@@ -65,6 +65,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                 except Exception:
                     console.print(traceback.format_exc())
@@ -84,6 +85,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     if tracker == 'SN':
                         await asyncio.sleep(16)
@@ -105,6 +107,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                 except Exception:
                     console.print(traceback.format_exc())
@@ -143,6 +146,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     await thr.upload(meta, disctype)
                 except Exception as e:
                     console.print(f"[red]Upload failed: {e}")
+                    console.print(traceback.format_exc())
                     return
                 await client.add_to_client(meta, "THR")
 
@@ -159,6 +163,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await asyncio.sleep(5)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     await client.add_to_client(meta, "PTP")
                 except Exception:

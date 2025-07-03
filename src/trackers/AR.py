@@ -525,14 +525,11 @@ class AR():
                                 async with session.post(self.upload_url, data=form, headers=headers) as response:
                                     if response.status == 200:
                                         # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
-                                        meta['tracker_status'][self.tracker]['status_message'] = response.url
+                                        meta['tracker_status'][self.tracker]['status_message'] = str(response.url)
                                         match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
                                         if match is None:
                                             await self.close_session()
-                                            console.print(response.url)
-                                            console.print(data)
-                                            raise UploadException(  # noqa F405
-                                                f"Upload to {self.tracker} failed: result URL {response.url} ({response.status}) is not the expected one.")  # noqa F405
+                                            meta['tracker_status'][self.tracker]['status_message'] = f"data error - failed: result URL {response.url} ({response.status}) is not the expected one."
 
                                         # having UA add the torrent link as a comment.
                                         if match:
@@ -541,15 +538,13 @@ class AR():
                                             await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
 
                                     else:
-                                        console.print("[red]Upload failed. Response was not 200.")
+                                        meta['tracker_status'][self.tracker]['status_message'] = "data error - Response was not 200."
                             except Exception:
                                 await self.close_session()
-                                console.print("[red]Error! It may have uploaded, go check")
-                                console.print("[cyan]Request Data:")
-                                console.print_exception()
+                                meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
                                 return
                 except FileNotFoundError:
-                    console.print(f"[red]File not found: {torrent_path}")
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - File not found: {torrent_path}"
                 return aiohttp
             else:
                 await self.close_session()
@@ -557,5 +552,5 @@ class AR():
                 console.print(data)
         except Exception as e:
             await self.close_session()
-            console.print(f"[red]Upload failed: {e}")
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error - Upload failed: {e}"
             return

@@ -66,14 +66,17 @@ class HDS(COMMON):
 
         # Screenshots
         images = meta.get('image_list', [])
-        if images:
-            screenshots_block = "[center][b]Screenshots[/b]\n"
-            for i in range(min(4, len(images))):
-                img_url = images[i]['img_url']
-                web_url = images[i]['web_url']
-                screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
-            screenshots_block += "[/center]"
-            description_parts.append(screenshots_block)
+        if not images or len(images) < 3:
+            raise UploadException("[red]HDS requires at least 3 screenshots.[/red]")
+
+        screenshots_block = "[center][b]Screenshots[/b]\n\n"
+        for image in images:
+            img_url = image['img_url']
+            web_url = image['web_url']
+            screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
+        screenshots_block += "[/center]"
+
+        description_parts.append(screenshots_block)
 
         if self.signature:
             description_parts.append(self.signature)
@@ -96,9 +99,11 @@ class HDS(COMMON):
         desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
-        desc = bbcode.convert_spoiler_to_hide(desc)
-        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = desc.replace("[hide]", "").replace("[/hide]", "")
+        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"NFO:[code][pre]\1[/pre][/code]", desc, flags=re.DOTALL)
         desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = bbcode.remove_spoiler(desc)
 
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
