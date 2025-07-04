@@ -3,6 +3,7 @@ import os
 import re
 import requests
 import cli_ui
+from pymediainfo import MediaInfo
 from datetime import datetime
 from src.exceptions import UploadException
 from bs4 import BeautifulSoup
@@ -294,15 +295,29 @@ class ASC(COMMON):
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
 
     async def build_description(self, json_data, meta):
-        fileinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{'BD_SUMMARY_00.txt' if meta.get('is_disc') == 'BDMV' else 'MEDIAINFO_CLEANPATH.txt'}"
-        with open(fileinfo_path, 'r', encoding='utf-8') as f:
-            fileinfo_dump = f.read()
+        fileinfo_dump = ""
+        if meta.get('is_disc') != 'BDMV':
+            video_file = meta['filelist'][0]
+            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
+            if os.path.exists(mi_template):
+                media_info = MediaInfo.parse(video_file, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
+                fileinfo_dump = str(media_info).replace('\r', '')
+            else:
+                fileinfo_dump = None
+        else:
+            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+            if os.path.exists(bd_summary_file):
+                with open(bd_summary_file, 'r', encoding='utf-8') as f:
+                    fileinfo_dump = f.read()
 
         asc_data = json_data.get('ASC')
         if not asc_data:
             console.print("[yellow]Alerta:[/yellow] O ASC não conseguiu gerar uma descrição com base no código IMDb.")
-            console.print("[yellow]Alerta:[/yellow] Usando informações do arquivo como descrição.")
-            return f"\n[left][font=Courier New]{fileinfo_dump}[/font][/left]"
+            if fileinfo_dump:
+                console.print("[yellow]Alerta:[/yellow] Usando informações do arquivo como descrição.")
+                return f"\n[left][font=Courier New]{fileinfo_dump}[/font][/left]"
+            else:
+                return
 
         def format_image(url):
             return f"[img]{url}[/img]" if url else ""
@@ -456,7 +471,10 @@ class ASC(COMMON):
         for i in range(1, 4):
             description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_B_{i}')))
 
-        description_parts.append(f"\n[spoiler=Informações do Arquivo]\n[left][font=Courier New]{fileinfo_dump}[/font][/left][/spoiler]\n")
+        # MediaInfo/BDinfo
+        if fileinfo_dump:
+            description_parts.append(f"\n[spoiler=Informações do Arquivo]\n[left][font=Courier New]{fileinfo_dump}[/font][/left][/spoiler]\n")
+
         description_parts.append("[/center]")
 
         return "".join(filter(None, description_parts))
