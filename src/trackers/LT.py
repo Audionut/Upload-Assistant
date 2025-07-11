@@ -92,6 +92,7 @@ class LT():
             audios = [
                 audio for audio in meta['mediainfo']['media']['track'][2:]
                 if audio.get('@type') == 'Audio'
+                and audio.get('Language') != {}
                 and audio.get('Language') in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co',
                                               'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
                                               'es-py', 'es-pe', 'es-pr', 'es-uy'}
