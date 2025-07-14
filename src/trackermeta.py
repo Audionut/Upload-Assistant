@@ -85,6 +85,10 @@ async def check_images_concurrently(imagelist, meta):
             image_dict['raw_url'] = img_url
             image_dict['web_url'] = img_url
 
+        # Handle when pixhost url points to web_url and convert to raw_url
+        if img_url.startswith("https://pixhost.to/show/"):
+            img_url = img_url.replace("https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
+
         # Verify the image link
         try:
             if await check_image_link(img_url, timeout):
@@ -169,8 +173,9 @@ async def check_images_concurrently(imagelist, meta):
 
 
 async def check_image_link(url, timeout=None):
-    if timeout is None:
-        timeout = aiohttp.ClientTimeout(total=20, connect=10, sock_connect=10)
+    # Handle when pixhost url points to web_url and convert to raw_url
+    if url.startswith("https://pixhost.to/show/"):
+        url = url.replace("https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
 
     connector = aiohttp.TCPConnector(ssl=False)  # Disable SSL verification for testing
 

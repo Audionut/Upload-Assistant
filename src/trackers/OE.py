@@ -5,13 +5,13 @@ import requests
 import platform
 import re
 import os
-import cli_ui
 import httpx
 from src.bbcode import BBCODE
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.dupe_checking import check_for_languages
 from src.rehostimages import check_hosts
+from src.languages import process_desc_language
 
 
 class OE():
@@ -64,7 +64,8 @@ class OE():
 
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         await self.edit_desc(meta, self.tracker, self.signature)
-        if "oe_no_language" in meta:
+        should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
+        if should_skip:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: oe_no_language"
             return
         cat_id = await self.get_cat_id(meta['category'])
@@ -160,6 +161,13 @@ class OE():
         name_type = meta.get('type', "")
         tag_lower = meta['tag'].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        imdb_name = meta.get('imdb_info', {}).get('title', "")
+        title = meta.get('title', "")
+        oe_name = oe_name.replace(f"{title}", imdb_name, 1)
+        year = str(meta.get('year', ""))
+        imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        if not meta.get('category') == "TV":
+            oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
         if name_type == "DVDRIP":
             if meta.get('category') == "MOVIE":
@@ -263,50 +271,7 @@ class OE():
             if desc_header != "":
                 descfile.write(desc_header)
 
-            if not meta['is_disc'] == "BDMV":
-                def process_languages(tracks):
-                    audio_languages = []
-                    subtitle_languages = []
-
-                    for track in tracks:
-                        if track.get('@type') == 'Audio':
-                            language = track.get('Language')
-                            if not language or language is None:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                                    audio_lang = cli_ui.ask_string('No audio language present, you must enter one:')
-                                    if audio_lang:
-                                        audio_languages.append(audio_lang)
-                                    else:
-                                        audio_languages.append("")
-                                else:
-                                    meta['oe_no_language'] = True
-                        if track.get('@type') == 'Text':
-                            language = track.get('Language')
-                            if not language or language is None:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                                    subtitle_lang = cli_ui.ask_string('No subtitle language present, you must enter one:')
-                                    if subtitle_lang:
-                                        subtitle_languages.append(subtitle_lang)
-                                    else:
-                                        subtitle_languages.append("")
-                                else:
-                                    meta['oe_no_language'] = True
-
-                    return audio_languages, subtitle_languages
-
-                media_data = meta.get('mediainfo', {})
-                if media_data:
-                    tracks = media_data.get('media', {}).get('track', [])
-                    if tracks:
-                        audio_languages, subtitle_languages = process_languages(tracks)
-                        if audio_languages:
-                            descfile.write(f"Audio Language: {', '.join(audio_languages)}\n")
-
-                        subtitle_tracks = [track for track in tracks if track.get('@type') == 'Text']
-                        if subtitle_tracks and subtitle_languages:
-                            descfile.write(f"Subtitle Language: {', '.join(subtitle_languages)}\n")
-                else:
-                    console.print("[red]No media information available in meta.[/red]")
+            await process_desc_language(meta, descfile, tracker=self.tracker)
 
             bbcode = BBCODE()
             if meta.get('discs', []) != []:

@@ -105,7 +105,7 @@ class OTW():
                 years.append(int(series_year))
             # Use the oldest year if any found, else empty string
             year = str(min(years)) if years else ""
-            if meta.get('no_year', False) is False:
+            if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 otw_name = otw_name.replace(meta['title'], f"{meta['title']} {year}", 1)
 
         return otw_name

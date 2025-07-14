@@ -184,7 +184,7 @@ async def get_resolution(guess, folder_id, base_dir):
             scan = "p"
         else:
             # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
-            match = re.search(r'\b(1080p|720p|2160p)\b', folder_id, re.IGNORECASE)
+            match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
             if match:
                 scan = "p"  # Assume progressive based on common resolution markers
             else:

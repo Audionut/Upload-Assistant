@@ -31,7 +31,6 @@ try:
     import ntpath
     from pathlib import Path
     import time
-    import sys
     from difflib import SequenceMatcher
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
@@ -85,6 +84,8 @@ class Prep():
         meta['we_checked_tvdb'] = False
         meta['we_checked_tmdb'] = False
         meta['we_asked_tvmaze'] = False
+        meta['audio_languages'] = None
+        meta['subtitle_languages'] = None
 
         folder_id = os.path.basename(meta['path'])
         if meta.get('uuid', None) is None:
@@ -287,11 +288,13 @@ class Prep():
         meta['filename'] = filename
         meta['bdinfo'] = bdinfo
 
+        meta['valid_mi'] = True
         if not meta['is_disc']:
             valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
             if not valid_mi:
-                console.print("[red]MediaInfo validation failed. Please check the MediaInfo file (Unique ID).")
-                sys.exit(1)
+                console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
+                meta['valid_mi'] = False
+                await asyncio.sleep(2)
 
         # Check if there's a language restriction
         if meta['has_languages'] is not None:

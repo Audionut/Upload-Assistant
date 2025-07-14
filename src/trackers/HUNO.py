@@ -7,9 +7,11 @@ import re
 import platform
 import cli_ui
 import httpx
+import aiofiles
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
+from src.languages import parsed_mediainfo
 
 
 class HUNO():
@@ -165,43 +167,49 @@ class HUNO():
                     print("DEBUG: No languages found in BDMV audio tracks.")
 
             else:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                # Extract all audio sections for DVD or other cases
-                audio_sections = re.findall(r'Audio\s+.*?(?=\n\n|Text|Menu|$)', media_info_text, re.DOTALL)
-                if audio_sections:
-                    if meta['is_disc'] == "DVD":
-                        # Aggregate all languages for DVDs
-                        languages = []
-                        for section in audio_sections:
-                            language_match = re.search(r'Language\s*:\s*(\w+.*)', section)
-                            if language_match:
-                                lang = language_match.group(1).strip()
-                                lang = re.sub(r'\(.+\)', '', lang)  # Remove parentheses and extra info
-                                if lang not in languages:
-                                    languages.append(lang)
-
-                        # Combine languages if multiple are found
-                        if len(languages) > 1:
-                            language = "Dual"
-                        elif languages:
-                            language = languages[0]
-                        else:
-                            print("DEBUG: No languages found in audio sections.")
+                if meta.get('audio_languages'):
+                    if len(meta['audio_languages']) > 1:
+                        language = "Dual"
                     else:
-                        # Use the first audio section for non-DVD cases
-                        first_audio_section = audio_sections[0]
-                        language_match = re.search(r'Language\s*:\s*(\w+.*)', first_audio_section)
-
-                        if language_match:
-                            language = language_match.group(1).strip()
-                            language = re.sub(r'\(.+\)', '', language)
-                        else:
-                            print("DEBUG: No Language match found in the first audio section.")
+                        language = meta['audio_languages'][0] if meta['audio_languages'] else "SKIPPED"
                 else:
-                    print("DEBUG: No Audio sections found in MEDIAINFO.txt.")
+                    media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+                    with open(media_info_path, 'r', encoding='utf-8') as f:
+                        media_info_text = f.read()
+
+                    # Extract all audio sections for DVD or other cases
+                    audio_sections = re.findall(r'Audio\s+.*?(?=\n\n|Text|Menu|$)', media_info_text, re.DOTALL)
+                    if audio_sections:
+                        if meta['is_disc'] == "DVD":
+                            # Aggregate all languages for DVDs
+                            languages = []
+                            for section in audio_sections:
+                                language_match = re.search(r'Language\s*:\s*(\w+.*)', section)
+                                if language_match:
+                                    lang = language_match.group(1).strip()
+                                    lang = re.sub(r'\(.+\)', '', lang)  # Remove parentheses and extra info
+                                    if lang not in languages:
+                                        languages.append(lang)
+
+                            # Combine languages if multiple are found
+                            if len(languages) > 1:
+                                language = "Dual"
+                            elif languages:
+                                language = languages[0]
+                            else:
+                                print("DEBUG: No languages found in audio sections.")
+                        else:
+                            # Use the first audio section for non-DVD cases
+                            first_audio_section = audio_sections[0]
+                            language_match = re.search(r'Language\s*:\s*(\w+.*)', first_audio_section)
+
+                            if language_match:
+                                language = language_match.group(1).strip()
+                                language = re.sub(r'\(.+\)', '', language)
+                            else:
+                                print("DEBUG: No Language match found in the first audio section.")
+                    else:
+                        print("DEBUG: No Audio sections found in MEDIAINFO.txt.")
 
         if language == "zxx":
             language = "NONE"
@@ -266,6 +274,9 @@ class HUNO():
         if tag == "":
             tag = "- NOGRP"
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
+        console.print(f"[bold cyan]Source: {source}")
+        if any(x in source.lower() for x in ["pal", "ntsc"]) and type == "ENCODE":
+            source = "DVD"
         hdr = meta.get('hdr', "")
         if not hdr.strip():
             hdr = "SDR"
@@ -309,6 +320,8 @@ class HUNO():
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {scale} {service} WEB-DL {hybrid} {video_encode} {hfr} {hdr} {audio} {tag}) {repack}"
             elif type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {edition} {hc} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
+            elif type == "DVDRIP":
+                name = f"{title} ({year}) {edition} {hc} ({resolution} {source} {video_encode} {hdr} {audio} {tag}) {repack}"
         elif meta['category'] == "TV":  # TV SPECIFIC
             if type == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
@@ -384,6 +397,50 @@ class HUNO():
                 console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
             meta['skipping'] = "HUNO"
             return
+
+        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
+            mediainfo_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+            if os.path.exists(mediainfo_file):
+                async with aiofiles.open(mediainfo_file, 'r', encoding='utf-8') as f:
+                    mediainfo_content = await f.read()
+                parsed_info = await parsed_mediainfo(mediainfo_content)
+                for video_track in parsed_info.get('video', []):
+                    encoding_settings = video_track.get('encoding_settings')
+                    if not encoding_settings:
+                        if not meta['unattended']:
+                            console.print("No encoding settings found in MEDIAINFO for HUNO")
+                        meta['skipping'] = "HUNO"
+                        return []
+                    if encoding_settings:
+                        crf_match = re.search(r'crf[ =:]+([\d.]+)', encoding_settings, re.IGNORECASE)
+                        if crf_match:
+                            crf_value = float(crf_match.group(1))
+                            if crf_value > 22:
+                                if not meta['unattended']:
+                                    console.print(f"CRF value too high: {crf_value} for HUNO")
+                                meta['skipping'] = "HUNO"
+                                return []
+                        else:
+                            bit_rate = video_track.get('bit_rate')
+                            if bit_rate and "Animation" not in meta.get('genre', ""):
+                                bit_rate_num = None
+                                # Match number and unit (e.g., 42.4 Mb/s, 42400 kb/s, etc.)
+                                match = re.search(r'([\d.]+)\s*([kM]?b/s)', bit_rate.replace(',', ''), re.IGNORECASE)
+                                if match:
+                                    value = float(match.group(1))
+                                    unit = match.group(2).lower()
+                                    if unit == 'mb/s':
+                                        bit_rate_num = int(value * 1000)
+                                    elif unit == 'kb/s':
+                                        bit_rate_num = int(value)
+                                    else:
+                                        bit_rate_num = int(value)
+                                if bit_rate_num is not None and bit_rate_num < 3000:
+                                    if not meta['unattended']:
+                                        console.print(f"Video bitrate too low: {bit_rate_num} kbps for HUNO")
+                                    meta['skipping'] = "HUNO"
+                                    return []
+
         dupes = []
 
         params = {

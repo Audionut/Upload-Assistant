@@ -477,10 +477,12 @@ class DiscParse():
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE
                             )
-                        stdout, stderr = await process.communicate()
+                            stdout, stderr = await process.communicate()
 
-                        if process.returncode == 0:
-                            vob_set_mi = stdout.decode()
+                            if process and process.returncode == 0:
+                                vob_set_mi = stdout.decode()
+                            else:
+                                vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
                         else:
                             vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
 
@@ -528,10 +530,12 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode == 0:
-                        each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
@@ -545,10 +549,12 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode == 0:
-                        each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
@@ -562,10 +568,12 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode == 0:
-                        each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
@@ -579,10 +587,12 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode == 0:
-                        each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:

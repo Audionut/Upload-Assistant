@@ -24,7 +24,7 @@ class ULCX():
         self.id_url = 'https://upload.cx/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
-            '4K4U', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym', 'Hi10', 'INFINITY',
+            '4K4U', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym', 'Hi10', 'iAHD', 'INFINITY',
             'ION10', 'iVy', 'Judas', 'LAMA', 'MeGusta', 'NAHOM', 'Niblets', 'nikt0', ['NuBz', 'Encodes'], 'OFT', 'QxR',
             ['Ralphy', 'Encodes'], 'RARBG', 'Sicario', 'SM737', 'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP',
             'TSPxL', 'VXT', 'Vyndros', 'Will1869', 'x0r', 'YIFY'
@@ -138,10 +138,11 @@ class ULCX():
                 data['internal'] = 1
         if meta.get('freeleech', 0) != 0:
             data['free'] = meta.get('freeleech', 0)
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
+        if meta['is_disc'] == "BDMV":
+            if region_id != 0:
+                data['region_id'] = region_id
+            if distributor_id != 0:
+                data['distributor_id'] = distributor_id
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')

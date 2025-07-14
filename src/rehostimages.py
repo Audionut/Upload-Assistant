@@ -24,6 +24,10 @@ async def sanitize_filename(filename):
 
 
 async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
+    if meta.get('skip_imghost_upload', False):
+        if meta['debug']:
+            console.print(f"[yellow]Skipping image host upload for {tracker} as per meta['skip_imghost_upload'] setting.")
+        return
     if meta['debug']:
         console.print(f"[yellow]Checking existing image hosts for {tracker}...")
     new_images_key = f'{tracker}_images_key'

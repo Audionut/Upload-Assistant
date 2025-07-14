@@ -219,7 +219,9 @@ class MTV():
                     img_url = image['img_url']
                     desc.write(f"[url={raw_url}][img=250]{img_url}[/img][/url]")
 
-            desc.write(f"\n\n[hide]{base}[/hide]")
+            base = re.sub(r'\[/?quote\]', '', base, flags=re.IGNORECASE).strip()
+            if base != "":
+                desc.write(f"\n\n[spoiler=Notes]{base}[/spoiler]")
             desc.close()
         return
 

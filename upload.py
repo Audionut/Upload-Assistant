@@ -567,6 +567,7 @@ async def update_notification(base_dir):
 
 async def do_the_thing(base_dir):
     await asyncio.sleep(0.1)  # Ensure it's not racing
+    bot = None
     meta = dict()
     paths = []
     for each in sys.argv[1:]:
@@ -655,7 +656,6 @@ async def do_the_thing(base_dir):
                 reset_terminal()
 
             sanitize_meta = config['DEFAULT'].get('sanitize_meta', True)
-            bot = None
             if use_discord and config['DISCORD'].get('discord_bot_token') and not meta['debug']:
                 if (config.get('DISCORD', {}).get('only_unattended', False) and meta.get('unattended', False)) or not config.get('DISCORD', {}).get('only_unattended', False):
                     try:
@@ -708,9 +708,9 @@ async def do_the_thing(base_dir):
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
                     if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
-                        console.print(f"[cyan]Sucessfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
+                        console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
                     else:
-                        console.print(f"[cyan]Sucessfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
+                        console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
                     if not meta['debug']:
                         if log_file:
                             await save_processed_file(log_file, path)

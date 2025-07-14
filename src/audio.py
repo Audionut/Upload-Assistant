@@ -197,7 +197,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                     meta['bloated'] = True
                     time.sleep(5)
 
-                if eng and (orig or non_en_non_commentary) and len(audio_tracks) > 1:
+                if (eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary) and len(audio_tracks) > 1:
                     dual = "Dual-Audio"
                 elif eng and not orig and orig_lang not in ['zxx', 'xx', 'en', None] and not meta.get('no_dub', False):
                     dual = "Dubbed"

@@ -102,7 +102,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             return True
 
         if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-            if len(dupes) > 1 and tag == "":
+            if len(each) > 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:
                 return False

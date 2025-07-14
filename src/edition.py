@@ -246,6 +246,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
         edition = ""
     if edition and "edition" in edition.lower():
         edition = re.sub(r'\bedition\b', '', edition, flags=re.IGNORECASE).strip()
+    if edition and "extended" in edition.lower():
+        edition = "Extended"
 
     if not edition:
         if video.lower().startswith('dc'):
