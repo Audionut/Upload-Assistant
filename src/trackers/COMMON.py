@@ -607,7 +607,7 @@ class COMMON():
                     if i >= process_limit:
                         continue
                     # Extract filename directly from the file path
-                    filename = os.path.splitext(os.path.basename(file.strip()))[0]
+                    filename = os.path.splitext(os.path.basename(file.strip()))[0].replace('[', '').replace(']', '')
 
                     # If we are beyond the file limit, add all further files in a spoiler
                     if multi_screens != 0:
