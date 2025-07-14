@@ -3,6 +3,7 @@ import os
 import re
 import requests
 import cli_ui
+import httpx
 from pymediainfo import MediaInfo
 from datetime import datetime
 from src.exceptions import UploadException
@@ -25,40 +26,26 @@ class ASC(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-    def get_season_and_episode(self, meta):
-        if meta.get('category') == 'TV':
-            season = meta.get('season')
-            episode = meta.get('episode')
-
-            if meta.get('tv_pack') == 1 and season:
-                return f"{season}", None
-            elif meta.get('tv_pack') == 0 and season and episode:
-                return f"{season}", f"{episode}"
-        return None, None
-
-    def get_title(self, meta):
+    async def get_title(self, meta):
+        tmdb_ptbr_data = await self.tmdb_ptbr_data(meta)
+        category = meta.get('category')
         og_name = meta.get('title')
-        ptbr_name = None
-        try:
-            for aka in meta.get('imdb_info', {}).get('akas', []):
-                if aka.get('country') == 'Brazil':
-                    ptbr_name = aka.get('title')
-                    break
-        except (TypeError, AttributeError):
-            ptbr_name = None
+        movie_title_ptbr = tmdb_ptbr_data.get('title') if tmdb_ptbr_data else None
+        tv_title_ptbr = tmdb_ptbr_data.get('name') if tmdb_ptbr_data else None
 
-        nome_base = og_name
-        if ptbr_name and ptbr_name.lower() != og_name.lower():
-            nome_base = f"{ptbr_name} ({og_name})"
+        base_name = og_name
 
-        season, episode = self.get_season_and_episode(meta)
-        season_episode_str = ""
-        if season and not episode:
-            season_episode_str = f" - {season}"
-        elif season and episode:
-            season_episode_str = f" - {season}{episode}"
+        if category == 'TV':
+            if tv_title_ptbr and tv_title_ptbr.lower() != og_name.lower():
+                base_name = f"{tv_title_ptbr} ({og_name})"
 
-        return f"{nome_base}{season_episode_str}"
+            return f"{base_name} - {meta.get('season', '')}{meta.get('episode', '')}"
+
+        else:
+            if movie_title_ptbr and movie_title_ptbr.lower() != og_name.lower():
+                base_name = f"{movie_title_ptbr} ({og_name})"
+
+            return f"{base_name}"
 
     def get_cat_id(self, meta):
         if meta.get('anime'):
@@ -130,7 +117,7 @@ class ASC(COMMON):
 
     def get_type_id(self, meta):
         qualidade_map_disc = {"BD25": "40", "BD50": "41", "BD66": "42", "BD100": "43"}
-        qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDR": "10"}
+        qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDRIP": "10"}
         qualidade_map_dvd = {"DVD5": "45", "DVD9": "46"}
 
         if meta.get('type') == 'DISC':
@@ -293,6 +280,24 @@ class ASC(COMMON):
 
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
+
+    async def tmdb_ptbr_data(self, meta):
+        tmdb_data = None
+        category = meta.get('category', '').lower()
+        tmdb_id = meta.get('tmdb', '')
+        tmdb_api = self.config['DEFAULT'].get('tmdb_api')
+
+        if tmdb_api:
+            url = f"https://api.themoviedb.org/3/{category}/{tmdb_id}?api_key={tmdb_api}&language=pt-BR"
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(url)
+                    if response.status_code == 200:
+                        tmdb_data = response.json()
+            except httpx.RequestError as e:
+                print(f"Ocorreu um erro ao fazer a requisição para o TMDB: {e}")
+
+        return tmdb_data
 
     async def build_description(self, json_data, meta):
         fileinfo_dump = ""
@@ -480,6 +485,8 @@ class ASC(COMMON):
         return "".join(filter(None, description_parts))
 
     async def prepare_form_data(self, meta):
+        tmdb_ptbr_data = await self.tmdb_ptbr_data(meta)
+
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
 
@@ -527,34 +534,10 @@ class ASC(COMMON):
                 f.write(data['descr'])
 
             # Poster
-            poster_path = asc_data.get('poster_path') if asc_data else None
-            if not poster_path:
-                poster_path = meta.get('poster')
-            if poster_path:
-                data['capa'] = poster_path
+            data['capa'] = tmdb_ptbr_data.get('poster_path') if tmdb_ptbr_data else meta.get('poster')
 
             # Title
-            # The site database is incompatible with non-ASCII characters in the title
-            def is_safe_ascii(text):
-                if not text:
-                    return False
-                return bool(re.match(r'^[ -~]+$', text))
-
-            title_from_asc = asc_data.get('Title') if asc_data else None
-
-            if is_safe_ascii(title_from_asc):
-                nome_base = title_from_asc
-
-                if meta.get('category') == 'TV':
-                    season, episode = self.get_season_and_episode(meta)
-                    season_episode_str = ""
-                    if season:
-                        season_episode_str = f" - {season}{episode or ''}"
-                    data['name'] = f"{nome_base}{season_episode_str}"
-                else:
-                    data['name'] = nome_base
-            else:
-                data['name'] = self.get_title(meta)
+            data['name'] = await self.get_title(meta)
 
             # Year
             ano = asc_data.get('Year') if asc_data and asc_data.get('Year') else meta.get('year')
@@ -758,28 +741,14 @@ class ASC(COMMON):
             search_query = search_name.replace(' ', '+')
             search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
 
-        elif meta.get('category') == 'TV':
-            imdb_id = meta.get('imdb_info', {}).get('imdbID')
+        imdb_id = meta.get('imdb_info', {}).get('imdbID')
+        category = meta.get('category')
 
-            if imdb_id:
-                season, episode = self.get_season_and_episode(meta)
-                search_param = ""
-                if season and not episode:
-                    search_param = f"{season}"
-                elif season and episode:
-                    search_param = f"{season}{episode}"
-
-                search_url = f"{self.base_url}/busca-series.php?search={search_param}&imdb={imdb_id}"
-            else:
-                search_name = self.get_title(meta)
-                search_query = search_name.replace(' ', '+')
-                search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
-
-        else:
-            imdb_id = meta.get('imdb_info', {}).get('imdbID')
-            if not imdb_id:
-                return []
+        if category == 'MOVIE':
             search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={imdb_id}"
+
+        if category == 'TV':
+            search_url = f"{self.base_url}/busca-series.php?search={meta.get('season', '')}{meta.get('episode', '')}&imdb={imdb_id}"
 
         return await self.get_dupes(search_url, meta)
 
