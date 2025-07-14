@@ -441,6 +441,8 @@ async def tmdb_other_meta(
             runtime = media_data.get('runtime', 60)
             if quickie_search or not imdb_id:
                 imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
+                if imdb_id_str == "None":
+                    imdb_id_str = ""
                 if imdb_id and imdb_id_str and (int(imdb_id_str) != imdb_id):
                     imdb_mismatch = True
                 imdb_id = int(imdb_id_str) if imdb_id_str.isdigit() else 0
