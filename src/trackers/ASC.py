@@ -284,7 +284,7 @@ class ASC(COMMON):
     async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT'].get('tmdb_api')
 
-        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR"
+        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -343,14 +343,27 @@ class ASC(COMMON):
                 with open(bd_summary_file, 'r', encoding='utf-8') as f:
                     fileinfo_dump = f.read()
 
-        asc_data = json_data.get('ASC')
+        asc_data = None
+        url_gerador_desc = f"{self.base_url}/search.php"
+        payload = {'imdb': self.imdb_id, 'layout': self.layout}
+        try:
+            await self.load_cookies(meta)
+            response = self.session.post(url_gerador_desc, data=payload, timeout=20)
+            response.raise_for_status()
+            asc_data = response.json().get('ASC')
+        except Exception:
+            asc_data = None
+
         if not asc_data:
-            console.print("[yellow]Alerta:[/yellow] O ASC não conseguiu gerar uma descrição com base no código IMDb.")
-            if fileinfo_dump:
-                console.print("[yellow]Alerta:[/yellow] Usando informações do arquivo como descrição.")
-                return f"\n[left][font=Courier New]{fileinfo_dump}[/font][/left]"
-            else:
-                return
+            # Use a fixed imdb ID as a fallback, so the script can fetch the custom layout images
+            payload = {'imdb': 'tt0013442', 'layout': self.layout}
+            try:
+                await self.load_cookies(meta)
+                response = self.session.post(url_gerador_desc, data=payload, timeout=20)
+                response.raise_for_status()
+                fallback_asc_data = response.json().get('ASC')
+            except Exception:
+                fallback_asc_data = None
 
         def format_image(url):
             return f"[img]{url}[/img]" if url else ""
@@ -365,9 +378,9 @@ class ASC(COMMON):
                     continue
             return date_str
 
-        def append_section(parts, barrinha_key, content):
+        def append_section(parts, layout_key, content):
             if content:
-                barrinha_url = barrinhas.get(barrinha_key)
+                barrinha_url = layout_image.get(layout_key)
                 if barrinha_url:
                     parts.append(f"\n{format_image(barrinha_url)}")
                 parts.append(f"\n{content}\n")
@@ -388,9 +401,10 @@ class ASC(COMMON):
                 return ""
 
             ratings_map = {
-                "Internet Movie Database": "https://i.postimg.cc/Pr8Gv4RQ/IMDB.png",
-                "Rotten Tomatoes": "https://i.postimg.cc/rppL76qC/rotten.png",
-                "Metacritic": "https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png"
+                "Internet Movie Database": "[img]https://i.postimg.cc/Pr8Gv4RQ/IMDB.png[/img]",
+                "Rotten Tomatoes": "[img]https://i.postimg.cc/rppL76qC/rotten.png[/img]",
+                "Metacritic": "[img]https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png[/img]",
+                "TMDb": "[img=60x26]https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg[/img]"
             }
             ratings_parts = []
             for rating in ratings_list:
@@ -401,14 +415,22 @@ class ASC(COMMON):
                 if not img_url:
                     continue
 
-                if source == "Internet Movie Database" and self.imdb_id:
-                    ratings_parts.append(f"[url=https://www.imdb.com/title/{self.imdb_id}]{format_image(img_url)}[/url] - [b]{value}[/b]")
+                if source == "Internet Movie Database":
+                    ratings_parts.append(f"\n[url=https://www.imdb.com/title/{self.imdb_id}]{img_url}[/url]\n[b]{value}[/b]\n")
                 else:
-                    ratings_parts.append(f"{format_image(img_url)} - [b]{value}[/b]")
+                    ratings_parts.append(f"{img_url}\n[b]{value}[/b]\n")
 
             return "\n".join(ratings_parts)
 
-        barrinhas = {key: value for key, value in asc_data.items() if key.startswith('BARRINHA_')}
+        # User layout
+        if asc_data:
+            user_layout = asc_data
+        else:
+            user_layout = fallback_asc_data
+
+        layout_image = {key: value for key, value in user_layout.items() if key.startswith('BARRINHA_')}
+
+        # Title
         title = await self.get_title(meta)
 
         # Poster
@@ -430,12 +452,6 @@ class ASC(COMMON):
             self.genre = ', '.join([g['name'] for g in main_tmdb.get('genres', [])])
         else:
             self.genre = meta.get('genre', "Sem gênero")
-
-        # Companies
-        if main_tmdb and main_tmdb.get('production_companies'):
-            production_companies = ', '.join([g['name'] for g in main_tmdb.get('production_companies', [])])
-        else:
-            production_companies = "N/A"
 
         # Country
         if main_tmdb and main_tmdb.get('production_countries'):
@@ -467,10 +483,10 @@ class ASC(COMMON):
 
         # Custom top bars
         for i in range(1, 4):
-            description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_T_{i}')))
+            description_parts.append(format_image(layout_image.get(f'BARRINHA_CUSTOM_T_{i}')))
 
         # Common data
-        description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}\n")
+        description_parts.append(f"\n{format_image(layout_image.get('BARRINHA_APRESENTA'))}\n")
         description_parts.append(f"\n[size=3]{title}[/size]\n")
 
         append_section(description_parts, 'BARRINHA_CAPA', format_image(self.poster))
@@ -501,7 +517,11 @@ class ASC(COMMON):
             description_parts.append("\n" + "\n".join(prod_parts) + "\n")
 
         # Cast
-        cast_content = build_cast_section(asc_data.get('cast'))
+        if self.category == 'TV':
+            cast = (episode_tmdb or {}).get('credits').get('cast') or (season_tmdb or {}).get('credits').get('cast')
+        else:
+            cast = main_tmdb.get('credits').get('cast')
+        cast_content = build_cast_section(cast)
         append_section(description_parts, 'BARRINHA_ELENCO', cast_content)
 
         # Seasons
@@ -522,13 +542,35 @@ class ASC(COMMON):
             append_section(description_parts, 'BARRINHA_EPISODIOS', "".join(seasons_content))
 
         # Ratings
-        ratings_content = build_ratings_section(asc_data.get('Ratings'))
-        barrinha_criticas_key = 'BARRINHA_INFORMACOES' if self.category == 'MOVIE' and 'BARRINHA_INFORMACOES' in barrinhas else 'BARRINHA_CRITICAS'
+        ratings_list = []
+
+        if asc_data:
+            primary_ratings = asc_data.get('Ratings')
+            if primary_ratings:
+                ratings_list.extend(primary_ratings)
+
+        else:
+            imdb_rating = meta.get('imdb_info', {}).get('rating')
+            if imdb_rating:
+                ratings_list.append({
+                    'Source': 'Internet Movie Database',
+                    'Value': f'{imdb_rating}/10'
+                })
+
+        tmdb_rating = main_tmdb.get('vote_average')
+        if tmdb_rating:
+            ratings_list.append({
+                'Source': 'TMDb',
+                'Value': f'{tmdb_rating:.1f}/10'
+            })
+
+        ratings_content = build_ratings_section(ratings_list)
+        barrinha_criticas_key = 'BARRINHA_INFORMACOES' if self.category == 'MOVIE' and 'BARRINHA_INFORMACOES' in layout_image else 'BARRINHA_CRITICAS'
         append_section(description_parts, barrinha_criticas_key, ratings_content)
 
         # Custom bottom bars
         for i in range(1, 4):
-            description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_B_{i}')))
+            description_parts.append(format_image(layout_image.get(f'BARRINHA_CUSTOM_B_{i}')))
 
         # MediaInfo/BDinfo
         if fileinfo_dump:
@@ -544,19 +586,9 @@ class ASC(COMMON):
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
 
-            asc_data = None
-            url_gerador_desc = f"{self.base_url}/search.php"
-            payload = {'imdb': self.imdb_id, 'layout': self.layout}
-            try:
-                await self.load_cookies(meta)
-                response = self.session.post(url_gerador_desc, data=payload, timeout=20)
-                response.raise_for_status()
-                asc_data = response.json().get('ASC')
-            except Exception:
-                asc_data = None
-
             # Description
-            tracker_description = await self.build_description({'ASC': asc_data}, meta)
+            json_data = {}
+            tracker_description = await self.build_description(json_data, meta)
 
             base_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
             asc_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
@@ -660,7 +692,6 @@ class ASC(COMMON):
             raise UploadException("Falha ao preparar os dados do formulário.", 'red')
 
         if meta.get('debug', False):
-            console.print("[yellow]MODO DEBUG ATIVADO. Upload não será realizado.[/yellow]")
             console.print("[cyan]Dados do formulário:[/cyan]", data)
             return
 
