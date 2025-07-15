@@ -26,34 +26,33 @@ class ASC(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
+    def commom_data(self, meta):
+        self.imdb_id = meta['imdb_info']['imdbID']
+        self.tmdb_id = meta['tmdb']
+        self.category = meta['category']
+        self.season = meta.get('season', '')
+        self.episode = meta.get('episode', '')
+
     async def get_title(self, meta):
-        tmdb_ptbr_data = await self.tmdb_ptbr_data(meta)
-        category = meta.get('category')
-        og_name = meta.get('title')
+        self.commom_data(meta)
+        tmdb_ptbr_data = await self.main_tmdb_data(meta)
+        name = meta.get('title')
         movie_title_ptbr = tmdb_ptbr_data.get('title') if tmdb_ptbr_data else None
         tv_title_ptbr = tmdb_ptbr_data.get('name') if tmdb_ptbr_data else None
 
-        base_name = og_name
+        base_name = name
 
-        if category == 'TV':
-            if tv_title_ptbr and tv_title_ptbr.lower() != og_name.lower():
-                base_name = f"{tv_title_ptbr} ({og_name})"
+        if self.category == 'TV':
+            if tv_title_ptbr and tv_title_ptbr.lower() != name.lower():
+                base_name = f"{tv_title_ptbr} ({name})"
 
-            return f"{base_name} - {meta.get('season', '')}{meta.get('episode', '')}"
+            return f"{base_name} - {self.season}{self.episode}"
 
         else:
-            if movie_title_ptbr and movie_title_ptbr.lower() != og_name.lower():
-                base_name = f"{movie_title_ptbr} ({og_name})"
+            if movie_title_ptbr and movie_title_ptbr.lower() != name.lower():
+                base_name = f"{movie_title_ptbr} ({name})"
 
             return f"{base_name}"
-
-    def get_cat_id(self, meta):
-        if meta.get('anime'):
-            if meta.get('category') == 'MOVIE':
-                return '116'  # Categoria Anime (Filme)
-            elif meta.get('category') == 'TV':
-                return '118'  # Categoria Anime (Série)
-        return None  # Retorna None se não for uma categoria de anime específica
 
     def get_subtitles(self, meta):
         subtitle_languages = []
@@ -225,7 +224,7 @@ class ASC(COMMON):
             if key in audio_type:
                 return code
 
-        return "20"  # Outros
+        return "20"
 
     def get_video_codec(self, meta):
         codec_video_map = {
@@ -261,9 +260,10 @@ class ASC(COMMON):
         return codec_id
 
     async def get_auto_description(self, meta):
+        self.commom_data(meta)
         url_gerador_desc = f"{self.base_url}/search.php"
         payload = {
-            'imdb': meta.get('imdb_info', {}).get('imdbID', ''),
+            'imdb': self.imdb_id,
             'layout': self.layout
         }
 
@@ -281,25 +281,53 @@ class ASC(COMMON):
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
 
-    async def tmdb_ptbr_data(self, meta):
-        tmdb_data = None
-        category = meta.get('category', '').lower()
-        tmdb_id = meta.get('tmdb', '')
+    async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT'].get('tmdb_api')
 
-        if tmdb_api:
-            url = f"https://api.themoviedb.org/3/{category}/{tmdb_id}?api_key={tmdb_api}&language=pt-BR"
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(url)
-                    if response.status_code == 200:
-                        tmdb_data = response.json()
-            except httpx.RequestError as e:
-                print(f"Ocorreu um erro ao fazer a requisição para o TMDB: {e}")
+        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    # Log opcional para status de erro, como 404 (Não Encontrado)
+                    # console.print(f"[yellow]Aviso: TMDB respondeu com status {response.status_code} para {url}[/yellow]")
+                    return None
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Ocorreu um erro ao fazer a requisição para o TMDB: {e}[/bold red]")
+            return None
 
-        return tmdb_data
+    async def main_tmdb_data(self, meta):
+        self.commom_data(meta)
+        if not self.category or not self.tmdb_id:
+            return None
+
+        endpoint = f"{self.category.lower()}/{self.tmdb_id}"
+        return await self.fetch_tmdb_data(endpoint)
+
+    async def season_tmdb_data(self, meta):
+        season = meta.get('season_int')
+        if not self.tmdb_id or season is None:
+            return None
+
+        endpoint = f"tv/{self.tmdb_id}/season/{season}"
+        return await self.fetch_tmdb_data(endpoint)
+
+    async def episode_tmdb_data(self, meta):
+        season = meta.get('season_int')
+        episode = meta.get('episode_int')
+        if not self.tmdb_id or season is None or episode is None:
+            return None
+
+        endpoint = f"tv/{self.tmdb_id}/season/{season}/episode/{episode}"
+        return await self.fetch_tmdb_data(endpoint)
 
     async def build_description(self, json_data, meta):
+        main_tmdb = await self.main_tmdb_data(meta)
+        season_tmdb = await self.season_tmdb_data(meta)
+        episode_tmdb = await self.episode_tmdb_data(meta)
+
         fileinfo_dump = ""
         if meta.get('is_disc') != 'BDMV':
             video_file = meta['filelist'][0]
@@ -355,7 +383,7 @@ class ASC(COMMON):
                 cast_parts.append(f"[url={tmdb_url}]{format_image(profile_url)}[/url]\n[size=2][b]({ator.get('name', '')}) como {ator.get('character', '')}[/b][/size]\n")
             return "".join(cast_parts)
 
-        def build_ratings_section(ratings_list, imdb_id):
+        def build_ratings_section(ratings_list):
             if not ratings_list:
                 return ""
 
@@ -373,26 +401,67 @@ class ASC(COMMON):
                 if not img_url:
                     continue
 
-                if source == "Internet Movie Database" and imdb_id:
-                    ratings_parts.append(f"[url=https://www.imdb.com/title/{imdb_id}]{format_image(img_url)}[/url] - [b]{value}[/b]")
+                if source == "Internet Movie Database" and self.imdb_id:
+                    ratings_parts.append(f"[url=https://www.imdb.com/title/{self.imdb_id}]{format_image(img_url)}[/url] - [b]{value}[/b]")
                 else:
                     ratings_parts.append(f"{format_image(img_url)} - [b]{value}[/b]")
 
             return "\n".join(ratings_parts)
 
-        tmdb_tv_data = None
-        if meta.get('category', '').lower() == 'tv' and meta.get('tmdb') and self.config['DEFAULT'].get('tmdb_api'):
-            url = f"https://api.themoviedb.org/3/tv/{meta['tmdb']}?api_key={self.config['DEFAULT']['tmdb_api']}&language=pt-BR"
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    tmdb_tv_data = response.json()
-            except requests.exceptions.RequestException as e:
-                print(f"Ocorreu um erro ao fazer a requisição para o TMDB: {e}")
-
-        tipo_media = asc_data.get('Type', 'movie')
-        imdb_id = asc_data.get('imdbID', '')
         barrinhas = {key: value for key, value in asc_data.items() if key.startswith('BARRINHA_')}
+        title = await self.get_title(meta)
+
+        # Poster
+        poster_url = "https://image.tmdb.org/t/p/w500"
+        poster_path = (season_tmdb or {}).get('poster_path') or (main_tmdb or {}).get('poster_path')
+        self.poster = f"{poster_url}{poster_path}"
+
+        # Overview
+        overview = (season_tmdb or {}).get('overview') or (main_tmdb or {}).get('overview')
+
+        # Still
+        if self.category == "TV":
+            still_url = "https://image.tmdb.org/t/p/w300"
+            still_path = episode_tmdb.get('still_path')
+            still = f"{still_url}{still_path}"
+
+        # Genre
+        if main_tmdb and main_tmdb.get('genres'):
+            self.genre = ', '.join([g['name'] for g in main_tmdb.get('genres', [])])
+        else:
+            self.genre = meta.get('genre', "Sem gênero")
+
+        # Companies
+        if main_tmdb and main_tmdb.get('production_companies'):
+            production_companies = ', '.join([g['name'] for g in main_tmdb.get('production_companies', [])])
+        else:
+            production_companies = "N/A"
+
+        # Country
+        if main_tmdb and main_tmdb.get('production_countries'):
+            production_countries = ', '.join([g['name'] for g in main_tmdb.get('production_countries', [])])
+        else:
+            production_countries = "N/A"
+
+        # Homepage
+        homepage = main_tmdb.get('homepage')
+
+        # Runtime
+        runtime = (episode_tmdb or {}).get('runtime') or (main_tmdb or {}).get('runtime')
+        hours = runtime // 60
+        minutes = runtime % 60
+        if hours > 1:
+            formatted_runtime = f"{hours} horas e {minutes:02d} minutos"
+        elif hours == 1:
+            formatted_runtime = f"{hours} hora e {minutes:02d} minutos"
+        else:
+            formatted_runtime = f"{minutes:02d} minutos"
+
+        # Release Date
+        if self.category == "MOVIE":
+            release_date = main_tmdb.get('release_date', 'N/A')
+        else:
+            release_date = (episode_tmdb or {}).get('air_date') or (season_tmdb or {}).get('air_date')
 
         description_parts = ["[center]"]
 
@@ -401,59 +470,44 @@ class ASC(COMMON):
             description_parts.append(format_image(barrinhas.get(f'BARRINHA_CUSTOM_T_{i}')))
 
         # Common data
-        if tipo_media == 'movie':
-            description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}\n")
-            description_parts.append(f"[size=3]{asc_data.get('Title', 'N/A')}[/size]\n")
+        description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}\n")
+        description_parts.append(f"\n[size=3]{title}[/size]\n")
 
-            append_section(description_parts, 'BARRINHA_CAPA', format_image(asc_data.get('poster_path')))
-            append_section(description_parts, 'BARRINHA_SINOPSE', asc_data.get('overview'))
+        append_section(description_parts, 'BARRINHA_CAPA', format_image(self.poster))
+        append_section(description_parts, 'BARRINHA_SINOPSE', overview)
+        description_parts.append(f"\n[size=4][b]Episódio:[/b] {episode_tmdb.get('name')}[/size]\n" if self.category == 'TV' else None)
+        if self.category == "TV":
+            description_parts.append(f"\n{format_image(still)}\n\n{episode_tmdb.get('overview')}\n" if still_path else f"\n{episode_tmdb.get('overview')}\n")
 
-            # Technical Sheet
-            ficha_content = "\n".join([
-                f"Tempo: {asc_data.get('Runtime', 'N/A')}",
-                f"Produtora: {asc_data.get('Production', 'N/A')}",
-                f"País de Origem: {asc_data.get('Country', 'N/A')}",
-                f"Gêneros: {asc_data.get('Genre', 'N/A')}",
-                f"Data de Lançamento: {format_date(asc_data.get('Released', 'N/A'))}",
-                (f"Site: [url={asc_data.get('Website')}]Clique aqui[/url]" if asc_data.get('Website') != 'N/A' else "")
-            ])
-            append_section(description_parts, 'BARRINHA_FICHA_TECNICA', ficha_content)
+        # Technical Sheet
+        sheet = [
+            (f"Duração: {formatted_runtime}" if runtime else None),
+            (f"País de Origem: {production_countries}" if production_countries else None),
+            (f"Gêneros: {self.genre}" if self.genre else None),
+            (f"Data de Lançamento: {format_date(release_date)}" if release_date else None),
+            (f"Site: [url={homepage}]Clique aqui[/url]" if homepage else None)
+        ]
 
-        elif tipo_media in ['series', 'episode']:
-            description_parts.append(f"\n{format_image(barrinhas.get('BARRINHA_APRESENTA'))}")
-            description_parts.append(f"\n{format_image(asc_data.get('poster_path'))}\n")
+        sheet_content = "\n".join(item for item in sheet if item is not None)
 
-            append_section(description_parts, 'BARRINHA_CAPA', format_image(asc_data.get('still_path')))
-            append_section(description_parts, 'BARRINHA_SINOPSE', asc_data.get('overview'))
+        append_section(description_parts, 'BARRINHA_FICHA_TECNICA', sheet_content)
 
-            # Technical Sheet (TV)
-            generos = asc_data.get('Genre', 'N/A')
-            if tmdb_tv_data and tmdb_tv_data.get('genres'):
-                generos = ', '.join([g['name'] for g in tmdb_tv_data.get('genres', [])])
-
-            ficha_content = "\n".join(filter(None, [
-                f"País de Origem: {asc_data.get('Country', 'N/A')}",
-                f"Gêneros: {generos}",
-                (f"Site: [url={asc_data.get('Website')}]Clique aqui[/url]" if asc_data.get('Website') != 'N/A' else None)
-            ]))
-            append_section(description_parts, 'BARRINHA_FICHA_TECNICA', ficha_content)
-
-            # Production Companies (TV)
-            if tmdb_tv_data and tmdb_tv_data.get('production_companies'):
-                prod_parts = ["[size=4][b]Produtoras[/b][/size]"]
-                for p in tmdb_tv_data['production_companies']:
-                    logo = format_image(f"https://image.tmdb.org/t/p/w45{p['logo_path']}") if p.get('logo_path') else ''
-                    prod_parts.append(f"{logo}[size=2] - [b]{p.get('name', '')}[/b][/size]" if logo else f"[size=2][b]{p.get('name', '')}[/b][/size]")
-                description_parts.append("\n" + "\n".join(prod_parts) + "\n")
+        # Production Companies (TV)
+        if main_tmdb and main_tmdb.get('production_companies'):
+            prod_parts = ["[size=4][b]Produtoras[/b][/size]"]
+            for p in main_tmdb['production_companies']:
+                logo = format_image(f"https://image.tmdb.org/t/p/w45{p['logo_path']}") if p.get('logo_path') else ''
+                prod_parts.append(f"{logo}[size=2] - [b]{p.get('name', '')}[/b][/size]" if logo else f"[size=2][b]{p.get('name', '')}[/b][/size]")
+            description_parts.append("\n" + "\n".join(prod_parts) + "\n")
 
         # Cast
         cast_content = build_cast_section(asc_data.get('cast'))
         append_section(description_parts, 'BARRINHA_ELENCO', cast_content)
 
         # Seasons
-        if tipo_media == 'series' and tmdb_tv_data and tmdb_tv_data.get('seasons'):
+        if self.category == 'TV' and main_tmdb and main_tmdb.get('seasons'):
             seasons_content = []
-            for temp in tmdb_tv_data['seasons']:
+            for temp in main_tmdb['seasons']:
                 nome_temporada = temp.get('name', f"Temporada {temp.get('season_number')}").strip()
                 poster_temp = format_image(f"https://image.tmdb.org/t/p/w185{temp.get('poster_path')}") if temp.get('poster_path') else ''
                 overview_temp = f"\n\nSinopse:\n{temp.get('overview')}" if temp.get('overview') else ''
@@ -468,8 +522,8 @@ class ASC(COMMON):
             append_section(description_parts, 'BARRINHA_EPISODIOS', "".join(seasons_content))
 
         # Ratings
-        ratings_content = build_ratings_section(asc_data.get('Ratings'), imdb_id)
-        barrinha_criticas_key = 'BARRINHA_INFORMACOES' if tipo_media == 'movie' and 'BARRINHA_INFORMACOES' in barrinhas else 'BARRINHA_CRITICAS'
+        ratings_content = build_ratings_section(asc_data.get('Ratings'))
+        barrinha_criticas_key = 'BARRINHA_INFORMACOES' if self.category == 'MOVIE' and 'BARRINHA_INFORMACOES' in barrinhas else 'BARRINHA_CRITICAS'
         append_section(description_parts, barrinha_criticas_key, ratings_content)
 
         # Custom bottom bars
@@ -485,22 +539,21 @@ class ASC(COMMON):
         return "".join(filter(None, description_parts))
 
     async def prepare_form_data(self, meta):
-        tmdb_ptbr_data = await self.tmdb_ptbr_data(meta)
+        self.commom_data(meta)
 
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
 
             asc_data = None
-            if meta.get('imdb_id'):
-                url_gerador_desc = f"{self.base_url}/search.php"
-                payload = {'imdb': meta.get('imdb_info', {}).get('imdbID', ''), 'layout': self.layout}
-                try:
-                    await self.load_cookies(meta)
-                    response = self.session.post(url_gerador_desc, data=payload, timeout=20)
-                    response.raise_for_status()
-                    asc_data = response.json().get('ASC')
-                except Exception:
-                    asc_data = None
+            url_gerador_desc = f"{self.base_url}/search.php"
+            payload = {'imdb': self.imdb_id, 'layout': self.layout}
+            try:
+                await self.load_cookies(meta)
+                response = self.session.post(url_gerador_desc, data=payload, timeout=20)
+                response.raise_for_status()
+                asc_data = response.json().get('ASC')
+            except Exception:
+                asc_data = None
 
             # Description
             tracker_description = await self.build_description({'ASC': asc_data}, meta)
@@ -534,20 +587,16 @@ class ASC(COMMON):
                 f.write(data['descr'])
 
             # Poster
-            data['capa'] = tmdb_ptbr_data.get('poster_path') if tmdb_ptbr_data else meta.get('poster')
+            data['capa'] = self.poster
 
             # Title
             data['name'] = await self.get_title(meta)
 
             # Year
-            ano = asc_data.get('Year') if asc_data and asc_data.get('Year') else meta.get('year')
-            if ano:
-                data['ano'] = ano
+            data['ano'] = meta.get('year')
 
             # Genre
-            genre = asc_data.get('Genre') if asc_data and asc_data.get('Genre') else meta.get('genres')
-            if genre:
-                data['genre'] = genre
+            data['genre'] = self.genre
 
             # File information
             data['legenda'] = self.get_subtitles(meta)
@@ -558,22 +607,23 @@ class ASC(COMMON):
             data['codecvideo'] = self.get_video_codec(meta)
 
             # IMDb
-            if meta.get('imdb_id'):
-                data['imdb'] = meta.get('imdb_info', {}).get('imdbID', '')
+            data['imdb'] = self.imdb_id
 
             # Trailer
-            if meta.get('youtube'):
-                data['tube'] = meta.get('youtube')
+            data['tube'] = meta.get('youtube', '')
 
             # Resolution
-            largura, altura = self.get_res_id(meta)
-            if largura:
-                data['largura'] = largura
-            if altura:
-                data['altura'] = altura
+            width, hight = self.get_res_id(meta)
+            data['largura'] = width
+            data['altura'] = hight
 
             # Languages
-            lang_map = {"en": "1", "fr": "2", "de": "3", "it": "4", "ja": "5", "es": "6", "ru": "7", "pt": "8", "zh": "10", "da": "12", "sv": "13", "fi": "14", "bg": "15", "no": "16", "nl": "17", "pl": "19", "ko": "20", "th": "21", "hi": "23", "tr": "25"}
+            lang_map = {
+                "en": "1", "fr": "2", "de": "3", "it": "4", "ja": "5",
+                "es": "6", "ru": "7", "pt": "8", "zh": "10", "da": "12",
+                "sv": "13", "fi": "14", "bg": "15", "no": "16", "nl": "17",
+                "pl": "19", "ko": "20", "th": "21", "hi": "23", "tr": "25"
+            }
 
             if meta.get('anime'):
                 if '3' in data['audio'] or '2' in data['audio']:
@@ -583,7 +633,12 @@ class ASC(COMMON):
 
                 idioma_map = {"de": "3", "zh": "9", "ko": "11", "es": "1", "en": "4", "ja": "8", "pt": "5", "ru": "2"}
                 data['idioma'] = idioma_map.get(meta.get('original_language', '').lower(), "6")
-                data['type'] = self.get_cat_id(meta)
+
+                if self.category == 'MOVIE':
+                    data['type'] = '116'
+                elif self.category == 'TV':
+                    data['type'] = '118'
+
             else:
                 data['lang'] = lang_map.get(meta.get('original_language', '').lower(), "11")
 
@@ -628,7 +683,7 @@ class ASC(COMMON):
     def get_upload_url(self, meta):
         if meta.get('anime'):
             return f"{self.base_url}/enviar-anime.php"
-        elif meta.get('category') == 'MOVIE':
+        elif self.category == 'MOVIE':
             return f"{self.base_url}/enviar-filme.php"
         else:
             return f"{self.base_url}/enviar-series.php"
@@ -736,19 +791,17 @@ class ASC(COMMON):
         return dupes
 
     async def search_existing(self, meta, disctype):
+        self.commom_data(meta)
         if meta.get('anime'):
-            search_name = self.get_title(meta)
+            search_name = await self.get_title(meta)
             search_query = search_name.replace(' ', '+')
             search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
 
-        imdb_id = meta.get('imdb_info', {}).get('imdbID')
-        category = meta.get('category')
+        if self.category == 'MOVIE':
+            search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={self.imdb_id}"
 
-        if category == 'MOVIE':
-            search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={imdb_id}"
-
-        if category == 'TV':
-            search_url = f"{self.base_url}/busca-series.php?search={meta.get('season', '')}{meta.get('episode', '')}&imdb={imdb_id}"
+        if self.category == 'TV':
+            search_url = f"{self.base_url}/busca-series.php?search={self.season}{self.episode}&imdb={self.imdb_id}"
 
         return await self.get_dupes(search_url, meta)
 
