@@ -36,19 +36,18 @@ class ASC(COMMON):
     async def get_title(self, meta):
         self.commom_data(meta)
         tmdb_ptbr_data = await self.main_tmdb_data(meta)
-        name = meta.get('title')
-        movie_title_ptbr = tmdb_ptbr_data.get('title') if tmdb_ptbr_data else None
-        tv_title_ptbr = tmdb_ptbr_data.get('name') if tmdb_ptbr_data else None
-
+        name = meta['title']
         base_name = name
 
         if self.category == 'TV':
+            tv_title_ptbr = tmdb_ptbr_data['name']
             if tv_title_ptbr and tv_title_ptbr.lower() != name.lower():
                 base_name = f"{tv_title_ptbr} ({name})"
 
             return f"{base_name} - {self.season}{self.episode}"
 
         else:
+            movie_title_ptbr = tmdb_ptbr_data['title']
             if movie_title_ptbr and movie_title_ptbr.lower() != name.lower():
                 base_name = f"{movie_title_ptbr} ({name})"
 
@@ -105,13 +104,13 @@ class ASC(COMMON):
         return '0'  # Sem Legenda
 
     def get_res_id(self, meta):
-        if meta.get('is_disc') == 'BDMV':
+        if meta['is_disc'] == 'BDMV':
             res_map = {'2160p': ('3840', '2160'), '1080p': ('1920', '1080'), '1080i': ('1920', '1080'), '720p': ('1280', '720')}
-            return res_map.get(meta.get('resolution'))
+            return res_map[meta['resolution']]
 
-        video_track = next((t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'Video'), None)
+        video_track = next((t for t in meta['mediainfo']['media']['track'] if t['@type'] == 'Video'), None)
         if video_track:
-            return video_track.get('Width'), video_track.get('Height')
+            return video_track['Width'], video_track['Height']
         return None, None
 
     def get_type_id(self, meta):
@@ -119,14 +118,14 @@ class ASC(COMMON):
         qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDRIP": "10"}
         qualidade_map_dvd = {"DVD5": "45", "DVD9": "46"}
 
-        if meta.get('type') == 'DISC':
-            if meta.get('is_disc') == 'DVD':
-                dvd_size = meta.get('dvd_size')
-                type_id = qualidade_map_dvd.get(dvd_size)
+        if meta['type'] == 'DISC':
+            if meta['is_disc'] == 'DVD':
+                dvd_size = meta['dvd_size']
+                type_id = qualidade_map_dvd[dvd_size]
                 if type_id:
                     return type_id
 
-            disctype = meta.get('disctype')
+            disctype = meta['disctype']
             if disctype in qualidade_map_disc:
                 return qualidade_map_disc[disctype]
 
@@ -142,7 +141,7 @@ class ASC(COMMON):
                 else:
                     return "40"  # BD25
         else:
-            return qualidade_map_files.get(meta.get('type'), "0")
+            return qualidade_map_files.get(meta['type'], "0")
 
     def get_dubs(self, meta):
         audio_tracks_raw = []
@@ -168,8 +167,8 @@ class ASC(COMMON):
                 console.print(f"[bold yellow]Aviso: Falha ao ler dados de áudio do IFO do DVD: {e}[/bold yellow]")
 
         elif meta.get('mediainfo'):
-            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
-            audio_tracks_raw = [{'language': t.get('Language')} for t in tracks if t.get('@type') == 'Audio']
+            tracks = meta['mediainfo']['media']['track']
+            audio_tracks_raw = [{'language': t.get('Language') or ''} for t in tracks if t.get('@type') == 'Audio']
 
         has_pt = any(any(v in track.get('language', '').lower() for v in pt_variants) for track in audio_tracks_raw)
         other_langs_count = sum(1 for t in audio_tracks_raw if not any(v in t.get('language', '').lower() for v in pt_variants))
@@ -184,13 +183,13 @@ class ASC(COMMON):
         return "1"  # Legendado
 
     def get_container(self, meta):
-        if meta.get('is_disc') == "BDMV":
+        if meta['is_disc'] == "BDMV":
             return "5"
-        elif meta.get('is_disc') == "DVD":
+        elif meta['is_disc'] == "DVD":
             return "15"
 
         try:
-            general_track = next(t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'General')
+            general_track = next(t for t in meta['mediainfo']['media']['track'] if t['@type'] == 'General')
             file_extension = general_track.get('FileExtension', '').lower()
             if file_extension == 'mkv':
                 return '6'
@@ -201,7 +200,7 @@ class ASC(COMMON):
         return None
 
     def get_audio_codec(self, meta):
-        audio_type = (meta.get('audio') or '').upper()
+        audio_type = (meta['audio'] or '').upper()
 
         codec_map = {
             "ATMOS": "43",
@@ -282,7 +281,7 @@ class ASC(COMMON):
             console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
 
     async def fetch_tmdb_data(self, endpoint):
-        tmdb_api = self.config['DEFAULT'].get('tmdb_api')
+        tmdb_api = self.config['DEFAULT']['tmdb_api']
 
         url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits"
         try:
@@ -329,7 +328,7 @@ class ASC(COMMON):
         episode_tmdb = await self.episode_tmdb_data(meta)
 
         fileinfo_dump = ""
-        if meta.get('is_disc') != 'BDMV':
+        if meta['is_disc'] != 'BDMV':
             video_file = meta['filelist'][0]
             mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
             if os.path.exists(mi_template):
@@ -390,10 +389,10 @@ class ASC(COMMON):
                 return ""
 
             cast_parts = []
-            for ator in cast_list[:10]:
-                profile_url = f"https://image.tmdb.org/t/p/w45{ator.get('profile_path')}" if ator.get('profile_path') else "https://i.imgur.com/eCCCtFA.png"
-                tmdb_url = f"https://www.themoviedb.org/person/{ator.get('id')}?language=pt-BR"
-                cast_parts.append(f"[url={tmdb_url}]{format_image(profile_url)}[/url]\n[size=2][b]({ator.get('name', '')}) como {ator.get('character', '')}[/b][/size]\n")
+            for person in cast_list[:10]:
+                profile_url = f"https://image.tmdb.org/t/p/w45{person.get('profile_path')}" if person.get('profile_path') else "https://i.imgur.com/eCCCtFA.png"
+                tmdb_url = f"https://www.themoviedb.org/person/{person.get('id')}?language=pt-BR"
+                cast_parts.append(f"[url={tmdb_url}]{format_image(profile_url)}[/url]\n[size=2][b]({person.get('name', '')}) como {person.get('character', '')}[/b][/size]\n")
             return "".join(cast_parts)
 
         def build_ratings_section(ratings_list):
@@ -538,7 +537,7 @@ class ASC(COMMON):
                     poster_temp,
                     overview_temp
                 ])
-                seasons_content.append(f"\n[spoiler={nome_temporada}]{inner_content}\n[/spoiler]")
+                seasons_content.append(f"\n[spoiler={nome_temporada}]{inner_content}[/spoiler]\n")
             append_section(description_parts, 'BARRINHA_EPISODIOS', "".join(seasons_content))
 
         # Ratings
@@ -625,7 +624,7 @@ class ASC(COMMON):
             data['name'] = await self.get_title(meta)
 
             # Year
-            data['ano'] = meta.get('year')
+            data['ano'] = meta['year']
 
             # Genre
             data['genre'] = self.genre
@@ -779,7 +778,7 @@ class ASC(COMMON):
                 is_disc = any(badge.text.strip().upper() in disc_types for badge in badges)
 
                 if is_disc:
-                    name, year, resolution, disk_type, video_codec, audio_codec = meta.get('title'), "N/A", "N/A", "N/A", "N/A", "N/A"
+                    name, year, resolution, disk_type, video_codec, audio_codec = meta['title'], "N/A", "N/A", "N/A", "N/A", "N/A"
                     video_codec_terms = ['MPEG-4', 'AV1', 'AVC', 'H264', 'H265', 'HEVC', 'MPEG-1', 'MPEG-2', 'VC-1', 'VP6', 'VP9']
                     audio_codec_terms = ['DTS', 'AC3', 'DDP', 'E-AC-3', 'TRUEHD', 'ATMOS', 'LPCM', 'AAC', 'FLAC']
 
