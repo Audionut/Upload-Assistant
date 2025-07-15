@@ -152,8 +152,8 @@ async def get_video(videoloc, mode):
                     for f in filelist:
                         if "sample" in os.path.basename(f).lower():
                             console.print("[green]Filelist:[/green]")
-                            for f in filelist:
-                                console.print(f"[cyan]{f}")
+                            for tf in filelist:
+                                console.print(f"[cyan]{tf}")
                             console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
                             if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
                                 filelist.remove(f)
