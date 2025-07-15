@@ -62,35 +62,25 @@ class ASC(COMMON):
             disc_type = meta['discs'][0].get('type')
 
         if disc_type == 'BDMV':
-            try:
-                bdinfo_subs = meta.get('bdinfo', {}).get('subtitles', [])
-                for sub in bdinfo_subs:
-                    lang = sub.get('language', '') if isinstance(sub, dict) else sub
-                    subtitle_languages.append(lang.lower())
-            except Exception:
-                console.print("[bold yellow]Aviso: Falha ao ler dados de legenda do BDInfo.[/bold yellow]")
+            bdinfo_subs = meta.get('bdinfo', {}).get('subtitles', [])
+            for sub in bdinfo_subs:
+                lang = sub.get('language', '') if isinstance(sub, dict) else sub
+                subtitle_languages.append(lang.lower())
 
         elif disc_type == 'DVD':
-            try:
-                for disc in meta.get('discs', []):
-                    if 'ifo_mi' in disc:
-                        ifo_text = disc['ifo_mi']
-                        matches = re.findall(r'Text #\d+.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
+            for disc in meta.get('discs', []):
+                if 'ifo_mi' in disc:
+                    ifo_text = disc['ifo_mi']
+                    matches = re.findall(r'Text #\d+.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
 
-                        for lang in matches:
-                            subtitle_languages.append(lang.strip().lower())
-
-            except Exception as e:
-                console.print(f"[bold yellow]Aviso: Falha ao ler dados de legenda do IFO do DVD: {e}[/bold yellow]")
+                    for lang in matches:
+                        subtitle_languages.append(lang.strip().lower())
 
         else:
-            try:
-                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
-                for track in tracks:
-                    if track.get('@type') == 'Text':
-                        subtitle_languages.append(track.get('Language', '').lower())
-            except (AttributeError, TypeError):
-                console.print("[bold yellow]Aviso: Falha ao ler dados de legenda do MediaInfo.[/bold yellow]")
+            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            for track in tracks:
+                if track.get('@type') == 'Text':
+                    subtitle_languages.append(track.get('Language', '').lower())
 
         if any(any(variant in lang for variant in pt_variants) for lang in subtitle_languages):
             return '1'  # Legenda Embutida
@@ -155,16 +145,13 @@ class ASC(COMMON):
             audio_tracks_raw = meta['bdinfo']['audio']
 
         elif disc_type == 'DVD':
-            try:
-                for disc in meta.get('discs', []):
-                    if 'ifo_mi' in disc:
-                        ifo_text = disc['ifo_mi']
-                        matches = re.findall(r'Audio(?: #\d+)?.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
+            for disc in meta.get('discs', []):
+                if 'ifo_mi' in disc:
+                    ifo_text = disc['ifo_mi']
+                    matches = re.findall(r'Audio(?: #\d+)?.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
 
-                        for lang in matches:
-                            audio_tracks_raw.append({'language': lang.strip().lower()})
-            except Exception as e:
-                console.print(f"[bold yellow]Aviso: Falha ao ler dados de áudio do IFO do DVD: {e}[/bold yellow]")
+                    for lang in matches:
+                        audio_tracks_raw.append({'language': lang.strip().lower()})
 
         elif meta.get('mediainfo'):
             tracks = meta['mediainfo']['media']['track']
@@ -258,28 +245,6 @@ class ASC(COMMON):
 
         return codec_id
 
-    async def get_auto_description(self, meta):
-        self.commom_data(meta)
-        url_gerador_desc = f"{self.base_url}/search.php"
-        payload = {
-            'imdb': self.imdb_id,
-            'layout': self.layout
-        }
-
-        try:
-            await self.load_cookies(meta)
-
-            response = self.session.post(url_gerador_desc, data=payload, timeout=20)
-            response.raise_for_status()
-
-            json_data = response.json()
-            auto_description = await self.build_description(json_data, meta)
-
-            return auto_description.strip()
-
-        except Exception as e:
-            console.print(f"[bold red]Ocorreu um erro no processo de descrição automática: {e}[/bold red]")
-
     async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
 
@@ -290,11 +255,8 @@ class ASC(COMMON):
                 if response.status_code == 200:
                     return response.json()
                 else:
-                    # Log opcional para status de erro, como 404 (Não Encontrado)
-                    # console.print(f"[yellow]Aviso: TMDB respondeu com status {response.status_code} para {url}[/yellow]")
                     return None
-        except httpx.RequestError as e:
-            console.print(f"[bold red]Ocorreu um erro ao fazer a requisição para o TMDB: {e}[/bold red]")
+        except httpx.RequestError:
             return None
 
     async def main_tmdb_data(self, meta):
@@ -403,7 +365,7 @@ class ASC(COMMON):
                 "Internet Movie Database": "[img]https://i.postimg.cc/Pr8Gv4RQ/IMDB.png[/img]",
                 "Rotten Tomatoes": "[img]https://i.postimg.cc/rppL76qC/rotten.png[/img]",
                 "Metacritic": "[img]https://i.postimg.cc/SKkH5pNg/Metacritic45x45.png[/img]",
-                "TMDb": "[img=60x26]https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg[/img]"
+                "TMDb": "[img]https://i.postimg.cc/T13yyzyY/tmdb.png[/img]"
             }
             ratings_parts = []
             for rating in ratings_list:
@@ -416,6 +378,8 @@ class ASC(COMMON):
 
                 if source == "Internet Movie Database":
                     ratings_parts.append(f"\n[url=https://www.imdb.com/title/{self.imdb_id}]{img_url}[/url]\n[b]{value}[/b]\n")
+                elif source == "TMDb":
+                    ratings_parts.append(f"[url=https://www.themoviedb.org/{self.category.lower()}/{self.tmdb_id}]{img_url}[/url]\n[b]{value}[/b]\n")
                 else:
                     ratings_parts.append(f"{img_url}\n[b]{value}[/b]\n")
 
@@ -687,17 +651,13 @@ class ASC(COMMON):
         await self.load_cookies(meta)
 
         data = await self.prepare_form_data(meta)
-        if data is None:
-            raise UploadException("Falha ao preparar os dados do formulário.", 'red')
 
         if meta.get('debug', False):
+            console.print("[yellow]MODO DEBUG ATIVADO. Upload não será realizado.[/yellow]")
             console.print("[cyan]Dados do formulário:[/cyan]", data)
             return
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        if not os.path.exists(torrent_path):
-            console.print(f"[bold red]CRÍTICO: Arquivo torrent não encontrado: {torrent_path}[/bold red]")
-            return
 
         upload_url = self.get_upload_url(meta)
 
@@ -725,7 +685,7 @@ class ASC(COMMON):
 
             relative_url = details_link_tag['href']
             torrent_url = f"{self.base_url}/{relative_url}"
-            announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+            announce_url = self.config['TRACKERS'][self.tracker]['announce_url']
             meta['tracker_status'][self.tracker]['status_message'] = torrent_url
 
             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
@@ -756,7 +716,6 @@ class ASC(COMMON):
 
     async def get_dupes(self, search_url, meta):
         dupes = []
-        console.print(f"[cyan]Buscando duplicados em:[/cyan] {search_url}")
 
         try:
             await self.load_cookies(meta)
