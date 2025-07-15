@@ -26,7 +26,7 @@ class ASC(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-    def commom_data(self, meta):
+    def assign_media_properties(self, meta):
         self.imdb_id = meta['imdb_info']['imdbID']
         self.tmdb_id = meta['tmdb']
         self.category = meta['category']
@@ -34,7 +34,7 @@ class ASC(COMMON):
         self.episode = meta.get('episode', '')
 
     async def get_title(self, meta):
-        self.commom_data(meta)
+        self.assign_media_properties(meta)
         tmdb_ptbr_data = await self.main_tmdb_data(meta)
         name = meta['title']
         base_name = name
@@ -260,7 +260,7 @@ class ASC(COMMON):
             return None
 
     async def main_tmdb_data(self, meta):
-        self.commom_data(meta)
+        self.assign_media_properties(meta)
         if not self.category or not self.tmdb_id:
             return None
 
@@ -544,7 +544,7 @@ class ASC(COMMON):
         return "".join(filter(None, description_parts))
 
     async def prepare_form_data(self, meta):
-        self.commom_data(meta)
+        self.assign_media_properties(meta)
 
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
@@ -647,7 +647,7 @@ class ASC(COMMON):
             raise
 
     async def upload(self, meta, disctype):
-        await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+        await self.edit_torrent(meta, self.tracker, self.source_flag)
         await self.load_cookies(meta)
 
         data = await self.prepare_form_data(meta)
@@ -688,7 +688,7 @@ class ASC(COMMON):
             announce_url = self.config['TRACKERS'][self.tracker]['announce_url']
             meta['tracker_status'][self.tracker]['status_message'] = torrent_url
 
-            await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
+            await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 
             should_approve = await self.get_approval(meta)
             if should_approve:
@@ -780,7 +780,7 @@ class ASC(COMMON):
         return dupes
 
     async def search_existing(self, meta, disctype):
-        self.commom_data(meta)
+        self.assign_media_properties(meta)
         if meta.get('anime'):
             search_name = await self.get_title(meta)
             search_query = search_name.replace(' ', '+')
