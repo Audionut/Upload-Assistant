@@ -53,7 +53,6 @@ async def process_all_trackers(meta):
 
                         if imdb_id is None or imdb_id.strip() == "":
                             local_meta['imdb_id'] = 0
-                            local_tracker_status['skipped'] = True
                             break
 
                         imdb_id = imdb_id.strip().lower()

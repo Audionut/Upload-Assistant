@@ -4,6 +4,7 @@ import re
 import requests
 from src.exceptions import UploadException
 from src.console import console
+from src.rehostimages import check_hosts
 from .COMMON import COMMON
 
 
@@ -48,7 +49,10 @@ class DC(COMMON):
             desc_parts.append(manual_desc)
 
         # Screenshots
-        images = meta.get('image_list', [])
+        if f'{self.tracker}_images_key' in meta:
+            images = meta[f'{self.tracker}_images_key']
+        else:
+            images = meta['image_list']
         if images:
             screenshots_block = "[center][b]Screenshots[/b]\n\n"
             for image in images:
@@ -176,6 +180,17 @@ class DC(COMMON):
 
     async def upload(self, meta, disctype):
         await self.edit_torrent(meta, self.tracker, self.source_flag)
+        approved_image_hosts = ['imgbox', 'imgbb', "bhd", "imgur", "postimg", "digitalcore"]
+        url_host_mapping = {
+            "ibb.co": "imgbb",
+            "imgbox.com": "imgbox",
+            "beyondhd.co": "bhd",
+            "imgur.com": "imgur",
+            "postimg.cc": "postimg",
+            "digitalcore.club": "digitalcore"
+        }
+
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
 
         cat_id = await self.get_category_id(meta)
 
