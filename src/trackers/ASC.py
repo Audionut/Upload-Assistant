@@ -248,7 +248,7 @@ class ASC(COMMON):
     async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
 
-        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits"
+        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -545,6 +545,7 @@ class ASC(COMMON):
 
     async def prepare_form_data(self, meta):
         self.assign_media_properties(meta)
+        main_tmdb = await self.main_tmdb_data(meta)
 
         try:
             data = {'takeupload': 'yes', 'tresd': 2, 'layout': self.layout}
@@ -605,7 +606,12 @@ class ASC(COMMON):
             data['imdb'] = self.imdb_id
 
             # Trailer
-            data['tube'] = meta.get('youtube', '')
+            video_results = main_tmdb.get('videos', {}).get('results', [])
+            youtube_code = video_results[-1].get('key', '') if video_results else ''
+            if youtube_code:
+                data['tube'] = f"http://www.youtube.com/watch?v={youtube_code}"
+            else:
+                data['tube'] = meta.get('youtube', '')
 
             # Resolution
             width, hight = self.get_res_id(meta)
