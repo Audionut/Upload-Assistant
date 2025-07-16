@@ -148,14 +148,15 @@ async def get_video(videoloc, mode):
             if not file.lower().endswith('sample.mkv') or "!sample" in file.lower():
                 filelist.append(os.path.abspath(f"{videoloc}{os.sep}{file}"))
                 filelist = sorted(filelist)
-                for f in filelist:
-                    if "sample" in os.path.basename(f).lower():
-                        console.print("[green]Filelist:[/green]")
-                        for f in filelist:
-                            console.print(f"[cyan]{f}")
-                        console.print(f"[bold red]Sample file detected in filelist!: [yellow]{f}")
-                        if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
-                            filelist.remove(f)
+                if len(filelist) > 1:
+                    for f in filelist:
+                        if "sample" in os.path.basename(f).lower():
+                            console.print("[green]Filelist:[/green]")
+                            for tf in filelist:
+                                console.print(f"[cyan]{tf}")
+                            console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
+                            if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
+                                filelist.remove(f)
         try:
             video = sorted(filelist)[0]
         except IndexError:

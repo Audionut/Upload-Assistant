@@ -200,6 +200,81 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                     }}
                 }}
             }}
+            technicalSpecifications {{
+                aspectRatios {{
+                    items {{
+                        aspectRatio
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                cameras {{
+                    items {{
+                        camera
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                colorations {{
+                    items {{
+                        text
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                laboratories {{
+                    items {{
+                        laboratory
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                negativeFormats {{
+                    items {{
+                        negativeFormat
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                printedFormats {{
+                    items {{
+                        printedFormat
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                processes {{
+                    items {{
+                        process
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                soundMixes {{
+                    items {{
+                        text
+                        attributes {{
+                            text
+                        }}
+                    }}
+                }}
+                filmLengths {{
+                    items {{
+                        filmLength
+                        countries {{
+                            text
+                        }}
+                        numReels
+                    }}
+                }}
+            }}
             akas(first: 100) {{
             edges {{
                 node {{
@@ -326,6 +401,9 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             }
             imdb_info['episodes'].append(episode_info)
 
+    sound_mixes = await safe_get(title_data, ['technicalSpecifications', 'soundMixes', 'items'], [])
+    imdb_info['sound_mixes'] = [sm.get('text', '') for sm in sound_mixes if isinstance(sm, dict) and 'text' in sm]
+
     episodes = imdb_info.get('episodes', [])
     current_year = datetime.now().year
     release_years = [episode['release_year'] for episode in episodes if 'release_year' in episode and isinstance(episode['release_year'], int)]
@@ -336,7 +414,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
         imdb_info['tv_year'] = None
 
     if debug:
-        console.print(f"[yellow]IMDb Response: {json.dumps(imdb_info, indent=2)[:600]}...[/yellow]")
+        console.print(f"[yellow]IMDb Response: {json.dumps(imdb_info, indent=2)[:1000]}...[/yellow]")
 
     return imdb_info
 
@@ -469,6 +547,6 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
 
             except Exception as e:
                 console.print(f"[red]Error reading input: {e}[/red]")
-                imdb_id = 0
+                imdbID = 0
 
     return imdbID

@@ -108,9 +108,33 @@ async def get_season_episode(video, meta):
                             episode_int = int(episodes)  # Convert to integer
                             episode = f"E{str(episode_int).zfill(2)}"
                     except Exception:
+                        episode_int = 1
                         episode = "E01"
-                        episode_int = 1  # Ensure it's an integer
-                        console.print('[bold yellow]There was an error guessing the episode number. Guessing E01. Use [bold green]--episode #[/bold green] to correct if needed')
+
+                        if meta.get('uuid'):
+                            # Look for episode patterns in uuid
+                            episode_patterns = [
+                                r'[Ee](\d+)[Ee](\d+)',
+                                r'[Ee](\d+)',
+                                r'[Ee]pisode[\s_]*(\d+)',
+                                r'[\s_\-](\d+)[\s_\-]',
+                                r'[\s_\-](\d+)$',
+                                r'^(\d+)[\s_\-]',
+                            ]
+
+                            for pattern in episode_patterns:
+                                match = re.search(pattern, meta['uuid'], re.IGNORECASE)
+                                if match:
+                                    try:
+                                        episode_int = int(match.group(1))
+                                        episode = f"E{str(episode_int).zfill(2)}"
+                                        break
+                                    except (ValueError, IndexError):
+                                        continue
+
+                        if episode_int == 1:  # Still using fallback
+                            console.print('[bold yellow]There was an error guessing the episode number. Guessing E01. Use [bold green]--episode #[/bold green] to correct if needed')
+
                         await asyncio.sleep(1.5)
                 else:
                     episode = ""
