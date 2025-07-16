@@ -1,7 +1,6 @@
 aiofiles
 aiohttp
 anitopy
-babel
 beautifulsoup4
 bencode.py
 click

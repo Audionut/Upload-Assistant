@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-import os
 import httpx
+import langcodes
+import os
 import re
 import requests
 import unicodedata
-from babel import Locale
-from babel.core import UnknownLocaleError
+from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
+from langcodes.tag_parser import LanguageTagError
 from src.console import console
-from .COMMON import COMMON
 
 
 class BT(COMMON):
@@ -147,10 +147,9 @@ class BT(COMMON):
             return None
 
         try:
-            locale_obj = Locale.parse(lang_code)
-            return locale_obj.get_language_name(locale='pt_BR').capitalize()
+            return langcodes.Language.make(lang_code).display_name('pt').capitalize()
 
-        except (UnknownLocaleError, ValueError):
+        except LanguageTagError:
             return lang_code
 
     async def search_existing(self, meta, disctype):
