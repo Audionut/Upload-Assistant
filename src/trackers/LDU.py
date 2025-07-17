@@ -51,7 +51,7 @@ class LDU():
                 category_id = '12'
             elif meta.get('anime', False) or meta.get('mal_id', 0) != 0:
                 category_id = '8'
-            elif (any('silent film' in mix.lower() for mix in sound_mixes if isinstance(mix, str)) or 
+            elif (any('silent film' in mix.lower() for mix in sound_mixes if isinstance(mix, str)) or
                   any('zxx' in lang.lower() for lang in audio_languages if isinstance(lang, str))):
                 category_id = '18'
             elif "musical" in genres.lower():
