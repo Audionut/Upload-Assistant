@@ -55,13 +55,13 @@ class ASC(COMMON):
             return f"{base_name}"
 
     async def _determine_language_properties(self, meta):
-        subtitled = 1
-        dual_audio = 2
-        dubbed = 3
-        original_dub = 4
+        subtitled = '1'
+        dual_audio = '2'
+        dubbed = '3'
+        original_dub = '4'
 
-        no_subs = 0
-        embedded_subs = 1
+        no_subs = '0'
+        embedded_subs = '1'
 
         if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
