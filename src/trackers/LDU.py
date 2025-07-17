@@ -26,7 +26,8 @@ class LDU():
 
     async def get_cat_id(self, meta):
         genres = f"{meta.get('keywords', '')} {meta.get('genres', '')}"
-        silent = f"{meta.get('imdb_info', {}).get('sound_mixes', [])} {meta.get('audio_languages', [])}"
+        sound_mixes = meta.get('imdb_info', {}).get('sound_mixes', [])
+        audio_languages = meta.get('audio_languages', [])
 
         category_id = {
             'MOVIE': '1',
@@ -39,7 +40,7 @@ class LDU():
         if 'hentai' in genres.lower():
             category_id = '10'
         elif any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
-            if not await has_english_language('subtitle_languages', []):
+            if not await has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '45'
             else:
                 category_id = '6'
@@ -50,7 +51,8 @@ class LDU():
                 category_id = '12'
             elif meta.get('anime', False) or meta.get('mal_id', 0) != 0:
                 category_id = '8'
-            elif any(x in silent.lower() for x in ['silent film', 'zxx']):
+            elif (any('silent film' in mix.lower() for mix in sound_mixes if isinstance(mix, str)) or 
+                  any('zxx' in lang.lower() for lang in audio_languages if isinstance(lang, str))):
                 category_id = '18'
             elif "musical" in genres.lower():
                 category_id = '25'
@@ -62,7 +64,7 @@ class LDU():
                 category_id = '20'
             elif "short film" in genres.lower() or int(meta.get('imdb_info', {}).get('runtime', 0)) < 5:
                 category_id = '19'
-            elif not await has_english_language('audio_languages', []) and not await has_english_language('subtitle_languages', []):
+            elif not await has_english_language(meta.get('audio_languages', [])) and not await has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '22'
             elif "dubbed" in meta.get('audio', '').lower():
                 category_id = '27'
@@ -73,7 +75,7 @@ class LDU():
                 category_id = '9'
             elif "documentary" in genres.lower():
                 category_id = '40'
-            elif not await has_english_language('audio_languages', []) and not await has_english_language('subtitle_languages', []):
+            elif not await has_english_language(meta.get('audio_languages', [])) and not await has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '29'
             elif meta.get('tv_pack', False):
                 category_id = '2'
