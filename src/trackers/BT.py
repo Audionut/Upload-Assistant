@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
 from langcodes.tag_parser import LanguageTagError
 from src.console import console
+from src.languages import process_desc_language
 
 
 class BT(COMMON):
@@ -312,40 +313,50 @@ class BT(COMMON):
         except (StopIteration, AttributeError, TypeError):
             return None
 
-    def get_audio(self, meta):
-        audio_tracks_raw = []
-        pt_variants = ["pt", "portuguese", "português", "pt-br"]
+    async def get_subtitles(self, meta):
+        if not meta.get('subtitle_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        disc_type = meta.get('is_disc')
-        if not disc_type and meta.get('discs'):
-            disc_type = meta['discs'][0].get('type')
+        found_language_strings = meta.get('subtitle_languages', [])
 
-        if disc_type == 'BDMV' and meta.get('bdinfo', {}).get('audio'):
-            audio_tracks_raw = meta['bdinfo']['audio']
+        subtitle_ids = set()
+        for lang_str in found_language_strings:
+            target_id = self.ultimate_lang_map.get(lang_str.lower())
+            if target_id:
+                subtitle_ids.add(target_id)
 
-        elif disc_type == 'DVD':
-            for disc in meta.get('discs', []):
-                if 'ifo_mi' in disc:
-                    ifo_text = disc['ifo_mi']
-                    matches = re.findall(r'Audio(?: #\d+)?.*?Language\s*:\s*(.*?)\n', ifo_text, re.DOTALL)
+        legenda_value = "Sim" if '49' in subtitle_ids else "Nao"
 
-                    for lang in matches:
-                        audio_tracks_raw.append({'language': lang.strip().lower()})
+        final_subtitle_ids = sorted(list(subtitle_ids))
+        if not final_subtitle_ids:
+            final_subtitle_ids.append('44')
 
-        elif meta.get('mediainfo'):
-            tracks = meta['mediainfo']['media']['track']
-            audio_tracks_raw = [{'language': t.get('Language') or ''} for t in tracks if t.get('@type') == 'Audio']
+        return {
+            'legenda': legenda_value,
+            'subtitles[]': final_subtitle_ids
+        }
 
-        has_pt = any(any(v in track.get('language', '').lower() for v in pt_variants) for track in audio_tracks_raw)
-        other_langs_count = sum(1 for t in audio_tracks_raw if not any(v in t.get('language', '').lower() for v in pt_variants))
-        is_original_pt = any(v in meta.get('original_language', '').lower() for v in pt_variants)
+    async def get_audio(self, meta):
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        if has_pt:
+        audio_languages = set(meta.get('audio_languages', []))
+
+        portuguese_languages = ['Portuguese', 'Português']
+
+        has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
+
+        original_lang = meta.get('original_language', '').lower()
+        is_original_pt = original_lang in portuguese_languages
+
+        if has_pt_audio:
             if is_original_pt:
                 return "Nacional"
-            elif other_langs_count > 0:
+            elif len(audio_languages) > 1:
                 return "Dual Audio"
-            return "Dublado"
+            else:
+                return "Dublado"
+
         return "Legendado"
 
     def get_video_codec(self, meta):
@@ -420,65 +431,6 @@ class BT(COMMON):
                     return codec_name
 
         return "Outro"
-
-    def get_subtitles(self, meta):
-        found_language_strings = set()
-
-        if meta.get('is_disc') == 'BDMV' and 'bdinfo' in meta and isinstance(meta['bdinfo'].get('subtitles'), list):
-            for sub_lang in meta['bdinfo']['subtitles']:
-                if sub_lang and isinstance(sub_lang, str):
-                    found_language_strings.add(sub_lang.strip())
-
-        elif meta.get('is_disc') == 'DVD' and meta.get('discs'):
-            for disc in meta.get('discs', []):
-                ifo_mi_text = disc.get('ifo_mi', '')
-                if not ifo_mi_text:
-                    continue
-
-                sections = ifo_mi_text.split('\n\n')
-                for section in sections:
-                    if section.strip().startswith('Text'):
-                        match = re.search(r'Language\s+:\s+(.*)', section)
-                        if match:
-                            language = match.group(1).strip()
-                            found_language_strings.add(language)
-
-        else:
-            try:
-                raw_tracks = meta.get('mediainfo', {}).get('media', {}).get('track')
-
-                tracks = []
-                if raw_tracks:
-                    if isinstance(raw_tracks, list):
-                        tracks = raw_tracks
-                    else:
-                        tracks = [raw_tracks]
-
-                text_tracks = [t for t in tracks if t and t.get('@type') == 'Text']
-                for track in text_tracks:
-                    if track.get('Language'):
-                        found_language_strings.add(track.get('Language').strip())
-                    if track.get('Title'):
-                        found_language_strings.add(track.get('Title').strip())
-            except (AttributeError, TypeError):
-                pass
-
-        subtitle_ids = set()
-        for lang_str in found_language_strings:
-            if lang_str:
-                target_id = self.ultimate_lang_map.get(lang_str.lower())
-                if target_id:
-                    subtitle_ids.add(target_id)
-
-        legenda_value = "Sim" if '49' in subtitle_ids else "Nao"
-        final_subtitle_ids = sorted(list(subtitle_ids))
-        if not final_subtitle_ids:
-            final_subtitle_ids.append('44')
-
-        return {
-            'legenda': legenda_value,
-            'subtitles[]': final_subtitle_ids
-        }
 
     def get_edition(self, meta):
         edition_str = meta.get('edition', '').lower()
@@ -573,7 +525,7 @@ class BT(COMMON):
 
         description_parts = []
 
-        # Adiciona nota sobre a fonte para WEBDLs
+        # WEBDL source note
         if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
             source_note = f"[center][quote]Este lançamento tem como fonte o serviço {meta['service_longname']}[/quote][/center]"
             description_parts.append(source_note)
@@ -586,12 +538,6 @@ class BT(COMMON):
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:
             final_description = "\n\n".join(filter(None, description_parts))
             descfile.write(final_description)
-
-    def get_3d(self, meta):
-        if meta.get('3D'):
-            return "Sim"
-        else:
-            return "Nao"
 
     def get_resolution(self, meta):
         width, height = "", ""
@@ -664,18 +610,18 @@ class BT(COMMON):
         })
 
         bt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
-        subtitles_info = self.get_subtitles(meta)
+        subtitles_info = await self.get_subtitles(meta)
         resolution = self.get_resolution(meta)
 
         all_possible_data.update({
             'mediainfo': self.get_file_info(meta),
             'format': self.get_format(meta),
-            'audio': self.get_audio(meta),
+            'audio': await self.get_audio(meta),
             'video_c': self.get_video_codec(meta),
             'audio_c': self.get_audio_codec(meta),
             'legenda': subtitles_info.get('legenda', 'Nao'),
             'subtitles[]': subtitles_info.get('subtitles[]'),
-            '3d': self.get_3d(meta),
+            '3d': 'Sim' if meta.get('3d') else 'Nao',
             'resolucao_1': resolution['resolucao_1'],
             'resolucao_2': resolution['resolucao_2'],
             'bitrate': self.get_bitrate(meta),
@@ -738,10 +684,7 @@ class BT(COMMON):
                     final_data['youtube'] = match.group(1)
 
         if meta.get('debug', False):
-            console.print("[yellow]MODO DEBUG ATIVADO. O upload não será realizado.[/yellow]")
-            import pprint
-            console.print("[cyan]-- PAYLOAD FINAL A SER ENVIADO --[/cyan]")
-            pprint.pprint(final_data)
+            console.print(final_data)
             return
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
