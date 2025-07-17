@@ -9,6 +9,7 @@ import os
 import langcodes
 from src.trackers.COMMON import COMMON
 from src.console import console
+from src.languages import has_english_language
 
 
 class LDU():
@@ -38,7 +39,7 @@ class LDU():
         if 'hentai' in genres.lower():
             category_id = '10'
         elif any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
-            if "English" not in meta.get('subtitles', []):
+            if not await has_english_language('subtitle_languages', []):
                 category_id = '45'
             else:
                 category_id = '6'
@@ -61,7 +62,7 @@ class LDU():
                 category_id = '20'
             elif "short film" in genres.lower() or int(meta.get('imdb_info', {}).get('runtime', 0)) < 5:
                 category_id = '19'
-            elif "English" not in meta.get('audio_languages', []) and "English" not in meta.get('subtitle_languages', []):
+            elif not await has_english_language('audio_languages', []) and not await has_english_language('subtitle_languages', []):
                 category_id = '22'
             elif "dubbed" in meta.get('audio', '').lower():
                 category_id = '27'
@@ -72,7 +73,7 @@ class LDU():
                 category_id = '9'
             elif "documentary" in genres.lower():
                 category_id = '40'
-            elif "English" not in meta.get('audio_languages', []) and "English" not in meta.get('subtitle_languages', []):
+            elif not await has_english_language('audio_languages', []) and not await has_english_language('subtitle_languages', []):
                 category_id = '29'
             elif meta.get('tv_pack', False):
                 category_id = '2'
@@ -225,7 +226,7 @@ class LDU():
                 try:
                     lang = langcodes.find(audio_language).to_alpha3()
                     iso_audio = lang.upper()
-                    if "English" not in audio_language:
+                    if not await has_english_language(audio_language):
                         non_eng_audio = True
                 except Exception as e:
                     console.print(f"[bold red]Error extracting audio language: {e}[/bold red]")
