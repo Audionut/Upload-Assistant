@@ -27,7 +27,6 @@ class LDU():
     async def get_cat_id(self, meta):
         genres = f"{meta.get('keywords', '')} {meta.get('genres', '')}"
         sound_mixes = meta.get('imdb_info', {}).get('sound_mixes', [])
-        audio_languages = meta.get('audio_languages', [])
 
         category_id = {
             'MOVIE': '1',
@@ -51,8 +50,7 @@ class LDU():
                 category_id = '12'
             elif meta.get('anime', False) or meta.get('mal_id', 0) != 0:
                 category_id = '8'
-            elif (any('silent film' in mix.lower() for mix in sound_mixes if isinstance(mix, str)) or
-                  any('zxx' in lang.lower() for lang in audio_languages if isinstance(lang, str))):
+            elif (any('silent film' in mix.lower() for mix in sound_mixes if isinstance(mix, str)) or meta.get('silent', False)):
                 category_id = '18'
             elif "musical" in genres.lower():
                 category_id = '25'
