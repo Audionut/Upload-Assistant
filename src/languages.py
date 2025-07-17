@@ -81,6 +81,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
         meta['unattended_audio_skip'] = False
     if 'unattended_subtitle_skip' not in meta:
         meta['unattended_subtitle_skip'] = False
+    if 'no_subs' not in meta:
+        meta['no_subs'] = False
     if not meta['is_disc'] == "BDMV":
         try:
             parsed_info = await parsed_mediainfo(meta)
@@ -123,30 +125,33 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 meta['audio_languages'].append(audio_track['language'])
 
                 if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and (not subtitle_languages or subtitle_languages is None):
-                    for text_track in parsed_info.get('text', []):
-                        if 'language' not in text_track:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                                console.print("No subtitle language/s found, you must enter (comma-separated) languages")
-                                subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
-                                if subtitle_lang:
-                                    subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
-                                    meta['subtitle_languages'] = subtitle_languages
-                                    meta['write_subtitle_languages'] = True
+                    if 'text' in parsed_info:
+                        for text_track in parsed_info.get('text', []):
+                            if 'language' not in text_track:
+                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                    console.print("No subtitle language/s found, you must enter (comma-separated) languages")
+                                    subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
+                                    if subtitle_lang:
+                                        subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
+                                        meta['subtitle_languages'] = subtitle_languages
+                                        meta['write_subtitle_languages'] = True
+                                    else:
+                                        meta['subtitle_languages'] = None
+                                        meta['unattended_subtitle_skip'] = True
+                                        meta['tracker_status'][tracker]['skip_upload'] = True
                                 else:
-                                    meta['subtitle_languages'] = None
                                     meta['unattended_subtitle_skip'] = True
                                     meta['tracker_status'][tracker]['skip_upload'] = True
                             else:
-                                meta['unattended_subtitle_skip'] = True
-                                meta['tracker_status'][tracker]['skip_upload'] = True
-                        else:
-                            meta['subtitle_languages'].append(text_track['language'])
+                                meta['subtitle_languages'].append(text_track['language'])
+                    else:
+                        meta['no_subs'] = True
 
             if meta['audio_languages'] and meta['write_audio_languages'] and desc is not None:
-                await desc.write(f"[code]Audio Language: {', '.join(meta['audio_languages'])}[/code]\n")
+                await desc.write(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]\n")
 
             if meta['subtitle_languages'] and meta['write_subtitle_languages'] and desc is not None:
-                await desc.write(f"[code]Subtitle Language: {', '.join(meta['subtitle_languages'])}[/code]\n")
+                await desc.write(f"[code]Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]\n")
 
         except Exception as e:
             console.print(f"[red]Error processing mediainfo languages: {e}[/red]")

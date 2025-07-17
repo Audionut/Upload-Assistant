@@ -26,7 +26,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Can automagically search qBitTorrent version 5+ clients for matching existing torrent.
   - Generates proper name for your upload using Mediainfo/BDInfo and TMDb/IMDb conforming to site rules.
   - Checks for existing releases already on site.
-  - Uploads to ACM/Aither/AL/ANT/AR/ASC/BHD/BHDTV/BLU/BT/CBR/DC/DP/FRIKI/FNP/FL/HDB/HDS/HDT/HHD/HP/HUNO/ITT/LCD/LST/LT/MTV/NBL/OE/OTW/PSS/PT/PTP/PTER/PTT/RF/R4E(limited)/RAS/RTF/SAM/SHRI/SN/SP/SPD/STC/STT/TLC/THR/TL/TOCA/TVC/TTG/UHD/ULCX/UTP/YOINK/YUS
+  - Uploads to ACM/Aither/AL/ANT/AR/ASC/BHD/BHDTV/BLU/BT/CBR/DC/DP/FRIKI/FNP/FL/HDB/HDS/HDT/HHD/HP/HUNO/ITT/LCD/LDU/LST/LT/MTV/NBL/OE/OTW/PSS/PT/PTP/PTER/PTT/RF/R4E(limited)/RAS/RTF/SAM/SHRI/SN/SP/SPD/STC/STT/TLC/THR/TL/TOCA/TVC/TTG/UHD/ULCX/UTP/YOINK/YUS
   - Adds to your client with fast resume, seeding instantly (rtorrent/qbittorrent/deluge/watch folder).
   - ALL WITH MINIMAL INPUT!
   - Currently works with .mkv/.mp4/Blu-ray/DVD/HD-DVDs.
