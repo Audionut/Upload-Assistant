@@ -3,13 +3,12 @@
 import asyncio
 import requests
 import platform
-import re
 import os
 import glob
 import httpx
-
 from src.trackers.COMMON import COMMON
 from src.console import console
+from src.languages import process_desc_language
 
 
 class AITHER():
@@ -138,49 +137,21 @@ class AITHER():
 
     async def edit_name(self, meta):
         aither_name = meta['name']
-        media_info_tracks = meta.get('media_info_tracks', [])  # noqa #F841
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
         video_encode = meta.get('video_encode')
         name_type = meta.get('type', "")
         source = meta.get('source', "")
 
-        if not meta['is_disc']:
-
-            def has_english_audio(tracks=None, media_info_text=None):
-                if media_info_text:
-                    audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    for i, language in enumerate(audio_section):
-                        language = language.lower().strip()
-                        if language.lower().startswith('en'):
-                            title_match = re.findall(r'Audio[\s\S]+?Title\s+:\s+(.+)', media_info_text)
-                            # Check if title_match has enough elements to access index i
-                            if title_match and len(title_match) > i and "commentary" in title_match[i].lower():
-                                continue
-                            return True
-                return False
-
-            def get_audio_lang(tracks=None, is_bdmv=False, media_info_text=None):
-                if media_info_text:
-                    match = re.search(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    if match:
-                        return match.group(1).upper()
-                return ""
-
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                if not has_english_audio(media_info_text=media_info_text):
-                    audio_lang = get_audio_lang(media_info_text=media_info_text)
-                    if audio_lang:
-                        if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
-                            aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {audio_lang}", 1)
-                        else:
-                            aither_name = aither_name.replace(meta['resolution'], f"{audio_lang} {meta['resolution']}", 1)
-            except (FileNotFoundError, KeyError) as e:
-                print(f"Error processing MEDIAINFO.txt: {e}")
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        else:
+            audio_languages = meta['audio_languages'][0]
+            if audio_languages and audio_languages.lower() != "english":
+                if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
+                    aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {audio_languages}", 1)
+                elif not meta.get('is_disc') == "BDMV":
+                    aither_name = aither_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
 
         if name_type == "DVDRIP":
             source = "DVDRip"

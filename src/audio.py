@@ -183,11 +183,6 @@ async def get_audio_v2(mi, meta, bdinfo):
                             console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
                             time.sleep(5)
 
-                    if not audio_language:
-                        if meta['debug']:
-                            console.print("DEBUG: Audio language is None or empty, setting to 'und'")
-                        audio_language = "und"
-
                 if (
                     orig_lang == "en"
                     and eng
@@ -197,7 +192,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                     meta['bloated'] = True
                     time.sleep(5)
 
-                if (eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary) and len(audio_tracks) > 1 and not meta.get('no_dual', False):
+                if ((eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary)) and len(audio_tracks) > 1 and not meta.get('no_dual', False):
                     dual = "Dual-Audio"
                 elif eng and not orig and orig_lang not in ['zxx', 'xx', 'en', None] and not meta.get('no_dub', False):
                     dual = "Dubbed"
@@ -297,27 +292,3 @@ async def get_audio_v2(mi, meta, bdinfo):
     audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
     audio = ' '.join(audio.split())
     return audio, chan, has_commentary
-
-
-async def get_audio_languages(mi, meta):
-    tracks = mi.get('media', {}).get('track', [])
-
-    languages = []
-
-    for i, t in enumerate(tracks):
-        if t.get('@type') != "Audio":
-            continue
-
-        language = t.get('Language', '')
-        if meta['debug']:
-            console.print(f"DEBUG: Track {i} Language = {language} ({type(language)})")
-
-        if isinstance(language, str):  # Normal case
-            languages.append(language.lower())
-        elif isinstance(language, dict):  # Handle unexpected dict case
-            if 'value' in language:  # Check if a known key exists
-                extracted = language['value']
-                if isinstance(extracted, str):
-                    languages.append(extracted.lower())
-
-    return languages

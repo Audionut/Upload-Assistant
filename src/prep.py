@@ -13,7 +13,7 @@ from src.bluray_com import get_bluray_releases
 from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb
 from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
-from src.audio import get_audio_languages, get_audio_v2
+from src.audio import get_audio_v2
 from src.edition import get_edition
 from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd
 from src.tags import get_tag, tag_override
@@ -21,6 +21,7 @@ from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
 from src.sonarr import get_sonarr_data
 from src.radarr import get_radarr_data
+from src.languages import parsed_mediainfo
 
 try:
     import traceback
@@ -298,12 +299,21 @@ class Prep():
 
         # Check if there's a language restriction
         if meta['has_languages'] is not None:
-            audio_languages = await get_audio_languages(mi, meta)
-            any_of_languages = meta['has_languages'].lower().split(",")
-            # We need to have user input languages and file must have audio tracks.
-            if len(any_of_languages) > 0 and len(audio_languages) > 0 and not set(any_of_languages).intersection(set(audio_languages)):
-                console.print(f"[red] None of the required languages ({meta['has_languages']}) is available on the file {audio_languages}")
-                raise Exception("No matching languages")
+            try:
+                audio_languages = []
+                parsed_info = await parsed_mediainfo(meta)
+                for audio_track in parsed_info.get('audio', []):
+                    if 'language' in audio_track and audio_track['language']:
+                        audio_languages.append(audio_track['language'].lower())
+                any_of_languages = meta['has_languages'].lower().split(",")
+                if all(len(lang.strip()) == 2 for lang in any_of_languages):
+                    raise Exception(f"Warning: Languages should be full names, not ISO codes. Found: {any_of_languages}")
+                # We need to have user input languages and file must have audio tracks.
+                if len(any_of_languages) > 0 and len(audio_languages) > 0 and not set(any_of_languages).intersection(set(audio_languages)):
+                    console.print(f"[red] None of the required languages ({meta['has_languages']}) is available on the file {audio_languages}")
+                    raise Exception("No matching languages")
+            except Exception as e:
+                console.print(f"[red]Error checking languages: {e}")
 
         if 'description' not in meta or meta.get('description') is None:
             meta['description'] = ""

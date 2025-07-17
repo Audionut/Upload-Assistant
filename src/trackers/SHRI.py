@@ -4,10 +4,9 @@ import asyncio
 import requests
 import platform
 import os
-import re
 import glob
 import httpx
-
+from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -146,28 +145,15 @@ class SHRI():
             shareisland_name = shareisland_name.replace(f"{meta['source']}", f"{resolution} {meta['source']}", 1)
             shareisland_name = shareisland_name.replace((meta['audio']), f"{meta['audio']}{video_encode}", 1)
 
-        if not meta['is_disc']:
-
-            def get_audio_lang(media_info_text=None):
-                if media_info_text:
-                    audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    languages = sorted(set(lang.upper() for lang in audio_section))
-                    return " - ".join(languages) if languages else ""
-                return ""
-
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                audio_lang = get_audio_lang(media_info_text=media_info_text)
-                if audio_lang:
-                    if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
-                        shareisland_name = shareisland_name.replace(str(meta['year']), f"{meta['year']} {audio_lang}", 1)
-                    else:
-                        shareisland_name = shareisland_name.replace(meta['resolution'], f"{audio_lang} {meta['resolution']}", 1)
-            except (FileNotFoundError, KeyError) as e:
-                print(f"Error processing MEDIAINFO.txt: {e}")
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        else:
+            audio_languages = meta['audio_languages'][0]
+            if audio_languages:
+                if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
+                    shareisland_name = shareisland_name.replace(str(meta['year']), f"{meta['year']} {audio_languages}", 1)
+                elif not meta.get('is_disc') == "BDMV":
+                    shareisland_name = shareisland_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
 
         if meta['is_disc'] == "DVD" or (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             shareisland_name = shareisland_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)

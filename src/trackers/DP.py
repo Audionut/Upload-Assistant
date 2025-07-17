@@ -9,7 +9,7 @@ import os
 from src.trackers.COMMON import COMMON
 from src.console import console
 from data.config import config
-from src.dupe_checking import check_for_languages
+from src.languages import process_desc_language
 
 
 class DP():
@@ -21,7 +21,14 @@ class DP():
         self.search_url = 'https://darkpeers.org/api/torrents/filter'
         self.torrent_url = 'https://darkpeers.org/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = [""]
+        self.banned_groups = [
+            'aXXo', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL', 'FaNGDiNG0', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime',
+            'iHYTECH', 'ION10', 'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD', 'nikt0', 'nSD',
+            'OFT', 'PRODJi', 'RARBG', 'Rifftrax', 'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
+            'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT', 'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
+            ['EVO', 'web-dl Only']
+        ]
+
         pass
 
     async def get_cat_id(self, category_name):
@@ -170,8 +177,15 @@ class DP():
         return 1 if meta.get(flag_name, False) else 0
 
     async def search_existing(self, meta, disctype):
-        tracker = self.tracker
-        await check_for_languages(meta, tracker)
+        if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
+        if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
+            if not meta['unattended']:
+                console.print('[bold red]DP requires at least one Nordic/English audio or subtitle track.')
+            meta['skipping'] = "DP"
+            return
+
         dupes = []
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
@@ -202,5 +216,11 @@ class DP():
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
+
+        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower() and len(dupes) > 0:
+            if not meta['unattended']:
+                console.print("[bold red]DP does not allow FGT encodes, skipping upload.")
+            meta['skipping'] = "DP"
+            return []
 
         return dupes
