@@ -288,6 +288,7 @@ class ASC(COMMON):
         main_tmdb = await self.main_tmdb_data(meta)
         season_tmdb = await self.season_tmdb_data(meta)
         episode_tmdb = await self.episode_tmdb_data(meta)
+        tv_pack = meta.get('tv_pack', False)
 
         fileinfo_dump = ""
         if meta['is_disc'] != 'BDMV':
@@ -393,23 +394,6 @@ class ASC(COMMON):
 
         layout_image = {key: value for key, value in user_layout.items() if key.startswith('BARRINHA_')}
 
-        # Title
-        title = await self.get_title(meta)
-
-        # Poster
-        poster_url = "https://image.tmdb.org/t/p/w500"
-        poster_path = (season_tmdb or {}).get('poster_path') or (main_tmdb or {}).get('poster_path')
-        self.poster = f"{poster_url}{poster_path}"
-
-        # Overview
-        overview = (season_tmdb or {}).get('overview') or (main_tmdb or {}).get('overview')
-
-        # Still
-        if self.category == "TV":
-            still_url = "https://image.tmdb.org/t/p/w300"
-            still_path = episode_tmdb.get('still_path')
-            still = f"{still_url}{still_path}"
-
         # Genre
         if main_tmdb and main_tmdb.get('genres'):
             self.genre = ', '.join([g['name'] for g in main_tmdb.get('genres', [])])
@@ -426,15 +410,16 @@ class ASC(COMMON):
         homepage = main_tmdb.get('homepage')
 
         # Runtime
-        runtime = (episode_tmdb or {}).get('runtime') or (main_tmdb or {}).get('runtime')
-        hours = runtime // 60
-        minutes = runtime % 60
-        if hours > 1:
-            formatted_runtime = f"{hours} horas e {minutes:02d} minutos"
-        elif hours == 1:
-            formatted_runtime = f"{hours} hora e {minutes:02d} minutos"
-        else:
-            formatted_runtime = f"{minutes:02d} minutos"
+        runtime = (episode_tmdb or {}).get('runtime') or (main_tmdb or {}).get('runtime') or meta.get('runtime')
+        if runtime:
+            hours = runtime // 60
+            minutes = runtime % 60
+            if hours > 1:
+                formatted_runtime = f"{hours} horas e {minutes:02d} minutos"
+            elif hours == 1:
+                formatted_runtime = f"{hours} hora e {minutes:02d} minutos"
+            else:
+                formatted_runtime = f"{minutes:02d} minutos"
 
         # Release Date
         if self.category == "MOVIE":
@@ -448,15 +433,38 @@ class ASC(COMMON):
         for i in range(1, 4):
             description_parts.append(format_image(layout_image.get(f'BARRINHA_CUSTOM_T_{i}')))
 
-        # Common data
+        # Title
+        title = await self.get_title(meta)
         description_parts.append(f"\n{format_image(layout_image.get('BARRINHA_APRESENTA'))}\n")
         description_parts.append(f"\n[size=3]{title}[/size]\n")
 
+        # Poster
+        poster_url = "https://image.tmdb.org/t/p/w500"
+        poster_path = (season_tmdb or {}).get('poster_path') or (main_tmdb or {}).get('poster_path') or meta.get('tmdb_poster')
+        self.poster = f"{poster_url}{poster_path}"
         append_section(description_parts, 'BARRINHA_CAPA', format_image(self.poster))
-        append_section(description_parts, 'BARRINHA_SINOPSE', overview)
-        description_parts.append(f"\n[size=4][b]Episódio:[/b] {episode_tmdb.get('name')}[/size]\n" if self.category == 'TV' else None)
-        if self.category == "TV":
-            description_parts.append(f"\n{format_image(still)}\n\n{episode_tmdb.get('overview')}\n" if still_path else f"\n{episode_tmdb.get('overview')}\n")
+
+        # Overview
+        overview = (season_tmdb or {}).get('overview') or (main_tmdb or {}).get('overview')
+        if overview:
+            append_section(description_parts, 'BARRINHA_SINOPSE', overview)
+
+        # Episode
+        if not tv_pack:
+            episode_overview = episode_tmdb.get('overview', '')
+            episode_name = episode_tmdb.get('name', '')
+            still_url = "https://image.tmdb.org/t/p/w300"
+            still_path = episode_tmdb.get('still_path', '')
+            still = f"{still_url}{still_path}" if still_path else None
+
+            if episode_name:
+                description_parts.append(f"\n[size=4][b]Episódio:[/b] {episode_name}[/size]\n")
+
+            if episode_overview:
+                if still:
+                    description_parts.append(f"\n{format_image(still)}\n\n{episode_overview}\n")
+                else:
+                    description_parts.append(f"\n{episode_overview}\n")
 
         # Technical Sheet
         sheet = [
@@ -468,40 +476,52 @@ class ASC(COMMON):
         ]
 
         sheet_content = "\n".join(item for item in sheet if item is not None)
-
         append_section(description_parts, 'BARRINHA_FICHA_TECNICA', sheet_content)
 
-        # Production Companies (TV)
-        if main_tmdb and main_tmdb.get('production_companies'):
+        # Production Companies
+        if main_tmdb.get('production_companies'):
             prod_parts = ["[size=4][b]Produtoras[/b][/size]"]
             for p in main_tmdb['production_companies']:
-                logo = format_image(f"https://image.tmdb.org/t/p/w45{p['logo_path']}") if p.get('logo_path') else ''
+                logo_path = p.get('logo_path')
+                logo = format_image(f"https://image.tmdb.org/t/p/w45{logo_path}") if logo_path else ''
+
                 prod_parts.append(f"{logo}[size=2] - [b]{p.get('name', '')}[/b][/size]" if logo else f"[size=2][b]{p.get('name', '')}[/b][/size]")
             description_parts.append("\n" + "\n".join(prod_parts) + "\n")
 
         # Cast
-        if self.category == 'TV':
-            cast = (episode_tmdb or {}).get('credits').get('cast') or (season_tmdb or {}).get('credits').get('cast')
+        cast = []
+        if self.category == 'MOVIE':
+            cast = (main_tmdb.get('credits') or {}).get('cast', [])
+        elif tv_pack:
+            cast = (season_tmdb.get('credits') or {}).get('cast', [])
         else:
-            cast = main_tmdb.get('credits').get('cast')
+            cast = (episode_tmdb.get('credits') or {}).get('cast', [])
+
         cast_content = build_cast_section(cast)
         append_section(description_parts, 'BARRINHA_ELENCO', cast_content)
 
         # Seasons
-        if self.category == 'TV' and main_tmdb and main_tmdb.get('seasons'):
+        if self.category == 'TV' and main_tmdb.get('seasons'):
             seasons_content = []
-            for temp in main_tmdb['seasons']:
-                nome_temporada = temp.get('name', f"Temporada {temp.get('season_number')}").strip()
-                poster_temp = format_image(f"https://image.tmdb.org/t/p/w185{temp.get('poster_path')}") if temp.get('poster_path') else ''
-                overview_temp = f"\n\nSinopse:\n{temp.get('overview')}" if temp.get('overview') else ''
+            for seasons in main_tmdb['seasons']:
+                season_name = seasons.get('name', f"Temporada {seasons.get('season_number')}").strip()
+                poster_temp = format_image(f"https://image.tmdb.org/t/p/w185{seasons.get('poster_path')}") if seasons.get('poster_path') else ''
+                overview_temp = f"\n\nSinopse:\n{seasons.get('overview')}" if seasons.get('overview') else ''
 
-                inner_content = "\n".join([
-                    f"Data: {format_date(temp.get('air_date'))}",
-                    f"Episódios: {temp.get('episode_count')}",
-                    poster_temp,
-                    overview_temp
-                ])
-                seasons_content.append(f"\n[spoiler={nome_temporada}]{inner_content}[/spoiler]\n")
+                inner_content_parts = []
+                air_date = seasons.get('air_date')
+                if air_date:
+                    inner_content_parts.append(f"Data: {format_date(air_date)}")
+
+                episode_count = seasons.get('episode_count')
+                if episode_count is not None:
+                    inner_content_parts.append(f"Episódios: {episode_count}")
+
+                inner_content_parts.append(poster_temp)
+                inner_content_parts.append(overview_temp)
+
+                inner_content = "\n".join(inner_content_parts)
+                seasons_content.append(f"\n[spoiler={season_name}]{inner_content}[/spoiler]\n")
             append_section(description_parts, 'BARRINHA_EPISODIOS', "".join(seasons_content))
 
         # Ratings
