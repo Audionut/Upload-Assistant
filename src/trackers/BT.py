@@ -599,8 +599,8 @@ class BT(COMMON):
         all_possible_data.update({
             'title': meta['title'],
             'title_br': tmdb_data.get('name') or tmdb_data.get('title') or '',
-            'nota_imdb': meta.get('imdb_info', {}).get('rating', ''),
-            'year': meta['year'],
+            'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
+            'year': str(meta['year']),
             'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
             'idioma_ori': original_language or meta.get('original_language', ''),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
@@ -652,8 +652,8 @@ class BT(COMMON):
             pass
 
         all_possible_data.update({
-            'releasedate': all_possible_data.get('year', ''),
-            'rating': all_possible_data.get('nota_imdb', ''),
+            'releasedate': str(all_possible_data.get('year', '')),
+            'rating': str(all_possible_data.get('nota_imdb', '')),
             'horas': str(duracao_min // 60),
             'minutos': str(duracao_min % 60),
             'fundo_torrent': meta.get('backdrop'),
