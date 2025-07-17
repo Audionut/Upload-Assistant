@@ -527,7 +527,7 @@ class ASC(COMMON):
             data['name'] = await self.get_title(meta)
 
             # Year
-            data['ano'] = meta['year']
+            data['ano'] = str(meta['year'])
 
             # Genre
             data['genre'] = (', '.join(g['name'] for g in main_tmdb.get('genres', []))) or meta.get('genre', 'Gênero desconhecido')
