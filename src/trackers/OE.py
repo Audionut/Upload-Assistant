@@ -10,7 +10,7 @@ from src.bbcode import BBCODE
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
-from src.languages import process_desc_language
+from src.languages import process_desc_language, has_english_language
 
 
 class OE():
@@ -178,8 +178,8 @@ class OE():
         if not meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         else:
-            audio_languages = meta['audio_languages'][0]
-            if audio_languages and audio_languages.lower() != "english" and not meta.get('is_disc') == "BDMV":
+            audio_languages = meta['audio_languages'][0].upper()
+            if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
                 oe_name = oe_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
 
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
@@ -298,7 +298,7 @@ class OE():
 
         if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
-        if 'English' not in meta.get('audio_languages', []) and 'English' not in meta.get('subtitle_languages', []):
+        if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
             if not meta['unattended']:
                 console.print('[bold red]OE requires at least one English audio or subtitle track.')
             meta['skipping'] = "OE"

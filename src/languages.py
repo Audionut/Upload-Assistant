@@ -123,6 +123,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 meta['audio_languages'].append(audio_track['language'])
                             elif "title" not in audio_track:
                                 meta['audio_languages'].append(audio_track['language'])
+                        if meta['audio_languages']:
+                            meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
 
                 if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and (not subtitle_languages or subtitle_languages is None):
                     if 'text' in parsed_info:
@@ -144,6 +146,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                     meta['tracker_status'][tracker]['skip_upload'] = True
                             else:
                                 meta['subtitle_languages'].append(text_track['language'])
+                            if meta['subtitle_languages']:
+                                meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
                     else:
                         meta['no_subs'] = True
 
@@ -212,3 +216,10 @@ async def process_desc_language(meta, desc=None, tracker=None):
 
     else:
         return desc if desc is not None else None
+
+
+async def has_english_language(languages):
+    """Check if any language in the list contains 'english'"""
+    if not languages:
+        return False
+    return any('english' in lang.lower() for lang in languages)

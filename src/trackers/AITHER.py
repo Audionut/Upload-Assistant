@@ -8,7 +8,7 @@ import glob
 import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import process_desc_language, has_english_language
 
 
 class AITHER():
@@ -146,8 +146,8 @@ class AITHER():
         if not meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         else:
-            audio_languages = meta['audio_languages'][0]
-            if audio_languages and audio_languages.lower() != "english":
+            audio_languages = meta['audio_languages'][0].upper()
+            if audio_languages and not await has_english_language(audio_languages):
                 if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
                     aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {audio_languages}", 1)
                 elif not meta.get('is_disc') == "BDMV":

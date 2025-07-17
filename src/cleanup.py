@@ -3,8 +3,13 @@ import psutil
 import threading
 import multiprocessing
 import sys
+import os
+import subprocess
+import re
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
+if os.name == "posix":
+    import termios
 
 running_subprocesses = set()
 thread_executor: ThreadPoolExecutor = None
@@ -15,7 +20,7 @@ async def cleanup():
     """Ensure all running tasks, threads, and subprocesses are properly cleaned up before exiting."""
     # console.print("[yellow]Cleaning up tasks before exiting...[/yellow]")
 
-    # ✅ Step 1: Shutdown ThreadPoolExecutor **before checking for threads**
+    # Step 1: Shutdown ThreadPoolExecutor **before checking for threads**
     global thread_executor
     if thread_executor:
         # console.print("[yellow]Shutting down thread pool executor...[/yellow]")
@@ -146,3 +151,58 @@ def kill_all_threads():
     #    console.print(f"  - {t.name} (Alive: {t.is_alive()})")
 
     # console.print("[green]Thread cleanup completed.[/green]")
+
+
+# Wrapped "erase key check and save" in tty check so that Python won't complain if UA is called by a script
+if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
+    try:
+        output = subprocess.check_output(['stty', '-a']).decode()
+        erase_key = re.search(r' erase = (\S+);', output).group(1)
+    except (IOError, OSError):
+        pass
+
+
+def reset_terminal():
+    """Reset the terminal while allowing the script to continue running (Linux/macOS only)."""
+    if os.name != "posix":
+        return
+
+    try:
+        if not sys.stderr.closed:
+            sys.stderr.flush()
+
+        if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
+            try:
+                subprocess.run(["stty", "sane"], check=False)
+                subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
+                if hasattr(termios, 'tcflush'):
+                    termios.tcflush(sys.stdin.fileno(), termios.TCIOFLUSH)
+                subprocess.run(["stty", "-ixon"], check=False)
+            except (IOError, OSError):
+                pass
+
+        if not sys.stdout.closed:
+            try:
+                sys.stdout.write("\033[0m")
+                sys.stdout.flush()
+                sys.stdout.write("\033[?25h")
+                sys.stdout.flush()
+            except (IOError, ValueError):
+                pass
+
+        # Kill background jobs
+        try:
+            os.system("jobs -p | xargs -r kill 2>/dev/null")
+        except Exception:
+            pass
+
+        if not sys.stderr.closed:
+            sys.stderr.flush()
+
+    except Exception as e:
+        try:
+            if not sys.stderr.closed:
+                sys.stderr.write(f"Error during terminal reset: {e}\n")
+                sys.stderr.flush()
+        except Exception:
+            pass  # At this point we can't do much more
