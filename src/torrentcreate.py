@@ -162,15 +162,57 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
         exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
         include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
 
-    if meta.get('tv_pack') and meta.get('tag', "").lower() != "-subsplease":
+    if meta.get('tv_pack'):
         completeness = check_season_pack_completeness(meta)
 
         if not completeness['complete']:
+            just_go = False
             missing_list = [f"S{s:02d}E{e:02d}" for s, e in completeness['missing_episodes']]
-            console.print("[yellow]Warning: Season pack appears incomplete!")
+            console.print("[red]Warning: Season pack appears incomplete!")
             console.print(f"[yellow]Missing episodes: {', '.join(missing_list)}")
 
-            if not meta.get('unattended'):
+            # Show first 15 files from filelist
+            filelist = meta['filelist']
+            files_shown = 0
+            batch_size = 15
+
+            console.print(f"[cyan]Filelist ({len(filelist)} files):")
+            for i, file in enumerate(filelist[:batch_size]):
+                console.print(f"[cyan]  {i+1:2d}. {os.path.basename(file)}")
+
+            files_shown = min(batch_size, len(filelist))
+
+            # Loop to handle showing more files in batches
+            while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                remaining_files = len(filelist) - files_shown
+                console.print(f"[yellow]... and {remaining_files} more files")
+
+                if remaining_files > batch_size:
+                    response = input(f"Show (n)ext {batch_size} files, (a)ll remaining files, (c)ontinue with incomplete pack, or (q)uit? (n/a/c/Q): ")
+                else:
+                    response = input(f"Show (a)ll remaining {remaining_files} files, (c)ontinue with incomplete pack, or (q)uit? (a/c/Q): ")
+
+                if response.lower() == 'n' and remaining_files > batch_size:
+                    # Show next batch of files
+                    next_batch = filelist[files_shown:files_shown + batch_size]
+                    for i, file in enumerate(next_batch):
+                        console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
+                    files_shown += len(next_batch)
+                elif response.lower() == 'a':
+                    # Show all remaining files
+                    remaining_batch = filelist[files_shown:]
+                    for i, file in enumerate(remaining_batch):
+                        console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
+                    files_shown = len(filelist)
+                elif response.lower() == 'c':
+                    just_go = True
+                    break  # Continue with incomplete pack
+                else:  # 'q' or any other input
+                    console.print("[red]Aborting torrent creation due to incomplete season pack")
+                    sys.exit(1)
+
+            # Final confirmation if not in unattended mode
+            if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended-confirm', False) and not just_go):
                 response = input("Continue with incomplete season pack? (y/N): ")
                 if response.lower() != 'y':
                     console.print("[red]Aborting torrent creation due to incomplete season pack")
@@ -437,21 +479,59 @@ def check_season_pack_completeness(meta):
     found_episodes = []
     season_numbers = set()
 
-    episode_pattern = r'[Ss](\d{1,2})[Ee](\d{1,3})'
+    # Pattern for standard TV shows: S01E01, S01E01E02
+    episode_pattern = r'[Ss](\d{1,2})[Ee](\d{1,3})(?:[Ee](\d{1,3}))?'
+
+    # Pattern for episode-only: E01, E01E02 (without season)
+    episode_only_pattern = r'\b[Ee](\d{1,3})(?:[Ee](\d{1,3}))?\b'
+
+    # Pattern for anime: " - 43 (1080p)" or "43 (1080p)" or similar
+    anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
 
     for file_path in files:
         filename = os.path.basename(file_path)
         matches = re.findall(episode_pattern, filename)
 
-        for season_str, episode_str in matches:
+        for match in matches:
+            season_str = match[0]
+            episode1_str = match[1]
+            episode2_str = match[2] if match[2] else None
+
             season_num = int(season_str)
-            episode_num = int(episode_str)
-            found_episodes.append((season_num, episode_num))
+            episode1_num = int(episode1_str)
+            found_episodes.append((season_num, episode1_num))
             season_numbers.add(season_num)
+
+            if episode2_str:
+                episode2_num = int(episode2_str)
+                found_episodes.append((season_num, episode2_num))
+
+        if not matches:
+            episode_only_matches = re.findall(episode_only_pattern, filename)
+            for match in episode_only_matches:
+                episode1_num = int(match[0])
+                episode2_num = int(match[1]) if match[1] else None
+
+                season_num = meta.get('season_int', 1)
+                found_episodes.append((season_num, episode1_num))
+                season_numbers.add(season_num)
+
+                if episode2_num:
+                    found_episodes.append((season_num, episode2_num))
+
+        if not matches and not episode_only_matches:
+            anime_matches = re.findall(anime_pattern, filename)
+            for match in anime_matches:
+                episode_num = int(match)
+                season_num = meta.get('season_int', 1)
+                found_episodes.append((season_num, episode_num))
+                season_numbers.add(season_num)
 
     if not found_episodes:
         console.print("[red]No episodes found in the season pack files.")
-        return {'complete': False, 'missing_episodes': [], 'found_episodes': []}
+        time.sleep(1)
+        # return true to not annoy the user with bad regex
+        return {'complete': True, 'missing_episodes': [], 'found_episodes': []}
 
     # Remove duplicates and sort
     found_episodes = sorted(list(set(found_episodes)))

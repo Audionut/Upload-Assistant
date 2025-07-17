@@ -32,6 +32,7 @@ from src.get_name import get_name
 from src.get_desc import gen_desc
 from discordbot import send_discord_notification, send_upload_status_notification
 from cogs.redaction import clean_meta_for_export
+from src.languages import process_desc_language
 if os.name == "posix":
     import termios
 
@@ -202,6 +203,29 @@ async def process_meta(meta, base_dir, bot=None):
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
         confirm = await helper.get_confirmation(meta)
+
+    console.print(f"[green]Processing {meta['name']} for upload...[/green]")
+
+    audio_prompted = False
+    for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR"]:
+        if tracker in trackers:
+            if not audio_prompted:
+                await process_desc_language(meta, desc=None, tracker=tracker)
+                audio_prompted = True
+            else:
+                if 'tracker_status' not in meta:
+                    meta['tracker_status'] = {}
+                if tracker not in meta['tracker_status']:
+                    meta['tracker_status'][tracker] = {}
+                if meta.get('unattended_audio_skip', False) or meta.get('unattended_subtitle_skip', False):
+                    meta['tracker_status'][tracker]['skip_upload'] = True
+                else:
+                    meta['tracker_status'][tracker]['skip_upload'] = False
+
+    await asyncio.sleep(0.2)
+    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+        json.dump(meta, f, indent=4)
+    await asyncio.sleep(0.2)
 
     successful_trackers = await process_all_trackers(meta)
 

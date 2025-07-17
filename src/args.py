@@ -110,7 +110,7 @@ class Args():
         parser.add_argument('--no-edition', dest='no_edition', action='store_true', required=False, help="Remove Edition from title")
         parser.add_argument('--dual-audio', dest='dual_audio', action='store_true', required=False, help="Add Dual-Audio to the title")
         parser.add_argument('-ol', '--original-language', dest='manual_language', nargs=1, required=False, help="Set original audio language")
-        parser.add_argument('-oil', '--only-if-languages', dest='has_languages',  nargs=1, required=False, help="Require at least one of the languages to upload. Comma separated list e.g. 'en,fr,pt'", type=str)
+        parser.add_argument('-oil', '--only-if-languages', dest='has_languages',  nargs='*', required=False, help="Require at least one of the languages to upload. Comma separated list e.g. 'English, French, Spanish'", type=str)
         parser.add_argument('-ns', '--no-seed', action='store_true', required=False, help="Do not add torrent to the client")
         parser.add_argument('-year', '--year', dest='manual_year', nargs=1, required=False, help="Override the year found", type=int, default=0)
         parser.add_argument('-ptp', '--ptp', nargs=1, required=False, help="PTP torrent id/permalink", type=str)
