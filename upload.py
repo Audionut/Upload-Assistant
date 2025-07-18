@@ -13,7 +13,6 @@ import cli_ui
 import traceback
 import time
 import gc
-import subprocess
 import re
 import requests
 import discord
@@ -26,15 +25,13 @@ from src.torrentcreate import create_torrent, create_random_torrents, create_bas
 from src.uphelper import UploadHelper
 from src.trackerstatus import process_all_trackers
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
-from src.cleanup import cleanup
+from src.cleanup import cleanup, reset_terminal
 from src.add_comparison import add_comparison
 from src.get_name import get_name
 from src.get_desc import gen_desc
 from discordbot import send_discord_notification, send_upload_status_notification
 from cogs.redaction import clean_meta_for_export
 from src.languages import process_desc_language
-if os.name == "posix":
-    import termios
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -55,15 +52,6 @@ except Exception:
 from src.prep import Prep  # noqa E402
 client = Clients(config=config)
 parser = Args(config)
-
-# Wrapped "erase key check and save" in tty check so that Python won't complain if UA is called by a script
-if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
-    try:
-        output = subprocess.check_output(['stty', '-a']).decode()
-        erase_key = re.search(r' erase = (\S+);', output).group(1)
-    except (IOError, OSError):
-        pass
-
 use_discord = False
 discord_config = config.get('discord')
 if discord_config:
@@ -282,12 +270,19 @@ async def process_meta(meta, base_dir, bot=None):
                                 meta.get('image_list', []), meta.get('ffdebug', False), None
                             )
                         except asyncio.CancelledError:
-                            console.print("[red]Screenshot capture was cancelled. Cleaning up...[/red]")
-                            await cleanup_screenshot_temp_files(meta)  # Cleanup only on cancellation
-                            raise  # Ensure cancellation propagates properly
+                            await cleanup_screenshot_temp_files(meta)
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception("Error during screenshot capture")
                         except Exception as e:
-                            console.print(f"[red]Error during BDMV screenshot capture: {e}[/red]", highlight=False)
-                            await cleanup_screenshot_temp_files(meta)  # Cleanup only on error
+                            await cleanup_screenshot_temp_files(meta)
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception(f"Error during screenshot capture: {e}")
 
                     elif meta['is_disc'] == "DVD":
                         try:
@@ -295,12 +290,19 @@ async def process_meta(meta, base_dir, bot=None):
                                 meta, 0, None, None
                             )
                         except asyncio.CancelledError:
-                            console.print("[red]DVD screenshot capture was cancelled. Cleaning up...[/red]")
                             await cleanup_screenshot_temp_files(meta)
-                            raise
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception("Error during screenshot capture")
                         except Exception as e:
-                            console.print(f"[red]Error during DVD screenshot capture: {e}[/red]", highlight=False)
                             await cleanup_screenshot_temp_files(meta)
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception(f"Error during screenshot capture: {e}")
 
                     else:
                         try:
@@ -312,21 +314,35 @@ async def process_meta(meta, base_dir, bot=None):
                                 manual_frames=manual_frames  # Pass additional kwargs directly
                             )
                         except asyncio.CancelledError:
-                            console.print("[red]Generic screenshot capture was cancelled. Cleaning up...[/red]")
                             await cleanup_screenshot_temp_files(meta)
-                            raise
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception("Error during screenshot capture")
                         except Exception as e:
-                            console.print(f"[red]Error during generic screenshot capture: {e}[/red]", highlight=False)
                             console.print(traceback.format_exc())
                             await cleanup_screenshot_temp_files(meta)
+                            await asyncio.sleep(0.1)
+                            await cleanup()
+                            gc.collect()
+                            reset_terminal()
+                            raise Exception(f"Error during screenshot capture: {e}")
 
                 except asyncio.CancelledError:
-                    console.print("[red]Process was cancelled. Performing cleanup...[/red]")
                     await cleanup_screenshot_temp_files(meta)
-                    raise
+                    await asyncio.sleep(0.1)
+                    await cleanup()
+                    gc.collect()
+                    reset_terminal()
+                    raise Exception("Error during screenshot capture")
                 except Exception as e:
                     await cleanup_screenshot_temp_files(meta)
-                    raise e
+                    await asyncio.sleep(0.1)
+                    await cleanup()
+                    gc.collect()
+                    reset_terminal()
+                    raise Exception(f"Error during screenshot capture: {e}")
                 finally:
                     await asyncio.sleep(0.1)
                     await cleanup()
@@ -462,52 +478,6 @@ async def save_processed_file(log_file, file_path):
 
     with open(log_file, "w") as f:
         json.dump(processed_files, f, indent=4)
-
-
-def reset_terminal():
-    """Reset the terminal while allowing the script to continue running (Linux/macOS only)."""
-    if os.name != "posix":
-        return
-
-    try:
-        if not sys.stderr.closed:
-            sys.stderr.flush()
-
-        if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
-            try:
-                subprocess.run(["stty", "sane"], check=False)
-                subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
-                if hasattr(termios, 'tcflush'):
-                    termios.tcflush(sys.stdin.fileno(), termios.TCIOFLUSH)
-                subprocess.run(["stty", "-ixon"], check=False)
-            except (IOError, OSError):
-                pass
-
-        if not sys.stdout.closed:
-            try:
-                sys.stdout.write("\033[0m")
-                sys.stdout.flush()
-                sys.stdout.write("\033[?25h")
-                sys.stdout.flush()
-            except (IOError, ValueError):
-                pass
-
-        # Kill background jobs
-        try:
-            os.system("jobs -p | xargs -r kill 2>/dev/null")
-        except Exception:
-            pass
-
-        if not sys.stderr.closed:
-            sys.stderr.flush()
-
-    except Exception as e:
-        try:
-            if not sys.stderr.closed:
-                sys.stderr.write(f"Error during terminal reset: {e}\n")
-                sys.stderr.flush()
-        except Exception:
-            pass  # At this point we can't do much more
 
 
 def get_local_version(version_file):

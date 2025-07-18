@@ -121,6 +121,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 meta['audio_languages'].append(audio_track['language'])
                             elif "title" not in audio_track:
                                 meta['audio_languages'].append(audio_track['language'])
+                        if meta['audio_languages']:
+                            meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
 
                 if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and (not subtitle_languages or subtitle_languages is None):
                     for text_track in parsed_info.get('text', []):
@@ -141,6 +143,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 meta['tracker_status'][tracker]['skip_upload'] = True
                         else:
                             meta['subtitle_languages'].append(text_track['language'])
+                        if meta['subtitle_languages']:
+                            meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
 
             if meta['audio_languages'] and meta['write_audio_languages'] and desc is not None:
                 await desc.write(f"[code]Audio Language: {', '.join(meta['audio_languages'])}[/code]\n")
