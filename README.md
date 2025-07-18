@@ -31,7 +31,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Currently works with .mkv/.mp4/Blu-ray/DVD/HD-DVDs.
   - <details><summary>Supported trackers list</summary><br>
       <table>
-       <tr><td>Name</td><td>Acronym</td></tr>
+       <tr><td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td></tr>
        <tr><td>Aither</td><td>AITHER</td></tr>
        <tr><td>Alpharatio</td><td>AR</td></tr>
        <tr><td>Amigos Share Club</td><td>ASC</td></tr>
