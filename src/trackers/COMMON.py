@@ -982,7 +982,7 @@ class COMMON():
                 if not id:
                     # Only prompt the user for ID selection if not searching by ID
                     try:
-                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name):
+                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
                             console.print("[yellow]User chose to skip based on IDs.[/yellow]")
                             return None, None, None, None, None, None, None, None, None
                     except (KeyboardInterrupt, EOFError):

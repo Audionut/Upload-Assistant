@@ -1,34 +1,34 @@
-torf
-guessit
-ffmpeg-python
-pymediainfo; sys_platform == "win32"
-pymediainfo==6.0.1; sys_platform == "linux"
-pymediainfo==6.0.1; sys_platform == "darwin"
-anitopy
-cli-ui
-qbittorrent-api
-deluge-client
-requests
-pyimgbox
-nest_asyncio
-bencode.py
-unidecode
-beautifulsoup4
-pyoxipng
-rich
-Jinja2
-pyotp
-click
-aiohttp
-Pillow
-tqdm
-urllib3
-httpx
 aiofiles
-pyparsebluray
-langcodes
-transmission_rpc
-psutil
-packaging
-tmdbsimple
+aiohttp
+anitopy
+beautifulsoup4
+bencode.py
+click
+cli-ui
+deluge-client
 discord
+ffmpeg-python
+guessit
+httpx
+Jinja2
+langcodes
+nest_asyncio
+packaging
+Pillow
+psutil
+pyimgbox
+pymediainfo; sys_platform == "win32"
+pymediainfo==6.0.1; sys_platform == "darwin"
+pymediainfo==6.0.1; sys_platform == "linux"
+pyotp
+pyoxipng
+pyparsebluray
+qbittorrent-api
+requests
+rich
+tmdbsimple
+torf
+tqdm
+transmission_rpc
+unidecode
+urllib3
