@@ -254,6 +254,8 @@ class DC(COMMON):
             else:
                 upload_filename = f"{base_name}.torrent"
 
+            upload_filename = upload_filename.replace('.mkv', '').replace('.mp4', '')
+
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file': (upload_filename, torrent_file, "application/x-bittorrent")}
                 upload_url = f"{self.api_base_url}/torrents/upload"
