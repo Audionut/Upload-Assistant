@@ -93,8 +93,8 @@ class LT():
                 audio for audio in meta['mediainfo']['media']['track'][2:]
                 if audio.get('@type') == 'Audio'
                 and isinstance(audio.get('Language'), str)
-                and audio.get('Language').lower() in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co', 
-                                                      'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa', 
+                and audio.get('Language').lower() in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co',
+                                                      'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
                                                       'es-py', 'es-pe', 'es-pr', 'es-uy'}
                 and "commentary" not in str(audio.get('Title', '')).lower()
                 ]
