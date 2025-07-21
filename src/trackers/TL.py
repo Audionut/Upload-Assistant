@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 # import discord
+import httpx
+import os
+import re
 import requests
 import platform
-
 from src.trackers.COMMON import COMMON
 from src.console import console
-from pathlib import Path
+from pymediainfo import MediaInfo
 
 
 class TL():
@@ -32,13 +34,123 @@ class TL():
         self.config = config
         self.tracker = 'TL'
         self.source_flag = 'TorrentLeech.org'
-        self.upload_url = 'https://www.torrentleech.org/torrents/upload/apiupload'
-        self.signature = None
+        self.base_url = 'https://www.torrentleech.org'
+        self.http_upload_url = f'{self.base_url}/torrents/upload/'
+        self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
+        self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant</a></center>"""
         self.banned_groups = [""]
-
+        self.session = requests.Session()
+        self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload')
         self.announce_key = self.config['TRACKERS'][self.tracker]['announce_key']
         self.config['TRACKERS'][self.tracker]['announce_url'] = f"https://tracker.torrentleech.org/a/{self.announce_key}/announce"
-        pass
+        self.session.headers.update({
+            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+        })
+
+    def parse_cookie_file(self, filepath):
+        cookies = {}
+        try:
+            with open(filepath, 'r') as f:
+                for line in f:
+                    if line.startswith('#') or line.strip() == '':
+                        continue
+                    parts = line.strip().split('\t')
+                    if len(parts) == 7:
+                        cookies[parts[5]] = parts[6]
+        except FileNotFoundError:
+            console.print(f"[bold red]'{self.tracker}' Cookies not found at: {filepath}[/bold red]")
+        return cookies
+
+    async def login(self, meta):
+        if self.api_upload:
+            return True
+
+        self.cookies_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/TL.txt")
+
+        cookie_path = os.path.abspath(self.cookies_file)
+        if not os.path.exists(cookie_path):
+            console.print(f"[bold red]'{self.tracker}' Cookies not found at: {cookie_path}[/bold red]")
+            return False
+
+        cookies = self.parse_cookie_file(cookie_path)
+        if not cookies:
+            console.print(f"[bold red]Invalid cookie file for '{self.tracker}'.[/bold red]")
+            return False
+
+        self.session.cookies.update(cookies)
+
+        try:
+            response = self.session.get(self.http_upload_url, timeout=10, allow_redirects=False)
+            if response.status_code == 200 and 'torrents/upload' in response.url:
+                return True
+            else:
+                console.print(f"[bold red]Failed to validate credentials for '{self.tracker}'. Cookies may have expired.[/bold red]")
+                return False
+        except requests.exceptions.RequestException as e:
+            console.print(f"[bold red]Error while validating credentials for '{self.tracker}': {e}[/bold red]")
+            return False
+
+    async def generate_description(self, meta):
+        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        self.final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+
+        description_parts = []
+
+        # MediaInfo/BDInfo
+        tech_info = ""
+        if meta.get('is_disc') != 'BDMV':
+            video_file = meta['filelist'][0]
+            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
+            if os.path.exists(mi_template):
+                try:
+                    media_info = MediaInfo.parse(video_file, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
+                    tech_info = str(media_info)
+                except Exception:
+                    console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
+                    mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+                    if os.path.exists(mi_file_path):
+                        with open(mi_file_path, 'r', encoding='utf-8') as f:
+                            tech_info = f.read()
+            else:
+                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
+                mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+                if os.path.exists(mi_file_path):
+                    with open(mi_file_path, 'r', encoding='utf-8') as f:
+                        tech_info = f.read()
+        else:
+            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+            if os.path.exists(bd_summary_file):
+                with open(bd_summary_file, 'r', encoding='utf-8') as f:
+                    tech_info = f.read()
+
+        if tech_info:
+            description_parts.append(tech_info)
+
+        if os.path.exists(base_desc_path):
+            with open(base_desc_path, 'r', encoding='utf-8') as f:
+                manual_desc = f.read()
+            description_parts.append(manual_desc)
+
+        if self.signature:
+            description_parts.append(self.signature)
+
+        final_description = "\n\n".join(filter(None, description_parts))
+        from src.bbcode import BBCODE
+        bbcode = BBCODE()
+        desc = final_description
+        desc = desc.replace("[center]", "<center>").replace("[/center]", "</center>")
+        desc = re.sub(r'\[spoiler=.*?\]', '[spoiler]', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[\*\]', '\n[*]', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[list=.*?\]', '[list]', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', desc, flags=re.IGNORECASE | re.DOTALL)
+        desc = re.sub(r'\[hr\]', '---', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[img=[\d"x]+\]', '[img]', desc, flags=re.IGNORECASE)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+
+        with open(self.final_desc_path, 'w', encoding='utf-8') as f:
+            f.write(desc)
+
+        return desc
 
     async def get_cat_id(self, common, meta):
         if meta.get('anime', 0):
@@ -75,44 +187,160 @@ class TL():
 
         raise NotImplementedError('Failed to determine TL category!')
 
+    def get_screens(self, meta):
+        screenshot_urls = [
+            image.get('raw_url')
+            for image in meta.get('image_list', [])
+            if image.get('raw_url')
+        ]
+
+        return screenshot_urls
+
+    def get_name(self, meta):
+        is_scene = bool(meta.get('scene_name'))
+        if is_scene:
+            name = meta['scene_name']
+        else:
+            name = meta['name']
+
+        return name
+
+    async def search_existing(self, meta, disctype):
+        await self.login(meta)
+
+        dupes = []
+
+        if self.api_upload:
+            console.print(f"[bold yellow]Cannot search for duplicates on {self.tracker} when using API upload.[/bold yellow]")
+            return dupes
+
+        imdb_id = meta.get('imdb_info', {}).get('imdbID')
+        if not imdb_id:
+            console.print(f"[bold yellow]Cannot perform search on {self.tracker}: IMDb ID not found in metadata.[/bold yellow]")
+            return dupes
+
+        search_url = f"{self.base_url}/torrents/browse/list/imdbID/{imdb_id}"
+        console.print(f"[cyan]Searching for duplicates on {self.tracker} with URL: {search_url}[/cyan]")
+
+        try:
+            async with httpx.AsyncClient(cookies=self.session.cookies) as client:
+                response = await client.get(search_url, timeout=20)
+                response.raise_for_status()
+
+                data = response.json()
+                torrents = data.get("torrentList", [])
+
+                for torrent in torrents:
+                    name = torrent.get("name")
+                    if name:
+                        dupes.append(name)
+
+        except Exception as e:
+            console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
+
+        return dupes
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(common, meta)
-        # await common.unit3d_edit_desc(meta, self.tracker, self.signature)
 
-        open_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'a+', encoding='utf-8')
+        if self.api_upload:
+            await self.upload_api(meta, cat_id)
+        else:
+            await self.upload_http(meta, cat_id)
 
-        info_filename = 'BD_SUMMARY_00' if meta['bdinfo'] is not None else 'MEDIAINFO_CLEANPATH'
-        open_info = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{info_filename}.txt", 'r', encoding='utf-8')
-        open_desc.write('\n\n')
-        open_desc.write(open_info.read())
-        open_info.close()
+    async def upload_api(self, meta, cat_id):
+        desc_content = await self.generate_description(meta)
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-        open_desc.seek(0)
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
+        with open(torrent_path, 'rb') as open_torrent:
+            files = {
+                'torrent': (self.get_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
+            }
+            data = {
+                'announcekey': self.announce_key,
+                'category': cat_id,
+                'nfo': desc_content
+            }
+
+            if meta['debug'] is False:
+                response = requests.post(url=self.api_upload_url, files=files, data=data, headers=self.session.headers)
+                if not response.text.isnumeric():
+                    meta['tracker_status'][self.tracker]['status_message'] = f"API Error: {response.text}"
+                    console.print(f"[bold red]Erro no upload para '{self.tracker}': {response.text}[/bold red]")
+                else:
+                    console.print(f"[bold green]Upload para '{self.tracker}' via API bem-sucedido. ID do Torrent: {response.text}[/bold green]")
+            else:
+                console.print(data)
+
+    async def upload_http(self, meta, cat_id):
+        if not await self.login(meta):
+            meta['tracker_status'][self.tracker]['status_message'] = "Login with cookies failed."
+            return
+
+        await self.generate_description(meta)
+
+        imdbURL = ''
+        if meta.get('category') == 'MOVIE' and meta.get('imdb_info'):
+            imdbURL = f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}"
+
+        tvMazeURL = ''
+        if meta.get('category') == 'TV' and meta.get("tvmaze_id"):
+            tvMazeURL = f"https://www.tvmaze.com/shows/{meta.get('tvmaze_id')}"
+
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        torrent_file = f"[{self.tracker}].torrent"
+        description_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+
         files = {
-            'nfo': open_desc,
-            'torrent': (self.get_name(meta) + '.torrent', open_torrent)
+            'torrent': (torrent_file, open(torrent_path, 'rb'), 'application/x-bittorrent'),
+            'nfo': (f"[{self.tracker}]DESCRIPTION.txt", open(description_path, 'rb'), 'text/plain')
         }
+
         data = {
-            'announcekey': self.announce_key,
-            'category': cat_id
-        }
-        headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'name': self.get_name(meta),
+            'category': cat_id,
+            'nonscene': 'off' if meta.get("scene") else 'on',
+            'imdbURL': imdbURL,
+            'tvMazeURL': tvMazeURL,
+            'igdbURL': '',
+            'torrentNFO': '0',
+            'torrentDesc': '1',
+            'nfotextbox': '',
+            'torrentComment': '0',
+            'uploaderComments': '',
+            'is_anonymous_upload': 'on' if meta.get('anon', False) else 'off',
+            'screenshots[]': self.get_screens(meta),
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
-            if not response.text.isnumeric():
-                meta['tracker_status'][self.tracker]['status_message'] = response.text
-        else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
-        open_torrent.close()
-        open_desc.close()
+            try:
+                response = self.session.post(url=self.http_upload_url, files=files, data=data)
 
-    def get_name(self, meta):
-        path = Path(meta['path'])
-        return path.stem if path.is_file() else path.name
+                if "torrent was uploaded successfully" in response.text:
+                    console.print(f"[bold green]Upload successful to '{self.tracker}'.[/bold green]")
+
+                    torrent_url_match = re.search(r'(https?://[a-zA-Z0-9.-]+/torrent/\d+)', response.text)
+
+                    if torrent_url_match:
+                        torrent_url = torrent_url_match.group(1)
+                        meta['tracker_status'][self.tracker]['status_message'] = torrent_url
+                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                        common = COMMON(config=self.config)
+                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
+
+                    else:
+                        console.print("[bold yellow]Warning: Upload was successful, but the torrent URL could not be found on the response page.[/bold yellow]")
+
+                else:
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                    with open(failure_path, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
+
+            finally:
+                files['torrent'][1].close()
+                files['nfo'][1].close()
+        else:
+            console.print(data)
