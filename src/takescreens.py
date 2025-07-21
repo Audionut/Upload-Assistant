@@ -256,7 +256,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
-                console.print("[red]Image size does not meet requirements for your image host, retaking.")
+                console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                 retake = True
 
             if retake:
@@ -1074,7 +1074,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                 if meta['debug']:
                     console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
-                console.print("[red]Image size does not meet requirements for your image host, retaking.")
+                console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                 retake = True
 
         if retake:
