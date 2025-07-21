@@ -3,7 +3,6 @@
 import httpx
 import os
 import re
-import requests
 import platform
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -39,27 +38,13 @@ class TL():
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant</a></center>"""
         self.banned_groups = [""]
-        self.session = requests.Session()
+        self.session = httpx.AsyncClient()
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload')
         self.announce_key = self.config['TRACKERS'][self.tracker]['announce_key']
         self.config['TRACKERS'][self.tracker]['announce_url'] = f"https://tracker.torrentleech.org/a/{self.announce_key}/announce"
         self.session.headers.update({
             'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
         })
-
-    def parse_cookie_file(self, filepath):
-        cookies = {}
-        try:
-            with open(filepath, 'r') as f:
-                for line in f:
-                    if line.startswith('#') or line.strip() == '':
-                        continue
-                    parts = line.strip().split('\t')
-                    if len(parts) == 7:
-                        cookies[parts[5]] = parts[6]
-        except FileNotFoundError:
-            console.print(f"[bold red]'{self.tracker}' Cookies not found at: {filepath}[/bold red]")
-        return cookies
 
     async def login(self, meta):
         if self.api_upload:
@@ -72,21 +57,15 @@ class TL():
             console.print(f"[bold red]'{self.tracker}' Cookies not found at: {cookie_path}[/bold red]")
             return False
 
-        cookies = self.parse_cookie_file(cookie_path)
-        if not cookies:
-            console.print(f"[bold red]Invalid cookie file for '{self.tracker}'.[/bold red]")
-            return False
-
-        self.session.cookies.update(cookies)
+        common = COMMON(config=self.config)
+        self.session.cookies.update(await common.parseCookieFile(self.cookies_file))
 
         try:
-            response = self.session.get(self.http_upload_url, timeout=10, allow_redirects=False)
-            if response.status_code == 200 and 'torrents/upload' in response.url:
+            response = await self.session.get(self.http_upload_url, timeout=10)
+            if response.status_code == 200 and 'torrents/upload' in str(response.url):
                 return True
-            else:
-                console.print(f"[bold red]Failed to validate credentials for '{self.tracker}'. Cookies may have expired.[/bold red]")
-                return False
-        except requests.exceptions.RequestException as e:
+
+        except httpx.RequestError as e:
             console.print(f"[bold red]Error while validating credentials for '{self.tracker}': {e}[/bold red]")
             return False
 
@@ -223,17 +202,16 @@ class TL():
         console.print(f"[cyan]Searching for duplicates on {self.tracker} with URL: {search_url}[/cyan]")
 
         try:
-            async with httpx.AsyncClient(cookies=self.session.cookies) as client:
-                response = await client.get(search_url, timeout=20)
-                response.raise_for_status()
+            response = await self.session.get(search_url, timeout=20)
+            response.raise_for_status()
 
-                data = response.json()
-                torrents = data.get("torrentList", [])
+            data = response.json()
+            torrents = data.get("torrentList", [])
 
-                for torrent in torrents:
-                    name = torrent.get("name")
-                    if name:
-                        dupes.append(name)
+            for torrent in torrents:
+                name = torrent.get("name")
+                if name:
+                    dupes.append(name)
 
         except Exception as e:
             console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
@@ -265,13 +243,15 @@ class TL():
             }
 
             if meta['debug'] is False:
-                response = requests.post(url=self.api_upload_url, files=files, data=data, headers=self.session.headers)
+                response = await self.session.post(
+                    url=self.api_upload_url,
+                    files=files,
+                    data=data
+                )
                 if not response.text.isnumeric():
-                    meta['tracker_status'][self.tracker]['status_message'] = f"API Error: {response.text}"
-                    console.print(f"[bold red]Erro no upload para '{self.tracker}': {response.text}[/bold red]")
-                else:
-                    console.print(f"[bold green]Upload para '{self.tracker}' via API bem-sucedido. ID do Torrent: {response.text}[/bold green]")
+                    meta['tracker_status'][self.tracker]['status_message'] = response.text
             else:
+                console.print("[cyan]Request Data:")
                 console.print(data)
 
     async def upload_http(self, meta, cat_id):
@@ -282,7 +262,7 @@ class TL():
         await self.generate_description(meta)
 
         imdbURL = ''
-        if meta.get('category') == 'MOVIE' and meta.get('imdb_info'):
+        if meta.get('category') == 'MOVIE' and meta.get('imdb_info', {}).get('imdbID', ''):
             imdbURL = f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}"
 
         tvMazeURL = ''
@@ -316,7 +296,11 @@ class TL():
 
         if meta['debug'] is False:
             try:
-                response = self.session.post(url=self.http_upload_url, files=files, data=data)
+                response = await self.session.post(
+                    url=self.http_upload_url,
+                    files=files,
+                    data=data
+                )
 
                 if "torrent was uploaded successfully" in response.text:
                     console.print(f"[bold green]Upload successful to '{self.tracker}'.[/bold green]")
