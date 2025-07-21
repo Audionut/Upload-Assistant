@@ -114,12 +114,12 @@ class TL():
         if meta.get('anon', False):
             images = meta.get('image_list', [])
 
-            screenshots_block = "<center>Screenshots</center>\n\n"
+            screenshots_block = "<center>Screenshots\n\n"
             for image in images:
                 img_url = image['img_url']
                 web_url = image['web_url']
                 screenshots_block += f"""<a href="{web_url}"><img src="{img_url}"></a> """
-            screenshots_block += "[/center]"
+            screenshots_block += "\n</center>"
 
             description_parts.append(screenshots_block)
 
