@@ -38,7 +38,7 @@ class TL():
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant</a></center>"""
         self.banned_groups = [""]
-        self.session = httpx.AsyncClient()
+        self.session = httpx.AsyncClient(timeout=60.0)
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload')
         self.announce_key = self.config['TRACKERS'][self.tracker]['announce_key']
         self.config['TRACKERS'][self.tracker]['announce_url'] = f"https://tracker.torrentleech.org/a/{self.announce_key}/announce"
@@ -109,6 +109,19 @@ class TL():
             with open(base_desc_path, 'r', encoding='utf-8') as f:
                 manual_desc = f.read()
             description_parts.append(manual_desc)
+
+        # Add screenshots to description only if it is an anonymous upload as TL does not support anonymous upload in the screenshots section
+        if meta.get('anon', False):
+            images = meta.get('image_list', [])
+
+            screenshots_block = "<center>Screenshots</center>\n\n"
+            for image in images:
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}"></a> """
+            screenshots_block += "[/center]"
+
+            description_parts.append(screenshots_block)
 
         if self.signature:
             description_parts.append(self.signature)
@@ -273,58 +286,57 @@ class TL():
         torrent_file = f"[{self.tracker}].torrent"
         description_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
 
-        files = {
-            'torrent': (torrent_file, open(torrent_path, 'rb'), 'application/x-bittorrent'),
-            'nfo': (f"[{self.tracker}]DESCRIPTION.txt", open(description_path, 'rb'), 'text/plain')
-        }
+        with open(torrent_path, 'rb') as torrent_fh, open(description_path, 'rb') as nfo:
 
-        data = {
-            'name': self.get_name(meta),
-            'category': cat_id,
-            'nonscene': 'off' if meta.get("scene") else 'on',
-            'imdbURL': imdbURL,
-            'tvMazeURL': tvMazeURL,
-            'igdbURL': '',
-            'torrentNFO': '0',
-            'torrentDesc': '1',
-            'nfotextbox': '',
-            'torrentComment': '0',
-            'uploaderComments': '',
-            'is_anonymous_upload': 'on' if meta.get('anon', False) else 'off',
-            'screenshots[]': self.get_screens(meta),
-        }
+            files = {
+                'torrent': (torrent_file, torrent_fh, 'application/x-bittorrent'),
+                'nfo': (f"[{self.tracker}]DESCRIPTION.txt", nfo, 'text/plain')
+            }
 
-        if meta['debug'] is False:
-            try:
-                response = await self.session.post(
-                    url=self.http_upload_url,
-                    files=files,
-                    data=data
-                )
+            data = {
+                'name': self.get_name(meta),
+                'category': cat_id,
+                'nonscene': 'on' if not meta.get("scene") else 'off',
+                'imdbURL': imdbURL,
+                'tvMazeURL': tvMazeURL,
+                'igdbURL': '',
+                'torrentNFO': '0',
+                'torrentDesc': '1',
+                'nfotextbox': '',
+                'torrentComment': '0',
+                'uploaderComments': '',
+                'is_anonymous_upload': 'on' if meta.get('anon', False) else 'off',
+                'screenshots[]': '' if meta.get('anon', False) else self.get_screens(meta),  # It is not possible to upload screenshots anonymously
+            }
 
-                if "torrent was uploaded successfully" in response.text:
-                    console.print(f"[bold green]Upload successful to '{self.tracker}'.[/bold green]")
+            if meta['debug'] is False:
+                try:
+                    response = await self.session.post(
+                        url=self.http_upload_url,
+                        files=files,
+                        data=data
+                    )
 
-                    torrent_url_match = re.search(r'(https?://[a-zA-Z0-9.-]+/torrent/\d+)', response.text)
-
-                    if torrent_url_match:
-                        torrent_url = torrent_url_match.group(1)
+                    if response.status_code == 302 and 'location' in response.headers:
+                        torrent_id = response.headers['location'].replace('/successfulupload?torrentID=', '')
+                        torrent_url = f"{self.base_url}/torrent/{torrent_id}"
                         meta['tracker_status'][self.tracker]['status_message'] = torrent_url
+
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         common = COMMON(config=self.config)
                         await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
 
                     else:
-                        console.print("[bold yellow]Warning: Upload was successful, but the torrent URL could not be found on the response page.[/bold yellow]")
+                        console.print("[bold red]Upload failed: No success redirect found.[/bold red]")
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                        with open(failure_path, "w", encoding="utf-8") as f:
+                            f.write(f"Status Code: {response.status_code}\n")
+                            f.write(f"Headers: {response.headers}\n")
+                            f.write(response.text)
+                        console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
 
-                else:
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(failure_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
-
-            finally:
-                files['torrent'][1].close()
-                files['nfo'][1].close()
-        else:
-            console.print(data)
+                except httpx.RequestError as e:
+                    console.print(f"[bold red]Error during upload to '{self.tracker}': {e}[/bold red]")
+                    meta['tracker_status'][self.tracker]['status_message'] = str(e)
+            else:
+                console.print(data)
