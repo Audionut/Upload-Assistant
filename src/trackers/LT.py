@@ -8,6 +8,7 @@ import glob
 import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
+from src.languages import process_desc_language
 
 
 class LT():
@@ -76,6 +77,14 @@ class LT():
         }.get(resolution, '10')
         return resolution_id
 
+    async def has_spanish_language(self, languages):
+        """Check if any language in the list contains 'spanish'"""
+        if isinstance(languages, str):
+            languages = [languages]
+        if not languages:
+            return False
+        return any('spanish' in lang.lower() for lang in languages)
+
     async def edit_name(self, meta):
         lt_name = meta['name'].replace('Dual-Audio', '').replace('Dubbed', '').replace(meta['aka'], '').replace('  ', ' ').strip()
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
@@ -88,23 +97,16 @@ class LT():
             # Check if original language is "es" if true replace title for AKA if available
             if meta.get('original_language') == 'es' and meta.get('aka') != "":
                 lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()
-            # Check if audio Spanish exists
-            audios = [
-                audio for audio in meta['mediainfo']['media']['track'][2:]
-                if audio.get('@type') == 'Audio'
-                and isinstance(audio.get('Language'), str)
-                and audio.get('Language') in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co',
-                                              'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
-                                              'es-py', 'es-pe', 'es-pr', 'es-uy'}
-                and "commentary" not in str(audio.get('Title', '')).lower()
-                ]
-            if len(audios) > 0:  # If there is at least 1 audio spanish
-                lt_name = lt_name
-            # if not audio Spanish exists, add "[SUBS]"
-            elif not meta.get('tag'):
-                lt_name = lt_name + " [SUBS]"
+            # Check if Spanish audio exists
+            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            if not await self.has_spanish_language(meta.get('audio_languages')):
+                if not meta.get('tag'):
+                    lt_name = lt_name + " [SUBS]"
+                else:
+                    lt_name = lt_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
             else:
-                lt_name = lt_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
+                lt_name = lt_name
 
         return lt_name
 
