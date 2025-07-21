@@ -559,7 +559,6 @@ class Clients():
                                     console.print(f"[green]File copied instead: {dst}")
                             else:
                                 # For directories, we need to link each file inside
-                                console.print("[yellow]Cannot hardlink directories directly. Creating directory structure...")
                                 os.makedirs(dst, exist_ok=True)
 
                                 for root, _, files in os.walk(src):
