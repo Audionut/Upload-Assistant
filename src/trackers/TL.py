@@ -111,7 +111,7 @@ class TL():
             description_parts.append(manual_desc)
 
         # Add screenshots to description only if it is an anonymous upload as TL does not support anonymous upload in the screenshots section
-        if meta.get('anon', False):
+        if meta.get('anon', False) or self.api_upload:
             images = meta.get('image_list', [])
 
             screenshots_block = "<center>Screenshots\n\n"
