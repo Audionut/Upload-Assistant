@@ -21,14 +21,14 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         tracker_keys = {
             'ptp': 'PTP',
             'btn': 'BTN',
-            'bhd': 'BHD',
-            'huno': 'HUNO',
+            'bhd': 'BHD',            
             'hdb': 'HDB',
             'blu': 'BLU',
             'aither': 'AITHER',
             'lst': 'LST',
             'oe': 'OE',
             'ulcx': 'ULCX',
+            'huno': 'HUNO',
         }
 
         specific_tracker = [tracker_keys[key] for key in tracker_keys if meta.get(key) is not None]
