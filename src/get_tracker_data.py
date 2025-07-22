@@ -21,7 +21,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         tracker_keys = {
             'ptp': 'PTP',
             'btn': 'BTN',
-            'bhd': 'BHD',            
+            'bhd': 'BHD',
             'hdb': 'HDB',
             'blu': 'BLU',
             'aither': 'AITHER',
