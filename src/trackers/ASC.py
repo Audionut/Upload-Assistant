@@ -375,7 +375,7 @@ class ASC(COMMON):
         overview = (season_tmdb or {}).get('overview') or (main_tmdb or {}).get('overview')
         append_section('BARRINHA_SINOPSE', overview)
 
-        # Episódio (TV)
+        # Episode
         if self.category == 'TV' and episode_tmdb:
             episode_name = episode_tmdb.get('name')
             episode_overview = episode_tmdb.get('overview')
