@@ -249,7 +249,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJ, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -326,6 +326,13 @@ config = {
             "announce_url": "https://trackerr.bit-hdtv.com/announce",
             # passkey found under https://www.bit-hdtv.com/my.php
             "my_announce_url": "https://trackerr.bit-hdtv.com/passkey/announce",
+            "anon": False,
+        },
+        "BJ": {
+            "link_dir_name": "",
+            # for BJ to work you need to export cookies from https://bj-share.info using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/BJ.txt
+            "announce_url": "https://tracker.bj-share.info:2053/<PASSKEY>/announce",
             "anon": False,
         },
         "BLU": {

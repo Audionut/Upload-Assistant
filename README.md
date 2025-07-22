@@ -40,6 +40,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
   <tr><td>Anthelion</td><td>ANT</td><td>AsianCinema</td><td>ACM</td></tr>
   <tr><td>Beyond-HD</td><td>BHD</td><td>BitHDTV</td><td>BHDTV</td></tr>
+  <tr><td>Bj-Share</td><td>BJ</td>
   <tr><td>Blutopia</td><td>BLU</td><td>BrasilTracker</td><td>BT</td></tr>
   <tr><td>CapybaraBR</td><td>CBR</td><td>Cinematik</td><td>TIK</td></tr>
   <tr><td>DarkPeers</td><td>DP</td><td>DigitalCore</td><td>DC</td></tr>
@@ -72,7 +73,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
-   - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git` 
+   - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git`
       - or download a zip of the source
    - Install necessary python modules `pip3 install --user -U -r requirements.txt`
       - `sudo apt install pip` if needed
@@ -86,9 +87,9 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Edit `config.py` to use your information (more detailed information in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki))
       - tmdb_api key can be obtained from https://www.themoviedb.org/settings/api
       - image host api keys can be obtained from their respective sites
-     
+
    **Additional Resources are found in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki)**
-   
+
    Feel free to contact me if you need help, I'm not that hard to find.
 
 ## **Updating:**
@@ -99,9 +100,9 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Run `python3 config-generator.py` and select to grab new UA config options.
 
 ## **CLI Usage:**
-  
+
   `python3 upload.py "/downloads/path/to/content" --args`
-  
+
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.
 
