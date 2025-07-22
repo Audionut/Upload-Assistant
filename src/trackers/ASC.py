@@ -105,7 +105,7 @@ class ASC(COMMON):
 
     def get_type_id(self, meta):
         qualidade_map_disc = {"BD25": "40", "BD50": "41", "BD66": "42", "BD100": "43"}
-        qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDRIP": "10"}
+        qualidade_map_files = {"ENCODE": "9", "REMUX": "39", "WEBDL": "23", "WEBRIP": "38", "BDRIP": "8", "DVDRIP": "3"}
         qualidade_map_dvd = {"DVD5": "45", "DVD9": "46"}
 
         if meta['type'] == 'DISC':
@@ -375,22 +375,16 @@ class ASC(COMMON):
         overview = (season_tmdb or {}).get('overview') or (main_tmdb or {}).get('overview')
         append_section('BARRINHA_SINOPSE', overview)
 
-        # Episode
+        # Episódio (TV)
         if self.category == 'TV' and episode_tmdb:
-            episode_overview = episode_tmdb.get('overview', '')
-            episode_name = episode_tmdb.get('name', '')
-            still_url = "https://image.tmdb.org/t/p/w300"
-            still_path = episode_tmdb.get('still_path', '')
-            still = f"{still_url}{still_path}" if still_path else None
+            episode_name = episode_tmdb.get('name')
+            episode_overview = episode_tmdb.get('overview')
+            still_path = episode_tmdb.get('still_path')
 
-            if episode_name:
+            if episode_name and episode_overview and still_path:
+                still_url = f"https://image.tmdb.org/t/p/w300{still_path}"
                 description_parts.append(f"\n[size=4][b]Episódio:[/b] {episode_name}[/size]\n")
-
-            if episode_overview:
-                if still:
-                    description_parts.append(f"\n{self.format_image(still)}\n\n{episode_overview}\n")
-                else:
-                    description_parts.append(f"\n{episode_overview}\n")
+                description_parts.append(f"\n{self.format_image(still_url)}\n\n{episode_overview}\n")
 
         # Technical Sheet
         if main_tmdb:
