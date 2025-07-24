@@ -27,96 +27,34 @@ class BJ(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-        target_site_ids = {
-            'danish': '10', 'swedish': '11', 'norwegian': '12', 'romanian': '13',
-            'chinese': '14', 'finnish': '15', 'italian': '16', 'polish': '17',
-            'turkish': '18', 'korean': '19', 'thai': '20', 'arabic': '22',
-            'croatian': '23', 'hungarian': '24', 'vietnamese': '25', 'greek': '26',
-            'icelandic': '28', 'bulgarian': '29', 'english': '3', 'czech': '30',
-            'serbian': '31', 'ukrainian': '34', 'latvian': '37', 'estonian': '38',
-            'lithuanian': '39', 'spanish': '4', 'hebrew': '40', 'hindi': '41',
-            'slovak': '42', 'slovenian': '43', 'indonesian': '47',
-            'português': '49',
-            'french': '5', 'german': '6', 'russian': '7', 'japanese': '8', 'dutch': '9',
-            'english - forçada': '50', 'persian': '52'
-        }
-
-        source_alias_map = {
-            ("Arabic", "ara", "ar"): "arabic",
-            ("Brazilian Portuguese", "Brazilian", "Portuguese-BR", 'pt-br', 'pt-BR', "Portuguese", "por", "pt", "pt-PT", "Português Brasileiro", "Português"): "português",
-            ("Bulgarian", "bul", "bg"): "bulgarian",
-            ("Chinese", "chi", "zh", "Chinese (Simplified)", "Chinese (Traditional)", 'cmn-Hant', 'cmn-Hans', 'yue-Hant', 'yue-Hans'): "chinese",
-            ("Croatian", "hrv", "hr", "scr"): "croatian",
-            ("Czech", "cze", "cz", "cs"): "czech",
-            ("Danish", "dan", "da"): "danish",
-            ("Dutch", "dut", "nl"): "dutch",
-            ("English", "eng", "en", "en-US", "en-GB", "English (CC)", "English - SDH"): "english",
-            ("English - Forced", "English (Forced)", "en (Forced)", "en-US (Forced)"): "english - forçada",
-            ("Estonian", "est", "et"): "estonian",
-            ("Finnish", "fin", "fi"): "finnish",
-            ("French", "fre", "fr", "fr-FR", "fr-CA"): "french",
-            ("German", "ger", "de"): "german",
-            ("Greek", "gre", "el"): "greek",
-            ("Hebrew", "heb", "he"): "hebrew",
-            ("Hindi", "hin", "hi"): "hindi",
-            ("Hungarian", "hun", "hu"): "hungarian",
-            ("Icelandic", "ice", "is"): "icelandic",
-            ("Indonesian", "ind", "id"): "indonesian",
-            ("Italian", "ita", "it"): "italian",
-            ("Japanese", "jpn", "ja"): "japanese",
-            ("Korean", "kor", "ko"): "korean",
-            ("Latvian", "lav", "lv"): "latvian",
-            ("Lithuanian", "lit", "lt"): "lithuanian",
-            ("Norwegian", "nor", "no"): "norwegian",
-            ("Persian", "fa", "far"): "persian",
-            ("Polish", "pol", "pl"): "polish",
-            ("Romanian", "rum", "ro"): "romanian",
-            ("Russian", "rus", "ru"): "russian",
-            ("Serbian", "srp", "sr", "scc"): "serbian",
-            ("Slovak", "slo", "sk"): "slovak",
-            ("Slovenian", "slv", "sl"): "slovenian",
-            ("Spanish", "spa", "es", "es-ES", "es-419"): "spanish",
-            ("Swedish", "swe", "sv"): "swedish",
-            ("Thai", "tha", "th"): "thai",
-            ("Turkish", "tur", "tr"): "turkish",
-            ("Ukrainian", "ukr", "uk"): "ukrainian",
-            ("Vietnamese", "vie", "vi"): "vietnamese",
-        }
         self.payload_fields_map = {
             # Movies
             '0': [
-                "submit", "auth", "type", "imdb_input", "adulto", "title", "title_br",
-                "nota_imdb", "year", "diretor", "duracao", "idioma_ori", "tags",
-                "image", "youtube", "sinopse", "mediainfo", "format", "audio",
-                "video_c", "audio_c", "legenda", "3d", "resolucao_1", "resolucao_2",
-                "versao", "bitrate", "screen[]", "desc", "especificas", "subtitles[]"
+                "submit", "auth", "type", "adulto", "imdblink", "validimdb",
+                "title", "titulobrasileiro", "imdbrating", "tags", "year", "elenco", "diretor",
+                "duracaotipo", "duracaoHR", "duracaoMIN", "datalancamento", "traileryoutube",
+                "formato", "qualidade", "release", "audio", "tipolegenda", "codecvideo",
+                "codecaudio", "idioma", "remaster_title", "resolucaow", "resolucaoh",
+                "sinopse", "fichatecnica", "image", "screenshots",
             ],
             # TV
             '1': [
-                "submit", "auth", "type", "imdb_input", "adulto", "title", "title_br",
-                "nota_imdb", "year", "diretor", "duracao", "idioma_ori", "tags",
-                "image", "youtube", "sinopse", "mediainfo", "tipo", "temporada",
-                "temporada_e", "episodio", "ntorrent", "format", "audio", "video_c",
-                "audio_c", "legenda", "3d", "resolucao_1", "resolucao_2", "bitrate",
-                "screen[]", "desc", "especificas", "subtitles[]"
+                "submit", "auth", "type", "validimdb", "imdbrating", "tipo", "season", "episode",
+                "imdblink", "network", "title", "titulobrasileiro", "numtemporadas", "year",
+                "datalancamento", "tags", "pais", "elenco", "diretorserie", "diretor", "duracaotipo",
+                "duracaoHR", "duracaoMIN", "avaliacao", "traileryoutube", "formato", "qualidade",
+                "release", "audio", "tipolegenda", "codecvideo", "codecaudio", "idioma", "remaster_title",
+                "resolucaow", "resolucaoh", "sinopse", "fichatecnica", "image", "screenshots"
             ],
             # Animes
-            '5': [
-                "submit", "auth", "type", "title", "releasedate", "vote", "rating",
-                "year", "diretor", "horas", "minutos", "duracao", "tags", "image",
-                "fundo_torrent", "youtube", "sinopse", "desc", "tipo", "temporada",
-                "temporada_e", "episodio", "mediainfo", "ntorrent", "idioma_ori",
-                "format", "bitrate", "audio", "video_c", "audio_c", "legenda",
-                "resolucao_1", "resolucao_2", "screen[]", "especificas", "subtitles[]"
+            '13': [
+                "submit", "auth", "type", "imdblink", "adulto", "title", "titulobrasileiro",
+                "tags", "tipo", "season", "episode", "release", "year", "diretor", "duracaotipo",
+                "duracaoHR", "duracaoMIN", "traileryoutube", "formato", "qualidade", "audio",
+                "tipolegenda", "codecvideo", "codecaudio", "idioma", "remaster_title", "resolucaow",
+                "resolucaoh", "sinopse", "fichatecnica", "image", "screenshots",
             ]
         }
-
-        self.ultimate_lang_map = {}
-        for aliases_tuple, canonical_name in source_alias_map.items():
-            if canonical_name in target_site_ids:
-                correct_id = target_site_ids[canonical_name]
-                for alias in aliases_tuple:
-                    self.ultimate_lang_map[alias.lower()] = correct_id
 
     def assign_media_properties(self, meta):
         self.imdb_id = meta['imdb_info']['imdbID']
