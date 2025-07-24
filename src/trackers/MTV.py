@@ -183,6 +183,7 @@ class MTV():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
 
     async def edit_desc(self, meta):

@@ -91,6 +91,7 @@ class RTF():
         else:
             console.print("[cyan]Request Data:")
             console.print(json_data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def search_existing(self, meta, disctype):
         disallowed_keywords = {'XXX', 'Erotic', 'softcore'}

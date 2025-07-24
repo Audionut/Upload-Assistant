@@ -118,6 +118,7 @@ class UTP():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def get_cat_id(self, category_name, edition):

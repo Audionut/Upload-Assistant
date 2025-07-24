@@ -372,6 +372,7 @@ class AL():
             console.print("[cyan]Request Data:")
             json_formatted_str = json.dumps(data, indent=4)
             console.print(json_formatted_str)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def search_existing(self, meta, disctype):

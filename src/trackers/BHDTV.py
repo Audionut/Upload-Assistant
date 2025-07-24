@@ -98,6 +98,7 @@ class BHDTV():
         else:
             console.print("[cyan]Request Data:")
             pprint(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         # # adding my anounce url to torrent.
         if 'view' in response.json()['data']:
             await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), response.json()['data']['view'])

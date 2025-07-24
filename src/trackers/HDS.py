@@ -286,3 +286,4 @@ class HDS(COMMON):
                 console.print(f"[bold blue]Debug Mode: Upload to {self.tracker} was not sent.[/bold blue]")
                 console.print("Headers:", self.session.headers)
                 console.print("Payload (data):", data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
