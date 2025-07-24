@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
 import httpx
 import langcodes
 import os
@@ -56,6 +57,8 @@ class BJ(COMMON):
             ]
         }
 
+
+
     def assign_media_properties(self, meta):
         self.imdb_id = meta['imdb_info']['imdbID']
         self.tmdb_id = meta['tmdb']
@@ -78,19 +81,53 @@ class BJ(COMMON):
         except httpx.RequestError:
             return None
 
-    # desnecessário?
     async def get_original_language(self, meta):
+        possible_languages = {
+            "Alemão", "Árabe", "Argelino", "Búlgaro", "Cantonês", "Chinês",
+            "Coreano", "Croata", "Dinamarquês", "Egípcio", "Espanhol", "Estoniano",
+            "Filipino", "Finlandês", "Francês", "Grego", "Hebraico", "Hindi",
+            "Holandês", "Húngaro", "Indonésio", "Inglês", "Islandês", "Italiano",
+            "Japonês", "Macedônio", "Malaio", "Marati", "Nigeriano", "Norueguês",
+            "Persa", "Polaco", "Polonês", "Português", "Português (pt)", "Romeno",
+            "Russo", "Sueco", "Tailandês", "Tamil", "Tcheco", "Telugo", "Turco",
+            "Ucraniano", "Urdu", "Vietnamita", "Zulu", "Outro"
+        }
         tmdb_data = await self.tmdb_data(meta)
         lang_code = tmdb_data.get("original_language")
 
+        # Pega a lista de países, garantindo que seja sempre uma lista
+        origin_countries = tmdb_data.get("origin_country", [])
+
+        # Se não houver código de idioma, não há o que fazer.
         if not lang_code:
-            return None
+            return "Outro"
 
-        try:
-            return langcodes.Language.make(lang_code).display_name('pt').capitalize()
+        language_name = None
 
-        except LanguageTagError:
-            return lang_code
+        # --- Lógica principal ---
+
+        # 1. Tratamento especial para o código 'pt'
+        if lang_code == 'pt':
+            # Verifica se 'PT' (código de Portugal) está na lista de países
+            if 'PT' in origin_countries:
+                language_name = "Português (pt)"
+            else:
+                language_name = "Português"
+        else:
+            # 2. Caso geral para todos os outros idiomas
+            try:
+                # Tenta traduzir o código (ex: 'en') para o nome em português ('Inglês')
+                language_name = langcodes.Language.make(lang_code).display_name('pt').capitalize()
+            except LanguageTagError:
+                # Se o código for inválido (ex: "xx"), não podemos traduzir.
+                # A validação final irá transformar isso em "Outro".
+                language_name = lang_code
+
+        # 3. Validação final contra a lista de idiomas permitidos
+        if language_name in possible_languages:
+            return language_name
+        else:
+            return "Outro"
 
     async def search_existing(self, meta, disctype):
         """
@@ -508,11 +545,6 @@ class BJ(COMMON):
 
         description_parts = []
 
-        # WEBDL source note
-        if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
-            source_note = f"[center][quote]Este lançamento tem como fonte o serviço {meta['service_longname']}[/quote][/center]"
-            description_parts.append(source_note)
-
         description_parts.append(base_desc)
 
         if self.signature:
@@ -547,13 +579,169 @@ class BJ(COMMON):
                 pass
 
         return {
-            'resolucao_1': width,
-            'resolucao_2': height
+            'resolucaow': width,
+            'resolucaoh': height
         }
+
+    async def get_cast(self, meta):
+        tmdb_data = await self.tmdb_data(meta)
+        cast_data = (tmdb_data.get('credits') or {}).get('cast', [])
+
+        return ", ".join(
+            cast_member['name']
+            for cast_member in cast_data
+            if cast_member.get('name')
+        )
+
+    def get_runtime(self, runtime):
+        try:
+            minutes_in_total = int(runtime)
+            if minutes_in_total < 0:
+                return 0, 0
+        except (ValueError, TypeError):
+            return 0, 0
+
+        hours, minutes = divmod(minutes_in_total, 60)
+        return hours, minutes
+
+    def get_formatted_date(self, tmdb_data):
+        """
+        Busca a data de lançamento ou primeira exibição e a formata.
+        Formato de entrada: "YYYY-MM-DD"
+        Formato de saída: "DD Mon YYYY" (ex: "08 Feb 2015")
+        """
+        raw_date_string = None
+
+        # 1. Seleciona a chave correta baseada na categoria
+        if self.category == 'TV':
+            raw_date_string = tmdb_data.get('first_air_date')
+        elif self.category == 'MOVIE':
+            raw_date_string = tmdb_data.get('release_date')
+
+        # 2. Valida se a data foi encontrada antes de continuar
+        if not raw_date_string:
+            return ""  # Retorna string vazia se a data for nula ou vazia
+
+        try:
+            # 3. Converte a string da API em um objeto de data do Python
+            # "%Y" = Ano com 4 dígitos (2015)
+            # "%m" = Mês em número (02)
+            # "%d" = Dia (08)
+            date_object = datetime.strptime(raw_date_string, "%Y-%m-%d")
+
+            # 4. Formata o objeto de data para a string no formato desejado
+            # "%d" = Dia (08)
+            # "%b" = Mês abreviado em inglês (Feb)
+            # "%Y" = Ano com 4 dígitos (2015)
+            formatted_date = date_object.strftime("%d %b %Y")
+
+            return formatted_date
+
+        except ValueError:
+            # 5. Se a data na API estiver em um formato inesperado, retorna vazio
+            return ""
+
+    async def get_trailer(self, meta):
+        tmdb_data = await self.tmdb_data(meta)
+        video_results = tmdb_data.get('videos', {}).get('results', [])
+        youtube_code = video_results[-1].get('key', '') if video_results else ''
+        if youtube_code:
+            youtube = f"http://www.youtube.com/watch?v={youtube_code}"
+
+        return youtube if youtube else meta.get('youtube', '')
+
+    def _find_remaster_tags(self, meta):
+        """
+        Função auxiliar para encontrar todas as tags aplicáveis no metadado.
+        Retorna um conjunto ('set') de tags encontradas.
+        """
+        found_tags = set()
+
+        # 1. Edições (usando sua função existente)
+        edition = self.get_edition(meta)
+        if edition:
+            found_tags.add(edition)
+
+        # 2. Recursos de Áudio (Dolby Atmos)
+        audio_string = meta.get('audio', '')
+        if 'Atmos' in audio_string:
+            found_tags.add('Dolby Atmos')
+
+        # 3. Recursos 4K (10-bit, Dolby Vision, HDR)
+        # 10-bit
+        is_10_bit = False
+        if meta.get('is_disc') == 'BDMV':
+            try:
+                # Acessa o dicionário de forma segura
+                bit_depth_str = meta['discs'][0]['bdinfo']['video'][0]['bit_depth']
+                if '10' in bit_depth_str:
+                    is_10_bit = True
+            except (KeyError, IndexError, TypeError):
+                pass  # Ignora se a estrutura de dados não existir
+        else:
+            if str(meta.get('bit_depth')) == '10':
+                is_10_bit = True
+
+        if is_10_bit:
+            found_tags.add('10-bit')
+
+        # HDR (Dolby Vision, HDR10, HDR10+)
+        hdr_string = meta.get('hdr', '').upper()  # Usa upper() para ser mais robusto
+        if 'DV' in hdr_string:
+            found_tags.add('Dolby Vision')
+        if 'HDR10+' in hdr_string:
+            found_tags.add('HDR10+')
+        if 'HDR' in hdr_string and 'HDR10+' not in hdr_string:
+            found_tags.add('HDR10')
+
+        # 4. Demais Recursos (Remux, Comentários)
+        if meta.get('type') == 'REMUX':
+            found_tags.add('Remux')
+        if meta.get('has_commentary') is True:
+            found_tags.add('Com comentários')
+
+        return found_tags
+
+    def build_remaster_title(self, meta):
+        """
+        Constrói a string do remaster_title com base nas tags encontradas,
+        respeitando a ordem de prioridade definida na classe.
+        """
+        tag_priority = [
+            'Dolby Atmos',
+            'Remux',
+            "Director's Cut",
+            'Extended Edition',
+            'IMAX',
+            'Open Matte',
+            'Noir Edition',
+            'Theatrical Cut',
+            'Uncut',
+            'Unrated',
+            'Uncensored',
+            '10-bit',
+            'Dolby Vision',
+            'HDR10+',
+            'HDR10',
+            'Com comentários'
+        ]
+        # Passo 1: Encontra todas as tags disponíveis no metadado.
+        available_tags = self._find_remaster_tags(meta)
+
+        # Passo 2: Filtra e ordena as tags encontradas de acordo com a lista de prioridade.
+        ordered_tags = []
+        for tag in tag_priority:
+            if tag in available_tags:
+                ordered_tags.append(tag)
+
+        # Passo 3: Junta as tags ordenadas com " / " como separador.
+        return " / ".join(ordered_tags)
 
     async def upload(self, meta, disctype):
         tmdb_data = await self.tmdb_data(meta)
-        original_language = await self.get_original_language(meta)
+
+        runtime_value = meta.get('runtime')
+        hours, minutes = self.get_runtime(runtime_value)
 
         if not await self.validate_credentials(meta):
             console.print(f"[bold red]Upload para {self.tracker} abortado.[/bold red]")
@@ -569,32 +757,53 @@ class BJ(COMMON):
         else:
             anon = 1
 
+        if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
+            release = meta.get('service_longname', '')
+
         all_possible_data = {}
 
         all_possible_data.update({
             'submit': 'true',
             'auth': self.auth_token,
             'type': category_type,
-            'imdb_input': meta.get('imdb_info', {}).get('imdbID', ''),
+            'imdblink': meta.get('imdb_info', {}).get('imdbID', ''),
+            'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
             'adulto': '0'
         })
 
         all_possible_data.update({
             'title': meta['title'],
-            'title_br': tmdb_data.get('name') or tmdb_data.get('title') or '',
-            'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
-            'year': str(meta['year']),
-            'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
-            'idioma_ori': original_language or meta.get('original_language', ''),
-            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
+            'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
+            'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
-            'duracao': f"{str(meta.get('runtime', ''))} min",
+            'year': str(meta['year']),
+            'elenco': await self.get_cast(meta),
+            'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
+            'duracaotipo': 'selectbox',
+            'duracaoHR': hours,
+            'duracaoMIN': minutes,
+            'datalancamento': self.get_formatted_date(tmdb_data),
+            'traileryoutube': await self.get_trailer(meta),
+            'formato': self.get_format(meta),
+            'qualidade': self.get_bitrate(meta),
+            'release': release,
+            'audio': await self.get_audio(meta),
+            # 'tipolegenda': ,
+            'codecvideo': self.get_video_codec(meta),
+            'codecaudio': self.get_audio_codec(meta),
+            'idioma': await self.get_original_language(meta),
+            'remaster_title': self.build_remaster_title(meta),
+            'resolucaow': self.get_resolution(meta).get('resolucaow', ''),
+            'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
+            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
+            'fichatecnica': self.get_file_info(meta),
+
+
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
         })
 
         bt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
         subtitles_info = await self.get_subtitles(meta)
-        resolution = self.get_resolution(meta)
 
         all_possible_data.update({
             'mediainfo': self.get_file_info(meta),
@@ -654,17 +863,6 @@ class BJ(COMMON):
 
         if anon == 1:
             final_data['anonymous'] = '1'
-
-        video_results = tmdb_data.get('videos', {}).get('results', [])
-        youtube_code = video_results[-1].get('key', '') if video_results else ''
-        if youtube_code:
-            final_data['youtube'] = youtube_code
-        else:
-            youtube_url = meta.get('youtube', '')
-            if youtube_url:
-                match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', youtube_url)
-                if match:
-                    final_data['youtube'] = match.group(1)
 
         if meta.get('debug', False):
             console.print(final_data)
