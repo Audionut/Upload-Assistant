@@ -28,37 +28,6 @@ class BJ(COMMON):
         })
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
-        self.payload_fields_map = {
-            # Movies
-            '0': [
-                "submit", "auth", "type", "adulto", "imdblink", "validimdb",
-                "title", "titulobrasileiro", "imdbrating", "tags", "year", "elenco", "diretor",
-                "duracaotipo", "duracaoHR", "duracaoMIN", "datalancamento", "traileryoutube",
-                "formato", "qualidade", "release", "audio", "tipolegenda", "codecvideo",
-                "codecaudio", "idioma", "remaster_title", "resolucaow", "resolucaoh",
-                "sinopse", "fichatecnica", "image", "screenshots",
-            ],
-            # TV
-            '1': [
-                "submit", "auth", "type", "validimdb", "imdbrating", "tipo", "season", "episode",
-                "imdblink", "network", "title", "titulobrasileiro", "numtemporadas", "year",
-                "datalancamento", "tags", "pais", "elenco", "diretorserie", "diretor", "duracaotipo",
-                "duracaoHR", "duracaoMIN", "avaliacao", "traileryoutube", "formato", "qualidade",
-                "release", "audio", "tipolegenda", "codecvideo", "codecaudio", "idioma", "remaster_title",
-                "resolucaow", "resolucaoh", "sinopse", "fichatecnica", "image", "screenshots"
-            ],
-            # Animes
-            '13': [
-                "submit", "auth", "type", "imdblink", "adulto", "title", "titulobrasileiro",
-                "tags", "tipo", "season", "episode", "release", "year", "diretor", "duracaotipo",
-                "duracaoHR", "duracaoMIN", "traileryoutube", "formato", "qualidade", "audio",
-                "tipolegenda", "codecvideo", "codecaudio", "idioma", "remaster_title", "resolucaow",
-                "resolucaoh", "sinopse", "fichatecnica", "image", "screenshots",
-            ]
-        }
-
-
-
     def assign_media_properties(self, meta):
         self.imdb_id = meta['imdb_info']['imdbID']
         self.tmdb_id = meta['tmdb']
@@ -284,24 +253,6 @@ class BJ(COMMON):
 
         return '0'
 
-    def get_file_info(self, meta):
-        info_file_path = ""
-        if meta.get('is_disc') == 'BDMV':
-            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
-        else:
-            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
-
-        if os.path.exists(info_file_path):
-            try:
-                with open(info_file_path, 'r', encoding='utf-8') as f:
-                    return f.read()
-            except Exception as e:
-                console.print(f"[bold red]Erro ao ler o arquivo de info em '{info_file_path}': {e}[/bold red]")
-                return ""
-        else:
-            console.print(f"[bold red]Arquivo de info não encontrado: {info_file_path}[/bold red]")
-            return ""
-
     def get_format(self, meta):
         if meta.get('is_disc') == "BDMV":
             return "M2TS"
@@ -320,29 +271,16 @@ class BJ(COMMON):
         except (StopIteration, AttributeError, TypeError):
             return None
 
-    # desnecessário?
     async def get_subtitles(self, meta):
-        if not meta.get('subtitle_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        await process_desc_language(meta, desc=None, tracker=self.tracker)
+        found_language_strings = meta.get('subtitle_languages', []).lower()
 
-        found_language_strings = meta.get('subtitle_languages', [])
+        if 'portuguese' in found_language_strings:
+            tipolegenda = 'Embutida'
+        else:
+            tipolegenda = 'Nenhuma'
 
-        subtitle_ids = set()
-        for lang_str in found_language_strings:
-            target_id = self.ultimate_lang_map.get(lang_str.lower())
-            if target_id:
-                subtitle_ids.add(target_id)
-
-        legenda_value = "Sim" if '49' in subtitle_ids else "Nao"
-
-        final_subtitle_ids = sorted(list(subtitle_ids))
-        if not final_subtitle_ids:
-            final_subtitle_ids.append('44')
-
-        return {
-            'legenda': legenda_value,
-            'subtitles[]': final_subtitle_ids
-        }
+        return tipolegenda
 
     async def get_audio(self, meta):
         if not meta.get('audio_languages'):
@@ -752,43 +690,31 @@ class BJ(COMMON):
 
         category_type = self.get_type(meta)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
-
         if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
             release = meta.get('service_longname', '')
 
-        all_possible_data = {}
+        data_to_send = {}
 
-        all_possible_data.update({
+        # Common
+        data_to_send.update({
             'submit': 'true',
             'auth': self.auth_token,
             'type': category_type,
             'imdblink': meta.get('imdb_info', {}).get('imdbID', ''),
-            'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
-            'adulto': '0'
-        })
-
-        all_possible_data.update({
             'title': meta['title'],
             'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
-            'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
-            'elenco': await self.get_cast(meta),
             'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
             'duracaotipo': 'selectbox',
             'duracaoHR': hours,
             'duracaoMIN': minutes,
-            'datalancamento': self.get_formatted_date(tmdb_data),
             'traileryoutube': await self.get_trailer(meta),
             'formato': self.get_format(meta),
             'qualidade': self.get_bitrate(meta),
             'release': release,
             'audio': await self.get_audio(meta),
-            # 'tipolegenda': ,
+            'tipolegenda': await self.get_subtitles(meta),
             'codecvideo': self.get_video_codec(meta),
             'codecaudio': self.get_audio_codec(meta),
             'idioma': await self.get_original_language(meta),
@@ -796,76 +722,63 @@ class BJ(COMMON):
             'resolucaow': self.get_resolution(meta).get('resolucaow', ''),
             'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
-            'fichatecnica': self.get_file_info(meta),
-
-
+            'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
-        })
+            'screenshots': self.get_screens(meta),
+            })
 
-        bt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
-        subtitles_info = await self.get_subtitles(meta)
+        if self.category == 'MOVIE':
+            data_to_send.update({
+                'adulto': '2',
+                'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
+                'elenco': await self.get_cast(meta),
+                'datalancamento': self.get_formatted_date(tmdb_data),
+            })
 
-        all_possible_data.update({
-            'mediainfo': self.get_file_info(meta),
-            'format': self.get_format(meta),
-            'audio': await self.get_audio(meta),
-            'video_c': self.get_video_codec(meta),
-            'audio_c': self.get_audio_codec(meta),
-            'legenda': subtitles_info.get('legenda', 'Nao'),
-            'subtitles[]': subtitles_info.get('subtitles[]'),
-            '3d': 'Sim' if meta.get('3d') else 'Nao',
-            'resolucao_1': resolution['resolucao_1'],
-            'resolucao_2': resolution['resolucao_2'],
-            'bitrate': self.get_bitrate(meta),
-            'screen[]': self.get_screens(meta),
-            'desc': '',
-            'especificas': bt_desc
-        })
+        if self.category == 'TV':
+            data_to_send.update({
+                'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
+                'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
+                'season': self.season,
+                'episode': self.episode,
+                'network': '',  # Optional
+                'numtemporadas': '',  # Optional
+                'datalancamento': self.get_formatted_date(tmdb_data),
+                'pais': '',  # Optional
+                'elenco': await self.get_cast(meta),
+                'diretorserie': '',  # Optional
+                'avaliacao': '',  # Optional
+            })
 
-        # Movies
-        all_possible_data['versao'] = self.get_edition(meta)
+        if meta.get('anime'):
+            data_to_send.update({
+                'adulto': '2',
+                'tipo': 'movie' if self.category == 'MOVIE' else 'season' if meta.get('tv_pack') == 1 else 'episode',
+                'season': self.season,
+                'episode': self.episode,
+            })
 
-        # TV/Anime
-        all_possible_data.update({
-            'ntorrent': f"{self.season}{self.episode}",
-            'tipo': 'ep_individual' if meta.get('tv_pack') == 0 else 'completa',
-            'temporada': self.season if meta.get('tv_pack') == 1 else '',
-            'temporada_e': self.season if meta.get('tv_pack') == 0 else '',
-            'episodio': self.episode
-        })
-
-        # Anime specific data
-        duracao_min = 0
-        try:
-            duracao_apenas_numeros = re.search(r'\d+', all_possible_data.get('duracao', '0'))
-            if duracao_apenas_numeros:
-                duracao_min = int(duracao_apenas_numeros.group(0))
-        except (ValueError, TypeError):
-            pass
-
-        all_possible_data.update({
-            'releasedate': str(all_possible_data.get('year', '')),
-            'rating': str(all_possible_data.get('nota_imdb', '')),
-            'horas': str(duracao_min // 60),
-            'minutos': str(duracao_min % 60),
-            'fundo_torrent': meta.get('backdrop'),
-        })
-
-        required_fields = self.payload_fields_map.get(category_type)
-        if not required_fields:
-            console.print(f"[bold red]Erro: Modelo de payload não encontrado para a categoria '{category_type}'. Upload abortado.[/bold red]")
-            return
-
-        final_data = {}
-        for field in required_fields:
-            if field in all_possible_data:
-                final_data[field] = all_possible_data[field]
+        # Anon
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 0
+        else:
+            anon = 1
 
         if anon == 1:
-            final_data['anonymous'] = '1'
+            data_to_send.update({
+                'anonymous': 'on'
+            })
+
+        # Show group if anon
+        if self.config['TRACKERS'][self.tracker].get('show_group_if_anon', False):
+            data_to_send.update({
+                'anonymousshowgroup': 'on'
+            })
 
         if meta.get('debug', False):
-            console.print(final_data)
+            console.print(data_to_send)
             return
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -877,7 +790,7 @@ class BJ(COMMON):
             files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
             try:
-                response = self.session.post(upload_url, data=final_data, files=files, timeout=60)
+                response = self.session.post(upload_url, data=data_to_send, files=files, timeout=60)
 
                 if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
                     final_url = str(response.url)
