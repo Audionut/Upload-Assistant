@@ -657,7 +657,7 @@ class BJ(COMMON):
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
-            'screenshots': self.get_screens(meta),
+            'screenshots[]': self.get_screens(meta),
             })
 
         if self.category == 'MOVIE':
@@ -725,17 +725,20 @@ class BJ(COMMON):
             try:
                 response = self.session.post(upload_url, data=data_to_send, files=files, timeout=60)
 
-                if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
-                    final_url = str(response.url)
-                    meta['tracker_status'][self.tracker]['status_message'] = final_url
-                    id_match = re.search(r'id=(\d+)', final_url)
+                if response.status_code == 200 and 'Clique em baixar para entrar de' in response.text:
+                    id_match = re.search(r'action=download&id=(\d+)', response.text)
+
                     if id_match:
                         torrent_id = id_match.group(1)
+
                         details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
+
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                        meta['tracker_status'][self.tracker]['status_message'] = details_url
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
+
                     else:
-                        console.print(f"[bold yellow]Redirecionamento para a página do torrent ocorreu, mas não foi possível extrair o ID da URL: {final_url}[/bold yellow]")
+                        console.print(f"[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]")
                 else:
                     console.print(f"[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red]")
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
