@@ -237,7 +237,7 @@ class BJ(COMMON):
         self.assign_media_properties(meta)
 
         if meta.get('anime', False):
-            return '5'
+            return '13'
 
         if self.category == 'TV' or meta.get('season') is not None:
             return '1'
@@ -279,7 +279,7 @@ class BJ(COMMON):
             elif file_extension == 'mp4':
                 return 'MP4'
             else:
-                return "Outros"
+                return "Outro"
         except (StopIteration, AttributeError, TypeError):
             return None
 
@@ -331,59 +331,60 @@ class BJ(COMMON):
         return "Legendado"
 
     def get_video_codec(self, meta):
-        video_encode = meta.get('video_encode', '').strip().lower()
-        codec_final = meta.get('video_codec', '')
-        is_hdr = bool(meta.get('hdr'))
-
-        encode_map = {
+        # 'meta': 'site'
+        CODEC_MAP = {
             'x265': 'x265',
             'h.265': 'H.265',
             'x264': 'x264',
             'h.264': 'H.264',
+            'av1': 'AV1',
+            'divx': 'DivX',
+            'h.263': 'H.263',
+            'kvcd': 'KVCD',
+            'mpeg-1': 'MPEG-1',
+            'mpeg-2': 'MPEG-2',
+            'realvideo': 'RealVideo',
+            'vc-1': 'VC-1',
+            'vp6': 'VP6',
+            'vp8': 'VP8',
             'vp9': 'VP9',
+            'windows media video': 'Windows Media Video',
             'xvid': 'XviD',
+            'hevc': 'H.265',
+            'avc': 'H.264',
         }
 
-        for key, value in encode_map.items():
-            if key in video_encode:
-                if value in ['x265', 'H.265'] and is_hdr:
-                    return f"{value} HDR"
+        video_encode = meta.get('video_encode', '').lower()
+        video_codec = meta.get('video_codec', '')
+
+        search_text = f"{video_encode} {video_codec.lower()}"
+
+        for key, value in CODEC_MAP.items():
+            if key in search_text:
                 return value
 
-        codec_lower = codec_final.lower()
-
-        codec_map = {
-            'hevc': 'x265',
-            'avc': 'x264',
-            'mpeg-2': 'MPEG-2',
-            'vc-1': 'VC-1',
-        }
-
-        for key, value in codec_map.items():
-            if key in codec_lower:
-                return f"{value} HDR" if value == 'x265' and is_hdr else value
-
-        return codec_final if codec_final else "Outro"
+        return video_codec if video_codec else "Outro"
 
     def get_audio_codec(self, meta):
         priority_order = [
-            "DTS-X", "E-AC-3 JOC", "TrueHD", "DTS-HD", "PCM", "FLAC", "DTS-ES",
-            "DTS", "E-AC-3", "AC3", "AAC", "Opus", "Vorbis", "MP3", "MP2"
+            "DTS-X", "E-AC-3 JOC", "TrueHD", "DTS-HD", "LPCM", "PCM", "FLAC",
+            "DTS-ES", "DTS", "E-AC-3", "AC3", "AAC", "Opus", "Vorbis", "MP3", "MP2"
         ]
 
         codec_map = {
-            "DTS-X": ["DTS:X"],
-            "E-AC-3 JOC": ["DD+ 5.1 Atmos", "DD+ 7.1 Atmos"],
-            "TrueHD": ["TrueHD"],
-            "DTS-HD": ["DTS-HD"],
-            "PCM": ["LPCM"],
+            "DTS-X": ["DTS:X", "DTS-X"],
+            "E-AC-3 JOC": ["E-AC-3 JOC", "DD+ JOC"],
+            "TrueHD": ["TRUEHD"],
+            "DTS-HD": ["DTS-HD", "DTSHD"],
+            "LPCM": ["LPCM"],
+            "PCM": ["PCM"],
             "FLAC": ["FLAC"],
             "DTS-ES": ["DTS-ES"],
             "DTS": ["DTS"],
-            "E-AC-3": ["DD+"],
-            "AC3": ["DD"],
+            "E-AC-3": ["E-AC-3", "DD+"],
+            "AC3": ["AC3", "DD"],
             "AAC": ["AAC"],
-            "Opus": ["Opus"],
+            "Opus": ["OPUS"],
             "Vorbis": ["VORBIS"],
             "MP2": ["MP2"],
             "MP3": ["MP3"]
@@ -394,11 +395,13 @@ class BJ(COMMON):
         if not audio_description or not isinstance(audio_description, str):
             return "Outro"
 
+        audio_upper = audio_description.upper()
+
         for codec_name in priority_order:
             search_terms = codec_map.get(codec_name, [])
 
             for term in search_terms:
-                if term in audio_description:
+                if term.upper() in audio_upper:
                     return codec_name
 
         return "Outro"
@@ -410,13 +413,14 @@ class BJ(COMMON):
 
         edition_map = {
             "director's cut": "Director's Cut",
+            "extended": "Extended Edition",
+            "imax": "IMAX",
+            "open matte": "Open Matte",
+            "noir": "Noir Edition",
             "theatrical": "Theatrical Cut",
-            "extended": "Extended",
             "uncut": "Uncut",
             "unrated": "Unrated",
-            "imax": "IMAX",
-            "noir": "Noir",
-            "remastered": "Remastered",
+            "uncensored": "Uncensored",
         }
 
         for keyword, label in edition_map.items():
@@ -460,7 +464,6 @@ class BJ(COMMON):
             return "Outro"
 
         keyword_map = {
-            'remux': 'Remux',
             'webdl': 'WEB-DL',
             'webrip': 'WEBRip',
             'web': 'WEB',
@@ -470,7 +473,16 @@ class BJ(COMMON):
             'hdtv': 'HDTV',
             'sdtv': 'SDTV',
             'dvdrip': 'DVDRip',
-            'hd-dvd': 'HD-DVD',
+            'hd-dvd': 'HD DVD',
+            'dvdscr': 'DVDScr',
+            'hdrip': 'HDRip',
+            'hdtc': 'HDTC',
+            'hdtv': 'HDTV',
+            'pdtv': 'PDTV',
+            'sdtv': 'SDTV',
+            'tc': 'TC',
+            'uhdtv': 'UHDTV',
+            'vhsrip': 'VHSRip',
             'tvrip': 'TVRip',
         }
 
