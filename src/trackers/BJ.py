@@ -12,6 +12,7 @@ from http.cookiejar import MozillaCookieJar
 from langcodes.tag_parser import LanguageTagError
 from src.console import console
 from src.languages import process_desc_language
+from src.exceptions import UploadException
 
 
 class BJ(COMMON):
@@ -39,7 +40,7 @@ class BJ(COMMON):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
         self.assign_media_properties(meta)
 
-        url = f"https://api.themoviedb.org/3/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=videos"
+        url = f"https://api.themoviedb.org/3/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -64,136 +65,103 @@ class BJ(COMMON):
         tmdb_data = await self.tmdb_data(meta)
         lang_code = tmdb_data.get("original_language")
 
-        # Pega a lista de países, garantindo que seja sempre uma lista
         origin_countries = tmdb_data.get("origin_country", [])
 
-        # Se não houver código de idioma, não há o que fazer.
         if not lang_code:
             return "Outro"
 
         language_name = None
 
-        # --- Lógica principal ---
-
-        # 1. Tratamento especial para o código 'pt'
         if lang_code == 'pt':
-            # Verifica se 'PT' (código de Portugal) está na lista de países
             if 'PT' in origin_countries:
                 language_name = "Português (pt)"
             else:
                 language_name = "Português"
         else:
-            # 2. Caso geral para todos os outros idiomas
             try:
-                # Tenta traduzir o código (ex: 'en') para o nome em português ('Inglês')
                 language_name = langcodes.Language.make(lang_code).display_name('pt').capitalize()
             except LanguageTagError:
-                # Se o código for inválido (ex: "xx"), não podemos traduzir.
-                # A validação final irá transformar isso em "Outro".
                 language_name = lang_code
 
-        # 3. Validação final contra a lista de idiomas permitidos
         if language_name in possible_languages:
             return language_name
         else:
             return "Outro"
 
     async def search_existing(self, meta, disctype):
-        """
-        Busca por torrents existentes em uma página de detalhes.
-        O código foi adaptado para a nova estrutura HTML.
-        """
         self.assign_media_properties(meta)
         is_current_upload_a_tv_pack = meta.get('tv_pack') == 1
 
-        # Assumimos que a URL de busca já leva para a página de detalhes do grupo
         search_url = f"{self.base_url}/torrents.php?searchstr={self.imdb_id}"
 
         found_items = []
         try:
-            response = await self.session.get(search_url)  # Use 'await' se a sessão for aiohttp/httpx
+            response = self.session.get(search_url, allow_redirects=False)
+            if response.status_code in [301, 302, 307] and 'Location' in response.headers:
+                redirect_url = f"{self.base_url}/{response.headers['Location']}"
+                response = self.session.get(redirect_url)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 1. MUDANÇA: Encontra a tabela principal pelo novo ID 'torrent_details'
-            # O nome anterior era 'torrent_table'
+            soup = BeautifulSoup(response.text, 'html.parser')
             torrent_details_table = soup.find('table', id='torrent_details')
             if not torrent_details_table:
                 return []
 
-            # 2. MUDANÇA: A lógica de 'group_links' foi removida.
-            # Iteramos diretamente sobre as linhas de torrent na página atual.
-
-            # Encontra todas as linhas de torrent que correspondem ao padrão de ID
             for torrent_row in torrent_details_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
 
-                # MUDANÇA: O link da descrição agora usa 'loadIfNeeded' no onclick
-                desc_link = torrent_row.find('a', onclick=re.compile(r"loadIfNeeded"))
-                if not desc_link:
-                    continue
-                description_text = " ".join(desc_link.get_text(strip=True).split())
-
-                # A extração do ID do torrent continua a mesma
-                torrent_id = torrent_row.get('id', '').replace('torrent', '')
-                if not torrent_id:
+                id_link = torrent_row.find('a', onclick=re.compile(r"loadIfNeeded\("))
+                if not id_link:
                     continue
 
-                # 3. MUDANÇA CRÍTICA: A lista de arquivos está na PRÓXIMA tag <tr>
-                # Usamos find_next_sibling() para encontrar a linha de detalhes correspondente
-                details_row = torrent_row.find_next_sibling('tr', class_=re.compile(r'torrentdetails'))
-                if not details_row:
+                onclick_attr = id_link['onclick']
+
+                id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
+
+                if not id_match:
                     continue
 
-                # Agora procuramos a div de arquivos dentro desta nova linha encontrada
-                file_div = details_row.find('div', id=f'files_{torrent_id}')
-                if not file_div:
-                    # Se a div não for encontrada (pode não ter sido carregada), pulamos para o próximo
+                torrent_id = id_match.group(1)
+                group_id = id_match.group(2)
+                description_text = " ".join(id_link.get_text(strip=True).split()) if id_link else ""
+
+                ajax_url = f"{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}"
+
+                try:
+                    ajax_response = self.session.get(ajax_url)
+                    ajax_response.raise_for_status()
+                    ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
+                except requests.exceptions.RequestException as e:
+                    console.print(f"[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]")
                     continue
 
-                # A lógica para identificar se é um disco permanece a mesma
                 is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
+                item_name = None
 
-                # A lógica para extrair o nome do arquivo ou pasta permanece a mesma,
-                # mas agora opera sobre o 'file_div' corretamente encontrado.
                 if is_existing_torrent_a_disc or is_current_upload_a_tv_pack:
-                    path_div = file_div.find('div', class_='filelist_path')
-                    # Verifica se o path_div existe e tem texto
+                    path_div = ajax_soup.find('div', class_='filelist_path')
                     if path_div and path_div.get_text(strip=True):
-                        folder_name = path_div.get_text(strip=True).strip('/')
-                        if folder_name:
-                            found_items.append(folder_name)
+                        item_name = path_div.get_text(strip=True).strip('/')
                     else:
-                        # Fallback para discos: se não houver um path, pega o primeiro item da lista,
-                        # que geralmente é a pasta principal do disco.
-                        file_table = file_div.find('table', class_='filelist_table')
+                        file_table = ajax_soup.find('table', class_='filelist_table')
                         if file_table:
-                            # Encontra a primeira linha que não seja o cabeçalho
                             first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                            if first_file_row:
-                                cell = first_file_row.find('td')
-                                if cell:
-                                    item_name = cell.get_text(strip=True)
-                                    if item_name:
-                                        found_items.append(item_name)
-                else:  # Caso de ser um arquivo único (encode)
-                    file_table = file_div.find('table', class_='filelist_table')
+                            if first_file_row and first_file_row.find('td'):
+                                item_name = first_file_row.find('td').get_text(strip=True)
+                else:
+                    file_table = ajax_soup.find('table', class_='filelist_table')
                     if file_table:
-                        # Itera nas linhas para encontrar a primeira que não é cabeçalho
-                        for row in file_table.find_all('tr'):
-                            if 'colhead_dark' not in row.get('class', []):
-                                cell = row.find('td')
-                                if cell:
-                                    filename = cell.get_text(strip=True)
-                                    if filename:
-                                        found_items.append(filename)
-                                        break  # Encontrou o arquivo, pode parar e ir para o próximo torrent
+                        first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
+                        if first_row and first_row.find('td'):
+                            item_name = first_row.find('td').get_text(strip=True)
+
+                if item_name:
+                    found_items.append(item_name)
 
         except requests.exceptions.RequestException as e:
             console.print(f"[bold red]Ocorreu um erro de rede ao buscar por duplicatas: {e}[/bold red]")
             return []
         except Exception as e:
             console.print(f"[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]")
-            # Para depuração, é útil imprimir o rastreamento do erro
             import traceback
             traceback.print_exc()
             return []
@@ -273,9 +241,9 @@ class BJ(COMMON):
 
     async def get_subtitles(self, meta):
         await process_desc_language(meta, desc=None, tracker=self.tracker)
-        found_language_strings = meta.get('subtitle_languages', []).lower()
+        found_language_strings = meta.get('subtitle_languages', [])
 
-        if 'portuguese' in found_language_strings:
+        if 'Portuguese' in found_language_strings:
             tipolegenda = 'Embutida'
         else:
             tipolegenda = 'Nenhuma'
@@ -468,7 +436,10 @@ class BJ(COMMON):
             image.get('raw_url')
             for image in meta.get('image_list', [])
             if image.get('raw_url')
-        ]
+        ][:6]
+
+        if len(screenshot_urls) < 2:
+            raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.")
 
         return screenshot_urls
 
@@ -527,7 +498,7 @@ class BJ(COMMON):
 
         return ", ".join(
             cast_member['name']
-            for cast_member in cast_data
+            for cast_member in cast_data[:4]
             if cast_member.get('name')
         )
 
@@ -543,40 +514,23 @@ class BJ(COMMON):
         return hours, minutes
 
     def get_formatted_date(self, tmdb_data):
-        """
-        Busca a data de lançamento ou primeira exibição e a formata.
-        Formato de entrada: "YYYY-MM-DD"
-        Formato de saída: "DD Mon YYYY" (ex: "08 Feb 2015")
-        """
         raw_date_string = None
 
-        # 1. Seleciona a chave correta baseada na categoria
         if self.category == 'TV':
             raw_date_string = tmdb_data.get('first_air_date')
         elif self.category == 'MOVIE':
             raw_date_string = tmdb_data.get('release_date')
 
-        # 2. Valida se a data foi encontrada antes de continuar
         if not raw_date_string:
-            return ""  # Retorna string vazia se a data for nula ou vazia
+            return ""
 
         try:
-            # 3. Converte a string da API em um objeto de data do Python
-            # "%Y" = Ano com 4 dígitos (2015)
-            # "%m" = Mês em número (02)
-            # "%d" = Dia (08)
             date_object = datetime.strptime(raw_date_string, "%Y-%m-%d")
-
-            # 4. Formata o objeto de data para a string no formato desejado
-            # "%d" = Dia (08)
-            # "%b" = Mês abreviado em inglês (Feb)
-            # "%Y" = Ano com 4 dígitos (2015)
             formatted_date = date_object.strftime("%d %b %Y")
 
             return formatted_date
 
         except ValueError:
-            # 5. Se a data na API estiver em um formato inesperado, retorna vazio
             return ""
 
     async def get_trailer(self, meta):
@@ -589,33 +543,24 @@ class BJ(COMMON):
         return youtube if youtube else meta.get('youtube', '')
 
     def _find_remaster_tags(self, meta):
-        """
-        Função auxiliar para encontrar todas as tags aplicáveis no metadado.
-        Retorna um conjunto ('set') de tags encontradas.
-        """
         found_tags = set()
 
-        # 1. Edições (usando sua função existente)
         edition = self.get_edition(meta)
         if edition:
             found_tags.add(edition)
 
-        # 2. Recursos de Áudio (Dolby Atmos)
         audio_string = meta.get('audio', '')
         if 'Atmos' in audio_string:
             found_tags.add('Dolby Atmos')
 
-        # 3. Recursos 4K (10-bit, Dolby Vision, HDR)
-        # 10-bit
         is_10_bit = False
         if meta.get('is_disc') == 'BDMV':
             try:
-                # Acessa o dicionário de forma segura
                 bit_depth_str = meta['discs'][0]['bdinfo']['video'][0]['bit_depth']
                 if '10' in bit_depth_str:
                     is_10_bit = True
             except (KeyError, IndexError, TypeError):
-                pass  # Ignora se a estrutura de dados não existir
+                pass
         else:
             if str(meta.get('bit_depth')) == '10':
                 is_10_bit = True
@@ -623,8 +568,7 @@ class BJ(COMMON):
         if is_10_bit:
             found_tags.add('10-bit')
 
-        # HDR (Dolby Vision, HDR10, HDR10+)
-        hdr_string = meta.get('hdr', '').upper()  # Usa upper() para ser mais robusto
+        hdr_string = meta.get('hdr', '').upper()
         if 'DV' in hdr_string:
             found_tags.add('Dolby Vision')
         if 'HDR10+' in hdr_string:
@@ -632,7 +576,6 @@ class BJ(COMMON):
         if 'HDR' in hdr_string and 'HDR10+' not in hdr_string:
             found_tags.add('HDR10')
 
-        # 4. Demais Recursos (Remux, Comentários)
         if meta.get('type') == 'REMUX':
             found_tags.add('Remux')
         if meta.get('has_commentary') is True:
@@ -641,10 +584,6 @@ class BJ(COMMON):
         return found_tags
 
     def build_remaster_title(self, meta):
-        """
-        Constrói a string do remaster_title com base nas tags encontradas,
-        respeitando a ordem de prioridade definida na classe.
-        """
         tag_priority = [
             'Dolby Atmos',
             'Remux',
@@ -663,16 +602,13 @@ class BJ(COMMON):
             'HDR10',
             'Com comentários'
         ]
-        # Passo 1: Encontra todas as tags disponíveis no metadado.
         available_tags = self._find_remaster_tags(meta)
 
-        # Passo 2: Filtra e ordena as tags encontradas de acordo com a lista de prioridade.
         ordered_tags = []
         for tag in tag_priority:
             if tag in available_tags:
                 ordered_tags.append(tag)
 
-        # Passo 3: Junta as tags ordenadas com " / " como separador.
         return " / ".join(ordered_tags)
 
     async def upload(self, meta, disctype):
@@ -690,9 +626,6 @@ class BJ(COMMON):
 
         category_type = self.get_type(meta)
 
-        if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
-            release = meta.get('service_longname', '')
-
         data_to_send = {}
 
         # Common
@@ -705,14 +638,14 @@ class BJ(COMMON):
             'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
-            'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
+            'diretor': meta.get('tmdb_directors', [None])[0],
             'duracaotipo': 'selectbox',
             'duracaoHR': hours,
             'duracaoMIN': minutes,
             'traileryoutube': await self.get_trailer(meta),
             'formato': self.get_format(meta),
             'qualidade': self.get_bitrate(meta),
-            'release': release,
+            'release': meta.get('service_longname', ''),
             'audio': await self.get_audio(meta),
             'tipolegenda': await self.get_subtitles(meta),
             'codecvideo': self.get_video_codec(meta),
