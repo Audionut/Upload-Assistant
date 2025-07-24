@@ -660,38 +660,46 @@ class BJ(COMMON):
             'screenshots[]': self.get_screens(meta),
             })
 
-        if self.category == 'MOVIE':
-            data_to_send.update({
-                'adulto': '2',
-                'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
-                'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                'elenco': await self.get_cast(meta),
-                'datalancamento': self.get_formatted_date(tmdb_data),
-            })
+        if not meta.get('anime'):
+            if self.category == 'MOVIE':
+                data_to_send.update({
+                    'adulto': '2',
+                    'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                    'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
+                    'elenco': await self.get_cast(meta),
+                    'datalancamento': self.get_formatted_date(tmdb_data),
+                })
 
-        if self.category == 'TV':
-            data_to_send.update({
-                'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
-                'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
-                'season': self.season,
-                'episode': self.episode,
-                'network': '',  # Optional
-                'numtemporadas': '',  # Optional
-                'datalancamento': self.get_formatted_date(tmdb_data),
-                'pais': '',  # Optional
-                'elenco': await self.get_cast(meta),
-                'diretorserie': '',  # Optional
-                'avaliacao': '',  # Optional
-            })
+            if self.category == 'TV':
+                data_to_send.update({
+                    'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                    'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
+                    'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
+                    'season': self.season,
+                    'episode': self.episode,
+                    'network': '',  # Optional
+                    'numtemporadas': '',  # Optional
+                    'datalancamento': self.get_formatted_date(tmdb_data),
+                    'pais': '',  # Optional
+                    'elenco': await self.get_cast(meta),
+                    'diretorserie': '',  # Optional
+                    'avaliacao': '',  # Optional
+                })
 
         if meta.get('anime'):
-            data_to_send.update({
-                'adulto': '2',
-                'tipo': 'movie' if self.category == 'MOVIE' else 'season' if meta.get('tv_pack') == 1 else 'episode',
-                'season': self.season,
-                'episode': self.episode,
-            })
+            if self.category == 'MOVIE':
+                data_to_send.update({
+                    'adulto': '2',
+                    'tipo': 'movie',
+                })
+
+            if self.category == 'TV':
+                data_to_send.update({
+                    'adulto': '2',
+                    'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
+                    'season': self.season,
+                    'episode': self.episode,
+                })
 
         # Anon
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
