@@ -251,8 +251,7 @@ class BJ(COMMON):
         return tipolegenda
 
     async def get_audio(self, meta):
-        if not meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -382,7 +381,7 @@ class BJ(COMMON):
                     return disctype
 
                 try:
-                    size_in_gb = meta['torrent_comments'][0]['size'] / (10**9)
+                    size_in_gb = meta['bdinfo']['size']
                 except (KeyError, IndexError, TypeError):
                     size_in_gb = 0
 
