@@ -153,7 +153,7 @@ class TL():
                 return self.CATEGORIES['MovieForeign']
             elif 'Documentary' in meta['genres']:
                 return self.CATEGORIES['MovieDocumentary']
-            elif meta['uhd']:
+            elif meta['resolution'] == '2160p':
                 return self.CATEGORIES['Movie4K']
             elif meta['is_disc'] in ('BDMV', 'HDDVD') or (meta['type'] == 'REMUX' and meta['source'] in ('BluRay', 'HDDVD')):
                 return self.CATEGORIES['MovieBluray']
@@ -199,6 +199,7 @@ class TL():
 
     async def search_existing(self, meta, disctype):
         await self.login(meta)
+        cat_id = await self.get_cat_id(self, meta)
 
         dupes = []
 
@@ -206,12 +207,23 @@ class TL():
             console.print(f"[bold yellow]Cannot search for duplicates on {self.tracker} when using API upload.[/bold yellow]")
             return dupes
 
-        imdb_id = meta.get('imdb_info', {}).get('imdbID')
-        if not imdb_id:
-            console.print(f"[bold yellow]Cannot perform search on {self.tracker}: IMDb ID not found in metadata.[/bold yellow]")
-            return dupes
+        search_name = meta["title"]
+        resolution = meta["resolution"]
+        year = meta['year']
+        episode = meta.get('episode', '')
+        season = meta.get('season', '')
+        season_episode = f"{season}{episode}" if season or episode else ''
 
-        search_url = f"{self.base_url}/torrents/browse/list/imdbID/{imdb_id}"
+        if meta['category'] == 'TV':
+            if meta.get('tv_pack', False):
+                param = f"{cat_id}/query/{search_name} {season} {resolution}"
+            else:
+                param = f"{cat_id}/query/{search_name} {season_episode} {resolution}"
+
+        if meta['category'] == 'MOVIE':
+            param = f"{cat_id}/query/{search_name} {year} {resolution}"
+
+        search_url = f"{self.base_url}/torrents/browse/list/categories/{param}"
         console.print(f"[cyan]Searching for duplicates on {self.tracker} with URL: {search_url}[/cyan]")
 
         try:
@@ -223,8 +235,9 @@ class TL():
 
             for torrent in torrents:
                 name = torrent.get("name")
-                if name:
-                    dupes.append(name)
+                size = torrent.get("size")
+                if name or size:
+                    dupes.append({'name': name, 'size': size})
 
         except Exception as e:
             console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
