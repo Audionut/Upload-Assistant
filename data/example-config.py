@@ -334,8 +334,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/BJ.txt
             "announce_url": "https://tracker.bj-share.info:2053/<PASSKEY>/announce",
             "anon": False,
-            # Set to True if during an anonymous upload you want your group to be visible
-            "show_group_if_anon": False,
+            # Set to False if during an anonymous upload you want your release group to be hidden
+            "show_group_if_anon": True,
         },
         "BLU": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

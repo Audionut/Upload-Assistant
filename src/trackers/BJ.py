@@ -707,7 +707,6 @@ class BJ(COMMON):
             data.update({
                 'anonymous': 'on'
             })
-            # Show group if anon
             if self.config['TRACKERS'][self.tracker].get('show_group_if_anon', False):
                 data.update({
                     'anonymousshowgroup': 'on'
