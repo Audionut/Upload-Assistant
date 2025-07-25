@@ -35,6 +35,7 @@ class BJ(COMMON):
         self.category = meta['category']
         self.season = meta.get('season_int', '')
         self.episode = meta.get('episode_int', '')
+        self.is_tv_pack = meta.get('tv_pack') == 1
 
     async def tmdb_data(self, meta):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
@@ -89,8 +90,20 @@ class BJ(COMMON):
             return "Outro"
 
     async def search_existing(self, meta, disctype):
-        self.assign_media_properties(meta)
-        is_current_upload_a_tv_pack = meta.get('tv_pack') == 1
+        self.is_tv_pack
+
+        upload_season_num = None
+        upload_episode_num = None
+
+        if self.category == 'TV':
+            season_match = meta.get('season', '').replace('S', '')
+            if season_match:
+                upload_season_num = season_match
+
+            if not self.is_tv_pack:
+                episode_match = meta.get('episode', '').replace('E', '')
+                if episode_match:
+                    upload_episode_num = episode_match
 
         search_url = f"{self.base_url}/torrents.php?searchstr={self.imdb_id}"
 
@@ -107,55 +120,83 @@ class BJ(COMMON):
             if not torrent_details_table:
                 return []
 
-            for torrent_row in torrent_details_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
+            current_season_on_page = None
+            for row in torrent_details_table.find_all('tr'):
+                if 'season_header' in row.get('class', []):
+                    season_header_text = row.get_text(strip=True)
+                    season_match = re.search(r'Temporada (\d+)', season_header_text)
+                    if season_match:
+                        current_season_on_page = season_match.group(1).zfill(2)
+                    continue
 
+                if not row.get('id', '').startswith('torrent'):
+                    continue
+
+                torrent_row = row
                 id_link = torrent_row.find('a', onclick=re.compile(r"loadIfNeeded\("))
                 if not id_link:
                     continue
 
-                onclick_attr = id_link['onclick']
+                description_text = " ".join(id_link.get_text(strip=True).split())
 
-                id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
+                should_make_ajax_call = False
+                if not self.category == 'TV':
+                    should_make_ajax_call = True
 
-                if not id_match:
-                    continue
+                else:
 
-                torrent_id = id_match.group(1)
-                group_id = id_match.group(2)
-                description_text = " ".join(id_link.get_text(strip=True).split()) if id_link else ""
+                    if current_season_on_page == upload_season_num:
+                        existing_episode_match = re.match(r'E(\d+)', description_text)
+                        is_existing_torrent_a_pack = not existing_episode_match
 
-                ajax_url = f"{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}"
+                        if self.is_tv_pack and is_existing_torrent_a_pack:
+                            should_make_ajax_call = True
 
-                try:
-                    ajax_response = self.session.get(ajax_url)
-                    ajax_response.raise_for_status()
-                    ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
-                except requests.exceptions.RequestException as e:
-                    console.print(f"[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]")
-                    continue
+                        elif not self.is_tv_pack and existing_episode_match:
+                            existing_episode_num = existing_episode_match.group(1).zfill(2)
+                            if existing_episode_num == upload_episode_num:
+                                should_make_ajax_call = True
 
-                is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
-                item_name = None
+                if should_make_ajax_call:
+                    onclick_attr = id_link['onclick']
+                    id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
+                    if not id_match:
+                        continue
 
-                if is_existing_torrent_a_disc or is_current_upload_a_tv_pack:
-                    path_div = ajax_soup.find('div', class_='filelist_path')
-                    if path_div and path_div.get_text(strip=True):
-                        item_name = path_div.get_text(strip=True).strip('/')
+                    torrent_id = id_match.group(1)
+                    group_id = id_match.group(2)
+                    ajax_url = f"{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}"
+
+                    try:
+                        ajax_response = self.session.get(ajax_url)
+                        ajax_response.raise_for_status()
+                        ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
+                    except requests.exceptions.RequestException as e:
+                        console.print(f"[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]")
+                        continue
+
+                    item_name = None
+                    is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
+
+                    if is_existing_torrent_a_disc or self.is_tv_pack:
+                        path_div = ajax_soup.find('div', class_='filelist_path')
+                        if path_div and path_div.get_text(strip=True):
+                            item_name = path_div.get_text(strip=True).strip('/')
+                        else:
+                            file_table = ajax_soup.find('table', class_='filelist_table')
+                            if file_table:
+                                first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
+                                if first_file_row and first_file_row.find('td'):
+                                    item_name = first_file_row.find('td').get_text(strip=True)
                     else:
                         file_table = ajax_soup.find('table', class_='filelist_table')
                         if file_table:
-                            first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                            if first_file_row and first_file_row.find('td'):
-                                item_name = first_file_row.find('td').get_text(strip=True)
-                else:
-                    file_table = ajax_soup.find('table', class_='filelist_table')
-                    if file_table:
-                        first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                        if first_row and first_row.find('td'):
-                            item_name = first_row.find('td').get_text(strip=True)
+                            first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
+                            if first_row and first_row.find('td'):
+                                item_name = first_row.find('td').get_text(strip=True)
 
-                if item_name:
-                    found_items.append(item_name)
+                    if item_name:
+                        found_items.append(item_name)
 
         except requests.exceptions.RequestException as e:
             console.print(f"[bold red]Ocorreu um erro de rede ao buscar por duplicatas: {e}[/bold red]")
@@ -538,10 +579,12 @@ class BJ(COMMON):
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
             youtube = f"http://www.youtube.com/watch?v={youtube_code}"
+        else:
+            youtube = meta.get('youtube', '')
 
-        return youtube if youtube else meta.get('youtube', '')
+        return youtube
 
-    def _find_remaster_tags(self, meta):
+    def find_remaster_tags(self, meta):
         found_tags = set()
 
         edition = self.get_edition(meta)
@@ -601,7 +644,7 @@ class BJ(COMMON):
             'HDR10',
             'Com comentários'
         ]
-        available_tags = self._find_remaster_tags(meta)
+        available_tags = self.find_remaster_tags(meta)
 
         ordered_tags = []
         for tag in tag_priority:
@@ -675,7 +718,7 @@ class BJ(COMMON):
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
                     'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                     'season': self.season,
-                    'episode': self.episode,
+                    'episode': self.episode if not self.is_tv_pack else '',
                     'network': '',  # Optional
                     'numtemporadas': '',  # Optional
                     'datalancamento': self.get_formatted_date(tmdb_data),
@@ -697,7 +740,7 @@ class BJ(COMMON):
                     'adulto': '2',
                     'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                     'season': self.season,
-                    'episode': self.episode,
+                    'episode': self.episode if not self.is_tv_pack else '',
                 })
 
         # Anon
