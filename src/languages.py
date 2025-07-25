@@ -216,9 +216,6 @@ async def process_desc_language(meta, desc=None, tracker=None):
                         else:
                             audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
                         meta['bluray_audio_skip'] = True
-                else:
-                    audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
-                    meta['bluray_audio_skip'] = True
 
             subtitle_tracks = bdinfo.get("subtitles", [])
             if subtitle_tracks and isinstance(subtitle_tracks[0], dict):
