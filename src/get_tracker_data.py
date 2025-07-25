@@ -19,16 +19,16 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
     if search_term:
         # Check if a specific tracker is already set in meta
         tracker_keys = {
-            'ptp': 'PTP',
+            'aither': 'AITHER',
+            'blu': 'BLU',
+            'lst': 'LST',
+            'ulcx': 'ULCX',
+            'oe': 'OE',
+            'huno': 'HUNO',
             'btn': 'BTN',
             'bhd': 'BHD',
-            'huno': 'HUNO',
             'hdb': 'HDB',
-            'blu': 'BLU',
-            'aither': 'AITHER',
-            'lst': 'LST',
-            'oe': 'OE',
-            'ulcx': 'ULCX',
+            'ptp': 'PTP',
         }
 
         specific_tracker = [tracker_keys[key] for key in tracker_keys if meta.get(key) is not None]

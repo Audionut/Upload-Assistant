@@ -121,6 +121,7 @@ class SPD():
         else:
             console.print("[cyan]Request Data:")
             pprint(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def get_cat_id(self, category_name):
         category_id = {

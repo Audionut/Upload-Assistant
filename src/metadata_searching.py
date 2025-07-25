@@ -652,6 +652,68 @@ async def imdb_tmdb(meta, filename):
     return meta
 
 
+async def get_tvmaze_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
+    if meta['debug']:
+        console.print("[yellow]Both TVMaze and TVDb IDs are present[/yellow]")
+    # Core metadata tasks that run in parallel
+    tasks = [
+        search_tvmaze(
+            filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
+            manual_date=meta.get('manual_date'),
+            tvmaze_manual=meta.get('tvmaze_manual'),
+            debug=meta.get('debug', False),
+            return_full_tuple=False
+        )
+    ]
+    if tvdb_api and tvdb_token:
+        tasks.append(
+            get_tvdb_series(
+                meta['base_dir'], meta.get('title', ''), meta.get('year', ''),
+                apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False)
+            )
+        )
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process TVMaze results
+    tvmaze_result = results[0]
+    if isinstance(tvmaze_result, tuple) and len(tvmaze_result) == 3:
+        # Handle tuple return: (tvmaze_id, imdbID, tvdbID)
+        tvmaze_id, imdb_id, tvdb_id = tvmaze_result
+        meta['tvmaze_id'] = tvmaze_id if isinstance(tvmaze_id, int) else 0
+
+        # Set tvdb_id if not already set and we got a valid one
+        if not meta.get('tvdb_id', 0) and isinstance(tvdb_id, int) and tvdb_id > 0:
+            meta['tvdb_id'] = tvdb_id
+            if meta.get('debug'):
+                console.print(f"[green]Set TVDb ID from TVMaze: {tvdb_id}[/green]")
+        if not meta.get('imdb_id', 0) and isinstance(imdb_id, str) and imdb_id.strip():
+            meta['imdb_id'] = imdb_id
+            if meta.get('debug'):
+                console.print(f"[green]Set IMDb ID from TVMaze: {imdb_id}[/green]")
+
+    elif isinstance(tvmaze_result, int):
+        meta['tvmaze_id'] = tvmaze_result
+    elif isinstance(tvmaze_result, Exception):
+        console.print(f"[red]TVMaze API call failed: {tvmaze_result}[/red]")
+        meta['tvmaze_id'] = 0  # Set default value if an exception occurred
+    else:
+        console.print(f"[yellow]Unexpected TVMaze result type: {type(tvmaze_result)}[/yellow]")
+        meta['tvmaze_id'] = 0
+
+    # Process TVDb results if we added that task
+    if len(results) > 1:
+        tvdb_result = results[1]
+        if tvdb_result and not isinstance(tvdb_result, Exception):
+            meta['tvdb_id'] = tvdb_result
+            if meta.get('debug'):
+                console.print(f"[green]Got TVDb series data: {tvdb_result}[/green]")
+        elif isinstance(tvdb_result, Exception):
+            console.print(f"[yellow]TVDb series data retrieval failed: {tvdb_result}[/yellow]")
+
+    return meta
+
+
 async def get_tv_data(meta, base_dir, tvdb_api=None, tvdb_token=None):
     if not meta.get('tv_pack', False) and meta.get('episode_int') != 0:
         if not meta.get('auto_episode_title') or not meta.get('overview_meta'):
@@ -659,8 +721,6 @@ async def get_tv_data(meta, base_dir, tvdb_api=None, tvdb_token=None):
             if tvdb_api and tvdb_token and not meta.get('we_checked_tvdb', False):
                 if meta['debug']:
                     console.print("[yellow]Fetching TVDb metadata...")
-                if meta.get('tvdb_id') == 0:
-                    meta['tvdb_id'] = await get_tvdb_series(base_dir, title=meta.get('title', ''), year=meta.get('year', ''), apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False))
                 if meta.get('tvdb_id') and meta['tvdb_id'] != 0:
                     meta['tvdb_season_int'], meta['tvdb_episode_int'] = await get_tvdb_series_episodes(base_dir, tvdb_token, meta.get('tvdb_id'), meta.get('season_int'), meta.get('episode_int'), tvdb_api, debug=meta.get('debug', False))
                     tvdb_episode_data = await get_tvdb_episode_data(base_dir, tvdb_token, meta['tvdb_id'], meta.get('tvdb_season_int'), meta.get('tvdb_episode_int'), api_key=tvdb_api, debug=meta.get('debug', False))

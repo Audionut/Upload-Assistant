@@ -10,7 +10,7 @@ from src.exportmi import exportInfo, mi_resolution, validate_mediainfo
 from src.getseasonep import get_season_episode
 from src.get_tracker_data import get_tracker_data, ping_unit3d
 from src.bluray_com import get_bluray_releases
-from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb
+from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
 from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
 from src.audio import get_audio_v2
@@ -563,15 +563,15 @@ class Prep():
             meta = await all_ids(meta, tvdb_api, tvdb_token)
 
         # Check if IMDb, TMDb, and TVDb IDs are all present
-        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0:
+        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
             meta = await imdb_tmdb_tvdb(meta, filename, tvdb_api, tvdb_token)
 
         # Check if both IMDb and TVDB IDs are present
-        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0:
+        elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and not meta.get('quickie_search', False):
             meta = await imdb_tvdb(meta, filename, tvdb_api, tvdb_token)
 
         # Check if both IMDb and TMDb IDs are present
-        elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0:
+        elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
             meta = await imdb_tmdb(meta, filename)
 
         # we have tmdb id one way or another, so lets get data if needed
@@ -653,7 +653,9 @@ class Prep():
             meta['aka'] = ""
 
         if meta['category'] == "TV":
-            if meta.get('tvmaze_id', 0) == 0:
+            if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
+                await get_tvmaze_tvdb(meta, filename, tvdb_api, tvdb_token)
+            elif meta.get('tvmaze_id', 0) == 0:
                 meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(
                     filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
                     manual_date=meta.get('manual_date'),
@@ -663,6 +665,9 @@ class Prep():
                 )
             else:
                 meta.setdefault('tvmaze_id', 0)
+            if meta.get('tvdb_id', 0) == 0 and tvdb_api and tvdb_token:
+                meta['tvdb_id'] = await get_tvdb_series(base_dir, title=meta.get('title', ''), year=meta.get('year', ''), apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False))
+
             # if it was skipped earlier, make sure we have the season/episode data
             if not meta.get('not_anime', False):
                 meta = await get_season_episode(video, meta)

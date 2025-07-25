@@ -117,6 +117,12 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
                 return_full_tuple = True
     if debug:
         console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__}), IMDb ID: {imdbID} (type: {type(imdbID).__name__}), TVDB ID: {tvdbID} (type: {type(tvdbID).__name__})[/cyan]")
+    if tvmaze_id is None:
+        tvmaze_id = 0
+    if imdbID is None:
+        imdbID = 0
+    if tvdbID is None:
+        tvdbID = 0
 
     return (tvmaze_id, imdbID, tvdbID) if return_full_tuple else tvmaze_id
 

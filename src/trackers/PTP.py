@@ -1382,6 +1382,7 @@ class PTP():
                     debug_data['AntiCsrfToken'] = '[REDACTED]'
                 console.log(url)
                 console.log(debug_data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"

@@ -378,6 +378,7 @@ class PTER():
             if meta['debug']:
                 console.print(url)
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 cookiefile = f"{meta['base_dir']}/data/cookies/PTER.txt"
                 if os.path.exists(cookiefile):

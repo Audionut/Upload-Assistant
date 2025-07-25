@@ -150,6 +150,7 @@ class OE():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta):
@@ -164,6 +165,7 @@ class OE():
         oe_name = oe_name.replace(f"{title}", imdb_name, 1)
         year = str(meta.get('year', ""))
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        scale = "DS4K" if "DS4K" in meta['uuid'].upper() else "RM4K" if "RM4K" in meta['uuid'].upper() else ""
         if not meta.get('category') == "TV":
             oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
@@ -181,6 +183,9 @@ class OE():
             audio_languages = meta['audio_languages'][0].upper()
             if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
                 oe_name = oe_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
+
+        if name_type in ["ENCODE", "WEBDL", "WEBRIP"] and scale != "":
+            oe_name = oe_name.replace(f"{resolution}", f"{scale}", 1)
 
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:

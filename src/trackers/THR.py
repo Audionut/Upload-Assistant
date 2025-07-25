@@ -138,6 +138,7 @@ class THR():
         else:
             console.print("[cyan]Request Data:")
             console.print(payload)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             return False
 
     async def get_cat_id(self, meta):
