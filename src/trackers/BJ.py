@@ -625,10 +625,10 @@ class BJ(COMMON):
 
         category_type = self.get_type(meta)
 
-        data_to_send = {}
+        data = {}
 
         # Common
-        data_to_send.update({
+        data.update({
             'submit': 'true',
             'auth': self.auth_token,
             'type': category_type,
@@ -661,7 +661,7 @@ class BJ(COMMON):
 
         if not meta.get('anime'):
             if self.category == 'MOVIE':
-                data_to_send.update({
+                data.update({
                     'adulto': '2',
                     'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
@@ -670,7 +670,7 @@ class BJ(COMMON):
                 })
 
             if self.category == 'TV':
-                data_to_send.update({
+                data.update({
                     'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
                     'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
@@ -687,13 +687,13 @@ class BJ(COMMON):
 
         if meta.get('anime'):
             if self.category == 'MOVIE':
-                data_to_send.update({
+                data.update({
                     'adulto': '2',
                     'tipo': 'movie',
                 })
 
             if self.category == 'TV':
-                data_to_send.update({
+                data.update({
                     'adulto': '2',
                     'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                     'season': self.season,
@@ -701,24 +701,20 @@ class BJ(COMMON):
                 })
 
         # Anon
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
 
-        if anon == 1:
-            data_to_send.update({
+        if anon:
+            data.update({
                 'anonymous': 'on'
             })
-
-        # Show group if anon
-        if self.config['TRACKERS'][self.tracker].get('show_group_if_anon', False):
-            data_to_send.update({
-                'anonymousshowgroup': 'on'
-            })
+            # Show group if anon
+            if self.config['TRACKERS'][self.tracker].get('show_group_if_anon', False):
+                data.update({
+                    'anonymousshowgroup': 'on'
+                })
 
         if meta.get('debug', False):
-            console.print(data_to_send)
+            console.print(data)
             return
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -730,7 +726,7 @@ class BJ(COMMON):
             files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
             try:
-                response = self.session.post(upload_url, data=data_to_send, files=files, timeout=60)
+                response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
                 if response.status_code == 200 and 'Clique em baixar para entrar de' in response.text:
                     id_match = re.search(r'action=download&id=(\d+)', response.text)
