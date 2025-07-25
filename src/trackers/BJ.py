@@ -33,8 +33,8 @@ class BJ(COMMON):
         self.imdb_id = meta['imdb_info']['imdbID']
         self.tmdb_id = meta['tmdb']
         self.category = meta['category']
-        self.season = meta.get('season', '')
-        self.episode = meta.get('episode', '')
+        self.season = meta.get('season_int', '')
+        self.episode = meta.get('episode_int', '')
 
     async def tmdb_data(self, meta):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
@@ -732,21 +732,22 @@ class BJ(COMMON):
 
                     if id_match:
                         torrent_id = id_match.group(1)
-
                         details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
-
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        meta['tracker_status'][self.tracker]['status_message'] = details_url
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
+                        final_message = details_url
 
                     else:
-                        console.print(f"[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]")
+                        final_message = "[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]"
+
                 else:
-                    console.print(f"[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red]")
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
-                    console.print(f"[yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]")
+                    final_message = f"""[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red].
+                                        [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
 
             except requests.exceptions.RequestException as e:
-                console.print(f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]")
+                final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+
+            meta['tracker_status'][self.tracker]['status_message'] = final_message
