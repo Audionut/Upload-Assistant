@@ -155,6 +155,7 @@ class Prep():
                 filename = guess_name
                 untouched_filename = search_term
                 meta['resolution'] = "480p"
+                meta['search_year'] = ""
             else:
                 guess_name = meta['discs'][0]['path'].replace('-', ' ')
                 filename = guessit(guess_name, {"excludes": ["country", "language"]})['title']
