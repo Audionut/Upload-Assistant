@@ -406,9 +406,9 @@ class ASC(COMMON):
             append_section('BARRINHA_FICHA_TECNICA', "\n".join(filter(None, sheet_items)))
 
         # Production Companies
-        if main_tmdb.get('production_companies'):
+        if main_tmdb and main_tmdb.get('production_companies'):
             prod_parts = ["[size=4][b]Produtoras[/b][/size]"]
-            for p in main_tmdb['production_companies']:
+            for p in main_tmdb.get('production_companies', []):
                 logo_path = p.get('logo_path')
                 logo = self.format_image(f"https://image.tmdb.org/t/p/w45{logo_path}") if logo_path else ''
 
@@ -417,17 +417,17 @@ class ASC(COMMON):
 
         # Cast
         if self.category == 'MOVIE':
-            cast_data = (main_tmdb.get('credits') or {}).get('cast', [])
+            cast_data = ((main_tmdb or {}).get('credits') or {}).get('cast', [])
         elif meta.get('tv_pack'):
-            cast_data = (season_tmdb.get('credits') or {}).get('cast', [])
+            cast_data = ((season_tmdb or {}).get('credits') or {}).get('cast', [])
         else:
-            cast_data = (episode_tmdb.get('credits') or {}).get('cast', [])
+            cast_data = ((episode_tmdb or {}).get('credits') or {}).get('cast', [])
         append_section('BARRINHA_ELENCO', self.build_cast_bbcode(cast_data))
 
         # Seasons
-        if self.category == 'TV' and main_tmdb.get('seasons'):
+        if self.category == 'TV' and main_tmdb and main_tmdb.get('seasons'):
             seasons_content = []
-            for seasons in main_tmdb['seasons']:
+            for seasons in main_tmdb.get('seasons', []):
                 season_name = seasons.get('name', f"Temporada {seasons.get('season_number')}").strip()
                 poster_temp = self.format_image(f"https://image.tmdb.org/t/p/w185{seasons.get('poster_path')}") if seasons.get('poster_path') else ''
                 overview_temp = f"\n\nSinopse:\n{seasons.get('overview')}" if seasons.get('overview') else ''
