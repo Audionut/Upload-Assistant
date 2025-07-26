@@ -31,6 +31,9 @@ class DiscParse():
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
 
+        if meta.get('emby', False):
+            return discs, meta_discs
+
         for i in range(len(discs)):
             bdinfo_text = None
             path = os.path.abspath(discs[i]['path'])

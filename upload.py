@@ -32,6 +32,7 @@ from src.get_desc import gen_desc
 from discordbot import send_discord_notification, send_upload_status_notification
 from cogs.redaction import clean_meta_for_export
 from src.languages import process_desc_language
+from src.nfo_link import nfo_link
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -153,6 +154,12 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(f"Error in gather_prep: {e}")
         console.print(traceback.format_exc())
         return
+
+    if meta.get('emby', False):
+        await nfo_link(meta)
+        meta['we_are_uploading'] = False
+        return
+
     meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
     parser = Args(config)
     helper = UploadHelper()
@@ -683,7 +690,7 @@ async def do_the_thing(base_dir):
 
             await process_meta(meta, base_dir, bot=bot)
 
-            if 'we_are_uploading' not in meta:
+            if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 console.print("we are not uploading.......")
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
@@ -731,7 +738,7 @@ async def do_the_thing(base_dir):
             if use_discord and bot:
                 await send_discord_notification(config, bot, f"Finsished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
 
-            if sanitize_meta:
+            if sanitize_meta and not meta.get('emby', False):
                 try:
                     await asyncio.sleep(0.3)  # We can't race the status prints
                     meta = await clean_meta_for_export(meta)

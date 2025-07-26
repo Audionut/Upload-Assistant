@@ -236,6 +236,11 @@ config = {
         # Whether or not to print direct torrent links for the uploaded content
         "print_tracker_links": True,
 
+        # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
+        # If not set, Emby linking will not be performed.
+        # path in quotes (double quotes for windows), e.g. "C:\\Emby\\Movies"
+        "emby_dir": None,
+
     },
 
     # these are used for DB links on AR

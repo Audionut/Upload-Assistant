@@ -108,9 +108,13 @@ class Prep():
             search_term = os.path.basename(meta['path'])
             search_file_folder = 'folder'
             try:
-                guess_name = bdinfo['title'].replace('-', ' ')
+                if meta.get('emby', False):
+                    guess_name = search_term.replace('-', ' ')
+                    untouched_filename = search_term
+                else:
+                    guess_name = bdinfo['title'].replace('-', ' ')
+                    untouched_filename = bdinfo['title']
                 filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]})['title']
-                untouched_filename = bdinfo['title']
                 try:
                     meta['search_year'] = guessit(bdinfo['title'])['year']
                 except Exception:
@@ -124,7 +128,7 @@ class Prep():
                 except Exception:
                     meta['search_year'] = ""
 
-            if meta.get('resolution', None) is None:
+            if meta.get('resolution', None) is None and not meta.get('emby', False):
                 meta['resolution'] = await mi_resolution(bdinfo['video'][0]['res'], guessit(video), width="OTHER", scan="p", height="OTHER", actual_height=0)
                 try:
                     is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"
@@ -134,6 +138,8 @@ class Prep():
                         meta['hfr'] = False
                 except Exception:
                     meta['hfr'] = False
+            else:
+                meta['resolution'] = "1080p"
 
             meta['sd'] = await is_sd(meta['resolution'])
 
@@ -144,22 +150,28 @@ class Prep():
             meta['filelist'] = []
             search_term = os.path.basename(meta['path'])
             search_file_folder = 'folder'
-            guess_name = meta['discs'][0]['path'].replace('-', ' ')
-            filename = guessit(guess_name, {"excludes": ["country", "language"]})['title']
-            untouched_filename = os.path.basename(os.path.dirname(meta['discs'][0]['path']))
-            try:
-                meta['search_year'] = guessit(meta['discs'][0]['path'])['year']
-            except Exception:
-                meta['search_year'] = ""
-            if not meta.get('edit', False):
-                mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_1.VOB", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta['debug'])
-                meta['mediainfo'] = mi
+            if meta.get('emby', False):
+                guess_name = search_term.replace('-', ' ')
+                filename = guess_name
+                untouched_filename = search_term
+                meta['resolution'] = "480p"
             else:
-                mi = meta['mediainfo']
+                guess_name = meta['discs'][0]['path'].replace('-', ' ')
+                filename = guessit(guess_name, {"excludes": ["country", "language"]})['title']
+                untouched_filename = os.path.basename(os.path.dirname(meta['discs'][0]['path']))
+                try:
+                    meta['search_year'] = guessit(meta['discs'][0]['path'])['year']
+                except Exception:
+                    meta['search_year'] = ""
+                if not meta.get('edit', False):
+                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_1.VOB", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta.get('debug', False))
+                    meta['mediainfo'] = mi
+                else:
+                    mi = meta['mediainfo']
 
-            meta['dvd_size'] = await get_dvd_size(meta['discs'], meta.get('manual_dvds'))
-            meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
-            meta['sd'] = await is_sd(meta['resolution'])
+                meta['dvd_size'] = await get_dvd_size(meta['discs'], meta.get('manual_dvds'))
+                meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
+                meta['sd'] = await is_sd(meta['resolution'])
 
         elif meta['is_disc'] == "HDDVD":
             video, meta['scene'], meta['imdb_id'] = await is_scene(meta['path'], meta, meta.get('imdb_id', 0))
@@ -526,7 +538,7 @@ class Prep():
             meta = await get_season_episode(video, meta)
 
         # Run a check against mediainfo to see if it has tmdb/imdb
-        if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
+        if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0 and not meta.get('emby', False):
             meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
                 mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
             )
@@ -705,20 +717,20 @@ class Prep():
         meta['bluray_score'] = int(float(self.config['DEFAULT'].get('bluray_score', 100)))
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
-        if meta.get('is_disc') == "BDMV" and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0:
+        if meta.get('is_disc') == "BDMV" and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
             await get_bluray_releases(meta)
 
-        # and if we getting bluray images, we'll rehost them
-        if meta.get('is_disc') == "BDMV" and meta.get('use_bluray_images', False):
-            from src.rehostimages import check_hosts
-            url_host_mapping = {
-                "ibb.co": "imgbb",
-                "pixhost.to": "pixhost",
-                "imgbox.com": "imgbox",
-            }
+            # and if we getting bluray images, we'll rehost them
+            if meta.get('is_disc') == "BDMV" and meta.get('use_bluray_images', False):
+                from src.rehostimages import check_hosts
+                url_host_mapping = {
+                    "ibb.co": "imgbb",
+                    "pixhost.to": "pixhost",
+                    "imgbox.com": "imgbox",
+                }
 
-            approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
-            await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+                approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
+                await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
 
         # user override check that only sets data after metadata setting
         if user_overrides and not meta.get('no_override', False):
@@ -740,73 +752,74 @@ class Prep():
 
         meta['video'] = video
 
-        meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
+        if not meta.get('emby', False):
+            meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
 
-        meta['3D'] = await is_3d(mi, bdinfo)
+            meta['3D'] = await is_3d(mi, bdinfo)
 
-        meta['source'], meta['type'] = await get_source(meta['type'], video, meta['path'], meta['is_disc'], meta, folder_id, base_dir)
+            meta['source'], meta['type'] = await get_source(meta['type'], video, meta['path'], meta['is_disc'], meta, folder_id, base_dir)
 
-        meta['uhd'] = await get_uhd(meta['type'], guessit(meta['path']), meta['resolution'], meta['path'])
-        meta['hdr'] = await get_hdr(mi, bdinfo)
+            meta['uhd'] = await get_uhd(meta['type'], guessit(meta['path']), meta['resolution'], meta['path'])
+            meta['hdr'] = await get_hdr(mi, bdinfo)
 
-        meta['distributor'] = await get_distributor(meta['distributor'])
+            meta['distributor'] = await get_distributor(meta['distributor'])
 
-        if meta.get('is_disc', None) == "BDMV":  # Blu-ray Specific
-            meta['region'] = await get_region(bdinfo, meta.get('region', None))
-            meta['video_codec'] = await get_video_codec(bdinfo)
-        else:
-            meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await get_video_encode(mi, meta['type'], bdinfo)
-
-        if meta.get('no_edition') is False:
-            meta['edition'], meta['repack'], meta['webdv'] = await get_edition(meta['uuid'], bdinfo, meta['filelist'], meta.get('manual_edition'), meta)
-            if "REPACK" in meta.get('edition', ""):
-                meta['repack'] = re.search(r"REPACK[\d]?", meta['edition'])[0]
-                meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
-        else:
-            meta['edition'] = ""
-
-        meta.get('stream', False)
-        meta['stream'] = await self.stream_optimized(meta['stream'])
-
-        if meta.get('tag', None) is None:
-            if meta.get('we_need_tag', False):
-                meta['tag'] = await get_tag(meta['scene_name'], meta)
+            if meta.get('is_disc', None) == "BDMV":  # Blu-ray Specific
+                meta['region'] = await get_region(bdinfo, meta.get('region', None))
+                meta['video_codec'] = await get_video_codec(bdinfo)
             else:
-                meta['tag'] = await get_tag(video, meta)
-                # all lowercase filenames will have bad group tag, it's probably a scene release.
-                # some extracted files do not match release name so lets double check if it really is a scene release
-                if not meta.get('scene') and meta['tag']:
-                    base = os.path.basename(video)
-                    match = re.match(r"^(.+)\.[a-zA-Z0-9]{3}$", os.path.basename(video))
-                    if match and (not meta['is_disc'] or meta.get('keep_folder', False)):
-                        base = match.group(1)
-                        is_all_lowercase = base.islower()
-                        if is_all_lowercase:
-                            release_name = await is_scene(videopath, meta, meta.get('imdb_id', 0), lower=True)
-                            if release_name is not None:
-                                try:
-                                    meta['scene_name'] = release_name
-                                    meta['tag'] = await self.get_tag(release_name, meta)
-                                except Exception:
-                                    console.print("[red]Error getting tag from scene name, check group tag.[/red]")
+                meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await get_video_encode(mi, meta['type'], bdinfo)
 
-        else:
-            if not meta['tag'].startswith('-') and meta['tag'] != "":
-                meta['tag'] = f"-{meta['tag']}"
+            if meta.get('no_edition') is False:
+                meta['edition'], meta['repack'], meta['webdv'] = await get_edition(meta['uuid'], bdinfo, meta['filelist'], meta.get('manual_edition'), meta)
+                if "REPACK" in meta.get('edition', ""):
+                    meta['repack'] = re.search(r"REPACK[\d]?", meta['edition'])[0]
+                    meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
+            else:
+                meta['edition'] = ""
 
-        meta = await tag_override(meta)
+            meta.get('stream', False)
+            meta['stream'] = await self.stream_optimized(meta['stream'])
 
-        if meta['tag'][1:].startswith(meta['channels']):
-            meta['tag'] = meta['tag'].replace(f"-{meta['channels']}", '')
+            if meta.get('tag', None) is None:
+                if meta.get('we_need_tag', False):
+                    meta['tag'] = await get_tag(meta['scene_name'], meta)
+                else:
+                    meta['tag'] = await get_tag(video, meta)
+                    # all lowercase filenames will have bad group tag, it's probably a scene release.
+                    # some extracted files do not match release name so lets double check if it really is a scene release
+                    if not meta.get('scene') and meta['tag']:
+                        base = os.path.basename(video)
+                        match = re.match(r"^(.+)\.[a-zA-Z0-9]{3}$", os.path.basename(video))
+                        if match and (not meta['is_disc'] or meta.get('keep_folder', False)):
+                            base = match.group(1)
+                            is_all_lowercase = base.islower()
+                            if is_all_lowercase:
+                                release_name = await is_scene(videopath, meta, meta.get('imdb_id', 0), lower=True)
+                                if release_name is not None:
+                                    try:
+                                        meta['scene_name'] = release_name
+                                        meta['tag'] = await self.get_tag(release_name, meta)
+                                    except Exception:
+                                        console.print("[red]Error getting tag from scene name, check group tag.[/red]")
 
-        if meta.get('no_tag', False):
-            meta['tag'] = ""
+            else:
+                if not meta['tag'].startswith('-') and meta['tag'] != "":
+                    meta['tag'] = f"-{meta['tag']}"
 
-        if meta.get('service', None) in (None, ''):
-            meta['service'], meta['service_longname'] = await get_service(video, meta.get('tag', ''), meta['audio'], meta['filename'])
-        elif meta.get('service'):
-            services = await get_service(get_services_only=True)
-            meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
+            meta = await tag_override(meta)
+
+            if meta['tag'][1:].startswith(meta['channels']):
+                meta['tag'] = meta['tag'].replace(f"-{meta['channels']}", '')
+
+            if meta.get('no_tag', False):
+                meta['tag'] = ""
+
+            if meta.get('service', None) in (None, ''):
+                meta['service'], meta['service_longname'] = await get_service(video, meta.get('tag', ''), meta['audio'], meta['filename'])
+            elif meta.get('service'):
+                services = await get_service(get_services_only=True)
+                meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
         # return duplicate ids so I don't have to catch every site file
         # this has the other adavantage of stringifying immb for this object
