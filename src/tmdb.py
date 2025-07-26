@@ -12,6 +12,7 @@ import requests
 import json
 import httpx
 import asyncio
+import os
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -131,7 +132,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     return category, tmdb_id, original_language
 
 
-async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None):
+async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None):
     search_results = {"results": []}
     secondary_results = {"results": []}
 
@@ -310,7 +311,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title)
+            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path)
 
         # Last attempt: Try parsing a better title
         if attempted == 1:
@@ -318,10 +319,23 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 parsed_title = anitopy.parse(
                     guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
                 )['anime_title']
+                original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
-                return await get_tmdb_id(parsed_title, search_year, category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title)
+                return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
+
+        # lets try with a folder name if we have one
+        if attempted == 3 and path:
+            try:
+                folder_name = os.path.basename(path).replace("_", "").replace("-", "") if path else ""
+                title = guessit(folder_name, {"excludes": ["country", "language"]})['title']
+                original_category = "MOVIE"
+                console.print(f"[bold yellow]Trying folder name: {title}[/bold yellow]")
+                return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
+            except Exception as e:
+                console.print(f"[bold red]Folder name search error:[/bold red] {e}")
+                search_results = {"results": []}
 
         # No match found, prompt user if in CLI mode
         console.print(f"[bold red]Unable to find TMDb match for {filename}[/bold red]")

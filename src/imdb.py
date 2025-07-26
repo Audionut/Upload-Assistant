@@ -2,6 +2,8 @@ from src.console import console
 import json
 import httpx
 from datetime import datetime
+from guessit import guessit
+import os
 
 
 async def get_imdb_aka_api(imdb_id, manual_language=None):
@@ -419,7 +421,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False):
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None):
     import re
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if debug:
@@ -474,6 +476,14 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     if debug:
         console.print(f"[yellow]Found {len(results)} results...[/yellow]")
         console.print(f"quickie: {quickie}, category: {category}, search_year: {search_year}")
+
+    if len(results) == 0 and secondary_title:
+        filename = secondary_title
+        return await search_imdb(filename, search_year, quickie=True, category=category, debug=debug, secondary_title=None, path=path)
+    if len(results) == 0 and not secondary_title and path:
+        folder_name = os.path.basename(path).replace("_", "").replace("-", "") if path else ""
+        filename = guessit(folder_name, {"excludes": ["country", "language"]})['title']
+        return await search_imdb(filename, search_year, quickie=True, category=category, debug=debug, secondary_title=None, path=None)
 
     if quickie:
         if results:
