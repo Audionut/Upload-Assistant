@@ -35,7 +35,7 @@ class BJS(COMMON):
         self.category = meta['category']
         self.season = meta.get('season_int', '')
         self.episode = meta.get('episode_int', '')
-        self.is_tv_pack = meta.get('tv_pack') == 1
+        self.is_tv_pack = meta.get('tv_pack', '') == 1
 
     async def tmdb_data(self, meta):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
@@ -90,8 +90,7 @@ class BJS(COMMON):
             return "Outro"
 
     async def search_existing(self, meta, disctype):
-        self.is_tv_pack
-
+        self.assign_media_properties(meta)
         upload_season_num = None
         upload_episode_num = None
 
@@ -620,7 +619,9 @@ class BJS(COMMON):
 
         if meta.get('type') == 'REMUX':
             found_tags.add('Remux')
-        if meta.get('has_commentary') is True:
+        if meta.get('extras'):
+            found_tags.add('Com extras')
+        if meta.get('has_commentary') or meta.get('manual_commentary'):
             found_tags.add('Com comentários')
 
         return found_tags
@@ -642,6 +643,7 @@ class BJS(COMMON):
             'Dolby Vision',
             'HDR10+',
             'HDR10',
+            'Com extras',
             'Com comentários'
         ]
         available_tags = self.find_remaster_tags(meta)
