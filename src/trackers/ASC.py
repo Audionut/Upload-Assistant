@@ -543,7 +543,7 @@ class ASC(COMMON):
             if youtube_code:
                 data['tube'] = f"http://www.youtube.com/watch?v={youtube_code}"
             else:
-                data['tube'] = meta.get('youtube', '')
+                data['tube'] = meta.get('youtube') or ''
 
             # Resolution
             width, hight = self.get_res_id(meta)
