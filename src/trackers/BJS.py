@@ -38,8 +38,8 @@ class BJS(COMMON):
         self.is_tv_pack = meta.get('tv_pack', '') == 1
 
     async def tmdb_data(self, meta):
-        tmdb_api = self.config['DEFAULT']['tmdb_api']
         self.assign_media_properties(meta)
+        tmdb_api = self.config['DEFAULT']['tmdb_api']
 
         url = f"https://api.themoviedb.org/3/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
         try:
@@ -65,7 +65,6 @@ class BJS(COMMON):
         }
         tmdb_data = await self.tmdb_data(meta)
         lang_code = tmdb_data.get("original_language")
-
         origin_countries = tmdb_data.get("origin_country", [])
 
         if not lang_code:
@@ -238,9 +237,10 @@ class BJS(COMMON):
             else:
                 console.print(f"[bold red]Falha na validação do {self.tracker}. Não foi possível encontrar o token 'auth' na página de upload.[/bold red]")
                 console.print("[yellow]Isso pode acontecer se a estrutura do site mudou ou se o login falhou silenciosamente.[/yellow]")
-                with open(f"{self.tracker}_auth_failure_{meta['uuid']}.html", "w", encoding="utf-8") as f:
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                with open(failure_path, "w", encoding="utf-8") as f:
                     f.write(response.text)
-                console.print(f"[yellow]A resposta do servidor foi salva em '{self.tracker}_auth_failure_{meta['uuid']}.html' para análise.[/yellow]")
+                console.print(f"[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]")
                 return False
 
         except Exception as e:
@@ -250,43 +250,54 @@ class BJS(COMMON):
     def get_type(self, meta):
         self.assign_media_properties(meta)
 
-        if meta.get('anime', False):
+        if meta.get('anime'):
             return '13'
 
-        if self.category == 'TV' or meta.get('season') is not None:
-            return '1'
+        category_map = {
+            'TV': '1',
+            'MOVIE': '0'
+        }
 
-        if self.category == 'MOVIE':
-            return '0'
+        return category_map.get(self.category)
 
-        return '0'
-
-    def get_format(self, meta):
-        if meta.get('is_disc') == "BDMV":
-            return "M2TS"
-        elif meta.get('is_disc') == "DVD":
-            return "VOB"
-
-        try:
-            general_track = next(t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'General')
-            file_extension = general_track.get('FileExtension', '').lower()
-            if file_extension == 'mkv':
-                return 'MKV'
-            elif file_extension == 'mp4':
-                return 'MP4'
-            else:
-                return "Outro"
-        except (StopIteration, AttributeError, TypeError):
-            return None
+    def get_container(self, meta):
+        container = None
+        if meta["is_disc"] == "BDMV":
+            container = "M2TS"
+        elif meta['is_disc'] == "DVD":
+            container = "VOB"
+        else:
+            ext = os.path.splitext(meta['filelist'][0])[1]
+            containermap = {
+                '.mkv': "MKV",
+                '.mp4': 'MP4'
+            }
+            container = containermap.get(ext, 'Outro')
+        return container
 
     async def get_subtitles(self, meta):
         await process_desc_language(meta, desc=None, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
+        tipolegenda = 'Nenhuma'
+
         if 'Portuguese' in found_language_strings:
             tipolegenda = 'Embutida'
+
         else:
-            tipolegenda = 'Nenhuma'
+            video_path = meta.get('path')
+            directory = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
+            subtitle_extensions = ('.srt', '.sub', '.ass', '.ssa', '.idx', '.smi', '.psb')
+
+            if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
+                if meta['keep_folder']:
+                    tipolegenda = 'Arquivos Separados'
+                else:
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        "ERRO: Seu upload contém legendas em arquivos separados. "
+                        "Use [yellow]-kf[/yellow] ou [yellow]--keep-folder[/yellow] para incluir todos os arquivos da pasta."
+                    )
+                    raise UploadException("Legendas externas detectadas sem o uso de -kf/--keep-folder")
 
         return tipolegenda
 
@@ -517,14 +528,9 @@ class BJS(COMMON):
                 pass
 
         else:
-            try:
-                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
-                video_track = next((t for t in tracks if t.get('@type') == 'Video'), None)
-                if video_track:
-                    width = video_track.get('Width', '')
-                    height = video_track.get('Height', '')
-            except (AttributeError, TypeError):
-                pass
+            video_mi = meta['mediainfo']['media']['track'][1]
+            width = video_mi['Width']
+            height = video_mi['Height']
 
         return {
             'resolucaow': width,
@@ -534,12 +540,15 @@ class BJS(COMMON):
     async def get_cast(self, meta):
         tmdb_data = await self.tmdb_data(meta)
         cast_data = (tmdb_data.get('credits') or {}).get('cast', [])
-
-        return ", ".join(
-            cast_member['name']
-            for cast_member in cast_data[:4]
-            if cast_member.get('name')
-        )
+        if cast_data:
+            return ", ".join(
+                cast_member['name']
+                for cast_member in cast_data[:4]
+                if cast_member.get('name')
+            )
+        else:
+            meta['tracker_status'][self.tracker]['status_message'] = "Não foi encontrado o elenco no TMDB. O upload não pode continuar."
+            raise UploadException("Não foi encontrado o elenco no TMDB. O upload não pode continuar.")
 
     def get_runtime(self, runtime):
         try:
@@ -579,7 +588,7 @@ class BJS(COMMON):
         if youtube_code:
             youtube = f"http://www.youtube.com/watch?v={youtube_code}"
         else:
-            youtube = meta.get('youtube', '')
+            youtube = meta.get('youtube') or ''
 
         return youtube
 
@@ -682,12 +691,12 @@ class BJS(COMMON):
             'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
-            'diretor': meta.get('tmdb_directors', [None])[0],
+            'diretor': (meta.get('tmdb_directors') or ['Desconhecido'])[0],
             'duracaotipo': 'selectbox',
             'duracaoHR': hours,
             'duracaoMIN': minutes,
             'traileryoutube': await self.get_trailer(meta),
-            'formato': self.get_format(meta),
+            'formato': self.get_container(meta),
             'qualidade': self.get_bitrate(meta),
             'release': meta.get('service_longname', ''),
             'audio': await self.get_audio(meta),
