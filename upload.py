@@ -745,6 +745,9 @@ async def do_the_thing(base_dir):
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
 
+            if meta.get('emby', False):
+                await asyncio.sleep(2)  # Don't hammer api's
+
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")
         if sanitize_meta:
