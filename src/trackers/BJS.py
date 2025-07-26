@@ -15,10 +15,10 @@ from src.languages import process_desc_language
 from src.exceptions import UploadException
 
 
-class BJ(COMMON):
+class BJS(COMMON):
     def __init__(self, config):
         super().__init__(config)
-        self.tracker = "BJ"
+        self.tracker = "BJS"
         self.banned_groups = [""]
         self.source_flag = "BJ"
         self.base_url = "https://bj-share.info"

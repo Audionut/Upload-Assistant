@@ -42,7 +42,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
   <tr><td>Anthelion</td><td>ANT</td><td>AsianCinema</td><td>ACM</td></tr>
   <tr><td>Beyond-HD</td><td>BHD</td><td>BitHDTV</td><td>BHDTV</td></tr>
-  <tr><td>Bj-Share</td><td>BJ</td><td>Blutopia</td><td>BLU</td></tr>
+  <tr><td>BrasilJapão-Share</td><td>BJS</td><td>Blutopia</td><td>BLU</td></tr>
   <tr><td>BrasilTracker</td><td>BT</td><td>CapybaraBR</td><td>CBR</td></tr>
   <tr><td>Cinematik</td><td>TIK</td><td>DarkPeers</td><td>DP</td></tr>
   <tr><td>DigitalCore</td><td>DC</td><td>FearNoPeer</td><td>FNP</td></tr>
