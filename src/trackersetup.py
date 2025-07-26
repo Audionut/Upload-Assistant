@@ -6,7 +6,7 @@ from src.trackers.AR import AR
 from src.trackers.ASC import ASC
 from src.trackers.BHD import BHD
 from src.trackers.BHDTV import BHDTV
-from trackers.BJS import BJS
+from src.trackers.BJS import BJS
 from src.trackers.BLU import BLU
 from src.trackers.BT import BT
 from src.trackers.CBR import CBR
