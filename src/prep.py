@@ -259,7 +259,10 @@ class Prep():
             if extracted_year and not meta.get('year'):
                 meta['year'] = extracted_year
 
-            guess_name = ntpath.basename(video).replace('-', ' ')
+            if meta.get('isdir', False):
+                guess_name = os.path.basename(meta['path']).replace("_", "").replace("-", "") if meta['path'] else ""
+            else:
+                guess_name = ntpath.basename(video).replace('-', ' ')
 
             if title:
                 filename = title
@@ -533,8 +536,12 @@ class Prep():
 
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
-            tmdb_task = get_tmdb_id(filename, meta.get('search_year', ''), meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None))
-            imdb_task = search_imdb(filename, meta.get('search_year', ''), quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None))
+            if meta.get('category') == "TV":
+                year = meta.get('manual_year', '') or meta.get('search_year', '') or meta.get('year', '')
+            else:
+                year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
+            tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None))
+            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None))
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -858,6 +865,9 @@ class Prep():
                 return "TV"
 
         try:
+            if meta.get('isdir', False):
+                video = os.path.basename(path).replace("_", "").replace("-", "") if path else video
+
             category = guessit(video.replace('1.0', ''))['type']
             if category.lower() == "movie":
                 category = "MOVIE"  # 1

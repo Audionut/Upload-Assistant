@@ -135,6 +135,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
 async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None):
     search_results = {"results": []}
     secondary_results = {"results": []}
+    final_attempt = False
 
     async with httpx.AsyncClient() as client:
         try:
@@ -311,6 +312,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
+            final_attempt = False
             return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path)
 
         # Last attempt: Try parsing a better title
@@ -321,17 +323,19 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 )['anime_title']
                 original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
+                final_attempt = False
                 return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
 
         # lets try with a folder name if we have one
-        if attempted == 3 and path:
+        if attempted > 1 and path and not final_attempt:
             try:
                 folder_name = os.path.basename(path).replace("_", "").replace("-", "") if path else ""
                 title = guessit(folder_name, {"excludes": ["country", "language"]})['title']
                 original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying folder name: {title}[/bold yellow]")
+                final_attempt = True
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
             except Exception as e:
                 console.print(f"[bold red]Folder name search error:[/bold red] {e}")
