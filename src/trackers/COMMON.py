@@ -90,7 +90,7 @@ class COMMON():
             # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use default
             screensPerRow = int(self.config['DEFAULT']['screens_per_row'])
         except Exception:
-            screensPerRow = None
+            screensPerRow = 2
         try:
             # If custom signature set and isn't empty, use that instead of the signature parameter
             custom_signature = self.config['TRACKERS'][tracker].get('custom_signature', signature)
