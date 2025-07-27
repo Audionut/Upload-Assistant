@@ -54,8 +54,8 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
   <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
   <tr><td>PrivateSilverScreen</td><td>PSS</td><td>PTerClub</td><td>PTER</td></tr>
-  <tr><td>Racing4Everyone</td><td>R4E</td><td>RocketHD</td><td>RHD</td></tr>
-  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
+  <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
+  <tr><td>ReelFLiX</td><td>RF</td><td>RocketHD</td><td>RHD</td></tr>
   <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
   <tr><td>seedpool</td><td>SP</td><td>Shareisland</td><td>SHRI</td></tr>
   <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
