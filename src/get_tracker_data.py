@@ -85,15 +85,15 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         # Check if a specific tracker is already set in meta
         tracker_keys = {
             'aither': 'AITHER',
+            'blu': 'BLU',
             'lst': 'LST',
             'ulcx': 'ULCX',
+            'oe': 'OE',
+            'huno': 'HUNO',
             'btn': 'BTN',
             'bhd': 'BHD',
-            'huno': 'HUNO',
             'hdb': 'HDB',
             'ptp': 'PTP',
-            'blu': 'BLU',
-            'oe': 'OE',
         }
 
         specific_tracker = [tracker_keys[key] for key in tracker_keys if meta.get(key) is not None]
@@ -175,7 +175,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
 
         else:
             # Process all trackers with API = true if no specific tracker is set in meta
-            tracker_order = ["PTP", "BHD", "BLU", "AITHER", "LST", "OE", "HDB", "HUNO", "ULCX"]
+            tracker_order = ["PTP", "HDB", "BHD", "BLU", "AITHER", "HUNO", "LST", "OE", "ULCX"]
 
             if cat == "TV" or meta.get('category') == "TV":
                 if meta['debug']:
