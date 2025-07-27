@@ -23,6 +23,7 @@ class YUS():
         self.upload_url = 'https://yu-scene.net/api/torrents/upload'
         self.search_url = 'https://yu-scene.net/api/torrents/filter'
         self.torrent_url = 'https://yu-scene.net/torrents/'
+        self.id_url = 'https://yu-scene.net/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = ['KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus', 'NhaNc3', 'nHD', 'RARBG', 'Radarr',
                               'RCDiVX', 'RDN', 'SANTi', 'VXT', 'Will1869', 'x0r', 'XS', 'YIFY', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']

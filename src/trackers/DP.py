@@ -20,6 +20,7 @@ class DP():
         self.upload_url = 'https://darkpeers.org/api/torrents/upload'
         self.search_url = 'https://darkpeers.org/api/torrents/filter'
         self.torrent_url = 'https://darkpeers.org/torrents/'
+        self.id_url = 'https://darkpeers.org/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             'aXXo', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL', 'FaNGDiNG0', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime',

@@ -37,7 +37,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
                     imdb = int(imdb_str) if imdb_str.isdigit() else 0
 
                 # NFO Download Handling
-                if not meta.get('nfo'):
+                if not meta.get('nfo') and not meta.get('emby', False):
                     if first_result.get("hasNFO") == "yes":
                         try:
                             release = first_result['release']

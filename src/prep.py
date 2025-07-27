@@ -56,6 +56,9 @@ class Prep():
         self.img_host = img_host.lower()
 
     async def gather_prep(self, meta, mode):
+        # set a timer to check speed
+        if meta['debug']:
+            meta_start_time = time.time()
         # set some details we'll need
         meta['cutoff'] = int(self.config['DEFAULT'].get('cutoff_screens', 1))
         tvdb_api_get = str(self.config['DEFAULT'].get('tvdb_api', None))
@@ -80,6 +83,9 @@ class Prep():
         use_radarr = config['DEFAULT'].get('use_radarr', False)
         meta['print_tracker_messages'] = config['DEFAULT'].get('print_tracker_messages', False)
         meta['print_tracker_links'] = config['DEFAULT'].get('print_tracker_links', True)
+        only_id = config['DEFAULT'].get('only_id', False) if meta.get('onlyID') is None else meta.get('onlyID')
+        meta['only_id'] = only_id
+        meta['keep_images'] = config['DEFAULT'].get('keep_images', True) if not meta.get('keep_images') else True
 
         # make sure these are set in meta
         meta['we_checked_tvdb'] = False
@@ -280,22 +286,26 @@ class Prep():
                 filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
             untouched_filename = os.path.basename(video)
 
-            # rely only on guessit for search_year for tv matching
-            try:
-                meta['search_year'] = guessit(video)['year']
-            except Exception:
-                meta['search_year'] = ""
+            if not meta.get('emby', False):
+                # rely only on guessit for search_year for tv matching
+                try:
+                    meta['search_year'] = guessit(video)['year']
+                except Exception:
+                    meta['search_year'] = ""
 
-            if not meta.get('edit', False):
-                mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, export_text=True)
-                meta['mediainfo'] = mi
+                if not meta.get('edit', False):
+                    mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, export_text=True)
+                    meta['mediainfo'] = mi
+                else:
+                    mi = meta['mediainfo']
+
+                if meta.get('resolution', None) is None:
+                    meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
+
+                meta['sd'] = await is_sd(meta['resolution'])
             else:
-                mi = meta['mediainfo']
-
-            if meta.get('resolution', None) is None:
-                meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
-
-            meta['sd'] = await is_sd(meta['resolution'])
+                meta['resolution'] = "1080p"
+                meta['search_year'] = ""
 
         if " AKA " in filename.replace('.', ' '):
             filename = filename.split('AKA')[0]
@@ -303,7 +313,7 @@ class Prep():
         meta['bdinfo'] = bdinfo
 
         meta['valid_mi'] = True
-        if not meta['is_disc']:
+        if not meta['is_disc'] and not meta.get('emby', False):
             valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
@@ -311,7 +321,7 @@ class Prep():
                 await asyncio.sleep(2)
 
         # Check if there's a language restriction
-        if meta['has_languages'] is not None:
+        if meta['has_languages'] is not None and not meta.get('emby', False):
             try:
                 audio_languages = []
                 parsed_info = await parsed_mediainfo(meta)
@@ -328,18 +338,26 @@ class Prep():
             except Exception as e:
                 console.print(f"[red]Error checking languages: {e}")
 
-        if 'description' not in meta or meta.get('description') is None:
-            meta['description'] = ""
+        if not meta.get('emby', False):
+            if 'description' not in meta or meta.get('description') is None:
+                meta['description'] = ""
 
-        description_text = meta.get('description', '')
-        if description_text is None:
-            description_text = ""
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
-            if len(description_text):
-                description.write(description_text)
+            description_text = meta.get('description', '')
+            if description_text is None:
+                description_text = ""
+            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
+                if len(description_text):
+                    description.write(description_text)
+
+        meta['skip_trackers'] = False
+        if meta.get('emby', False):
+            only_id = True
+            meta['keep_images'] = False
+            if meta.get('imdb_id', 0) != 0:
+                meta['skip_trackers'] = True
 
         # auto torrent searching with qbittorrent that grabs torrent ids for metadata searching
-        if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids):
+        if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False):
             await client.get_pathed_torrents(meta['path'], meta)
 
         # Ensure all manual IDs have proper default values
@@ -392,123 +410,124 @@ class Prep():
             meta['category'] = meta['category'].upper()
 
         ids = None
-        if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
-            ids = await get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename', None), debug=meta.get('debug', False))
-            if ids:
-                if meta['debug']:
-                    console.print(f"TVDB ID: {ids['tvdb_id']}")
-                    console.print(f"IMDB ID: {ids['imdb_id']}")
-                    console.print(f"TVMAZE ID: {ids['tvmaze_id']}")
-                    console.print(f"TMDB ID: {ids['tmdb_id']}")
-                    console.print(f"Genres: {ids['genres']}")
-                    console.print(f"Release Group: {ids['release_group']}")
-                    console.print(f"Year: {ids['year']}")
-                if 'anime' not in [genre.lower() for genre in ids['genres']]:
-                    meta['not_anime'] = True
-                if meta.get('tvdb_id', 0) == 0 and ids['tvdb_id'] is not None:
-                    meta['tvdb_id'] = ids['tvdb_id']
-                if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
-                    meta['imdb_id'] = ids['imdb_id']
-                if meta.get('tvmaze_id', 0) == 0 and ids['tvmaze_id'] is not None:
-                    meta['tvmaze_id'] = ids['tvmaze_id']
-                if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
-                    meta['tmdb_id'] = ids['tmdb_id']
-                if meta.get('tag', None) is None:
-                    meta['tag'] = ids['release_group']
-                if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
-                    meta['manual_year'] = ids['year']
-            else:
-                ids = None
+        if not meta.get('skip_trackers', False):
+            if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
+                ids = await get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename', None), debug=meta.get('debug', False))
+                if ids:
+                    if meta['debug']:
+                        console.print(f"TVDB ID: {ids['tvdb_id']}")
+                        console.print(f"IMDB ID: {ids['imdb_id']}")
+                        console.print(f"TVMAZE ID: {ids['tvmaze_id']}")
+                        console.print(f"TMDB ID: {ids['tmdb_id']}")
+                        console.print(f"Genres: {ids['genres']}")
+                        console.print(f"Release Group: {ids['release_group']}")
+                        console.print(f"Year: {ids['year']}")
+                    if 'anime' not in [genre.lower() for genre in ids['genres']]:
+                        meta['not_anime'] = True
+                    if meta.get('tvdb_id', 0) == 0 and ids['tvdb_id'] is not None:
+                        meta['tvdb_id'] = ids['tvdb_id']
+                    if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                        meta['imdb_id'] = ids['imdb_id']
+                    if meta.get('tvmaze_id', 0) == 0 and ids['tvmaze_id'] is not None:
+                        meta['tvmaze_id'] = ids['tvmaze_id']
+                    if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                        meta['tmdb_id'] = ids['tmdb_id']
+                    if meta.get('tag', None) is None:
+                        meta['tag'] = ids['release_group']
+                    if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
+                        meta['manual_year'] = ids['year']
+                else:
+                    ids = None
 
-        if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
-            ids = await get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
-            if ids:
-                if meta['debug']:
-                    console.print(f"IMDB ID: {ids['imdb_id']}")
-                    console.print(f"TMDB ID: {ids['tmdb_id']}")
-                    console.print(f"Genres: {ids['genres']}")
-                    console.print(f"Year: {ids['year']}")
-                    console.print(f"Release Group: {ids['release_group']}")
-                if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
-                    meta['imdb_id'] = ids['imdb_id']
-                if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
-                    meta['tmdb_id'] = ids['tmdb_id']
-                if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
-                    meta['manual_year'] = ids['year']
-                if meta.get('tag', None) is None:
-                    meta['tag'] = ids['release_group']
-            else:
-                ids = None
+            if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
+                ids = await get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
+                if ids:
+                    if meta['debug']:
+                        console.print(f"IMDB ID: {ids['imdb_id']}")
+                        console.print(f"TMDB ID: {ids['tmdb_id']}")
+                        console.print(f"Genres: {ids['genres']}")
+                        console.print(f"Year: {ids['year']}")
+                        console.print(f"Release Group: {ids['release_group']}")
+                    if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                        meta['imdb_id'] = ids['imdb_id']
+                    if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                        meta['tmdb_id'] = ids['tmdb_id']
+                    if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
+                        meta['manual_year'] = ids['year']
+                    if meta.get('tag', None) is None:
+                        meta['tag'] = ids['release_group']
+                else:
+                    ids = None
 
-        # check if we've already searched torrents
-        if 'base_torrent_created' not in meta:
-            meta['base_torrent_created'] = False
-        if 'we_checked_them_all' not in meta:
-            meta['we_checked_them_all'] = False
+            # check if we've already searched torrents
+            if 'base_torrent_created' not in meta:
+                meta['base_torrent_created'] = False
+            if 'we_checked_them_all' not in meta:
+                meta['we_checked_them_all'] = False
 
-        # if not auto qbittorrent search, this also checks with the infohash if passed.
-        if meta.get('infohash') is not None and not meta['base_torrent_created'] and not meta['we_checked_them_all'] and not ids:
-            meta = await client.get_ptp_from_hash(meta)
+            # if not auto qbittorrent search, this also checks with the infohash if passed.
+            if meta.get('infohash') is not None and not meta['base_torrent_created'] and not meta['we_checked_them_all'] and not ids:
+                meta = await client.get_ptp_from_hash(meta)
 
-        if not meta.get('image_list') and not meta.get('edit', False) and not ids:
-            # Reuse information from trackers with fallback
-            await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'])
+            if not meta.get('image_list') and not meta.get('edit', False) and not ids:
+                # Reuse information from trackers with fallback
+                await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'])
 
-        if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-            ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
-            if ids:
-                if meta['debug']:
-                    console.print(f"TVDB ID: {ids['tvdb_id']}")
-                    console.print(f"IMDB ID: {ids['imdb_id']}")
-                    console.print(f"TVMAZE ID: {ids['tvmaze_id']}")
-                    console.print(f"TMDB ID: {ids['tmdb_id']}")
-                    console.print(f"Genres: {ids['genres']}")
-                if 'anime' not in [genre.lower() for genre in ids['genres']]:
-                    meta['not_anime'] = True
-                if meta.get('tvdb_id', 0) == 0 and ids['tvdb_id'] is not None:
-                    meta['tvdb_id'] = ids['tvdb_id']
-                if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
-                    meta['imdb_id'] = ids['imdb_id']
-                if meta.get('tvmaze_id', 0) == 0 and ids['tvmaze_id'] is not None:
-                    meta['tvmaze_id'] = ids['tvmaze_id']
-                if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
-                    meta['tmdb_id'] = ids['tmdb_id']
-                if meta.get('tag', None) is None:
-                    meta['tag'] = ids['release_group']
-                if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
-                    meta['manual_year'] = ids['year']
-            else:
-                ids = None
+            if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
+                ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
+                if ids:
+                    if meta['debug']:
+                        console.print(f"TVDB ID: {ids['tvdb_id']}")
+                        console.print(f"IMDB ID: {ids['imdb_id']}")
+                        console.print(f"TVMAZE ID: {ids['tvmaze_id']}")
+                        console.print(f"TMDB ID: {ids['tmdb_id']}")
+                        console.print(f"Genres: {ids['genres']}")
+                    if 'anime' not in [genre.lower() for genre in ids['genres']]:
+                        meta['not_anime'] = True
+                    if meta.get('tvdb_id', 0) == 0 and ids['tvdb_id'] is not None:
+                        meta['tvdb_id'] = ids['tvdb_id']
+                    if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                        meta['imdb_id'] = ids['imdb_id']
+                    if meta.get('tvmaze_id', 0) == 0 and ids['tvmaze_id'] is not None:
+                        meta['tvmaze_id'] = ids['tvmaze_id']
+                    if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                        meta['tmdb_id'] = ids['tmdb_id']
+                    if meta.get('tag', None) is None:
+                        meta['tag'] = ids['release_group']
+                    if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
+                        meta['manual_year'] = ids['year']
+                else:
+                    ids = None
 
-        if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-            ids = await get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
-            if ids:
-                if meta['debug']:
-                    console.print(f"IMDB ID: {ids['imdb_id']}")
-                    console.print(f"TMDB ID: {ids['tmdb_id']}")
-                    console.print(f"Genres: {ids['genres']}")
-                    console.print(f"Year: {ids['year']}")
-                    console.print(f"Release Group: {ids['release_group']}")
-                if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
-                    meta['imdb_id'] = ids['imdb_id']
-                if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
-                    meta['tmdb_id'] = ids['tmdb_id']
-                if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
-                    meta['manual_year'] = ids['year']
-                if meta.get('tag', None) is None:
-                    meta['tag'] = ids['release_group']
-            else:
-                ids = None
+            if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
+                ids = await get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
+                if ids:
+                    if meta['debug']:
+                        console.print(f"IMDB ID: {ids['imdb_id']}")
+                        console.print(f"TMDB ID: {ids['tmdb_id']}")
+                        console.print(f"Genres: {ids['genres']}")
+                        console.print(f"Year: {ids['year']}")
+                        console.print(f"Release Group: {ids['release_group']}")
+                    if meta.get('imdb_id', 0) == 0 and ids['imdb_id'] is not None:
+                        meta['imdb_id'] = ids['imdb_id']
+                    if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
+                        meta['tmdb_id'] = ids['tmdb_id']
+                    if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
+                        meta['manual_year'] = ids['year']
+                    if meta.get('tag', None) is None:
+                        meta['tag'] = ids['release_group']
+                else:
+                    ids = None
 
         # if there's no region/distributor info, lets ping some unit3d trackers and see if we get it
         ping_unit3d_config = self.config['DEFAULT'].get('ping_unit3d', False)
-        if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False):
+        if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False) and not meta.get('emby', False):
             await ping_unit3d(meta)
 
         # the first user override check that allows to set metadata ids.
         # it relies on imdb or tvdb already being set.
         user_overrides = config['DEFAULT'].get('user_overrides', False)
-        if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0):
+        if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0) and not meta.get('emby', False):
             meta = await get_source_override(meta, other_id=True)
             meta['category'] = meta.get('category', None).upper()
             # set a flag so that the other check later doesn't run
@@ -527,7 +546,8 @@ class Prep():
 
         # set a timer to check speed
         if meta['debug']:
-            meta_start_time = time.time()
+            meta_middle_time = time.time()
+            console.print(f"Source/tracker data processed in {meta_middle_time - meta_start_time:.2f} seconds")
 
         if meta.get('manual_language'):
             meta['original_langauge'] = meta.get('manual_language').lower()
@@ -687,31 +707,31 @@ class Prep():
             # all your episode data belongs to us
             meta = await get_tv_data(meta, base_dir, tvdb_api, tvdb_token)
 
-        # if we're using tvdb, lets use it's series name if it applies
-        # language check since tvdb returns original language names
-        if tvdb_api and tvdb_token and meta.get('original_language', "") == "en":
-            if meta.get('tvdb_episode_data') and meta.get('tvdb_episode_data').get('series_name') != "" and meta.get('title') != meta.get('tvdb_episode_data').get('series_name'):
-                series_name = meta.get('tvdb_episode_data').get('series_name', '')
-                if meta['debug']:
-                    console.print(f"[yellow]tvdb series name: {series_name}")
-                year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                if year_match:
-                    extracted_year = year_match.group(0)
-                    meta['search_year'] = extracted_year
-                    series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                series_name = series_name.replace('(', '').replace(')', '').strip()
-                meta['title'] = series_name
-            elif meta.get('tvdb_series_name') and meta.get('tvdb_series_name') != "" and meta.get('title') != meta.get('tvdb_series_name'):
-                series_name = meta.get('tvdb_series_name')
-                if meta['debug']:
-                    console.print(f"[yellow]tvdb series name: {series_name}")
-                year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                if year_match:
-                    extracted_year = year_match.group(0)
-                    meta['search_year'] = extracted_year
-                    series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                series_name = series_name.replace('(', '').replace(')', '').strip()
-                meta['title'] = series_name
+            # if we're using tvdb, lets use it's series name if it applies
+            # language check since tvdb returns original language names
+            if tvdb_api and tvdb_token and meta.get('original_language', "") == "en":
+                if meta.get('tvdb_episode_data') and meta.get('tvdb_episode_data').get('series_name') != "" and meta.get('title') != meta.get('tvdb_episode_data').get('series_name'):
+                    series_name = meta.get('tvdb_episode_data').get('series_name', '')
+                    if meta['debug']:
+                        console.print(f"[yellow]tvdb series name: {series_name}")
+                    year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
+                    if year_match:
+                        extracted_year = year_match.group(0)
+                        meta['search_year'] = extracted_year
+                        series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
+                    series_name = series_name.replace('(', '').replace(')', '').strip()
+                    meta['title'] = series_name
+                elif meta.get('tvdb_series_name') and meta.get('tvdb_series_name') != "" and meta.get('title') != meta.get('tvdb_series_name'):
+                    series_name = meta.get('tvdb_series_name')
+                    if meta['debug']:
+                        console.print(f"[yellow]tvdb series name: {series_name}")
+                    year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
+                    if year_match:
+                        extracted_year = year_match.group(0)
+                        meta['search_year'] = extracted_year
+                        series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
+                    series_name = series_name.replace('(', '').replace(')', '').strip()
+                    meta['title'] = series_name
 
         # bluray.com data if config
         get_bluray_info = self.config['DEFAULT'].get('get_bluray_info', False)
@@ -734,7 +754,7 @@ class Prep():
                 await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
 
         # user override check that only sets data after metadata setting
-        if user_overrides and not meta.get('no_override', False):
+        if user_overrides and not meta.get('no_override', False) and not meta.get('emby', False):
             meta = await get_source_override(meta)
 
         if meta.get('tag') == "-SubsPlease":  # SubsPlease-specific

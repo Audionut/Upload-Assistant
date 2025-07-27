@@ -1,7 +1,6 @@
 import aiohttp
 import requests
 import os
-import asyncio
 import json
 import time
 from data.config import config
@@ -68,37 +67,57 @@ async def get_available_trackers(specific_trackers, base_dir=None, debug=False):
     return available, waiting
 
 
-async def get_tracker_data(video, meta, search_term=None, search_file_folder=None, cat=None):
-    only_id = config['DEFAULT'].get('only_id', False) if meta.get('onlyID') is None else meta.get('onlyID')
-    meta['only_id'] = only_id
-    meta['keep_images'] = config['DEFAULT'].get('keep_images', True) if not meta.get('keep_images') else True
+async def get_tracker_data(video, meta, search_term=None, search_file_folder=None, cat=None, only_id=False):
     found_match = False
     base_dir = meta['base_dir']
-    if meta.get('emby', False):
-        only_id = True
-        meta['keep_images'] = False
-    if only_id and meta.get('imdb_id') != 0:
-        if meta['debug']:
-            console.print("[yellow]Only ID and we have an IMDb ID, skipping tracker updates[/yellow]")
-        return meta
     if search_term:
         # Check if a specific tracker is already set in meta
-        tracker_keys = {
-            'aither': 'AITHER',
-            'blu': 'BLU',
-            'lst': 'LST',
-            'ulcx': 'ULCX',
-            'oe': 'OE',
-            'huno': 'HUNO',
-            'btn': 'BTN',
-            'bhd': 'BHD',
-            'hdb': 'HDB',
-            'ptp': 'PTP',
-        }
+        if not meta.get('emby', False):
+            tracker_keys = {
+                'aither': 'AITHER',
+                'blu': 'BLU',
+                'lst': 'LST',
+                'ulcx': 'ULCX',
+                'oe': 'OE',
+                'huno': 'HUNO',
+                'ant': 'ANT',
+                'btn': 'BTN',
+                'bhd': 'BHD',
+                'hdb': 'HDB',
+                'rf': 'RF',
+                'otw': 'OTW',
+                'yus': 'YUS',
+                'dp': 'DP',
+                'ptp': 'PTP',
+            }
+        else:
+            # Preference trackers with lesser overall torrents
+            # Leaving the more complete trackers free when really needed
+            tracker_keys = {
+                'sp': 'SP',
+                'otw': 'OTW',
+                'dp': 'DP',
+                'yus': 'YUS',
+                'rf': 'RF',
+                'btn': 'BTN',
+                'oe': 'OE',
+                'ulcx': 'ULCX',
+                'huno': 'HUNO',
+                'lst': 'LST',
+                'ant': 'ANT',
+                'hdb': 'HDB',
+                'bhd': 'BHD',
+                'blu': 'BLU',
+                'aither': 'AITHER',
+                'ptp': 'PTP',
+            }
 
         specific_tracker = [tracker_keys[key] for key in tracker_keys if meta.get(key) is not None]
 
         if specific_tracker:
+            if meta.get('is_disc', False) and "ANT" in specific_tracker:
+                specific_tracker.remove("ANT")
+
             async def process_tracker(tracker_name, meta, only_id):
                 nonlocal found_match
                 if tracker_class_map is None:
@@ -129,7 +148,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 available_trackers, waiting_trackers = await get_available_trackers(specific_tracker, base_dir, debug=meta['debug'])
 
                 if available_trackers:
-                    if meta['debug']:
+                    if meta['debug'] or meta.get('emby', False):
                         console.print(f"[green]Available trackers: {', '.join(available_trackers)}[/green]")
                     tracker_to_process = available_trackers[0]
                 else:
@@ -137,8 +156,16 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                         waiting_trackers.sort(key=lambda x: x[1])
                         tracker_to_process, wait_time = waiting_trackers[0]
 
-                        console.print(f"[yellow]All specific trackers in cooldown. Waiting {wait_time:.1f} seconds for {tracker_to_process}[/yellow]")
-                        await asyncio.sleep(wait_time + 1)
+                        cooldown_info = ", ".join(
+                            f"{tracker} ({wait_time:.1f}s)" for tracker, wait_time in waiting_trackers
+                        )
+                        for remaining in range(int(wait_time), -1, -1):
+                            msg = (f"[yellow]All specific trackers in cooldown. "
+                                   f"Waiting {remaining:.1f} seconds for {tracker_to_process}. "
+                                   f"Cooldowns: {cooldown_info}[/yellow]")
+                            console.print(msg, end='\r')
+                            time.sleep(1)
+                        console.print()
 
                     else:
                         if meta['debug']:
@@ -153,14 +180,24 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     if meta.get('imdb_id') != 0:
                         found_match = True
                     await save_tracker_timestamp("BTN", base_dir=base_dir)
+                elif tracker_to_process == "ANT":
+                    imdb_tmdb_list = await tracker_class_map['ANT'](config=config).get_data_from_files(meta)
+                    console.print(f"[green]ANT tracker data found: {imdb_tmdb_list}[/green]")
+                    if imdb_tmdb_list:
+                        for d in imdb_tmdb_list:
+                            meta.update(d)
+                        found_match = True
+                    await save_tracker_timestamp("ANT", base_dir=base_dir)
                 else:
                     meta = await process_tracker(tracker_to_process, meta, only_id)
 
                 if not found_match:
+                    if tracker_to_process in specific_tracker:
+                        specific_tracker.remove(tracker_to_process)
                     remaining_available, remaining_waiting = await get_available_trackers(specific_tracker, base_dir, debug=meta['debug'])
 
                     if remaining_available or remaining_waiting:
-                        if meta['debug']:
+                        if meta['debug'] or meta.get('emby', False):
                             console.print(f"[yellow]No match found with {tracker_to_process}. Checking remaining trackers...[/yellow]")
                     else:
                         if meta['debug']:

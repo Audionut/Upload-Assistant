@@ -1510,9 +1510,14 @@ class Clients():
                 'bhd': {"url": "https://beyond-hd.me", "pattern": r'details/(\d+)'},
                 'huno': {"url": "https://hawke.uno", "pattern": r'/(\d+)$'},
                 'ulcx': {"url": "https://upload.cx", "pattern": r'/(\d+)$'},
+                'rf': {"url": "https://reelflix.xyz", "pattern": r'/(\d+)$'},
+                'otw': {"url": "https://oldtoons.world", "pattern": r'/(\d+)$'},
+                'yus': {"url": "https://yu-scene.net", "pattern": r'/(\d+)$'},
+                'dp': {"url": "https://darkpeers.org", "pattern": r'/(\d+)$'},
+                'sp': {"url": "https://seedpool.org", "pattern": r'/(\d+)$'},
             }
 
-            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'ptp']
+            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
 
             try:
                 qbt_client = qbittorrentapi.Client(
@@ -1664,6 +1669,16 @@ class Clients():
                                     })
                                     meta['huno'] = huno_id
                                     tracker_found = True
+
+                        if torrent.tracker and 'tracker.anthelion.me' in torrent.tracker:
+                            ant_id = 1
+                            if has_working_tracker:
+                                tracker_urls.append({
+                                    'id': 'ant',
+                                    'tracker_id': ant_id,
+                                })
+                                meta['ant'] = ant_id
+                                tracker_found = True
 
                         match_info['tracker_urls'] = tracker_urls
                         match_info['has_tracker'] = tracker_found

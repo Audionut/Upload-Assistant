@@ -697,7 +697,9 @@ async def do_the_thing(base_dir):
                     processed_files_count += 1
                     if not meta.get('emby', False):
                         skipped_files_count += 1
-                    console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
+                        console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
+                    else:
+                        console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
                     if not meta['debug']:
                         if log_file:
                             await save_processed_file(log_file, path)
