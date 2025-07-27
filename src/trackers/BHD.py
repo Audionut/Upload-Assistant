@@ -29,7 +29,7 @@ class BHD():
         self.source_flag = 'BHD'
         self.upload_url = 'https://beyond-hd.me/api/upload/'
         self.torrent_url = 'https://beyond-hd.me/details/'
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "\n"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
         pass
 
@@ -258,6 +258,11 @@ class BHD():
                             desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
                             desc.write("\n")
             desc.write(base.replace("[img]", "[img width=300]"))
+            try:
+                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use default
+                screensPerRow = int(self.config['DEFAULT']['screens_per_row'])
+            except Exception:
+                screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
                 desc.write("[center]")
                 comparison_groups = meta.get('comparison_groups', {})
@@ -292,13 +297,13 @@ class BHD():
             else:
                 images = meta['image_list']
             if len(images) > 0:
-                desc.write("[align=center]")
+                desc.write("[align=center]SCREENSHOTS:\n\n")
                 for each in range(len(images[:int(meta['screens'])])):
                     web_url = images[each]['web_url']
                     img_url = images[each]['img_url']
                     if (each == len(images) - 1):
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
-                    elif (each + 1) % 2 == 0:
+                    elif (each + 1) % screensPerRow == 0:
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
                         desc.write("\n")
                     else:
