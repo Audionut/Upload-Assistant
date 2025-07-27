@@ -499,6 +499,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         found_match = True
                     else:
                         meta['image_list'] = []
+                elif meta.get('bhd'):
+                    found_match = True
         else:
             found_match = False
 
