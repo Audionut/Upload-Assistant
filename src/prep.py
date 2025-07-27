@@ -885,20 +885,7 @@ class Prep():
             if re.search(pattern, uuid) or re.search(pattern, os.path.basename(path)):
                 return "TV"
 
-        try:
-            if meta.get('isdir', False):
-                video = os.path.basename(path).replace("_", "").replace("-", "") if path else video
-
-            category = guessit(video.replace('1.0', ''))['type']
-            if category.lower() == "movie":
-                category = "MOVIE"  # 1
-            elif category.lower() in ("tv", "episode"):
-                category = "TV"  # 2
-            else:
-                category = "TV"
-            return category
-        except Exception:
-            return "TV"
+        return "MOVIE"
 
     async def stream_optimized(self, stream_opt):
         if stream_opt is True:
