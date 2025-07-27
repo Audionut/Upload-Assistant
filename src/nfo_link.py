@@ -175,8 +175,10 @@ async def nfo_link(meta):
 async def linking(meta, movie_name, year):
     if not meta['is_disc']:
         folder_name = f"{movie_name} ({year})"
-    else:
+    elif meta['is_disc'] == "BDMV":
         folder_name = f"{movie_name} ({year}) - Disc"
+    else:
+        folder_name = f"{movie_name} ({year}) - {meta['is_disc']}"
     target_base = config['DEFAULT'].get('emby_dir', None)
     if target_base is not None:
         target_dir = os.path.join(target_base, folder_name)
