@@ -136,6 +136,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     search_results = {"results": []}
     secondary_results = {"results": []}
     final_attempt = False
+    if attempted is None:
+        attempted = 0
 
     async with httpx.AsyncClient() as client:
         try:
