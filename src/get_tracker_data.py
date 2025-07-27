@@ -48,7 +48,7 @@ async def save_tracker_timestamp(tracker_name, base_dir=None, debug=False):
 
 async def get_available_trackers(specific_trackers, base_dir=None, debug=False):
     """Get trackers that are available (60+ seconds since last processed)"""
-    timestamps = await get_tracker_timestamps(base_dir, debug=debug)
+    timestamps = await get_tracker_timestamps(base_dir)
     current_time = time.time()
     cooldown_seconds = 60
 

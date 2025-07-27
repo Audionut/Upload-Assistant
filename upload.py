@@ -691,10 +691,12 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
-                console.print("we are not uploading.......")
+                if not meta.get('emby', False):
+                    console.print("we are not uploading.......")
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
-                    skipped_files_count += 1
+                    if not meta.get('emby', False):
+                        skipped_files_count += 1
                     console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
                     if not meta['debug']:
                         if log_file:
