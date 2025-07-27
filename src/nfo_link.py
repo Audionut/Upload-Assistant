@@ -12,62 +12,151 @@ async def nfo_link(meta):
         imdb_info = meta.get('imdb_info', {})
         title = imdb_info.get('title', meta.get('title', ''))
         year = imdb_info.get('year', meta.get('year', ''))
-        plot = imdb_info.get('plot', meta.get('overview', ''))
+        plot = meta.get('overview', '')
         rating = imdb_info.get('rating', '')
-        runtime = imdb_info.get('runtime', '')
-        genres = imdb_info.get('genres', '')
-        country = imdb_info.get('country', '')
-        aka = imdb_info.get('aka', '')
+        runtime = imdb_info.get('runtime', meta.get('runtime', ''))
+        genres = imdb_info.get('genres', meta.get('genres', ''))
+        country = imdb_info.get('country', meta.get('country', ''))
+        aka = imdb_info.get('aka', title)  # Fallback to title if no aka
+        tagline = imdb_info.get('plot', '')
+        premiered = meta.get('release_date', '')
 
         # IDs
-        imdb_id = imdb_info.get('imdbID', '').replace('tt', '')
+        imdb_id = imdb_info.get('imdbID', meta.get('imdb_id', '')).replace('tt', '')
         tmdb_id = meta.get('tmdb_id', '')
         tvdb_id = meta.get('tvdb_id', '')
-        mal_id = meta.get('mal_id', '')
-        tvmaze_id = meta.get('tvmaze_id', '')
 
-        # Images
-        poster = meta.get('poster', '')
-        backdrop = meta.get('backdrop', '')
+        # Cast and crew
+        cast = meta.get('cast', [])
+        directors = meta.get('directors', [])
+        studios = meta.get('studios', [])
 
-        # Build NFO XML content
-        nfo_content = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <movie>
-            <title>{title}</title>
-            <originaltitle>{aka}</originaltitle>
-            <year>{year}</year>
-            <plot>{plot}</plot>
-            <runtime>{runtime}</runtime>
-            <country>{country}</country>
-            <rating>{rating}</rating>
-            <imdbid>{imdb_id}</imdbid>
-            <tmdbid>{tmdb_id}</tmdbid>
-            <tvdbid>{tvdb_id}</tvdbid>
-            <malid>{mal_id}</malid>
-            <tvmazeid>{tvmaze_id}</tvmazeid>
-            <thumb aspect="poster">{poster}</thumb>
-            <fanart>
-                <thumb>{backdrop}</thumb>
-            </fanart>
-        '''
+        # Build NFO XML content with proper structure
+        nfo_content = '''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>'''
+
+        # Add plot with CDATA
+        if plot:
+            nfo_content += f'\n  <plot><![CDATA[{plot}]]></plot>'
+
+        # Add tagline if available
+        if tagline:
+            nfo_content += f'\n  <outline><![CDATA[{tagline}]]></outline>'
+            nfo_content += f'\n  <tagline>{tagline}</tagline>'
+
+        # Basic metadata
+        nfo_content += f'\n  <title>{title}</title>'
+        nfo_content += f'\n  <originaltitle>{aka}</originaltitle>'
+
+        # Add cast/actors
+        for actor in cast:
+            name = actor.get('name', '')
+            role = actor.get('character', actor.get('role', ''))
+            tmdb_actor_id = actor.get('id', '')
+            if name:
+                nfo_content += '\n  <actor>'
+                nfo_content += f'\n    <name>{name}</name>'
+                if role:
+                    nfo_content += f'\n    <role>{role}</role>'
+                nfo_content += '\n    <type>Actor</type>'
+                if tmdb_actor_id:
+                    nfo_content += f'\n    <tmdbid>{tmdb_actor_id}</tmdbid>'
+                nfo_content += '\n  </actor>'
+
+        # Add directors
+        for director in directors:
+            director_name = director.get('name', director) if isinstance(director, dict) else director
+            director_id = director.get('id', '') if isinstance(director, dict) else ''
+            if director_name:
+                nfo_content += '\n  <director'
+                if director_id:
+                    nfo_content += f' tmdbid="{director_id}"'
+                nfo_content += f'>{director_name}</director>'
+
+        # Add rating and year
+        if rating:
+            nfo_content += f'\n  <rating>{rating}</rating>'
+        if year:
+            nfo_content += f'\n  <year>{year}</year>'
+
+        nfo_content += f'\n  <sorttitle>{title}</sorttitle>'
+
+        # Add IDs
+        if imdb_id:
+            nfo_content += f'\n  <imdbid>tt{imdb_id}</imdbid>'
+        if tvdb_id:
+            nfo_content += f'\n  <tvdbid>{tvdb_id}</tvdbid>'
+        if tmdb_id:
+            nfo_content += f'\n  <tmdbid>{tmdb_id}</tmdbid>'
+
+        # Add dates
+        if premiered:
+            nfo_content += f'\n  <premiered>{premiered}</premiered>'
+            nfo_content += f'\n  <releasedate>{premiered}</releasedate>'
+
+        # Add runtime (convert to minutes if needed)
+        if runtime:
+            # Handle runtime in different formats
+            runtime_minutes = runtime
+            if isinstance(runtime, str) and 'min' in runtime:
+                runtime_minutes = runtime.replace('min', '').strip()
+            nfo_content += f'\n  <runtime>{runtime_minutes}</runtime>'
+
+        # Add country
+        if country:
+            nfo_content += f'\n  <country>{country}</country>'
 
         # Add genres
         if genres:
-            genre_list = [g.strip() for g in genres.split(',')]
+            if isinstance(genres, str):
+                genre_list = [g.strip() for g in genres.split(',')]
+            else:
+                genre_list = genres
             for genre in genre_list:
-                nfo_content += f'    <genre>{genre}</genre>\n'
+                if genre:
+                    nfo_content += f'\n  <genre>{genre}</genre>'
 
-        nfo_content += '</movie>'
+        # Add studios
+        for studio in studios:
+            studio_name = studio.get('name', studio) if isinstance(studio, dict) else studio
+            if studio_name:
+                nfo_content += f'\n  <studio>{studio_name}</studio>'
+
+        # Add unique IDs
+        if tmdb_id:
+            nfo_content += f'\n  <uniqueid type="tmdb">{tmdb_id}</uniqueid>'
+        if imdb_id:
+            nfo_content += f'\n  <uniqueid type="imdb">tt{imdb_id}</uniqueid>'
+        if tvdb_id:
+            nfo_content += f'\n  <uniqueid type="tvdb">{tvdb_id}</uniqueid>'
+
+        # Add legacy ID
+        if imdb_id:
+            nfo_content += f'\n  <id>tt{imdb_id}</id>'
+
+        nfo_content += '\n</movie>'
 
         # Save NFO file
         movie_name = meta.get('title', 'movie')
         # Remove or replace invalid characters: < > : " | ? * \ /
         movie_name = re.sub(r'[<>:"|?*\\/]', '', movie_name)
-        save_path = await linking(meta, movie_name, year)
-        if save_path is not None:
-            save_path = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/", f"{movie_name}.nfo")
-        os.makedirs(save_path, exist_ok=True)
-        nfo_file_path = os.path.join(save_path, f"{movie_name}.nfo")
+        link_dir = await linking(meta, movie_name, year)
+
+        uuid = meta.get('uuid')
+        filelist = meta.get('filelist', [])
+        if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
+            # Single file - create symlink in the target folder
+            src_file = filelist[0]
+            filename = os.path.splitext(os.path.basename(src_file))[0]
+        else:
+            filename = uuid
+
+        if link_dir is not None:
+            nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
+        else:
+            temp_dir = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/")
+            os.makedirs(temp_dir, exist_ok=True)
+            nfo_file_path = os.path.join(temp_dir, f"{filename}.nfo")
 
         with open(nfo_file_path, 'w', encoding='utf-8') as f:
             f.write(nfo_content)
@@ -83,7 +172,10 @@ async def nfo_link(meta):
 
 
 async def linking(meta, movie_name, year):
-    folder_name = f"{movie_name} ({year})"
+    if not meta['is_disc']:
+        folder_name = f"{movie_name} ({year})"
+    else:
+        folder_name = f"{movie_name} ({year}) - Disc"
     target_base = config['DEFAULT'].get('emby_dir', None)
     if target_base is not None:
         target_dir = os.path.join(target_base, folder_name)
