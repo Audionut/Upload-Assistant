@@ -546,8 +546,29 @@ class Prep():
             tmdb_id, category = tmdb_result
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)
-            meta['imdb_id'] = int(imdb_result)
-            meta['quickie_search'] = True
+            if isinstance(imdb_result, str):
+                meta['imdb_id'] = int(imdb_result)
+                meta['comp_search'] = True
+            else:
+                meta['imdb_id'] = imdb_result
+                meta['quickie_search'] = True
+
+            # if we have a string imdb_id, it means we did some throughough searching in imdb, probably because guessit failed
+            # lets prefer the imdb_id here and get the tmdb_id from it
+            if meta.get('tmdb_id') != meta.get('imdb_id') and meta.get('imdb_id') != 0 and meta.get('comp_search', False):
+                category, tmdb_id, original_language = await get_tmdb_from_imdb(
+                    meta['imdb_id'],
+                    meta.get('tvdb_id'),
+                    meta.get('search_year'),
+                    filename,
+                    debug=meta.get('debug', False),
+                    mode=meta.get('mode', 'discord'),
+                    category_preference=meta.get('category')
+                )
+
+                meta['category'] = category
+                meta['tmdb_id'] = int(tmdb_id)
+                meta['original_language'] = original_language
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
         elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
