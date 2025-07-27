@@ -54,16 +54,17 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
   <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
   <tr><td>PrivateSilverScreen</td><td>PSS</td><td>PTerClub</td><td>PTER</td></tr>
-  <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
-  <tr><td>ReelFLiX</td><td>RF</td><td>RetroFlix</td><td>RTF</td></tr>
-  <tr><td>Samaritano</td><td>SAM</td><td>seedpool</td><td>SP</td></tr>
-  <tr><td>Shareisland</td><td>SHRI</td><td>SkipTheCommericals</td><td>STC</td></tr>
-  <tr><td>SpeedApp</td><td>SPD</td><td>Swarmazon</td><td>SN</td></tr>
-  <tr><td>Toca Share</td><td>TOCA</td><td>TorrentHR</td><td>THR</td></tr>
-  <tr><td>TorrentLeech</td><td>TL</td><td>ToTheGlory</td><td>TTG</td></tr>
-  <tr><td>TVChaosUK</td><td>TVC</td><td>UHDShare</td><td>UHD</td></tr>
-  <tr><td>ULCX</td><td>ULCX</td><td>UTOPIA</td><td>UTP</td></tr>
-  <tr><td>YOiNKED</td><td>YOINK</td><td>YUSCENE</td><td>YUS</td></tr>
+  <tr><td>Racing4Everyone</td><td>R4E</td><td>RocketHD</td><td>RHD</td></tr>
+  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
+  <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
+  <tr><td>seedpool</td><td>SP</td><td>Shareisland</td><td>SHRI</td></tr>
+  <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
+  <tr><td>Swarmazon</td><td>SN</td><td>Toca Share</td><td>TOCA</td></tr>
+  <tr><td>TorrentHR</td><td>THR</td><td>TorrentLeech</td><td>TL</td></tr>
+  <tr><td>ToTheGlory</td><td>TTG</td><td>TVChaosUK</td><td>TVC</td></tr>
+  <tr><td>UHDShare</td><td>UHD</td><td>ULCX</td><td>ULCX</td></tr>
+  <tr><td>UTOPIA</td><td>UTP</td><td>YOiNKED</td><td>YOINK</td></tr>
+  <tr><td>YUSCENE</td><td>YUS</td><td></td><td></td></tr>
 </table>
 
 ## **Setup:**
