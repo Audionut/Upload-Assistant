@@ -104,11 +104,12 @@ async def linking(meta, movie_name, year):
             target_file = os.path.join(target_dir, filename)
 
             try:
-                subprocess.run([
-                    'mklink',
-                    target_file,
-                    src_file
-                ], check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                cmd = f'mklink "{target_file}" "{src_file}"'
+                subprocess.run(cmd, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                if meta.get('debug'):
+                    console.print(f"[green]Created symlink: {target_file}")
+
             except subprocess.CalledProcessError as e:
                 console.print(f"[red]Failed to create file symlink: {e}")
 
@@ -129,11 +130,12 @@ async def linking(meta, movie_name, year):
                     os.makedirs(target_file_dir, exist_ok=True)
 
                     try:
-                        subprocess.run([
-                            'mklink',
-                            target_file,
-                            src_file
-                        ], check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        cmd = f'mklink "{target_file}" "{src_file}"'
+                        subprocess.run(cmd, check=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                        if meta.get('debug'):
+                            console.print(f"[green]Created symlink: {file}")
+
                     except subprocess.CalledProcessError as e:
                         console.print(f"[red]Failed to create symlink for {file}: {e}")
 
