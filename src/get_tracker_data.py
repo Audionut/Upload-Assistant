@@ -77,6 +77,10 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
     if meta.get('emby', False):
         only_id = True
         meta['keep_images'] = False
+    if only_id and meta.get('imdb_id') != 0:
+        if meta['debug']:
+            console.print("[yellow]Only ID and we have an IMDb ID, skipping tracker updates[/yellow]")
+        return meta
     if search_term:
         # Check if a specific tracker is already set in meta
         tracker_keys = {
