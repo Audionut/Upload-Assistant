@@ -158,8 +158,9 @@ async def nfo_link(meta):
             os.makedirs(temp_dir, exist_ok=True)
             nfo_file_path = os.path.join(temp_dir, f"{filename}.nfo")
 
-        with open(nfo_file_path, 'w', encoding='utf-8') as f:
-            f.write(nfo_content)
+        if not meta.get('linking_failed', False):
+            with open(nfo_file_path, 'w', encoding='utf-8') as f:
+                f.write(nfo_content)
 
         if meta['debug']:
             console.print(f"[green]Emby NFO created at {nfo_file_path}")
@@ -204,6 +205,7 @@ async def linking(meta, movie_name, year):
 
             except subprocess.CalledProcessError as e:
                 console.print(f"[red]Failed to create file symlink: {e}")
+                meta['linking_failed'] = True
 
         else:
             # Folder content - symlink all files from the source folder
@@ -230,6 +232,7 @@ async def linking(meta, movie_name, year):
 
                     except subprocess.CalledProcessError as e:
                         console.print(f"[red]Failed to create symlink for {file}: {e}")
+                        meta['linking_failed'] = True
 
         console.print(f"[green]Movie folder created: {target_dir}")
         return target_dir
