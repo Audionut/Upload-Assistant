@@ -297,7 +297,7 @@ class BHD():
             else:
                 images = meta['image_list']
             if len(images) > 0:
-                desc.write("[align=center]SCREENSHOTS:\n\n")
+                desc.write("[align=center]")
                 for each in range(len(images[:int(meta['screens'])])):
                     web_url = images[each]['web_url']
                     img_url = images[each]['img_url']
