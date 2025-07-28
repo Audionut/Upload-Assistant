@@ -351,7 +351,6 @@ class BJS(COMMON):
         return "Legendado"
 
     def get_video_codec(self, meta):
-        # 'meta': 'site'
         CODEC_MAP = {
             'x265': 'x265',
             'h.265': 'H.265',
@@ -533,7 +532,7 @@ class BJS(COMMON):
 
     async def get_poster(self, meta):
         tmdb_data = await self.main_tmdb_data(meta)
-        poster_path = tmdb_data.get('poster_path')
+        poster_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not poster_path:
             print("Nenhum poster_path encontrado nos dados do TMDB.")
             return None
@@ -545,7 +544,6 @@ class BJS(COMMON):
             image_bytes = response.content
             filename = os.path.basename(poster_path)
 
-            print(f"Fazendo upload do pôster: {filename}")
             return await self.img_host(image_bytes, filename)
         except Exception as e:
             print(f"Falha ao processar pôster da URL {poster_tmdb_url}: {e}")
@@ -912,7 +910,7 @@ class BJS(COMMON):
 
                     if id_match:
                         torrent_id = id_match.group(1)
-                        details_url = f"{self.base_url}/torrents.php?id={id_match}&torrentid={torrent_id}"
+                        details_url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                         final_message = details_url
