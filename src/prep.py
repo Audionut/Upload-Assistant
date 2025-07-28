@@ -238,7 +238,7 @@ class Prep():
                     return title, None, year
 
                 # If no pattern match works but there's still a year in the filename, extract it
-                year_match = re.search(r'\b(19|20)\d{2}\b', basename)
+                year_match = re.search(r'(?<!\d)(19|20)\d{2}(?!\d)', basename)
                 if year_match:
                     year = year_match.group(0)
                     return None, None, year
