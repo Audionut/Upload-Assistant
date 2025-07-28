@@ -508,60 +508,85 @@ class BJS(COMMON):
 
         return keyword_map.get(source_type.lower(), "Outro")
 
-    async def get_screens(self, meta):
-        screen_upload_url = f"{self.base_url}/ajax.php?action=screen_up"
+    async def img_host(self, image_bytes: bytes, filename: str) -> str | None:
+        upload_url = f"{self.base_url}/ajax.php?action=screen_up"
         headers = {
             'Referer': f"{self.base_url}/upload.php",
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json'
         }
+        files = {'file': (filename, image_bytes, 'image/png')}
 
+        try:
+            response = await asyncio.to_thread(
+                self.session.post, upload_url, headers=headers, files=files, timeout=60
+            )
+            if response.ok:
+                data = response.json()
+                return data.get('url', '').replace('\\/', '/')
+            else:
+                print(f"Erro no upload de {filename}: Status {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"Exceção no upload de {filename}: {e}")
+            return None
+
+    async def get_poster(self, meta):
+        tmdb_data = await self.main_tmdb_data(meta)
+        poster_path = tmdb_data.get('poster_path')
+        if not poster_path:
+            print("Nenhum poster_path encontrado nos dados do TMDB.")
+            return None
+
+        poster_tmdb_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
+        try:
+            response = await self.session.get(poster_tmdb_url, timeout=30)
+            response.raise_for_status()
+            image_bytes = response.content
+            filename = os.path.basename(poster_path)
+
+            print(f"Fazendo upload do pôster: {filename}")
+            return await self.img_host(image_bytes, filename)
+        except Exception as e:
+            print(f"Falha ao processar pôster da URL {poster_tmdb_url}: {e}")
+            return None
+
+    async def get_screenshots(self, meta):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
         local_files = sorted(screenshot_dir.glob('*.png'))
 
-        if local_files and len(local_files) >= 2:
-            async def upload_from_path(path):
-                try:
-                    with open(path, 'rb') as f:
-                        files = {'file': (os.path.basename(path), f, 'image/png')}
-                        response = await asyncio.to_thread(
-                            self.session.post, screen_upload_url, headers=headers, files=files, timeout=60
-                        )
-                        if response.ok:
-                            data = response.json()
-                            return data.get('url', '').replace('\\/', '/')
-                except Exception as e:
-                    print(f"Erro no upload do arquivo local {path}: {e}")
-                return None
+        tasks = []
+        if local_files:
+            print(f"Encontrados {len(local_files)} screenshots locais para upload.")
 
-            tasks = [upload_from_path(path) for path in local_files[:6]]
+            async def upload_local_file(path):
+                with open(path, 'rb') as f:
+                    image_bytes = f.read()
+                return await self.img_host(image_bytes, os.path.basename(path))
+
+            tasks = [upload_local_file(path) for path in local_files[:6]]
 
         else:
-            image_links = [image.get('raw_url') for image in meta.get('image_list', []) if image.get('raw_url')][:6]
-
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')][:6]
+            print(f"Encontrados {len(image_links)} links de screenshots para re-upload.")
             if len(image_links) < 2:
                 raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.")
 
-            async def upload_from_url(url):
+            async def upload_remote_file(url):
                 try:
-                    response = await asyncio.to_thread(self.session.get, url, timeout=30)
+                    response = await self.session.get(url, timeout=30)
                     response.raise_for_status()
                     image_bytes = response.content
-
                     filename = os.path.basename(urlparse(url).path) or "screenshot.png"
-
-                    files = {'file': (filename, image_bytes, 'image/png')}
-                    upload_response = await asyncio.to_thread(
-                        self.session.post, screen_upload_url, headers=headers, files=files, timeout=60
-                    )
-                    if upload_response.ok:
-                        data = upload_response.json()
-                        return data.get('url', '').replace('\\/', '/')
+                    return await self.img_host(image_bytes, filename)
                 except Exception as e:
-                    print(f"Erro no re-upload do link {url}: {e}")
-                return None
+                    print(f"Falha ao processar screenshot da URL {url}: {e}")
+                    return None
 
-            tasks = [upload_from_url(link) for link in image_links]
+            tasks = [upload_remote_file(link) for link in image_links]
+
+        if not tasks:
+            return []
 
         results = await asyncio.gather(*tasks)
         final_urls = [url for url in results if url]
@@ -810,8 +835,8 @@ class BJS(COMMON):
             'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
             'sinopse': await self.get_overview(meta),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
-            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
-            'screenshots[]': await self.get_screens(meta),
+            'image': await self.get_poster(meta),
+            'screenshots[]': await self.get_screenshots(meta),
             })
 
         if not meta.get('anime'):
