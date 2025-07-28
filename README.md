@@ -33,10 +33,8 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 ## Supported Sites:
 <table>
   <tr>
-    <td align="center"><b>Name</b></td>
-    <td align="center"><b>Acronym</b></td>
-    <td align="center"><b>Name</b></td>
-    <td align="center"><b>Acronym</b></td>
+    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
+    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
   </tr>
   <tr><td>Aither</td><td>AITHER</td><td>Alpharatio</td><td>AR</td></tr>
   <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
