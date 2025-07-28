@@ -532,7 +532,8 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                             console.print(f"[yellow]Year mismatch: found {year_int}, expected {search_year_int}[/yellow]")
                         return 0
                 else:
-                    return 0
+                    imdbID = int(imdb_id.replace('tt', '').strip())
+                    return imdbID
             else:
                 if not imdb_id and debug:
                     console.print("[yellow]No IMDb ID found in quickie result[/yellow]")
