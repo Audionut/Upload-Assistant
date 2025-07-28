@@ -506,11 +506,15 @@ class BJS(COMMON):
 
         description_parts.append(base_desc)
 
+        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
+        if custom_description_header:
+            description_parts.append(custom_description_header + "\n")
+
         if self.signature:
             description_parts.append(self.signature)
 
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            final_description = "\n\n".join(filter(None, description_parts))
+            final_description = "\n".join(filter(None, description_parts))
             descfile.write(final_description)
 
     def get_resolution(self, meta):
@@ -786,7 +790,7 @@ class BJS(COMMON):
 
                     if id_match:
                         torrent_id = id_match.group(1)
-                        details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
+                        details_url = f"{self.base_url}/torrents.php?id={id_match}&torrentid={torrent_id}"
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                         final_message = details_url
