@@ -567,9 +567,8 @@ class BJS(COMMON):
         final_urls = [url for url in results if url]
 
         if len(final_urls) < 2:
-            raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] Não foi possível obter links para pelo menos 2 screenshots após o processo.")
+            raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] O host de imagem do {self.tracker} não retornou o número mínimo de screenshots.")
 
-        print(f"INFO: {len(final_urls)} screenshots processadas com sucesso.")
         return final_urls
 
     async def edit_desc(self, meta):
