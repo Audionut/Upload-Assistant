@@ -558,24 +558,9 @@ class Prep():
                 filename,
                 debug=meta.get('debug', False),
                 mode=meta.get('mode', 'discord'),
-                category_preference=meta.get('category')
-            )
-
-            meta['category'] = category
-            meta['tmdb_id'] = int(tmdb_id)
-            meta['original_language'] = original_language
-
-        # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
-        elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
-            category, tmdb_id, original_language = await get_tmdb_from_imdb(
-                meta['imdb_id'],
-                meta.get('tvdb_id'),
-                meta.get('search_year'),
-                filename,
-                debug=meta.get('debug', False),
-                mode=meta.get('mode', 'discord'),
-                category_preference=meta.get('category')
-            )
+                category_preference=meta.get('category'),
+                imdb_info=meta.get('imdb_info', None)
+                )
 
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)
@@ -662,7 +647,8 @@ class Prep():
                     filename,
                     debug=meta.get('debug', False),
                     mode=meta.get('mode', 'discord'),
-                    category_preference=meta.get('category')
+                    category_preference=meta.get('category'),
+                    imdb_info=meta.get('imdb_info', None)
                 )
 
                 meta['category'] = category

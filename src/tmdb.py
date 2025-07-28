@@ -18,14 +18,18 @@ TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 
-async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None):
+async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None, imdb_info=None):
     """Fetches TMDb ID using IMDb or TVDb ID.
 
     - Returns `(category, tmdb_id, original_language)`
     - If TMDb fails, prompts the user (if in CLI mode).
     """
     if not str(imdb_id).startswith("tt"):
-        imdb_id = f"tt{imdb_id:07d}"
+        if isinstance(imdb_id, str) and imdb_id.isdigit():
+            imdb_id = f"tt{int(imdb_id):07d}"
+        elif isinstance(imdb_id, int):
+            imdb_id = f"tt{imdb_id:07d}"
+    console.print(f"[yellow]Using IMDb ID: {imdb_id}[/yellow]")
 
     async def _tmdb_find_by_external_source(external_id, source):
         """Helper function to find a movie or TV show on TMDb by external ID."""
@@ -83,9 +87,12 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     console.print("[yellow]TMDb was unable to find anything with that IMDb ID, checking TVDb...")
 
     # If both TMDb and TVDb fail, fetch IMDb info and attempt a title search
-    imdb_info = await get_imdb_info_api(imdb_id.replace('tt', ''), {})
+    imdb_id = imdb_id.replace("tt", "")
+    imdb_id = int(imdb_id) if imdb_id.isdigit() else 0
+    imdb_info = imdb_info or await get_imdb_info_api(imdb_id, {})
     title = imdb_info.get("title") or filename
     year = imdb_info.get("year") or search_year
+    original_language = imdb_info.get("original language", "en")
 
     console.print(f"[yellow]TMDb was unable to find anything from external IDs, searching TMDb for {title} ({year})[/yellow]")
 
@@ -98,7 +105,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     }
 
     # Try as movie first
-    result = await get_tmdb_id(
+    tmdb_id, category = await get_tmdb_id(
         title,
         year,
         meta,
@@ -107,9 +114,9 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     )
 
     # If no results, try as TV
-    if result['tmdb_id'] == 0:
+    if tmdb_id == 0:
         meta['category'] = "TV"
-        result = await get_tmdb_id(
+        tmdb_id, category = await get_tmdb_id(
             title,
             year,
             meta,
@@ -118,9 +125,8 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
         )
 
     # Extract necessary values from the result
-    tmdb_id = result.get('tmdb_id', 0)
-    category = result.get('category', "MOVIE")
-    original_language = result.get('original_language', "en")
+    tmdb_id = tmdb_id or 0
+    category = category or "MOVIE"
 
     # **User Prompt for Manual TMDb ID Entry**
     if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
