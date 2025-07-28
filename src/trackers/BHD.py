@@ -259,8 +259,8 @@ class BHD():
                             desc.write("\n")
             desc.write(base.replace("[img]", "[img width=300]"))
             try:
-                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use default
-                screensPerRow = int(self.config['DEFAULT']['screens_per_row'])
+                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+                screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
             except Exception:
                 screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
