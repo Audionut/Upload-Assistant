@@ -140,30 +140,31 @@ async def nfo_link(meta):
         movie_name = meta.get('title', 'movie')
         # Remove or replace invalid characters: < > : " | ? * \ /
         movie_name = re.sub(r'[<>:"|?*\\/]', '', movie_name)
-        link_dir = await linking(meta, movie_name, year)
+        if not meta['debug']:
+            link_dir = await linking(meta, movie_name, year)
 
-        uuid = meta.get('uuid')
-        filelist = meta.get('filelist', [])
-        if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
-            # Single file - create symlink in the target folder
-            src_file = filelist[0]
-            filename = os.path.splitext(os.path.basename(src_file))[0]
-        else:
-            filename = uuid
+            uuid = meta.get('uuid')
+            filelist = meta.get('filelist', [])
+            if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
+                # Single file - create symlink in the target folder
+                src_file = filelist[0]
+                filename = os.path.splitext(os.path.basename(src_file))[0]
+            else:
+                filename = uuid
 
-        if link_dir is not None:
-            nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
-        else:
-            temp_dir = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/")
-            os.makedirs(temp_dir, exist_ok=True)
-            nfo_file_path = os.path.join(temp_dir, f"{filename}.nfo")
+            if link_dir is not None:
+                nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
+            else:
+                temp_dir = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/")
+                os.makedirs(temp_dir, exist_ok=True)
+                nfo_file_path = os.path.join(temp_dir, f"{filename}.nfo")
 
-        if not meta.get('linking_failed', False):
-            with open(nfo_file_path, 'w', encoding='utf-8') as f:
-                f.write(nfo_content)
+            if not meta.get('linking_failed', False):
+                with open(nfo_file_path, 'w', encoding='utf-8') as f:
+                    f.write(nfo_content)
 
-        if meta['debug']:
-            console.print(f"[green]Emby NFO created at {nfo_file_path}")
+            if meta['debug']:
+                console.print(f"[green]Emby NFO created at {nfo_file_path}")
 
         return nfo_file_path
 
