@@ -29,7 +29,6 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             imdb_id = f"tt{int(imdb_id):07d}"
         elif isinstance(imdb_id, int):
             imdb_id = f"tt{imdb_id:07d}"
-    console.print(f"[yellow]Using IMDb ID: {imdb_id}[/yellow]")
 
     async def _tmdb_find_by_external_source(external_id, source):
         """Helper function to find a movie or TV show on TMDb by external ID."""
