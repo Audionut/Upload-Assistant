@@ -294,7 +294,7 @@ class BJS(COMMON):
                     tipolegenda = 'Arquivos Separados'
                 else:
                     meta['tracker_status'][self.tracker]['status_message'] = (
-                        "ERRO: Seu upload contém legendas em arquivos separados. "
+                        "ERRO: Seu upload contém legendas em arquivos separados."
                         "Use [yellow]-kf[/yellow] ou [yellow]--keep-folder[/yellow] para incluir todos os arquivos da pasta."
                     )
                     raise UploadException("Legendas externas detectadas sem o uso de -kf/--keep-folder")
