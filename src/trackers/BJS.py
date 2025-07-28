@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
+import asyncio
 import httpx
 import langcodes
 import os
@@ -8,11 +8,14 @@ import requests
 import unicodedata
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
+from datetime import datetime
 from http.cookiejar import MozillaCookieJar
 from langcodes.tag_parser import LanguageTagError
+from pathlib import Path
 from src.console import console
-from src.languages import process_desc_language
 from src.exceptions import UploadException
+from src.languages import process_desc_language
+from urllib.parse import urlparse
 
 
 class BJS(COMMON):
@@ -37,11 +40,10 @@ class BJS(COMMON):
         self.episode = meta.get('episode_int', '')
         self.is_tv_pack = meta.get('tv_pack', '') == 1
 
-    async def tmdb_data(self, meta):
-        self.assign_media_properties(meta)
+    async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
 
-        url = f"https://api.themoviedb.org/3/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
+        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -51,6 +53,31 @@ class BJS(COMMON):
                     return None
         except httpx.RequestError:
             return None
+
+    async def main_tmdb_data(self, meta):
+        self.assign_media_properties(meta)
+        if not self.category or not self.tmdb_id:
+            return None
+
+        endpoint = f"{self.category.lower()}/{self.tmdb_id}"
+        return await self.fetch_tmdb_data(endpoint)
+
+    async def season_tmdb_data(self, meta):
+        season = meta.get('season_int')
+        if not self.tmdb_id or season is None:
+            return None
+
+        endpoint = f"tv/{self.tmdb_id}/season/{season}"
+        return await self.fetch_tmdb_data(endpoint)
+
+    async def episode_tmdb_data(self, meta):
+        season = meta.get('season_int')
+        episode = meta.get('episode_int')
+        if not self.tmdb_id or season is None or episode is None:
+            return None
+
+        endpoint = f"tv/{self.tmdb_id}/season/{season}/episode/{episode}"
+        return await self.fetch_tmdb_data(endpoint)
 
     async def get_original_language(self, meta):
         possible_languages = {
@@ -63,7 +90,7 @@ class BJS(COMMON):
             "Russo", "Sueco", "Tailandês", "Tamil", "Tcheco", "Telugo", "Turco",
             "Ucraniano", "Urdu", "Vietnamita", "Zulu", "Outro"
         }
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.main_tmdb_data(meta)
         lang_code = tmdb_data.get("original_language")
         origin_countries = tmdb_data.get("origin_country", [])
 
@@ -481,17 +508,69 @@ class BJS(COMMON):
 
         return keyword_map.get(source_type.lower(), "Outro")
 
-    def get_screens(self, meta):
-        screenshot_urls = [
-            image.get('raw_url')
-            for image in meta.get('image_list', [])
-            if image.get('raw_url')
-        ][:6]
+    async def get_screens(self, meta):
+        screen_upload_url = f"{self.base_url}/ajax.php?action=screen_up"
+        headers = {
+            'Referer': f"{self.base_url}/upload.php",
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
 
-        if len(screenshot_urls) < 2:
-            raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.")
+        screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
+        local_files = sorted(screenshot_dir.glob('*.png'))
 
-        return screenshot_urls
+        if local_files and len(local_files) >= 2:
+            async def upload_from_path(path):
+                try:
+                    with open(path, 'rb') as f:
+                        files = {'file': (os.path.basename(path), f, 'image/png')}
+                        response = await asyncio.to_thread(
+                            self.session.post, screen_upload_url, headers=headers, files=files, timeout=60
+                        )
+                        if response.ok:
+                            data = response.json()
+                            return data.get('url', '').replace('\\/', '/')
+                except Exception as e:
+                    print(f"Erro no upload do arquivo local {path}: {e}")
+                return None
+
+            tasks = [upload_from_path(path) for path in local_files[:6]]
+
+        else:
+            image_links = [image.get('raw_url') for image in meta.get('image_list', []) if image.get('raw_url')][:6]
+
+            if len(image_links) < 2:
+                raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.")
+
+            async def upload_from_url(url):
+                try:
+                    response = await asyncio.to_thread(self.session.get, url, timeout=30)
+                    response.raise_for_status()
+                    image_bytes = response.content
+
+                    filename = os.path.basename(urlparse(url).path) or "screenshot.png"
+
+                    files = {'file': (filename, image_bytes, 'image/png')}
+                    upload_response = await asyncio.to_thread(
+                        self.session.post, screen_upload_url, headers=headers, files=files, timeout=60
+                    )
+                    if upload_response.ok:
+                        data = upload_response.json()
+                        return data.get('url', '').replace('\\/', '/')
+                except Exception as e:
+                    print(f"Erro no re-upload do link {url}: {e}")
+                return None
+
+            tasks = [upload_from_url(link) for link in image_links]
+
+        results = await asyncio.gather(*tasks)
+        final_urls = [url for url in results if url]
+
+        if len(final_urls) < 2:
+            raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] Não foi possível obter links para pelo menos 2 screenshots após o processo.")
+
+        print(f"INFO: {len(final_urls)} screenshots processadas com sucesso.")
+        return final_urls
 
     async def edit_desc(self, meta):
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
@@ -542,7 +621,7 @@ class BJS(COMMON):
         }
 
     async def get_cast(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.main_tmdb_data(meta)
         cast_data = (tmdb_data.get('credits') or {}).get('cast', [])
         if cast_data:
             return ", ".join(
@@ -586,7 +665,7 @@ class BJS(COMMON):
             return ""
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.main_tmdb_data(meta)
         video_results = tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
@@ -668,8 +747,27 @@ class BJS(COMMON):
 
         return " / ".join(ordered_tags)
 
+    async def get_overview(self, meta):
+        episode = await self.episode_tmdb_data(meta)
+        season = await self.season_tmdb_data(meta)
+        main = await self.main_tmdb_data(meta)
+
+        if self.category == 'TV':
+            overview = season.get('overview', '') if self.is_tv_pack else episode.get('overview', '')
+            overview = overview or main.get('overview', '')
+        else:
+            overview = main.get('overview', '')
+
+        if not overview:
+            meta['tracker_status'][self.tracker]['status_message'] = (
+                "ERRO: Não foi possível encontrar a sinopse no TMDB. O upload não pode continuar."
+            )
+            raise UploadException
+
+        return overview
+
     async def upload(self, meta, disctype):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.main_tmdb_data(meta)
 
         runtime_value = meta.get('runtime')
         hours, minutes = self.get_runtime(runtime_value)
@@ -711,10 +809,10 @@ class BJS(COMMON):
             'remaster_title': self.build_remaster_title(meta),
             'resolucaow': self.get_resolution(meta).get('resolucaow', ''),
             'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
-            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
+            'sinopse': await self.get_overview(meta),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
-            'screenshots[]': self.get_screens(meta),
+            'screenshots[]': await self.get_screens(meta),
             })
 
         if not meta.get('anime'):
