@@ -214,33 +214,40 @@ class TL():
         season = meta.get('season', '')
         season_episode = f"{season}{episode}" if season or episode else ''
 
+        search_urls = []
+
         if meta['category'] == 'TV':
             if meta.get('tv_pack', False):
                 param = f"{cat_id}/query/{search_name} {season} {resolution}"
+                search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{param}")
             else:
-                param = f"{cat_id}/query/{search_name} {season_episode} {resolution}"
+                episode_param = f"{cat_id}/query/{search_name} {season_episode} {resolution}"
+                search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{episode_param}")
 
-        if meta['category'] == 'MOVIE':
+                # Also check for season packs
+                pack_param = f"27/query/{search_name} {season} {resolution}"
+                search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{pack_param}")
+
+        elif meta['category'] == 'MOVIE':
             param = f"{cat_id}/query/{search_name} {year} {resolution}"
+            search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{param}")
 
-        search_url = f"{self.base_url}/torrents/browse/list/categories/{param}"
-        console.print(f"[cyan]Searching for duplicates on {self.tracker} with URL: {search_url}[/cyan]")
+        for url in search_urls:
+            try:
+                response = await self.session.get(url, timeout=20)
+                response.raise_for_status()
 
-        try:
-            response = await self.session.get(search_url, timeout=20)
-            response.raise_for_status()
+                data = response.json()
+                torrents = data.get("torrentList", [])
 
-            data = response.json()
-            torrents = data.get("torrentList", [])
+                for torrent in torrents:
+                    name = torrent.get("name")
+                    size = torrent.get("size")
+                    if name or size:
+                        dupes.append({'name': name, 'size': size})
 
-            for torrent in torrents:
-                name = torrent.get("name")
-                size = torrent.get("size")
-                if name or size:
-                    dupes.append({'name': name, 'size': size})
-
-        except Exception as e:
-            console.print(f"[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]")
+            except Exception as e:
+                console.print(f"[bold red]Error searching for duplicates on {self.tracker} ({url}): {e}[/bold red]")
 
         return dupes
 
