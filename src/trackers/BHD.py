@@ -258,6 +258,11 @@ class BHD():
                             desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
                             desc.write("\n")
             desc.write(base.replace("[img]", "[img width=300]"))
+            try:
+                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+                screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
+            except Exception:
+                screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
                 desc.write("[center]")
                 comparison_groups = meta.get('comparison_groups', {})
@@ -298,7 +303,7 @@ class BHD():
                     img_url = images[each]['img_url']
                     if (each == len(images) - 1):
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
-                    elif (each + 1) % 2 == 0:
+                    elif (each + 1) % screensPerRow == 0:
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
                         desc.write("\n")
                     else:
