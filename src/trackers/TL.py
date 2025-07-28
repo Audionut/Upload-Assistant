@@ -225,7 +225,8 @@ class TL():
                 search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{episode_param}")
 
                 # Also check for season packs
-                pack_param = f"27/query/{search_name} {season} {resolution}"
+                pack_cat_id = 44 if cat_id == 44 else 27  # Foreign TV shows do not have a separate cat_id for season/episodes
+                pack_param = f"{pack_cat_id}/query/{search_name} {season} {resolution}"
                 search_urls.append(f"{self.base_url}/torrents/browse/list/categories/{pack_param}")
 
         elif meta['category'] == 'MOVIE':
