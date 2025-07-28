@@ -546,29 +546,24 @@ class Prep():
             tmdb_id, category = tmdb_result
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)
-            if isinstance(imdb_result, str):
-                meta['imdb_id'] = int(imdb_result)
-                meta['comp_search'] = True
-            else:
-                meta['imdb_id'] = imdb_result
-                meta['quickie_search'] = True
+            meta['imdb_id'] = imdb_result
+            meta['quickie_search'] = True
 
-            # if we have a string imdb_id, it means we did some throughough searching in imdb, probably because guessit failed
-            # lets prefer the imdb_id here and get the tmdb_id from it
-            if meta.get('tmdb_id') != meta.get('imdb_id') and meta.get('imdb_id') != 0 and meta.get('comp_search', False):
-                category, tmdb_id, original_language = await get_tmdb_from_imdb(
-                    meta['imdb_id'],
-                    meta.get('tvdb_id'),
-                    meta.get('search_year'),
-                    filename,
-                    debug=meta.get('debug', False),
-                    mode=meta.get('mode', 'discord'),
-                    category_preference=meta.get('category')
-                )
+        # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
+        elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
+            category, tmdb_id, original_language = await get_tmdb_from_imdb(
+                meta['imdb_id'],
+                meta.get('tvdb_id'),
+                meta.get('search_year'),
+                filename,
+                debug=meta.get('debug', False),
+                mode=meta.get('mode', 'discord'),
+                category_preference=meta.get('category')
+            )
 
-                meta['category'] = category
-                meta['tmdb_id'] = int(tmdb_id)
-                meta['original_language'] = original_language
+            meta['category'] = category
+            meta['tmdb_id'] = int(tmdb_id)
+            meta['original_language'] = original_language
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
         elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
@@ -629,7 +624,8 @@ class Prep():
                         poster=meta.get('poster'),
                         debug=meta.get('debug', False),
                         mode=meta.get('mode', 'cli'),
-                        tvdb_id=meta.get('tvdb_id', 0)
+                        tvdb_id=meta.get('tvdb_id', 0),
+                        quickie_search=meta.get('quickie_search', False),
                     )
 
                     # Check if the metadata is empty or missing essential fields
@@ -649,13 +645,67 @@ class Prep():
         if meta.get('retrieved_aka', None) is not None:
             meta['aka'] = meta['retrieved_aka']
 
-        # if the quickie search and tmdb return didn't yield an IMDb ID, try again with prompts
+        # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
+        if meta.get('imdb_mismatch', False):
+            if meta['debug']:
+                console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
+            # if there's a secondary title, TMDb is probably correct
+            if meta.get('secondary_title', None):
+                meta['imdb_id'] = 0
+                meta['imdb_info'] = None
+            # Otherwise, IMDb used some other regex and we'll trust it more than guessit
+            else:
+                category, tmdb_id, original_language = await get_tmdb_from_imdb(
+                    meta['imdb_id'],
+                    meta.get('tvdb_id'),
+                    meta.get('search_year'),
+                    filename,
+                    debug=meta.get('debug', False),
+                    mode=meta.get('mode', 'discord'),
+                    category_preference=meta.get('category')
+                )
+
+                meta['category'] = category
+                meta['tmdb_id'] = int(tmdb_id)
+                meta['original_language'] = original_language
+
+                try:
+                    tmdb_metadata = await tmdb_other_meta(
+                        tmdb_id=meta['tmdb_id'],
+                        path=meta.get('path'),
+                        search_year=meta.get('search_year'),
+                        category=meta.get('category'),
+                        imdb_id=meta.get('imdb_id', 0),
+                        manual_language=meta.get('manual_language'),
+                        anime=meta.get('anime', False),
+                        mal_manual=meta.get('mal_manual'),
+                        aka=meta.get('aka', ''),
+                        original_language=meta.get('original_language'),
+                        poster=meta.get('poster'),
+                        debug=meta.get('debug', False),
+                        mode=meta.get('mode', 'cli'),
+                        tvdb_id=meta.get('tvdb_id', 0),
+                        quickie_search=meta.get('quickie_search', False),
+                    )
+
+                    if not tmdb_metadata or not all(tmdb_metadata.get(field) for field in ['title', 'year']):
+                        error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
+                        console.print(f"[bold red]{error_msg}[/bold red]")
+                        raise ValueError(error_msg)
+
+                    meta.update(tmdb_metadata)
+
+                except Exception as e:
+                    error_msg = f"TMDB metadata retrieval failed for ID {meta['tmdb_id']}: {str(e)}"
+                    console.print(f"[bold red]{error_msg}[/bold red]")
+                    raise RuntimeError(error_msg) from e
+
+        # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:
             meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=meta.get('debug', False))
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
-        # rerun if imdb_mismatch, since it means tmdb return and quickie search did not match and we'll prefer tmdb return
-        if (meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0) or meta.get('imdb_mismatch'):
+        if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
             imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
             meta['imdb_info'] = imdb_info
             meta['tv_year'] = imdb_info.get('tv_year', None)

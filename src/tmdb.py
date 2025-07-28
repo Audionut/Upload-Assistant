@@ -434,6 +434,7 @@ async def tmdb_other_meta(
     youtube = None
     title = None
     year = None
+    original_imdb_id = imdb_id
 
     async with httpx.AsyncClient() as client:
         # Get main media details first (movie or TV show)
@@ -544,9 +545,11 @@ async def tmdb_other_meta(
                     if imdb_id_str and imdb_id_str not in ["", " ", "None", None]:
                         imdb_id_clean = imdb_id_str.lstrip('t')
                         if imdb_id_clean.isdigit():
-                            if imdb_id_clean != imdb_id:
+                            if imdb_id_clean != original_imdb_id and quickie_search:
                                 imdb_mismatch = True
-                            imdb_id = int(imdb_id_clean)
+                                imdb_id = original_imdb_id
+                            else:
+                                imdb_id = int(imdb_id_clean)
                 else:
                     imdb_id = int(imdb_id)
 
