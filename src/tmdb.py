@@ -545,7 +545,8 @@ async def tmdb_other_meta(
                     if imdb_id_str and imdb_id_str not in ["", " ", "None", None]:
                         imdb_id_clean = imdb_id_str.lstrip('t')
                         if imdb_id_clean.isdigit():
-                            if imdb_id_clean != original_imdb_id and quickie_search:
+                            imdb_id_clean_int = int(imdb_id_clean)
+                            if imdb_id_clean_int != int(original_imdb_id) and quickie_search:
                                 imdb_mismatch = True
                                 imdb_id = original_imdb_id
                             else:
