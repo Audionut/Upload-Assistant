@@ -119,6 +119,7 @@ class BJS(COMMON):
         self.assign_media_properties(meta)
         upload_season_num = None
         upload_episode_num = None
+        upload_resolution = meta.get('resolution')
 
         if self.category == 'TV':
             season_match = meta.get('season', '').replace('S', '')
@@ -141,17 +142,53 @@ class BJS(COMMON):
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            torrent_details_table = soup.find('table', id='torrent_details')
+            torrent_details_table = soup.find('div', class_='main_column')
+
+            episode_found_on_page = False
+            if self.category == 'TV' and not self.is_tv_pack and upload_season_num and upload_episode_num:
+                temp_season_on_page = None
+                upload_episode_str = f"E{upload_episode_num}"
+                for r in torrent_details_table.find_all('tr'):
+                    if 'season_header' in r.get('class', []):
+                        s_match = re.search(r'Temporada (\d+)', r.get_text(strip=True))
+                        if s_match:
+                            temp_season_on_page = s_match.group(1)
+                        continue
+                    if temp_season_on_page == upload_season_num and r.get('id', '').startswith('torrent'):
+                        link = r.find('a', onclick=re.compile(r"loadIfNeeded\("))
+                        if link and re.search(r'\b' + re.escape(upload_episode_str) + r'\b', link.get_text(strip=True)):
+                            episode_found_on_page = True
+                            break
+
+            # Get the cover while searching for dupes
+            cover_div = soup.find('div', id='cover_div_0')
+            image_url = None
+
+            if cover_div:
+                link_tag = cover_div.find('a')
+                if link_tag and link_tag.get('href'):
+                    image_url = link_tag['href']
+
+            if image_url:
+                self.cover = image_url
+
             if not torrent_details_table:
                 return []
 
             current_season_on_page = None
+            current_resolution_on_page = None
             for row in torrent_details_table.find_all('tr'):
+                if 'resolution_header' in row.get('class', []):
+                    header_text = row.get_text(strip=True)
+                    resolution_match = re.search(r'(\d{3,4}p)', header_text)
+                    if resolution_match:
+                        current_resolution_on_page = resolution_match.group(1)
+                    continue
                 if 'season_header' in row.get('class', []):
                     season_header_text = row.get_text(strip=True)
                     season_match = re.search(r'Temporada (\d+)', season_header_text)
                     if season_match:
-                        current_season_on_page = season_match.group(1).zfill(2)
+                        current_season_on_page = season_match.group(1)
                     continue
 
                 if not row.get('id', '').startswith('torrent'):
@@ -165,22 +202,37 @@ class BJS(COMMON):
                 description_text = " ".join(id_link.get_text(strip=True).split())
 
                 should_make_ajax_call = False
-                if not self.category == 'TV':
-                    should_make_ajax_call = True
 
-                else:
-
+                # TV
+                if self.category == 'TV':
                     if current_season_on_page == upload_season_num:
-                        existing_episode_match = re.match(r'E(\d+)', description_text)
-                        is_existing_torrent_a_pack = not existing_episode_match
+                        existing_episode_match = re.search(r'E(\d+)', description_text)
+                        is_current_row_a_pack = not existing_episode_match
 
-                        if self.is_tv_pack and is_existing_torrent_a_pack:
-                            should_make_ajax_call = True
-
-                        elif not self.is_tv_pack and existing_episode_match:
-                            existing_episode_num = existing_episode_match.group(1).zfill(2)
-                            if existing_episode_num == upload_episode_num:
+                        # Case 1: We are uploading a SEASON PACK
+                        if self.is_tv_pack:
+                            if is_current_row_a_pack:
                                 should_make_ajax_call = True
+
+                        # Case 2: We are uploading a SINGLE EPISODE
+                        else:
+                            # Subcase 2a: Exact episode was found on the page. Only process that match.
+                            if episode_found_on_page:
+                                if existing_episode_match:
+                                    existing_episode_num = existing_episode_match.group(1)
+                                    if existing_episode_num == upload_episode_num:
+                                        should_make_ajax_call = True
+                            # Subcase 2b: Exact episode not found. Process season packs instead.
+                            else:
+                                if is_current_row_a_pack:
+                                    process_folder_name = True
+                                    should_make_ajax_call = True
+
+                # MOVIE
+                if self.category == 'MOVIE':
+                    # Only process matching resolution
+                    if upload_resolution and current_resolution_on_page == upload_resolution:
+                        should_make_ajax_call = True
 
                 if should_make_ajax_call:
                     onclick_attr = id_link['onclick']
@@ -203,7 +255,7 @@ class BJS(COMMON):
                     item_name = None
                     is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
 
-                    if is_existing_torrent_a_disc or self.is_tv_pack:
+                    if is_existing_torrent_a_disc or self.is_tv_pack or process_folder_name:
                         path_div = ajax_soup.find('div', class_='filelist_path')
                         if path_div and path_div.get_text(strip=True):
                             item_name = path_div.get_text(strip=True).strip('/')
@@ -530,24 +582,27 @@ class BJS(COMMON):
             print(f"Exceção no upload de {filename}: {e}")
             return None
 
-    async def get_poster(self, meta):
-        tmdb_data = await self.main_tmdb_data(meta)
-        poster_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
-        if not poster_path:
-            print("Nenhum poster_path encontrado nos dados do TMDB.")
-            return None
+    async def get_cover(self, meta):
+        if self.cover:
+            return self.cover
+        else:
+            tmdb_data = await self.main_tmdb_data(meta)
+            cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
+            if not cover_path:
+                print("Nenhum poster_path encontrado nos dados do TMDB.")
+                return None
 
-        poster_tmdb_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
-        try:
-            response = await self.session.get(poster_tmdb_url, timeout=30)
-            response.raise_for_status()
-            image_bytes = response.content
-            filename = os.path.basename(poster_path)
+            cover_tmdb_url = f"https://image.tmdb.org/t/p/w500{cover_path}"
+            try:
+                response = await self.session.get(cover_tmdb_url, timeout=30)
+                response.raise_for_status()
+                image_bytes = response.content
+                filename = os.path.basename(cover_path)
 
-            return await self.img_host(image_bytes, filename)
-        except Exception as e:
-            print(f"Falha ao processar pôster da URL {poster_tmdb_url}: {e}")
-            return None
+                return await self.img_host(image_bytes, filename)
+            except Exception as e:
+                print(f"Falha ao processar pôster da URL {cover_tmdb_url}: {e}")
+                return None
 
     async def get_screenshots(self, meta):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
@@ -833,8 +888,6 @@ class BJS(COMMON):
             'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
             'sinopse': await self.get_overview(meta),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
-            'image': await self.get_poster(meta),
-            'screenshots[]': await self.get_screenshots(meta),
             })
 
         if not meta.get('anime'):
@@ -893,6 +946,11 @@ class BJS(COMMON):
         if meta.get('debug', False):
             console.print(data)
             return
+        else:
+            data.update({
+                'image': await self.get_cover(meta),
+                'screenshots[]': await self.get_screenshots(meta),
+            })
 
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         if not os.path.exists(torrent_path):
