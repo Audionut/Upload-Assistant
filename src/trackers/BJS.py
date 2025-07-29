@@ -120,6 +120,7 @@ class BJS(COMMON):
         upload_season_num = None
         upload_episode_num = None
         upload_resolution = meta.get('resolution')
+        process_folder_name = False
 
         if self.category == 'TV':
             season_match = meta.get('season', '').replace('S', '')
@@ -582,7 +583,8 @@ class BJS(COMMON):
             print(f"Exceção no upload de {filename}: {e}")
             return None
 
-    async def get_cover(self, meta):
+    async def get_cover(self, meta, disctype):
+        await self.search_existing(meta, disctype)
         if self.cover:
             return self.cover
         else:
@@ -594,7 +596,7 @@ class BJS(COMMON):
 
             cover_tmdb_url = f"https://image.tmdb.org/t/p/w500{cover_path}"
             try:
-                response = await self.session.get(cover_tmdb_url, timeout=30)
+                response = await self.session.get(cover_tmdb_url, timeout=60)
                 response.raise_for_status()
                 image_bytes = response.content
                 filename = os.path.basename(cover_path)
@@ -610,7 +612,7 @@ class BJS(COMMON):
 
         tasks = []
         if local_files:
-            print(f"Encontrados {len(local_files)} screenshots locais para upload.")
+            print(f"Enviando {len(local_files)} screenshots para o {self.tracker}.")
 
             async def upload_local_file(path):
                 with open(path, 'rb') as f:
@@ -627,7 +629,7 @@ class BJS(COMMON):
 
             async def upload_remote_file(url):
                 try:
-                    response = await self.session.get(url, timeout=30)
+                    response = await asyncio.to_thread(self.session.get, url, timeout=60)
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or "screenshot.png"
@@ -948,7 +950,7 @@ class BJS(COMMON):
             return
         else:
             data.update({
-                'image': await self.get_cover(meta),
+                'image': await self.get_cover(meta, disctype),
                 'screenshots[]': await self.get_screenshots(meta),
             })
 
