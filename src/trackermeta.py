@@ -549,9 +549,10 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             imdb, tvdb_id, hdb_name, meta['ext_torrenthash'], meta['hdb_description'] = await tracker_instance.get_info_from_torrent_id(meta[tracker_key])
 
             if imdb or tvdb_id:
-                meta['imdb_id'] = imdb if imdb else 0
-                meta['tvdb_id'] = tvdb_id if tvdb_id else 0
+                meta['imdb_id'] = imdb if imdb else meta.get('imdb_id', 0)
+                meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id', 0)
                 meta['hdb_name'] = hdb_name
+                found_match = True
                 result = bbcode.clean_hdb_description(meta['hdb_description'])
                 if meta['hdb_description'] and len(meta['hdb_description']) > 0 and not only_id:
                     if result is None:
@@ -560,7 +561,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         meta['image_list'] = []
                     else:
                         meta['description'], meta['image_list'] = result
-                found_match = True
+                        meta['saved_description'] = True
+
                 if meta.get('image_list') and meta.get('keep_images'):
                     valid_images = await check_images_concurrently(meta.get('image_list'), meta)
                     if valid_images:
@@ -568,6 +570,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         await handle_image_list(meta, tracker_name, valid_images)
                 else:
                     meta['image_list'] = []
+
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
             else:
                 console.print(f"[yellow]{tracker_name} data not found for ID: {meta[tracker_key]}[/yellow]")
@@ -589,7 +592,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         meta['imdb_id'] = imdb if imdb else meta.get('imdb_id')
                         meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id')
                         found_match = True
-                        if meta['hdb_description'] and len(meta['hdb_description']) > 0:
+                        if meta['hdb_description'] and len(meta['hdb_description']) > 0 and not only_id:
                             result = bbcode.clean_hdb_description(meta['hdb_description'])
                             if result is None:
                                 console.print("[yellow]Failed to clean HDB description, it might be empty or malformed[/yellow]")
@@ -617,7 +620,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                                     console.print("[green]Keeping the original description.[/green]")
                                     meta['description'] = desc
                                     meta['saved_description'] = True
-                                if meta.get('image_list'):
+                                if meta.get('image_list') and meta.get('keep_images'):
                                     valid_images = await check_images_concurrently(meta.get('image_list'), meta)
                                     if valid_images:
                                         meta['image_list'] = valid_images

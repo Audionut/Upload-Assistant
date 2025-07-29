@@ -877,7 +877,7 @@ async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imd
                     category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
                 if each.lower().startswith('imdb'):
                     try:
-                        imdbid = str(int(extra[each].replace('tt', ''))).zfill(7)
+                        imdbid = int(extra[each].replace('tt', ''))
                     except Exception:
                         pass
     return category, tmdbid, imdbid

@@ -40,6 +40,30 @@ desat = float(config['DEFAULT'].get('desat', 10.0))
 frame_overlay = config['DEFAULT'].get('frame_overlay', False)
 
 
+async def run_ffmpeg(command):
+    if platform.system() == 'Linux':
+        ffmpeg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bin', 'ffmpeg', 'ffmpeg')
+        if os.path.exists(ffmpeg_path):
+            cmd_list = command.compile()
+            cmd_list[0] = ffmpeg_path
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd_list,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            return process.returncode, stdout, stderr
+
+    process = await asyncio.create_subprocess_exec(
+        *command.compile(),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+    return process.returncode, stdout, stderr
+
+
 async def sanitize_filename(filename):
     # Replace invalid characters like colons with an underscore
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
@@ -399,9 +423,9 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
             .overwrite_output()
             .global_args('-loglevel', loglevel)
         )
-        process = await asyncio.create_subprocess_exec(*command.compile(), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await process.communicate()
-        if process.returncode == 0:
+
+        returncode, stdout, stderr = await run_ffmpeg(command)
+        if returncode == 0:
             return (index, image_path)
         else:
             console.print(f"[red]FFmpeg error capturing screenshot: {stderr.decode()}")
@@ -783,18 +807,8 @@ async def capture_dvd_screenshot(task):
             # Use the filtered output with frame info
             ff = base_text
 
-        cmd = ff.output(image, vframes=1, pix_fmt="rgb24").overwrite_output().global_args('-loglevel', loglevel, '-accurate_seek').compile()
-
-        # Run ffmpeg asynchronously
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        stdout, stderr = await process.communicate()
-
-        if process.returncode != 0:
+        returncode, _, stderr = await run_ffmpeg(ff.output(image, vframes=1, pix_fmt="rgb24").overwrite_output().global_args('-loglevel', loglevel, '-accurate_seek'))
+        if returncode != 0:
             console.print(f"[red]Error capturing screenshot for {input_file} at {seek_time}s:[/red]\n{stderr.decode()}")
             return (index, None)
 
@@ -1235,6 +1249,7 @@ async def capture_screenshot(args):
             )
         else:
             ff = ffmpeg.input(path, ss=ss_time)
+        ff = ff['v']
         if w_sar != 1 or h_sar != 1:
             ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
 
@@ -1336,15 +1351,8 @@ async def capture_screenshot(args):
             cmd = command.compile()
             console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
 
-        process = await asyncio.create_subprocess_exec(
-            *command.compile(),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        # Ensure process completes and doesn't leak
         try:
-            stdout, stderr = await process.communicate()
+            returncode, stdout, stderr = await run_ffmpeg(command)
 
             # Print stdout and stderr if in verbose mode
             if loglevel == 'verbose':
@@ -1355,10 +1363,9 @@ async def capture_screenshot(args):
 
         except asyncio.CancelledError:
             console.print(traceback.format_exc())
-            process.kill()
             raise
 
-        if process.returncode == 0:
+        if returncode == 0:
             return (index, image_path)
         else:
             stderr_text = stderr.decode('utf-8', errors='replace')
@@ -1504,14 +1511,8 @@ async def get_frame_info(path, ss_time, meta):
         if meta.get('debug', False):
             console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]")
 
-        # Execute the info gathering command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        _, stderr = await process.communicate()
+        returncode, _, stderr = await run_ffmpeg(info_command)
+        assert returncode is not None
         stderr_text = stderr.decode('utf-8', errors='replace')
 
         # Calculate frame number based on timestamp and framerate

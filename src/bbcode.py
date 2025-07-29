@@ -38,7 +38,6 @@ class BBCODE:
         pass
 
     def clean_hdb_description(self, description):
-        console.print("[yellow]Cleaning HDB description...")
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
@@ -126,6 +125,9 @@ class BBCODE:
             }
             imagelist.append(image_dict)
             desc = desc.replace(f"[url={web_url}][img]{img_url}[/img][/url]", '')
+
+        description = desc.strip()
+        return description, imagelist
 
     def clean_bhd_description(self, description, meta):
         # Unescape html

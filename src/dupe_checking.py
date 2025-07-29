@@ -115,6 +115,10 @@ async def filter_dupes(dupes, meta, tracker_name):
             return False
 
         if tracker_name in ["AITHER", "LST"] and is_dvd:
+            if len(each) >= 1 and tag == "":
+                return False
+            if tag and tag.strip() and tag.strip() in normalized:
+                return False
             return True
 
         if web_dl:

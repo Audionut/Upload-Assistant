@@ -559,7 +559,7 @@ class Prep():
             meta = await get_season_episode(video, meta)
 
         # Run a check against mediainfo to see if it has tmdb/imdb
-        if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0 and not meta.get('emby', False):
+        if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
             meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
                 mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
             )

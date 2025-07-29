@@ -72,6 +72,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
+      - If you have issues with ffmpeg and cannot update binary, see https://github.com/Audionut/Upload-Assistant/pull/641
    - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git` 
       - or download a zip of the source
    - Install necessary python modules `pip3 install --user -U -r requirements.txt`

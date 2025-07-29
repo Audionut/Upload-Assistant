@@ -114,6 +114,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                     "File_Modified_Date_Local": track.get("File_Modified_Date_Local", {}),
                     "Encoded_Application": track.get("Encoded_Application", {}),
                     "Encoded_Library": track.get("Encoded_Library", {}),
+                    "extra": track.get("extra", {}),
                 })
             elif track["@type"] == "Video":
                 filtered["media"]["track"].append({

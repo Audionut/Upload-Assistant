@@ -424,11 +424,7 @@ async def process_meta(meta, base_dir, bot=None):
             if not meta['mkbrr']:
                 create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
-        if 'saved_description' in meta and meta['saved_description'] is False:
-            meta = await gen_desc(meta)
-
-        if meta.get('description') in ('None', '', ' '):
-            meta['description'] = None
+        meta = await gen_desc(meta)
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)

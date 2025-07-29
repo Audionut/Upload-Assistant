@@ -7,7 +7,7 @@ import click
 import sys
 import glob
 from pymediainfo import MediaInfo
-
+import secrets
 from src.bbcode import BBCODE
 from src.console import console
 from src.uploadscreens import upload_screens
@@ -33,7 +33,10 @@ class COMMON():
                 created_by = new_torrent.metainfo['created by']
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Audionut's Upload Assistant"
-
+            if int(meta.get('entropy', None)) == 32:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)
+            elif int(meta.get('entropy', None)) == 64:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
 
@@ -87,10 +90,10 @@ class COMMON():
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting custom description header: {str(e)}[/yellow]")
         try:
-            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use default
-            screensPerRow = int(self.config['DEFAULT']['screens_per_row'])
+            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+            screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
         except Exception:
-            screensPerRow = None
+            screensPerRow = 2
         try:
             # If custom signature set and isn't empty, use that instead of the signature parameter
             custom_signature = self.config['TRACKERS'][tracker].get('custom_signature', signature)
@@ -200,7 +203,7 @@ class COMMON():
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url]")
+                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
 
                     # If screensPerRow is set and we have reached that number of screenshots, add a new line
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
@@ -246,9 +249,9 @@ class COMMON():
                                 for img in meta[new_images_key]:
                                     web_url = img['web_url']
                                     raw_url = img['raw_url']
-                                    image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                    image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                     descfile.write(image_str)
-                                descfile.write("[/center]\n\n")
+                                descfile.write("[/center]\n ")
                             else:
                                 descfile.write("[center]\n\n")
                                 # Use the summary corresponding to the current bdinfo
@@ -279,9 +282,9 @@ class COMMON():
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
-                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                         descfile.write(image_str)
-                                    descfile.write("[/center]\n\n")
+                                    descfile.write("[/center]\n")
 
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                                 with open(meta_filename, 'w') as f:
@@ -321,7 +324,7 @@ class COMMON():
                         for img_index in range(len(images[:int(meta['screens'])])):
                             web_url = images[img_index]['web_url']
                             raw_url = images[img_index]['raw_url']
-                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                             descfile.write(image_str)
 
                             # If screensPerRow is set and we have reached that number of screenshots, add a new line
@@ -419,9 +422,9 @@ class COMMON():
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
-                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                         descfile.write(image_str)
-                                    descfile.write("[/center]\n\n")
+                                    descfile.write("[/center]\n")
 
                                 # Save the updated meta to `meta.json` after upload
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
@@ -467,7 +470,7 @@ class COMMON():
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url]")
+                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
                         descfile.write("\n")
                 descfile.write("[/center]")
@@ -583,7 +586,7 @@ class COMMON():
                             for img_index in range(len(images)):
                                 web_url = images[img_index]['web_url']
                                 raw_url = images[img_index]['raw_url']
-                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                 descfile.write(image_str)
                                 char_count += len(image_str)
 
@@ -599,10 +602,10 @@ class COMMON():
                             for img in meta[new_images_key]:
                                 web_url = img['web_url']
                                 raw_url = img['raw_url']
-                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                 descfile.write(image_str)
                                 char_count += len(image_str)
-                            descfile.write("[/center]\n\n")
+                            descfile.write("[/center]\n")
                             char_count += len("[/center]\n\n")
 
                 if other_files_spoiler_open:
