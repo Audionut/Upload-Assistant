@@ -942,8 +942,8 @@ class Prep():
         return meta
 
     async def get_cat(self, video, meta):
-        if meta.get('category'):
-            return meta.get('category')
+        if meta.get('manual_category'):
+            return meta.get('manual_category').upper()
 
         path_patterns = [
             r'(?i)[\\/](?:tv|tvshows|tv.shows|series|shows)[\\/]',

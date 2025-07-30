@@ -237,7 +237,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
             if len(desc) > 0:
                 description.write((desc or "") + "\n")
-    if category and not meta.get('category'):
+    if category and not meta.get('manual_category', None):
         cat_upper = category.upper()
         if "MOVIE" in cat_upper:
             meta['category'] = "MOVIE"
