@@ -33,6 +33,7 @@ from discordbot import send_discord_notification, send_upload_status_notificatio
 from cogs.redaction import clean_meta_for_export
 from src.languages import process_desc_language
 from src.nfo_link import nfo_link
+from bin.get_mkbrr import ensure_mkbrr_binary
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -402,8 +403,6 @@ async def process_meta(meta, base_dir, bot=None):
             except asyncio.CancelledError:
                 pass
 
-        if not meta['mkbrr']:
-            meta['mkbrr'] = int(config['DEFAULT'].get('mkbrr', False))
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         if not os.path.exists(torrent_path):
             reuse_torrent = None
@@ -601,6 +600,14 @@ async def do_the_thing(base_dir):
         if path.endswith('"'):
             path = path[:-1]
 
+        is_binary = await get_mkbrr_path(meta, base_dir)
+        if not meta['mkbrr']:
+            meta['mkbrr'] = int(config['DEFAULT'].get('mkbrr', False))
+        if meta['mkbrr'] and not is_binary:
+            console.print("[bold red]mkbrr binary is not available. Please ensure it is installed correctly.[/bold red]")
+            console.print("[bold red]Reverting to Torf[/bold red]")
+            meta['mkbrr'] = False
+
         queue, log_file = await handle_queue(path, meta, paths, base_dir)
 
         processed_files_count = 0
@@ -763,6 +770,15 @@ async def do_the_thing(base_dir):
                 pass
         if not sys.stdin.closed:
             reset_terminal()
+
+
+async def get_mkbrr_path(meta, base_dir=None):
+    try:
+        mkbrr_path = await ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.8.1")
+        return mkbrr_path
+    except Exception as e:
+        console.print(f"[red]Error setting up mkbrr binary: {e}[/red]")
+        return None
 
 
 def check_python_version():

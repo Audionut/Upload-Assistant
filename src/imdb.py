@@ -2,6 +2,8 @@ from src.console import console
 import json
 import httpx
 from datetime import datetime
+import os
+import re
 
 
 async def get_imdb_aka_api(imdb_id, manual_language=None):
@@ -419,8 +421,32 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False):
-    import re
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None):
+    if secondary_title is not None:
+        filename = secondary_title
+    else:
+        folder_name = os.path.basename(path) if path else ""
+        year_pattern = r'(19|20)\d{2}'
+        res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
+        year_match = re.search(year_pattern, folder_name)
+        res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
+
+        indices = []
+        if year_match:
+            indices.append(('year', year_match.start(), year_match.group()))
+        if res_match:
+            indices.append(('res', res_match.start(), res_match.group()))
+
+        if indices:
+            indices.sort(key=lambda x: x[1])
+            first_type, first_index, first_value = indices[0]
+            title_part = folder_name[:first_index]
+            title_part = re.sub(r'[\.\-_ ]+$', '', title_part)
+        else:
+            title_part = folder_name
+
+        filename = title_part.replace('.', ' ')
+
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if debug:
         console.print(f"[yellow]Searching IMDb for {filename} and year {search_year}...[/yellow]")
@@ -485,6 +511,8 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             type_info = await safe_get(title, ["titleType"], {})
             year = await safe_get(title, ["releaseYear", "year"], None)
             imdb_id = await safe_get(title, ["id"], "")
+            year_int = int(year) if year else None
+            search_year_int = int(search_year) if search_year else None
 
             type_matches = False
             if type_info:
@@ -495,14 +523,14 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                     type_matches = True
 
             if imdb_id and type_matches:
-                if year and search_year:
-                    if year == search_year:
+                if year_int and search_year_int:
+                    if year_int == search_year_int:
                         imdbID = int(imdb_id.replace('tt', '').strip())
                         return imdbID
                     else:
                         if debug:
-                            console.print(f"[yellow]Year mismatch: found {year}, expected {search_year}[/yellow]")
-                        imdbID = 0
+                            console.print(f"[yellow]Year mismatch: found {year_int}, expected {search_year_int}[/yellow]")
+                        return 0
                 else:
                     imdbID = int(imdb_id.replace('tt', '').strip())
                     return imdbID

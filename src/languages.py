@@ -163,7 +163,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                         else:
                             meta['subtitle_languages'] = "English"
                             meta['write_hc_languages'] = True
-                    else:
+                    if 'text' not in parsed_info and not meta.get('hardcoded-subs', False):
                         meta['no_subs'] = True
 
             if meta['audio_languages'] and meta['write_audio_languages'] and desc is not None:

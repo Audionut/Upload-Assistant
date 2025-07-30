@@ -1,0 +1,249 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+      previous_version:
+        description: 'Previous version for changelog (leave empty for auto-detect)'
+        required: false
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for changelog generation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format. Use format: v1.2.3"
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "VERSION_NUMBER=${VERSION#v}" >> $GITHUB_ENV
+
+      - name: Check if tag already exists
+        run: |
+          if git tag -l "${{ env.VERSION }}" | grep -q "${{ env.VERSION }}"; then
+            echo "❌ Tag ${{ env.VERSION }} already exists!"
+            exit 1
+          fi
+
+      - name: Get previous tag for changelog
+        run: |
+          if [ -n "${{ github.event.inputs.previous_version }}" ]; then
+            PREVIOUS_TAG="${{ github.event.inputs.previous_version }}"
+          else
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "PREVIOUS_TAG=initial" >> $GITHUB_ENV
+          else
+            echo "PREVIOUS_TAG=${PREVIOUS_TAG}" >> $GITHUB_ENV
+          fi
+          echo "📝 Previous tag: ${PREVIOUS_TAG:-'none (first release)'}"
+
+      - name: Generate changelog from merged PRs and commits
+        run: |
+          if [ "${{ env.PREVIOUS_TAG }}" = "initial" ]; then
+            # For first release, get all commits since beginning
+            COMMIT_RANGE=""
+          else
+            # Get commits since previous tag
+            COMMIT_RANGE="${{ env.PREVIOUS_TAG }}..HEAD"
+          fi
+          
+          # Create changelog
+          {
+            echo "CHANGELOG<<EOF"
+            echo "## What's Changed"
+            echo ""
+            
+            # Get commits in chronological order
+            if [ -z "$COMMIT_RANGE" ]; then
+              COMMITS=$(git log --pretty=format:"%H|%an|%s" --reverse)
+            else
+              COMMITS=$(git log $COMMIT_RANGE --pretty=format:"%H|%an|%s" --reverse)
+            fi
+            
+            # Track if we found any changes
+            FOUND_CHANGES=false
+            
+            # Process each commit
+            echo "$COMMITS" | while IFS='|' read -r COMMIT_HASH AUTHOR SUBJECT; do
+              # Skip empty lines
+              [ -z "$COMMIT_HASH" ] && continue
+              
+              # Handle PR merge commits
+              if [[ $SUBJECT =~ ^Merge\ pull\ request\ #([0-9]+)\ from\ (.+) ]]; then
+                PR_NUMBER="${BASH_REMATCH[1]}"
+                BRANCH_INFO="${BASH_REMATCH[2]}"
+                
+                # Get PR title from GitHub API
+                PR_TITLE=$(curl -s \
+                  -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}" \
+                  | jq -r '.title // empty')
+                
+                # Get PR author from GitHub API
+                PR_AUTHOR=$(curl -s \
+                  -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}" \
+                  | jq -r '.user.login // empty')
+                
+                # Use PR title if available, otherwise use branch name
+                if [ -n "$PR_TITLE" ] && [ "$PR_TITLE" != "null" ]; then
+                  TITLE="$PR_TITLE"
+                else
+                  # Clean up branch name for display
+                  TITLE=$(echo "$BRANCH_INFO" | sed 's|.*/||' | sed 's|-| |g' | sed 's/_/ /g')
+                fi
+                
+                # Use PR author if available, otherwise use commit author
+                if [ -n "$PR_AUTHOR" ] && [ "$PR_AUTHOR" != "null" ]; then
+                  DISPLAY_AUTHOR="@$PR_AUTHOR"
+                else
+                  DISPLAY_AUTHOR="@$AUTHOR"
+                fi
+                
+                echo "* ${TITLE} by ${DISPLAY_AUTHOR} in https://github.com/${{ github.repository }}/pull/${PR_NUMBER}"
+                FOUND_CHANGES=true
+                
+              # Handle direct branch merges
+              elif [[ $SUBJECT =~ ^Merge\ branch\ \'([^\']+)\' ]]; then
+                BRANCH_NAME="${BASH_REMATCH[1]}"
+                
+                # Clean up branch name for display
+                CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's|-| |g' | sed 's/_/ /g')
+                
+                echo "* Merge branch '${BRANCH_NAME}' by @${AUTHOR}"
+                FOUND_CHANGES=true
+                
+              # Handle direct commits (non-merge commits that might be significant)
+              elif [[ ! $SUBJECT =~ ^Merge ]]; then
+                # Skip version update commits and other automated commits
+                if [[ ! $SUBJECT =~ ^Update\ version\.py ]] && [[ ! $SUBJECT =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! $AUTHOR =~ github-actions ]]; then
+                  # Only include if it looks like a meaningful change
+                  if [[ $SUBJECT =~ ^(feat|fix|add|update|improve|remove|refactor): ]] || [[ ${#SUBJECT} -gt 10 ]]; then
+                    echo "* ${SUBJECT} by @${AUTHOR} in ${COMMIT_HASH:0:7}"
+                    FOUND_CHANGES=true
+                  fi
+                fi
+              fi
+            done
+            
+            # If no changes found, add default message
+            if [ "$FOUND_CHANGES" = false ]; then
+              echo "* Other minor updates and improvements"
+            fi
+            
+            echo ""
+            if [ "${{ env.PREVIOUS_TAG }}" != "initial" ]; then
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ env.PREVIOUS_TAG }}...${{ env.VERSION }}"
+            else
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ env.VERSION }}"
+            fi
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Update version.py
+        run: |
+          TIMESTAMP=$(date +"%Y-%m-%d")
+          VERSION_FILE="data/version.py"
+
+          # Create version.py if it doesn't exist
+          if [ ! -f "$VERSION_FILE" ]; then
+            echo "__version__ = \"0.0.0\"" > "$VERSION_FILE"
+            echo "" >> "$VERSION_FILE"
+          fi
+
+          # Prepend new release info
+          TEMP_FILE=$(mktemp)
+          echo "__version__ = \"${{ env.VERSION }}\"" > "$TEMP_FILE"
+          echo "" >> "$TEMP_FILE"
+          echo "\"\"\"" >> "$TEMP_FILE"
+          echo "Release Notes for version ${{ env.VERSION }} ($TIMESTAMP):" >> "$TEMP_FILE"
+          echo "" >> "$TEMP_FILE"
+          echo "${{ env.CHANGELOG }}" | sed 's/^/# /' >> "$TEMP_FILE"
+          echo "\"\"\"" >> "$TEMP_FILE"
+          echo "" >> "$TEMP_FILE"
+          
+          # Skip the first line of existing version.py (old __version__)
+          if [ -f "$VERSION_FILE" ]; then
+            tail -n +2 "$VERSION_FILE" >> "$TEMP_FILE"
+          fi
+          mv "$TEMP_FILE" "$VERSION_FILE"
+
+      - name: Commit version update
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/version.py
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "${{ env.VERSION }}"
+            echo "✅ Committed version.py update with message: ${{ env.VERSION }}"
+          fi
+
+      - name: Create and push tag
+        run: |
+          # Create the tag on the commit that includes the version update
+          git tag -a "${{ env.VERSION }}" -m "${{ env.VERSION }}"
+          
+          # Push the commit and tag
+          git push origin HEAD:${{ github.event.repository.default_branch }}
+          git push origin "${{ env.VERSION }}"
+          
+          echo "✅ Created and pushed tag: ${{ env.VERSION }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: "${{ env.VERSION }}"
+          body: ${{ env.CHANGELOG }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false  # Use only our custom changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output release information
+        run: |
+          echo "✅ Release ${{ env.VERSION }} created successfully!"
+          echo "📝 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ env.VERSION }}"
+          echo "📄 Version file updated and committed with tag: ${{ env.VERSION }}"
+          echo "🏷️ Tag includes the version commit"
+
+      - name: Trigger Docker build
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'docker-image.yml',
+              ref: '${{ env.VERSION }}'
+            });
+            console.log('🐳 Triggered Docker workflow for tag: ${{ env.VERSION }}');

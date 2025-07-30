@@ -73,11 +73,15 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
       - If you have issues with ffmpeg and cannot update binary, see https://github.com/Audionut/Upload-Assistant/pull/641
-   - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git` 
-      - or download a zip of the source
+   - Get the source:
+      - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git`
+      - Fetch all of the release tags `git fetch --all --tags`
+      - Check out the specifc release (see https://github.com/Audionut/Upload-Assistant/releases)
+      - `git checkout tags/tagname` where `tagname` is the release name, eg `v5.0.0`
+      - or download a zip of the source from the releases page and create/overwrite a local copy.
    - Install necessary python modules `pip3 install --user -U -r requirements.txt`
       - `sudo apt install pip` if needed
-  - If you receive an error about externally managed environment
+  - If you receive an error about externally managed environment, or otherwise wish to keep UA python separate:
       - Install virtual python environment `python3 -m venv venv`
       - Activate the virtual environment `source venv/bin/activate`
       - Then install the requirements `pip install -r requirements.txt`
@@ -94,14 +98,15 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 
 ## **Updating:**
   - To update first navigate into the Upload-Assistant directory: `cd Upload-Assistant`
-  - Run a `git pull` to grab latest updates
-  - Or download a fresh zip and overwrite existing files
+  - `git fetch --all --tags`
+  - `git checkout tags/tagname`
+  - Or download a fresh zip from the releases page and overwrite existing files
   - Run `python3 -m pip install --user -U -r requirements.txt` to ensure dependencies are up to date
   - Run `python3 config-generator.py` and select to grab new UA config options.
 
 ## **CLI Usage:**
   
-  `python3 upload.py "/downloads/path/to/content" --args`
+  `python3 upload.py "/path/to/content" --args`
   
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.

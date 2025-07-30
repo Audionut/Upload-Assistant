@@ -40,16 +40,21 @@ async def get_season_episode(video, meta):
                         guess_year = guessit(video)['year']
                     except Exception:
                         guess_year = ""
-                    if guessit(video)["season"] == guess_year:
-                        if f"s{guessit(video)['season']}" in video.lower():
+                    try:
+                        if guessit(video)["season"] == guess_year:
+                            if f"s{guessit(video)['season']}" in video.lower():
+                                season_int = str(guessit(video)["season"])
+                                season = "S" + season_int.zfill(2)
+                            else:
+                                season_int = "1"
+                                season = "S01"
+                        else:
                             season_int = str(guessit(video)["season"])
                             season = "S" + season_int.zfill(2)
-                        else:
-                            season_int = "1"
-                            season = "S01"
-                    else:
-                        season_int = str(guessit(video)["season"])
-                        season = "S" + season_int.zfill(2)
+                    except Exception:
+                        console.print("[bold yellow]There was an error guessing the season number. Guessing S01. Use [bold green]--season #[/bold green] to correct if needed")
+                        season_int = "1"
+                        season = "S01"
 
             except Exception:
                 console.print_exception()
