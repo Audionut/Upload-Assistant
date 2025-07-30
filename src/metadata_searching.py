@@ -93,7 +93,7 @@ async def all_ids(meta, tvdb_api=None, tvdb_token=None):
         tmdb_metadata, imdb_info = results[0:2]
     except Exception as e:
         console.print(f"[red]Error occurred while processing core metadata: {e}[/red]")
-        return meta
+        pass
     result_index = 2  # Start processing episode data from this index
 
     # Process TMDB metadata
@@ -590,11 +590,11 @@ async def imdb_tmdb(meta, filename):
     if isinstance(results[0], Exception):
         error_msg = f"TMDB metadata retrieval failed: {str(results[0])}"
         console.print(f"[bold red]{error_msg}[/bold red]")
-        raise RuntimeError(error_msg)
+        pass
     elif not results[0]:  # Check if the result is empty (empty dict)
         error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
         console.print(f"[bold red]{error_msg}[/bold red]")
-        raise ValueError(error_msg)
+        pass
     else:
         tmdb_metadata = results[0]
 
