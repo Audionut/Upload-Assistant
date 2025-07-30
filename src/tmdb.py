@@ -29,6 +29,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             imdb_id = f"tt{int(imdb_id):07d}"
         elif isinstance(imdb_id, int):
             imdb_id = f"tt{imdb_id:07d}"
+    filename_search = False
 
     async def _tmdb_find_by_external_source(external_id, source):
         """Helper function to find a movie or TV show on TMDb by external ID."""
@@ -52,7 +53,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
         if debug:
             console.print("TVDB INFO", info_tvdb)
         if info_tvdb.get("tv_results"):
-            return "TV", info_tvdb['tv_results'][0]['id'], info_tvdb['tv_results'][0].get('original_language')
+            return "TV", info_tvdb['tv_results'][0]['id'], info_tvdb['tv_results'][0].get('original_language'), filename_search
 
     # Use IMDb ID if no TVDb ID is provided
     info = await _tmdb_find_by_external_source(imdb_id, "imdb_id")
@@ -66,24 +67,25 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
         if category_preference == "MOVIE" and has_movie_results:
             if debug:
                 console.print("[green]Found both movie and TV results, using movie based on preference")
-            return "MOVIE", info['movie_results'][0]['id'], info['movie_results'][0].get('original_language')
+            return "MOVIE", info['movie_results'][0]['id'], info['movie_results'][0].get('original_language'), filename_search
         elif category_preference == "TV" and has_tv_results:
             if debug:
                 console.print("[green]Found both movie and TV results, using TV based on preference")
-            return "TV", info['tv_results'][0]['id'], info['tv_results'][0].get('original_language')
+            return "TV", info['tv_results'][0]['id'], info['tv_results'][0].get('original_language'), filename_search
 
     # If no preference or preference doesn't match available results, proceed with normal logic
     if has_movie_results:
         if debug:
             console.print("Movie INFO", info)
-        return "MOVIE", info['movie_results'][0]['id'], info['movie_results'][0].get('original_language')
+        return "MOVIE", info['movie_results'][0]['id'], info['movie_results'][0].get('original_language'), filename_search
 
     elif has_tv_results:
         if debug:
             console.print("TV INFO", info)
-        return "TV", info['tv_results'][0]['id'], info['tv_results'][0].get('original_language')
+        return "TV", info['tv_results'][0]['id'], info['tv_results'][0].get('original_language'), filename_search
 
     console.print("[yellow]TMDb was unable to find anything with that IMDb ID, checking TVDb...")
+    filename_search = True
 
     # If both TMDb and TVDb fail, fetch IMDb info and attempt a title search
     imdb_id = imdb_id.replace("tt", "")
@@ -134,7 +136,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
         parser = Args(config=config)
         category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
-    return category, tmdb_id, original_language
+    return category, tmdb_id, original_language, filename_search
 
 
 async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None):

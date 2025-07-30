@@ -589,7 +589,7 @@ class Prep():
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
         elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
-            category, tmdb_id, original_language = await get_tmdb_from_imdb(
+            category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
                 meta['imdb_id'],
                 meta.get('tvdb_id'),
                 meta.get('search_year'),
@@ -603,6 +603,7 @@ class Prep():
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)
             meta['original_language'] = original_language
+            meta['no_ids'] = filename_search
 
         # if we have all of the ids, search everything all at once
         if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
@@ -687,7 +688,7 @@ class Prep():
                 meta['imdb_info'] = None
             # Otherwise, IMDb used some other regex and we'll trust it more than guessit
             else:
-                category, tmdb_id, original_language = await get_tmdb_from_imdb(
+                category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
                     meta['imdb_id'],
                     meta.get('tvdb_id'),
                     meta.get('search_year'),
@@ -701,6 +702,7 @@ class Prep():
                 meta['category'] = category
                 meta['tmdb_id'] = int(tmdb_id)
                 meta['original_language'] = original_language
+                meta['no_ids'] = filename_search
 
                 try:
                     tmdb_metadata = await tmdb_other_meta(
