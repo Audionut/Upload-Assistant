@@ -156,31 +156,35 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(traceback.format_exc())
         return
 
-    if meta.get('emby', False) and meta['unattended']:
+    # If unnattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
+    if meta.get('emby', False) and not (meta['unattended'] and meta.get('unattended_confirm', False) and meta.get('no_ids', False)):
         await nfo_link(meta)
         meta['we_are_uploading'] = False
         return
 
-    meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
     parser = Args(config)
     helper = UploadHelper()
-    if meta.get('trackers'):
-        trackers = meta['trackers']
-    else:
-        default_trackers = config['TRACKERS'].get('default_trackers', '')
-        trackers = [tracker.strip() for tracker in default_trackers.split(',')]
 
-    if isinstance(trackers, str):
-        if "," in trackers:
-            trackers = [t.strip().upper() for t in trackers.split(',')]
+    if not meta.get('emby', False):
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
+
+        if meta.get('trackers'):
+            trackers = meta['trackers']
         else:
-            trackers = [trackers.strip().upper()]  # Make it a list with one element
-    else:
-        trackers = [t.strip().upper() for t in trackers]
-    meta['trackers'] = trackers
-    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-        json.dump(meta, f, indent=4)
-        f.close()
+            default_trackers = config['TRACKERS'].get('default_trackers', '')
+            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
+
+        if isinstance(trackers, str):
+            if "," in trackers:
+                trackers = [t.strip().upper() for t in trackers.split(',')]
+            else:
+                trackers = [trackers.strip().upper()]  # Make it a list with one element
+        else:
+            trackers = [t.strip().upper() for t in trackers]
+        meta['trackers'] = trackers
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+            json.dump(meta, f, indent=4)
+            f.close()
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
         editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")

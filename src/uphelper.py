@@ -105,6 +105,8 @@ class UploadHelper:
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
             else:
                 confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+        if meta.get('emby', False):
+            confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         else:
             console.print(f"[bold]Name:[/bold] {meta['name']}")
             confirm = True

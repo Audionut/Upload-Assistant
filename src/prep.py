@@ -567,6 +567,10 @@ class Prep():
                 mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
             )
 
+        # Flag for emby if no IDs were found
+        if meta.get('imdb_id', 0) == 0 and meta.get('tvdb_id', 0) == 0 and meta.get('tmdb_id', 0) == 0 and meta.get('tvmaze_id', 0) == 0 and meta.get('mal_id', 0) == 0 and meta.get('emby', False):
+            meta['no_ids'] = True
+
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
             if meta.get('category') == "TV":
