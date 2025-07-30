@@ -585,6 +585,7 @@ class BJS(COMMON):
 
     async def get_cover(self, meta, disctype):
         await self.search_existing(meta, disctype)
+        # Use an existing cover instead of uploading a new one
         if self.cover:
             return self.cover
         else:
@@ -611,6 +612,7 @@ class BJS(COMMON):
         local_files = sorted(screenshot_dir.glob('*.png'))
 
         tasks = []
+        # Use existing files
         if local_files:
             print(f"Enviando {len(local_files)} screenshots para o {self.tracker}.")
 
@@ -621,9 +623,9 @@ class BJS(COMMON):
 
             tasks = [upload_local_file(path) for path in local_files[:6]]
 
+        # If no files are found, get them from meta links
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')][:6]
-            print(f"Encontrados {len(image_links)} links de screenshots para re-upload.")
             if len(image_links) < 2:
                 raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.")
 
