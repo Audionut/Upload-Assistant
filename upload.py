@@ -202,6 +202,8 @@ async def process_meta(meta, base_dir, bot=None):
             editargs += ("--debug",)
         if meta.get('trackers', None) is not None:
             editargs += ("--trackers", ",".join(meta["trackers"]))
+        if meta.get('emby', False):
+            editargs += ("--emby",)
         meta, help, before_args = parser.parse(editargs, meta)
         if isinstance(meta.get('trackers'), str):
             if "," in meta['trackers']:
