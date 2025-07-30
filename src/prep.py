@@ -78,7 +78,7 @@ class Prep():
         client = Clients(config=config)
         meta['skip_auto_torrent'] = config['DEFAULT'].get('skip_auto_torrent', False)
         hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
-        tracker_ids = ['ptp', 'bhd', 'btn', 'blu', 'aither', 'lst', 'oe', 'hdb', 'huno']
+        tracker_ids = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
         use_sonarr = config['DEFAULT'].get('use_sonarr', False)
         use_radarr = config['DEFAULT'].get('use_radarr', False)
         meta['print_tracker_messages'] = config['DEFAULT'].get('print_tracker_messages', False)
@@ -355,6 +355,7 @@ class Prep():
         meta['skip_trackers'] = False
         if meta.get('emby', False):
             only_id = True
+            meta['only_id'] = True
             meta['keep_images'] = False
             if meta.get('imdb_id', 0) != 0:
                 meta['skip_trackers'] = True
