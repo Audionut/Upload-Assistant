@@ -403,7 +403,24 @@ class Args():
         return result
 
     def parse_tmdb_id(self, id, category):
-        id = id.lower().lstrip()
+        id = str(id).lower().strip()
+        if id.startswith('http'):
+            parsed = urllib.parse.urlparse(id)
+            path = parsed.path.strip('/')
+
+            if '/' in path:
+                parts = path.split('/')
+                if len(parts) >= 2:
+                    type_part = parts[-2]
+                    id_part = parts[-1]
+
+                    if type_part == 'tv':
+                        category = 'TV'
+                    elif type_part == 'movie':
+                        category = 'MOVIE'
+
+                    id = id_part
+
         if id.startswith('tv'):
             id = id.split('/')[1]
             category = 'TV'
@@ -412,5 +429,10 @@ class Args():
             category = 'MOVIE'
         else:
             id = id
-        id = int(id)
+
+        if isinstance(id, str) and id.isdigit():
+            id = int(id)
+        else:
+            id = 0
+
         return category, id

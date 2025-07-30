@@ -899,15 +899,40 @@ async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imd
         if mediainfo['media']['track'][0].get('extra'):
             extra = mediainfo['media']['track'][0]['extra']
             for each in extra:
-                if each.lower().startswith('tmdb'):
-                    parser = Args(config=config)
-                    category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
-                if each.lower().startswith('imdb'):
-                    try:
-                        imdbid = int(extra[each].replace('tt', ''))
-                    except Exception:
-                        pass
+                try:
+                    if each.lower().startswith('tmdb'):
+                        parser = Args(config=config)
+                        category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
+                    if each.lower().startswith('imdb'):
+                        try:
+                            imdb_id = extract_imdb_id(extra[each])
+                            if imdb_id:
+                                imdbid = imdb_id
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
     return category, tmdbid, imdbid
+
+
+def extract_imdb_id(value):
+    """Extract IMDb ID from various formats"""
+    patterns = [
+        r'/title/(tt\d+)',  # URL format
+        r'^(tt\d+)$',       # Direct tt format
+        r'^(\d+)$'          # Plain number
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, value)
+        if match:
+            imdb_id = match.group(1)
+            if not imdb_id.startswith('tt'):
+                imdb_id = f"tt{imdb_id}"
+            return int(imdb_id.replace('tt', ''))
+
+    return None
 
 
 async def daily_to_tmdb_season_episode(tmdbid, date):
