@@ -397,7 +397,7 @@ class BJS(COMMON):
             if is_original_pt:
                 return "Nacional"
             elif len(audio_languages) > 1:
-                return "Dual Audio"
+                return "Dual Áudio"
             else:
                 return "Dublado"
 
