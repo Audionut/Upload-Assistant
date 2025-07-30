@@ -171,6 +171,7 @@ class Args():
         parser.add_argument('-fl', '--freeleech', nargs=1, required=False, help="Freeleech Percentage. Any value 1-100 works, but site search is limited to certain values", default=0, dest="freeleech")
         parser.add_argument('--infohash', nargs=1, required=False, help="V1 Info Hash")
         parser.add_argument('-emby', '--emby', action='store_true', required=False, help="Create an Emby-compliant NFO file and optionally symlink the content")
+        parser.add_argument('-emby_cat', '--emby_cat', nargs=1, required=False, help="Set the expected category for Emby (movie, tv)")
         args, before_args = parser.parse_known_args(input)
         args = vars(args)
         # console.print(args)

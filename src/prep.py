@@ -537,6 +537,9 @@ class Prep():
             # set a flag so that the other check later doesn't run
             meta['no_override'] = True
 
+        if meta.get('emby_cat', None) is not None and meta.get('emby_cat', None).upper() != meta.get('category', None):
+            return meta
+
         if meta['debug']:
             console.print("ID inputs into prep")
             console.print("category:", meta.get("category"))

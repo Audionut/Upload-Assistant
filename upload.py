@@ -156,6 +156,15 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(traceback.format_exc())
         return
 
+    if meta.get('emby_cat', None) == "movie" and meta.get('category', None) != "MOVIE":
+        console.print(f"[red]Wrong category detected! Expected 'MOVIE', but found: {meta.get('category', None)}[/red]")
+        meta['we_are_uploading'] = False
+        return
+    elif meta.get('emby_cat', None) == "tv" and meta.get('category', None) != "TV":
+        console.print(f"[red]Wrong category detected! Expected 'TV', but found: {meta.get('category', None)}[/red]")
+        meta['we_are_uploading'] = False
+        return
+
     # If unnattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
     if meta.get('emby', False) and not (meta['unattended'] and meta.get('unattended_confirm', False) and meta.get('no_ids', False)):
         await nfo_link(meta)
