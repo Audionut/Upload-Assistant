@@ -156,7 +156,7 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(traceback.format_exc())
         return
 
-    if meta.get('emby', False):
+    if meta.get('emby', False) and meta['unattended']:
         await nfo_link(meta)
         meta['we_are_uploading'] = False
         return
@@ -199,6 +199,11 @@ async def process_meta(meta, base_dir, bot=None):
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
         confirm = await helper.get_confirmation(meta)
+
+    if meta.get('emby', False):
+        await nfo_link(meta)
+        meta['we_are_uploading'] = False
+        return
 
     console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 

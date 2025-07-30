@@ -74,19 +74,21 @@ class UploadHelper:
         if int(meta.get('mal_id') or 0) != 0:
             console.print(f"[bold]MAL:[/bold] https://myanimelist.net/anime/{meta['mal_id']}")
         console.print()
-        if int(meta.get('freeleech', 0)) != 0:
-            console.print(f"[bold]Freeleech:[/bold] {meta['freeleech']}")
-        tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
-        res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
-        console.print(f"{res} / {meta['type']}{tag}")
-        if meta.get('personalrelease', False) is True:
-            console.print("[bold green]Personal Release![/bold green]")
-        console.print()
+        if not meta.get('emby', False):
+            if int(meta.get('freeleech', 0)) != 0:
+                console.print(f"[bold]Freeleech:[/bold] {meta['freeleech']}")
+            tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
+            res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
+            console.print(f"{res} / {meta['type']}{tag}")
+            if meta.get('personalrelease', False) is True:
+                console.print("[bold green]Personal Release![/bold green]")
+            console.print()
         if meta.get('unattended', False) is False:
-            await self.get_missing(meta)
-            ring_the_bell = "\a" if config['DEFAULT'].get("sfx_on_prompt", True) is True else ""
-            if ring_the_bell:
-                console.print(ring_the_bell)
+            if not meta.get('emby', False):
+                await self.get_missing(meta)
+                ring_the_bell = "\a" if config['DEFAULT'].get("sfx_on_prompt", True) is True else ""
+                if ring_the_bell:
+                    console.print(ring_the_bell)
 
             if meta.get('is disc', False) is True:
                 meta['keep_folder'] = False
@@ -98,8 +100,11 @@ class UploadHelper:
                     console.print("[bold red]Aborting...[/bold red]")
                     exit()
 
-            console.print(f"[bold]Name:[/bold] {meta['name']}")
-            confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+            if not meta.get('emby', False):
+                console.print(f"[bold]Name:[/bold] {meta['name']}")
+                confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+            else:
+                confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         else:
             console.print(f"[bold]Name:[/bold] {meta['name']}")
             confirm = True
