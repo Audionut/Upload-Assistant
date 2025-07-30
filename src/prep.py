@@ -954,6 +954,7 @@ class Prep():
 
         filename_patterns = [
             r'(?i)s\d{1,2}e\d{1,2}',
+            r'(?i)s\d{1,2}',
             r'(?i)\d{1,2}x\d{2}',
             r'(?i)(?:season|series)\s*\d+',
             r'(?i)e\d{2,3}\s*\-',
