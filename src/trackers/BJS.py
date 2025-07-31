@@ -41,10 +41,14 @@ class BJS(COMMON):
         self.episode = meta.get('episode_int', '')
         self.is_tv_pack = meta.get('tv_pack', '') == 1
 
-    async def fetch_tmdb_data(self, endpoint):
+    async def ptbr_tmdb_data(self, meta):
+        self.assign_media_properties(meta)
         tmdb_api = self.config['DEFAULT']['tmdb_api']
+        tmdb_data = None
 
-        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos,content_ratings"
+        base_url = "https://api.themoviedb.org/3"
+        url = f"{base_url}/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos,content_ratings"
+
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -55,30 +59,58 @@ class BJS(COMMON):
         except httpx.RequestError:
             return None
 
-    async def main_tmdb_data(self, meta):
-        self.assign_media_properties(meta)
-        if not self.category or not self.tmdb_id:
+        if not tmdb_data:
             return None
 
-        endpoint = f"{self.category.lower()}/{self.tmdb_id}"
-        return await self.fetch_tmdb_data(endpoint)
+    async def required_data(self, meta):
+        data = await self.ptbr_tmdb_data(meta)
+        required_fields = {
+            'Criado(a) por': data.get('created_by'),
+            'Data de Lançamento ou Primeira Exibição': data.get('first_air_date') or data.get('release_date'),
+            'Diretores': meta.get('tmdb_directors'),
+            'Elenco': data.get('credits').get('cast'),
+            'Gêneros': data.get('genres'),
+            'Idioma Original': data.get('original_language'),
+            'Sinopse (Português)': data.get('overview'),
+        }
 
-    async def season_tmdb_data(self, meta):
-        season = meta.get('season_int')
-        if not self.tmdb_id or season is None:
-            return None
+        missing_items = [name for name, value in required_fields.items() if not value]
 
-        endpoint = f"tv/{self.tmdb_id}/season/{season}"
-        return await self.fetch_tmdb_data(endpoint)
+        if missing_items:
+            missing_fields_str = ', '.join(missing_items)
+            error_message = (
+                f"""Upload bloqueado. Campos obrigatórios faltando no TMDB: "{missing_fields_str}"
+                Por favor, adicione as informações em: https://www.themoviedb.org/{self.category.lower()}/{self.tmdb_id}/edit?language=pt-BR"""
+            )
+            meta['tracker_status'][self.tracker]['status_message'] = f"{error_message}"
+            raise UploadException(error_message)
 
-    async def episode_tmdb_data(self, meta):
-        season = meta.get('season_int')
-        episode = meta.get('episode_int')
-        if not self.tmdb_id or season is None or episode is None:
-            return None
+    async def get_rating(self, meta):
+        tmdb_data = await self.ptbr_tmdb_data(meta)
+        ratings = tmdb_data.get('content_ratings', {}).get('results', [])
 
-        endpoint = f"tv/{self.tmdb_id}/season/{season}/episode/{episode}"
-        return await self.fetch_tmdb_data(endpoint)
+        if not ratings:
+            return ''
+
+        VALID_BR_RATINGS = {'L', '10', '12', '14', '16', '18'}
+
+        br_rating = ''
+        us_rating = ''
+
+        for item in ratings:
+            if item.get('iso_3166_1') == 'BR' and item.get('rating') in VALID_BR_RATINGS:
+                br_rating = item['rating']
+                if br_rating == 'L':
+                    br_rating = 'Livre para todos os públicos'
+                else:
+                    br_rating = f"Não recomendado para menores de {br_rating} anos"
+                break
+
+            # Use US rating as fallback
+            if item.get('iso_3166_1') == 'US' and not us_rating:
+                us_rating = item.get('rating', '')
+
+        return br_rating or us_rating or ''
 
     async def get_original_language(self, meta):
         possible_languages = {
@@ -91,7 +123,7 @@ class BJS(COMMON):
             "Russo", "Sueco", "Tailandês", "Tamil", "Tcheco", "Telugo", "Turco",
             "Ucraniano", "Urdu", "Vietnamita", "Zulu", "Outro"
         }
-        tmdb_data = await self.main_tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         lang_code = tmdb_data.get("original_language")
         origin_countries = tmdb_data.get("origin_country", [])
 
@@ -593,7 +625,7 @@ class BJS(COMMON):
         if self.cover:
             return self.cover
         else:
-            tmdb_data = await self.main_tmdb_data(meta)
+            tmdb_data = await self.ptbr_tmdb_data(meta)
             cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
             if not cover_path:
                 print("Nenhum poster_path encontrado nos dados do TMDB.")
@@ -706,7 +738,7 @@ class BJS(COMMON):
         }
 
     async def get_cast(self, meta):
-        tmdb_data = await self.main_tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         cast_data = (tmdb_data.get('credits') or {}).get('cast', [])
         if cast_data:
             return ", ".join(
@@ -748,7 +780,7 @@ class BJS(COMMON):
             return ""
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.main_tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         video_results = tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
@@ -830,56 +862,10 @@ class BJS(COMMON):
 
         return " / ".join(ordered_tags)
 
-    async def get_overview(self, meta):
-        episode = await self.episode_tmdb_data(meta)
-        season = await self.season_tmdb_data(meta)
-        main = await self.main_tmdb_data(meta)
-
-        if self.category == 'TV':
-            overview = season.get('overview', '') if self.is_tv_pack else episode.get('overview', '')
-            overview = overview or main.get('overview', '')
-        else:
-            overview = main.get('overview', '')
-
-        if not overview:
-            meta['tracker_status'][self.tracker]['status_message'] = (
-                "ERRO: Não foi possível encontrar a sinopse no TMDB. O upload não pode continuar."
-            )
-            raise UploadException
-
-        return overview
-
-    async def get_rating(self, meta):
-        tmdb_data = await self.main_tmdb_data(meta)
-        ratings = tmdb_data.get('content_ratings', {}).get('results', [])
-
-        if not ratings:
-            return ''
-
-        VALID_BR_RATINGS = {'L', '10', '12', '14', '16', '18'}
-
-        br_rating = ''
-        us_rating = ''
-
-        for item in ratings:
-            if item.get('iso_3166_1') == 'BR' and item.get('rating') in VALID_BR_RATINGS:
-                br_rating = item['rating']
-                if br_rating == 'L':
-                    br_rating = 'Livre para todos os públicos'
-                else:
-                    br_rating = f"Não recomendado para menores de {br_rating} anos"
-                break
-
-            # Use US rating as fallback
-            if item.get('iso_3166_1') == 'US' and not us_rating:
-                us_rating = item.get('rating', '')
-
-        return br_rating or us_rating or ''
-
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
         await self.edit_desc(meta)
-        tmdb_data = await self.main_tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
 
         data = {}
 
@@ -890,7 +876,7 @@ class BJS(COMMON):
             'type': self.get_type(meta),
             'imdblink': meta['imdb_info']['imdbID'],
             'title': meta['title'],
-            'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
+            'titulobrasileiro': (tmdb_data.get('name') or tmdb_data.get('title')) if (tmdb_data.get('name') or tmdb_data.get('title')) != meta.get('title') else '',
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
             'duracaotipo': 'selectbox',
@@ -908,7 +894,7 @@ class BJS(COMMON):
             'remaster_title': self.build_remaster_title(meta),
             'resolucaow': self.get_resolution(meta).get('resolucaow'),
             'resolucaoh': self.get_resolution(meta).get('resolucaoh'),
-            'sinopse': await self.get_overview(meta),
+            'sinopse': tmdb_data.get('overview'),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             })
 
