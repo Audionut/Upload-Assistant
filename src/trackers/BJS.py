@@ -3,6 +3,7 @@ import asyncio
 import httpx
 import langcodes
 import os
+import pycountry
 import re
 import requests
 import unicodedata
@@ -43,7 +44,7 @@ class BJS(COMMON):
     async def fetch_tmdb_data(self, endpoint):
         tmdb_api = self.config['DEFAULT']['tmdb_api']
 
-        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos"
+        url = f"https://api.themoviedb.org/3/{endpoint}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos,content_ratings"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url)
@@ -116,6 +117,9 @@ class BJS(COMMON):
             return "Outro"
 
     async def search_existing(self, meta, disctype):
+        if meta.get('debug'):
+            return []
+
         self.assign_media_properties(meta)
         upload_season_num = None
         upload_episode_num = None
@@ -842,6 +846,33 @@ class BJS(COMMON):
 
         return overview
 
+    async def get_rating(self, meta):
+        tmdb_data = await self.main_tmdb_data(meta)
+        ratings = tmdb_data.get('content_ratings', {}).get('results', [])
+
+        if not ratings:
+            return ''
+
+        VALID_BR_RATINGS = {'L', '10', '12', '14', '16', '18'}
+
+        br_rating = ''
+        us_rating = ''
+
+        for item in ratings:
+            if item.get('iso_3166_1') == 'BR' and item.get('rating') in VALID_BR_RATINGS:
+                br_rating = item['rating']
+                if br_rating == 'L':
+                    br_rating = 'Livre para todos os públicos'
+                else:
+                    br_rating = f"Não recomendado para menores de {br_rating} anos"
+                break
+
+            # Use US rating as fallback
+            if item.get('iso_3166_1') == 'US' and not us_rating:
+                us_rating = item.get('rating', '')
+
+        return br_rating or us_rating or ''
+
     async def upload(self, meta, disctype):
         tmdb_data = await self.main_tmdb_data(meta)
 
@@ -890,7 +921,7 @@ class BJS(COMMON):
         if self.category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
+                'diretor': ", ".join(set(meta.get('tmdb_directors', [])[:5])),
             })
 
         if self.category == 'TV':
@@ -912,16 +943,22 @@ class BJS(COMMON):
                 })
 
             if self.category == 'TV':
+                # Convert country code to name
+                country_list = [
+                    country.name
+                    for code in tmdb_data.get('origin_country', [])
+                    if (country := pycountry.countries.get(alpha_2=code))
+                ]
                 data.update({
                     'validimdb': 'yes',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                    'network': '',  # Optional
-                    'numtemporadas': '',  # Optional
+                    'network': ", ".join([p.get("name", "Desconhecido") for p in tmdb_data.get("networks", [])]) or "",  # Optional
+                    'numtemporadas': tmdb_data.get("number_of_seasons", ''),  # Optional
                     'datalancamento': self.get_release_date(tmdb_data),
-                    'pais': '',  # Optional
+                    'pais': ", ".join(country_list),  # Optional
                     'elenco': await self.get_cast(meta),
-                    'diretorserie': '',  # Optional
-                    'avaliacao': '',  # Optional
+                    'diretorserie': ", ".join(set(meta.get('tmdb_directors', [])[:5])),  # Optional
+                    'avaliacao': await self.get_rating(meta),  # Optional
                 })
 
         # Anime-specific data

@@ -3,8 +3,8 @@ aiohttp
 anitopy
 beautifulsoup4
 bencode.py
-click
 cli-ui
+click
 deluge-client
 discord
 ffmpeg-python
@@ -16,6 +16,7 @@ nest_asyncio
 packaging
 Pillow
 psutil
+pycountry
 pyimgbox
 pymediainfo; sys_platform == "win32"
 pymediainfo==6.0.1; sys_platform == "darwin"
