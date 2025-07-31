@@ -926,7 +926,7 @@ class BJS(COMMON):
 
         if self.category == 'TV':
             data.update({
-                'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
+                'diretor': ", ".join([p.get("name", "Desconhecido") for p in tmdb_data.get("created_by", [])[:3]]) or "",
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': self.season,
                 'episode': self.episode if not self.is_tv_pack else '',
