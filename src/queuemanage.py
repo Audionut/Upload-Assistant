@@ -235,9 +235,9 @@ async def handle_queue(path, meta, paths, base_dir):
                     for file in sorted(removed_files):
                         console.print(f"  - {file}")
 
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[yellow]Do you want to update the queue log, edit, discard, or keep the existing queue?[/yellow]")
-                    edit_choice = input("Enter 'u' to update, 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
+                    edit_choice = input("Enter 'u' to update, 'a' to add specific new files, 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
 
                     if edit_choice == 'u':
                         queue = current_files
@@ -245,6 +245,22 @@ async def handle_queue(path, meta, paths, base_dir):
                         with open(log_file, 'w') as f:
                             json.dump(queue, f, indent=4)
                         console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
+                    elif edit_choice == 'a':
+                        console.print("[yellow]Select which new files to add (comma-separated numbers):[/yellow]")
+                        for idx, file in enumerate(sorted(new_files), 1):
+                            console.print(f"  {idx}. {file}")
+                        selected = input("Enter numbers (e.g., 1,3,5): ").strip()
+                        try:
+                            indices = [int(x) for x in selected.split(',') if x.strip().isdigit()]
+                            selected_files = [file for i, file in enumerate(sorted(new_files), 1) if i in indices]
+                            queue = list(existing_queue) + selected_files
+                            console.print(f"[bold green]Queue updated with selected new files ({len(queue)} items).")
+                            with open(log_file, 'w') as f:
+                                json.dump(queue, f, indent=4)
+                            console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
+                        except Exception as e:
+                            console.print(f"[bold red]Failed to update queue with selected files: {e}. Using the existing queue.")
+                            queue = existing_queue
                     elif edit_choice == 'e':
                         edited_content = click.edit(json.dumps(current_files, indent=4))
                         if edited_content:
