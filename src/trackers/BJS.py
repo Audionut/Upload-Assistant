@@ -718,16 +718,19 @@ class BJS(COMMON):
             meta['tracker_status'][self.tracker]['status_message'] = "Não foi encontrado o elenco no TMDB. O upload não pode continuar."
             raise UploadException("Não foi encontrado o elenco no TMDB. O upload não pode continuar.")
 
-    def get_runtime(self, runtime):
+    def get_runtime(self, meta):
         try:
-            minutes_in_total = int(runtime)
+            minutes_in_total = int(meta.get('runtime'))
             if minutes_in_total < 0:
                 return 0, 0
         except (ValueError, TypeError):
             return 0, 0
 
         hours, minutes = divmod(minutes_in_total, 60)
-        return hours, minutes
+        return {
+            'hours': hours,
+            'minutes': minutes
+        }
 
     def get_release_date(self, tmdb_data):
         raw_date_string = tmdb_data.get('first_air_date') or tmdb_data.get('release_date')
@@ -873,18 +876,10 @@ class BJS(COMMON):
 
         return br_rating or us_rating or ''
 
-    async def upload(self, meta, disctype):
-        tmdb_data = await self.main_tmdb_data(meta)
-
-        runtime_value = meta.get('runtime')
-        hours, minutes = self.get_runtime(runtime_value)
-
-        if not await self.validate_credentials(meta):
-            console.print(f"[bold red]Upload para {self.tracker} abortado.[/bold red]")
-            return
-
-        await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+    async def data_prep(self, meta, disctype):
+        await self.validate_credentials(meta)
         await self.edit_desc(meta)
+        tmdb_data = await self.main_tmdb_data(meta)
 
         data = {}
 
@@ -899,8 +894,8 @@ class BJS(COMMON):
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
             'duracaotipo': 'selectbox',
-            'duracaoHR': hours,
-            'duracaoMIN': minutes,
+            'duracaoHR': self.get_runtime(meta).get('hours'),
+            'duracaoMIN': self.get_runtime(meta).get('minutes'),
             'traileryoutube': await self.get_trailer(meta),
             'formato': self.get_container(meta),
             'qualidade': self.get_bitrate(meta),
@@ -911,8 +906,8 @@ class BJS(COMMON):
             'codecaudio': self.get_audio_codec(meta),
             'idioma': await self.get_original_language(meta),
             'remaster_title': self.build_remaster_title(meta),
-            'resolucaow': self.get_resolution(meta).get('resolucaow', ''),
-            'resolucaoh': self.get_resolution(meta).get('resolucaoh', ''),
+            'resolucaow': self.get_resolution(meta).get('resolucaow'),
+            'resolucaoh': self.get_resolution(meta).get('resolucaoh'),
             'sinopse': await self.get_overview(meta),
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             })
@@ -967,7 +962,6 @@ class BJS(COMMON):
                 data.update({
                     'tipo': 'movie',
                 })
-
             if self.category == 'TV':
                 data.update({
                     'adulto': '2',
@@ -975,7 +969,6 @@ class BJS(COMMON):
 
         # Anon
         anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
-
         if anon:
             data.update({
                 'anonymous': 'on'
@@ -985,47 +978,52 @@ class BJS(COMMON):
                     'anonymousshowgroup': 'on'
                 })
 
-        if meta.get('debug', False):
-            console.print(data)
-            return
-        else:
+        # Only upload images if not debugging
+        if not meta.get('debug', False):
             data.update({
                 'image': await self.get_cover(meta, disctype),
                 'screenshots[]': await self.get_screenshots(meta),
             })
 
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        if not os.path.exists(torrent_path):
-            return
+        return data
 
-        upload_url = f"{self.base_url}/upload.php"
-        with open(torrent_path, 'rb') as torrent_file:
-            files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
+    async def upload(self, meta, disctype):
+        data = await self.data_prep(meta, disctype)
+        if not meta.get('debug', False):
+            await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+            upload_url = f"{self.base_url}/upload.php"
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            with open(torrent_path, 'rb') as torrent_file:
+                files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
-            try:
-                response = self.session.post(upload_url, data=data, files=files, timeout=60)
+                try:
+                    response = self.session.post(upload_url, data=data, files=files, timeout=60)
 
-                if response.status_code == 200 and 'Clique em baixar para entrar de' in response.text:
-                    id_match = re.search(r'action=download&id=(\d+)', response.text)
+                    if response.status_code == 200 and 'Clique em baixar para entrar de' in response.text:
+                        id_match = re.search(r'action=download&id=(\d+)', response.text)
 
-                    if id_match:
-                        torrent_id = id_match.group(1)
-                        details_url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
-                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
-                        final_message = details_url
+                        if id_match:
+                            torrent_id = id_match.group(1)
+                            details_url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
+                            announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                            await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
+                            final_message = details_url
+
+                        else:
+                            final_message = "[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]"
 
                     else:
-                        final_message = "[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]"
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                        with open(failure_path, "w", encoding="utf-8") as f:
+                            f.write(response.text)
+                        final_message = f"""[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red].
+                                            [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
 
-                else:
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(failure_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    final_message = f"""[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red].
-                                        [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
+                except requests.exceptions.RequestException as e:
+                    final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
 
-            except requests.exceptions.RequestException as e:
-                final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+        else:
+            console.print(data)
+            final_message = 'Debug mode enabled, not uploading.'
 
-            meta['tracker_status'][self.tracker]['status_message'] = final_message
+        meta['tracker_status'][self.tracker]['status_message'] = final_message
