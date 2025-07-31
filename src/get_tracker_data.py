@@ -49,12 +49,11 @@ async def get_available_trackers(specific_trackers, base_dir=None, debug=False):
     """Get trackers that are available (60+ seconds since last processed)"""
     timestamps = await get_tracker_timestamps(base_dir)
     current_time = time.time()
-    cooldown_seconds = 60
-
     available = []
     waiting = []
 
     for tracker in specific_trackers:
+        cooldown_seconds = 60 if tracker == "PTP" else 15
         last_processed = timestamps.get(tracker, 0)
         time_since_last = current_time - last_processed
 
