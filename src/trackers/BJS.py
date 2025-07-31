@@ -855,15 +855,13 @@ class BJS(COMMON):
         await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
 
-        category_type = self.get_type(meta)
-
         data = {}
 
-        # Common
+        # These fields are common across all upload types
         data.update({
             'submit': 'true',
             'auth': self.auth_token,
-            'type': category_type,
+            'type': self.get_type(meta),
             'imdblink': meta['imdb_info']['imdbID'],
             'title': meta['title'],
             'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
@@ -888,49 +886,54 @@ class BJS(COMMON):
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             })
 
+        # These fields are common in movies and TV shows, even if it's anime
+        if self.category == 'MOVIE':
+            data.update({
+                'adulto': '2',
+                'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
+            })
+
+        if self.category == 'TV':
+            data.update({
+                'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
+                'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
+                'season': self.season,
+                'episode': self.episode if not self.is_tv_pack else '',
+            })
+
+        # These fields are common in movies and TV shows, if not Anime
         if not meta.get('anime'):
             if self.category == 'MOVIE':
                 data.update({
-                    'adulto': '2',
-                    'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                    'validimdb': 'yes',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
                     'elenco': await self.get_cast(meta),
                     'datalancamento': self.get_release_date(tmdb_data),
-                    'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
                 })
 
             if self.category == 'TV':
                 data.update({
-                    'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
+                    'validimdb': 'yes',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                    'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
-                    'season': self.season,
-                    'episode': self.episode if not self.is_tv_pack else '',
                     'network': '',  # Optional
                     'numtemporadas': '',  # Optional
                     'datalancamento': self.get_release_date(tmdb_data),
                     'pais': '',  # Optional
                     'elenco': await self.get_cast(meta),
-                    'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
                     'diretorserie': '',  # Optional
                     'avaliacao': '',  # Optional
                 })
 
+        # Anime-specific data
         if meta.get('anime'):
             if self.category == 'MOVIE':
                 data.update({
-                    'adulto': '2',
                     'tipo': 'movie',
-                    'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
                 })
 
             if self.category == 'TV':
                 data.update({
                     'adulto': '2',
-                    'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
-                    'season': self.season,
-                    'episode': self.episode if not self.is_tv_pack else '',
-                    'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
                 })
 
         # Anon
