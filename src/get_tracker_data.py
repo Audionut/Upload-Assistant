@@ -117,6 +117,8 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         if specific_tracker:
             if meta.get('is_disc', False) and "ANT" in specific_tracker:
                 specific_tracker.remove("ANT")
+            if meta.get('category') == "MOVIE" and "BTN" in specific_tracker:
+                specific_tracker.remove("BTN")
 
             async def process_tracker(tracker_name, meta, only_id):
                 nonlocal found_match
@@ -179,6 +181,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     await get_btn_torrents(btn_api, btn_id, meta)
                     if meta.get('imdb_id') != 0:
                         found_match = True
+                        meta['matched_tracker'] = "BTN"
                     await save_tracker_timestamp("BTN", base_dir=base_dir)
                 elif tracker_to_process == "ANT":
                     imdb_tmdb_list = await tracker_class_map['ANT'](config=config).get_data_from_files(meta)
@@ -187,6 +190,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                         for d in imdb_tmdb_list:
                             meta.update(d)
                         found_match = True
+                        meta['matched_tracker'] = "ANT"
                     await save_tracker_timestamp("ANT", base_dir=base_dir)
                 else:
                     meta = await process_tracker(tracker_to_process, meta, only_id)

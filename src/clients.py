@@ -1845,7 +1845,8 @@ class Clients():
                                             except Exception as e:
                                                 console.print(f"[bold red]Error creating BASE.torrent for alternative: {e}")
                                         else:
-                                            console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
+                                            if meta['debug']:
+                                                console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
                                             if os.path.exists(alt_torrent_file_path) and alt_torrent_file_path.startswith(extracted_torrent_dir):
                                                 os.remove(alt_torrent_file_path)
 
