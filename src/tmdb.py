@@ -47,15 +47,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
 
         return {}
 
-    # Check TVDb for an ID first if present
-    if tvdb_id:
-        info_tvdb = await _tmdb_find_by_external_source(str(tvdb_id), "tvdb_id")
-        if debug:
-            console.print("TVDB INFO", info_tvdb)
-        if info_tvdb.get("tv_results"):
-            return "TV", info_tvdb['tv_results'][0]['id'], info_tvdb['tv_results'][0].get('original_language'), filename_search
-
-    # Use IMDb ID if no TVDb ID is provided
+    # Run a search by IMDb ID
     info = await _tmdb_find_by_external_source(imdb_id, "imdb_id")
 
     # Check if both movie and TV results exist
@@ -84,7 +76,17 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             console.print("TV INFO", info)
         return "TV", info['tv_results'][0]['id'], info['tv_results'][0].get('original_language'), filename_search
 
-    console.print("[yellow]TMDb was unable to find anything with that IMDb ID, checking TVDb...")
+    if debug:
+        console.print("[yellow]TMDb was unable to find anything with that IMDb ID, checking TVDb...")
+
+    # Check TVDb for an ID if TVDb and still no results
+    if tvdb_id:
+        info_tvdb = await _tmdb_find_by_external_source(str(tvdb_id), "tvdb_id")
+        if debug:
+            console.print("TVDB INFO", info_tvdb)
+        if info_tvdb.get("tv_results"):
+            return "TV", info_tvdb['tv_results'][0]['id'], info_tvdb['tv_results'][0].get('original_language'), filename_search
+
     filename_search = True
 
     # If both TMDb and TVDb fail, fetch IMDb info and attempt a title search
