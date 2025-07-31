@@ -725,13 +725,8 @@ class BJS(COMMON):
         hours, minutes = divmod(minutes_in_total, 60)
         return hours, minutes
 
-    def get_formatted_date(self, tmdb_data):
-        raw_date_string = None
-
-        if self.category == 'TV':
-            raw_date_string = tmdb_data.get('first_air_date')
-        elif self.category == 'MOVIE':
-            raw_date_string = tmdb_data.get('release_date')
+    def get_release_date(self, tmdb_data):
+        raw_date_string = tmdb_data.get('first_air_date') or tmdb_data.get('release_date')
 
         if not raw_date_string:
             return ""
@@ -869,12 +864,11 @@ class BJS(COMMON):
             'submit': 'true',
             'auth': self.auth_token,
             'type': category_type,
-            'imdblink': meta.get('imdb_info', {}).get('imdbID', ''),
+            'imdblink': meta['imdb_info']['imdbID'],
             'title': meta['title'],
             'titulobrasileiro': tmdb_data.get('name') or tmdb_data.get('title') or '',
             'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
             'year': str(meta['year']),
-            'diretor': (meta.get('tmdb_directors') or ['Desconhecido'])[0],
             'duracaotipo': 'selectbox',
             'duracaoHR': hours,
             'duracaoMIN': minutes,
@@ -901,7 +895,8 @@ class BJS(COMMON):
                     'validimdb': 'yes' if meta.get('imdb_info', {}).get('imdbID') else 'no',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
                     'elenco': await self.get_cast(meta),
-                    'datalancamento': self.get_formatted_date(tmdb_data),
+                    'datalancamento': self.get_release_date(tmdb_data),
+                    'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
                 })
 
             if self.category == 'TV':
@@ -913,9 +908,10 @@ class BJS(COMMON):
                     'episode': self.episode if not self.is_tv_pack else '',
                     'network': '',  # Optional
                     'numtemporadas': '',  # Optional
-                    'datalancamento': self.get_formatted_date(tmdb_data),
+                    'datalancamento': self.get_release_date(tmdb_data),
                     'pais': '',  # Optional
                     'elenco': await self.get_cast(meta),
+                    'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
                     'diretorserie': '',  # Optional
                     'avaliacao': '',  # Optional
                 })
@@ -925,6 +921,7 @@ class BJS(COMMON):
                 data.update({
                     'adulto': '2',
                     'tipo': 'movie',
+                    'diretor': (meta.get('tmdb_directors') or [''])[0] if meta.get('tmdb_directors') else '',
                 })
 
             if self.category == 'TV':
@@ -933,6 +930,7 @@ class BJS(COMMON):
                     'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                     'season': self.season,
                     'episode': self.episode if not self.is_tv_pack else '',
+                    'diretor': ", ".join([p.get("name", "Desconhecido") for p in meta.get("created_by", [])[:3]]) or "",
                 })
 
         # Anon
