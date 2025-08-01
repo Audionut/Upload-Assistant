@@ -109,9 +109,9 @@ class BJS(COMMON):
             if item.get('iso_3166_1') == 'BR' and item.get('rating') in VALID_BR_RATINGS:
                 br_rating = item['rating']
                 if br_rating == 'L':
-                    br_rating = 'Livre para todos os públicos'
+                    br_rating = 'Livre'
                 else:
-                    br_rating = f"Não recomendado para menores de {br_rating} anos"
+                    br_rating = f"{br_rating} anos"
                 break
 
             # Use US rating as fallback
