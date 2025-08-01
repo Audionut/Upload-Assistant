@@ -290,6 +290,9 @@ class AL():
             return audio_codec_str
 
     async def upload(self, meta, disctype):
+        if not meta["mal"]:
+            console.print("[bold red]MAL ID is missing, cannot upload to AL.[/bold red]")
+            return
         title = await self.get_mal_data(meta['mal'], meta)
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
