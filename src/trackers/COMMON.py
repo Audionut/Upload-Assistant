@@ -7,7 +7,7 @@ import click
 import sys
 import glob
 from pymediainfo import MediaInfo
-
+import secrets
 from src.bbcode import BBCODE
 from src.console import console
 from src.uploadscreens import upload_screens
@@ -33,7 +33,10 @@ class COMMON():
                 created_by = new_torrent.metainfo['created by']
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Audionut's Upload Assistant"
-
+            if int(meta.get('entropy', None)) == 32:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)
+            elif int(meta.get('entropy', None)) == 64:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
 

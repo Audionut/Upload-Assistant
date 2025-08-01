@@ -1,4 +1,74 @@
-__version__ = "5.1.5.2"
+__version__ = "v5.2.1"
+
+"""
+Release Notes for version v5.2.1 (2025-07-30):
+
+# ## What's Changed
+# 
+# * fix no_subs meta by @Audionut in 86f2bcf
+# * Robust id from mediainfo (#645) by @Audionut in 9c43584
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.0...v5.2.1
+"""
+
+
+"""
+Release Notes for version v5.2.0 (2025-07-29):
+
+# ## What's Changed
+# 
+# * hc subs language handling by @Audionut in 762eed8
+# * pack check also being cat by @Audionut in 9279b8e
+# * CBR - bdmv language check by @Audionut in de461fb
+# * set hc_language meta object by @Audionut in 0bd92d7
+# * LT Spanish catches by @Audionut in ac9dc35
+# * Revert LT Spanish catches by @Audionut in 51c64f2
+# * remove verbose print by @Audionut in fc3d1b8
+# * LT.py SUBS parser failed Spanish (AR) (#626) by @Hielito in 7b6292e
+# * clarify image size else print by @Audionut in a13211b
+# * fix tvmaze returning None ids by @Audionut in 0769997
+# * move tvdb search outside tv_pack by @Audionut in 6573337
+# * get_tracker_data.py - lower HUNO priority (#629) by @wastaken7 in 8156bc8
+# * ASC - type mapping and description fix (#628) by @wastaken7 in f0defc9
+# * debug status message by @Audionut in 26038d4
+# * OE - DS4K in name by @Audionut in 84e7517
+# * Update languages.py (#633) by @wastaken7 in ae963ab
+# * Add option to use entropy by @Audionut in dbba7f0
+# * queue update by @Audionut in 9b1775d
+# * don't add useless folders to queue by @Audionut in 63113d6
+# * ffmpeg only video stream by @Audionut in 049697a
+# * Merge branch 'queue-update' by @Audionut
+# * group check dvd by @Audionut in 7b68370
+# * Better matching of files against foldered torrents by @Audionut in 6af32a9
+# * Add linux option to use custom ffmpeg binary by @Audionut in 3baa389
+# * Give screenshots some spaces to breathe (#639) by @Khoa Pham in aba0bb6
+# * Merge branch 'ffmpeg' by @Audionut
+# * ASC - strengthen the description against NoneType errors (#638) by @wastaken7 in c2cdba6
+# * CBR - handle no_dual by @Audionut in 7133915
+# * CBR also remove the dual-audio by @Audionut in f62247f
+# * set dual-audio meta by @Audionut in afb8175
+# * mkbrr - only wanted binary by @Audionut in 57d9c5d
+# * correct call by @Audionut in d005b37
+# * Note about ffmpeg linux binary by @Audionut in f792c56
+# * TL - add http upload option (#627) by @wastaken7 in 5d27d27
+# * Merge branch 'auto-torrent-searching' by @Audionut
+# * clarify usage in arg by @Audionut in 639328e
+# * Merge branch 'entropy' by @Audionut
+# * Prioritize arg descriptions by @Audionut in c11c3a4
+# * fix id from mi by @Audionut in 694c331
+# * docker mkbrr binary by @Audionut in 9077df6
+# * correct filename by @Audionut in 6a6e8e8
+# * Merge branch 'mkbrr-binaries' by @Audionut
+# * Correct versioning in releases (#644) by @Audionut in a279a6a
+# * Improve metadata finding (#636) by @Audionut in 9e32eaa
+# * correct base_dir by @Audionut in 9bb68fd
+# * fix docker do not tag manual as latest by @Audionut in f373286
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.5.2...v5.2.0
+"""
+
 
 """
 Changelog for version 5.1.5.2 (2025-07-19):

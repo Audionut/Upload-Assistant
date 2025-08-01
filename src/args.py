@@ -163,6 +163,7 @@ class Args():
         parser.add_argument('-tk', '--trackers', nargs=1, required=False, help="Upload to these trackers, comma seperated (--trackers blu,bhd) including manual")
         parser.add_argument('-tpc', '--trackers-pass', dest='trackers_pass', nargs=1, required=False, help="How many trackers need to pass all checks (dupe/banned group/etc) to actually proceed to uploading", type=int)
         parser.add_argument('-rt', '--randomized', nargs=1, required=False, help="Number of extra, torrents with random infohash", default=0)
+        parser.add_argument('-entropy', '--entropy', dest='entropy', nargs=1, required=False, help="Use entropy in created torrents. (32 or 64) bits (ie: -entropy 32). Not supported at all sites, you many need to redownload the torrent", type=int, default=0)
         parser.add_argument('-ua', '--unattended', action='store_true', required=False, help=argparse.SUPPRESS)
         parser.add_argument('-uac', '--unattended-confirm', action='store_true', required=False, help=argparse.SUPPRESS)
         parser.add_argument('-vs', '--vapoursynth', action='store_true', required=False, help="Use vapoursynth for screens (requires vs install)")
@@ -404,7 +405,24 @@ class Args():
         return result
 
     def parse_tmdb_id(self, id, category):
-        id = id.lower().lstrip()
+        id = str(id).lower().strip()
+        if id.startswith('http'):
+            parsed = urllib.parse.urlparse(id)
+            path = parsed.path.strip('/')
+
+            if '/' in path:
+                parts = path.split('/')
+                if len(parts) >= 2:
+                    type_part = parts[-2]
+                    id_part = parts[-1]
+
+                    if type_part == 'tv':
+                        category = 'TV'
+                    elif type_part == 'movie':
+                        category = 'MOVIE'
+
+                    id = id_part
+
         if id.startswith('tv'):
             id = id.split('/')[1]
             category = 'TV'
@@ -413,4 +431,10 @@ class Args():
             category = 'MOVIE'
         else:
             id = id
+
+        if isinstance(id, str) and id.isdigit():
+            id = int(id)
+        else:
+            id = 0
+
         return category, id

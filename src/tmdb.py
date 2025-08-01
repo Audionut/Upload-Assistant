@@ -12,19 +12,23 @@ import requests
 import json
 import httpx
 import asyncio
+import os
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 
-async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None):
+async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None, imdb_info=None):
     """Fetches TMDb ID using IMDb or TVDb ID.
 
     - Returns `(category, tmdb_id, original_language)`
     - If TMDb fails, prompts the user (if in CLI mode).
     """
     if not str(imdb_id).startswith("tt"):
-        imdb_id = f"tt{imdb_id:07d}"
+        if isinstance(imdb_id, str) and imdb_id.isdigit():
+            imdb_id = f"tt{int(imdb_id):07d}"
+        elif isinstance(imdb_id, int):
+            imdb_id = f"tt{imdb_id:07d}"
 
     async def _tmdb_find_by_external_source(external_id, source):
         """Helper function to find a movie or TV show on TMDb by external ID."""
@@ -82,9 +86,12 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     console.print("[yellow]TMDb was unable to find anything with that IMDb ID, checking TVDb...")
 
     # If both TMDb and TVDb fail, fetch IMDb info and attempt a title search
-    imdb_info = await get_imdb_info_api(imdb_id.replace('tt', ''), {})
+    imdb_id = imdb_id.replace("tt", "")
+    imdb_id = int(imdb_id) if imdb_id.isdigit() else 0
+    imdb_info = imdb_info or await get_imdb_info_api(imdb_id, {})
     title = imdb_info.get("title") or filename
     year = imdb_info.get("year") or search_year
+    original_language = imdb_info.get("original language", "en")
 
     console.print(f"[yellow]TMDb was unable to find anything from external IDs, searching TMDb for {title} ({year})[/yellow]")
 
@@ -97,7 +104,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     }
 
     # Try as movie first
-    result = await get_tmdb_id(
+    tmdb_id, category = await get_tmdb_id(
         title,
         year,
         meta,
@@ -106,9 +113,9 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     )
 
     # If no results, try as TV
-    if result['tmdb_id'] == 0:
+    if tmdb_id == 0:
         meta['category'] = "TV"
-        result = await get_tmdb_id(
+        tmdb_id, category = await get_tmdb_id(
             title,
             year,
             meta,
@@ -117,9 +124,8 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
         )
 
     # Extract necessary values from the result
-    tmdb_id = result.get('tmdb_id', 0)
-    category = result.get('category', "MOVIE")
-    original_language = result.get('original_language', "en")
+    tmdb_id = tmdb_id or 0
+    category = category or "MOVIE"
 
     # **User Prompt for Manual TMDb ID Entry**
     if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
@@ -131,9 +137,13 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     return category, tmdb_id, original_language
 
 
-async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None):
+async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None):
     search_results = {"results": []}
     secondary_results = {"results": []}
+    if final_attempt is None:
+        final_attempt = False
+    if attempted is None:
+        attempted = 0
 
     async with httpx.AsyncClient() as client:
         try:
@@ -310,7 +320,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title)
+            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path)
 
         # Last attempt: Try parsing a better title
         if attempted == 1:
@@ -318,10 +328,23 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 parsed_title = anitopy.parse(
                     guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
                 )['anime_title']
+                original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
-                return await get_tmdb_id(parsed_title, search_year, category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title)
+                return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
+
+        # lets try with a folder name if we have one
+        if attempted > 1 and path and not final_attempt:
+            try:
+                folder_name = os.path.basename(path).replace("_", "").replace("-", "") if path else ""
+                title = guessit(folder_name, {"excludes": ["country", "language"]})['title']
+                original_category = "MOVIE"
+                console.print(f"[bold yellow]Trying folder name: {title}[/bold yellow]")
+                return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True)
+            except Exception as e:
+                console.print(f"[bold red]Folder name search error:[/bold red] {e}")
+                search_results = {"results": []}
 
         # No match found, prompt user if in CLI mode
         console.print(f"[bold red]Unable to find TMDb match for {filename}[/bold red]")
@@ -416,6 +439,7 @@ async def tmdb_other_meta(
     youtube = None
     title = None
     year = None
+    original_imdb_id = imdb_id
 
     async with httpx.AsyncClient() as client:
         # Get main media details first (movie or TV show)
@@ -526,9 +550,12 @@ async def tmdb_other_meta(
                     if imdb_id_str and imdb_id_str not in ["", " ", "None", None]:
                         imdb_id_clean = imdb_id_str.lstrip('t')
                         if imdb_id_clean.isdigit():
-                            if imdb_id_clean != imdb_id:
+                            imdb_id_clean_int = int(imdb_id_clean)
+                            if imdb_id_clean_int != int(original_imdb_id) and quickie_search and original_imdb_id != 0:
                                 imdb_mismatch = True
-                            imdb_id = int(imdb_id_clean)
+                                imdb_id = original_imdb_id
+                            else:
+                                imdb_id = int(imdb_id_clean)
                 else:
                     imdb_id = int(imdb_id)
 
@@ -872,15 +899,40 @@ async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imd
         if mediainfo['media']['track'][0].get('extra'):
             extra = mediainfo['media']['track'][0]['extra']
             for each in extra:
-                if each.lower().startswith('tmdb'):
-                    parser = Args(config=config)
-                    category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
-                if each.lower().startswith('imdb'):
-                    try:
-                        imdbid = str(int(extra[each].replace('tt', ''))).zfill(7)
-                    except Exception:
-                        pass
+                try:
+                    if each.lower().startswith('tmdb'):
+                        parser = Args(config=config)
+                        category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
+                    if each.lower().startswith('imdb'):
+                        try:
+                            imdb_id = extract_imdb_id(extra[each])
+                            if imdb_id:
+                                imdbid = imdb_id
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
     return category, tmdbid, imdbid
+
+
+def extract_imdb_id(value):
+    """Extract IMDb ID from various formats"""
+    patterns = [
+        r'/title/(tt\d+)',  # URL format
+        r'^(tt\d+)$',       # Direct tt format
+        r'^(\d+)$'          # Plain number
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, value)
+        if match:
+            imdb_id = match.group(1)
+            if not imdb_id.startswith('tt'):
+                imdb_id = f"tt{imdb_id}"
+            return int(imdb_id.replace('tt', ''))
+
+    return None
 
 
 async def daily_to_tmdb_season_episode(tmdbid, date):
