@@ -176,7 +176,7 @@ async def process_meta(meta, base_dir, bot=None):
         f.close()
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
-        editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
+        editargs = cli_ui.ask_string("Input new args e.g. (--tag NTb --category tv --tmdb 12345), this will overwrite/bypass all args from original command")
         editargs = (meta['path'],) + tuple(editargs.split())
         if meta.get('debug', False):
             editargs += ("--debug",)
