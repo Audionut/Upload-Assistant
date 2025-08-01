@@ -83,7 +83,7 @@ class UploadHelper:
             if meta.get('personalrelease', False) is True:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
-        if meta.get('unattended', False) is False:
+        if not meta.get('unattended', False):
             if not meta.get('emby', False):
                 await self.get_missing(meta)
                 ring_the_bell = "\a" if config['DEFAULT'].get("sfx_on_prompt", True) is True else ""
@@ -104,12 +104,25 @@ class UploadHelper:
                 console.print(f"[bold]Name:[/bold] {meta['name']}")
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
             else:
-                if meta.get('unattended_confirm', False):
-                    console.print("[bold]Filename searching was required, double check the database information.[/bold]")
+                console.print("[bold yellow]Filename searching was required, double check the database information.[/bold yellow]")
                 confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         if meta.get('emby', False):
-            if meta.get('unattended_confirm', False):
-                console.print("[bold]Filename searching was required, double check the database information.[/bold]")
+            if meta.get('original_imdb', 0) != meta.get('imdb_id', 0):
+                console.print(f"[bold red]IMDB ID changed from {meta['original_imdb']} to {meta['imdb_id']}[/bold red]")
+            if meta.get('original_tmdb', 0) != meta.get('tmdb_id', 0):
+                console.print(f"[bold red]TMDB ID changed from {meta['original_tmdb']} to {meta['tmdb_id']}[/bold red]")
+            if meta.get('original_mal', 0) != meta.get('mal_id', 0):
+                console.print(f"[bold red]MAL ID changed from {meta['original_mal']} to {meta['mal_id']}[/bold red]")
+            if meta.get('original_tvmaze', 0) != meta.get('tvmaze_id', 0):
+                console.print(f"[bold red]TVMaze ID changed from {meta['original_tvmaze']} to {meta['tvmaze_id']}[/bold red]")
+            if meta.get('original_tvdb', 0) != meta.get('tvdb_id', 0):
+                console.print(f"[bold red]TVDB ID changed from {meta['original_tvdb']} to {meta['tvdb_id']}[/bold red]")
+            if meta.get('original_category', None) != meta.get('category', None):
+                console.print(f"[bold red]Category changed from {meta['original_category']} to {meta['category']}[/bold red]")
+            if meta['debug']:
+                console.print(f"[bold cyan]Regex Title:[/bold cyan] [yellow]{meta.get('regex_title', 'N/A')}[/yellow], [bold cyan]Secondary Title:[/bold cyan] [yellow]{meta.get('regex_secondary_title', 'N/A')}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{meta.get('regex_year', 'N/A')}[/yellow]")
+                console.print()
+            console.print("[bold yellow]Filename searching was required, double check the database information.[/bold yellow]")
             confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         else:
             console.print(f"[bold]Name:[/bold] {meta['name']}")

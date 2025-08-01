@@ -34,6 +34,7 @@ from cogs.redaction import clean_meta_for_export
 from src.languages import process_desc_language
 from src.nfo_link import nfo_link
 from bin.get_mkbrr import ensure_mkbrr_binary
+from src.get_tracker_data import get_tracker_data
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -194,6 +195,23 @@ async def process_meta(meta, base_dir, bot=None):
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
             f.close()
+
+    if meta.get('emby', False) and meta['debug']:
+        meta['original_imdb'] = meta.get('imdb_id', None)
+        meta['original_tmdb'] = meta.get('tmdb_id', None)
+        meta['original_mal'] = meta.get('mal_id', None)
+        meta['original_tvmaze'] = meta.get('tvmaze_id', None)
+        meta['original_tvdb'] = meta.get('tvdb_id', None)
+        meta['original_category'] = meta.get('category', None)
+        await client.get_pathed_torrents(meta['path'], meta)
+        if meta['is_disc']:
+            search_term = os.path.basename(meta['path'])
+            search_file_folder = 'folder'
+        else:
+            search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
+            search_file_folder = 'file'
+        await get_tracker_data(meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'])
+
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
         editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
@@ -758,11 +776,6 @@ async def do_the_thing(base_dir):
                     gc.collect()
                     reset_terminal()
 
-            if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
-                if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
-                    console.print(f"[red]Uploading limit of {meta['limit_queue']} files reached. Stopping queue processing. {skipped_files_count} skipped files.")
-                    break
-
             if meta['debug']:
                 finish_time = time.time()
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
@@ -776,6 +789,17 @@ async def do_the_thing(base_dir):
                     meta = await clean_meta_for_export(meta)
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
+
+            if meta.get('delete_tmp', False) and os.path.exists(tmp_path) and meta.get('emby', False):
+                try:
+                    shutil.rmtree(tmp_path)
+                    console.print(f"[bold green]Successfully deleted temp directory for {os.path.basename(path)}")
+                except Exception as e:
+                    console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
+
+            if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
+                if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
+                    break
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")

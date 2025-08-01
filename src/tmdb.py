@@ -12,7 +12,6 @@ import requests
 import json
 import httpx
 import asyncio
-import os
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -338,16 +337,29 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
 
-        # lets try with a folder name if we have one
+        # lets try with less words in the title
+        if attempted > 1 and attempted < 5 and path:
+            try:
+                words = filename.split()
+                console.print(f"[bold yellow]Original Words: {words}[/bold yellow]")
+                title = ' '.join(words[:-1])
+                original_category = "MOVIE"
+                console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
+                return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
+            except Exception as e:
+                console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
+                search_results = {"results": []}
+
+        # lets try with less words in the title
         if attempted > 1 and path and not final_attempt:
             try:
-                folder_name = os.path.basename(path).replace("_", "").replace("-", "") if path else ""
-                title = guessit(folder_name, {"excludes": ["country", "language"]})['title']
+                words = filename.split()
+                title = ' '.join(words[:-2])
                 original_category = "MOVIE"
-                console.print(f"[bold yellow]Trying folder name: {title}[/bold yellow]")
+                console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True)
             except Exception as e:
-                console.print(f"[bold red]Folder name search error:[/bold red] {e}")
+                console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
                 search_results = {"results": []}
 
         # No match found, prompt user if in CLI mode

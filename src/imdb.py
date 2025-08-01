@@ -2,8 +2,6 @@ from src.console import console
 import json
 import httpx
 from datetime import datetime
-import os
-import re
 
 
 async def get_imdb_aka_api(imdb_id, manual_language=None):
@@ -424,30 +422,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None):
     if secondary_title is not None:
         filename = secondary_title
-    else:
-        folder_name = os.path.basename(path) if path else ""
-        year_pattern = r'(19|20)\d{2}'
-        res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
-        year_match = re.search(year_pattern, folder_name)
-        res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
 
-        indices = []
-        if year_match:
-            indices.append(('year', year_match.start(), year_match.group()))
-        if res_match:
-            indices.append(('res', res_match.start(), res_match.group()))
-
-        if indices:
-            indices.sort(key=lambda x: x[1])
-            first_type, first_index, first_value = indices[0]
-            title_part = folder_name[:first_index]
-            title_part = re.sub(r'[\.\-_ ]+$', '', title_part)
-        else:
-            title_part = folder_name
-
-        filename = title_part.replace('.', ' ')
-
-    filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if debug:
         console.print(f"[yellow]Searching IMDb for {filename} and year {search_year}...[/yellow]")
     imdbID = imdb_id = 0
