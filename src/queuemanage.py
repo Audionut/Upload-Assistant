@@ -22,7 +22,7 @@ async def load_processed_files(log_file):
     Loads the list of processed files from the log file.
     """
     if os.path.exists(log_file):
-        with open(log_file, "r") as f:
+        with open(log_file, 'r', encoding='utf-8') as f:
             return set(json.load(f))
     return set()
 
@@ -34,19 +34,59 @@ async def gather_files_recursive(path, allowed_extensions=None):
     Skip folders that don't contain allowed extensions or disc structures (VIDEO_TS/BDMV).
     """
     queue = []
+
+    # Normalize the path to handle Unicode characters properly
+    try:
+        if isinstance(path, bytes):
+            path = path.decode('utf-8', errors='replace')
+
+        # Normalize Unicode characters
+        import unicodedata
+        path = unicodedata.normalize('NFC', path)
+
+        # Ensure proper path format
+        path = os.path.normpath(path)
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Path normalization failed for {path}: {e}[/yellow]")
+
     if os.path.isdir(path):
-        for entry in os.scandir(path):
-            if entry.is_dir():
-                # Check if this directory should be included
-                if await should_include_directory(entry.path, allowed_extensions):
-                    queue.append(entry.path)
-            elif entry.is_file() and (allowed_extensions is None or entry.name.lower().endswith(tuple(allowed_extensions))):
-                queue.append(entry.path)
+        try:
+            for entry in os.scandir(path):
+                try:
+                    # Get the full path and normalize it
+                    entry_path = os.path.normpath(entry.path)
+
+                    if entry.is_dir():
+                        # Check if this directory should be included
+                        if await should_include_directory(entry_path, allowed_extensions):
+                            queue.append(entry_path)
+                    elif entry.is_file() and (allowed_extensions is None or entry.name.lower().endswith(tuple(allowed_extensions))):
+                        queue.append(entry_path)
+
+                except (OSError, UnicodeDecodeError, UnicodeError) as e:
+                    console.print(f"[yellow]Warning: Skipping entry due to encoding issue: {e}[/yellow]")
+                    # Try to get the path in a different way
+                    try:
+                        alt_path = os.path.join(path, entry.name)
+                        if os.path.exists(alt_path):
+                            if os.path.isdir(alt_path) and await should_include_directory(alt_path, allowed_extensions):
+                                queue.append(alt_path)
+                            elif os.path.isfile(alt_path) and (allowed_extensions is None or alt_path.lower().endswith(tuple(allowed_extensions))):
+                                queue.append(alt_path)
+                    except Exception:
+                        continue
+
+        except (OSError, PermissionError) as e:
+            console.print(f"[red]Error scanning directory {path}: {e}[/red]")
+            return []
+
     elif os.path.isfile(path):
         if allowed_extensions is None or path.lower().endswith(tuple(allowed_extensions)):
             queue.append(path)
     else:
-        console.print(f"[red]Invalid path: {path}")
+        console.print(f"[red]Invalid path: {path}[/red]")
+
     return queue
 
 
@@ -58,6 +98,9 @@ async def should_include_directory(dir_path, allowed_extensions=None):
     - A subfolder named 'VIDEO_TS' or 'BDMV' (disc structures)
     """
     try:
+        # Normalize the path
+        dir_path = os.path.normpath(dir_path)
+
         # Check for disc structures first (VIDEO_TS or BDMV subfolders)
         for entry in os.scandir(dir_path):
             if entry.is_dir() and entry.name.upper() in ('VIDEO_TS', 'BDMV'):
@@ -76,8 +119,8 @@ async def should_include_directory(dir_path, allowed_extensions=None):
 
         return False
 
-    except (OSError, PermissionError) as e:
-        console.print(f"[yellow]Warning: Could not scan directory {dir_path}: {e}")
+    except (OSError, PermissionError, UnicodeError) as e:
+        console.print(f"[yellow]Warning: Could not scan directory {dir_path}: {e}[/yellow]")
         return False
 
 
@@ -120,7 +163,7 @@ async def extract_safe_file_locations(log_file):
     safe_section = False
     safe_file_locations = []
 
-    with open(log_file, 'r') as f:
+    with open(log_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
 
@@ -153,7 +196,7 @@ async def display_queue(queue, base_dir, queue_name, save_to_log=True):
         log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
         try:
-            with open(log_file, 'w') as f:
+            with open(log_file, 'w', encoding='utf-8') as f:
                 json.dump(queue, f, indent=4)
             console.print(f"[bold green]Queue successfully saved to log file: {log_file}")
         except Exception as e:
@@ -178,7 +221,7 @@ async def handle_queue(path, meta, paths, base_dir):
 
                 # Save the queue to the log file
                 try:
-                    with open(log_file, 'w') as f:
+                    with open(log_file, 'w', encoding='utf-8') as f:
                         json.dump(queue, f, indent=4)
                     console.print(f"[bold green]Queue log file saved successfully: {log_file}[/bold green]")
                 except IOError as e:
@@ -205,7 +248,7 @@ async def handle_queue(path, meta, paths, base_dir):
 
     elif meta.get('queue'):
         if os.path.exists(log_file):
-            with open(log_file, 'r') as f:
+            with open(log_file, 'r', encoding='utf-8') as f:
                 existing_queue = json.load(f)
 
             if os.path.exists(path):
@@ -242,7 +285,7 @@ async def handle_queue(path, meta, paths, base_dir):
                     if edit_choice == 'u':
                         queue = current_files
                         console.print(f"[bold green]Queue updated with current files ({len(queue)} items).")
-                        with open(log_file, 'w') as f:
+                        with open(log_file, 'w', encoding='utf-8') as f:
                             json.dump(queue, f, indent=4)
                         console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
                     elif edit_choice == 'a':
@@ -255,7 +298,7 @@ async def handle_queue(path, meta, paths, base_dir):
                             selected_files = [file for i, file in enumerate(sorted(new_files), 1) if i in indices]
                             queue = list(existing_queue) + selected_files
                             console.print(f"[bold green]Queue updated with selected new files ({len(queue)} items).")
-                            with open(log_file, 'w') as f:
+                            with open(log_file, 'w', encoding='utf-8') as f:
                                 json.dump(queue, f, indent=4)
                             console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
                         except Exception as e:
@@ -267,7 +310,7 @@ async def handle_queue(path, meta, paths, base_dir):
                             try:
                                 queue = json.loads(edited_content.strip())
                                 console.print("[bold green]Successfully updated the queue from the editor.")
-                                with open(log_file, 'w') as f:
+                                with open(log_file, 'w', encoding='utf-8') as f:
                                     json.dump(queue, f, indent=4)
                             except json.JSONDecodeError as e:
                                 console.print(f"[bold red]Failed to parse the edited content: {e}. Using the current files.")
@@ -278,7 +321,7 @@ async def handle_queue(path, meta, paths, base_dir):
                     elif edit_choice == 'd':
                         console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
                         queue = current_files
-                        with open(log_file, 'w') as f:
+                        with open(log_file, 'w', encoding='utf-8') as f:
                             json.dump(queue, f, indent=4)
                         console.print(f"[bold green]New queue log file created: {log_file}[/bold green]")
                     else:
@@ -301,7 +344,7 @@ async def handle_queue(path, meta, paths, base_dir):
                             try:
                                 queue = json.loads(edited_content.strip())
                                 console.print("[bold green]Successfully updated the queue from the editor.")
-                                with open(log_file, 'w') as f:
+                                with open(log_file, 'w', encoding='utf-8') as f:
                                     json.dump(queue, f, indent=4)
                             except json.JSONDecodeError as e:
                                 console.print(f"[bold red]Failed to parse the edited content: {e}. Using the original queue.")
@@ -312,7 +355,7 @@ async def handle_queue(path, meta, paths, base_dir):
                     elif edit_choice == 'd':
                         console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
                         queue = current_files
-                        with open(log_file, 'w') as f:
+                        with open(log_file, 'w', encoding='utf-8') as f:
                             json.dump(queue, f, indent=4)
                         console.print(f"[bold green]New queue log file created: {log_file}[/bold green]")
                     else:
@@ -344,7 +387,7 @@ async def handle_queue(path, meta, paths, base_dir):
                     console.print("[bold red]No changes were made. Using the original queue.")
 
             # Save the queue to the log file
-            with open(log_file, 'w') as f:
+            with open(log_file, 'w', encoding='utf-8') as f:
                 json.dump(queue, f, indent=4)
             console.print(f"[bold green]Queue log file created: {log_file}[/bold green]")
 
