@@ -355,7 +355,12 @@ async def process_meta(meta, base_dir, bot=None):
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}")
+                            try:
+                                raise Exception(f"Error during screenshot capture: {e}")
+                            except Exception as e2:
+                                if "workers" in str(e2):
+                                    console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
+                                raise e2
 
                 except asyncio.CancelledError:
                     await cleanup_screenshot_temp_files(meta)
@@ -364,13 +369,13 @@ async def process_meta(meta, base_dir, bot=None):
                     gc.collect()
                     reset_terminal()
                     raise Exception("Error during screenshot capture")
-                except Exception as e:
+                except Exception:
                     await cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
                     await cleanup()
                     gc.collect()
                     reset_terminal()
-                    raise Exception(f"Error during screenshot capture: {e}")
+                    raise Exception
                 finally:
                     await asyncio.sleep(0.1)
                     await cleanup()
@@ -723,7 +728,7 @@ async def do_the_thing(base_dir):
                         console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
                     else:
                         console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
-                    if not meta['debug']:
+                    if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
                             await save_processed_file(log_file, path)
 
@@ -739,7 +744,7 @@ async def do_the_thing(base_dir):
                         console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
                     else:
                         console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
-                    if not meta['debug']:
+                    if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
                             await save_processed_file(log_file, path)
                     await asyncio.sleep(0.1)

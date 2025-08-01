@@ -549,7 +549,8 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             input_files.append(input_file)
 
         if frame_overlay:
-            console.print("[yellow]Getting frame information for overlays...")
+            if meta['debug']:
+                console.print("[yellow]Getting frame information for overlays...")
             frame_info_tasks = [
                 get_frame_info(input_files[i], ss_times[i], meta)
                 for i in range(num_screens + 1)
@@ -943,7 +944,8 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         ss_times = await valid_ss_time([], num_capture, length, frame_rate, meta, retake=force_screenshots)
 
     if frame_overlay:
-        console.print("[yellow]Getting frame information for overlays...")
+        if meta['debug']:
+            console.print("[yellow]Getting frame information for overlays...")
         frame_info_tasks = [
             get_frame_info(path, ss_times[i], meta)
             for i in range(num_capture)
@@ -997,8 +999,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         gc.collect()
         reset_terminal()
         sys.exit(1)
-    except Exception as e:
-        console.print(f"[red]Error during screenshot capture: {e}[/red]")
+    except Exception:
         await asyncio.sleep(0.1)
         await kill_all_child_processes()
         gc.collect()
@@ -1369,7 +1370,10 @@ async def capture_screenshot(args):
             return (index, image_path)
         else:
             stderr_text = stderr.decode('utf-8', errors='replace')
-            console.print(f"[red]FFmpeg error capturing screenshot: {stderr_text}[/red]")
+            if "Error initializing complex filters" in stderr_text:
+                console.print("[red]FFmpeg complex filters error: see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
+            else:
+                console.print(f"[red]FFmpeg error capturing screenshot: {stderr_text}[/red]")
             return (index, None)
     except Exception as e:
         console.print(traceback.format_exc())

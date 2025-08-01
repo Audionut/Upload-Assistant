@@ -587,6 +587,7 @@ async def imdb_tmdb(meta, filename):
     # Gather results
     results = await asyncio.gather(*coroutines, return_exceptions=True)
 
+    tmdb_metadata = None
     # Process the results
     if isinstance(results[0], Exception):
         error_msg = f"TMDB metadata retrieval failed: {str(results[0])}"

@@ -180,9 +180,21 @@ async def get_resolution(guess, folder_id, base_dir):
         except Exception:
             width = 0
             height = 0
-        framerate = mi['media']['track'][1].get('FrameRate', '24')
-        if int(float(framerate)) > 30:
-            hfr = True
+
+        framerate = mi['media']['track'][1].get('FrameRate')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Original')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Num')
+        if framerate:
+            try:
+                if int(float(framerate)) > 30:
+                    hfr = True
+            except Exception:
+                hfr = False
+        else:
+            framerate = "24.000"
+
         try:
             scan = mi['media']['track'][1]['ScanType']
         except Exception:

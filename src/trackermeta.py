@@ -269,6 +269,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
 
     if tracker_name == "PTP":
         imdb_id = 0
+        ptp_imagelist = []
         if meta.get('ptp') is None:
             imdb_id, ptp_torrent_id, meta['ext_torrenthash'] = await tracker_instance.get_ptp_id_imdb(search_term, search_file_folder, meta)
             if ptp_torrent_id:

@@ -148,6 +148,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                     "DisplayAspectRatio": track.get("DisplayAspectRatio", {}),
                     "FrameRate_Mode": track.get("FrameRate_Mode", {}),
                     "FrameRate": track.get("FrameRate", {}),
+                    "FrameRate_Original": track.get("FrameRate_Original", {}),
                     "FrameRate_Num": track.get("FrameRate_Num", {}),
                     "FrameRate_Den": track.get("FrameRate_Den", {}),
                     "FrameCount": track.get("FrameCount", {}),
