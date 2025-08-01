@@ -64,22 +64,31 @@ class BJS(COMMON):
 
     async def required_data(self, meta):
         data = await self.ptbr_tmdb_data(meta)
-        required_fields = {
-            'Criado(a) por': data.get('created_by'),
+        required_fields = {}
+        required_fields.update({
+            'Criado(a) por': [p.get("name") for p in data.get('created_by', []) if p.get("name")],
             'Data de Lançamento ou Primeira Exibição': data.get('first_air_date') or data.get('release_date'),
-            'Diretores': meta.get('tmdb_directors'),
-            'Elenco': data.get('credits').get('cast'),
-            'Gêneros': data.get('genres'),
+            'Elenco': [a.get("name") for a in data.get('credits', {}).get('cast', []) if a.get("name")],
+            'Gêneros': [g.get("name") for g in data.get('genres', []) if g.get("name")],
             'Idioma Original': data.get('original_language'),
             'Sinopse (Português)': data.get('overview'),
-        }
+        })
+
+        if self.category == 'TV':
+            required_fields.update({
+                'Diretor': [p.get("name") for p in data.get('created_by', []) if p.get("name")]
+            })
+        if self.category == 'MOVIE':
+            required_fields.update({
+                'Diretor': meta.get('tmdb_directors') if meta.get('tmdb_directors') and any(meta.get('tmdb_directors')) else None
+            })
 
         missing_items = [name for name, value in required_fields.items() if not value]
 
         if missing_items:
             missing_fields_str = ', '.join(missing_items)
             error_message = (
-                f"""Upload bloqueado. Campos obrigatórios faltando no TMDB: "{missing_fields_str}"
+                f"""Upload bloqueado. Campos obrigatórios faltando no TMDB: {missing_fields_str}
                 Por favor, adicione as informações em: https://www.themoviedb.org/{self.category.lower()}/{self.tmdb_id}/edit?language=pt-BR"""
             )
             meta['tracker_status'][self.tracker]['status_message'] = f"{error_message}"
@@ -865,6 +874,7 @@ class BJS(COMMON):
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
         await self.edit_desc(meta)
+        await self.required_data(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
 
         data = {}
@@ -907,7 +917,7 @@ class BJS(COMMON):
 
         if self.category == 'TV':
             data.update({
-                'diretor': ", ".join([p.get("name", "Desconhecido") for p in tmdb_data.get("created_by", [])[:3]]) or "",
+                'diretor': ", ".join([p["name"] for p in tmdb_data.get("created_by", [])[:3] if "name" in p]),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': self.season,
                 'episode': self.episode if not self.is_tv_pack else '',
