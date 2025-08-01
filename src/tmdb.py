@@ -144,6 +144,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         final_attempt = False
     if attempted is None:
         attempted = 0
+    if attempted:
+        await asyncio.sleep(1)  # Whoa baby, slow down
 
     async with httpx.AsyncClient() as client:
         try:

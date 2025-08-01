@@ -706,8 +706,9 @@ class Prep():
             meta['tv_year'] = imdb_info.get('tv_year', None)
         check_valid_data = meta.get('imdb_info', {}).get('title', "")
         if check_valid_data:
-            aka = meta.get('imdb_info', {}).get('aka', "").strip()
-            title = meta.get('imdb_info', {}).get('title', "").strip().lower()
+            title = meta['title'].lower().strip()
+            aka = meta.get('imdb_info', {}).get('title', "").strip().lower()
+            imdb_aka = meta.get('imdb_info', {}).get('aka', "").strip().lower()
             year = str(meta.get('imdb_info', {}).get('year', ""))
 
             if aka and not meta.get('aka'):
@@ -716,11 +717,24 @@ class Prep():
                 if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
                     aka = None
 
+                difference = SequenceMatcher(None, title, imdb_aka).ratio()
+                if difference >= 0.7 or not imdb_aka or imdb_aka in title:
+                    imdb_aka = None
+
                 if aka is not None:
                     if f"({year})" in aka:
-                        aka = aka.replace(f"({year})", "").strip()
+                        aka = meta.get('imdb_info', {}).get('title', "").replace(f"({year})", "").strip()
+                    else:
+                        aka = meta.get('imdb_info', {}).get('title', "").strip()
                     meta['aka'] = f"AKA {aka.strip()}"
-                    meta['title'] = f"{meta.get('imdb_info', {}).get('title', '').strip()}"
+                    meta['title'] = meta['title'].strip()
+                elif imdb_aka is not None:
+                    if f"({year})" in imdb_aka:
+                        imdb_aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
+                    else:
+                        imdb_aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                    meta['aka'] = f"AKA {imdb_aka.strip()}"
+                    meta['title'] = meta['title'].strip()
 
         if meta.get('aka', None) is None:
             meta['aka'] = ""
