@@ -16,6 +16,7 @@ from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
+from tqdm import tqdm
 from urllib.parse import urlparse
 
 
@@ -50,7 +51,7 @@ class BJS(COMMON):
         url = f"{base_url}/{self.category.lower()}/{self.tmdb_id}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos,content_ratings"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url)
                 if response.status_code == 200:
                     return response.json()
@@ -347,7 +348,7 @@ class BJS(COMMON):
 
         try:
             upload_page_url = f"{self.base_url}/upload.php"
-            response = self.session.get(upload_page_url, timeout=10, allow_redirects=True)
+            response = self.session.get(upload_page_url, timeout=30, allow_redirects=True)
 
             if 'login.php' in str(response.url):
                 console.print(f"[bold red]Falha na validação do {self.tracker}. O cookie parece estar expirado ou é inválido.[/bold red]")
@@ -615,7 +616,7 @@ class BJS(COMMON):
 
         try:
             response = await asyncio.to_thread(
-                self.session.post, upload_url, headers=headers, files=files, timeout=60
+                self.session.post, upload_url, headers=headers, files=files, timeout=120
             )
             if response.ok:
                 data = response.json()
@@ -641,7 +642,7 @@ class BJS(COMMON):
 
             cover_tmdb_url = f"https://image.tmdb.org/t/p/w500{cover_path}"
             try:
-                response = await self.session.get(cover_tmdb_url, timeout=60)
+                response = await self.session.get(cover_tmdb_url, timeout=120)
                 response.raise_for_status()
                 image_bytes = response.content
                 filename = os.path.basename(cover_path)
@@ -655,17 +656,21 @@ class BJS(COMMON):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
         local_files = sorted(screenshot_dir.glob('*.png'))
 
-        tasks = []
+        results = []
+
         # Use existing files
         if local_files:
-            print(f"Enviando {len(local_files)} screenshots para o {self.tracker}.")
-
             async def upload_local_file(path):
                 with open(path, 'rb') as f:
                     image_bytes = f.read()
                 return await self.img_host(image_bytes, os.path.basename(path))
 
-            tasks = [upload_local_file(path) for path in local_files[:6]]
+            paths = local_files[:6]
+
+            for coro in tqdm(asyncio.as_completed([upload_local_file(p) for p in paths]), total=len(paths), desc=f"Enviando {len(local_files)} screenshots para o host do {self.tracker}"):
+                result = await coro
+                if result:
+                    results.append(result)
 
         # If no files are found, get them from meta links
         else:
@@ -675,7 +680,7 @@ class BJS(COMMON):
 
             async def upload_remote_file(url):
                 try:
-                    response = await asyncio.to_thread(self.session.get, url, timeout=60)
+                    response = await asyncio.to_thread(self.session.get, url, timeout=120)
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or "screenshot.png"
@@ -684,18 +689,17 @@ class BJS(COMMON):
                     print(f"Falha ao processar screenshot da URL {url}: {e}")
                     return None
 
-            tasks = [upload_remote_file(link) for link in image_links]
+            links = image_links
 
-        if not tasks:
-            return []
+            for coro in tqdm(asyncio.as_completed([upload_remote_file(url) for url in links]), total=len(links), desc=f"Enviando {len(image_links)} screenshots para o host do {self.tracker}"):
+                result = await coro
+                if result:
+                    results.append(result)
 
-        results = await asyncio.gather(*tasks)
-        final_urls = [url for url in results if url]
-
-        if len(final_urls) < 2:
+        if len(results) < 2:
             raise UploadException(f"[bold red]FALHA NO UPLOAD:[/bold red] O host de imagem do {self.tracker} não retornou o número mínimo de screenshots.")
 
-        return final_urls
+        return results
 
     async def edit_desc(self, meta):
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
@@ -992,7 +996,7 @@ class BJS(COMMON):
                 files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
                 try:
-                    response = self.session.post(upload_url, data=data, files=files, timeout=60)
+                    response = self.session.post(upload_url, data=data, files=files, timeout=120)
 
                     if response.status_code == 200 and 'Clique em baixar para entrar de' in response.text:
                         id_match = re.search(r'action=download&id=(\d+)', response.text)
