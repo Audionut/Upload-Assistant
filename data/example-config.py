@@ -329,6 +329,7 @@ config = {
             "anon": False,
         },
         "BJS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             # for BJS to work you need to export cookies from https://bj-share.info using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
             # cookies need to be in netscape format and need to be in data/cookies/BJS.txt
