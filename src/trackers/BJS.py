@@ -66,7 +66,6 @@ class BJS(COMMON):
         data = await self.ptbr_tmdb_data(meta)
         required_fields = {}
         required_fields.update({
-            'Criado(a) por': [p.get("name") for p in data.get('created_by', []) if p.get("name")],
             'Data de Lançamento ou Primeira Exibição': data.get('first_air_date') or data.get('release_date'),
             'Elenco': [a.get("name") for a in data.get('credits', {}).get('cast', []) if a.get("name")],
             'Gêneros': [g.get("name") for g in data.get('genres', []) if g.get("name")],
@@ -76,7 +75,7 @@ class BJS(COMMON):
 
         if self.category == 'TV':
             required_fields.update({
-                'Diretor': [p.get("name") for p in data.get('created_by', []) if p.get("name")]
+                'Criado(a) por': [p.get("name") for p in data.get('created_by', []) if p.get("name")],
             })
         if self.category == 'MOVIE':
             required_fields.update({
