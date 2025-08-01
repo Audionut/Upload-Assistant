@@ -697,7 +697,7 @@ async def do_the_thing(base_dir):
                     processed_files_count += 1
                     skipped_files_count += 1
                     console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
-                    if not meta['debug']:
+                    if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
                             await save_processed_file(log_file, path)
 
@@ -713,7 +713,7 @@ async def do_the_thing(base_dir):
                         console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
                     else:
                         console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
-                    if not meta['debug']:
+                    if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
                             await save_processed_file(log_file, path)
                     await asyncio.sleep(0.1)
