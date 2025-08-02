@@ -489,9 +489,12 @@ async def tmdb_other_meta(
             runtime = media_data.get('runtime', 60)
             if quickie_search or not imdb_id:
                 imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
-                if imdb_id and imdb_id_str and (int(imdb_id_str) != imdb_id):
-                    imdb_mismatch = True
-                imdb_id = int(imdb_id_str) if imdb_id_str.isdigit() else 0
+                if imdb_id_str and imdb_id_str.isdigit():
+                    if imdb_id and int(imdb_id_str) != imdb_id:
+                        imdb_mismatch = True
+                    imdb_id = int(imdb_id_str)
+                else:
+                    imdb_id = 0
             tmdb_type = 'Movie'
         else:  # TV show
             title = media_data['name']
@@ -569,7 +572,7 @@ async def tmdb_other_meta(
                 # Process IMDB ID
                 if quickie_search or imdb_id == 0:
                     imdb_id_str = external.get('imdb_id', None)
-                    if imdb_id_str and imdb_id_str not in ["", " ", "None", None]:
+                    if isinstance(imdb_id_str, str) and imdb_id_str not in ["", " ", "None", "null"]:
                         imdb_id_clean = imdb_id_str.lstrip('t')
                         if imdb_id_clean.isdigit():
                             imdb_id_clean_int = int(imdb_id_clean)
@@ -578,13 +581,22 @@ async def tmdb_other_meta(
                                 imdb_id = original_imdb_id
                             else:
                                 imdb_id = int(imdb_id_clean)
+                        else:
+                            imdb_id = 0
+                    else:
+                        imdb_id = 0
                 else:
-                    imdb_id = int(imdb_id)
+                    if imdb_id and str(imdb_id).isdigit():
+                        imdb_id = int(imdb_id)
+                    else:
+                        imdb_id = 0
 
                 # Process TVDB ID
                 if tvdb_id == 0:
-                    tvdb_id = external.get('tvdb_id', None)
-                    if tvdb_id in ["", " ", "None", None]:
+                    tvdb_id_str = external.get('tvdb_id', None)
+                    if isinstance(tvdb_id_str, str) and tvdb_id_str not in ["", " ", "None", "null"]:
+                        tvdb_id = int(tvdb_id_str) if tvdb_id_str.isdigit() else 0
+                    else:
                         tvdb_id = 0
             except Exception:
                 console.print("[bold red]Failed to process external IDs[/bold red]")
