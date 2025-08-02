@@ -146,7 +146,7 @@ class DiscParse():
                     selected_playlists = [max(valid_playlists, key=lambda p: sum(item['size'] for item in p['items']))]
                 else:
                     # Allow user to select playlists
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         if len(valid_playlists) == 1:
                             console.print("[yellow]Only one valid playlist found. Automatically selecting.")
                             selected_playlists = valid_playlists
@@ -258,7 +258,7 @@ class DiscParse():
                                 current_label = bdinfo.get('label', f"Playlist {idx}")
                                 console.print(f"[bold yellow]Current label for playlist {playlist['file']}: {current_label}")
 
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("[bold green]You can create a custom Edition for this playlist.")
                                     user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
                                     if user_input:
@@ -273,7 +273,7 @@ class DiscParse():
                                 discs[i]['summary'] = bd_summary.strip()
                                 discs[i]['bdinfo'] = bdinfo
                                 discs[i]['playlists'] = selected_playlists
-                                if valid_playlists and meta['unattended'] and not meta.get('unattended-confirm', False):
+                                if valid_playlists and meta['unattended'] and not meta.get('unattended_confirm', False):
                                     simplified_playlists = [{"file": p["file"], "duration": p["duration"]} for p in valid_playlists]
                                     duration_map = {}
 
@@ -662,7 +662,7 @@ class DiscParse():
                             key=lambda p: p["totalSize"]
                         )
                     ]
-                elif meta['unattended'] and not meta.get('unattended-confirm', False):
+                elif meta['unattended'] and not meta.get('unattended_confirm', False):
                     console.print("[yellow]Unattended mode: Auto-selecting the largest playlist.")
                     selected_playlists = [
                         max(

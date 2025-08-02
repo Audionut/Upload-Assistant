@@ -215,7 +215,7 @@ class OTW():
 
     async def search_existing(self, meta, disctype):
         if not any(genre in meta['genres'] for genre in ['Animation', 'Family']):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass

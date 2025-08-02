@@ -320,7 +320,7 @@ class BHD():
             "-ncmt", "-tdd", "-flux", "-crfw", "-sonny", "-zr-", "-mkvultra",
             "-rpg", "-w4nk3r", "-irobot", "-beyondhd"
         )):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass

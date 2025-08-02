@@ -135,7 +135,7 @@ async def process_all_trackers(meta):
                         console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
                     if (
                         not local_meta['unattended']
-                        or (local_meta['unattended'] and local_meta.get('unattended-confirm', False))
+                        or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))
                     ) and not we_already_asked:
                         edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
                         if edit_choice.lower() == 'y':

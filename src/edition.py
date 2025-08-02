@@ -50,7 +50,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                         console.print("[yellow]Edition without attributes are theatrical editions and skipped[/yellow]")
 
                         if len(matching_editions) > 1:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Media file duration {formatted_duration} matches multiple editions:[/yellow]")
                                 for i, ed in enumerate(matching_editions):
                                     diff_formatted = format_duration(ed['difference'])
@@ -101,7 +101,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                 all_playlists = []
                 for disc in meta['discs']:
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         if disc.get('playlists'):
                             all_playlists.extend(disc['playlists'])
                     else:
@@ -152,7 +152,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                         # If multiple editions match this playlist, ask the user
                         if len(matching_editions) > 1:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Playlist edition [green]{playlist_edition} [yellow]using file [green]{playlist_file} [yellow]with duration [green]{formatted_duration} [yellow]matches multiple editions:[/yellow]")
                                 for i, ed in enumerate(matching_editions):
                                     console.print(f"[yellow]{i+1}. [green]{ed['name']} ({ed['display_name']}, diff: {ed['difference']:.2f} seconds)")
