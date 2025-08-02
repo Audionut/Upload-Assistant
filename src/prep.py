@@ -929,25 +929,33 @@ class Prep():
                 if not meta['tag'].startswith('-') and meta['tag'] != "":
                     meta['tag'] = f"-{meta['tag']}"
 
-        if meta.get('tag') == "-SubsPlease":  # SubsPlease-specific
-            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])  # Get all tracks
-            bitrate = tracks[1].get('BitRate', '') if len(tracks) > 1 and not isinstance(tracks[1].get('BitRate', ''), dict) else ''  # Check that bitrate is not a dict
-            bitrate_oldMediaInfo = tracks[0].get('OverallBitRate', '') if len(tracks) > 0 and not isinstance(tracks[0].get('OverallBitRate', ''), dict) else ''  # Check for old MediaInfo
-            meta['episode_title'] = ""
-            if (bitrate.isdigit() and int(bitrate) >= 8000000) or (bitrate_oldMediaInfo.isdigit() and int(bitrate_oldMediaInfo) >= 8000000) and meta.get('resolution') == "1080p":  # 8Mbps for 1080p
-                meta['service'] = "CR"
-            elif (bitrate.isdigit() or bitrate_oldMediaInfo.isdigit()) and meta.get('resolution') == "1080p":  # Only assign if at least one bitrate is present, otherwise leave it to user
-                meta['service'] = "HIDI"
-            elif (bitrate.isdigit() and int(bitrate) >= 4000000) or (bitrate_oldMediaInfo.isdigit() and int(bitrate_oldMediaInfo) >= 4000000) and meta.get('resolution') == "720p":  # 4Mbps for 720p
-                meta['service'] = "CR"
-            elif (bitrate.isdigit() or bitrate_oldMediaInfo.isdigit()) and meta.get('resolution') == "720p":
-                meta['service'] = "HIDI"
+            meta = await tag_override(meta)
 
-        if meta.get('service', None) in (None, ''):
-            meta['service'], meta['service_longname'] = await get_service(video, meta.get('tag', ''), meta['audio'], meta['filename'])
-        elif meta.get('service'):
-            services = await get_service(get_services_only=True)
-            meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
+            if meta['tag'][1:].startswith(meta['channels']):
+                meta['tag'] = meta['tag'].replace(f"-{meta['channels']}", '')
+
+            if meta.get('no_tag', False):
+                meta['tag'] = ""
+
+            if meta.get('tag') == "-SubsPlease":  # SubsPlease-specific
+                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])  # Get all tracks
+                bitrate = tracks[1].get('BitRate', '') if len(tracks) > 1 and not isinstance(tracks[1].get('BitRate', ''), dict) else ''  # Check that bitrate is not a dict
+                bitrate_oldMediaInfo = tracks[0].get('OverallBitRate', '') if len(tracks) > 0 and not isinstance(tracks[0].get('OverallBitRate', ''), dict) else ''  # Check for old MediaInfo
+                meta['episode_title'] = ""
+                if (bitrate.isdigit() and int(bitrate) >= 8000000) or (bitrate_oldMediaInfo.isdigit() and int(bitrate_oldMediaInfo) >= 8000000) and meta.get('resolution') == "1080p":  # 8Mbps for 1080p
+                    meta['service'] = "CR"
+                elif (bitrate.isdigit() or bitrate_oldMediaInfo.isdigit()) and meta.get('resolution') == "1080p":  # Only assign if at least one bitrate is present, otherwise leave it to user
+                    meta['service'] = "HIDI"
+                elif (bitrate.isdigit() and int(bitrate) >= 4000000) or (bitrate_oldMediaInfo.isdigit() and int(bitrate_oldMediaInfo) >= 4000000) and meta.get('resolution') == "720p":  # 4Mbps for 720p
+                    meta['service'] = "CR"
+                elif (bitrate.isdigit() or bitrate_oldMediaInfo.isdigit()) and meta.get('resolution') == "720p":
+                    meta['service'] = "HIDI"
+
+            if meta.get('service', None) in (None, ''):
+                meta['service'], meta['service_longname'] = await get_service(video, meta.get('tag', ''), meta['audio'], meta['filename'])
+            elif meta.get('service'):
+                services = await get_service(get_services_only=True)
+                meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
         # return duplicate ids so I don't have to catch every site file
         # this has the other adavantage of stringifying immb for this object
