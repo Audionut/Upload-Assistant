@@ -53,18 +53,17 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>MoreThanTV</td><td>MTV</td><td>Nebulance</td><td>NBL</td></tr>
   <tr><td>OldToonsWorld</td><td>OTW</td><td>OnlyEncodes+</td><td>OE</td></tr>
   <tr><td>PassThePopcorn</td><td>PTP</td><td>Polish Torrent</td><td>PTT</td></tr>
-  <tr><td>Portugas</td><td>PT</td><td>PrivateSilverScreen</td><td>PSS</td></tr>
-  <tr><td>PTerClub</td><td>PTER</td><td>Racing4Everyone</td><td>R4E</td></tr>
-  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
-  <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
-  <tr><td>seedpool</td><td>SP</td><td>Shareisland</td><td>SHRI</td></tr>
-  <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
-  <tr><td>Swarmazon</td><td>SN</td><td>Toca Share</td><td>TOCA</td></tr>
-  <tr><td>TorrentHR</td><td>THR</td><td>TorrentLeech</td><td>TL</td></tr>
-  <tr><td>ToTheGlory</td><td>TTG</td><td>TVChaosUK</td><td>TVC</td></tr>
-  <tr><td>UHDShare</td><td>UHD</td><td>ULCX</td><td>ULCX</td></tr>
-  <tr><td>UTOPIA</td><td>UTP</td><td>YOiNKED</td><td>YOINK</td></tr>
-  <tr><td>YUSCENE</td><td>YUS</td><td></td><td></td></tr>
+  <tr><td>Portugas</td><td>PT</td><tr><td>PTerClub</td><td>PTER</td>
+  <td>Racing4Everyone</td><td>R4E</td></tr><tr><td>Rastastugan</td>
+  <td>RAS</td><td>ReelFLiX</td><td>RF</td></tr><tr><td>RetroFlix</td><td>RTF</td>
+  <td>Samaritano</td><td>SAM</td></tr><tr><td>seedpool</td><td>SP</td>
+  <td>Shareisland</td><td>SHRI</td></tr><tr><td>SkipTheCommericals</td><td>STC</td>
+  <td>SpeedApp</td><td>SPD</td></tr><tr><td>Swarmazon</td><td>SN</td>
+  <td>Toca Share</td><td>TOCA</td></tr><tr><td>TorrentHR</td><td>THR</td>
+  <td>TorrentLeech</td><td>TL</td></tr><tr><td>ToTheGlory</td><td>TTG</td>
+  <td>TVChaosUK</td><td>TVC</td></tr><tr><td>UHDShare</td><td>UHD</td>
+  <td>ULCX</td><td>ULCX</td></tr><tr><td>UTOPIA</td><td>UTP</td><td>YOiNKED</td>
+  <td>YOINK</td></tr><tr><td>YUSCENE</td><td>YUS</td><td></td><td></td></tr>
 </table>
 
 ## **Setup:**

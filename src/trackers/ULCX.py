@@ -180,10 +180,10 @@ class ULCX():
         if not meta.get('category') == "TV":
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
         if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":
-            ulcx_name = ulcx_name.replace(f"{meta['aka']}", "", 1)
+            ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
         if meta.get('is_disc') == "BDMV":
             if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
                     region_id = await common.unit3d_region_ids(region_name)
                     if not meta.get('edition', ""):
@@ -193,7 +193,7 @@ class ULCX():
                 else:
                     region_id = "SKIPPED"
             if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     distributor_name = cli_ui.ask_string("ULCX: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
                     distributor_id = await common.unit3d_distributor_ids(distributor_name)
                 else:
@@ -210,7 +210,7 @@ class ULCX():
 
     async def search_existing(self, meta, disctype):
         if 'concert' in meta['keywords']:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Concerts not allowed at ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
@@ -221,7 +221,7 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]This content might not fit HEVC rules for ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass

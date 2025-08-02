@@ -174,20 +174,22 @@ async def process_meta(meta, base_dir, bot=None):
     with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
         json.dump(meta, f, indent=4)
         f.close()
+    editargs_tracking = ()
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
         editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
-        editargs = (meta['path'],) + tuple(editargs.split())
-        if meta.get('debug', False):
-            editargs += ("--debug",)
-        if meta.get('trackers', None) is not None:
-            editargs += ("--trackers", ",".join(meta["trackers"]))
-        meta, help, before_args = parser.parse(editargs, meta)
+        editargs = tuple(editargs.split())
+        # Tracks multiple edits
+        editargs_tracking = editargs_tracking + editargs
+        # Carry original args over, let parse handle duplicates
+        meta, help, before_args = parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta)
         if isinstance(meta.get('trackers'), str):
             if "," in meta['trackers']:
-                meta['trackers'] = [t.strip() for t in meta['trackers'].split(',')]
+                meta['trackers'] = [t.strip().upper() for t in meta['trackers'].split(',')]
             else:
-                meta['trackers'] = [meta['trackers']]
+                meta['trackers'] = [meta['trackers'].strip().upper()]
+        elif isinstance(meta.get('trackers'), list):
+            meta['trackers'] = [t.strip().upper() for t in meta['trackers'] if isinstance(t, str)]
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)

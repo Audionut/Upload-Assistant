@@ -334,7 +334,7 @@ async def handle_queue(path, meta, paths, base_dir):
             else:
                 # No changes detected
                 console.print("[green]No changes detected in the queue.[/green]")
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[yellow]Do you want to edit, discard, or keep the existing queue?[/yellow]")
                     edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
 

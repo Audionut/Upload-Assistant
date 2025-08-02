@@ -106,7 +106,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                 if not meta.get('unattended_audio_skip', False) and (not audio_languages or audio_languages is None):
                     for audio_track in parsed_info.get('audio', []):
                         if 'language' not in audio_track:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print("No audio language/s found, you must enter (comma-separated) languages")
                                 audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
                                 if audio_lang:
@@ -132,7 +132,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if 'text' in parsed_info:
                         for text_track in parsed_info.get('text', []):
                             if 'language' not in text_track:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("No subtitle language/s found, you must enter (comma-separated) languages")
                                     subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
                                     if subtitle_lang:
@@ -209,7 +209,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                 lang = track.get("language", "")
                 if bitrate_num is not None and bitrate_num < 258:
                     if lang and lang in audio_languages and len(lang) > 1 and not meta['bluray_audio_skip']:
-                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             console.print(f"Audio track '{lang}' has a bitrate of {bitrate_num} kbps. Probably commentary and should be removed.")
                             if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
                                 audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
