@@ -196,21 +196,22 @@ async def process_meta(meta, base_dir, bot=None):
             json.dump(meta, f, indent=4)
             f.close()
 
-    if meta.get('emby', False) and meta['debug']:
+    if meta.get('emby', False):
         meta['original_imdb'] = meta.get('imdb_id', None)
         meta['original_tmdb'] = meta.get('tmdb_id', None)
         meta['original_mal'] = meta.get('mal_id', None)
         meta['original_tvmaze'] = meta.get('tvmaze_id', None)
         meta['original_tvdb'] = meta.get('tvdb_id', None)
         meta['original_category'] = meta.get('category', None)
-        await client.get_pathed_torrents(meta['path'], meta)
-        if meta['is_disc']:
-            search_term = os.path.basename(meta['path'])
-            search_file_folder = 'folder'
-        else:
-            search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
-            search_file_folder = 'file'
-        await get_tracker_data(meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'])
+        if 'matched_tracker' not in meta:
+            await client.get_pathed_torrents(meta['path'], meta)
+            if meta['is_disc']:
+                search_term = os.path.basename(meta['path'])
+                search_file_folder = 'folder'
+            else:
+                search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
+                search_file_folder = 'file'
+            await get_tracker_data(meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'])
 
     editargs_tracking = ()
     confirm = await helper.get_confirmation(meta)

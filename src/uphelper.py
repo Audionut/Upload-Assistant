@@ -1,4 +1,5 @@
 import cli_ui
+from difflib import SequenceMatcher
 from rich.console import Console
 from data.config import config
 
@@ -48,19 +49,20 @@ class UploadHelper:
         console.print("[bold yellow]Database Info[/bold yellow]")
         console.print(f"[bold]Title:[/bold] {meta['title']} ({meta['year']})")
         console.print()
-        console.print(f"[bold]Overview:[/bold] {meta['overview'][:100]}....")
-        console.print()
-        if meta.get('category') == 'TV' and not meta.get('tv_pack') and meta.get('auto_episode_title'):
-            console.print(f"[bold]Episode Title:[/bold] {meta['auto_episode_title']}")
+        if not meta.get('emby', False):
+            console.print(f"[bold]Overview:[/bold] {meta['overview'][:100]}....")
             console.print()
-        if meta.get('category') == 'TV' and not meta.get('tv_pack') and meta.get('overview_meta'):
-            console.print(f"[bold]Episode overview:[/bold] {meta['overview_meta']}")
+            if meta.get('category') == 'TV' and not meta.get('tv_pack') and meta.get('auto_episode_title'):
+                console.print(f"[bold]Episode Title:[/bold] {meta['auto_episode_title']}")
+                console.print()
+            if meta.get('category') == 'TV' and not meta.get('tv_pack') and meta.get('overview_meta'):
+                console.print(f"[bold]Episode overview:[/bold] {meta['overview_meta']}")
+                console.print()
+            console.print(f"[bold]Genre:[/bold] {meta['genres']}")
             console.print()
-        console.print(f"[bold]Genre:[/bold] {meta['genres']}")
-        console.print()
-        if str(meta.get('demographic', '')) != '':
-            console.print(f"[bold]Demographic:[/bold] {meta['demographic']}")
-            console.print()
+            if str(meta.get('demographic', '')) != '':
+                console.print(f"[bold]Demographic:[/bold] {meta['demographic']}")
+                console.print()
         console.print(f"[bold]Category:[/bold] {meta['category']}")
         console.print()
         if int(meta.get('tmdb_id') or 0) != 0:
@@ -83,6 +85,7 @@ class UploadHelper:
             if meta.get('personalrelease', False) is True:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
+
         if meta.get('unattended', False) and not meta.get('unattended_confirm', False):
             console.print("[bold yellow]Unattended mode is enabled, skipping confirmation.[/bold yellow]")
             return True
@@ -106,9 +109,6 @@ class UploadHelper:
             if not meta.get('emby', False):
                 console.print(f"[bold]Name:[/bold] {meta['name']}")
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-            else:
-                console.print("[bold yellow]Filename searching was required, double check the database information.[/bold yellow]")
-                confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         if meta.get('emby', False):
             if meta.get('original_imdb', 0) != meta.get('imdb_id', 0):
                 console.print(f"[bold red]IMDB ID changed from {meta['original_imdb']} to {meta['imdb_id']}[/bold red]")
@@ -122,11 +122,34 @@ class UploadHelper:
                 console.print(f"[bold red]TVDB ID changed from {meta['original_tvdb']} to {meta['tvdb_id']}[/bold red]")
             if meta.get('original_category', None) != meta.get('category', None):
                 console.print(f"[bold red]Category changed from {meta['original_category']} to {meta['category']}[/bold red]")
-            if meta['debug']:
-                console.print(f"[bold cyan]Regex Title:[/bold cyan] [yellow]{meta.get('regex_title', 'N/A')}[/yellow], [bold cyan]Secondary Title:[/bold cyan] [yellow]{meta.get('regex_secondary_title', 'N/A')}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{meta.get('regex_year', 'N/A')}[/yellow]")
-                console.print()
-            console.print("[bold yellow]Filename searching was required, double check the database information.[/bold yellow]")
-            confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+            console.print(f"[bold cyan]Regex Title:[/bold cyan] [yellow]{meta.get('regex_title', 'N/A')}[/yellow], [bold cyan]Secondary Title:[/bold cyan] [yellow]{meta.get('regex_secondary_title', 'N/A')}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{meta.get('regex_year', 'N/A')}[/yellow]")
+            console.print()
+            if meta.get('original_imdb', 0) == meta.get('imdb_id', 0) and meta.get('original_tmdb', 0) == meta.get('tmdb_id', 0) and meta.get('original_mal', 0) == meta.get('mal_id', 0) and meta.get('original_tvmaze', 0) == meta.get('tvmaze_id', 0) and meta.get('original_tvdb', 0) == meta.get('tvdb_id', 0) and meta.get('original_category', None) == meta.get('category', None):
+                console.print("[bold yellow]Database ID's are correct![/bold yellow]")
+                regex_title = meta.get('regex_title', None)
+                title = meta.get('title', None)
+                if regex_title and title:
+                    similarity = SequenceMatcher(None, str(regex_title).lower(), str(title).lower()).ratio()
+                    if similarity < 0.90:
+                        console.print()
+                        console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
+                        confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                    else:
+                        regex_year = meta.get('regex_year', 0)
+                        year = meta.get('year', 0)
+                        if regex_year and year:
+                            if int(regex_year) != int(year):
+                                console.print()
+                                console.print(f"[bold cyan]Regex Year Mismatch:[/bold cyan] [yellow]{regex_year}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{year}[/yellow]")
+                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                        else:
+                            return True
+                    return True
+                else:
+                    return True
+            else:
+                console.print("[bold red]Filename searching was required, double check the database information.[/bold red]")
+                confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
 
         return confirm
 
