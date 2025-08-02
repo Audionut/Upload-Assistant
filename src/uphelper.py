@@ -83,7 +83,10 @@ class UploadHelper:
             if meta.get('personalrelease', False) is True:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
-        if not meta.get('unattended', False):
+        if meta.get('unattended', False) and not meta.get('unattended_confirm', False):
+            console.print("[bold yellow]Unattended mode is enabled, skipping confirmation.[/bold yellow]")
+            return True
+        else:
             if not meta.get('emby', False):
                 await self.get_missing(meta)
                 ring_the_bell = "\a" if config['DEFAULT'].get("sfx_on_prompt", True) is True else ""
@@ -124,9 +127,6 @@ class UploadHelper:
                 console.print()
             console.print("[bold yellow]Filename searching was required, double check the database information.[/bold yellow]")
             confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-        else:
-            console.print(f"[bold]Name:[/bold] {meta['name']}")
-            confirm = True
 
         return confirm
 

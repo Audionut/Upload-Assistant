@@ -234,7 +234,8 @@ async def process_meta(meta, base_dir, bot=None):
         confirm = await helper.get_confirmation(meta)
 
     if meta.get('emby', False):
-        await nfo_link(meta)
+        if not meta['debug']:
+            await nfo_link(meta)
         meta['we_are_uploading'] = False
         return
 
