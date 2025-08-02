@@ -650,6 +650,7 @@ class Prep():
                             mode=meta.get('mode', 'cli'),
                             tvdb_id=meta.get('tvdb_id', 0),
                             quickie_search=meta.get('quickie_search', False),
+                            filename=filename,
                         )
 
                         if tmdb_metadata and all(tmdb_metadata.get(field) for field in ['title', 'year']):
@@ -676,7 +677,7 @@ class Prep():
             meta['aka'] = meta['retrieved_aka']
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
-        if meta.get('imdb_mismatch', False):
+        if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
             if meta['debug']:
                 console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
             # if there's a secondary title, TMDb is probably correct
@@ -718,6 +719,7 @@ class Prep():
                         mode=meta.get('mode', 'cli'),
                         tvdb_id=meta.get('tvdb_id', 0),
                         quickie_search=meta.get('quickie_search', False),
+                        filename=filename,
                     )
 
                     if not tmdb_metadata or not all(tmdb_metadata.get(field) for field in ['title', 'year']):

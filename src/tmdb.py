@@ -395,7 +395,8 @@ async def tmdb_other_meta(
     debug=False,
     mode="discord",
     tvdb_id=0,
-    quickie_search=False
+    quickie_search=False,
+    filename=None
 ):
     """
     Fetch metadata from TMDB for a movie or TV show.
@@ -674,7 +675,7 @@ async def tmdb_other_meta(
     if not anime:
         mal_id, retrieved_aka, anime, demographic = await get_anime(
             media_data,
-            {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'path': path}
+            {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'filename': filename}
         )
 
     if mal_manual is not None and mal_manual != 0:
@@ -820,98 +821,91 @@ async def get_anime(response, meta):
 
 
 async def get_romaji(tmdb_name, mal, meta):
-    if mal is None or mal == 0:
-        tmdb_name = tmdb_name.replace('-', "").replace("The Movie", "")
-        tmdb_name = ' '.join(tmdb_name.split())
-        query = '''
-            query ($search: String) {
-                Page (page: 1) {
-                    pageInfo {
-                        total
-                    }
-                media (search: $search, type: ANIME, sort: SEARCH_MATCH) {
-                    id
-                    idMal
-                    title {
-                        romaji
-                        english
-                        native
-                    }
-                    seasonYear
-                    episodes
-                    tags {
-                        name
-                    }
-                    externalLinks {
-                        id
-                        url
-                        site
-                        siteId
-                    }
-                }
-            }
-        }
-        '''
-        # Define our query variables and values that will be used in the query request
-        variables = {
-            'search': tmdb_name
-        }
-    else:
-        query = '''
-            query ($search: Int) {
-                Page (page: 1) {
-                    pageInfo {
-                        total
-                    }
-                media (idMal: $search, type: ANIME, sort: SEARCH_MATCH) {
-                    id
-                    idMal
-                    title {
-                        romaji
-                        english
-                        native
-                    }
-                    seasonYear
-                    episodes
-                    tags {
-                        name
-                    }
-                }
-            }
-        }
-        '''
-        # Define our query variables and values that will be used in the query request
-        variables = {
-            'search': mal
-        }
-
-    # Make the HTTP Api request
-    url = 'https://graphql.anilist.co'
+    media = []
     demographic = 'Mina'  # Default to Mina if no tags are found
-    try:
-        response = requests.post(url, json={'query': query, 'variables': variables})
-        json = response.json()
 
-        # console.print('Checking for demographic tags...')
-
-        demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
-
-        for tag in demographics:
-            if tag in response.text:
-                demographic = tag
-                # print(f"Found {tag} tag")
-                break
-
-        media = json['data']['Page']['media']
-    except Exception:
-        console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
-        media = []
-    if "subsplease" in meta.get('path', '').lower():
-        match = re.search(r"\] (.+?) - \d+ ", meta['path'])
-        if match:
-            search_name = match.group(1).lower().replace(' ', '').replace('-', ':')
+    # Try AniList query with tmdb_name first, then fallback to meta['filename'] if no results
+    for search_term in [tmdb_name, meta.get('filename', '')]:
+        if not search_term:
+            continue
+        if mal is None or mal == 0:
+            cleaned_name = search_term.replace('-', "").replace("The Movie", "")
+            cleaned_name = ' '.join(cleaned_name.split())
+            query = '''
+                query ($search: String) {
+                    Page (page: 1) {
+                        pageInfo {
+                            total
+                        }
+                    media (search: $search, type: ANIME, sort: SEARCH_MATCH) {
+                        id
+                        idMal
+                        title {
+                            romaji
+                            english
+                            native
+                        }
+                        seasonYear
+                        episodes
+                        tags {
+                            name
+                        }
+                        externalLinks {
+                            id
+                            url
+                            site
+                            siteId
+                        }
+                    }
+                }
+            }
+            '''
+            variables = {'search': cleaned_name}
         else:
-            search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
+            query = '''
+                query ($search: Int) {
+                    Page (page: 1) {
+                        pageInfo {
+                            total
+                        }
+                    media (idMal: $search, type: ANIME, sort: SEARCH_MATCH) {
+                        id
+                        idMal
+                        title {
+                            romaji
+                            english
+                            native
+                        }
+                        seasonYear
+                        episodes
+                        tags {
+                            name
+                        }
+                    }
+                }
+            }
+            '''
+            variables = {'search': mal}
+
+        url = 'https://graphql.anilist.co'
+        try:
+            response = requests.post(url, json={'query': query, 'variables': variables})
+            json_data = response.json()
+
+            demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
+            for tag in demographics:
+                if tag in response.text:
+                    demographic = tag
+                    break
+
+            media = json_data['data']['Page']['media']
+            if media not in (None, []):
+                break  # Found results, stop retrying
+        except Exception:
+            console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
+            media = []
+    if "subsplease" in meta.get('path', '').lower():
+        search_name = meta['filename'].lower()
     else:
         search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
     if media not in (None, []):
