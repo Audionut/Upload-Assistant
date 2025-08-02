@@ -140,13 +140,20 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     return category, tmdb_id, original_language, filename_search
 
 
-async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None):
+async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None):
     search_results = {"results": []}
     secondary_results = {"results": []}
+    original_category = category
+    if new_category:
+        category = new_category
+    else:
+        category = original_category
     if final_attempt is None:
         final_attempt = False
     if attempted is None:
         attempted = 0
+    if attempted:
+        await asyncio.sleep(1)  # Whoa baby, slow down
 
     async with httpx.AsyncClient() as client:
         try:
@@ -323,7 +330,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, new_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path)
+            return await get_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category)
 
         # Last attempt: Try parsing a better title
         if attempted == 1:
@@ -331,7 +338,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 parsed_title = anitopy.parse(
                     guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
                 )['anime_title']
-                original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
                 return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
             except KeyError:
@@ -341,9 +347,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         if attempted > 1 and attempted < 5 and path:
             try:
                 words = filename.split()
-                console.print(f"[bold yellow]Original Words: {words}[/bold yellow]")
                 title = ' '.join(words[:-1])
-                original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
             except Exception as e:
@@ -355,7 +359,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             try:
                 words = filename.split()
                 title = ' '.join(words[:-2])
-                original_category = "MOVIE"
                 console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True)
             except Exception as e:

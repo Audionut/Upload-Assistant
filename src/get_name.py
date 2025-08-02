@@ -210,7 +210,6 @@ async def extract_title_and_year(meta, filename):
             return title, None, year
 
     folder_name = os.path.basename(meta['uuid']) if meta['uuid'] else ""
-    console.print(f"Folder name: {folder_name}")
     year_pattern = r'(19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
     type_pattern = r'\b(WEBDL|BluRay|REMUX|HDRip|DVDRip|Blu-Ray|Web-DL|webrip|web-rip|HDDVD)\b'
