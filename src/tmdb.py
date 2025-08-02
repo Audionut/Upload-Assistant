@@ -659,7 +659,7 @@ async def tmdb_other_meta(
     if not anime:
         mal_id, retrieved_aka, anime, demographic = await get_anime(
             media_data,
-            {'title': title, 'aka': retrieved_aka, 'mal_id': 0}
+            {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'path': path}
         )
 
     if mal_manual is not None and mal_manual != 0:
@@ -791,7 +791,7 @@ async def get_anime(response, meta):
         if each['id'] == 16:
             animation = True
     if response['original_language'] == 'ja' and animation is True:
-        romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id', None))
+        romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id', None), meta)
         alt_name = f" AKA {romaji}"
 
         anime = True
@@ -804,7 +804,7 @@ async def get_anime(response, meta):
     return mal_id, alt_name, anime, demographic
 
 
-async def get_romaji(tmdb_name, mal):
+async def get_romaji(tmdb_name, mal, meta):
     if mal is None or mal == 0:
         tmdb_name = tmdb_name.replace('-', "").replace("The Movie", "")
         tmdb_name = ' '.join(tmdb_name.split())
@@ -885,11 +885,18 @@ async def get_romaji(tmdb_name, mal):
     except Exception:
         console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
         media = []
+    if "subsplease" in meta.get('path', '').lower():
+        match = re.search(r"\] (.+?) - \d+ ", meta['path'])
+        if match:
+            search_name = match.group(1).lower().replace(' ', '').replace('-', ':')
+        else:
+            search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
+    else:
+        search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
     if media not in (None, []):
         result = {'title': {}}
         difference = 0
         for anime in media:
-            search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
             for title in anime['title'].values():
                 if title is not None:
                     title = re.sub(u'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)

@@ -969,6 +969,11 @@ class Prep():
             if re.search(pattern, uuid) or re.search(pattern, os.path.basename(path)):
                 return "TV"
 
+        if "subsplease" in path.lower() or "subsplease" in uuid.lower():
+            anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
+            if re.search(anime_pattern, path.lower()) or re.search(anime_pattern, uuid.lower()):
+                return "TV"
+
         return "MOVIE"
 
     async def stream_optimized(self, stream_opt):
