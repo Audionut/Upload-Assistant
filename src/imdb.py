@@ -523,35 +523,41 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         return imdbID
 
     else:
-        for idx, edge in enumerate(results):
-            node = await safe_get(edge, ["node"], {})
-            title = await safe_get(node, ["title"], {})
-            title_text = await safe_get(title, ["titleText", "text"], "")
-            year = await safe_get(title, ["releaseYear", "year"], None)
-            imdb_id = await safe_get(title, ["id"], "")
-            title_type = await safe_get(title, ["titleType", "text"], "")
-            plot = await safe_get(title, ["plot", "plotText", "plainText"], "")
+        if len(results) == 1:
+            imdb_id = await safe_get(results[0], ["node", "title", "id"], "")
+            if imdb_id:
+                imdbID = int(imdb_id.replace('tt', '').strip())
+                return imdbID
+        else:
+            for idx, edge in enumerate(results):
+                node = await safe_get(edge, ["node"], {})
+                title = await safe_get(node, ["title"], {})
+                title_text = await safe_get(title, ["titleText", "text"], "")
+                year = await safe_get(title, ["releaseYear", "year"], None)
+                imdb_id = await safe_get(title, ["id"], "")
+                title_type = await safe_get(title, ["titleType", "text"], "")
+                plot = await safe_get(title, ["plot", "plotText", "plainText"], "")
 
-            console.print(f"[cyan]Result {idx+1}: {title_text} - ({year}) - {imdb_id} - Type: {title_type}[/cyan]")
-            if plot:
-                console.print(f"[green]Plot: {plot}[/green]")
+                console.print(f"[cyan]Result {idx+1}: {title_text} - ({year}) - {imdb_id} - Type: {title_type}[/cyan]")
+                if plot:
+                    console.print(f"[green]Plot: {plot}[/green]")
 
-        if results:
-            console.print("[yellow]Enter the number of the correct entry, or 0 for none:[/yellow]")
-            try:
-                user_input = input("> ").strip()
-                if user_input.isdigit():
-                    selection = int(user_input)
-                    if 1 <= selection <= len(results):
-                        selected = results[selection - 1]
-                        imdb_id = await safe_get(selected, ["node", "title", "id"], "")
-                        if imdb_id:
-                            imdbID = int(imdb_id.replace('tt', '').strip())
-                            return imdbID
+            if results:
+                console.print("[yellow]Enter the number of the correct entry, or 0 for none:[/yellow]")
+                try:
+                    user_input = input("> ").strip()
+                    if user_input.isdigit():
+                        selection = int(user_input)
+                        if 1 <= selection <= len(results):
+                            selected = results[selection - 1]
+                            imdb_id = await safe_get(selected, ["node", "title", "id"], "")
+                            if imdb_id:
+                                imdbID = int(imdb_id.replace('tt', '').strip())
+                                return imdbID
 
-            except Exception as e:
-                console.print(f"[red]Error reading input: {e}[/red]")
-                imdbID = 0
+                except Exception as e:
+                    console.print(f"[red]Error reading input: {e}[/red]")
+                    imdbID = 0
 
     return imdbID
 
