@@ -1,5 +1,7 @@
 import os
 import re
+import anitopy
+from guessit import guessit
 from src.console import console
 
 
@@ -210,6 +212,14 @@ async def extract_title_and_year(meta, filename):
             return title, None, year
 
     folder_name = os.path.basename(meta['uuid']) if meta['uuid'] else ""
+    # lets do some subsplease handling
+    if 'subsplease' in folder_name.lower():
+        parsed_title = anitopy.parse(
+            guessit(folder_name, {"excludes": ["country", "language"]})['title']
+        )['anime_title']
+        if parsed_title:
+            return parsed_title, None, None
+
     year_pattern = r'(19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
     type_pattern = r'\b(WEBDL|BluRay|REMUX|HDRip|DVDRip|Blu-Ray|Web-DL|webrip|web-rip|HDDVD)\b'
