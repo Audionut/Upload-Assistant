@@ -194,25 +194,43 @@ class RHD():
             german_audio_tracks = []
             for track in mi['media']['track']:
                 if track.get('@type') == 'Audio':
-                    title = track.get('Title', '').lower()
+                    title = track.get('Title', '')
+                    title = title.lower() if isinstance(title, str) else ''
                     if not any(keyword in title for keyword in ignored_keywords):
                         language = track.get('Language', '').lower()
                         if language:
                             audio_languages.append(language)
                             if language in german_language_codes:
+                                extra_str = ''
                                 channels = track.get('Channels', '0')
                                 format_str = track.get('Format', '')
-                                if format_str == 'DTS XLL':
-                                    format_str = 'DTS HD-MA'
-                                elif format_str == 'MLP FBA':
-                                    format_str = 'TrueHD'
-                                elif format_str == 'E-AC-3':
-                                    format_str = 'DDP'
-                                elif format_str == 'AC-3':
-                                    format_str = 'DD'
+                                additional_features = track.get('Format_AdditionalFeatures', '')
+                                new_format_str = format_str
+
+                                if 'JOC' in additional_features:
+                                    extra_str = ' ATMOS'
+
+                                if '16-ch' in additional_features:
+                                    new_format_str = format_str.replace(' 16-ch', '')
+                                    extra_str = ' ATMOS'
+
+                                replacements = {
+                                    "E-AC-3": "DDP",
+                                    "AC-3": "DD",
+                                    "DTS ES XLL": "DTS-HD MA ES",
+                                    "DTS XBR": "DTS:X",
+                                    "DTS XLL": "DTS-HD MA",
+                                    "MLP FBA": "TrueHD",
+                                    "PCM": "LPCM",
+                                }
+
+                                for src, target in replacements.items():
+                                    new_format_str = new_format_str.replace(src, target)
+
                                 channel_notation = {'6': '5.1', '8': '7.1'}.get(channels,
-                                                                                f"{channels}.0")
-                                codec = f"{format_str} {channel_notation}"
+                                                                            f"{channels}.0")
+                                codec = f"{new_format_str} {channel_notation}{extra_str}"
+
                                 german_audio_tracks.append(
                                     {'codec': codec, 'channels': int(channels)})
                 elif track.get('@type') == 'Text':
@@ -265,7 +283,7 @@ class RHD():
         distinct_audio_languages = set(audio_languages)  # Remove duplicates
 
         if not has_german_audio:
-            console.print("[yellow]WARN: No german track found. This is only allowed for requested media.", default=False)
+            console.print("[yellow]WARN: No german track found. This is only allowed for requested media.")
 
         if has_german_audio and len(distinct_audio_languages) == 1:
             lang_tag = "GERMAN"
