@@ -230,7 +230,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             search_results = {"results": []}  # Reset search_results on exception
 
         # Secondary attempt: Try searching without the year
-        console.print("[yellow]Retrying without year...[/yellow]")
+        if debug:
+            console.print("[yellow]Retrying without year...[/yellow]")
         try:
             if category == "MOVIE":
                 if debug:
@@ -329,7 +330,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         # If still no match, attempt alternative category switch
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
-            console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
+            if debug:
+                console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
             return await get_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category)
 
         # Last attempt: Try parsing a better title
@@ -338,7 +340,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 parsed_title = anitopy.parse(
                     guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
                 )['anime_title']
-                console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
+                if debug:
+                    console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
                 return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
@@ -348,7 +351,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             try:
                 words = filename.split()
                 title = ' '.join(words[:-1])
-                console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
+                if debug:
+                    console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
@@ -359,7 +363,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             try:
                 words = filename.split()
                 title = ' '.join(words[:-2])
-                console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
+                if debug:
+                    console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
                 return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
@@ -474,7 +479,7 @@ async def tmdb_other_meta(
             return {}
 
         if debug:
-            console.print(f"[cyan]TMDB Response: {json.dumps(media_data, indent=2)[:600]}...")
+            console.print(f"[cyan]TMDB Response: {json.dumps(media_data, indent=2)[:1200]}...")
 
         # Extract basic info from media_data
         if category == "MOVIE":
@@ -484,8 +489,6 @@ async def tmdb_other_meta(
             runtime = media_data.get('runtime', 60)
             if quickie_search or not imdb_id:
                 imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
-                if imdb_id_str == "None":
-                    imdb_id_str = ""
                 if imdb_id and imdb_id_str and (int(imdb_id_str) != imdb_id):
                     imdb_mismatch = True
                 imdb_id = int(imdb_id_str) if imdb_id_str.isdigit() else 0
@@ -826,6 +829,12 @@ async def get_romaji(tmdb_name, mal, meta):
                     episodes
                     tags {
                         name
+                    }
+                    externalLinks {
+                        id
+                        url
+                        site
+                        siteId
                     }
                 }
             }

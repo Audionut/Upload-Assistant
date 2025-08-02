@@ -84,7 +84,8 @@ async def get_tvdb_episode_data(base_dir, token, tvdb_id, season, episode, api_k
                     console.print(f"[yellow]Series: {result['series_name']} - {result['series_overview']}[/yellow]")
                 return result
             else:
-                console.print(f"[yellow]No TVDB episode data found for S{season}E{episode}[/yellow]")
+                if debug:
+                    console.print(f"[yellow]No TVDB episode data found for S{season}E{episode}[/yellow]")
                 return None
 
     except httpx.HTTPStatusError as e:
@@ -234,7 +235,8 @@ async def get_tvdb_series_episodes(base_dir, token, tvdb_id, season, episode, ap
                 all_episodes = episodes
 
             if not all_episodes:
-                console.print(f"[yellow]No episodes found for TVDB series ID {tvdb_id}[/yellow]")
+                if debug:
+                    console.print(f"[yellow]No episodes found for TVDB series ID {tvdb_id}[/yellow]")
                 return (season, episode)
 
             if debug:
@@ -417,6 +419,8 @@ async def get_tvdb_series_episodes(base_dir, token, tvdb_id, season, episode, ap
 
 
 async def get_tvdb_series_data(base_dir, token, tvdb_id, api_key=None, retry_attempted=False, debug=False):
+    if debug:
+        console.print(f"[cyan]Fetching TVDb series data for ID {tvdb_id}...[/cyan]")
     url = f"https://api4.thetvdb.com/v4/series/{tvdb_id}"
     headers = {
         "accept": "application/json",
@@ -467,7 +471,8 @@ async def get_tvdb_series_data(base_dir, token, tvdb_id, api_key=None, retry_att
                     console.print(f"[bold cyan]TVDB series name: {series_name}[/bold cyan]")
                 return series_name
             else:
-                console.print(f"[yellow]No TVDb series data found for {tvdb_id}[/yellow]")
+                if debug:
+                    console.print(f"[yellow]No TVDb series data found for {tvdb_id}[/yellow]")
                 return None
 
     except httpx.HTTPStatusError as e:

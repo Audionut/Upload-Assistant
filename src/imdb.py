@@ -516,7 +516,8 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                     console.print(f"[yellow]Type mismatch: found {type_info.get('text', '')}, expected {category}[/yellow]")
                 imdbID = 0
         else:
-            console.print("[yellow]No results found for quickie search[/yellow]")
+            if debug:
+                console.print("[yellow]No results found for quickie search[/yellow]")
             imdbID = 0
 
         return imdbID
