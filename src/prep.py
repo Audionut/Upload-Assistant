@@ -3,7 +3,7 @@ from src.console import console
 from src.clients import Clients
 from data.config import config
 from src.tvmaze import search_tvmaze
-from src.imdb import get_imdb_info_api, search_imdb
+from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
 from src.tmdb import tmdb_other_meta, get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id
 from src.region import get_region, get_distributor, get_service
 from src.exportmi import exportInfo, mi_resolution, validate_mediainfo
@@ -783,6 +783,46 @@ class Prep():
                 meta = await get_season_episode(video, meta)
             # all your episode data belongs to us
             meta = await get_tv_data(meta, base_dir, tvdb_api, tvdb_token)
+
+            if meta.get('tvdb_episode_data', None) and meta.get('tvdb_episode_data').get('imdb_id', None):
+                imdb = meta.get('tvdb_episode_data').get('imdb_id', 0).replace('tt', '')
+                if imdb.isdigit():
+                    if imdb != meta.get('imdb_id', 0):
+                        episode_info = await get_imdb_from_episode(imdb, debug=True)
+                        if episode_info:
+                            series_id = episode_info.get('series', {}).get('series_id', None)
+                            if series_id:
+                                series_imdb = series_id.replace('tt', '')
+                                meta['imdb_id'] = int(series_imdb)
+                                imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+                                meta['imdb_info'] = imdb_info
+                                meta['tv_year'] = imdb_info.get('year', None)
+                                check_valid_data = meta.get('imdb_info', {}).get('title', "")
+                                if check_valid_data:
+                                    title = meta.get('imdb_info', {}).get('title', "").strip()
+                                    aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                                    year = str(meta.get('imdb_info', {}).get('year', ""))
+
+                                    if aka:
+                                        aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
+                                        console.print(f"[yellow]Checking AKA: {aka_trimmed}[/yellow]")
+                                        difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
+                                        if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
+                                            aka = None
+
+                                        if aka is not None:
+                                            if f"({year})" in aka:
+                                                aka = meta.get('imdb_info', {}).get('title', "").replace(f"({year})", "").strip()
+                                            else:
+                                                aka = meta.get('imdb_info', {}).get('title', "").strip()
+                                            meta['aka'] = f"AKA {aka.strip()}"
+                                            meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
+                                        else:
+                                            meta['aka'] = ""
+                                            meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
+                                    else:
+                                        meta['aka'] = ""
+                                        meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
 
             # if we're using tvdb, lets use it's series name if it applies
             # language check since tvdb returns original language names

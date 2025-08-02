@@ -554,3 +554,106 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                 imdbID = 0
 
     return imdbID
+
+
+async def get_imdb_from_episode(imdb_id, debug=False):
+    if not imdb_id or imdb_id == 0:
+        return None
+
+    if not str(imdb_id).startswith("tt"):
+        try:
+            imdb_id_int = int(imdb_id)
+            imdb_id = f"tt{imdb_id_int:07d}"
+        except Exception:
+            imdb_id = f"tt{str(imdb_id).zfill(7)}"
+
+    query = {
+        "query": f"""
+            {{
+                title(id: "{imdb_id}") {{
+                    id
+                    titleText {{ text }}
+                    series {{
+                        displayableEpisodeNumber {{
+                            displayableSeason {{
+                                id
+                                season
+                                text
+                            }}
+                            episodeNumber {{
+                                id
+                                text
+                            }}
+                        }}
+                        nextEpisode {{
+                            id
+                            titleText {{ text }}
+                        }}
+                        previousEpisode {{
+                            id
+                            titleText {{ text }}
+                        }}
+                        series {{
+                            id
+                            titleText {{ text }}
+                        }}
+                    }}
+                }}
+            }}
+        """
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "https://api.graphql.imdb.com/",
+                json=query,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            if debug:
+                print(f"[red]IMDb API error: {e}[/red]")
+            return None
+
+    title_data = await safe_get(data, ["data", "title"], {})
+    if not title_data:
+        return None
+
+    result = {
+        "id": await safe_get(title_data, ["id"]),
+        "title": await safe_get(title_data, ["titleText", "text"]),
+        "series": {},
+        "next_episode": {},
+        "previous_episode": {},
+    }
+
+    series_info = await safe_get(title_data, ["series"], {})
+    if series_info:
+        displayable = await safe_get(series_info, ["displayableEpisodeNumber"], {})
+        season_info = await safe_get(displayable, ["displayableSeason"], {})
+        episode_info = await safe_get(displayable, ["episodeNumber"], {})
+        result["series"]["season_id"] = await safe_get(season_info, ["id"])
+        result["series"]["season"] = await safe_get(season_info, ["season"])
+        result["series"]["season_text"] = await safe_get(season_info, ["text"])
+        result["series"]["episode_id"] = await safe_get(episode_info, ["id"])
+        result["series"]["episode_text"] = await safe_get(episode_info, ["text"])
+
+        # Next episode
+        next_ep = await safe_get(series_info, ["nextEpisode"], {})
+        result["next_episode"]["id"] = await safe_get(next_ep, ["id"])
+        result["next_episode"]["title"] = await safe_get(next_ep, ["titleText", "text"])
+
+        # Previous episode
+        prev_ep = await safe_get(series_info, ["previousEpisode"], {})
+        result["previous_episode"]["id"] = await safe_get(prev_ep, ["id"])
+        result["previous_episode"]["title"] = await safe_get(prev_ep, ["titleText", "text"])
+
+        # Series info
+        series_obj = await safe_get(series_info, ["series"], {})
+        result["series"]["series_id"] = await safe_get(series_obj, ["id"])
+        result["series"]["series_title"] = await safe_get(series_obj, ["titleText", "text"])
+
+    return result
