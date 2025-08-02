@@ -67,7 +67,8 @@ class UploadHelper:
         console.print()
         if meta.get('emby', False):
             if int(meta.get('original_imdb', 0)) != 0:
-                console.print(f"[bold]IMDB:[/bold] https://www.imdb.com/title/tt{meta['original_imdb']}")
+                imdb = str(meta.get('original_imdb', 0)).zfill(7)
+                console.print(f"[bold]IMDB:[/bold] https://www.imdb.com/title/tt{imdb}")
             if int(meta.get('original_tmdb', 0)) != 0:
                 console.print(f"[bold]TMDB:[/bold] https://www.themoviedb.org/{meta['category'].lower()}/{meta['original_tmdb']}")
             if int(meta.get('original_tvdb', 0)) != 0:
@@ -123,8 +124,9 @@ class UploadHelper:
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
         if meta.get('emby', False):
             if meta.get('original_imdb', 0) != meta.get('imdb_id', 0):
+                imdb = str(meta.get('imdb_id', 0)).zfill(7)
                 console.print(f"[bold red]IMDB ID changed from {meta['original_imdb']} to {meta['imdb_id']}[/bold red]")
-                console.print(f"[bold cyan]IMDB URL:[/bold cyan] [yellow]https://www.imdb.com/title/tt{meta['imdb_id']}[/yellow]")
+                console.print(f"[bold cyan]IMDB URL:[/bold cyan] [yellow]https://www.imdb.com/title/tt{imdb}[/yellow]")
             if meta.get('original_tmdb', 0) != meta.get('tmdb_id', 0):
                 console.print(f"[bold red]TMDB ID changed from {meta['original_tmdb']} to {meta['tmdb_id']}[/bold red]")
                 console.print(f"[bold cyan]TMDB URL:[/bold cyan] [yellow]https://www.themoviedb.org/{meta['category'].lower()}/{meta['tmdb_id']}[/yellow]")
@@ -145,23 +147,41 @@ class UploadHelper:
                 console.print("[bold yellow]Database ID's are correct![/bold yellow]")
                 regex_title = meta.get('regex_title', None)
                 title = meta.get('title', None)
+                secondary_title = meta.get('secondary_title', None)
                 if regex_title and title:
                     similarity = SequenceMatcher(None, str(regex_title).lower(), str(title).lower()).ratio()
                     if similarity < 0.90:
-                        console.print()
-                        console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
-                        confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                        if secondary_title:
+                            similarity_secondary = SequenceMatcher(None, str(secondary_title).lower(), str(title).lower()).ratio()
+                            if similarity_secondary < 0.90:
+                                console.print()
+                                console.print("path: ", meta['path'])
+                                console.print()
+                                console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
+                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                            else:
+                                return True
+                        else:
+                            console.print()
+                            console.print("path: ", meta['path'])
+                            console.print()
+                            console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
+                            confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
                     else:
                         regex_year = meta.get('regex_year', 0)
                         year = meta.get('year', 0)
+                        imdb_year = meta.get('imdb_info', {}).get('year', 0)
                         if regex_year and year:
-                            if int(regex_year) != int(year):
+                            if imdb_year and int(imdb_year) == int(regex_year):
+                                return True
+                            elif int(regex_year) != int(year):
                                 console.print()
                                 console.print(f"[bold cyan]Regex Year Mismatch:[/bold cyan] [yellow]{regex_year}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{year}[/yellow]")
                                 confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                            else:
+                                return True
                         else:
                             return True
-                    return True
                 else:
                     return True
             else:
