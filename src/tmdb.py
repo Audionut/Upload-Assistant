@@ -673,6 +673,10 @@ async def tmdb_other_meta(
 
     # Get anime information if applicable
     if not anime:
+        if category == "MOVIE":
+            filename = filename
+        else:
+            filename = path
         mal_id, retrieved_aka, anime, demographic = await get_anime(
             media_data,
             {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'filename': filename}
@@ -904,7 +908,7 @@ async def get_romaji(tmdb_name, mal, meta):
         except Exception:
             console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
             media = []
-    if "subsplease" in meta.get('path', '').lower():
+    if "subsplease" in meta.get('filename', '').lower():
         search_name = meta['filename'].lower()
     else:
         search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
