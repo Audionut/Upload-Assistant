@@ -805,7 +805,6 @@ class Prep():
 
                                     if aka:
                                         aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
-                                        console.print(f"[yellow]Checking AKA: {aka_trimmed}[/yellow]")
                                         difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
                                         if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
                                             aka = None
