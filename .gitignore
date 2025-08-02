@@ -6,6 +6,7 @@ data/cookies/*.txt
 data/cookies/*.pkl
 data/cookies/*.pickle
 data/banned/*.*
+bin/mkbrr/*
 *.mkv
 .vscode/
 __pycache__/
