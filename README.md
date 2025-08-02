@@ -53,7 +53,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Nebulance</td><td>NBL</td><td>OldToonsWorld</td><td>OTW</td></tr>
   <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
   <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
-  <tr><td>PrivateSilverScreen</td><td>PSS</td><td>PTerClub</td><td>PTER</td></tr>
+  <td>PTerClub</td><td>PTER</td></tr>
   <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
   <tr><td>ReelFLiX</td><td>RF</td><td>RetroFlix</td><td>RTF</td></tr>
   <tr><td>Samaritano</td><td>SAM</td><td>seedpool</td><td>SP</td></tr>
