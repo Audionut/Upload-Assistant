@@ -239,7 +239,7 @@ async def extract_title_and_year(meta, filename):
         indices.sort(key=lambda x: x[1])
         first_type, first_index, first_value = indices[0]
         title_part = folder_name[:first_index]
-        title_part = re.sub(r'[\.\-_ ]+$', '', title_part)
+        title_part = re.sub(r'[\.\-_ \(\[\{]+$', '', title_part)
     else:
         title_part = folder_name
 
