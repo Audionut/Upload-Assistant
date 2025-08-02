@@ -801,7 +801,7 @@ class Prep():
                                 meta['tv_year'] = imdb_info.get('year', None)
                                 check_valid_data = meta.get('imdb_info', {}).get('title', "")
                                 if check_valid_data:
-                                    title = meta.get('imdb_info', {}).get('title', "").strip()
+                                    title = meta.get('title', "").strip()
                                     aka = meta.get('imdb_info', {}).get('aka', "").strip()
                                     year = str(meta.get('imdb_info', {}).get('year', ""))
 
@@ -813,17 +813,14 @@ class Prep():
 
                                         if aka is not None:
                                             if f"({year})" in aka:
-                                                aka = meta.get('imdb_info', {}).get('title', "").replace(f"({year})", "").strip()
+                                                aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
                                             else:
-                                                aka = meta.get('imdb_info', {}).get('title', "").strip()
+                                                aka = meta.get('imdb_info', {}).get('aka', "").strip()
                                             meta['aka'] = f"AKA {aka.strip()}"
-                                            meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
                                         else:
                                             meta['aka'] = ""
-                                            meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
                                     else:
                                         meta['aka'] = ""
-                                        meta['title'] = meta.get('imdb_info', {}).get('title', "").strip()
 
             # if we're using tvdb, lets use it's series name if it applies
             # language check since tvdb returns original language names
