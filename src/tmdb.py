@@ -219,7 +219,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     limited_results = results[:5]
 
                 if len(limited_results) == 1:
-                    tmdb_id = limited_results[0]['id']
+                    tmdb_id = int(limited_results[0]['id'])
                     return tmdb_id, category
                 else:
                     console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
@@ -242,7 +242,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         try:
                             selection_int = int(selection)
                             if 1 <= selection_int <= len(limited_results):
-                                tmdb_id = limited_results[selection_int - 1]['id']
+                                tmdb_id = int(limited_results[selection_int - 1]['id'])
                                 return tmdb_id, category
                             elif selection_int == 0:
                                 console.print("[bold red]No valid selection made.[/bold red]")
