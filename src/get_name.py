@@ -243,7 +243,7 @@ async def extract_title_and_year(meta, filename):
     else:
         title_part = folder_name
 
-    filename = title_part.replace('.', ' ')
+    filename = title_part.replace('.', ' ').replace('_', ' ')
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if filename:
         found_year = None
