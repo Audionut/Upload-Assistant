@@ -634,7 +634,8 @@ async def do_the_thing(base_dir):
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):
                 shutil.rmtree(f"{base_dir}/tmp")
-                console.print("[bold green]Successfully emptied tmp directory")
+                console.print("[yellow]Successfully emptied tmp directory[/yellow]")
+                console.print()
             if not meta.get('path') or cleanup_only:
                 exit(0)
 
@@ -652,6 +653,7 @@ async def do_the_thing(base_dir):
         if meta['mkbrr'] and not is_binary:
             console.print("[bold red]mkbrr binary is not available. Please ensure it is installed correctly.[/bold red]")
             console.print("[bold red]Reverting to Torf[/bold red]")
+            console.print()
             meta['mkbrr'] = False
 
         queue, log_file = await handle_queue(path, meta, paths, base_dir)
@@ -675,7 +677,8 @@ async def do_the_thing(base_dir):
                     try:
                         shutil.rmtree(tmp_path)
                         os.makedirs(tmp_path, exist_ok=True)
-                        console.print(f"[bold green]Successfully cleaned temp directory for {os.path.basename(path)}")
+                        console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
+                        console.print()
                     except Exception as e:
                         console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 
@@ -796,7 +799,8 @@ async def do_the_thing(base_dir):
             if meta.get('delete_tmp', False) and os.path.exists(tmp_path) and meta.get('emby', False):
                 try:
                     shutil.rmtree(tmp_path)
-                    console.print(f"[bold green]Successfully deleted temp directory for {os.path.basename(path)}")
+                    console.print(f"[yellow]Successfully deleted temp directory for {os.path.basename(path)}[/yellow]")
+                    console.print()
                 except Exception as e:
                     console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 

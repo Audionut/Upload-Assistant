@@ -146,8 +146,14 @@ class UploadHelper:
             if meta.get('original_imdb', 0) == meta.get('imdb_id', 0) and meta.get('original_tmdb', 0) == meta.get('tmdb_id', 0) and meta.get('original_mal', 0) == meta.get('mal_id', 0) and meta.get('original_tvmaze', 0) == meta.get('tvmaze_id', 0) and meta.get('original_tvdb', 0) == meta.get('tvdb_id', 0) and meta.get('original_category', None) == meta.get('category', None):
                 console.print("[bold yellow]Database ID's are correct![/bold yellow]")
                 regex_title = meta.get('regex_title', None)
+                if regex_title:
+                    regex_title = regex_title.replace('&', 'and').replace('  ', ' ').strip()
                 title = meta.get('title', None)
+                if title:
+                    title = title.replace('&', 'and').replace('  ', ' ').strip()
                 secondary_title = meta.get('secondary_title', None)
+                if secondary_title:
+                    secondary_title = secondary_title.replace('&', 'and').replace('  ', ' ').strip()
                 if regex_title and title:
                     similarity = SequenceMatcher(None, str(regex_title).lower(), str(title).lower()).ratio()
                     if similarity < 0.90:
