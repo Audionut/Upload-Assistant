@@ -222,7 +222,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 else:
                     limited_results = results[:5]
 
-                if len(limited_results) == 1 or unattended:
+                if len(limited_results) == 1:
                     tmdb_id = int(limited_results[0]['id'])
                     return tmdb_id, category
                 elif len(limited_results) > 1:
@@ -249,11 +249,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         tmdb_id = int(exact_matches[0]['id'])
                         return tmdb_id, category
 
-                    # If no exact matches, try similarity matching
-                    best_match = None
-                    best_similarity = 0.0
-                    similarity_threshold = 0.85
-
+                    # If no exact matches, calculate similarity for all results and sort them
+                    results_with_similarity = []
                     for r in limited_results:
                         result_title = await normalize_title(r.get('title') or r.get('name', ''))
                         similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
@@ -261,41 +258,46 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         # Boost similarity if years match (when both are available)
                         result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
                         if search_year_int > 0 and result_year > 0 and result_year == search_year_int:
-                            similarity += 0.5
+                            similarity += 0.1
 
-                        if similarity > best_similarity:
-                            best_similarity = similarity
-                            best_match = r
+                        results_with_similarity.append((r, similarity))
 
-                    # Auto-select if similarity is high enough and significantly better than others
-                    if best_match and best_similarity >= similarity_threshold:
+                    # Sort by similarity (highest first)
+                    results_with_similarity.sort(key=lambda x: x[1], reverse=True)
+                    sorted_results = [r[0] for r in results_with_similarity]
+
+                    # Check if the best match is significantly better than others
+                    best_similarity = results_with_similarity[0][1]
+                    similarity_threshold = 0.85
+
+                    if best_similarity >= similarity_threshold:
                         # Check that no other result is close to the best match
-                        second_best = 0.0
-                        for r in limited_results:
-                            if r == best_match:
-                                continue
-                            result_title = await normalize_title(r.get('title') or r.get('name', ''))
-                            sim = SequenceMatcher(None, filename_norm, result_title).ratio()
-                            if sim > second_best:
-                                second_best = sim
+                        second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
 
-                        # Only auto-select if the best match is significantly better
-                        if best_similarity - second_best >= 0.15:
+                        if best_similarity - second_best >= 0.10:
                             if debug:
-                                console.print(f"[green]Auto-selecting best match: {best_match.get('title') or best_match.get('name')} (similarity: {best_similarity:.2f})[/green]")
-                            tmdb_id = int(best_match['id'])
+                                console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f})[/green]")
+                            tmdb_id = int(sorted_results[0]['id'])
                             return tmdb_id, category
 
+                    if unattended:
+                        tmdb_id = int(sorted_results[0]['id'])
+                        return tmdb_id, category
+
+                    # Show sorted results to user
                     console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
                     if category == "MOVIE":
                         tmdb_url = "https://www.themoviedb.org/movie/"
                     else:
                         tmdb_url = "https://www.themoviedb.org/tv/"
-                    for idx, result in enumerate(limited_results):
+
+                    for idx, result in enumerate(sorted_results):
                         title = result.get('title') or result.get('name', '')
                         year = result.get('release_date', result.get('first_air_date', ''))[:4]
                         overview = result.get('overview', '')
-                        console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title}[/bold] ({year}) [yellow]ID:[/yellow] {tmdb_url}{result['id']}")
+                        similarity_score = results_with_similarity[idx][1]
+
+                        console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title}[/bold] ({year}) [yellow]ID:[/yellow] {tmdb_url}{result['id']} [dim](similarity: {similarity_score:.2f})[/dim]")
                         if overview:
                             console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
                         console.print()
@@ -305,8 +307,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         selection = cli_ui.ask_string("Enter the number of the correct entry, or 0 for none: ")
                         try:
                             selection_int = int(selection)
-                            if 1 <= selection_int <= len(limited_results):
-                                tmdb_id = int(limited_results[selection_int - 1]['id'])
+                            if 1 <= selection_int <= len(sorted_results):
+                                tmdb_id = int(sorted_results[selection_int - 1]['id'])
                                 return tmdb_id, category
                             elif selection_int == 0:
                                 console.print("[bold red]No valid selection made.[/bold red]")
