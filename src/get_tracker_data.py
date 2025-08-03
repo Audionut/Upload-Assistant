@@ -253,6 +253,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                         meta = await process_tracker(tracker_name, meta, only_id)
 
             if not found_match:
+                meta['no_tracker_match'] = True
                 if meta['debug']:
                     console.print("[yellow]No matches found on any trackers.[/yellow]")
 
