@@ -204,9 +204,39 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 console.print(f"[yellow]Search results (primary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
 
             # Check if results were found
-            if search_results.get('results'):
-                tmdb_id = search_results['results'][0]['id']
-                return tmdb_id, category
+            results = search_results.get('results', [])
+            if results:
+                if len(results) == 1:
+                    tmdb_id = results[0]['id']
+                    return tmdb_id, category
+                else:
+                    # Prompt user to select from multiple results
+                    console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
+                    if category == "MOVIE":
+                        tmdb_url = "https://www.themoviedb.org/movie/"
+                    else:
+                        tmdb_url = "https://www.themoviedb.org/tv/"
+                    for idx, result in enumerate(results):
+                        title = result.get('title') or result.get('name', '')
+                        year = result.get('release_date', result.get('first_air_date', ''))[:4]
+                        overview = result.get('overview', '')
+                        console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title}[/bold] ({year}) [yellow]ID:[/yellow] {tmdb_url}{result['id']}")
+                        if overview:
+                            console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
+                        console.print()
+
+                    selection = cli_ui.ask_string("Enter the number of the correct entry, or 0 for none: ")
+                    try:
+                        selection = int(selection)
+                        if 1 <= selection <= len(results):
+                            tmdb_id = results[selection-1]['id']
+                            return tmdb_id, category
+                        else:
+                            console.print("[bold red]No valid selection made.[/bold red]")
+                            return 0, category
+                    except Exception:
+                        console.print("[bold red]Invalid input.[/bold red]")
+                        return 0, category
 
             # If no results and we have a secondary title, try searching with that
             if not search_results.get('results') and secondary_title and attempted < 3:
