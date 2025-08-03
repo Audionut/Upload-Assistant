@@ -116,6 +116,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             }}
             releaseYear {{
                 year
+                endYear
             }}
             titleType {{
                 id
@@ -315,6 +316,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     imdb_info['title'] = await safe_get(title_data, ['titleText', 'text'])
     imdb_info['country'] = await safe_get(title_data, ['titleText', 'country', 'text'])
     imdb_info['year'] = await safe_get(title_data, ['releaseYear', 'year'])
+    imdb_info['end_year'] = await safe_get(title_data, ['releaseYear', 'endYear'])
     original_title = await safe_get(title_data, ['originalTitleText', 'text'], '')
     imdb_info['aka'] = original_title if original_title and original_title != imdb_info['title'] else imdb_info['title']
     imdb_info['type'] = await safe_get(title_data, ['titleType', 'id'], None)
@@ -329,18 +331,33 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
     imdb_info['rating'] = await safe_get(title_data, ['ratingsSummary', 'aggregateRating'], 'N/A')
 
-    imdb_info['directors'] = []
-    principal_credits = await safe_get(title_data, ['principalCredits'], [])
-    if isinstance(principal_credits, list):
+    async def get_credits(title_data, category_keyword):
+        people_list = []
+        principal_credits = await safe_get(title_data, ['principalCredits'], [])
+
+        if not isinstance(principal_credits, list):
+            return people_list
+
         for pc in principal_credits:
             category_text = await safe_get(pc, ['category', 'text'], '')
-            if 'Direct' in category_text:
+
+            if category_keyword in category_text:
                 credits = await safe_get(pc, ['credits'], [])
                 for c in credits:
-                    name_id = await safe_get(c, ['name', 'id'], '')
-                    if name_id.startswith('nm'):
-                        imdb_info['directors'].append(name_id)
+                    name_obj = await safe_get(c, ['name'], {})
+                    person_id = await safe_get(name_obj, ['id'], '')
+                    person_name = await safe_get(name_obj, ['nameText', 'text'], '')
+
+                    if person_id and person_name:
+                        people_list.append(person_name)
                 break
+
+        return people_list
+
+    imdb_info['directors'] = await get_credits(title_data, 'Direct')
+    imdb_info['creators'] = await get_credits(title_data, 'Creat')
+    imdb_info['writers'] = await get_credits(title_data, 'Writ')
+    imdb_info['stars'] = await get_credits(title_data, 'Star')
 
     editions = await safe_get(title_data, ['runtimes', 'edges'], [])
     if editions:

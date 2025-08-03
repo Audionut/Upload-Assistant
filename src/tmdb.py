@@ -201,7 +201,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             # If no results and we have a secondary title, try searching with that
             if not search_results.get('results') and secondary_title and attempted < 3:
                 console.print(f"[yellow]No results found for primary title. Trying secondary title: {secondary_title}[/yellow]")
-                secondary_meta = await get_tmdb_id(
+                tmdb_id, category = await get_tmdb_id(
                     secondary_title,
                     search_year,
                     category,
@@ -211,8 +211,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     secondary_title=secondary_title
                 )
 
-                if secondary_meta.get('tmdb_id', 0) != 0:
-                    tmdb_id = secondary_meta['tmdb_id']
+                if tmdb_id != 0:
                     return tmdb_id, category
 
         except Exception as e:
