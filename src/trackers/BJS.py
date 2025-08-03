@@ -70,7 +70,6 @@ class BJS(COMMON):
             'Data de Lançamento ou Primeira Exibição': data.get('first_air_date') or data.get('release_date'),
             'Elenco': [a.get("name") for a in data.get('credits', {}).get('cast', []) if a.get("name")],
             'Gêneros': [g.get("name") for g in data.get('genres', []) if g.get("name")],
-            'Idioma Original': data.get('original_language'),
             'Sinopse (Português)': data.get('overview'),
         })
 
@@ -83,16 +82,34 @@ class BJS(COMMON):
                 'Diretor': meta.get('tmdb_directors') if meta.get('tmdb_directors') and any(meta.get('tmdb_directors')) else None
             })
 
-        missing_items = [name for name, value in required_fields.items() if not value]
+        for key, value in required_fields.items():
+            if not value:
+                user_input = None
+                if key == 'Elenco':
+                    user_input = input("Campo obrigatório 'Elenco' está faltando no TMDB.\nInsira manualmente pelo menos o nome de 1 ator (máximo 5):\n").strip()
+                    required_fields[key] = [item.strip() for item in user_input.split(',') if item.strip()]
 
-        if missing_items:
-            missing_fields_str = ', '.join(missing_items)
-            error_message = (
-                f"""Upload bloqueado. Campos obrigatórios faltando no TMDB: {missing_fields_str}
-                Por favor, adicione as informações em: https://www.themoviedb.org/{self.category.lower()}/{self.tmdb_id}/edit?language=pt-BR"""
-            )
-            meta['tracker_status'][self.tracker]['status_message'] = f"{error_message}"
-            raise UploadException(error_message)
+                elif key == 'Gêneros':
+                    user_input = input("Campo obrigatório 'Gêneros' está faltando no TMDB.\nInsira manualmente pelo menos 1 gênero (Ex: drama, ficcao.cientifica):\n").strip()
+                    required_fields[key] = [item.strip() for item in user_input.split(',') if item.strip()]
+
+                elif key == 'Criado(a) por':
+                    user_input = input("Campo obrigatório 'Criado(a) por' está faltando no TMDB.\nInsira manualmente o(s) nome(s) do(s) criador(es):\n").strip()
+                    required_fields[key] = [item.strip() for item in user_input.split(',') if item.strip()]
+
+                elif key == 'Diretor':
+                    user_input = input("Campo obrigatório 'Diretor' está faltando no TMDB.\nInsira manualmente o(s) nome(s) do(s) diretor(es):\n").strip()
+                    required_fields[key] = [item.strip() for item in user_input.split(',') if item.strip()]
+
+                elif key == 'Data de Lançamento ou Primeira Exibição':
+                    user_input = input("Campo obrigatório 'Data de Lançamento ou Primeira Exibição' está faltando no TMDB.\nInsira manualmente a data no formato 07 Sep 2019:\n").strip()
+                    required_fields[key] = user_input
+
+                elif key == 'Sinopse (Português)':
+                    user_input = input("Campo obrigatório 'Sinopse (Português)' está faltando no TMDB.\nInsira manualmente a sinopse:\n""").strip()
+                    required_fields[key] = user_input
+
+        return required_fields
 
     async def get_rating(self, meta):
         tmdb_data = await self.ptbr_tmdb_data(meta)
@@ -877,7 +894,7 @@ class BJS(COMMON):
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
         await self.edit_desc(meta)
-        await self.required_data(meta)
+        user_input = await self.required_data(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
 
         data = {}
@@ -890,7 +907,7 @@ class BJS(COMMON):
             'imdblink': meta['imdb_info']['imdbID'],
             'title': meta['title'],
             'titulobrasileiro': (tmdb_data.get('name') or tmdb_data.get('title')) if (tmdb_data.get('name') or tmdb_data.get('title')) != meta.get('title') else '',
-            'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
+            'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])) or user_input['Gêneros'],
             'year': str(meta['year']),
             'duracaotipo': 'selectbox',
             'duracaoHR': self.get_runtime(meta).get('hours'),
@@ -907,7 +924,7 @@ class BJS(COMMON):
             'remaster_title': self.build_remaster_title(meta),
             'resolucaow': self.get_resolution(meta).get('resolucaow'),
             'resolucaoh': self.get_resolution(meta).get('resolucaoh'),
-            'sinopse': tmdb_data.get('overview'),
+            'sinopse': tmdb_data.get('overview') or user_input['Sinopse (Português)'],
             'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
             })
 
@@ -915,12 +932,12 @@ class BJS(COMMON):
         if self.category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': ", ".join(set(meta.get('tmdb_directors', [])[:5])),
+                'diretor': ", ".join(set(meta.get('tmdb_directors', [])[:5])) or ', '.join(user_input.get('Diretor', [])),
             })
 
         if self.category == 'TV':
             data.update({
-                'diretor': ", ".join([p["name"] for p in tmdb_data.get("created_by", [])[:3] if "name" in p]),
+                'diretor': ", ".join([p["name"] for p in tmdb_data.get("created_by", [])[:3] if "name" in p]) or ', '.join(user_input.get('Criado(a) por', [])),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': self.season,
                 'episode': self.episode if not self.is_tv_pack else '',
@@ -932,8 +949,8 @@ class BJS(COMMON):
                 data.update({
                     'validimdb': 'yes',
                     'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                    'elenco': await self.get_cast(meta),
-                    'datalancamento': self.get_release_date(tmdb_data),
+                    'elenco': await self.get_cast(meta) or user_input['Elenco'],
+                    'datalancamento': self.get_release_date(tmdb_data) or user_input['Data de Lançamento ou Primeira Exibição'],
                 })
 
             if self.category == 'TV':
@@ -950,7 +967,7 @@ class BJS(COMMON):
                     'numtemporadas': tmdb_data.get("number_of_seasons", ''),  # Optional
                     'datalancamento': self.get_release_date(tmdb_data),
                     'pais': ", ".join(country_list),  # Optional
-                    'elenco': await self.get_cast(meta),
+                    'elenco': await self.get_cast(meta) or user_input['Elenco'],
                     'diretorserie': ", ".join(set(meta.get('tmdb_directors', [])[:5])),  # Optional
                     'avaliacao': await self.get_rating(meta),  # Optional
                 })
