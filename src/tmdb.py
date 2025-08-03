@@ -17,6 +17,10 @@ TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 
+async def normalize_title(title):
+    return title.lower().replace('&', 'and').replace('  ', ' ').strip()
+
+
 async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None, imdb_info=None):
     """Fetches TMDb ID using IMDb or TVDb ID.
 
@@ -221,7 +225,28 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 if len(limited_results) == 1 or unattended:
                     tmdb_id = int(limited_results[0]['id'])
                     return tmdb_id, category
-                else:
+                elif len(limited_results) > 1:
+                    filename_norm = await normalize_title(filename)
+                    search_year_int = int(search_year) if search_year else 0
+
+                    # Find all exact matches (title and year)
+                    exact_matches = []
+                    for r in limited_results:
+                        result_title = await normalize_title(r.get('title') or r.get('name', ''))
+                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+                        # Only count as exact match if both years are present and non-zero
+                        if (
+                            filename_norm == result_title
+                            and search_year_int > 0
+                            and result_year > 0
+                            and result_year == search_year_int
+                        ):
+                            exact_matches.append(r)
+
+                    if len(exact_matches) == 1:
+                        tmdb_id = int(exact_matches[0]['id'])
+                        return tmdb_id, category
+
                     console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
                     if category == "MOVIE":
                         tmdb_url = "https://www.themoviedb.org/movie/"

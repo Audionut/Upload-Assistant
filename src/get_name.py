@@ -258,6 +258,7 @@ async def extract_title_and_year(meta, filename):
         'HDTV': '',
         'DVDRip': '',
         'HDRip': '',
+        'BDMV': '',
     }
     filename = await multi_replace(title_part, replacements)
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
