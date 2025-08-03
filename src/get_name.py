@@ -243,7 +243,23 @@ async def extract_title_and_year(meta, filename):
     else:
         title_part = folder_name
 
-    filename = title_part.replace('.', ' ').replace('_', ' ')
+    replacements = {
+        '_': ' ',
+        '.': ' ',
+        'DVDR': '',
+        'BDR': '',
+        'HDDVD': '',
+        'WEB-DL': '',
+        'WEBRip': '',
+        'WEB': '',
+        'BluRay': '',
+        'Blu-ray': '',
+        'DVD': '',
+        'HDTV': '',
+        'DVDRip': '',
+        'HDRip': '',
+    }
+    filename = await multi_replace(title_part, replacements)
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if filename:
         found_year = None
@@ -260,3 +276,9 @@ async def extract_title_and_year(meta, filename):
         return None, None, year
 
     return None, None, None
+
+
+async def multi_replace(text, replacements):
+    for old, new in replacements.items():
+        text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
+    return text
