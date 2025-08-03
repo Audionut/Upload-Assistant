@@ -492,9 +492,10 @@ async def tmdb_other_meta(
                 if imdb_id_str and imdb_id_str.isdigit():
                     if imdb_id and int(imdb_id_str) != imdb_id:
                         imdb_mismatch = True
-                    imdb_id = int(imdb_id_str)
+                        imdb_id = int(imdb_id_str)
                 else:
-                    imdb_id = 0
+                    imdb_id = original_imdb_id
+
             tmdb_type = 'Movie'
         else:  # TV show
             title = media_data['name']
@@ -582,14 +583,11 @@ async def tmdb_other_meta(
                             else:
                                 imdb_id = int(imdb_id_clean)
                         else:
-                            imdb_id = 0
+                            imdb_id = original_imdb_id
                     else:
-                        imdb_id = 0
+                        imdb_id = original_imdb_id
                 else:
-                    if imdb_id and str(imdb_id).isdigit():
-                        imdb_id = int(imdb_id)
-                    else:
-                        imdb_id = 0
+                    imdb_id = original_imdb_id
 
                 # Process TVDB ID
                 if tvdb_id == 0:
