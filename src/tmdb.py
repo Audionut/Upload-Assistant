@@ -206,17 +206,28 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             # Check if results were found
             results = search_results.get('results', [])
             if results:
-                if len(results) == 1:
-                    tmdb_id = results[0]['id']
+                # Filter results by year if search_year is provided
+                if search_year:
+                    def get_result_year(result):
+                        return int((result.get('release_date') or result.get('first_air_date') or '0000')[:4] or 0)
+                    filtered_results = [
+                        r for r in results
+                        if abs(get_result_year(r) - int(search_year)) <= 2
+                    ]
+                    limited_results = (filtered_results if filtered_results else results)[:5]
+                else:
+                    limited_results = results[:5]
+
+                if len(limited_results) == 1:
+                    tmdb_id = limited_results[0]['id']
                     return tmdb_id, category
                 else:
-                    # Prompt user to select from multiple results
                     console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
                     if category == "MOVIE":
                         tmdb_url = "https://www.themoviedb.org/movie/"
                     else:
                         tmdb_url = "https://www.themoviedb.org/tv/"
-                    for idx, result in enumerate(results):
+                    for idx, result in enumerate(limited_results):
                         title = result.get('title') or result.get('name', '')
                         year = result.get('release_date', result.get('first_air_date', ''))[:4]
                         overview = result.get('overview', '')
@@ -225,18 +236,21 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
                         console.print()
 
-                    selection = cli_ui.ask_string("Enter the number of the correct entry, or 0 for none: ")
-                    try:
-                        selection = int(selection)
-                        if 1 <= selection <= len(results):
-                            tmdb_id = results[selection-1]['id']
-                            return tmdb_id, category
-                        else:
-                            console.print("[bold red]No valid selection made.[/bold red]")
-                            return 0, category
-                    except Exception:
-                        console.print("[bold red]Invalid input.[/bold red]")
-                        return 0, category
+                    selection = None
+                    while True:
+                        selection = cli_ui.ask_string("Enter the number of the correct entry, or 0 for none: ")
+                        try:
+                            selection_int = int(selection)
+                            if 1 <= selection_int <= len(limited_results):
+                                tmdb_id = limited_results[selection_int - 1]['id']
+                                return tmdb_id, category
+                            elif selection_int == 0:
+                                console.print("[bold red]No valid selection made.[/bold red]")
+                                return 0, category
+                            else:
+                                console.print("[bold red]Selection out of range. Please try again.[/bold red]")
+                        except ValueError:
+                            console.print("[bold red]Invalid input. Please enter a number.[/bold red]")
 
             # If no results and we have a secondary title, try searching with that
             if not search_results.get('results') and secondary_title and attempted < 3:
