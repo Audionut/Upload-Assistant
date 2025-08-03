@@ -140,7 +140,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     return category, tmdb_id, original_language, filename_search
 
 
-async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None):
+async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
     search_results = {"results": []}
     secondary_results = {"results": []}
     original_category = category
@@ -218,7 +218,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 else:
                     limited_results = results[:5]
 
-                if len(limited_results) == 1:
+                if len(limited_results) == 1 or unattended:
                     tmdb_id = int(limited_results[0]['id'])
                     return tmdb_id, category
                 else:
