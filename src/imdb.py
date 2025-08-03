@@ -420,7 +420,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False):
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None):
     if secondary_title is not None:
         filename = secondary_title
     if final_attempt is None:
@@ -433,12 +433,34 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         console.print(f"[yellow]Searching IMDb for {filename} and year {search_year}...[/yellow]")
     imdbID = imdb_id = 0
     url = "https://api.graphql.imdb.com/"
+    if category == "MOVIE":
+        filename = filename.replace('and', '&').replace('And', '&').replace('AND', '&').strip()
+
+    constraints_parts = [f'titleTextConstraint: {{searchTerm: "{filename}"}}']
+
+    # Add release date constraint if search_year is provided
+    if quickie:
+        if search_year:
+            search_year_int = int(search_year)
+            start_year = search_year_int - 1
+            end_year = search_year_int + 1
+            constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
+
+        if duration:
+            if isinstance(duration, int):
+                duration = str(duration)
+                start_duration = int(duration) - 10
+                end_duration = int(duration) + 10
+                constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
+
+    constraints_string = ', '.join(constraints_parts)
+
     query = {
         "query": f"""
             {{
                 advancedTitleSearch(
                     first: 10,
-                    constraints: {{ titleTextConstraint: {{ searchTerm: "{filename}" }} }}
+                    constraints: {{{constraints_string}}}
                 ) {{
                     total
                     edges {{
@@ -503,7 +525,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                 if len(words) > 1:
                     reduced_title = ' '.join(words[:-1])
                     if debug:
-                        console.print(f"[bold yellow]Trying IMDB withreduced name: {reduced_title}[/bold yellow]")
+                        console.print(f"[bold yellow]Trying IMDB with reduced name: {reduced_title}[/bold yellow]")
                     return await search_imdb(reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")

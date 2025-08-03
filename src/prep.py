@@ -15,7 +15,7 @@ from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
 from src.audio import get_audio_v2
 from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd
+from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
 from src.tags import get_tag, tag_override
 from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
@@ -33,6 +33,7 @@ try:
     import ntpath
     from pathlib import Path
     import time
+    import sys
     from difflib import SequenceMatcher
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
@@ -568,6 +569,9 @@ class Prep():
         if meta.get('imdb_id', 0) == 0 and meta.get('tvdb_id', 0) == 0 and meta.get('tmdb_id', 0) == 0 and meta.get('tvmaze_id', 0) == 0 and meta.get('mal_id', 0) == 0 and meta.get('emby', False):
             meta['no_ids'] = True
 
+        meta['video_duration'] = await get_video_duration(meta)
+        duration = meta.get('video_duration', None)
+
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -579,7 +583,7 @@ class Prep():
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
             tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
-            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename)
+            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -749,8 +753,13 @@ class Prep():
             meta['tv_year'] = imdb_info.get('tv_year', None)
         check_valid_data = meta.get('imdb_info', {}).get('title', "")
         if check_valid_data:
-            aka = meta.get('imdb_info', {}).get('aka', "").strip()
-            title = meta.get('imdb_info', {}).get('title', "").strip().lower()
+            try:
+                title = meta['title'].lower().strip()
+            except KeyError:
+                console.print("[red]Title is missing from TMDB....")
+                sys.exit(1)
+            aka = meta.get('imdb_info', {}).get('title', "").strip().lower()
+            imdb_aka = meta.get('imdb_info', {}).get('aka', "").strip().lower()
             year = str(meta.get('imdb_info', {}).get('year', ""))
 
             if aka and not meta.get('aka'):
@@ -759,11 +768,24 @@ class Prep():
                 if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
                     aka = None
 
+                difference = SequenceMatcher(None, title, imdb_aka).ratio()
+                if difference >= 0.7 or not imdb_aka or imdb_aka in title:
+                    imdb_aka = None
+
                 if aka is not None:
                     if f"({year})" in aka:
-                        aka = aka.replace(f"({year})", "").strip()
+                        aka = meta.get('imdb_info', {}).get('title', "").replace(f"({year})", "").strip()
+                    else:
+                        aka = meta.get('imdb_info', {}).get('title', "").strip()
                     meta['aka'] = f"AKA {aka.strip()}"
-                    meta['title'] = f"{meta.get('imdb_info', {}).get('title', '').strip()}"
+                    meta['title'] = meta['title'].strip()
+                elif imdb_aka is not None:
+                    if f"({year})" in imdb_aka:
+                        imdb_aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
+                    else:
+                        imdb_aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                    meta['aka'] = f"AKA {imdb_aka.strip()}"
+                    meta['title'] = meta['title'].strip()
 
         if meta.get('aka', None) is None:
             meta['aka'] = ""
