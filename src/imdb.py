@@ -347,10 +347,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                     person_name = await safe_get(name_obj, ['nameText', 'text'], '')
 
                     if person_id and person_name:
-                        people_list.append({
-                            "id": person_id,
-                            "name": person_name
-                        })
+                        people_list.append(person_name)
                 break
 
         return people_list
