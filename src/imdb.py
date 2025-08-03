@@ -116,6 +116,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             }}
             releaseYear {{
                 year
+                endYear
             }}
             titleType {{
                 id
@@ -315,6 +316,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     imdb_info['title'] = await safe_get(title_data, ['titleText', 'text'])
     imdb_info['country'] = await safe_get(title_data, ['titleText', 'country', 'text'])
     imdb_info['year'] = await safe_get(title_data, ['releaseYear', 'year'])
+    imdb_info['end_year'] = await safe_get(title_data, ['releaseYear', 'endYear'])
     original_title = await safe_get(title_data, ['originalTitleText', 'text'], '')
     imdb_info['aka'] = original_title if original_title and original_title != imdb_info['title'] else imdb_info['title']
     imdb_info['type'] = await safe_get(title_data, ['titleType', 'id'], None)
