@@ -220,7 +220,7 @@ async def extract_title_and_year(meta, filename):
         if parsed_title:
             return parsed_title, None, None
 
-    year_pattern = r'(19|20)\d{2}'
+    year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
     type_pattern = r'\b(WEBDL|BluRay|REMUX|HDRip|DVDRip|Blu-Ray|Web-DL|webrip|web-rip|HDDVD)\b'
     year_match = re.search(year_pattern, folder_name)

@@ -228,6 +228,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 elif len(limited_results) > 1:
                     filename_norm = await normalize_title(filename)
                     search_year_int = int(search_year) if search_year else 0
+                    if debug:
+                        console.print(f"[yellow]Multiple results found for {filename} ({search_year})[/yellow]")
 
                     # Find all exact matches (title and year)
                     exact_matches = []
@@ -246,6 +248,43 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     if len(exact_matches) == 1:
                         tmdb_id = int(exact_matches[0]['id'])
                         return tmdb_id, category
+
+                    # If no exact matches, try similarity matching
+                    best_match = None
+                    best_similarity = 0.0
+                    similarity_threshold = 0.85
+
+                    for r in limited_results:
+                        result_title = await normalize_title(r.get('title') or r.get('name', ''))
+                        similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
+
+                        # Boost similarity if years match (when both are available)
+                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+                        if search_year_int > 0 and result_year > 0 and result_year == search_year_int:
+                            similarity += 0.5
+
+                        if similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = r
+
+                    # Auto-select if similarity is high enough and significantly better than others
+                    if best_match and best_similarity >= similarity_threshold:
+                        # Check that no other result is close to the best match
+                        second_best = 0.0
+                        for r in limited_results:
+                            if r == best_match:
+                                continue
+                            result_title = await normalize_title(r.get('title') or r.get('name', ''))
+                            sim = SequenceMatcher(None, filename_norm, result_title).ratio()
+                            if sim > second_best:
+                                second_best = sim
+
+                        # Only auto-select if the best match is significantly better
+                        if best_similarity - second_best >= 0.15:
+                            if debug:
+                                console.print(f"[green]Auto-selecting best match: {best_match.get('title') or best_match.get('name')} (similarity: {best_similarity:.2f})[/green]")
+                            tmdb_id = int(best_match['id'])
+                            return tmdb_id, category
 
                     console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
                     if category == "MOVIE":
