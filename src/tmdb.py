@@ -276,10 +276,10 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
                     best_similarity = results_with_similarity[0][1]
                     if best_similarity >= 0.90:
-                        # Filter out results with similarity < 0.70
+                        # Filter out results with similarity < 0.75
                         filtered_results_with_similarity = [
                             (result, sim) for result, sim in results_with_similarity
-                            if sim >= 0.70
+                            if sim >= 0.75
                         ]
                         results_with_similarity = filtered_results_with_similarity
                         sorted_results = [r[0] for r in results_with_similarity]

@@ -271,6 +271,10 @@ async def extract_title_and_year(meta, filename):
         'R4': '',
         'R5': '',
         'R6': '',
+        "Director's Cut": '',
+        "Extended Edition": '',
+        "directors cut": '',
+        "director cut": '',
     }
     filename = re.sub(r'\s+', ' ', filename)
     filename = await multi_replace(title_part, replacements)
