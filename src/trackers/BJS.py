@@ -870,12 +870,12 @@ class BJS(COMMON):
         if self.category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': ", ".join(list(dict.fromkeys(meta.get('tmdb_directors', [])[:5])) or meta.get('imdb_info', {}).get('directors', [])[:5]),
+                'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('directors', [])[:5] or meta.get('tmdb_directors', [])[:5]))),
             })
 
         if self.category == 'TV':
             data.update({
-                'diretor': ", ".join(list(dict.fromkeys(meta.get('tmdb_creators', [])[:5])) or meta.get('imdb_info', {}).get('creators', [])[:5]),
+                'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('creators', [])[:5])) or meta.get('tmdb_creators', [])[:5]),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': self.season,
                 'episode': self.episode if not self.is_tv_pack else '',

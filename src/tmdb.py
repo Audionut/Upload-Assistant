@@ -602,6 +602,8 @@ async def tmdb_other_meta(
             name = each.get('original_name') or each.get('name')
             if name:
                 creators.append(name)
+        # Limit to the first 5 unique names
+        creators = list(dict.fromkeys(creators))[:5]
 
         if isinstance(credits_data, Exception):
             console.print("[bold red]Failed to fetch credits[/bold red]")
@@ -617,6 +619,9 @@ async def tmdb_other_meta(
                         directors.append(each.get('original_name', each.get('name')))
                     elif each.get('known_for_department', '') == "Acting" or each.get('job', '') in {"Actor", "Actress"}:
                         cast.append(each.get('original_name', each.get('name')))
+                # Limit to the first 5 unique names
+                directors = list(dict.fromkeys(directors))[:5]
+                cast = list(dict.fromkeys(cast))[:5]
             except Exception:
                 console.print("[bold red]Failed to process credits[/bold red]")
                 directors = []
