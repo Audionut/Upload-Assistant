@@ -587,6 +587,17 @@ class BT(COMMON):
 
         return tags
 
+    def get_credits(self, meta):
+        director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
+        if director:
+            unique_names = list(dict.fromkeys(director))[:5]
+            return ", ".join(unique_names)
+
+        creator = (meta.get('imdb_info', {}).get('creators') or []) + (meta.get('tmdb_creators') or [])
+        if creator:
+            unique_names = list(dict.fromkeys(creator))[:5]
+            return ", ".join(unique_names)
+
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
         await self.edit_desc(meta)
@@ -599,10 +610,10 @@ class BT(COMMON):
             'type': self.get_type(meta),
             'title': meta['title'],
             'year': str(meta['year']),
-            'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('directors', [])[:5] or meta.get('tmdb_directors', [])[:5]))),
-            'duracao': f"{str(meta.get('runtime', ''))} min",
+            'diretor': self.get_credits(meta),
             'idioma_ori': await self.get_original_language(meta) or meta.get('original_language', ''),
             'tags': await self.get_tags(meta),
+            'duracao': f"{str(meta.get('runtime', ''))} min",
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
             'youtube': await self.get_trailer(meta),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
@@ -663,6 +674,7 @@ class BT(COMMON):
 
     async def upload(self, meta, disctype):
         data = await self.data_prep(meta, disctype)
+        final_message = ''
         if not meta.get('debug', False):
             await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
             upload_url = f"{self.base_url}/upload.php"
@@ -673,12 +685,14 @@ class BT(COMMON):
                 try:
                     response = self.session.post(upload_url, data=data, files=files, timeout=120)
 
-                    if response.status_code == 200 and 'action=download&id=' in response.text:
-                        id_match = re.search(r'action=download&id=(\d+)', response.text)
+                    if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
+                        final_url = str(response.url)
+                        meta['tracker_status'][self.tracker]['status_message'] = final_url
+                        id_match = re.search(r'id=(\d+)', final_url)
 
                         if id_match:
                             torrent_id = id_match.group(1)
-                            details_url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
+                            details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
                             announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                             await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                             final_message = details_url
