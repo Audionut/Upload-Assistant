@@ -203,7 +203,7 @@ async def process_meta(meta, base_dir, bot=None):
         meta['original_tvmaze'] = meta.get('tvmaze_id', None)
         meta['original_tvdb'] = meta.get('tvdb_id', None)
         meta['original_category'] = meta.get('category', None)
-        if 'matched_tracker' not in meta and 'no_tracker_match' not in meta:
+        if 'matched_tracker' not in meta:
             await client.get_pathed_torrents(meta['path'], meta)
             if meta['is_disc']:
                 search_term = os.path.basename(meta['path'])
