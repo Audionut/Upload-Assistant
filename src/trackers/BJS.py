@@ -944,6 +944,12 @@ class BJS(COMMON):
                     'anonymousshowgroup': 'on'
                 })
 
+        # Internal
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            data.update({
+                'internalrel': 1,
+            })
+
         # Only upload images if not debugging
         if not meta.get('debug', False):
             data.update({
