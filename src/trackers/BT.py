@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import httpx
 import langcodes
 import os
@@ -30,17 +29,16 @@ class BT(COMMON):
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
         target_site_ids = {
-            'danish': '10', 'swedish': '11', 'norwegian': '12', 'romanian': '13',
-            'chinese': '14', 'finnish': '15', 'italian': '16', 'polish': '17',
-            'turkish': '18', 'korean': '19', 'thai': '20', 'arabic': '22',
-            'croatian': '23', 'hungarian': '24', 'vietnamese': '25', 'greek': '26',
-            'icelandic': '28', 'bulgarian': '29', 'english': '3', 'czech': '30',
-            'serbian': '31', 'ukrainian': '34', 'latvian': '37', 'estonian': '38',
-            'lithuanian': '39', 'spanish': '4', 'hebrew': '40', 'hindi': '41',
-            'slovak': '42', 'slovenian': '43', 'indonesian': '47',
-            'português': '49',
-            'french': '5', 'german': '6', 'russian': '7', 'japanese': '8', 'dutch': '9',
-            'english - forçada': '50', 'persian': '52'
+            'arabic': '22', 'bulgarian': '29', 'chinese': '14', 'croatian': '23',
+            'czech': '30', 'danish': '10', 'dutch': '9', 'english - forçada': '50',
+            'english': '3', 'estonian': '38', 'finnish': '15', 'french': '5',
+            'german': '6', 'greek': '26', 'hebrew': '40', 'hindi': '41',
+            'hungarian': '24', 'icelandic': '28', 'indonesian': '47', 'italian': '16',
+            'japanese': '8', 'korean': '19', 'latvian': '37', 'lithuanian': '39',
+            'norwegian': '12', 'persian': '52', 'polish': '17', 'português': '49',
+            'romanian': '13', 'russian': '7', 'serbian': '31', 'slovak': '42',
+            'slovenian': '43', 'spanish': '4', 'swedish': '11', 'thai': '20',
+            'turkish': '18', 'ukrainian': '34', 'vietnamese': '25',
         }
 
         source_alias_map = {
@@ -52,8 +50,8 @@ class BT(COMMON):
             ("Czech", "cze", "cz", "cs"): "czech",
             ("Danish", "dan", "da"): "danish",
             ("Dutch", "dut", "nl"): "dutch",
-            ("English", "eng", "en", "en-US", "en-GB", "English (CC)", "English - SDH"): "english",
             ("English - Forced", "English (Forced)", "en (Forced)", "en-US (Forced)"): "english - forçada",
+            ("English", "eng", "en", "en-US", "en-GB", "English (CC)", "English - SDH"): "english",
             ("Estonian", "est", "et"): "estonian",
             ("Finnish", "fin", "fi"): "finnish",
             ("French", "fre", "fr", "fr-FR", "fr-CA"): "french",
@@ -552,7 +550,7 @@ class BT(COMMON):
         }
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
+        tmdb_data = await self.tmdb_data(meta)
         video_results = tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
@@ -566,6 +564,28 @@ class BT(COMMON):
                 youtube = meta_trailer.replace('https://www.youtube.com/watch?v=', '').replace('/', '')
 
         return youtube
+
+    async def get_tags(self, meta):
+        tmdb_data = await self.tmdb_data(meta)
+        genre_names = []
+
+        if tmdb_data and isinstance(tmdb_data.get('genres'), list):
+            genre_names = [g.get('name', '') for g in tmdb_data['genres'] if 'name' in g]
+
+        # Use meta as fallback
+        elif meta and isinstance(meta.get('genres'), str):
+            genre_names = [g.strip() for g in meta['genres'].split(',') if g.strip()]
+
+        tags = ', '.join(
+            unicodedata.normalize('NFKD', name)
+            .encode('ASCII', 'ignore')
+            .decode('utf-8')
+            .replace(' ', '.')
+            .lower()
+            for name in genre_names
+        )
+
+        return tags
 
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
@@ -582,7 +602,7 @@ class BT(COMMON):
             'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('directors', [])[:5] or meta.get('tmdb_directors', [])[:5]))),
             'duracao': f"{str(meta.get('runtime', ''))} min",
             'idioma_ori': await self.get_original_language(meta) or meta.get('original_language', ''),
-            'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])) or await asyncio.to_thread(input, f"Digite os gêneros (no formato do {self.tracker}): "),
+            'tags': await self.get_tags(meta),
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
             'youtube': await self.get_trailer(meta),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
