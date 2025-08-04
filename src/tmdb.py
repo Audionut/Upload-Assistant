@@ -518,7 +518,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 search_results = {"results": []}
 
         # No match found, prompt user if in CLI mode
-        console.print(f"[bold red]Unable to find TMDb match for {filename}[/bold red]")
+        console.print("[bold red]Unable to find TMDb match[/bold red]")
 
         tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
         category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)

@@ -689,7 +689,7 @@ class Prep():
             if meta['debug']:
                 console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
             # with refactored tmmdb, it quite likely to be correct
-            meta['imdb_id'] = meta['mismatch_imdb_id']
+            meta['imdb_id'] = meta['mismatched_imdb_id']
             meta['imdb_info'] = None
 
         # Get IMDb ID if not set

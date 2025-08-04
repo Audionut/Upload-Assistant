@@ -656,7 +656,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                                 imdbID = int(imdb_id.replace('tt', '').strip())
                                 return imdbID
                         elif selection_int == 0:
-                            console.print("[bold red]No valid selection made.[/bold red]")
+                            console.print("[bold red]Skipping IMDb[/bold red]")
                             return 0
                         else:
                             console.print("[bold red]Selection out of range. Please try again.[/bold red]")
