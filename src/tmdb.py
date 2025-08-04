@@ -387,7 +387,9 @@ async def tmdb_other_meta(
     genres = ""
     genre_ids = ""
     keywords = ""
+    creators = []
     directors = []
+    cast = []
     original_title = ""
     runtime = 60
     certification = ""
@@ -595,19 +597,30 @@ async def tmdb_other_meta(
                 keywords = ""
 
         # Process credits
+        creators = []
+        for each in media_data.get("created_by", []):
+            name = each.get('original_name') or each.get('name')
+            if name:
+                creators.append(name)
+
         if isinstance(credits_data, Exception):
             console.print("[bold red]Failed to fetch credits[/bold red]")
             directors = []
+            cast = []
         else:
             try:
                 credits = credits_data.json()
                 directors = []
+                cast = []
                 for each in credits.get('cast', []) + credits.get('crew', []):
                     if each.get('known_for_department', '') == "Directing" or each.get('job', '') == "Director":
                         directors.append(each.get('original_name', each.get('name')))
+                    elif each.get('known_for_department', '') == "Acting" or each.get('job', '') in {"Actor", "Actress"}:
+                        cast.append(each.get('original_name', each.get('name')))
             except Exception:
                 console.print("[bold red]Failed to process credits[/bold red]")
                 directors = []
+                cast = []
 
         # Process genres
         genres_data = await get_genres(media_data)
@@ -664,7 +677,9 @@ async def tmdb_other_meta(
         'keywords': keywords,
         'genres': genres,
         'genre_ids': genre_ids,
+        'tmdb_creators': creators,
         'tmdb_directors': directors,
+        'tmdb_cast': cast,
         'mal_id': mal_id,
         'anime': anime,
         'demographic': demographic,
