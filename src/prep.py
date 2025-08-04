@@ -583,7 +583,7 @@ class Prep():
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
             tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
-            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration)
+            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=meta['debug'], secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -688,59 +688,9 @@ class Prep():
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
             if meta['debug']:
                 console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
-            # if there's a secondary title, TMDb is probably correct
-            if meta.get('secondary_title', None):
-                meta['imdb_id'] = 0
-                meta['imdb_info'] = None
-            # Otherwise, IMDb used some other regex and we'll trust it more than guessit
-            else:
-                category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
-                    meta['imdb_id'],
-                    meta.get('tvdb_id'),
-                    meta.get('search_year'),
-                    filename,
-                    debug=meta.get('debug', False),
-                    mode=meta.get('mode', 'discord'),
-                    category_preference=meta.get('category'),
-                    imdb_info=meta.get('imdb_info', None)
-                )
-
-                meta['category'] = category
-                meta['tmdb_id'] = int(tmdb_id)
-                meta['original_language'] = original_language
-                meta['no_ids'] = filename_search
-
-                try:
-                    tmdb_metadata = await tmdb_other_meta(
-                        tmdb_id=meta['tmdb_id'],
-                        path=meta.get('path'),
-                        search_year=meta.get('search_year'),
-                        category=meta.get('category'),
-                        imdb_id=meta.get('imdb_id', 0),
-                        manual_language=meta.get('manual_language'),
-                        anime=meta.get('anime', False),
-                        mal_manual=meta.get('mal_manual'),
-                        aka=meta.get('aka', ''),
-                        original_language=meta.get('original_language'),
-                        poster=meta.get('poster'),
-                        debug=meta.get('debug', False),
-                        mode=meta.get('mode', 'cli'),
-                        tvdb_id=meta.get('tvdb_id', 0),
-                        quickie_search=meta.get('quickie_search', False),
-                        filename=filename,
-                    )
-
-                    if not tmdb_metadata or not all(tmdb_metadata.get(field) for field in ['title', 'year']):
-                        error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
-                        console.print(f"[bold red]{error_msg}[/bold red]")
-                        raise ValueError(error_msg)
-
-                    meta.update(tmdb_metadata)
-
-                except Exception as e:
-                    error_msg = f"TMDB metadata retrieval failed for ID {meta['tmdb_id']}: {str(e)}"
-                    console.print(f"[bold red]{error_msg}[/bold red]")
-                    raise RuntimeError(error_msg) from e
+            # with refactored tmmdb, it quite likely to be correct
+            meta['imdb_id'] = meta['mismatch_imdb_id']
+            meta['imdb_info'] = None
 
         # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:

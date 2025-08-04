@@ -3,76 +3,8 @@ import json
 import httpx
 from datetime import datetime
 import asyncio
-
-
-async def get_imdb_aka_api(imdb_id, manual_language=None):
-    if imdb_id == 0:
-        return "", None
-    if not str(imdb_id).startswith("tt"):
-        imdb_id = f"tt{imdb_id:07d}"
-    query = {
-        "query": f"""
-            query {{
-                title(id: "{imdb_id}") {{
-                    id
-                    titleText {{
-                        text
-                        isOriginalTitle
-                    }}
-                    originalTitleText {{
-                        text
-                    }}
-                    countriesOfOrigin {{
-                        countries {{
-                            id
-                        }}
-                    }}
-                }}
-            }}
-        """
-    }
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post("https://api.graphql.imdb.com/", json=query, headers={"Content-Type": "application/json"}, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as e:
-            console.print(f"[red]IMDb API error: {e.response.status_code}[/red]")
-            return "", None
-        except httpx.RequestError as e:
-            console.print(f"[red]IMDb API Network error: {e}[/red]")
-            return "", None
-
-    # Check if `data` and `title` exist
-    title_data = data.get("data", {}).get("title")
-    if title_data is None:
-        console.print("Title data is missing from response")
-        return "", None
-
-    # Extract relevant fields from the response
-    aka_check = title_data.get("originalTitleText", {})
-    if aka_check:
-        aka = title_data.get("originalTitleText", {}).get("text", "")
-    else:
-        return "", None
-    title_txt_check = title_data.get("titleText", {})
-    if title_txt_check:
-        is_original = title_data.get("titleText", {}).get("isOriginalTitle", False)
-        title_text = title_data.get("titleText", {}).get("text", "")
-    else:
-        return "", None
-    if manual_language:
-        original_language = manual_language
-    else:
-        original_language = None
-
-    if title_text != aka:
-        aka = f" AKA {aka}"
-    elif is_original and aka:
-        aka = f" AKA {aka}"
-
-    return aka, original_language
+from difflib import SequenceMatcher
+import cli_ui
 
 
 async def safe_get(data, path, default=None):
@@ -437,7 +369,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None):
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None, unattended=False):
     if secondary_title is not None:
         filename = secondary_title
     if final_attempt is None:
@@ -456,19 +388,18 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     constraints_parts = [f'titleTextConstraint: {{searchTerm: "{filename}"}}']
 
     # Add release date constraint if search_year is provided
-    if quickie:
-        if search_year:
-            search_year_int = int(search_year)
-            start_year = search_year_int - 1
-            end_year = search_year_int + 1
-            constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
+    if search_year:
+        search_year_int = int(search_year)
+        start_year = search_year_int - 1
+        end_year = search_year_int + 1
+        constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
 
-        if duration:
-            if isinstance(duration, int):
-                duration = str(duration)
-                start_duration = int(duration) - 10
-                end_duration = int(duration) + 10
-                constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
+    if duration:
+        if isinstance(duration, int):
+            duration = str(duration)
+            start_duration = int(duration) - 10
+            end_duration = int(duration) + 10
+            constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
 
     constraints_string = ', '.join(constraints_parts)
 
@@ -607,38 +538,123 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             if imdb_id:
                 imdbID = int(imdb_id.replace('tt', '').strip())
                 return imdbID
-        else:
-            for idx, edge in enumerate(results):
-                node = await safe_get(edge, ["node"], {})
+        elif len(results) > 1:
+            # Calculate similarity for all results
+            results_with_similarity = []
+            filename_norm = filename.lower().strip()
+            search_year_int = int(search_year) if search_year else 0
+
+            for r in results:
+                node = await safe_get(r, ["node"], {})
+                title = await safe_get(node, ["title"], {})
+                title_text = await safe_get(title, ["titleText", "text"], "")
+                result_year = await safe_get(title, ["releaseYear", "year"], 0)
+
+                similarity = SequenceMatcher(None, filename_norm, title_text.lower().strip()).ratio()
+
+                # Only boost similarity if titles are very similar (>= 0.99) AND years match
+                if similarity >= 0.99 and search_year_int > 0 and result_year > 0:
+                    if result_year == search_year_int:
+                        similarity += 0.1  # Full boost for exact year match
+                    elif result_year == search_year_int - 1:
+                        similarity += 0.05  # Half boost for -1 year
+
+                results_with_similarity.append((r, similarity))
+
+            # Sort by similarity (highest first)
+            results_with_similarity.sort(key=lambda x: x[1], reverse=True)
+
+            # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
+            best_similarity = results_with_similarity[0][1]
+            if best_similarity >= 0.90:
+                filtered_results_with_similarity = [
+                    (result, sim) for result, sim in results_with_similarity
+                    if sim >= 0.70
+                ]
+                results_with_similarity = filtered_results_with_similarity
+
+                if debug:
+                    console.print(f"[yellow]Filtered out low similarity results (< 0.70) since best match has {best_similarity:.2f} similarity[/yellow]")
+
+            sorted_results = [r[0] for r in results_with_similarity]
+
+            # Check if the best match is significantly better than others
+            best_similarity = results_with_similarity[0][1]
+            similarity_threshold = 0.85
+
+            if best_similarity >= similarity_threshold:
+                second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
+
+                if best_similarity - second_best >= 0.10:
+                    if debug:
+                        console.print(f"[green]Auto-selecting best match: {await safe_get(sorted_results[0], ['node', 'title', 'titleText', 'text'], '')} (similarity: {best_similarity:.2f})[/green]")
+                    imdb_id = await safe_get(sorted_results[0], ["node", "title", "id"], "")
+                    if imdb_id:
+                        imdbID = int(imdb_id.replace('tt', '').strip())
+                        return imdbID
+
+            if unattended:
+                imdb_id = await safe_get(sorted_results[0], ["node", "title", "id"], "")
+                if imdb_id:
+                    imdbID = int(imdb_id.replace('tt', '').strip())
+                    if debug:
+                        console.print(f"[green]Unattended mode: auto-selected IMDb ID {imdbID}[/green]")
+                    return imdbID
+
+            # Show sorted results to user
+            console.print("[bold yellow]Multiple IMDb results found. Please select the correct entry:[/bold yellow]")
+
+            for idx, result in enumerate(sorted_results):
+                node = await safe_get(result, ["node"], {})
                 title = await safe_get(node, ["title"], {})
                 title_text = await safe_get(title, ["titleText", "text"], "")
                 year = await safe_get(title, ["releaseYear", "year"], None)
                 imdb_id = await safe_get(title, ["id"], "")
                 title_type = await safe_get(title, ["titleType", "text"], "")
                 plot = await safe_get(title, ["plot", "plotText", "plainText"], "")
+                similarity_score = results_with_similarity[idx][1]
 
-                console.print(f"[cyan]Result {idx+1}: {title_text} - ({year}) - {imdb_id} - Type: {title_type}[/cyan]")
+                console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title_text}[/bold] ({year}) [yellow]ID:[/yellow] {imdb_id} [yellow]Type:[/yellow] {title_type} [dim](similarity: {similarity_score:.2f})[/dim]")
                 if plot:
-                    console.print(f"[green]Plot: {plot}[/green]")
+                    console.print(f"[green]Plot:[/green] {plot[:200]}{'...' if len(plot) > 200 else ''}")
+                console.print()
 
-            if results:
-                console.print("[yellow]Enter the number of the correct entry, or 0 for none:[/yellow]")
-                try:
-                    user_input = input("> ").strip()
-                    if user_input.isdigit():
-                        selection = int(user_input)
-                        if 1 <= selection <= len(results):
-                            selected = results[selection - 1]
+            if sorted_results:
+                selection = None
+                while True:
+                    selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                    try:
+                        # Check if it's a manual IMDb ID entry
+                        if selection.lower().startswith('tt') and len(selection) >= 3:
+                            try:
+                                manual_imdb_id = selection.lower().replace('tt', '').strip()
+                                if manual_imdb_id.isdigit():
+                                    console.print(f"[green]Using manual IMDb ID: {selection}[/green]")
+                                    return int(manual_imdb_id)
+                                else:
+                                    console.print("[bold red]Invalid IMDb ID format. Please try again.[/bold red]")
+                                    continue
+                            except Exception as e:
+                                console.print(f"[bold red]Error parsing IMDb ID: {e}. Please try again.[/bold red]")
+                                continue
+
+                        # Handle numeric selection
+                        selection_int = int(selection)
+                        if 1 <= selection_int <= len(sorted_results):
+                            selected = sorted_results[selection_int - 1]
                             imdb_id = await safe_get(selected, ["node", "title", "id"], "")
                             if imdb_id:
                                 imdbID = int(imdb_id.replace('tt', '').strip())
                                 return imdbID
+                        elif selection_int == 0:
+                            console.print("[bold red]No valid selection made.[/bold red]")
+                            return 0
+                        else:
+                            console.print("[bold red]Selection out of range. Please try again.[/bold red]")
+                    except ValueError:
+                        console.print("[bold red]Invalid input. Please enter a number or IMDb ID (tt1234567).[/bold red]")
 
-                except Exception as e:
-                    console.print(f"[red]Error reading input: {e}[/red]")
-                    imdbID = 0
-
-    return imdbID
+    return imdbID if imdbID else 0
 
 
 async def get_imdb_from_episode(imdb_id, debug=False):

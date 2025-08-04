@@ -1,5 +1,5 @@
 from src.console import console
-from src.imdb import get_imdb_aka_api, get_imdb_info_api
+from src.imdb import get_imdb_info_api
 from src.args import Args
 from data.config import config
 import re
@@ -15,6 +15,7 @@ import asyncio
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
+parser = Args(config=config)
 
 
 async def normalize_title(title):
@@ -138,7 +139,6 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
         console.print('[yellow]Unable to find a matching TMDb entry[/yellow]')
         tmdb_id = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ")
-        parser = Args(config=config)
         category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
     return category, tmdb_id, original_language, filename_search
@@ -255,16 +255,39 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         result_title = await normalize_title(r.get('title') or r.get('name', ''))
                         similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
 
-                        # Boost similarity if years match (when both are available)
+                        # Boost similarity if titles are exact AND years match
                         result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
-                        if search_year_int > 0 and result_year > 0 and result_year == search_year_int:
-                            similarity += 0.1
+                        if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
+                            if result_year == search_year_int:
+                                # Full boost for exact year match
+                                similarity += 0.1
+                            elif result_year == search_year_int + 1:
+                                # Half boost when result year is +1 against search year (handles tmdb/imdb differences)
+                                similarity += 0.05
 
                         results_with_similarity.append((r, similarity))
 
                     # Sort by similarity (highest first)
                     results_with_similarity.sort(key=lambda x: x[1], reverse=True)
                     sorted_results = [r[0] for r in results_with_similarity]
+
+                    results_with_similarity.sort(key=lambda x: x[1], reverse=True)
+
+                    # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
+                    best_similarity = results_with_similarity[0][1]
+                    if best_similarity >= 0.90:
+                        # Filter out results with similarity < 0.70
+                        filtered_results_with_similarity = [
+                            (result, sim) for result, sim in results_with_similarity
+                            if sim >= 0.70
+                        ]
+                        results_with_similarity = filtered_results_with_similarity
+                        sorted_results = [r[0] for r in results_with_similarity]
+
+                        if debug:
+                            console.print(f"[yellow]Filtered out low similarity results (< 0.70) since best match has {best_similarity:.2f} similarity[/yellow]")
+                    else:
+                        sorted_results = [r[0] for r in results_with_similarity]
 
                     # Check if the best match is significantly better than others
                     best_similarity = results_with_similarity[0][1]
@@ -304,8 +327,23 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
                     selection = None
                     while True:
-                        selection = cli_ui.ask_string("Enter the number of the correct entry, or 0 for none: ")
+                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual TMDb ID (tv/12345 or movie/12345): ")
                         try:
+                            # Check if it's a manual TMDb ID entry
+                            if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
+                                try:
+                                    parsed_category, parsed_tmdb_id = parser.parse_tmdb_id(selection, category)
+                                    if parsed_tmdb_id and parsed_tmdb_id != 0:
+                                        console.print(f"[green]Using manual TMDb ID: {parsed_tmdb_id} and category: {parsed_category}[/green]")
+                                        return int(parsed_tmdb_id), parsed_category
+                                    else:
+                                        console.print("[bold red]Invalid TMDb ID format. Please try again.[/bold red]")
+                                        continue
+                                except Exception as e:
+                                    console.print(f"[bold red]Error parsing TMDb ID: {e}. Please try again.[/bold red]")
+                                    continue
+
+                            # Handle numeric selection
                             selection_int = int(selection)
                             if 1 <= selection_int <= len(sorted_results):
                                 tmdb_id = int(sorted_results[selection_int - 1]['id'])
@@ -316,7 +354,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             else:
                                 console.print("[bold red]Selection out of range. Please try again.[/bold red]")
                         except ValueError:
-                            console.print("[bold red]Invalid input. Please enter a number.[/bold red]")
+                            console.print("[bold red]Invalid input. Please enter a number or TMDb ID (tv/12345 or movie/12345).[/bold red]")
 
             # If no results and we have a secondary title, try searching with that
             if not search_results.get('results') and secondary_title and attempted < 3:
@@ -483,7 +521,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         console.print(f"[bold red]Unable to find TMDb match for {filename}[/bold red]")
 
         tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
-        parser = Args(config=config)
         category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
         return tmdb_id, category
@@ -535,6 +572,7 @@ async def tmdb_other_meta(
     mal_id = 0
     demographic = ""
     imdb_mismatch = False
+    mismatched_imdb_id = 0
 
     if tmdb_id == 0:
         try:
@@ -604,7 +642,8 @@ async def tmdb_other_meta(
                 if imdb_id_str and imdb_id_str.isdigit():
                     if imdb_id and int(imdb_id_str) != imdb_id:
                         imdb_mismatch = True
-                        imdb_id = int(imdb_id_str)
+                        mismatched_imdb_id = int(imdb_id_str)
+                        imdb_id = original_imdb_id
                 else:
                     imdb_id = original_imdb_id
 
@@ -647,11 +686,6 @@ async def tmdb_other_meta(
                            params={"api_key": TMDB_API_KEY})
             )
 
-        # Add IMDB API call if we already have an IMDB ID
-        if imdb_id != 0:
-            # Get AKA and original language from IMDB immediately, don't wait
-            endpoints.append(get_imdb_aka_api(imdb_id, manual_language))
-
         # Make all requests concurrently
         results = await asyncio.gather(*endpoints, return_exceptions=True)
 
@@ -659,22 +693,11 @@ async def tmdb_other_meta(
         external_data, videos_data, keywords_data, credits_data, *rest = results
         idx = 0
         logo_data = None
-        imdb_data = None
 
         # Get logo data if it was requested
         if config['DEFAULT'].get('add_logo', False):
             logo_data = rest[idx]
             idx += 1
-
-        # Get IMDB data if it was requested
-        if imdb_id != 0:
-            imdb_data = rest[idx]
-            # Process IMDB data
-            if isinstance(imdb_data, Exception):
-                console.print("[yellow]Failed to get AKA and original language from IMDB[/yellow]")
-                retrieved_aka, retrieved_original_language = "", None
-            else:
-                retrieved_aka, retrieved_original_language = imdb_data
 
         # Process external IDs
         if isinstance(external_data, Exception):
@@ -691,7 +714,7 @@ async def tmdb_other_meta(
                             imdb_id_clean_int = int(imdb_id_clean)
                             if imdb_id_clean_int != int(original_imdb_id) and quickie_search and original_imdb_id != 0:
                                 imdb_mismatch = True
-                                imdb_id = original_imdb_id
+                                mismatched_imdb_id = imdb_id_clean_int
                             else:
                                 imdb_id = int(imdb_id_clean)
                         else:
@@ -784,15 +807,9 @@ async def tmdb_other_meta(
                 console.print("[yellow]Failed to process logo[/yellow]")
                 logo_path = ""
 
-    # Get AKA and original language from IMDB if needed
-    if imdb_id != 0 and imdb_data is None:
-        retrieved_aka, retrieved_original_language = await get_imdb_aka_api(imdb_id, manual_language)
-    elif imdb_data is None:
-        retrieved_aka, retrieved_original_language = "", None
-
     # Use retrieved original language or fallback to TMDB's value
-    if retrieved_original_language is not None:
-        original_language = retrieved_original_language
+    if manual_language:
+        original_language = manual_language
     else:
         original_language = original_language_from_tmdb
 
@@ -845,7 +862,8 @@ async def tmdb_other_meta(
         'runtime': runtime,
         'youtube': youtube,
         'certification': certification,
-        'imdb_mismatch': imdb_mismatch
+        'imdb_mismatch': imdb_mismatch,
+        'mismatched_imdb_id': mismatched_imdb_id
     }
 
     return tmdb_metadata
@@ -1073,7 +1091,6 @@ async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imd
             for each in extra:
                 try:
                     if each.lower().startswith('tmdb'):
-                        parser = Args(config=config)
                         category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
                     if each.lower().startswith('imdb'):
                         try:
