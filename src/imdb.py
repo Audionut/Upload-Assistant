@@ -5,6 +5,8 @@ from datetime import datetime
 import asyncio
 from difflib import SequenceMatcher
 import cli_ui
+from anitopy import parse as anitopy_parse
+from guessit import guessit
 
 
 async def safe_get(data, path, default=None):
@@ -369,7 +371,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None, unattended=False):
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None, unattended=False, wide_search=False):
     if secondary_title is not None:
         filename = secondary_title
     if final_attempt is None:
@@ -388,13 +390,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     constraints_parts = [f'titleTextConstraint: {{searchTerm: "{filename}"}}']
 
     # Add release date constraint if search_year is provided
-    if search_year:
+    if not wide_search and search_year:
         search_year_int = int(search_year)
         start_year = search_year_int - 1
         end_year = search_year_int + 1
         constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
 
-    if duration:
+    if not wide_search and duration:
         if isinstance(duration, int):
             duration = str(duration)
             start_duration = int(duration) - 10
@@ -453,40 +455,47 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         console.print(f"quickie: {quickie}, category: {category}, search_year: {search_year}")
 
     if not results:
-        # Try parsed title (anitopy + guessit)
-        if attempted < 1 and untouched_filename:
+        # relax the constraints
+        if attempted <= 1:
+            if debug:
+                console.print("[yellow]No results found, trying with a wider search...[/yellow]")
             try:
-                from anitopy import parse as anitopy_parse
-                from guessit import guessit
+                return await search_imdb(filename, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
+            except Exception as e:
+                console.print(f"[red]Error during wide search: {e}[/red]")
+
+        # Try parsed title (anitopy + guessit)
+        if attempted <= 2 and untouched_filename:
+            try:
                 parsed = guessit(untouched_filename, {"excludes": ["country", "language"]})
                 parsed_title = anitopy_parse(parsed['title'])['anime_title']
                 if debug:
                     console.print(f"[bold yellow]Trying IMDB with parsed title: {parsed_title}[/bold yellow]")
-                return await search_imdb(parsed_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1)
+                return await search_imdb(parsed_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
             except Exception as e:
                 console.print(f"[bold red]Failed to parse title for IMDb search: {e}[/bold red]")
 
         # Try with less words in the title
-        if attempted >= 1 and attempted < 3 and filename:
+        if attempted <= 3 and filename:
             try:
                 words = filename.split()
                 if len(words) > 1:
                     reduced_title = ' '.join(words[:-1])
                     if debug:
                         console.print(f"[bold yellow]Trying IMDB with reduced name: {reduced_title}[/bold yellow]")
-                    return await search_imdb(reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1)
+                    return await search_imdb(reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
 
         # Try with even fewer words
-        if attempted >= 2 and filename and not final_attempt:
+        if attempted > 3 and filename and not final_attempt:
             try:
                 words = filename.split()
                 if len(words) > 2:
                     further_reduced_title = ' '.join(words[:-2])
                     if debug:
                         console.print(f"[bold yellow]Trying IMDB with further reduced name: {further_reduced_title}[/bold yellow]")
-                    return await search_imdb(further_reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, final_attempt=True)
+                    return await search_imdb(further_reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, final_attempt=True, unattended=unattended, wide_search=True)
             except Exception as e:
                 console.print(f"[bold red]Further reduced name search error:[/bold red] {e}")
 
@@ -564,12 +573,12 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             # Sort by similarity (highest first)
             results_with_similarity.sort(key=lambda x: x[1], reverse=True)
 
-            # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
+            # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.75)
             best_similarity = results_with_similarity[0][1]
             if best_similarity >= 0.90:
                 filtered_results_with_similarity = [
                     (result, sim) for result, sim in results_with_similarity
-                    if sim >= 0.70
+                    if sim >= 0.75
                 ]
                 results_with_similarity = filtered_results_with_similarity
 
@@ -653,6 +662,19 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                             console.print("[bold red]Selection out of range. Please try again.[/bold red]")
                     except ValueError:
                         console.print("[bold red]Invalid input. Please enter a number or IMDb ID (tt1234567).[/bold red]")
+
+        else:
+            selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+            if selection.lower().startswith('tt') and len(selection) >= 3:
+                try:
+                    manual_imdb_id = selection.lower().replace('tt', '').strip()
+                    if manual_imdb_id.isdigit():
+                        console.print(f"[green]Using manual IMDb ID: {selection}[/green]")
+                        return int(manual_imdb_id)
+                    else:
+                        console.print("[bold red]Invalid IMDb ID format. Please try again.[/bold red]")
+                except Exception as e:
+                    console.print(f"[bold red]Error parsing IMDb ID: {e}. Please try again.[/bold red]")
 
     return imdbID if imdbID else 0
 
