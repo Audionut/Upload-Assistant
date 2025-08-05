@@ -155,9 +155,9 @@ async def nfo_link(meta):
             if link_dir is not None and not meta.get('linking_failed', False):
                 nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
             else:
-                temp_dir = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/")
-                os.makedirs(temp_dir, exist_ok=True)
-                nfo_file_path = os.path.join(temp_dir, f"{filename}.nfo")
+                nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
+                os.makedirs(nfo_dir, exist_ok=True)
+                nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
 
             with open(nfo_file_path, 'w', encoding='utf-8') as f:
                 f.write(nfo_content)
