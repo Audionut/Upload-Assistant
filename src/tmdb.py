@@ -258,7 +258,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             ):
                                 exact_matches.append(r)
 
-                            elif (
+                            if (
                                 filename_norm == result_title
                                 and search_year_int > 0
                                 and result_year > 0
@@ -267,8 +267,19 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             ):
                                 exact_matches.append(r)
 
-                        if len(exact_matches) == 1:
-                            tmdb_id = int(exact_matches[0]['id'])
+                            if secondary_norm and (
+                                secondary_norm == result_title
+                                and search_year_int > 0
+                                and result_year > 0
+                                and result_year == search_year_int
+                                or result_year == search_year_int + 1
+                            ):
+                                exact_matches.append(r)
+
+                        summary_exact_matches = set((r['id'] for r in exact_matches))
+
+                        if len(summary_exact_matches) == 1:
+                            tmdb_id = int(summary_exact_matches.pop())
                             return tmdb_id, category
 
                         # If no exact matches, calculate similarity for all results and sort them
@@ -287,9 +298,9 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             # Boost similarity if original title matches
                             if original_similarity >= 1.0 and search_year_int > 0 and result_year > 0:
                                 if result_year == search_year_int:
-                                    similarity += 0.1
+                                    similarity += 0.05
                                 elif result_year == search_year_int + 1:
-                                    similarity += 0.1
+                                    similarity += 0.05
 
                             # Boost similarity if titles are exact AND years match
                             if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
