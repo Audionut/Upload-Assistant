@@ -146,7 +146,6 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
 
 async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
     search_results = {"results": []}
-    secondary_results = {"results": []}
     original_category = category
     if new_category:
         category = new_category
@@ -401,112 +400,21 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             console.print(f"[bold red]TMDb search error:[/bold red] {e}")
             search_results = {"results": []}  # Reset search_results on exception
 
-        # Secondary attempt: Try searching without the year
-        if debug:
-            console.print("[yellow]Retrying without year...[/yellow]")
-        try:
-            if category == "MOVIE":
-                if debug:
-                    console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Without year)")
-
-                params = {
-                    "api_key": TMDB_API_KEY,
-                    "query": filename,
-                    "language": "en-US",
-                    "include_adult": "true"
-                }
-
-                response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                try:
-                    response.raise_for_status()
-                    search_results = response.json()
-                except Exception:
-                    console.print(f"[bold red]Failed with secondary movie search: {response.status_code}[/bold red]")
-
-            elif category == "TV":
-                if debug:
-                    console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Without year)")
-
-                params = {
-                    "api_key": TMDB_API_KEY,
-                    "query": filename,
-                    "language": "en-US",
-                    "include_adult": "true"
-                }
-
-                response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                try:
-                    response.raise_for_status()
-                    search_results = response.json()
-                except Exception:
-                    console.print(f"[bold red]Failed secondary TV search: {response.status_code}[/bold red]")
-
+        # Secondary attempt: Try searching with year + 1 if search_year is provided
+        if search_year and search_year.isdigit() and int(search_year) > 0:
+            imdb_year = int(search_year) + 1
             if debug:
-                console.print(f"[yellow]Search results (secondary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
-
-            # Check if results were found
-            if search_results.get('results'):
-                tmdb_id = search_results['results'][0]['id']
-                return tmdb_id, category
-
-            # Try with secondary title without year
-            if not search_results.get('results') and secondary_title and attempted < 3:
-                console.print(f"[yellow]No results found for primary title without year. Trying secondary title: {secondary_title}[/yellow]")
-
-                if category == "MOVIE":
-                    if debug:
-                        console.print(f"[green]Searching TMDb for movie with secondary title:[/] [cyan]{secondary_title}[/cyan] (Without year)")
-
-                    params = {
-                        "api_key": TMDB_API_KEY,
-                        "query": secondary_title,
-                        "language": "en-US",
-                        "include_adult": "true"
-                    }
-
-                    response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                    try:
-                        response.raise_for_status()
-                        secondary_results = response.json()
-                    except Exception:
-                        console.print(f"[bold red]Failed with secondary title movie search: {response.status_code}[/bold red]")
-
-                elif category == "TV":
-                    if debug:
-                        console.print(f"[green]Searching TMDb for TV show with secondary title:[/] [cyan]{secondary_title}[/cyan] (Without year)")
-
-                    params = {
-                        "api_key": TMDB_API_KEY,
-                        "query": secondary_title,
-                        "language": "en-US",
-                        "include_adult": "true"
-                    }
-
-                    response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                    try:
-                        response.raise_for_status()
-                        secondary_results = response.json()
-                    except Exception:
-                        console.print(f"[bold red]Failed with secondary title TV search: {response.status_code}[/bold red]")
-
-                if debug:
-                    console.print(f"[yellow]Secondary title search results: {json.dumps(secondary_results.get('results', [])[:2], indent=2)}[/yellow]")
-
-                if secondary_results.get('results'):
-                    tmdb_id = secondary_results['results'][0]['id']
-                    return tmdb_id, category
-
-        except Exception as e:
-            console.print(f"[bold red]Secondary search error:[/bold red] {e}")
+                console.print("[yellow]Retrying with year +1...[/yellow]")
+            return await get_tmdb_id(filename, imdb_year, category, untouched_filename, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
 
         # If still no match, attempt alternative category switch
         if attempted < 1:
             new_category = "TV" if category == "MOVIE" else "MOVIE"
             if debug:
                 console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category)
+            return await get_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category, unattended=unattended)
 
-        # Last attempt: Try parsing a better title
+        # try animne name parsing
         if attempted == 1:
             try:
                 parsed_title = anitopy.parse(
@@ -514,30 +422,32 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 )['anime_title']
                 if debug:
                     console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
-                return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 2, debug=debug, secondary_title=secondary_title, path=path)
+                return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
             except KeyError:
                 console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
 
         # lets try with less words in the title
-        if attempted > 1 and attempted < 5 and path:
+        if attempted >= 1 and attempted <= 2 and path:
             try:
                 words = filename.split()
-                title = ' '.join(words[:-1])
-                if debug:
-                    console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
-                return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path)
+                if len(words) >= 2:
+                    title = ' '.join(words[:-1])
+                    if debug:
+                        console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
+                    return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
                 search_results = {"results": []}
 
-        # lets try with less words in the title
-        if attempted > 1 and path and not final_attempt:
+        # try with even less words
+        if attempted > 2 and path and not final_attempt:
             try:
                 words = filename.split()
-                title = ' '.join(words[:-2])
-                if debug:
-                    console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
-                return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 3, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True)
+                if len(words) >= 3:
+                    title = ' '.join(words[:-2])
+                    if debug:
+                        console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
+                    return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True, unattended=unattended)
             except Exception as e:
                 console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
                 search_results = {"results": []}
