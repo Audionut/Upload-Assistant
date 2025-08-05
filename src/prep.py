@@ -666,7 +666,8 @@ class Prep():
                             break  # Success, exit loop
                         else:
                             error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
-                            console.print(f"[bold red]{error_msg}[/bold red]")
+                            if meta['debug']:
+                                console.print(f"[bold red]{error_msg}[/bold red]")
                             if attempt < max_attempts:
                                 console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
                                 await asyncio.sleep(delay_seconds)
@@ -674,11 +675,14 @@ class Prep():
                                 raise ValueError(error_msg)
                     except Exception as e:
                         error_msg = f"TMDB metadata retrieval failed for ID {meta['tmdb_id']}: {str(e)}"
-                        console.print(f"[bold red]{error_msg}[/bold red]")
+                        if meta['debug']:
+                            console.print(f"[bold red]{error_msg}[/bold red]")
                         if attempt < max_attempts:
                             console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
                             await asyncio.sleep(delay_seconds)
                         else:
+                            console.print(f"[red]Catastrophic error getting TMDB data using ID {meta['tmdb_id']}[/red]")
+                            console.print(f"[red]Check category is set correctly, UA was using {meta.get('category', None)}[/red]")
                             raise RuntimeError(error_msg) from e
 
         if meta.get('retrieved_aka', None) is not None:
