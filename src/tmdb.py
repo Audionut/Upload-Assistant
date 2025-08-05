@@ -205,7 +205,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     console.print(f"[bold red]Failed with primary TV search: {response.status_code}[/bold red]")
 
             if debug:
-                console.print(f"[yellow]Search results (primary): {json.dumps(search_results.get('results', [])[:2], indent=2)}[/yellow]")
+                console.print(f"[yellow]TMDB search results (primary): {json.dumps(search_results.get('results', [])[:4], indent=2)}[/yellow]")
 
             # Check if results were found
             results = search_results.get('results', [])
@@ -227,6 +227,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     return tmdb_id, category
                 elif len(limited_results) > 1:
                     filename_norm = await normalize_title(filename)
+                    secondary_norm = await normalize_title(secondary_title) if secondary_title else None
                     search_year_int = int(search_year) if search_year else 0
                     if debug:
                         console.print(f"[yellow]Multiple results found for {filename} ({search_year})[/yellow]")
@@ -234,14 +235,25 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     # Find all exact matches (title and year)
                     exact_matches = []
                     for r in limited_results:
-                        result_title = await normalize_title(r.get('title') or r.get('name', ''))
+                        result_title = await normalize_title(r.get('title'))
+                        original_title = await normalize_title(r.get('original_title', ''))
                         result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
                         # Only count as exact match if both years are present and non-zero
-                        if (
+                        if secondary_norm and (
+                            secondary_norm == original_title
+                            and search_year_int > 0
+                            and result_year > 0
+                            and result_year == search_year_int
+                            or result_year == search_year_int + 1
+                        ):
+                            exact_matches.append(r)
+
+                        elif (
                             filename_norm == result_title
                             and search_year_int > 0
                             and result_year > 0
                             and result_year == search_year_int
+                            or result_year == search_year_int + 1
                         ):
                             exact_matches.append(r)
 
@@ -252,18 +264,31 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                     # If no exact matches, calculate similarity for all results and sort them
                     results_with_similarity = []
                     for r in limited_results:
-                        result_title = await normalize_title(r.get('title') or r.get('name', ''))
+                        result_title = await normalize_title(r.get('title'))
+                        original_title = await normalize_title(r.get('original_title', ''))
                         similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
+                        if secondary_norm is not None:
+                            original_similarity = SequenceMatcher(None, secondary_norm, original_title).ratio()
+                        else:
+                            original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
+
+                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+
+                        # Boost similarity if original title matches
+                        if original_similarity >= 1.0 and search_year_int > 0 and result_year > 0:
+                            if result_year == search_year_int:
+                                similarity += 0.1
+                            elif result_year == search_year_int + 1:
+                                similarity += 0.1
 
                         # Boost similarity if titles are exact AND years match
-                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
                         if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
                             if result_year == search_year_int:
                                 # Full boost for exact year match
                                 similarity += 0.1
                             elif result_year == search_year_int + 1:
-                                # Half boost when result year is +1 against search year (handles tmdb/imdb differences)
-                                similarity += 0.05
+                                # Boost when result year is +1 against search year (handles tmdb/imdb differences)
+                                similarity += 0.1
 
                         results_with_similarity.append((r, similarity))
 
