@@ -850,6 +850,13 @@ class BJS(COMMON):
 
         data = {}
 
+        desc_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        try:
+            with open(desc_file_path, 'r', newline='', encoding='utf-8') as desc_file:
+                ficha_content = desc_file.read()
+        except FileNotFoundError:
+            ficha_content = ""
+
         # These fields are common across all upload types
         data.update({
             'submit': 'true',
@@ -876,7 +883,7 @@ class BJS(COMMON):
             'resolucaow': self.get_resolution(meta).get('resolucaow'),
             'resolucaoh': self.get_resolution(meta).get('resolucaoh'),
             'sinopse': tmdb_data.get('overview') or await asyncio.to_thread(input, "Digite a sinopse: "),
-            'fichatecnica': f"{open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()}",
+            'fichatecnica': ficha_content,
             })
 
         # These fields are common in movies and TV shows, even if it's anime
@@ -943,6 +950,12 @@ class BJS(COMMON):
                 data.update({
                     'anonymousshowgroup': 'on'
                 })
+
+        # Internal
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            data.update({
+                'internalrel': 1,
+            })
 
         # Only upload images if not debugging
         if not meta.get('debug', False):
