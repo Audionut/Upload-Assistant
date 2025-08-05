@@ -65,7 +65,7 @@ class UploadHelper:
                 console.print()
         console.print(f"[bold]Category:[/bold] {meta['category']}")
         console.print()
-        if meta.get('emby', False):
+        if meta.get('emby', False) and meta.get('emby_debug', False):
             if int(meta.get('original_imdb', 0)) != 0:
                 imdb = str(meta.get('original_imdb', 0)).zfill(7)
                 console.print(f"[bold]IMDB:[/bold] https://www.imdb.com/title/tt{imdb}")
@@ -100,7 +100,8 @@ class UploadHelper:
             console.print()
 
         if meta.get('unattended', False) and not meta.get('unattended_confirm', False):
-            console.print("[bold yellow]Unattended mode is enabled, skipping confirmation.[/bold yellow]")
+            if meta['debug'] is True:
+                console.print("[bold yellow]Unattended mode is enabled, skipping confirmation.[/bold yellow]")
             return True
         else:
             if not meta.get('emby', False):
@@ -122,7 +123,9 @@ class UploadHelper:
             if not meta.get('emby', False):
                 console.print(f"[bold]Name:[/bold] {meta['name']}")
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-        if meta.get('emby', False):
+            elif not meta.get('emby_debug', False):
+                confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+        if meta.get('emby', False) and meta.get('emby_debug', False):
             if meta.get('original_imdb', 0) != meta.get('imdb_id', 0):
                 imdb = str(meta.get('imdb_id', 0)).zfill(7)
                 console.print(f"[bold red]IMDB ID changed from {meta['original_imdb']} to {meta['imdb_id']}[/bold red]")

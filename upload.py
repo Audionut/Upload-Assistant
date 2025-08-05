@@ -157,12 +157,13 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(traceback.format_exc())
         return
 
+    meta['emby_debug'] = meta.get('emby_debug') if meta.get('emby_debug', False) else config['DEFAULT'].get('emby_debug', False)
     if meta.get('emby_cat', None) == "movie" and meta.get('category', None) != "MOVIE":
         console.print(f"[red]Wrong category detected! Expected 'MOVIE', but found: {meta.get('category', None)}[/red]")
         meta['we_are_uploading'] = False
         return
     elif meta.get('emby_cat', None) == "tv" and meta.get('category', None) != "TV":
-        console.print(f"[red]Wrong category detected! Expected 'TV', but found: {meta.get('category', None)}[/red]")
+        console.print("[red]TV content is not supported at this time[/red]")
         meta['we_are_uploading'] = False
         return
 
@@ -196,7 +197,7 @@ async def process_meta(meta, base_dir, bot=None):
             json.dump(meta, f, indent=4)
             f.close()
 
-    if meta.get('emby', False):
+    if meta.get('emby', False) and meta.get('emby_debug', False):
         meta['original_imdb'] = meta.get('imdb_id', None)
         meta['original_tmdb'] = meta.get('tmdb_id', None)
         meta['original_mal'] = meta.get('mal_id', None)
