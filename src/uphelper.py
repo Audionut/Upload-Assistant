@@ -151,6 +151,9 @@ class UploadHelper:
                 title = meta.get('title', None)
                 if title:
                     title = title.replace('&', 'and').replace('  ', ' ').strip()
+                original_title = meta.get('original_title', None)
+                if original_title:
+                    original_title = original_title.replace('&', 'and').replace('  ', ' ').strip()
                 secondary_title = meta.get('secondary_title', None)
                 if secondary_title:
                     secondary_title = secondary_title.replace('&', 'and').replace('  ', ' ').strip()
@@ -160,6 +163,16 @@ class UploadHelper:
                         if secondary_title:
                             similarity_secondary = SequenceMatcher(None, str(secondary_title).lower(), str(title).lower()).ratio()
                             if similarity_secondary < 0.90:
+                                console.print()
+                                console.print("path: ", meta['path'])
+                                console.print()
+                                console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
+                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                            else:
+                                return True
+                        if original_title:
+                            original_similarity = SequenceMatcher(None, str(original_title).lower(), str(regex_title).lower()).ratio()
+                            if original_similarity < 0.90:
                                 console.print()
                                 console.print("path: ", meta['path'])
                                 console.print()
