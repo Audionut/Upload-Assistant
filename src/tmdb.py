@@ -158,307 +158,350 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     if attempted:
         await asyncio.sleep(1)  # Whoa baby, slow down
 
-    async with httpx.AsyncClient() as client:
-        try:
-            # Primary search attempt with year
-            if category == "MOVIE":
-                if debug:
-                    console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
-
-                params = {
-                    "api_key": TMDB_API_KEY,
-                    "query": filename,
-                    "language": "en-US",
-                    "include_adult": "true"
-                }
-
-                if search_year:
-                    params["year"] = search_year
-
-                response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
-                try:
-                    response.raise_for_status()
-                    search_results = response.json()
-                except Exception:
-                    console.print(f"[bold red]Failure with primary movie search: {response.status_code}[/bold red]")
-
-            elif category == "TV":
-                if debug:
-                    console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
-
-                params = {
-                    "api_key": TMDB_API_KEY,
-                    "query": filename,
-                    "language": "en-US",
-                    "include_adult": "true"
-                }
-
-                if search_year:
-                    params["first_air_date_year"] = search_year
-
-                response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
-                try:
-                    response.raise_for_status()
-                    search_results = response.json()
-                except Exception:
-                    console.print(f"[bold red]Failed with primary TV search: {response.status_code}[/bold red]")
-
-            if debug:
-                console.print(f"[yellow]TMDB search results (primary): {json.dumps(search_results.get('results', [])[:4], indent=2)}[/yellow]")
-
-            # Check if results were found
-            results = search_results.get('results', [])
-            if results:
-                # Filter results by year if search_year is provided
-                if search_year:
-                    def get_result_year(result):
-                        return int((result.get('release_date') or result.get('first_air_date') or '0000')[:4] or 0)
-                    filtered_results = [
-                        r for r in results
-                        if abs(get_result_year(r) - int(search_year)) <= 2
-                    ]
-                    limited_results = (filtered_results if filtered_results else results)[:5]
-                else:
-                    limited_results = results[:5]
-
-                if len(limited_results) == 1:
-                    tmdb_id = int(limited_results[0]['id'])
-                    return tmdb_id, category
-                elif len(limited_results) > 1:
-                    filename_norm = await normalize_title(filename)
-                    secondary_norm = await normalize_title(secondary_title) if secondary_title else None
-                    search_year_int = int(search_year) if search_year else 0
+    async def search_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
+        search_results = {"results": []}
+        original_category = category
+        if new_category:
+            category = new_category
+        else:
+            category = original_category
+        if final_attempt is None:
+            final_attempt = False
+        if attempted is None:
+            attempted = 0
+        if attempted:
+            await asyncio.sleep(1)  # Whoa baby, slow down
+        async with httpx.AsyncClient() as client:
+            try:
+                # Primary search attempt with year
+                if category == "MOVIE":
                     if debug:
-                        console.print(f"[yellow]Multiple results found for {filename} ({search_year})[/yellow]")
+                        console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
-                    # Find all exact matches (title and year)
-                    exact_matches = []
-                    for r in limited_results:
-                        result_title = await normalize_title(r.get('title'))
-                        original_title = await normalize_title(r.get('original_title', ''))
-                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
-                        # Only count as exact match if both years are present and non-zero
-                        if secondary_norm and (
-                            secondary_norm == original_title
-                            and search_year_int > 0
-                            and result_year > 0
-                            and result_year == search_year_int
-                            or result_year == search_year_int + 1
-                        ):
-                            exact_matches.append(r)
+                    params = {
+                        "api_key": TMDB_API_KEY,
+                        "query": filename,
+                        "language": "en-US",
+                        "include_adult": "true"
+                    }
 
-                        elif (
-                            filename_norm == result_title
-                            and search_year_int > 0
-                            and result_year > 0
-                            and result_year == search_year_int
-                            or result_year == search_year_int + 1
-                        ):
-                            exact_matches.append(r)
+                    if search_year:
+                        params["year"] = search_year
 
-                    if len(exact_matches) == 1:
-                        tmdb_id = int(exact_matches[0]['id'])
-                        return tmdb_id, category
+                    response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
+                    try:
+                        response.raise_for_status()
+                        search_results = response.json()
+                    except Exception:
+                        console.print(f"[bold red]Failure with primary movie search: {response.status_code}[/bold red]")
 
-                    # If no exact matches, calculate similarity for all results and sort them
-                    results_with_similarity = []
-                    for r in limited_results:
-                        result_title = await normalize_title(r.get('title'))
-                        original_title = await normalize_title(r.get('original_title', ''))
-                        similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
-                        if secondary_norm is not None:
-                            original_similarity = SequenceMatcher(None, secondary_norm, original_title).ratio()
-                        else:
-                            original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
+                elif category == "TV":
+                    if debug:
+                        console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
-                        result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+                    params = {
+                        "api_key": TMDB_API_KEY,
+                        "query": filename,
+                        "language": "en-US",
+                        "include_adult": "true"
+                    }
 
-                        # Boost similarity if original title matches
-                        if original_similarity >= 1.0 and search_year_int > 0 and result_year > 0:
-                            if result_year == search_year_int:
-                                similarity += 0.1
-                            elif result_year == search_year_int + 1:
-                                similarity += 0.1
+                    if search_year:
+                        params["first_air_date_year"] = search_year
 
-                        # Boost similarity if titles are exact AND years match
-                        if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
-                            if result_year == search_year_int:
-                                # Full boost for exact year match
-                                similarity += 0.1
-                            elif result_year == search_year_int + 1:
-                                # Boost when result year is +1 against search year (handles tmdb/imdb differences)
-                                similarity += 0.1
+                    response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
+                    try:
+                        response.raise_for_status()
+                        search_results = response.json()
+                    except Exception:
+                        console.print(f"[bold red]Failed with primary TV search: {response.status_code}[/bold red]")
 
-                        results_with_similarity.append((r, similarity))
+                if debug:
+                    console.print(f"[yellow]TMDB search results (primary): {json.dumps(search_results.get('results', [])[:4], indent=2)}[/yellow]")
 
-                    # Sort by similarity (highest first)
-                    results_with_similarity.sort(key=lambda x: x[1], reverse=True)
-                    sorted_results = [r[0] for r in results_with_similarity]
-
-                    results_with_similarity.sort(key=lambda x: x[1], reverse=True)
-
-                    # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
-                    best_similarity = results_with_similarity[0][1]
-                    if best_similarity >= 0.90:
-                        # Filter out results with similarity < 0.75
-                        filtered_results_with_similarity = [
-                            (result, sim) for result, sim in results_with_similarity
-                            if sim >= 0.75
+                # Check if results were found
+                results = search_results.get('results', [])
+                if results:
+                    # Filter results by year if search_year is provided
+                    if search_year:
+                        def get_result_year(result):
+                            return int((result.get('release_date') or result.get('first_air_date') or '0000')[:4] or 0)
+                        filtered_results = [
+                            r for r in results
+                            if abs(get_result_year(r) - int(search_year)) <= 2
                         ]
-                        results_with_similarity = filtered_results_with_similarity
-                        sorted_results = [r[0] for r in results_with_similarity]
-
-                        if debug:
-                            console.print(f"[yellow]Filtered out low similarity results (< 0.70) since best match has {best_similarity:.2f} similarity[/yellow]")
+                        limited_results = (filtered_results if filtered_results else results)[:15]
                     else:
+                        limited_results = results[:5]
+
+                    if len(limited_results) == 1:
+                        tmdb_id = int(limited_results[0]['id'])
+                        return tmdb_id, category
+                    elif len(limited_results) > 1:
+                        filename_norm = await normalize_title(filename)
+                        secondary_norm = await normalize_title(secondary_title) if secondary_title else None
+                        search_year_int = int(search_year) if search_year else 0
+
+                        # Find all exact matches (title and year)
+                        exact_matches = []
+                        for r in limited_results:
+                            result_title = await normalize_title(r.get('title'))
+                            original_title = await normalize_title(r.get('original_title', ''))
+                            result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+                            # Only count as exact match if both years are present and non-zero
+                            if secondary_norm and (
+                                secondary_norm == original_title
+                                and search_year_int > 0
+                                and result_year > 0
+                                and result_year == search_year_int
+                                or result_year == search_year_int + 1
+                            ):
+                                exact_matches.append(r)
+
+                            elif (
+                                filename_norm == result_title
+                                and search_year_int > 0
+                                and result_year > 0
+                                and result_year == search_year_int
+                                or result_year == search_year_int + 1
+                            ):
+                                exact_matches.append(r)
+
+                        if len(exact_matches) == 1:
+                            tmdb_id = int(exact_matches[0]['id'])
+                            return tmdb_id, category
+
+                        # If no exact matches, calculate similarity for all results and sort them
+                        results_with_similarity = []
+                        for r in limited_results:
+                            result_title = await normalize_title(r.get('title'))
+                            original_title = await normalize_title(r.get('original_title', ''))
+                            similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
+                            if secondary_norm is not None:
+                                original_similarity = SequenceMatcher(None, secondary_norm, original_title).ratio()
+                            else:
+                                original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
+
+                            result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
+
+                            # Boost similarity if original title matches
+                            if original_similarity >= 1.0 and search_year_int > 0 and result_year > 0:
+                                if result_year == search_year_int:
+                                    similarity += 0.1
+                                elif result_year == search_year_int + 1:
+                                    similarity += 0.1
+
+                            # Boost similarity if titles are exact AND years match
+                            if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
+                                if result_year == search_year_int:
+                                    # Full boost for exact year match
+                                    similarity += 0.1
+                                elif result_year == search_year_int + 1:
+                                    # Boost when result year is +1 against search year (handles tmdb/imdb differences)
+                                    similarity += 0.1
+
+                            results_with_similarity.append((r, similarity))
+
+                        # Sort by similarity (highest first)
+                        results_with_similarity.sort(key=lambda x: x[1], reverse=True)
                         sorted_results = [r[0] for r in results_with_similarity]
 
-                    # Check if the best match is significantly better than others
-                    best_similarity = results_with_similarity[0][1]
-                    similarity_threshold = 0.85
+                        results_with_similarity.sort(key=lambda x: x[1], reverse=True)
 
-                    if best_similarity >= similarity_threshold:
-                        # Check that no other result is close to the best match
-                        second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
+                        # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
+                        best_similarity = results_with_similarity[0][1]
+                        if best_similarity >= 0.90:
+                            # Filter out results with similarity < 0.75
+                            filtered_results_with_similarity = [
+                                (result, sim) for result, sim in results_with_similarity
+                                if sim >= 0.75
+                            ]
+                            results_with_similarity = filtered_results_with_similarity
+                            sorted_results = [r[0] for r in results_with_similarity]
 
-                        if best_similarity - second_best >= 0.10:
                             if debug:
-                                console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f})[/green]")
+                                console.print(f"[yellow]Filtered out low similarity results (< 0.70) since best match has {best_similarity:.2f} similarity[/yellow]")
+                        else:
+                            sorted_results = [r[0] for r in results_with_similarity]
+
+                        # Check if the best match is significantly better than others
+                        best_similarity = results_with_similarity[0][1]
+                        similarity_threshold = 0.75
+
+                        if best_similarity >= similarity_threshold:
+                            # Check that no other result is close to the best match
+                            second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
+
+                            if best_similarity - second_best >= 0.10:
+                                if debug:
+                                    console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f})[/green]")
+                                tmdb_id = int(sorted_results[0]['id'])
+                                return tmdb_id, category
+
+                        if unattended:
                             tmdb_id = int(sorted_results[0]['id'])
                             return tmdb_id, category
 
-                    if unattended:
-                        tmdb_id = int(sorted_results[0]['id'])
-                        return tmdb_id, category
-
-                    # Show sorted results to user
-                    console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
-                    if category == "MOVIE":
-                        tmdb_url = "https://www.themoviedb.org/movie/"
-                    else:
-                        tmdb_url = "https://www.themoviedb.org/tv/"
-
-                    for idx, result in enumerate(sorted_results):
-                        title = result.get('title') or result.get('name', '')
-                        year = result.get('release_date', result.get('first_air_date', ''))[:4]
-                        overview = result.get('overview', '')
-                        similarity_score = results_with_similarity[idx][1]
-
-                        console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title}[/bold] ({year}) [yellow]ID:[/yellow] {tmdb_url}{result['id']} [dim](similarity: {similarity_score:.2f})[/dim]")
-                        if overview:
-                            console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
+                        # Show sorted results to user
                         console.print()
+                        console.print("[bold yellow]Multiple TMDb results found. Please select the correct entry:[/bold yellow]")
+                        if category == "MOVIE":
+                            tmdb_url = "https://www.themoviedb.org/movie/"
+                        else:
+                            tmdb_url = "https://www.themoviedb.org/tv/"
 
-                    selection = None
-                    while True:
-                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual TMDb ID (tv/12345 or movie/12345): ")
-                        try:
-                            # Check if it's a manual TMDb ID entry
-                            if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
-                                try:
-                                    parsed_category, parsed_tmdb_id = parser.parse_tmdb_id(selection, category)
-                                    if parsed_tmdb_id and parsed_tmdb_id != 0:
-                                        console.print(f"[green]Using manual TMDb ID: {parsed_tmdb_id} and category: {parsed_category}[/green]")
-                                        return int(parsed_tmdb_id), parsed_category
-                                    else:
-                                        console.print("[bold red]Invalid TMDb ID format. Please try again.[/bold red]")
+                        for idx, result in enumerate(sorted_results):
+                            title = result.get('title') or result.get('name', '')
+                            year = result.get('release_date', result.get('first_air_date', ''))[:4]
+                            overview = result.get('overview', '')
+                            similarity_score = results_with_similarity[idx][1]
+
+                            console.print(f"[cyan]{idx+1}.[/cyan] [bold]{title}[/bold] ({year}) [yellow]ID:[/yellow] {tmdb_url}{result['id']} [dim](similarity: {similarity_score:.2f})[/dim]")
+                            if overview:
+                                console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
+                            console.print()
+
+                        selection = None
+                        while True:
+                            console.print("Enter the number of the correct entry, or manual TMDb ID (tv/12345 or movie/12345):")
+                            selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                            try:
+                                # Check if it's a manual TMDb ID entry
+                                if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
+                                    try:
+                                        parsed_category, parsed_tmdb_id = parser.parse_tmdb_id(selection, category)
+                                        if parsed_tmdb_id and parsed_tmdb_id != 0:
+                                            console.print(f"[green]Using manual TMDb ID: {parsed_tmdb_id} and category: {parsed_category}[/green]")
+                                            return int(parsed_tmdb_id), parsed_category
+                                        else:
+                                            console.print("[bold red]Invalid TMDb ID format. Please try again.[/bold red]")
+                                            continue
+                                    except Exception as e:
+                                        console.print(f"[bold red]Error parsing TMDb ID: {e}. Please try again.[/bold red]")
                                         continue
-                                except Exception as e:
-                                    console.print(f"[bold red]Error parsing TMDb ID: {e}. Please try again.[/bold red]")
-                                    continue
 
-                            # Handle numeric selection
-                            selection_int = int(selection)
-                            if 1 <= selection_int <= len(sorted_results):
-                                tmdb_id = int(sorted_results[selection_int - 1]['id'])
-                                return tmdb_id, category
-                            elif selection_int == 0:
-                                console.print("[bold red]No valid selection made.[/bold red]")
-                                return 0, category
-                            else:
-                                console.print("[bold red]Selection out of range. Please try again.[/bold red]")
-                        except ValueError:
-                            console.print("[bold red]Invalid input. Please enter a number or TMDb ID (tv/12345 or movie/12345).[/bold red]")
+                                # Handle numeric selection
+                                selection_int = int(selection)
+                                if 1 <= selection_int <= len(sorted_results):
+                                    tmdb_id = int(sorted_results[selection_int - 1]['id'])
+                                    return tmdb_id, category
+                                else:
+                                    console.print("[bold red]Selection out of range. Please try again.[/bold red]")
+                            except ValueError:
+                                console.print("[bold red]Invalid input. Please enter a number or TMDb ID (tv/12345 or movie/12345).[/bold red]")
 
-            # If no results and we have a secondary title, try searching with that
-            if not search_results.get('results') and secondary_title and attempted < 3:
-                console.print(f"[yellow]No results found for primary title. Trying secondary title: {secondary_title}[/yellow]")
-                tmdb_id, category = await get_tmdb_id(
-                    secondary_title,
-                    search_year,
-                    category,
-                    untouched_filename,
-                    attempted + 1,
-                    debug=debug,
-                    secondary_title=secondary_title
-                )
+            except Exception:
+                search_results = {"results": []}  # Reset search_results on exception
 
-                if tmdb_id != 0:
-                    return tmdb_id, category
+    # If we have a secondary title, try searching with that
+    if secondary_title:
+        if search_year and search_year.isdigit() and int(search_year) > 0:
+            search_year = str(int(search_year) + 1)
+        else:
+            search_year = None
+        if debug:
+            console.print(f"[yellow]Trying secondary title: {secondary_title}[/yellow]")
+        result = await search_tmdb_id(
+            secondary_title,
+            search_year,
+            category,
+            untouched_filename,
+            debug=debug,
+            secondary_title=secondary_title,
+            path=path,
+            unattended=unattended
+        )
+        if result and result != (0, category):
+            return result
 
-        except Exception as e:
-            console.print(f"[bold red]TMDb search error:[/bold red] {e}")
-            search_results = {"results": []}  # Reset search_results on exception
+    # Try searching with the primary filename
+    if debug:
+        console.print(f"[yellow]Trying primary filename: {filename}[/yellow]")
+    if not search_results.get('results'):
+        result = await search_tmdb_id(
+            filename,
+            search_year,
+            category,
+            untouched_filename,
+            debug=debug,
+            secondary_title=secondary_title,
+            path=path,
+            unattended=unattended
+        )
+        if result and result != (0, category):
+            return result
 
-        # Secondary attempt: Try searching with year + 1 if search_year is provided
+    # Try searching with year + 1 if search_year is provided
+    if not search_results.get('results'):
         if search_year and search_year.isdigit() and int(search_year) > 0:
             imdb_year = int(search_year) + 1
             if debug:
                 console.print("[yellow]Retrying with year +1...[/yellow]")
-            return await get_tmdb_id(filename, imdb_year, category, untouched_filename, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+            result = await search_tmdb_id(filename, imdb_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+            if result and result != (0, category):
+                return result
 
-        # If still no match, attempt alternative category switch
-        if attempted < 1:
-            new_category = "TV" if category == "MOVIE" else "MOVIE"
+    # Try switching category
+    if not search_results.get('results'):
+        new_category = "TV" if category == "MOVIE" else "MOVIE"
+        if debug:
+            console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
+        result = await search_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category, unattended=unattended)
+        if result and result != (0, category):
+            return result
+
+    # try anime name parsing
+    if not search_results.get('results'):
+        try:
+            parsed_title = anitopy.parse(
+                guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
+            )['anime_title']
             if debug:
-                console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
-            return await get_tmdb_id(filename, search_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, new_category=new_category, unattended=unattended)
+                console.print(f"[bold yellow]Trying parsed anime title: {parsed_title}[/bold yellow]")
+            result = await search_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+            if result and result != (0, category):
+                return result
+        except KeyError:
+            console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
+            search_results = {"results": []}
 
-        # try animne name parsing
-        if attempted == 1:
-            try:
-                parsed_title = anitopy.parse(
-                    guessit(untouched_filename, {"excludes": ["country", "language"]})['title']
-                )['anime_title']
+    # Try with less words in the title
+    if not search_results.get('results'):
+        try:
+            words = filename.split()
+            if len(words) >= 2:
+                title = ' '.join(words[:-1])
                 if debug:
-                    console.print(f"[bold yellow]Trying parsed title: {parsed_title}[/bold yellow]")
-                return await get_tmdb_id(parsed_title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
-            except KeyError:
-                console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
+                    console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
+                result = await search_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+                if result and result != (0, category):
+                    return result
+        except Exception as e:
+            console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
+            search_results = {"results": []}
 
-        # lets try with less words in the title
-        if attempted >= 1 and attempted <= 2 and path:
-            try:
-                words = filename.split()
-                if len(words) >= 2:
-                    title = ' '.join(words[:-1])
-                    if debug:
-                        console.print(f"[bold yellow]Trying reduced name: {title}[/bold yellow]")
-                    return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
-            except Exception as e:
-                console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
-                search_results = {"results": []}
+    # Try with even less words
+    if not search_results.get('results'):
+        try:
+            words = filename.split()
+            if len(words) >= 3:
+                title = ' '.join(words[:-2])
+                if debug:
+                    console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
+                result = await search_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+                if result and result != (0, category):
+                    return result
+        except Exception as e:
+            console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
+            search_results = {"results": []}
 
-        # try with even less words
-        if attempted > 2 and path and not final_attempt:
-            try:
-                words = filename.split()
-                if len(words) >= 3:
-                    title = ' '.join(words[:-2])
-                    if debug:
-                        console.print(f"[bold yellow]Trying further reduced name: {title}[/bold yellow]")
-                    return await get_tmdb_id(title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, final_attempt=True, unattended=unattended)
-            except Exception as e:
-                console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
-                search_results = {"results": []}
+    # No match found, prompt user if in CLI mode
+    console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
 
-        # No match found, prompt user if in CLI mode
-        console.print("[bold red]Unable to find TMDb match[/bold red]")
+    tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+    category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
-        tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
-        category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
-
-        return tmdb_id, category
+    return tmdb_id, category
 
 
 async def tmdb_other_meta(
