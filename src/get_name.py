@@ -223,23 +223,64 @@ async def extract_title_and_year(meta, filename):
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
     type_pattern = r'\b(WEBDL|BluRay|REMUX|HDRip|DVDRip|Blu-Ray|Web-DL|webrip|web-rip|HDDVD)\b'
-    year_match = re.search(year_pattern, folder_name)
-    res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
-    type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
 
-    indices = []
-    if year_match:
-        indices.append(('year', year_match.start(), year_match.group()))
-    if res_match:
-        indices.append(('res', res_match.start(), res_match.group()))
-    if type_match:
-        indices.append(('type', type_match.start(), type_match.group()))
+    # Check for the specific pattern: year.year (e.g., "1970.2014")
+    double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
+    double_year_match = re.search(double_year_pattern, folder_name)
+
+    if double_year_match:
+        full_match = double_year_match.group(0)
+        years = full_match.split('.')
+        first_year = years[0]
+        second_year = years[1]
+
+        if meta['debug']:
+            console.print(f"[cyan]Found double year pattern: {full_match}, using {second_year} as year[/cyan]")
+
+        modified_folder_name = folder_name.replace(full_match, first_year)
+        year_match = None
+        res_match = re.search(res_pattern, modified_folder_name, re.IGNORECASE)
+        type_match = re.search(type_pattern, modified_folder_name, re.IGNORECASE)
+
+        indices = [('year', double_year_match.end(), second_year)]
+        if res_match:
+            indices.append(('res', res_match.start(), res_match.group()))
+        if type_match:
+            indices.append(('type', type_match.start(), type_match.group()))
+
+        folder_name_for_title = modified_folder_name
+        actual_year = second_year
+
+    else:
+        year_match = re.search(year_pattern, folder_name)
+        res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
+        type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
+
+        indices = []
+        if year_match:
+            indices.append(('year', year_match.start(), year_match.group()))
+        if res_match:
+            indices.append(('res', res_match.start(), res_match.group()))
+        if type_match:
+            indices.append(('type', type_match.start(), type_match.group()))
+
+        folder_name_for_title = folder_name
+        actual_year = year_match.group() if year_match else None
 
     if indices:
         indices.sort(key=lambda x: x[1])
         first_type, first_index, first_value = indices[0]
-        title_part = folder_name[:first_index]
-        title_part = re.sub(r'[\.\-_ \(\[\{]+$', '', title_part)
+        title_part = folder_name_for_title[:first_index]
+        title_part = re.sub(r'[\.\-_ ]+$', '', title_part)
+        # Handle unmatched opening parenthesis
+        if title_part.count('(') > title_part.count(')'):
+            paren_pos = title_part.rfind('(')
+            content_after_paren = folder_name[paren_pos + 1:first_index].strip()
+
+            if content_after_paren:
+                secondary_title = content_after_paren
+
+            title_part = title_part[:paren_pos].rstrip()
     else:
         title_part = folder_name
 
@@ -280,12 +321,7 @@ async def extract_title_and_year(meta, filename):
     filename = await multi_replace(title_part, replacements)
     filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
     if filename:
-        found_year = None
-        for idx_type, idx_pos, idx_value in indices:
-            if idx_type == 'year':
-                found_year = idx_value
-                break
-        return filename, None, found_year
+        return filename, secondary_title, actual_year
 
     # If no pattern match works but there's still a year in the filename, extract it
     year_match = re.search(r'(?<!\d)(19|20)\d{2}(?!\d)', basename)
