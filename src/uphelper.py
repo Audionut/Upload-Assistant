@@ -162,10 +162,10 @@ class UploadHelper:
                     secondary_title = secondary_title.replace('&', 'and').replace('  ', ' ').strip()
                 if regex_title and title:
                     similarity = SequenceMatcher(None, str(regex_title).lower(), str(title).lower()).ratio()
-                    if similarity < 0.90:
+                    if similarity < 0.80:
                         if secondary_title:
                             similarity_secondary = SequenceMatcher(None, str(secondary_title).lower(), str(title).lower()).ratio()
-                            if similarity_secondary < 0.90:
+                            if similarity_secondary < 0.80:
                                 console.print()
                                 console.print("path: ", meta['path'])
                                 console.print()
@@ -175,7 +175,7 @@ class UploadHelper:
                                 return True
                         if original_title:
                             original_similarity = SequenceMatcher(None, str(original_title).lower(), str(regex_title).lower()).ratio()
-                            if original_similarity < 0.90:
+                            if original_similarity < 0.80:
                                 console.print()
                                 console.print("path: ", meta['path'])
                                 console.print()
@@ -209,7 +209,7 @@ class UploadHelper:
             else:
                 console.print("path: ", meta['path'])
                 console.print()
-                console.print("[bold red]Filename searching was required, double check the database information.[/bold red]")
+                console.print("[bold red]Double check the database information.[/bold red]")
                 confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
 
         return confirm

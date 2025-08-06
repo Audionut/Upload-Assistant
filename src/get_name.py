@@ -212,6 +212,8 @@ async def extract_title_and_year(meta, filename):
             return title, None, year
 
     folder_name = os.path.basename(meta['uuid']) if meta['uuid'] else ""
+    if meta['debug']:
+        console.print(f"[cyan]Extracting title and year from folder name: {folder_name}[/cyan]")
     # lets do some subsplease handling
     if 'subsplease' in folder_name.lower():
         parsed_title = anitopy.parse(
@@ -222,7 +224,7 @@ async def extract_title_and_year(meta, filename):
 
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
-    type_pattern = r'\b(WEBDL|BluRay|REMUX|HDRip|DVDRip|Blu-Ray|Web-DL|webrip|web-rip|HDDVD)\b'
+    type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI)(?=[._\-\s]|$)'
 
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
@@ -319,7 +321,22 @@ async def extract_title_and_year(meta, filename):
     }
     filename = re.sub(r'\s+', ' ', filename)
     filename = await multi_replace(title_part, replacements)
-    filename = re.sub(r'\s+[A-Z]{2}$', '', filename.strip())
+
+    if filename:
+        # Look for content in parentheses
+        bracket_pattern = r'\s*\(([^)]+)\)\s*'
+        bracket_match = re.search(bracket_pattern, filename)
+
+        if bracket_match:
+            bracket_content = bracket_match.group(1).strip()
+
+            # Only add to secondary_title if we don't already have one
+            if not secondary_title and bracket_content:
+                secondary_title = bracket_content
+
+            filename = re.sub(bracket_pattern, ' ', filename)
+            filename = re.sub(r'\s+', ' ', filename).strip()
+
     if filename:
         return filename, secondary_title, actual_year
 

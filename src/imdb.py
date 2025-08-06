@@ -479,6 +479,16 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         if attempted <= 3 and filename:
             try:
                 words = filename.split()
+                extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+                words_lower = [word.lower() for word in words]
+
+                for ext in extensions:
+                    if ext in words_lower:
+                        ext_index = words_lower.index(ext)
+                        words.pop(ext_index)
+                        words_lower.pop(ext_index)
+                        break
+
                 if len(words) > 1:
                     reduced_title = ' '.join(words[:-1])
                     if debug:
@@ -491,6 +501,16 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         if attempted > 3 and filename and not final_attempt:
             try:
                 words = filename.split()
+                extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+                words_lower = [word.lower() for word in words]
+
+                for ext in extensions:
+                    if ext in words_lower:
+                        ext_index = words_lower.index(ext)
+                        words.pop(ext_index)
+                        words_lower.pop(ext_index)
+                        break
+
                 if len(words) > 2:
                     further_reduced_title = ' '.join(words[:-2])
                     if debug:

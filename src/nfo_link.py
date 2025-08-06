@@ -141,6 +141,7 @@ async def nfo_link(meta):
         # Remove or replace invalid characters: < > : " | ? * \ /
         movie_name = re.sub(r'[<>:"|?*\\/]', '', movie_name)
         if not meta['debug']:
+            meta['linking_failed'] = False
             link_dir = await linking(meta, movie_name, year)
 
             uuid = meta.get('uuid')
@@ -155,6 +156,8 @@ async def nfo_link(meta):
             if link_dir is not None and not meta.get('linking_failed', False):
                 nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
             else:
+                if meta.get('linking_failed', False):
+                    console.print("[red]Linking failed, saving NFO in data/nfos[/red]")
                 nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
                 os.makedirs(nfo_dir, exist_ok=True)
                 nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
@@ -205,8 +208,7 @@ async def linking(meta, movie_name, year):
                 if meta.get('debug'):
                     console.print(f"[green]Created symlink: {target_file}")
 
-            except subprocess.CalledProcessError as e:
-                console.print(f"[red]Failed to create file symlink: {e}")
+            except subprocess.CalledProcessError:
                 meta['linking_failed'] = True
 
         else:
@@ -232,8 +234,7 @@ async def linking(meta, movie_name, year):
                         if meta.get('debug'):
                             console.print(f"[green]Created symlink: {file}")
 
-                    except subprocess.CalledProcessError as e:
-                        console.print(f"[red]Failed to create symlink for {file}: {e}")
+                    except subprocess.CalledProcessError:
                         meta['linking_failed'] = True
 
         console.print(f"[green]Movie folder created: {target_dir}")

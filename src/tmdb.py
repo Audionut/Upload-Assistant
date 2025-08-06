@@ -12,6 +12,7 @@ import requests
 import json
 import httpx
 import asyncio
+import sys
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -232,7 +233,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         ]
                         limited_results = (filtered_results if filtered_results else results)[:15]
                     else:
-                        limited_results = results[:5]
+                        limited_results = results[:8]
 
                     if len(limited_results) == 1:
                         tmdb_id = int(limited_results[0]['id'])
@@ -253,8 +254,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 secondary_norm == original_title
                                 and search_year_int > 0
                                 and result_year > 0
-                                and result_year == search_year_int
-                                or result_year == search_year_int + 1
+                                and (result_year == search_year_int or result_year == search_year_int + 1)
                             ):
                                 exact_matches.append(r)
 
@@ -262,8 +262,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 filename_norm == result_title
                                 and search_year_int > 0
                                 and result_year > 0
-                                and result_year == search_year_int
-                                or result_year == search_year_int + 1
+                                and (result_year == search_year_int or result_year == search_year_int + 1)
                             ):
                                 exact_matches.append(r)
 
@@ -271,8 +270,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 secondary_norm == result_title
                                 and search_year_int > 0
                                 and result_year > 0
-                                and result_year == search_year_int
-                                or result_year == search_year_int + 1
+                                and (result_year == search_year_int or result_year == search_year_int + 1)
                             ):
                                 exact_matches.append(r)
 
@@ -287,29 +285,34 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         for r in limited_results:
                             result_title = await normalize_title(r.get('title'))
                             original_title = await normalize_title(r.get('original_title', ''))
-                            similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
+
+                            # Calculate similarity for both main title and original title
+                            main_similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
+                            original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
+
+                            # Also calculate secondary title similarity if available
                             if secondary_norm is not None:
-                                original_similarity = SequenceMatcher(None, secondary_norm, original_title).ratio()
+                                secondary_main_sim = SequenceMatcher(None, secondary_norm, result_title).ratio()
+                                secondary_orig_sim = SequenceMatcher(None, secondary_norm, original_title).ratio()
+                                secondary_best = max(secondary_main_sim, secondary_orig_sim)
+                                similarity = (main_similarity * 0.25) + (original_similarity * 0.25) + (secondary_best * 0.5)
                             else:
-                                original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
+                                similarity = (main_similarity * 0.5) + (original_similarity * 0.5)
 
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
 
-                            # Boost similarity if original title matches
-                            if original_similarity >= 1.0 and search_year_int > 0 and result_year > 0:
-                                if result_year == search_year_int:
-                                    similarity += 0.05
-                                elif result_year == search_year_int + 1:
-                                    similarity += 0.05
+                            if debug:
+                                console.print(f"[cyan]ID {r['id']}: '{result_title}' vs '{filename_norm}'[/cyan]")
+                                console.print(f"[cyan]  Main similarity: {main_similarity:.3f}[/cyan]")
+                                console.print(f"[cyan]  Original similarity: {original_similarity:.3f}[/cyan]")
+                                console.print(f"[cyan]  Final similarity: {similarity:.3f}[/cyan]")
 
-                            # Boost similarity if titles are exact AND years match
+                            # Boost similarity if we have exact matches with year validation
                             if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
                                 if result_year == search_year_int:
-                                    # Full boost for exact year match
-                                    similarity += 0.1
+                                    similarity += 0.1  # Full boost for exact year match
                                 elif result_year == search_year_int + 1:
-                                    # Boost when result year is +1 against search year (handles tmdb/imdb differences)
-                                    similarity += 0.1
+                                    similarity += 0.1  # Boost for +1 year (handles TMDB/IMDb differences)
 
                             results_with_similarity.append((r, similarity))
 
@@ -317,9 +320,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         results_with_similarity.sort(key=lambda x: x[1], reverse=True)
                         sorted_results = [r[0] for r in results_with_similarity]
 
-                        results_with_similarity.sort(key=lambda x: x[1], reverse=True)
-
-                        # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.70)
+                        # Filter results: if we have high similarity matches (>= 0.90), hide low similarity ones (< 0.75)
                         best_similarity = results_with_similarity[0][1]
                         if best_similarity >= 0.90:
                             # Filter out results with similarity < 0.75
@@ -337,18 +338,70 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
                         # Check if the best match is significantly better than others
                         best_similarity = results_with_similarity[0][1]
-                        similarity_threshold = 0.75
+                        similarity_threshold = 0.70
 
                         if best_similarity >= similarity_threshold:
                             # Check that no other result is close to the best match
                             second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
+                            percentage_difference = (best_similarity - second_best) / best_similarity
 
-                            if best_similarity - second_best >= 0.10:
+                            if percentage_difference >= 0.15:  # 15% better than second place
                                 if debug:
-                                    console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f})[/green]")
+                                    console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f}, {percentage_difference:.1%} better than second)[/green]")
                                 tmdb_id = int(sorted_results[0]['id'])
                                 return tmdb_id, category
 
+                        # Check for "The" prefix handling
+                        if len(results_with_similarity) > 1:
+                            the_results = []
+                            non_the_results = []
+
+                            for result_tuple in results_with_similarity:
+                                result, similarity = result_tuple
+                                title = await normalize_title(result.get('title'))
+                                if title.startswith('the '):
+                                    the_results.append(result_tuple)
+                                else:
+                                    non_the_results.append(result_tuple)
+
+                            # If exactly one result starts with "The", check if similarity improves
+                            if len(the_results) == 1 and len(non_the_results) > 0:
+                                the_result, the_similarity = the_results[0]
+                                the_title = await normalize_title(the_result.get('title'))
+                                the_title_without_the = the_title[4:]
+                                new_similarity = SequenceMatcher(None, filename_norm, the_title_without_the).ratio()
+
+                                if debug:
+                                    console.print(f"[cyan]Checking 'The' prefix: '{the_title}' -> '{the_title_without_the}'[/cyan]")
+                                    console.print(f"[cyan]Original similarity: {the_similarity:.3f}, New similarity: {new_similarity:.3f}[/cyan]")
+
+                                # If similarity improves significantly, update and resort
+                                if new_similarity > the_similarity + 0.05:
+                                    if debug:
+                                        console.print("[green]'The' prefix removal improved similarity, updating results[/green]")
+
+                                    updated_results = []
+                                    for result_tuple in results_with_similarity:
+                                        result, similarity = result_tuple
+                                        if result['id'] == the_result['id']:
+                                            updated_results.append((result, new_similarity))
+                                        else:
+                                            updated_results.append(result_tuple)
+
+                                    # Resort by similarity
+                                    updated_results.sort(key=lambda x: x[1], reverse=True)
+                                    results_with_similarity = updated_results
+                                    sorted_results = [r[0] for r in results_with_similarity]
+                                    best_similarity = results_with_similarity[0][1]
+                                    second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
+
+                                    if best_similarity >= 0.75 and best_similarity - second_best >= 0.10:
+                                        if debug:
+                                            console.print(f"[green]Auto-selecting 'The' prefixed match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f})[/green]")
+                                        tmdb_id = int(sorted_results[0]['id'])
+                                        return tmdb_id, category
+
+                        # Put unattended handling here, since it will work based on the sorted results
                         if unattended:
                             tmdb_id = int(sorted_results[0]['id'])
                             return tmdb_id, category
@@ -390,6 +443,9 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                     except Exception as e:
                                         console.print(f"[bold red]Error parsing TMDb ID: {e}. Please try again.[/bold red]")
                                         continue
+                                    except KeyboardInterrupt:
+                                        console.print("\n[bold red]Search cancelled by user.[/bold red]")
+                                        sys.exit(0)
 
                                 # Handle numeric selection
                                 selection_int = int(selection)
@@ -400,6 +456,9 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                     console.print("[bold red]Selection out of range. Please try again.[/bold red]")
                             except ValueError:
                                 console.print("[bold red]Invalid input. Please enter a number or TMDb ID (tv/12345 or movie/12345).[/bold red]")
+                            except KeyboardInterrupt:
+                                console.print("\n[bold red]Search cancelled by user.[/bold red]")
+                                sys.exit(0)
 
             except Exception:
                 search_results = {"results": []}  # Reset search_results on exception
@@ -480,6 +539,16 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     if not search_results.get('results'):
         try:
             words = filename.split()
+            extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+            words_lower = [word.lower() for word in words]
+
+            for ext in extensions:
+                if ext in words_lower:
+                    ext_index = words_lower.index(ext)
+                    words.pop(ext_index)
+                    words_lower.pop(ext_index)
+                    break
+
             if len(words) >= 2:
                 title = ' '.join(words[:-1])
                 if debug:
@@ -495,6 +564,16 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     if not search_results.get('results'):
         try:
             words = filename.split()
+            extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+            words_lower = [word.lower() for word in words]
+
+            for ext in extensions:
+                if ext in words_lower:
+                    ext_index = words_lower.index(ext)
+                    words.pop(ext_index)
+                    words_lower.pop(ext_index)
+                    break
+
             if len(words) >= 3:
                 title = ' '.join(words[:-2])
                 if debug:
