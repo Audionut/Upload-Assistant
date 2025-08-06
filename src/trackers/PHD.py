@@ -5,6 +5,9 @@ import os
 import re
 import requests
 import unicodedata
+import asyncio
+import hashlib
+import bencodepy
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
@@ -325,91 +328,97 @@ class PHD(COMMON):
 
     async def upload(self, meta, disctype):
         lang_info = await self.get_lang(meta)
-        if await self.get_media_code(meta):
-            pass
-        else:
+        if not await self.get_media_code(meta):
             raise UploadException('no media code')
 
         await self.validate_credentials(meta)
         self.assign_media_properties(meta)
 
+        type_id = ''
         if self.category == 'MOVIE':
             type_id = '1'
         if self.category == 'TV':
             type_id = '2'
 
-        data1 = {}
+        final_message = ""
 
-        data1.update({
-            '_token': self.auth_token,
-            'type_id': type_id,
-            'movie_id': self.media_code,
-            'media_info': await self.get_file_info(meta),
-        })
+        try:
+            data1 = {
+                '_token': self.auth_token,
+                'type_id': type_id,
+                'movie_id': self.media_code,
+                'media_info': await self.get_file_info(meta),
+            }
 
-        if not meta.get('debug', False):
             await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-            upload_url = f"{self.base_url}/upload/{self.category.lower()}"
-
+            upload_url_step1 = f"{self.base_url}/upload/{self.category.lower()}"
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
+                response1 = self.session.post(upload_url_step1, data=data1, files=files, timeout=120, allow_redirects=False)
 
-                try:
-                    response = self.session.post(upload_url, data=data1, files=files, timeout=120)
+            if response1.status_code == 302 and 'Location' in response1.headers:
+                await asyncio.sleep(5)
+                redirect_url = response1.headers['Location']
 
-                    if response.status_code == 302:
-                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, announce_url)
+                match = re.search(r'/(\d+)$', redirect_url)
+                if not match:
+                    raise UploadException(f"Não foi possível extrair o 'task_id' da URL de redirecionamento: {redirect_url}")
 
-                except requests.exceptions.RequestException as e:
-                    final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+                task_id = match.group(1)
 
-        data2 = {}
-        data2.update({
-            '_token': self.auth_token,
-            'info_hash': meta['infohash'],
-            'torrent_id': '',  # empty
-            'type_id': type_id,
-            'task_id': '',
-            'file_name': meta['name'],
-            'anon_upload': '',
-            'description': '',
-            'qqfile': '',  # empty
-            'screenshots[]': '',
-            'rip_type_id': '3',
-            'video_quality_id': '3',
-            'video_resolution': '',  # can be empty it seems
-            'movie_id': self.media_code,
-            'languages[]': lang_info.get('languages[]'),  # audio languages
-            'subtitles[]': lang_info.get('subtitles[]'),  # subtitles languages
-            'media_info': await self.get_file_info(meta),
-        })
+                with open(torrent_path, "rb") as f:
+                    torrent_data = bencodepy.decode(f.read())
+                    info = bencodepy.encode(torrent_data[b'info'])
+                    new_info_hash = hashlib.sha1(info).hexdigest()
 
-        if not meta.get('debug', False):
-            await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-            upload_url = ''
+                data2 = {
+                    '_token': self.auth_token,
+                    'info_hash': new_info_hash,
+                    'torrent_id': '',
+                    'type_id': type_id,
+                    'task_id': task_id,
+                    'file_name': meta.get('name'),
+                    'anon_upload': '',
+                    'description': '', # add later
+                    'qqfile': '',
+                    'screenshots[]': '684049', # placeholder, add img hosting
+                    'rip_type_id': '3',
+                    'video_quality_id': '3',
+                    'video_resolution': '',
+                    'movie_id': self.media_code,
+                    'languages[]': lang_info.get('languages[]'),
+                    'subtitles[]': lang_info.get('subtitles[]'),
+                    'media_info': await self.get_file_info(meta),
+                }
 
-            try:
-                response = self.session.post(upload_url, data=data2, timeout=120)
+                upload_url_step2 = redirect_url
+                response2 = self.session.post(upload_url_step2, data=data2, timeout=120)
 
-                if response.status_code == 302:
+                if response2.status_code in [200, 302]:
                     announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                    await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, announce_url)
-
+                    await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, upload_url_step2)
+                    final_message = f"[bold green]{meta['name']} foi enviado com sucesso para {self.tracker}[/bold green]"
                 else:
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    final_message = f"""[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red].
+                        f.write(response2.text)
+                    final_message = f"""[bold red]Falha na Etapa 2 do upload para {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
                                         [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
+            else:
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
+                with open(failure_path, "w", encoding="utf-8") as f:
+                    f.write(response1.text)
+                final_message = f"""[bold red]Falha na Etapa 1 do upload para {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
+                                    [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
 
-            except requests.exceptions.RequestException as e:
-                final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
-
-        if meta.get('debug', False):
-            console.print(data2)
-            final_message = 'Debug mode enabled, not uploading.'
+        except requests.exceptions.RequestException as e:
+            final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+        except UploadException as e:
+            final_message = f"[bold red]Erro de upload: {e}[/bold red]"
+        except Exception as e:
+            final_message = f"[bold red]Ocorreu um erro inesperado durante o upload para {self.tracker}: {e}[/bold red]"
 
         meta['tracker_status'][self.tracker]['status_message'] = final_message
 
