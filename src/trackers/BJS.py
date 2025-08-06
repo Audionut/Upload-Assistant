@@ -127,6 +127,7 @@ class BJS(COMMON):
             return "Outro"
 
     async def search_existing(self, meta, disctype):
+        self.cover = ''
         if meta.get('debug'):
             return []
 
@@ -611,7 +612,7 @@ class BJS(COMMON):
 
             cover_tmdb_url = f"https://image.tmdb.org/t/p/w500{cover_path}"
             try:
-                response = await self.session.get(cover_tmdb_url, timeout=120)
+                response = self.session.get(cover_tmdb_url, timeout=120)
                 response.raise_for_status()
                 image_bytes = response.content
                 filename = os.path.basename(cover_path)
@@ -843,6 +844,21 @@ class BJS(COMMON):
 
         return " / ".join(ordered_tags)
 
+    def get_credits(self, meta, role):
+        role_map = {
+            'director': ('directors', 'tmdb_directors'),
+            'creator': ('creators', 'tmdb_creators'),
+            'cast': ('stars', 'tmdb_cast'),
+        }
+
+        if role in role_map:
+            imdb_key, tmdb_key = role_map[role]
+            names = (meta.get('imdb_info', {}).get(imdb_key) or []) + (meta.get(tmdb_key) or [])
+            unique_names = list(dict.fromkeys(names))[:5]
+            return ", ".join(unique_names) if unique_names else "N/A"
+
+        return "N/A"
+
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
         await self.edit_desc(meta)
@@ -890,12 +906,12 @@ class BJS(COMMON):
         if self.category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('directors', [])[:5] or meta.get('tmdb_directors', [])[:5]))),
+                'diretor': self.get_credits(meta, 'director'),
             })
 
         if self.category == 'TV':
             data.update({
-                'diretor': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('creators', [])[:5])) or meta.get('tmdb_creators', [])[:5]),
+                'diretor': self.get_credits(meta, 'creator'),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': self.season,
                 'episode': self.episode if not self.is_tv_pack else '',
@@ -906,7 +922,7 @@ class BJS(COMMON):
             data.update({
                 'validimdb': 'yes',
                 'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                'elenco': ", ".join(list(dict.fromkeys(meta.get('imdb_info', {}).get('stars', [])[:5] or meta.get('tmdb_cast', [])[:5])))
+                'elenco': self.get_credits(meta, 'cast'),
             })
             if self.category == 'MOVIE':
                 data.update({
