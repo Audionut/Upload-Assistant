@@ -1503,7 +1503,7 @@ async def set_tmdb_metadata(meta, filename=None):
                     meta.update(tmdb_metadata)
                     if meta.get('retrieved_aka', None) is not None:
                         meta['aka'] = meta['retrieved_aka']
-                    return meta
+                    break
                 else:
                     error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
                     if meta['debug']:

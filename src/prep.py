@@ -628,7 +628,7 @@ class Prep():
 
         # we should have tmdb id one way or another, so lets get data if needed
         if int(meta['tmdb_id']) != 0:
-            meta = await set_tmdb_metadata(meta, filename)
+            await set_tmdb_metadata(meta, filename)
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
@@ -662,7 +662,7 @@ class Prep():
             meta['no_ids'] = filename_search
 
         if int(meta['tmdb_id']) != 0:
-            meta = await set_tmdb_metadata(meta, filename)
+            await set_tmdb_metadata(meta, filename)
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
