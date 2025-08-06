@@ -237,6 +237,14 @@ class PHD(COMMON):
         self.season = meta.get('season', '')
         self.episode = meta.get('episode', '')
 
+    def get_resolution(self, meta):
+        resolution = ''
+        if not meta.get('is_disc') == 'BDMV':
+            video_mi = meta['mediainfo']['media']['track'][1]
+            resolution = f"{video_mi['Width']}x{video_mi['Height']}"
+
+        return resolution
+
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
@@ -332,84 +340,90 @@ class PHD(COMMON):
 
         final_message = ""
 
-        try:
-            data1 = {
-                '_token': self.auth_token,
-                'type_id': type_id,
-                'movie_id': self.media_code,
-                'media_info': await self.get_file_info(meta),
+        data1 = {
+            '_token': self.auth_token,
+            'type_id': type_id,
+            'movie_id': self.media_code,
+            'media_info': await self.get_file_info(meta),
+        }
+
+        data2 = {
+            '_token': self.auth_token,
+            'torrent_id': '',
+            'type_id': type_id,
+            'file_name': meta.get('name'),
+            'anon_upload': '',  # add later
+            'description': '',  # add later
+            'qqfile': '',
+            'screenshots[]': '684049',  # placeholder, add img hosting later
+            'rip_type_id': '3',  # add later
+            'video_quality_id': '3',  # add later
+            'video_resolution': self.get_resolution(meta),  # not sure if necessary
+            'movie_id': self.media_code,
+            'languages[]': lang_info.get('languages[]'),
+            'subtitles[]': lang_info.get('subtitles[]'),
+            'media_info': await self.get_file_info(meta),
             }
+        if not meta.get('debug', False):
+            try:
+                await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+                upload_url_step1 = f"{self.base_url}/upload/{self.category.lower()}"
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-            await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-            upload_url_step1 = f"{self.base_url}/upload/{self.category.lower()}"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+                with open(torrent_path, 'rb') as torrent_file:
+                    files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
+                    response1 = self.session.post(upload_url_step1, data=data1, files=files, timeout=120, allow_redirects=False)
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                response1 = self.session.post(upload_url_step1, data=data1, files=files, timeout=120, allow_redirects=False)
+                if response1.status_code == 302 and 'Location' in response1.headers:
+                    await asyncio.sleep(5)
+                    redirect_url = response1.headers['Location']
 
-            if response1.status_code == 302 and 'Location' in response1.headers:
-                await asyncio.sleep(5)
-                redirect_url = response1.headers['Location']
+                    match = re.search(r'/(\d+)$', redirect_url)
+                    if not match:
+                        raise UploadException(f"Could not extract 'task_id' from redirect URL:{redirect_url}")
 
-                match = re.search(r'/(\d+)$', redirect_url)
-                if not match:
-                    raise UploadException(f"Could not extract 'task_id' from redirect URL:{redirect_url}")
+                    task_id = match.group(1)
 
-                task_id = match.group(1)
+                    with open(torrent_path, "rb") as f:
+                        torrent_data = bencodepy.decode(f.read())
+                        info = bencodepy.encode(torrent_data[b'info'])
+                        new_info_hash = hashlib.sha1(info).hexdigest()
 
-                with open(torrent_path, "rb") as f:
-                    torrent_data = bencodepy.decode(f.read())
-                    info = bencodepy.encode(torrent_data[b'info'])
-                    new_info_hash = hashlib.sha1(info).hexdigest()
+                    data2.update({
+                        'info_hash': new_info_hash,
+                        'task_id': task_id,
+                    })
+                    upload_url_step2 = redirect_url
+                    response2 = self.session.post(upload_url_step2, data=data2, timeout=120)
 
-                data2 = {
-                    '_token': self.auth_token,
-                    'info_hash': new_info_hash,
-                    'torrent_id': '',
-                    'type_id': type_id,
-                    'task_id': task_id,
-                    'file_name': meta.get('name'),
-                    'anon_upload': '',  # add later
-                    'description': '',  # add later
-                    'qqfile': '',
-                    'screenshots[]': '684049',  # placeholder, add img hosting later
-                    'rip_type_id': '3',  # add later
-                    'video_quality_id': '3',  # add later
-                    'video_resolution': '',  # not sure if necessary
-                    'movie_id': self.media_code,
-                    'languages[]': lang_info.get('languages[]'),
-                    'subtitles[]': lang_info.get('subtitles[]'),
-                    'media_info': await self.get_file_info(meta),
-                }
-
-                upload_url_step2 = redirect_url
-                response2 = self.session.post(upload_url_step2, data=data2, timeout=120)
-
-                if response2.status_code in [200, 302]:
-                    announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                    await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, upload_url_step2)
-                    final_message = f"[bold green]{meta['name']} was successfully sent to {self.tracker}[/bold green]"  # change to print the torrent url later
+                    if response2.status_code in [200, 302]:
+                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, upload_url_step2)
+                        final_message = f"[bold green]{meta['name']} was successfully sent to {self.tracker}[/bold green]"  # change to print the torrent url later
+                    else:
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
+                        with open(failure_path, "w", encoding="utf-8") as f:
+                            f.write(response2.text)
+                        final_message = f"""[bold red]Step 2 of upload failed to {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
+                                            [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
                 else:
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
-                        f.write(response2.text)
-                    final_message = f"""[bold red]Step 2 of upload failed to {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
+                        f.write(response1.text)
+                    final_message = f"""[bold red]Step 1 of upload failed to {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
                                         [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
-            else:
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
-                with open(failure_path, "w", encoding="utf-8") as f:
-                    f.write(response1.text)
-                final_message = f"""[bold red]Step 1 of upload failed to {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
-                                    [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
 
-        except requests.exceptions.RequestException as e:
-            final_message = f"[bold red]Connection error while uploading to {self.tracker}: {e}[/bold red]"
-        except UploadException as e:
-            final_message = f"[bold red]Upload error: {e}[/bold red]"
-        except Exception as e:
-            final_message = f"[bold red]An unexpected error occurred while uploading to {self.tracker}: {e}[/bold red]"
+            except requests.exceptions.RequestException as e:
+                final_message = f"[bold red]Connection error while uploading to {self.tracker}: {e}[/bold red]"
+            except UploadException as e:
+                final_message = f"[bold red]Upload error: {e}[/bold red]"
+            except Exception as e:
+                final_message = f"[bold red]An unexpected error occurred while uploading to {self.tracker}: {e}[/bold red]"
 
+        else:
+            console.print(data1)
+            console.print(data2)
+            final_message = 'Debug mode enabled, not uploading.'
         meta['tracker_status'][self.tracker]['status_message'] = final_message
 
     async def get_file_info(self, meta):
@@ -472,26 +486,4 @@ class PHD(COMMON):
             final_description = "\n".join(filter(None, description_parts))
             descfile.write(final_description)
 
-    def get_resolution(self, meta):
-        width, height = "", ""
 
-        if meta.get('is_disc') == 'BDMV':
-            resolution_str = meta.get('resolution', '')
-            try:
-                height_num = int(resolution_str.lower().replace('p', '').replace('i', ''))
-                height = str(height_num)
-
-                width_num = round((16 / 9) * height_num)
-                width = str(width_num)
-            except (ValueError, TypeError):
-                pass
-
-        else:
-            video_mi = meta['mediainfo']['media']['track'][1]
-            width = video_mi['Width']
-            height = video_mi['Height']
-
-        return {
-            'resolucaow': width,
-            'resolucaoh': height
-        }
