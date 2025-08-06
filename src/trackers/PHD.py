@@ -370,13 +370,13 @@ class PHD(COMMON):
                     'type_id': type_id,
                     'task_id': task_id,
                     'file_name': meta.get('name'),
-                    'anon_upload': '', # add later
-                    'description': '', # add later
+                    'anon_upload': '',  # add later
+                    'description': '',  # add later
                     'qqfile': '',
-                    'screenshots[]': '684049', # placeholder, add img hosting later
-                    'rip_type_id': '3', # add later
-                    'video_quality_id': '3', # add later
-                    'video_resolution': '', # not sure if necessary
+                    'screenshots[]': '684049',  # placeholder, add img hosting later
+                    'rip_type_id': '3',  # add later
+                    'video_quality_id': '3',  # add later
+                    'video_resolution': '',  # not sure if necessary
                     'movie_id': self.media_code,
                     'languages[]': lang_info.get('languages[]'),
                     'subtitles[]': lang_info.get('subtitles[]'),
