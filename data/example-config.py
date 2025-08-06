@@ -237,7 +237,7 @@ config = {
         "print_tracker_links": True,
 
         # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
-        # If not set, Emby linking will not be performed.
+        # If not set, Emby linking will not be performed. Symlinking only, linux not tested
         # path in quotes (double quotes for windows), e.g. "C:\\Emby\\Movies"
         "emby_dir": None,
 

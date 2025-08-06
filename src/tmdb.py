@@ -231,7 +231,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             r for r in results
                             if abs(get_result_year(r) - int(search_year)) <= 2
                         ]
-                        limited_results = (filtered_results if filtered_results else results)[:15]
+                        limited_results = (filtered_results if filtered_results else results)[:8]
                     else:
                         limited_results = results[:8]
 
@@ -318,7 +318,10 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 best_primary = max(main_similarity, original_similarity, translated_similarity)
                                 similarity = (best_primary * 0.75) + (secondary_best * 0.25)
                             else:
-                                similarity = (main_similarity * 0.4) + (original_similarity * 0.3) + (translated_similarity * 0.3)
+                                if translated_similarity == 0.0:
+                                    similarity = (main_similarity * 0.5) + (original_similarity * 0.5)
+                                else:
+                                    similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (translated_similarity * 0.4)
 
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
 
