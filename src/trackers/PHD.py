@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
+import asyncio
+import bencodepy
+import hashlib
 import os
 import re
 import requests
-import asyncio
-import hashlib
-import bencodepy
+import uuid
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
+from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
+from tqdm.asyncio import tqdm
+from urllib.parse import urlparse
 
 
 class PHD(COMMON):
@@ -311,7 +315,7 @@ class PHD(COMMON):
             '720p': '2',
         }
 
-        return keyword_map.get(resolution)
+        return keyword_map.get(resolution.lower())
 
     async def search_existing(self, meta, disctype):
         await self.validate_credentials(meta)
@@ -353,38 +357,42 @@ class PHD(COMMON):
 
         return bool(self.media_code)
 
+    async def get_cat_id(self, category_name):
+        category_id = {
+            'MOVIE': '1',
+            'TV': '2',
+        }.get(category_name, '0')
+        return category_id
+
     async def upload(self, meta, disctype):
         lang_info = await self.get_lang(meta)
-        if not await self.get_media_code(meta):
-            raise UploadException('no media code')  # improve message
-
         await self.validate_credentials(meta)
         self.assign_media_properties(meta)
-
-        type_id = ''
-        if self.category == 'MOVIE':
-            type_id = '1'
-        if self.category == 'TV':
-            type_id = '2'
+        if not await self.get_media_code(meta):
+            # maybe create a function to add the media to the database in the future
+            raise UploadException(f"This media ({self.imdb_id}) is not registered in {self.tracker}, please add it to the database by following this link: {self.base_url}/add/{self.category.lower()}")
 
         final_message = ""
 
+        # Uploading to the tracker works in 2 separate steps
+        # Step 1:
         data1 = {
             '_token': self.auth_token,
-            'type_id': type_id,
+            'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
         }
 
+        # After sending the first set of data we are redirected to a second page where we fill in the remaining data
+        # Step 2:
         data2 = {
             '_token': self.auth_token,
             'torrent_id': '',
-            'type_id': type_id,
+            'type_id': await self.get_cat_id(meta['category']),
             'file_name': meta.get('name'),
             'anon_upload': '',
-            'description': '',  # Couldn't find a way to properly handle the description while following the rules
-            'qqfile': '',  # I'm not sure what this does, it doesn't seem necessary
-            'screenshots[]': '684049',  # placeholder, add img hosting later
+            'description': '',  # Could not find a way to properly handle the description following the rules and supported formatting rules
+            'qqfile': '',
             'rip_type_id': self.get_rip_type(meta),
             'video_quality_id': self.get_video_quality(meta),
             'video_resolution': self.get_resolution(meta),
@@ -420,22 +428,27 @@ class PHD(COMMON):
 
                     task_id = match.group(1)
 
+                    # At this point Step 1 is completed
+
                     with open(torrent_path, "rb") as f:
                         torrent_data = bencodepy.decode(f.read())
                         info = bencodepy.encode(torrent_data[b'info'])
                         new_info_hash = hashlib.sha1(info).hexdigest()
 
+                    self.upload_url_step2 = redirect_url
+
+                    # The hash, task_id, and screenshot cannot be called until Step 1 is completed
                     data2.update({
                         'info_hash': new_info_hash,
                         'task_id': task_id,
+                        'screenshots[]': await self.get_screenshots(meta),
                     })
-                    upload_url_step2 = redirect_url
-                    response2 = self.session.post(upload_url_step2, data=data2, timeout=120)
+                    response2 = self.session.post(self.upload_url_step2, data=data2, timeout=120)
 
                     if response2.status_code in [200, 302]:
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, upload_url_step2)
-                        final_message = f"[bold green]{meta['name']} was successfully sent to {self.tracker}[/bold green]"  # change to print the torrent url later
+                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, self.upload_url_step2)
+                        final_message = self.upload_url_step2  # show torrent link in terminal at end of upload
                     else:
                         failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                         with open(failure_path, "w", encoding="utf-8") as f:
@@ -497,3 +510,88 @@ class PHD(COMMON):
             'subtitles[]': final_subtitle_ids,
             'languages[]': final_audio_ids
         }
+
+    async def img_host(self, meta, image_bytes: bytes, filename: str) -> str | None:
+        upload_url = f"{self.base_url}/ajax/image/upload"
+
+        headers = {
+            'Referer': self.upload_url_step2,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+            'Origin': self.base_url,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'
+        }
+
+        data = {
+            '_token': self.auth_token,
+            'qquuid': str(uuid.uuid4()),
+            'qqfilename': filename,
+            'qqtotalfilesize': str(len(image_bytes))
+        }
+
+        files = {'qqfile': (filename, image_bytes, 'image/png')}
+
+        try:
+            response = await asyncio.to_thread(
+                self.session.post, upload_url, headers=headers, data=data, files=files, timeout=120
+            )
+
+            if response.ok:
+                json_data = response.json()
+                if json_data.get('success'):
+                    image_id = json_data.get('imageId')
+                    return str(image_id)
+                else:
+                    error_message = json_data.get('error', 'Unknown image host error.')
+                    print(f"Erro no upload de {filename}: {error_message}")
+                    return None
+            else:
+                print(f"Error uploading {filename}: Status {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            print(f"Exception when uploading {filename}: {e}")
+            return None
+
+    async def get_screenshots(self, meta):
+        screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
+        local_files = sorted(screenshot_dir.glob('*.png'))
+        results = []
+
+        if local_files:
+            async def upload_local_file(path):
+                with open(path, 'rb') as f:
+                    image_bytes = f.read()
+                return await self.img_host(meta, image_bytes, os.path.basename(path))
+
+            paths = local_files[:6]
+            for coro in tqdm(asyncio.as_completed([upload_local_file(p) for p in paths]), total=len(paths), desc=f"Uploading {len(paths)} screenshots to {self.tracker} host"):
+                result = await coro
+                if result:
+                    results.append(result)
+
+        else:
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')][:6]
+            if len(image_links) < 3:
+                raise UploadException(f"UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.")
+
+            async def upload_remote_file(url):
+                try:
+                    response = await asyncio.to_thread(self.session.get, url, timeout=120)
+                    response.raise_for_status()
+                    image_bytes = response.content
+                    filename = os.path.basename(urlparse(url).path) or "screenshot.png"
+                    return await self.img_host(meta, image_bytes, filename)
+                except Exception as e:
+                    print(f"Failed to process screenshot from URL {url}: {e}")
+                    return None
+
+            links = image_links
+            for coro in tqdm(asyncio.as_completed([upload_remote_file(url) for url in links]), total=len(links), desc=f"Uploading {len(links)} screenshots to {self.tracker} host"):
+                result = await coro
+                if result:
+                    results.append(result)
+
+        if len(results) < 3:
+            raise UploadException("UPLOAD FAILED: The image host did not return the minimum number of screenshots.")
+
+        return results
