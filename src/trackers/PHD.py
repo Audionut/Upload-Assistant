@@ -284,6 +284,35 @@ class PHD(COMMON):
             console.print(f"[bold red]Error validating credentials for {self.tracker}: {e}[/bold red]")
             return False
 
+    def get_rip_type(self, meta):
+        source_type = meta.get('type')
+
+        keyword_map = {
+            'bdrip': '1',
+            'encode': '2',
+            'disc': '3',
+            'hdrip': '6',
+            'hdtv': '7',
+            'webdl': '12',
+            'webrip': '13',
+            'remux': '14',
+        }
+
+        return keyword_map.get(source_type.lower())
+
+    def get_video_quality(self, meta):
+        resolution = meta.get('resolution')
+
+        keyword_map = {
+            '1080i': '7',
+            '1080p': '3',
+            '2160p': '6',
+            '4320p': '8',
+            '720p': '2',
+        }
+
+        return keyword_map.get(resolution)
+
     async def search_existing(self, meta, disctype):
         await self.validate_credentials(meta)
         return []
@@ -352,18 +381,25 @@ class PHD(COMMON):
             'torrent_id': '',
             'type_id': type_id,
             'file_name': meta.get('name'),
-            'anon_upload': '',  # add later
-            'description': '',  # add later
-            'qqfile': '',
+            'anon_upload': '',
+            'description': '',  # Couldn't find a way to properly handle the description while following the rules
+            'qqfile': '',  # I'm not sure what this does, it doesn't seem necessary
             'screenshots[]': '684049',  # placeholder, add img hosting later
-            'rip_type_id': '3',  # add later
-            'video_quality_id': '3',  # add later
-            'video_resolution': self.get_resolution(meta),  # not sure if necessary
+            'rip_type_id': self.get_rip_type(meta),
+            'video_quality_id': self.get_video_quality(meta),
+            'video_resolution': self.get_resolution(meta),
             'movie_id': self.media_code,
             'languages[]': lang_info.get('languages[]'),
             'subtitles[]': lang_info.get('subtitles[]'),
             'media_info': await self.get_file_info(meta),
             }
+
+        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+        if anon:
+            data2.update({
+                'anon_upload': '1'
+            })
+
         if not meta.get('debug', False):
             try:
                 await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
@@ -461,29 +497,3 @@ class PHD(COMMON):
             'subtitles[]': final_subtitle_ids,
             'languages[]': final_audio_ids
         }
-
-    async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-
-        base_desc = ""
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                base_desc = f.read()
-
-        description_parts = []
-
-        description_parts.append(base_desc)
-
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header + "\n")
-
-        if self.signature:
-            description_parts.append(self.signature)
-
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            final_description = "\n".join(filter(None, description_parts))
-            descfile.write(final_description)
-
-
