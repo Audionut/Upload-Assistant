@@ -58,6 +58,62 @@ jobs:
           fi
           echo "📝 Previous tag: ${PREVIOUS_TAG:-'none (first release)'}"
 
+      - name: Fetch changelog from local file
+        run: |
+          # Path to the local changelog file
+          CHANGELOG_FILE="data/Upload-Assistant-release_notes.md"
+    
+          echo "🔍 Attempting to read changelog from: $CHANGELOG_FILE"
+    
+          # Check if the file exists and read it
+          if [ -f "$CHANGELOG_FILE" ]; then
+            # Read the file content
+            GIST_CONTENT=$(cat "$CHANGELOG_FILE")
+      
+            # Check if content is not empty
+            if [ -n "$GIST_CONTENT" ] && [ ${#GIST_CONTENT} -gt 10 ]; then
+              echo "✅ Successfully read content from local file"
+        
+              # Get the first line and check if it matches the version
+              FIRST_LINE=$(echo "$GIST_CONTENT" | head -n 1)
+              echo "🔍 First line of file: '$FIRST_LINE'"
+              echo "🔍 Expected version: '${{ env.VERSION }}'"
+        
+              # Check if first line matches the version (with or without markdown formatting)
+              if [[ "$FIRST_LINE" == "${{ env.VERSION }}" ]] || [[ "$FIRST_LINE" == "# ${{ env.VERSION }}" ]] || [[ "$FIRST_LINE" == "## ${{ env.VERSION }}" ]]; then
+                echo "✅ First line matches version, removing it and using rest of content"
+                # Remove the first line and use the rest
+                PROCESSED_CONTENT=$(echo "$GIST_CONTENT" | tail -n +2)
+              else
+                echo "⚠️ First line doesn't match version '${{ env.VERSION }}', skipping file content"
+                PROCESSED_CONTENT=""
+              fi
+        
+              # Only set the changelog if we have processed content
+              if [ -n "$PROCESSED_CONTENT" ] && [ ${#PROCESSED_CONTENT} -gt 5 ]; then
+                echo "✅ Using local file changelog content"
+                # Save to environment variable
+                {
+                  echo "GIST_CHANGELOG<<EOF"
+                  echo "$PROCESSED_CONTENT"
+                  echo ""
+                  echo "---"
+                  echo ""
+                  echo "EOF"
+                } >> $GITHUB_ENV
+              else
+                echo "⚠️ No valid content after processing, skipping file"
+                echo "GIST_CHANGELOG=" >> $GITHUB_ENV
+              fi
+            else
+              echo "⚠️ File content appears to be empty or too short, skipping"
+              echo "GIST_CHANGELOG=" >> $GITHUB_ENV
+            fi
+          else
+            echo "⚠️ Changelog file '$CHANGELOG_FILE' not found, continuing without it"
+            echo "GIST_CHANGELOG=" >> $GITHUB_ENV
+          fi
+
       - name: Generate changelog from merged PRs and commits
         run: |
           if [ "${{ env.PREVIOUS_TAG }}" = "initial" ]; then
@@ -71,6 +127,12 @@ jobs:
           # Create changelog
           {
             echo "CHANGELOG<<EOF"
+            
+            # Add Gist content at the top if it exists
+            if [ -n "${{ env.GIST_CHANGELOG }}" ]; then
+              echo "${{ env.GIST_CHANGELOG }}"
+            fi
+            
             echo "## What's Changed"
             echo ""
             
