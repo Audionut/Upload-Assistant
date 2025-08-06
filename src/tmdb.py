@@ -290,14 +290,35 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             main_similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
                             original_similarity = SequenceMatcher(None, filename_norm, original_title).ratio()
 
+                            # Try getting TMDb translation for original title if it's different
+                            translated_title = ""
+                            translated_similarity = 0.0
+
+                            if original_title and original_title != result_title:
+                                translated_title = await get_tmdb_translations(r['id'], category, 'en', debug)
+                                if translated_title:
+                                    translated_title_norm = await normalize_title(translated_title)
+                                    translated_similarity = SequenceMatcher(None, filename_norm, translated_title_norm).ratio()
+
+                                    if debug:
+                                        console.print(f"[cyan]  TMDb translation: '{translated_title}' (similarity: {translated_similarity:.3f})[/cyan]")
+
                             # Also calculate secondary title similarity if available
                             if secondary_norm is not None:
                                 secondary_main_sim = SequenceMatcher(None, secondary_norm, result_title).ratio()
                                 secondary_orig_sim = SequenceMatcher(None, secondary_norm, original_title).ratio()
-                                secondary_best = max(secondary_main_sim, secondary_orig_sim)
-                                similarity = (main_similarity * 0.25) + (original_similarity * 0.25) + (secondary_best * 0.5)
+                                secondary_trans_sim = 0.0
+
+                                if translated_title:
+                                    translated_title_norm = await normalize_title(translated_title)
+                                    secondary_trans_sim = SequenceMatcher(None, secondary_norm, translated_title_norm).ratio()
+
+                                secondary_best = max(secondary_main_sim, secondary_orig_sim, secondary_trans_sim)
+
+                                best_primary = max(main_similarity, original_similarity, translated_similarity)
+                                similarity = (best_primary * 0.75) + (secondary_best * 0.25)
                             else:
-                                similarity = (main_similarity * 0.5) + (original_similarity * 0.5)
+                                similarity = (main_similarity * 0.4) + (original_similarity * 0.3) + (translated_similarity * 0.3)
 
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
 
@@ -305,6 +326,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 console.print(f"[cyan]ID {r['id']}: '{result_title}' vs '{filename_norm}'[/cyan]")
                                 console.print(f"[cyan]  Main similarity: {main_similarity:.3f}[/cyan]")
                                 console.print(f"[cyan]  Original similarity: {original_similarity:.3f}[/cyan]")
+                                if translated_similarity > 0:
+                                    console.print(f"[cyan]  Translated similarity: {translated_similarity:.3f}[/cyan]")
                                 console.print(f"[cyan]  Final similarity: {similarity:.3f}[/cyan]")
 
                             # Boost similarity if we have exact matches with year validation
@@ -465,10 +488,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
     # If we have a secondary title, try searching with that
     if secondary_title:
-        if search_year and search_year.isdigit() and int(search_year) > 0:
-            search_year = str(int(search_year) + 1)
-        else:
-            search_year = None
         if debug:
             console.print(f"[yellow]Trying secondary title: {secondary_title}[/yellow]")
         result = await search_tmdb_id(
@@ -1409,3 +1428,35 @@ async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API
         console.print(f"[red]Error fetching logo: {e}[/red]")
 
     return logo_path
+
+
+async def get_tmdb_translations(tmdb_id, category, target_language='en', debug=False):
+    """Get translations from TMDb API"""
+    endpoint = "movie" if category == "MOVIE" else "tv"
+    url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}/translations"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, params={"api_key": TMDB_API_KEY})
+            response.raise_for_status()
+            data = response.json()
+
+            # Look for target language translation
+            for translation in data.get('translations', []):
+                if translation.get('iso_639_1') == target_language:
+                    translated_data = translation.get('data', {})
+                    translated_title = translated_data.get('title') or translated_data.get('name')
+
+                    if translated_title and debug:
+                        console.print(f"[cyan]Found TMDb translation: '{translated_title}'[/cyan]")
+
+                    return translated_title or ""
+
+            if debug:
+                console.print(f"[yellow]No {target_language} translation found in TMDb[/yellow]")
+            return ""
+
+        except Exception as e:
+            if debug:
+                console.print(f"[yellow]TMDb translation fetch failed: {e}[/yellow]")
+            return ""
