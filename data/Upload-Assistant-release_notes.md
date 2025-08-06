@@ -17,5 +17,5 @@ v5.3.0
  ## NOTEWORTHY UPDATES
   - Two new trackers, BT and BJS have been added thanks to @wastaken7
   - PSS was removed as offline
-  - The edit pathway, when correcting Information, should now correctly handle existing args thanks to @ppkoa
+  - The edit pathway, when correcting Information, should now correctly handle existing args thanks to @ppkhoa
   - Some additional context has been added regarding ffmpeg screen capture issues, particularly on seedboxes, also see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues

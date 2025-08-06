@@ -224,7 +224,7 @@ async def extract_title_and_year(meta, filename):
 
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
-    type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI)(?=[._\-\s]|$)'
+    type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI|REPACK)(?=[._\-\s]|$)'
 
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'

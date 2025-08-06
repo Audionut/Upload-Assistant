@@ -4,7 +4,7 @@ from src.clients import Clients
 from data.config import config
 from src.tvmaze import search_tvmaze
 from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
-from src.tmdb import tmdb_other_meta, get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id
+from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
 from src.region import get_region, get_distributor, get_service
 from src.exportmi import exportInfo, mi_resolution, validate_mediainfo
 from src.getseasonep import get_season_episode
@@ -37,7 +37,7 @@ try:
     from difflib import SequenceMatcher
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
-    console.print('[bold red]Missing Module Found. Please reinstall required dependancies.')
+    console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
     console.print('[yellow]pip3 install --user -U -r requirements.txt')
     exit()
 except KeyboardInterrupt:
@@ -551,7 +551,7 @@ class Prep():
             console.print(f"Source/tracker data processed in {meta_middle_time - meta_start_time:.2f} seconds")
 
         if meta.get('manual_language'):
-            meta['original_langauge'] = meta.get('manual_language').lower()
+            meta['original_language'] = meta.get('manual_language').lower()
 
         meta['type'] = await get_type(video, meta['scene'], meta['is_disc'], meta)
 
@@ -593,7 +593,7 @@ class Prep():
             meta['no_ids'] = True
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
-        elif meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
+        if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
             category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
                 meta['imdb_id'],
                 meta.get('tvdb_id'),
@@ -626,79 +626,43 @@ class Prep():
         elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
             meta = await imdb_tmdb(meta, filename)
 
-        # we have tmdb id one way or another, so lets get data if needed
+        # we should have tmdb id one way or another, so lets get data if needed
         if int(meta['tmdb_id']) != 0:
-            if not meta.get('edit', False):
-                # if we have these fields already, we probably got them from a multi id searching
-                # and don't need to fetch them again
-                essential_fields = ['title', 'year', 'genres', 'overview']
-                tmdb_metadata_populated = all(meta.get(field) is not None for field in essential_fields)
-            else:
-                # if we're in that blastard edit mode, ignore any previous set data and get fresh
-                tmdb_metadata_populated = False
-
-            if not tmdb_metadata_populated:
-                max_attempts = 2
-                delay_seconds = 5
-                for attempt in range(1, max_attempts + 1):
-                    try:
-                        tmdb_metadata = await tmdb_other_meta(
-                            tmdb_id=meta['tmdb_id'],
-                            path=meta.get('path'),
-                            search_year=meta.get('search_year'),
-                            category=meta.get('category'),
-                            imdb_id=meta.get('imdb_id', 0),
-                            manual_language=meta.get('manual_language'),
-                            anime=meta.get('anime', False),
-                            mal_manual=meta.get('mal_manual'),
-                            aka=meta.get('aka', ''),
-                            original_language=meta.get('original_language'),
-                            poster=meta.get('poster'),
-                            debug=meta.get('debug', False),
-                            mode=meta.get('mode', 'cli'),
-                            tvdb_id=meta.get('tvdb_id', 0),
-                            quickie_search=meta.get('quickie_search', False),
-                            filename=filename,
-                        )
-
-                        if tmdb_metadata and all(tmdb_metadata.get(field) for field in ['title', 'year']):
-                            meta.update(tmdb_metadata)
-                            break  # Success, exit loop
-                        else:
-                            error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
-                            if meta['debug']:
-                                console.print(f"[bold red]{error_msg}[/bold red]")
-                            if attempt < max_attempts:
-                                console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
-                                await asyncio.sleep(delay_seconds)
-                            else:
-                                raise ValueError(error_msg)
-                    except Exception as e:
-                        error_msg = f"TMDB metadata retrieval failed for ID {meta['tmdb_id']}: {str(e)}"
-                        if meta['debug']:
-                            console.print(f"[bold red]{error_msg}[/bold red]")
-                        if attempt < max_attempts:
-                            console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
-                            await asyncio.sleep(delay_seconds)
-                        else:
-                            console.print(f"[red]Catastrophic error getting TMDB data using ID {meta['tmdb_id']}[/red]")
-                            console.print(f"[red]Check category is set correctly, UA was using {meta.get('category', None)}[/red]")
-                            raise RuntimeError(error_msg) from e
-
-        if meta.get('retrieved_aka', None) is not None:
-            meta['aka'] = meta['retrieved_aka']
+            meta = await set_tmdb_metadata(meta, filename)
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
             if meta['debug']:
                 console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
-            # with refactored tmmdb, it quite likely to be correct
+            # with refactored tmdb, it quite likely to be correct
             meta['imdb_id'] = meta['mismatched_imdb_id']
             meta['imdb_info'] = None
 
         # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:
             meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=meta.get('debug', False))
+
+        # user might have skipped tmdb earlier, lets double check
+        if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
+            console.print("[yellow]No TMDB ID found, attempting to fetch from IMDb...[/yellow]")
+            category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
+                meta['imdb_id'],
+                meta.get('tvdb_id'),
+                meta.get('search_year'),
+                filename,
+                debug=meta.get('debug', False),
+                mode=meta.get('mode', 'discord'),
+                category_preference=meta.get('category'),
+                imdb_info=meta.get('imdb_info', None)
+            )
+
+            meta['category'] = category
+            meta['tmdb_id'] = int(tmdb_id)
+            meta['original_language'] = original_language
+            meta['no_ids'] = filename_search
+
+        if int(meta['tmdb_id']) != 0:
+            meta = await set_tmdb_metadata(meta, filename)
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
@@ -938,7 +902,7 @@ class Prep():
                 meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
         # return duplicate ids so I don't have to catch every site file
-        # this has the other adavantage of stringifying immb for this object
+        # this has the other advantage of stringing imdb for this object
         meta['tmdb'] = meta.get('tmdb_id')
         if int(meta.get('imdb_id')) != 0:
             imdb_str = str(meta['imdb_id']).zfill(7)

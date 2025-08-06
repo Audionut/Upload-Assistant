@@ -1463,3 +1463,64 @@ async def get_tmdb_translations(tmdb_id, category, target_language='en', debug=F
             if debug:
                 console.print(f"[yellow]TMDb translation fetch failed: {e}[/yellow]")
             return ""
+
+
+async def set_tmdb_metadata(meta, filename=None):
+    if not meta.get('edit', False):
+        # if we have these fields already, we probably got them from a multi id searching
+        # and don't need to fetch them again
+        essential_fields = ['title', 'year', 'genres', 'overview']
+        tmdb_metadata_populated = all(meta.get(field) is not None for field in essential_fields)
+    else:
+        # if we're in that blasted edit mode, ignore any previous set data and get fresh
+        tmdb_metadata_populated = False
+
+    if not tmdb_metadata_populated:
+        max_attempts = 2
+        delay_seconds = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                tmdb_metadata = await tmdb_other_meta(
+                    tmdb_id=meta['tmdb_id'],
+                    path=meta.get('path'),
+                    search_year=meta.get('search_year'),
+                    category=meta.get('category'),
+                    imdb_id=meta.get('imdb_id', 0),
+                    manual_language=meta.get('manual_language'),
+                    anime=meta.get('anime', False),
+                    mal_manual=meta.get('mal_manual'),
+                    aka=meta.get('aka', ''),
+                    original_language=meta.get('original_language'),
+                    poster=meta.get('poster'),
+                    debug=meta.get('debug', False),
+                    mode=meta.get('mode', 'cli'),
+                    tvdb_id=meta.get('tvdb_id', 0),
+                    quickie_search=meta.get('quickie_search', False),
+                    filename=filename,
+                )
+
+                if tmdb_metadata and all(tmdb_metadata.get(field) for field in ['title', 'year']):
+                    meta.update(tmdb_metadata)
+                    if meta.get('retrieved_aka', None) is not None:
+                        meta['aka'] = meta['retrieved_aka']
+                    return meta
+                else:
+                    error_msg = f"Failed to retrieve essential metadata from TMDB ID: {meta['tmdb_id']}"
+                    if meta['debug']:
+                        console.print(f"[bold red]{error_msg}[/bold red]")
+                    if attempt < max_attempts:
+                        console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
+                        await asyncio.sleep(delay_seconds)
+                    else:
+                        raise ValueError(error_msg)
+            except Exception as e:
+                error_msg = f"TMDB metadata retrieval failed for ID {meta['tmdb_id']}: {str(e)}"
+                if meta['debug']:
+                    console.print(f"[bold red]{error_msg}[/bold red]")
+                if attempt < max_attempts:
+                    console.print(f"[yellow]Retrying TMDB metadata fetch in {delay_seconds} seconds... (Attempt {attempt + 1}/{max_attempts})[/yellow]")
+                    await asyncio.sleep(delay_seconds)
+                else:
+                    console.print(f"[red]Catastrophic error getting TMDB data using ID {meta['tmdb_id']}[/red]")
+                    console.print(f"[red]Check category is set correctly, UA was using {meta.get('category', None)}[/red]")
+                    raise RuntimeError(error_msg) from e
