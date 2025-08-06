@@ -249,6 +249,35 @@ class PHD(COMMON):
 
         return resolution
 
+    def get_video_quality(self, meta):
+        resolution = meta.get('resolution')
+
+        keyword_map = {
+            '1080i': '7',
+            '1080p': '3',
+            '2160p': '6',
+            '4320p': '8',
+            '720p': '2',
+        }
+
+        return keyword_map.get(resolution.lower())
+
+    def get_rip_type(self, meta):
+        source_type = meta.get('type')
+
+        keyword_map = {
+            'bdrip': '1',
+            'encode': '2',
+            'disc': '3',
+            'hdrip': '6',
+            'hdtv': '7',
+            'webdl': '12',
+            'webrip': '13',
+            'remux': '14',
+        }
+
+        return keyword_map.get(source_type.lower())
+
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
@@ -288,38 +317,51 @@ class PHD(COMMON):
             console.print(f"[bold red]Error validating credentials for {self.tracker}: {e}[/bold red]")
             return False
 
-    def get_rip_type(self, meta):
-        source_type = meta.get('type')
-
-        keyword_map = {
-            'bdrip': '1',
-            'encode': '2',
-            'disc': '3',
-            'hdrip': '6',
-            'hdtv': '7',
-            'webdl': '12',
-            'webrip': '13',
-            'remux': '14',
-        }
-
-        return keyword_map.get(source_type.lower())
-
-    def get_video_quality(self, meta):
-        resolution = meta.get('resolution')
-
-        keyword_map = {
-            '1080i': '7',
-            '1080p': '3',
-            '2160p': '6',
-            '4320p': '8',
-            '720p': '2',
-        }
-
-        return keyword_map.get(resolution.lower())
-
     async def search_existing(self, meta, disctype):
         await self.validate_credentials(meta)
-        return []
+        await self.get_media_code(meta)
+
+        if meta.get('resolution') == '2160p':
+            resolution = 'UHD'
+        elif meta.get('resolution') in ('720p', '1080p'):
+            resolution = meta.get('resolution')
+        else:
+            resolution = 'all'
+
+        page_url = f"{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}"
+
+        dupes = []
+
+        visited_urls = set()
+
+        while page_url and page_url not in visited_urls:
+
+            console.log(f"Acessando a página: {page_url}")
+            visited_urls.add(page_url)
+
+            try:
+                response = self.session.get(page_url, allow_redirects=False)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, 'html.parser')
+                torrent_links = soup.find_all('a', class_='torrent-filename')
+
+                for link in torrent_links:
+                    dupes.append(link.get_text(strip=True))
+
+                # Finds the next page
+                next_page_tag = soup.select_one('a[rel="next"]')
+                if next_page_tag and 'href' in next_page_tag.attrs:
+                    page_url = next_page_tag['href']
+                else:
+                    # if no rel="next", we are at the last page
+                    page_url = None
+
+            except requests.RequestException as e:
+                console.log(f"{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}")
+                return dupes
+
+        return dupes
 
     async def get_media_code(self, meta):
         self.assign_media_properties(meta)
