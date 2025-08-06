@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
-import httpx
-import langcodes
 import os
 import re
 import requests
-import unicodedata
 import asyncio
 import hashlib
 import bencodepy
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
-from langcodes.tag_parser import LanguageTagError
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
@@ -226,14 +222,11 @@ class PHD(COMMON):
         for key_tuple, lang_id in self.all_lang_map.items():
             lang_name, code3, code2 = key_tuple
 
-            # Adiciona o nome completo do idioma em minúsculas como chave
             self.lang_map[lang_name.lower()] = lang_id
 
-            # Adiciona o código de 3 letras como chave
             if code3:
                 self.lang_map[code3.lower()] = lang_id
 
-            # Adiciona o código de 2 letras como chave
             if code2:
                 self.lang_map[code2.lower()] = lang_id
 
@@ -247,7 +240,7 @@ class PHD(COMMON):
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
-            console.print(f"[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]")
+            console.print(f"[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]")
             return False
 
         try:
@@ -255,7 +248,7 @@ class PHD(COMMON):
             jar.load(ignore_discard=True, ignore_expires=True)
             self.session.cookies = jar
         except Exception as e:
-            console.print(f"[bold red]Erro ao carregar o arquivo de cookie. Verifique se o formato está correto. Erro: {e}[/bold red]")
+            console.print(f"[bold red]Error loading cookie file. Please check if the format is correct. Error:{e}[/bold red]")
             return False
 
         try:
@@ -263,7 +256,7 @@ class PHD(COMMON):
             response = self.session.get(upload_page_url, timeout=10, allow_redirects=True)
 
             if 'login' in str(response.url):
-                console.print(f"[bold red]Falha na validação do {self.tracker}. O cookie parece estar expirado ou é inválido.[/bold red]")
+                console.print(f"[bold red]{self.tracker} validation failed. The cookie appears to be expired or invalid.[/bold red]")
                 return False
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
@@ -272,15 +265,15 @@ class PHD(COMMON):
                 self.auth_token = auth_match.group(1)
                 return True
             else:
-                console.print(f"[bold red]Falha na validação do {self.tracker}. Não foi possível encontrar o token 'auth' na página de upload.[/bold red]")
-                console.print("[yellow]Isso pode acontecer se a estrutura do site mudou ou se o login falhou silenciosamente.[/yellow]")
+                console.print(f"[bold red]{self.tracker} validation failed. Could not find 'auth' token on upload page.[/bold red]")
+                console.print("[yellow]This can happen if the site structure has changed or if the login failed silently..[/yellow]")
                 with open(f"{self.tracker}_auth_failure_{meta['uuid']}.html", "w", encoding="utf-8") as f:
                     f.write(response.text)
-                console.print(f"[yellow]A resposta do servidor foi salva em '{self.tracker}_auth_failure_{meta['uuid']}.html' para análise.[/yellow]")
+                console.print(f"[yellow]The server response was saved to '{self.tracker}_auth_failure_{meta['uuid']}.html' for analysis.[/yellow]")
                 return False
 
         except Exception as e:
-            console.print(f"[bold red]Erro ao validar credenciais do {self.tracker}: {e}[/bold red]")
+            console.print(f"[bold red]Error validating credentials for {self.tracker}: {e}[/bold red]")
             return False
 
     async def search_existing(self, meta, disctype):
@@ -295,12 +288,9 @@ class PHD(COMMON):
         if self.category == 'MOVIE':
             category_path = 'movie'
             search_category = 'movies'
-        elif self.category == 'TV':
+        if self.category == 'TV':
             category_path = 'tv'
             search_category = 'tv-shows'
-        else:
-            console.print(f"[bold red]Categoria desconhecida: {self.category}[/bold red]")
-            return None
 
         search_url = f"https://privatehd.to/{search_category}?search=&imdb={self.imdb_id}"
 
@@ -317,7 +307,7 @@ class PHD(COMMON):
                 href = media_link.get('href')
                 match = re.search(rf'/{category_path}/(\d+)-', href)
                 self.media_code = match.group(1) if match else None
-                console.print(f"Media code is {self.media_code}")
+                console.print(f"Media code is {self.media_code}")  # delete after finished
             else:
                 console.print(f"No code found for {self.imdb_id} in {search_url}")
 
@@ -329,7 +319,7 @@ class PHD(COMMON):
     async def upload(self, meta, disctype):
         lang_info = await self.get_lang(meta)
         if not await self.get_media_code(meta):
-            raise UploadException('no media code')
+            raise UploadException('no media code')  # improve message
 
         await self.validate_credentials(meta)
         self.assign_media_properties(meta)
@@ -364,7 +354,7 @@ class PHD(COMMON):
 
                 match = re.search(r'/(\d+)$', redirect_url)
                 if not match:
-                    raise UploadException(f"Não foi possível extrair o 'task_id' da URL de redirecionamento: {redirect_url}")
+                    raise UploadException(f"Could not extract 'task_id' from redirect URL:{redirect_url}")
 
                 task_id = match.group(1)
 
@@ -380,13 +370,13 @@ class PHD(COMMON):
                     'type_id': type_id,
                     'task_id': task_id,
                     'file_name': meta.get('name'),
-                    'anon_upload': '',
+                    'anon_upload': '', # add later
                     'description': '', # add later
                     'qqfile': '',
-                    'screenshots[]': '684049', # placeholder, add img hosting
-                    'rip_type_id': '3',
-                    'video_quality_id': '3',
-                    'video_resolution': '',
+                    'screenshots[]': '684049', # placeholder, add img hosting later
+                    'rip_type_id': '3', # add later
+                    'video_quality_id': '3', # add later
+                    'video_resolution': '', # not sure if necessary
                     'movie_id': self.media_code,
                     'languages[]': lang_info.get('languages[]'),
                     'subtitles[]': lang_info.get('subtitles[]'),
@@ -399,26 +389,26 @@ class PHD(COMMON):
                 if response2.status_code in [200, 302]:
                     announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                     await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, upload_url_step2)
-                    final_message = f"[bold green]{meta['name']} foi enviado com sucesso para {self.tracker}[/bold green]"
+                    final_message = f"[bold green]{meta['name']} was successfully sent to {self.tracker}[/bold green]"  # change to print the torrent url later
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
                         f.write(response2.text)
-                    final_message = f"""[bold red]Falha na Etapa 2 do upload para {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
-                                        [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
+                    final_message = f"""[bold red]Step 2 of upload failed to {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
+                                        [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
                 with open(failure_path, "w", encoding="utf-8") as f:
                     f.write(response1.text)
-                final_message = f"""[bold red]Falha na Etapa 1 do upload para {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
-                                    [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
+                final_message = f"""[bold red]Step 1 of upload failed to {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
+                                    [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
 
         except requests.exceptions.RequestException as e:
-            final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+            final_message = f"[bold red]Connection error while uploading to {self.tracker}: {e}[/bold red]"
         except UploadException as e:
-            final_message = f"[bold red]Erro de upload: {e}[/bold red]"
+            final_message = f"[bold red]Upload error: {e}[/bold red]"
         except Exception as e:
-            final_message = f"[bold red]Ocorreu um erro inesperado durante o upload para {self.tracker}: {e}[/bold red]"
+            final_message = f"[bold red]An unexpected error occurred while uploading to {self.tracker}: {e}[/bold red]"
 
         meta['tracker_status'][self.tracker]['status_message'] = final_message
 
@@ -505,26 +495,3 @@ class PHD(COMMON):
             'resolucaow': width,
             'resolucaoh': height
         }
-
-    async def data_prep(self, meta, disctype):
-        await self.validate_credentials(meta)
-        await self.edit_desc(meta)
-
-        desc_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-
-        data = {
-            'submit': 'true',
-            'auth': self.auth_token,
-        }
-
-        # Common data MOVIE/TV
-        if self.category in ('MOVIE', 'TV'):
-            data.update({
-            })
-
-        # Anon
-        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
-        if anon:
-            data['anonymous'] = '1'
-
-        return data
