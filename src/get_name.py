@@ -225,6 +225,8 @@ async def extract_title_and_year(meta, filename):
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
     type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI|REPACK)(?=[._\-\s]|$)'
+    season_pattern = r'\bS(\d{1,2})\b'
+    season_episode_pattern = r'\bS(\d{1,2})E(\d{1,3})\b'
 
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
@@ -242,11 +244,17 @@ async def extract_title_and_year(meta, filename):
         modified_folder_name = folder_name.replace(full_match, first_year)
         year_match = None
         res_match = re.search(res_pattern, modified_folder_name, re.IGNORECASE)
+        season_pattern_match = re.search(season_pattern, modified_folder_name, re.IGNORECASE)
+        season_episode_match = re.search(season_episode_pattern, modified_folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, modified_folder_name, re.IGNORECASE)
 
         indices = [('year', double_year_match.end(), second_year)]
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
+        if season_pattern_match:
+            indices.append(('season', season_pattern_match.start(), season_pattern_match.group()))
+        if season_episode_match:
+            indices.append(('season_episode', season_episode_match.start(), season_episode_match.group()))
         if type_match:
             indices.append(('type', type_match.start(), type_match.group()))
 
@@ -256,6 +264,8 @@ async def extract_title_and_year(meta, filename):
     else:
         year_match = re.search(year_pattern, folder_name)
         res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
+        season_pattern_match = re.search(season_pattern, folder_name, re.IGNORECASE)
+        season_episode_match = re.search(season_episode_pattern, folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
 
         indices = []
@@ -263,6 +273,10 @@ async def extract_title_and_year(meta, filename):
             indices.append(('year', year_match.start(), year_match.group()))
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
+        if season_pattern_match:
+            indices.append(('season', season_pattern_match.start(), season_pattern_match.group()))
+        if season_episode_match:
+            indices.append(('season_episode', season_episode_match.start(), season_episode_match.group()))
         if type_match:
             indices.append(('type', type_match.start(), type_match.group()))
 

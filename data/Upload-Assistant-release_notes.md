@@ -19,3 +19,5 @@ v5.3.0
   - PSS was removed as offline
   - The edit pathway, when correcting Information, should now correctly handle existing args thanks to @ppkhoa
   - Some additional context has been added regarding ffmpeg screen capture issues, particularly on seedboxes, also see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues
+  - Additional trackers have been added for getting existing ids, but they are currently only available via auto torrent searching
+  - Getting data from trackers now has a cool off period. This should not be noticed under normal circumstances. PTP has a 60 second cool off period, which was chosen to minimize interference with other tools.
