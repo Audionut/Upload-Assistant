@@ -140,33 +140,32 @@ async def nfo_link(meta):
         movie_name = meta.get('title', 'movie')
         # Remove or replace invalid characters: < > : " | ? * \ /
         movie_name = re.sub(r'[<>:"|?*\\/]', '', movie_name)
-        if not meta['debug']:
-            meta['linking_failed'] = False
-            link_dir = await linking(meta, movie_name, year)
+        meta['linking_failed'] = False
+        link_dir = await linking(meta, movie_name, year)
 
-            uuid = meta.get('uuid')
-            filelist = meta.get('filelist', [])
-            if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
-                # Single file - create symlink in the target folder
-                src_file = filelist[0]
-                filename = os.path.splitext(os.path.basename(src_file))[0]
-            else:
-                filename = uuid
+        uuid = meta.get('uuid')
+        filelist = meta.get('filelist', [])
+        if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
+            # Single file - create symlink in the target folder
+            src_file = filelist[0]
+            filename = os.path.splitext(os.path.basename(src_file))[0]
+        else:
+            filename = uuid
 
-            if link_dir is not None and not meta.get('linking_failed', False):
-                nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
-            else:
-                if meta.get('linking_failed', False):
-                    console.print("[red]Linking failed, saving NFO in data/nfos[/red]")
-                nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
-                os.makedirs(nfo_dir, exist_ok=True)
-                nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
+        if link_dir is not None and not meta.get('linking_failed', False):
+            nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
+        else:
+            if meta.get('linking_failed', False):
+                console.print("[red]Linking failed, saving NFO in data/nfos[/red]")
+            nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
+            os.makedirs(nfo_dir, exist_ok=True)
+            nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
 
-            with open(nfo_file_path, 'w', encoding='utf-8') as f:
-                f.write(nfo_content)
+        with open(nfo_file_path, 'w', encoding='utf-8') as f:
+            f.write(nfo_content)
 
-            if meta['debug']:
-                console.print(f"[green]Emby NFO created at {nfo_file_path}")
+        if meta['debug']:
+            console.print(f"[green]Emby NFO created at {nfo_file_path}")
 
         return nfo_file_path
 

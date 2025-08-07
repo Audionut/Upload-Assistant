@@ -168,7 +168,7 @@ async def process_meta(meta, base_dir, bot=None):
         return
 
     # If unattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
-    if meta.get('emby', False) and not (meta['unattended'] and meta.get('unattended_confirm', False) and meta.get('no_ids', False)):
+    if meta.get('emby', False) and not meta.get('no_ids', False) and not meta.get('unattended_confirm', False) and meta.get('unattended', False):
         await nfo_link(meta)
         meta['we_are_uploading'] = False
         return
@@ -218,7 +218,6 @@ async def process_meta(meta, base_dir, bot=None):
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
         editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
-        editargs = (meta['path'],) + tuple(editargs.split())
         editargs = tuple(editargs.split())
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
