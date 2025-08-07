@@ -45,10 +45,10 @@ async def get_btn_torrents(btn_api, btn_id, meta):
             imdb_id = first_torrent.get("ImdbID")
             tvdb_id = first_torrent.get("TvdbID")
 
-            if imdb_id and imdb_id != "0" and not meta.get("imdb_id"):
+            if imdb_id and imdb_id != "0":
                 meta["imdb_id"] = int(imdb_id)
 
-            if tvdb_id and tvdb_id != "0" and not meta.get("tvdb_id"):
+            if tvdb_id and tvdb_id != "0":
                 meta["tvdb_id"] = int(tvdb_id)
 
             if meta.get("imdb_id") or meta.get("tvdb_id"):
@@ -156,10 +156,10 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
         description = str(description_value) if description_value is not None else ""
 
     imdb_id = first_result.get("imdb_id", "").replace("tt", "") if first_result.get("imdb_id") else 0
-    meta["imdb_id"] = int(imdb_id or 0) if not meta.get("imdb_id") else meta["imdb_id"]
+    meta["imdb_id"] = int(imdb_id or 0)
 
     raw_tmdb_id = first_result.get("tmdb_id", "")
-    if raw_tmdb_id and raw_tmdb_id != "0" and not meta.get("tmdb_id"):
+    if raw_tmdb_id and raw_tmdb_id != "0":
         meta["category"], parsed_tmdb_id = await parse_tmdb_id(raw_tmdb_id, meta.get("category"))
         meta["tmdb_id"] = int(parsed_tmdb_id or 0)
 
@@ -182,7 +182,7 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
 
     console.print(f"[green]Found BHD IDs: IMDb={meta.get('imdb_id')}, TMDb={meta.get('tmdb_id')}")
 
-    return meta["imdb_id"] or meta["tmdb_id"] or 0
+    return meta["imdb_id"] and meta["tmdb_id"]
 
 
 async def parse_tmdb_id(tmdb_id, category):

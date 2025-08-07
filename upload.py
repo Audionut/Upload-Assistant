@@ -167,7 +167,7 @@ async def process_meta(meta, base_dir, bot=None):
         meta['we_are_uploading'] = False
         return
 
-    # If unnattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
+    # If unattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
     if meta.get('emby', False) and not (meta['unattended'] and meta.get('unattended_confirm', False) and meta.get('no_ids', False)):
         await nfo_link(meta)
         meta['we_are_uploading'] = False
@@ -788,7 +788,7 @@ async def do_the_thing(base_dir):
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
 
             if use_discord and bot:
-                await send_discord_notification(config, bot, f"Finsished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
+                await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
 
             if sanitize_meta and not meta.get('emby', False):
                 try:
