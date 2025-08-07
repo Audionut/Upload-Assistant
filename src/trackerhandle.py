@@ -40,7 +40,8 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
     enabled_trackers = tracker_setup.trackers_enabled(meta)
 
     async def process_single_tracker(tracker):
-        tracker_class = tracker_class_map[tracker](config=config)
+        if not tracker == "MANUAL":
+            tracker_class = tracker_class_map[tracker](config=config)
         if meta['name'].endswith('DUPE?'):
             meta['name'] = meta['name'].replace(' DUPE?', '')
 
