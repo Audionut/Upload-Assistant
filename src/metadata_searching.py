@@ -719,7 +719,7 @@ async def get_tvmaze_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
 async def get_tv_data(meta, base_dir, tvdb_api=None, tvdb_token=None):
     if not meta.get('tv_pack', False) and meta.get('episode_int') != 0:
         if not meta.get('auto_episode_title') or not meta.get('overview_meta'):
-            # prioritze tvdb metadata if available
+            # prioritize tvdb metadata if available
             if tvdb_api and tvdb_token and not meta.get('we_checked_tvdb', False):
                 if meta['debug']:
                     console.print("[yellow]Fetching TVDb metadata...")
@@ -735,8 +735,10 @@ async def get_tv_data(meta, base_dir, tvdb_api=None, tvdb_token=None):
                         if meta.get('tvdb_episode_data') and meta['tvdb_episode_data'].get('eng_overview'):
                             meta['tvdb_episode_data'].get('overview') == meta['tvdb_episode_data'].get('eng_overview')
                             en_overview = True
-                    else:
-                        meta['tvdb_episode_data'] = await get_tvdb_episode_data(base_dir, tvdb_token, meta['tvdb_id'], meta.get('tvdb_season_int'), meta.get('tvdb_episode_int'), api_key=tvdb_api, debug=meta.get('debug', False))
+
+                    result = await get_tvdb_episode_data(base_dir, tvdb_token, meta['tvdb_id'], meta.get('tvdb_season_int'), meta.get('tvdb_episode_int'), api_key=tvdb_api, debug=meta.get('debug', False))
+                    if result:
+                        meta['tvdb_episode_data']['series_name'] = result.get('series_name', None)
 
                     if meta.get('tvdb_episode_data') and meta['tvdb_episode_data'].get('episode_name') and meta.get('auto_episode_title') is None and meta.get('original_language', "") == "en":
                         episode_name = meta['tvdb_episode_data'].get('episode_name')

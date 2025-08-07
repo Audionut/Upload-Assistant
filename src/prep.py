@@ -739,58 +739,65 @@ class Prep():
                             series_id = episode_info.get('series', {}).get('series_id', None)
                             if series_id:
                                 series_imdb = series_id.replace('tt', '')
-                                meta['imdb_id'] = int(series_imdb)
-                                imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
-                                meta['imdb_info'] = imdb_info
-                                meta['tv_year'] = imdb_info.get('year', None)
-                                check_valid_data = meta.get('imdb_info', {}).get('title', "")
-                                if check_valid_data:
-                                    title = meta.get('title', "").strip()
-                                    aka = meta.get('imdb_info', {}).get('aka', "").strip()
-                                    year = str(meta.get('imdb_info', {}).get('year', ""))
+                                if series_imdb.isdigit() and int(series_imdb) != meta.get('imdb_id', 0):
+                                    if meta['debug']:
+                                        console.print(f"[yellow]Updating IMDb ID from episode data: {series_imdb}")
+                                    meta['imdb_id'] = int(series_imdb)
+                                    imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+                                    meta['imdb_info'] = imdb_info
+                                    meta['tv_year'] = imdb_info.get('year', None)
+                                    check_valid_data = meta.get('imdb_info', {}).get('title', "")
+                                    if check_valid_data:
+                                        title = meta.get('title', "").strip()
+                                        aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                                        year = str(meta.get('imdb_info', {}).get('year', ""))
 
-                                    if aka:
-                                        aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
-                                        difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
-                                        if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
-                                            aka = None
+                                        if aka:
+                                            aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
+                                            difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
+                                            if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
+                                                aka = None
 
-                                        if aka is not None:
-                                            if f"({year})" in aka:
-                                                aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
+                                            if aka is not None:
+                                                if f"({year})" in aka:
+                                                    aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
+                                                else:
+                                                    aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                                                meta['aka'] = f"AKA {aka.strip()}"
                                             else:
-                                                aka = meta.get('imdb_info', {}).get('aka', "").strip()
-                                            meta['aka'] = f"AKA {aka.strip()}"
+                                                meta['aka'] = ""
                                         else:
                                             meta['aka'] = ""
-                                    else:
-                                        meta['aka'] = ""
 
             # if we're using tvdb, lets use it's series name if it applies
             # language check since tvdb returns original language names
             if tvdb_api and tvdb_token and meta.get('original_language', "") == "en":
-                if meta.get('tvdb_episode_data') and meta.get('tvdb_episode_data').get('series_name') != "" and meta.get('title') != meta.get('tvdb_episode_data').get('series_name'):
-                    series_name = meta.get('tvdb_episode_data').get('series_name', '')
-                    if meta['debug']:
-                        console.print(f"[yellow]tvdb series name: {series_name}")
-                    year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                    if year_match:
-                        extracted_year = year_match.group(0)
-                        meta['search_year'] = extracted_year
-                        series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                    series_name = series_name.replace('(', '').replace(')', '').strip()
-                    meta['title'] = series_name
-                elif meta.get('tvdb_series_name') and meta.get('tvdb_series_name') != "" and meta.get('title') != meta.get('tvdb_series_name'):
+                if meta.get('tvdb_episode_data'):
+                    series_name = meta['tvdb_episode_data'].get('series_name', '')
+                    if series_name and meta.get('title') != series_name:
+                        if meta['debug']:
+                            console.print(f"[yellow]tvdb series name: {series_name}")
+                        year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
+                        if year_match:
+                            extracted_year = year_match.group(0)
+                            meta['search_year'] = extracted_year
+                            series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
+                        series_name = series_name.replace('(', '').replace(')', '').strip()
+                        if series_name:  # Only set if not empty
+                            meta['title'] = series_name
+                elif meta.get('tvdb_series_name'):
                     series_name = meta.get('tvdb_series_name')
-                    if meta['debug']:
-                        console.print(f"[yellow]tvdb series name: {series_name}")
-                    year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                    if year_match:
-                        extracted_year = year_match.group(0)
-                        meta['search_year'] = extracted_year
-                        series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                    series_name = series_name.replace('(', '').replace(')', '').strip()
-                    meta['title'] = series_name
+                    if series_name and meta.get('title') != series_name:
+                        if meta['debug']:
+                            console.print(f"[yellow]tvdb series name: {series_name}")
+                        year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
+                        if year_match:
+                            extracted_year = year_match.group(0)
+                            meta['search_year'] = extracted_year
+                            series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
+                        series_name = series_name.replace('(', '').replace(')', '').strip()
+                        if series_name:  # Only set if not empty
+                            meta['title'] = series_name
 
         # bluray.com data if config
         get_bluray_info = self.config['DEFAULT'].get('get_bluray_info', False)
