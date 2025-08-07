@@ -15,7 +15,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
         base = match.group(1)
         is_all_lowercase = base.islower()
     base = urllib.parse.quote(base)
-    if 'scene' not in meta and not lower:
+    if 'scene' not in meta and not lower and not meta.get('emby_debug', False):
         url = f"https://api.srrdb.com/v1/search/r:{base}"
         if meta['debug']:
             console.print("Using SRRDB url", url)
@@ -69,7 +69,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
         except Exception as e:
             console.print(f"[yellow]SRRDB: No match found, or request has timed out: {e}")
 
-    elif not scene and lower:
+    elif not scene and lower and not meta.get('emby_debug', False):
         release_name = None
         name = meta.get('filename', None).replace(" ", ".")
         tag = meta.get('tag', None).replace("-", "")
