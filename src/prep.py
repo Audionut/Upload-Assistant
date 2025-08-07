@@ -722,7 +722,7 @@ class Prep():
             else:
                 meta.setdefault('tvmaze_id', 0)
             if meta.get('tvdb_id', 0) == 0 and tvdb_api and tvdb_token:
-                meta['tvdb_id'] = await get_tvdb_series(base_dir, title=meta.get('title', ''), year=meta.get('year', ''), apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False))
+                meta['tvdb_id'] = await get_tvdb_series(base_dir, filename, year=meta.get('year', ''), apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False))
 
             # if it was skipped earlier, make sure we have the season/episode data
             if not meta.get('not_anime', False):

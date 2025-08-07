@@ -670,7 +670,7 @@ async def get_tvmaze_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
     if tvdb_api and tvdb_token:
         tasks.append(
             get_tvdb_series(
-                meta['base_dir'], meta.get('title', ''), meta.get('year', ''),
+                meta['base_dir'], filename, meta.get('year', ''),
                 apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False)
             )
         )
