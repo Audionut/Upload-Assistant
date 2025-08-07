@@ -333,6 +333,7 @@ async def extract_title_and_year(meta, filename):
             # Only add to secondary_title if we don't already have one
             if not secondary_title and bracket_content:
                 secondary_title = bracket_content
+                secondary_title = re.sub(r'[\.\-_ ]+$', '', secondary_title)
 
             filename = re.sub(bracket_pattern, ' ', filename)
             filename = re.sub(r'\s+', ' ', filename).strip()
