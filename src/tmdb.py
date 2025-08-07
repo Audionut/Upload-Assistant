@@ -801,6 +801,13 @@ async def tmdb_other_meta(
             title = media_data['name']
             original_title = media_data.get('original_name', title)
             year = datetime.strptime(media_data['first_air_date'], '%Y-%m-%d').year if media_data['first_air_date'] else search_year
+            if not year:
+                year_pattern = r'(18|19|20)\d{2}'
+                year_match = re.search(year_pattern, title)
+                if year_match:
+                    year = int(year_match.group(0))
+            if not year:
+                year = datetime.strptime(media_data['last_air_date'], '%Y-%m-%d').year if media_data['last_air_date'] else 0
             runtime_list = media_data.get('episode_run_time', [60])
             runtime = runtime_list[0] if runtime_list else 60
             tmdb_type = media_data.get('type', 'Scripted')
