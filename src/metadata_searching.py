@@ -686,11 +686,11 @@ async def get_tvmaze_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
 
         # Set tvdb_id if not already set and we got a valid one
         if not meta.get('tvdb_id', 0) and isinstance(tvdb_id, int) and tvdb_id > 0:
-            meta['tvdb_id'] = tvdb_id
+            meta['tvdb_id'] = int(tvdb_id)
             if meta.get('debug'):
                 console.print(f"[green]Set TVDb ID from TVMaze: {tvdb_id}[/green]")
         if not meta.get('imdb_id', 0) and isinstance(imdb_id, str) and imdb_id.strip():
-            meta['imdb_id'] = imdb_id
+            meta['imdb_id'] = int(imdb_id)
             if meta.get('debug'):
                 console.print(f"[green]Set IMDb ID from TVMaze: {imdb_id}[/green]")
 
@@ -707,7 +707,7 @@ async def get_tvmaze_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
     if len(results) > 1 and tvdb_api and tvdb_token:
         tvdb_result = results[1]
         if tvdb_result and not isinstance(tvdb_result, Exception):
-            meta['tvdb_id'] = tvdb_result
+            meta['tvdb_id'] = int(tvdb_result)
             if meta.get('debug'):
                 console.print(f"[green]Got TVDb series data: {tvdb_result}[/green]")
         elif isinstance(tvdb_result, Exception):
