@@ -98,7 +98,6 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 'dp': 'DP',
                 'yus': 'YUS',
                 'rf': 'RF',
-                'btn': 'BTN',
                 'oe': 'OE',
                 'ulcx': 'ULCX',
                 'huno': 'HUNO',
@@ -108,6 +107,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 'bhd': 'BHD',
                 'blu': 'BLU',
                 'aither': 'AITHER',
+                'btn': 'BTN',
                 'ptp': 'PTP',
             }
 

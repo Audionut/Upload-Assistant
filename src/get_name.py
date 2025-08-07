@@ -224,9 +224,10 @@ async def extract_title_and_year(meta, filename):
 
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
-    type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI|REPACK)(?=[._\-\s]|$)'
-    season_pattern = r'\bS(\d{1,2})\b'
-    season_episode_pattern = r'\bS(\d{1,2})E(\d{1,3})\b'
+    type_pattern = r'(WEBDL|BluRay|REMUX|HDRip|Blu-Ray|Web-DL|webrip|web-rip|DVD|BD100|BD50|BD25|HDTV|UHD|HDR|DOVI|REPACK|Season)(?=[._\-\s]|$)'
+    season_pattern = r'\bS(\d{1,3})\b'
+    season_episode_pattern = r'\bS(\d{1,3})E(\d{1,3})\b'
+    date_pattern = r'\b(20\d{2})\.(\d{1,2})\.(\d{1,2})\b'
 
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
@@ -262,6 +263,7 @@ async def extract_title_and_year(meta, filename):
         actual_year = second_year
 
     else:
+        date_match = re.search(date_pattern, folder_name)
         year_match = re.search(year_pattern, folder_name)
         res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
         season_pattern_match = re.search(season_pattern, folder_name, re.IGNORECASE)
@@ -269,7 +271,9 @@ async def extract_title_and_year(meta, filename):
         type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
 
         indices = []
-        if year_match:
+        if date_match:
+            indices.append(('date', date_match.start(), date_match.group()))
+        if year_match and not date_match:
             indices.append(('year', year_match.start(), year_match.group()))
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
@@ -281,7 +285,7 @@ async def extract_title_and_year(meta, filename):
             indices.append(('type', type_match.start(), type_match.group()))
 
         folder_name_for_title = folder_name
-        actual_year = year_match.group() if year_match else None
+        actual_year = year_match.group() if year_match and not date_match else None
 
     if indices:
         indices.sort(key=lambda x: x[1])

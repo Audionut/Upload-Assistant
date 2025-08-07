@@ -361,6 +361,16 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
                             results_with_similarity.append((r, similarity))
 
+                        # Give a slight boost to the first result for TV shows (often the main series)
+                        if category == "TV" and results_with_similarity:
+                            first_result = results_with_similarity[0]
+                            # Boost the first result's similarity by 0.05 (5%)
+                            boosted_similarity = first_result[1] + 0.05
+                            results_with_similarity[0] = (first_result[0], boosted_similarity)
+
+                            if debug:
+                                console.print(f"[cyan]Boosted first TV result similarity from {first_result[1]:.3f} to {boosted_similarity:.3f}[/cyan]")
+
                         # Sort by similarity (highest first)
                         results_with_similarity.sort(key=lambda x: x[1], reverse=True)
                         sorted_results = [r[0] for r in results_with_similarity]
