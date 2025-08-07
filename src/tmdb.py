@@ -522,6 +522,32 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             except Exception:
                 search_results = {"results": []}  # Reset search_results on exception
 
+    # TMDb doesn't do roman
+    if not search_results.get('results'):
+        try:
+            words = filename.split()
+            roman_numerals = {
+                'II': '2', 'III': '3', 'IV': '4', 'V': '5',
+                'VI': '6', 'VII': '7', 'VIII': '8', 'IX': '9', 'X': '10'
+            }
+
+            converted = False
+            for i, word in enumerate(words):
+                if word.upper() in roman_numerals:
+                    words[i] = roman_numerals[word.upper()]
+                    converted = True
+
+            if converted:
+                converted_title = ' '.join(words)
+                if debug:
+                    console.print(f"[bold yellow]Trying with roman numerals converted: {converted_title}[/bold yellow]")
+                result = await search_tmdb_id(converted_title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
+                if result and result != (0, category):
+                    return result
+        except Exception as e:
+            console.print(f"[bold red]Roman numeral conversion error:[/bold red] {e}")
+            search_results = {"results": []}
+
     # If we have a secondary title, try searching with that
     if secondary_title:
         if debug:
@@ -588,32 +614,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 return result
         except KeyError:
             console.print("[bold red]Failed to parse title for TMDb search.[/bold red]")
-            search_results = {"results": []}
-
-    # Replace the roman numeral with its numeric equivalent
-    if not search_results.get('results'):
-        try:
-            words = filename.split()
-            roman_numerals = {
-                'II': '2', 'III': '3', 'IV': '4', 'V': '5',
-                'VI': '6', 'VII': '7', 'VIII': '8', 'IX': '9', 'X': '10'
-            }
-
-            converted = False
-            for i, word in enumerate(words):
-                if word.upper() in roman_numerals:
-                    words[i] = roman_numerals[word.upper()]
-                    converted = True
-
-            if converted:
-                converted_title = ' '.join(words)
-                if debug:
-                    console.print(f"[bold yellow]Trying with roman numerals converted: {converted_title}[/bold yellow]")
-                result = await search_tmdb_id(converted_title, search_year, original_category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
-                if result and result != (0, category):
-                    return result
-        except Exception as e:
-            console.print(f"[bold red]Roman numeral conversion error:[/bold red] {e}")
             search_results = {"results": []}
 
     # Try with less words in the title
