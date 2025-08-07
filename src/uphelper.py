@@ -13,7 +13,7 @@ class UploadHelper:
             meta['upload'] = True
             return meta, False
         else:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join([d['name'] if isinstance(d, dict) else d for d in dupes])
                 console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
                 console.print()
@@ -27,6 +27,7 @@ class UploadHelper:
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
+                    meta['we_asked'] = True
                 else:
                     upload = True
 
