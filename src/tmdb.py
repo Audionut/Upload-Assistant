@@ -246,8 +246,14 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         # Find all exact matches (title and year)
                         exact_matches = []
                         for r in limited_results:
-                            result_title = await normalize_title(r.get('title'))
-                            original_title = await normalize_title(r.get('original_title', ''))
+                            if r.get('title'):
+                                result_title = await normalize_title(r.get('title'))
+                            else:
+                                result_title = await normalize_title(r.get('name', ''))
+                            if r.get('original_title'):
+                                original_title = await normalize_title(r.get('original_title'))
+                            else:
+                                original_title = await normalize_title(r.get('original_name', ''))
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
                             # Only count as exact match if both years are present and non-zero
                             if secondary_norm and (
@@ -283,8 +289,15 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         # If no exact matches, calculate similarity for all results and sort them
                         results_with_similarity = []
                         for r in limited_results:
-                            result_title = await normalize_title(r.get('title'))
-                            original_title = await normalize_title(r.get('original_title', ''))
+                            if r.get('title'):
+                                result_title = await normalize_title(r.get('title'))
+                            else:
+                                result_title = await normalize_title(r.get('name', ''))
+
+                            if r.get('original_title'):
+                                original_title = await normalize_title(r.get('original_title'))
+                            else:
+                                original_title = await normalize_title(r.get('original_name', ''))
 
                             # Calculate similarity for both main title and original title
                             main_similarity = SequenceMatcher(None, filename_norm, result_title).ratio()
