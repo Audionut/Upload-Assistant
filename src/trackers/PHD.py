@@ -14,7 +14,10 @@ from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
 from tqdm.asyncio import tqdm
+from typing import Optional
 from urllib.parse import urlparse
+from countryinfo import CountryInfo
+from datetime import datetime
 
 
 class PHD(COMMON):
@@ -22,7 +25,7 @@ class PHD(COMMON):
         super().__init__(config)
         self.tracker = "PHD"
         self.source_flag = "PrivateHD"
-        self.banned_groups = [""]
+        self.banned_groups = ["RARBG", "FGT", "Grym"]
         self.base_url = "https://privatehd.to"
         self.auth_token = None
         self.session = requests.Session()
@@ -241,6 +244,152 @@ class PHD(COMMON):
         self.season = meta.get('season', '')
         self.episode = meta.get('episode', '')
 
+    def follow_the_rules(self, meta):
+        self.assign_media_properties(meta)
+        compliant = True
+
+        # This also checks the rule "FANRES content is not allowed"
+        rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
+        if self.category not in ('MOVIE', 'TV'):
+            console.print(rule)
+            compliant = False
+
+        rule = "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
+        if meta.get('anime', False):
+            console.print(rule)
+            compliant = False
+
+        all_countries = CountryInfo().all()
+
+        european_countries = []
+        south_american_countries = []
+        african_countries = []
+        asian_countries = []
+
+        for country_name in all_countries:
+            try:
+                info = CountryInfo(country_name)
+                region = info.region()
+
+                if region == 'Europe' and country_name not in ["United Kingdom", "Ireland"]:
+                    european_countries.append(country_name)
+                elif region == 'Americas' and info.subregion() == 'South America':
+                    south_american_countries.append(country_name)
+                elif region == 'Africa':
+                    african_countries.append(country_name)
+                elif region == 'Asia':
+                    asian_countries.append(country_name)
+
+            except KeyError:
+                pass
+
+                english_speaking_countries_in_north_america = [
+                    "Anguilla", "Antigua and Barbuda", "Bahamas", "Barbados", "Belize", "Bermuda",
+                    "British Virgin Islands", "Canada", "Cayman Islands", "Curaçao", "Dominica",
+                    "Grenada", "Jamaica", "Montserrat", "Puerto Rico", "Saint Kitts and Nevis",
+                    "Saint Lucia", "Saint Vincent and the Grenadines", "Trinidad and Tobago",
+                    "Turks and Caicos Islands", "United States", "United States Virgin Islands"
+                ]
+
+        origin_country = meta.get('imdb_info', {}).get('country')
+        # language = meta.get('original_language')
+
+        rule = "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
+        if origin_country in european_countries or south_american_countries or african_countries:
+            console.print(rule)
+            compliant = False
+
+        rule = "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
+        if origin_country in asian_countries:
+            console.print(rule)
+            console.print(f'Origin country for your upload: {origin_country}')
+            compliant = False
+
+        rule = "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
+        year = meta.get('year')
+        current_year = datetime.now().year
+        is_older_than_50_years = (current_year - year) >= 50 if year else False
+        if is_older_than_50_years:
+            console.print(rule)
+            compliant = False
+
+        rule = "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
+        if origin_country not in english_speaking_countries_in_north_america:
+            console.print(rule)
+            compliant = False
+
+        rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
+        if meta.get('tag', '').lower() in ('RARBG', 'FGT', 'Grym', 'TBS'):
+            console.print(rule)
+            compliant = False
+
+        rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
+        if meta.get('tag', '').lower() == 'evo' and meta.get('source', '').lower() != 'web':
+            console.print(rule)
+            compliant = False
+
+        rule = "SD (Standard Definition) content is forbidden."
+        if meta.get('sd') == 1:
+            console.print(rule)
+            compliant = False
+
+        rule = "Allowed containers: MKV, MP4."
+        if meta.get('is_disc') != 'BDMV':
+            ext = os.path.splitext(meta['filelist'][0])[1].lower()
+            allowed_extensions = {'.mkv': "MKV", '.mp4': "MP4"}
+            container = allowed_extensions.get(ext)
+            if container is None:
+                console.print(rule)
+                compliant = False
+
+        video_codec = meta.get('video_codec').lower()
+
+        rule = "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
+        if meta.get('is_disc').lower() == 'bdmv' or meta.get('type').lower() == 'remux':
+            if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
+                console.print(rule)
+                compliant = False
+
+        rule = "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
+        if meta.get('type').lower() == 'encode' and meta.get('source').lower() == 'bluray':
+            if video_codec not in ('h.264', 'h.265', 'x264', 'x265'):
+                console.print(rule)
+                compliant = False
+
+        rule = "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
+        if meta.get('type').lower() in ('webdl', 'web-dl') and meta.get('source').lower() == 'web':
+            if video_codec not in ('h.264', 'h.265', 'vp9'):
+                console.print(rule)
+                compliant = False
+
+        rule = "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
+        if meta.get('type').lower() == 'encode' and meta.get('source').lower() == 'web':
+            if video_codec not in ('h.264', 'h.265', 'x264', 'x265'):
+                console.print(rule)
+                compliant = False
+
+        rule = "Allowed Video Codecs for x265 encodes must be 10-bit"
+        if meta.get('type').lower() == 'encode':
+            if video_codec == 'x265':
+                if meta.get('bit_depth') != '10':
+                    console.print(rule)
+                    compliant = False
+
+        rule = "H.264/x264 only allowed for 1080p and below."
+        resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
+        if resolution >= 1080:
+            if video_codec in ('h.264', 'x264'):
+                console.print(rule)
+                compliant = False
+
+        rule = (
+                """Allowed Video Codecs: AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, x265
+                Not Allowed: Any codec not mentioned above is not allowed."""
+                )
+        if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265'):
+            console.print(rule)
+            compliant = False
+
     def get_resolution(self, meta):
         resolution = ''
         if not meta.get('is_disc') == 'BDMV':
@@ -279,6 +428,7 @@ class PHD(COMMON):
         return keyword_map.get(source_type.lower())
 
     async def validate_credentials(self, meta):
+        self.follow_the_rules(meta)
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
             console.print(f"[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]")
@@ -553,7 +703,7 @@ class PHD(COMMON):
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta, image_bytes: bytes, filename: str) -> str | None:
+    async def img_host(self, meta, image_bytes: bytes, filename: str) -> Optional[str]:
         upload_url = f"{self.base_url}/ajax/image/upload"
 
         headers = {
