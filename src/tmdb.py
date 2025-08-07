@@ -306,6 +306,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             # Try getting TMDb translation for original title if it's different
                             translated_title = ""
                             translated_similarity = 0.0
+                            secondary_best = 0.0
 
                             if original_title and original_title != result_title:
                                 translated_title = await get_tmdb_translations(r['id'], category, 'en', debug)
@@ -328,13 +329,16 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
                                 secondary_best = max(secondary_main_sim, secondary_orig_sim, secondary_trans_sim)
 
-                                best_primary = max(main_similarity, original_similarity, translated_similarity)
-                                similarity = (best_primary * 0.75) + (secondary_best * 0.25)
-                            else:
-                                if translated_similarity == 0.0:
+                            if translated_similarity == 0.0:
+                                if secondary_best == 0.0:
                                     similarity = (main_similarity * 0.5) + (original_similarity * 0.5)
                                 else:
+                                    similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (secondary_best * 0.4)
+                            else:
+                                if secondary_best == 0.0:
                                     similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (translated_similarity * 0.4)
+                                else:
+                                    similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (secondary_best * 0.4)
 
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
 
@@ -344,10 +348,12 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 console.print(f"[cyan]  Original similarity: {original_similarity:.3f}[/cyan]")
                                 if translated_similarity > 0:
                                     console.print(f"[cyan]  Translated similarity: {translated_similarity:.3f}[/cyan]")
+                                if secondary_best > 0:
+                                    console.print(f"[cyan]  Secondary similarity: {secondary_best:.3f}[/cyan]")
                                 console.print(f"[cyan]  Final similarity: {similarity:.3f}[/cyan]")
 
                             # Boost similarity if we have exact matches with year validation
-                            if similarity >= 1.0 and search_year_int > 0 and result_year > 0:
+                            if similarity >= 0.9 and search_year_int > 0 and result_year > 0:
                                 if result_year == search_year_int:
                                     similarity += 0.1  # Full boost for exact year match
                                 elif result_year == search_year_int + 1:
@@ -382,11 +388,9 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         if best_similarity >= similarity_threshold:
                             # Check that no other result is close to the best match
                             second_best = results_with_similarity[1][1] if len(results_with_similarity) > 1 else 0.0
-                            percentage_difference = (best_similarity - second_best) / best_similarity
-
-                            if percentage_difference >= 0.15:  # 15% better than second place
+                            if best_similarity >= 0.75 and best_similarity - second_best >= 0.10:
                                 if debug:
-                                    console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f}, {percentage_difference:.1%} better than second)[/green]")
+                                    console.print(f"[green]Auto-selecting best match: {sorted_results[0].get('title') or sorted_results[0].get('name')} (similarity: {best_similarity:.2f}[/green]")
                                 tmdb_id = int(sorted_results[0]['id'])
                                 return tmdb_id, category
 
@@ -397,7 +401,10 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
                             for result_tuple in results_with_similarity:
                                 result, similarity = result_tuple
-                                title = await normalize_title(result.get('title'))
+                                if result.get('title'):
+                                    title = await normalize_title(result.get('title'))
+                                else:
+                                    title = await normalize_title(result.get('name', ''))
                                 if title.startswith('the '):
                                     the_results.append(result_tuple)
                                 else:
@@ -406,7 +413,10 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                             # If exactly one result starts with "The", check if similarity improves
                             if len(the_results) == 1 and len(non_the_results) > 0:
                                 the_result, the_similarity = the_results[0]
-                                the_title = await normalize_title(the_result.get('title'))
+                                if the_result.get('title'):
+                                    the_title = await normalize_title(the_result.get('title'))
+                                else:
+                                    the_title = await normalize_title(the_result.get('name', ''))
                                 the_title_without_the = the_title[4:]
                                 new_similarity = SequenceMatcher(None, filename_norm, the_title_without_the).ratio()
 
