@@ -17,6 +17,7 @@ from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
 from tqdm import tqdm
+from typing import Optional
 from urllib.parse import urlparse
 
 
@@ -575,7 +576,7 @@ class BJS(COMMON):
 
         return keyword_map.get(source_type.lower(), "Outro")
 
-    async def img_host(self, image_bytes: bytes, filename: str) -> str | None:
+    async def img_host(self, image_bytes: bytes, filename: str) -> Optional[str]:
         upload_url = f"{self.base_url}/ajax.php?action=screen_up"
         headers = {
             'Referer': f"{self.base_url}/upload.php",
