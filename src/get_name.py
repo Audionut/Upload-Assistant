@@ -228,6 +228,7 @@ async def extract_title_and_year(meta, filename):
     season_pattern = r'\bS(\d{1,3})\b'
     season_episode_pattern = r'\bS(\d{1,3})E(\d{1,3})\b'
     date_pattern = r'\b(20\d{2})\.(\d{1,2})\.(\d{1,2})\b'
+    extension_pattern = r'\.(mkv|mp4)$'
 
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
@@ -247,6 +248,7 @@ async def extract_title_and_year(meta, filename):
         res_match = re.search(res_pattern, modified_folder_name, re.IGNORECASE)
         season_pattern_match = re.search(season_pattern, modified_folder_name, re.IGNORECASE)
         season_episode_match = re.search(season_episode_pattern, modified_folder_name, re.IGNORECASE)
+        extension_match = re.search(extension_pattern, modified_folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, modified_folder_name, re.IGNORECASE)
 
         indices = [('year', double_year_match.end(), second_year)]
@@ -256,6 +258,8 @@ async def extract_title_and_year(meta, filename):
             indices.append(('season', season_pattern_match.start(), season_pattern_match.group()))
         if season_episode_match:
             indices.append(('season_episode', season_episode_match.start(), season_episode_match.group()))
+        if extension_match:
+            indices.append(('extension', extension_match.start(), extension_match.group()))
         if type_match:
             indices.append(('type', type_match.start(), type_match.group()))
 
@@ -268,6 +272,7 @@ async def extract_title_and_year(meta, filename):
         res_match = re.search(res_pattern, folder_name, re.IGNORECASE)
         season_pattern_match = re.search(season_pattern, folder_name, re.IGNORECASE)
         season_episode_match = re.search(season_episode_pattern, folder_name, re.IGNORECASE)
+        extension_match = re.search(extension_pattern, folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
 
         indices = []
@@ -281,6 +286,8 @@ async def extract_title_and_year(meta, filename):
             indices.append(('season', season_pattern_match.start(), season_pattern_match.group()))
         if season_episode_match:
             indices.append(('season_episode', season_episode_match.start(), season_episode_match.group()))
+        if extension_match:
+            indices.append(('extension', extension_match.start(), extension_match.group()))
         if type_match:
             indices.append(('type', type_match.start(), type_match.group()))
 
