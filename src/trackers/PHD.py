@@ -253,6 +253,22 @@ class PHD(COMMON):
         if meta.get('is_disc', '') == 'BDMV':
             is_bd_disc = True
 
+        video_codec = meta.get('video_codec', '')
+        if video_codec:
+            video_codec = video_codec.strip().lower()
+
+        type = meta.get('type', '')
+        if type:
+            type = type.strip().lower()
+
+        source = meta.get('source', '')
+        if source:
+            source = source.strip().lower()
+
+        video_encode = meta.get('video_encode', '')
+        if video_encode:
+            video_encode = video_encode.strip().lower()
+
         # This also checks the rule "FANRES content is not allowed"
         if self.category not in ('MOVIE', 'TV'):
             rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
@@ -324,17 +340,20 @@ class PHD(COMMON):
             console.print(rule)
             raise UploadException(rule)
 
-        if meta.get('tag', '').lower() in ('RARBG', 'FGT', 'Grym', 'TBS'):
-            rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
-            console.print(rule)
-            raise UploadException(rule)
+        tag = meta.get('tag', '')
+        if tag:
+            tag = tag.strip().lower()
+            if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
+                rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
+                console.print(rule)
+                raise UploadException(rule)
 
-        if meta.get('tag', '').lower() == 'evo' and meta.get('source', '').lower() != 'web':
-            rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
-            console.print(rule)
-            raise UploadException(rule)
+            if tag == 'evo' and source != 'web':
+                rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
+                console.print(rule)
+                raise UploadException(rule)
 
-        if meta.get('sd') == 1:
+        if meta.get('sd', '') == 1:
             rule = "SD (Standard Definition) content is forbidden."
             console.print(rule)
             raise UploadException(rule)
@@ -360,19 +379,6 @@ class PHD(COMMON):
                 6 - H.264/x264 only allowed for 1080p and below.
                 7 - Not Allowed: Any codec not mentioned above is not allowed.
         """
-        video_codec = meta.get('video_codec').strip().lower()
-
-        type = meta.get('type', '')
-        if type:
-            type = type.strip().lower()
-
-        source = meta.get('source', '')
-        if source:
-            source = source.strip().lower()
-
-        video_encode = meta.get('video_encode', '')
-        if video_encode:
-            video_encode = video_encode.strip().lower()
 
         # 1
         if is_bd_disc or type == 'remux':
