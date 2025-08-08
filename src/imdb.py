@@ -371,157 +371,204 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, final_attempt=False, duration=None, unattended=False, wide_search=False):
-    if secondary_title is not None:
-        filename = secondary_title
-    if final_attempt is None:
-        final_attempt = False
+async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, duration=None, unattended=False):
+    search_results = []
+    imdbID = imdb_id = 0
     if attempted is None:
         attempted = 0
-    if attempted:
-        await asyncio.sleep(1)  # Whoa baby, slow down
     if debug:
         console.print(f"[yellow]Searching IMDb for {filename} and year {search_year}...[/yellow]")
-    imdbID = imdb_id = 0
-    url = "https://api.graphql.imdb.com/"
-    if category == "MOVIE":
-        filename = filename.replace('and', '&').replace('And', '&').replace('AND', '&').strip()
+    if attempted:
+        await asyncio.sleep(1)  # Whoa baby, slow down
 
-    constraints_parts = [f'titleTextConstraint: {{searchTerm: "{filename}"}}']
+    async def run_imdb_search(filename, search_year, category=None, debug=False, attempted=0, duration=None, wide_search=False):
+        search_results = []
+        if secondary_title is not None:
+            filename = secondary_title
+        if attempted is None:
+            attempted = 0
+        if attempted:
+            await asyncio.sleep(1)  # Whoa baby, slow down
+        url = "https://api.graphql.imdb.com/"
+        if category == "MOVIE":
+            filename = filename.replace('and', '&').replace('And', '&').replace('AND', '&').strip()
 
-    # Add release date constraint if search_year is provided
-    if not wide_search and search_year:
-        search_year_int = int(search_year)
-        start_year = search_year_int - 1
-        end_year = search_year_int + 1
-        constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
+        constraints_parts = [f'titleTextConstraint: {{searchTerm: "{filename}"}}']
 
-    if not wide_search and duration:
-        if isinstance(duration, int):
-            duration = str(duration)
-            start_duration = int(duration) - 10
-            end_duration = int(duration) + 10
-            constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
+        # Add release date constraint if search_year is provided
+        if not wide_search and search_year:
+            search_year_int = int(search_year)
+            start_year = search_year_int - 1
+            end_year = search_year_int + 1
+            constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
 
-    constraints_string = ', '.join(constraints_parts)
+        if not wide_search and duration:
+            if isinstance(duration, int):
+                duration = str(duration)
+                start_duration = int(duration) - 10
+                end_duration = int(duration) + 10
+                constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
 
-    query = {
-        "query": f"""
-            {{
-                advancedTitleSearch(
-                    first: 10,
-                    constraints: {{{constraints_string}}}
-                ) {{
-                    total
-                    edges {{
-                        node {{
-                            title {{
-                                id
-                                titleText {{
-                                    text
-                                }}
-                                titleType {{
-                                    text
-                                }}
-                                releaseYear {{
-                                    year
-                                }}
-                                plot {{
-                                    plotText {{
-                                    plainText
+        constraints_string = ', '.join(constraints_parts)
+
+        query = {
+            "query": f"""
+                {{
+                    advancedTitleSearch(
+                        first: 10,
+                        constraints: {{{constraints_string}}}
+                    ) {{
+                        total
+                        edges {{
+                            node {{
+                                title {{
+                                    id
+                                    titleText {{
+                                        text
+                                    }}
+                                    titleType {{
+                                        text
+                                    }}
+                                    releaseYear {{
+                                        year
+                                    }}
+                                    plot {{
+                                        plotText {{
+                                        plainText
+                                        }}
                                     }}
                                 }}
                             }}
                         }}
                     }}
                 }}
-            }}
-        """
-    }
+            """
+        }
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=query, headers={"Content-Type": "application/json"}, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-    except Exception as e:
-        console.print(f"[red]IMDb GraphQL API error: {e}[/red]")
-        return 0
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=query, headers={"Content-Type": "application/json"}, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+        except Exception as e:
+            console.print(f"[red]IMDb GraphQL API error: {e}[/red]")
+            return 0
 
-    results = await safe_get(data, ["data", "advancedTitleSearch", "edges"], [])
+        results = await safe_get(data, ["data", "advancedTitleSearch", "edges"], [])
+        search_results = results
 
-    if debug:
-        console.print(f"[yellow]Found {len(results)} results...[/yellow]")
-        console.print(f"quickie: {quickie}, category: {category}, search_year: {search_year}")
+        if debug:
+            console.print(f"[yellow]Found {len(results)} results...[/yellow]")
+            console.print(f"quickie: {quickie}, category: {category}, search_year: {search_year}")
+        return search_results
 
-    if not results:
-        # relax the constraints
-        if attempted <= 1:
-            if debug:
-                console.print("[yellow]No results found, trying with a wider search...[/yellow]")
-            try:
-                return await search_imdb(filename, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
-            except Exception as e:
-                console.print(f"[red]Error during wide search: {e}[/red]")
+    if not search_results:
+        result = await run_imdb_search(filename, search_year, category, debug, attempted, duration, wide_search=False)
+        if result and len(result) > 0:
+            search_results = result
 
-        # Try parsed title (anitopy + guessit)
-        if attempted <= 2 and untouched_filename:
-            try:
-                parsed = guessit(untouched_filename, {"excludes": ["country", "language"]})
-                parsed_title = anitopy_parse(parsed['title'])['anime_title']
+    if not search_results and secondary_title:
+        if debug:
+            console.print(f"[yellow]Trying IMDb with secondary title: {secondary_title}[/yellow]")
+        result = await run_imdb_search(secondary_title, search_year, category, debug, attempted, duration, wide_search=True)
+        if result and len(result) > 0:
+            search_results = result
+
+    # remove 'the' from the beginning of the title if it exists
+    if not search_results:
+        try:
+            words = filename.split()
+            bad_words = ['the']
+            words_lower = [word.lower() for word in words]
+
+            if words_lower and words_lower[0] in bad_words:
+                words.pop(0)
+                words_lower.pop(0)
+                title = ' '.join(words)
                 if debug:
-                    console.print(f"[bold yellow]Trying IMDB with parsed title: {parsed_title}[/bold yellow]")
-                return await search_imdb(parsed_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
-            except Exception as e:
-                console.print(f"[bold red]Failed to parse title for IMDb search: {e}[/bold red]")
+                    console.print(f"[bold yellow]Trying IMDb with the prefix removed: {title}[/bold yellow]")
+                result = await run_imdb_search(title, search_year, category, debug, attempted + 1, wide_search=False)
+                if result and len(result) > 0:
+                    search_results = result
+        except Exception as e:
+            console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
+            search_results = {"results": []}
 
-        # Try with less words in the title
-        if attempted <= 3 and filename:
-            try:
-                words = filename.split()
-                extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
-                words_lower = [word.lower() for word in words]
+    # relax the constraints
+    if not search_results:
+        if debug:
+            console.print("[yellow]No results found, trying with a wider search...[/yellow]")
+        try:
+            result = await run_imdb_search(filename, search_year, category, debug, attempted + 1, wide_search=True)
+            if result and len(result) > 0:
+                search_results = result
+        except Exception as e:
+            console.print(f"[red]Error during wide search: {e}[/red]")
 
-                for ext in extensions:
-                    if ext in words_lower:
-                        ext_index = words_lower.index(ext)
-                        words.pop(ext_index)
-                        words_lower.pop(ext_index)
-                        break
+    # Try parsed title (anitopy + guessit)
+    if not search_results:
+        try:
+            parsed = guessit(untouched_filename, {"excludes": ["country", "language"]})
+            parsed_title = anitopy_parse(parsed['title'])['anime_title']
+            if debug:
+                console.print(f"[bold yellow]Trying IMDB with parsed title: {parsed_title}[/bold yellow]")
+            result = await run_imdb_search(parsed_title, search_year, category, debug, attempted + 1, wide_search=True)
+            if result and len(result) > 0:
+                search_results = result
+        except Exception as e:
+            console.print(f"[bold red]Failed to parse title for IMDb search: {e}[/bold red]")
 
-                if len(words) > 1:
-                    reduced_title = ' '.join(words[:-1])
-                    if debug:
-                        console.print(f"[bold yellow]Trying IMDB with reduced name: {reduced_title}[/bold yellow]")
-                    return await search_imdb(reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, unattended=unattended, wide_search=True)
-            except Exception as e:
-                console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
+    # Try with less words in the title
+    if not search_results:
+        try:
+            words = title.split()
+            extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+            words_lower = [word.lower() for word in words]
 
-        # Try with even fewer words
-        if attempted > 3 and filename and not final_attempt:
-            try:
-                words = filename.split()
-                extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
-                words_lower = [word.lower() for word in words]
+            for ext in extensions:
+                if ext in words_lower:
+                    ext_index = words_lower.index(ext)
+                    words.pop(ext_index)
+                    words_lower.pop(ext_index)
+                    break
 
-                for ext in extensions:
-                    if ext in words_lower:
-                        ext_index = words_lower.index(ext)
-                        words.pop(ext_index)
-                        words_lower.pop(ext_index)
-                        break
+            if len(words) > 1:
+                reduced_title = ' '.join(words[:-1])
+                if debug:
+                    console.print(f"[bold yellow]Trying IMDB with reduced name: {reduced_title}[/bold yellow]")
+                result = await run_imdb_search(reduced_title, search_year, category, debug, attempted + 1, wide_search=True)
+                if result and len(result) > 0:
+                    search_results = result
+        except Exception as e:
+            console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
 
-                if len(words) > 2:
-                    further_reduced_title = ' '.join(words[:-2])
-                    if debug:
-                        console.print(f"[bold yellow]Trying IMDB with further reduced name: {further_reduced_title}[/bold yellow]")
-                    return await search_imdb(further_reduced_title, search_year, quickie, category, debug, secondary_title, path, untouched_filename, attempted + 1, final_attempt=True, unattended=unattended, wide_search=True)
-            except Exception as e:
-                console.print(f"[bold red]Further reduced name search error:[/bold red] {e}")
+    # Try with even fewer words
+    if not search_results:
+        try:
+            words = title.split()
+            extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
+            words_lower = [word.lower() for word in words]
+
+            for ext in extensions:
+                if ext in words_lower:
+                    ext_index = words_lower.index(ext)
+                    words.pop(ext_index)
+                    words_lower.pop(ext_index)
+                    break
+
+            if len(words) > 2:
+                further_reduced_title = ' '.join(words[:-2])
+                if debug:
+                    console.print(f"[bold yellow]Trying IMDB with further reduced name: {further_reduced_title}[/bold yellow]")
+                result = await run_imdb_search(further_reduced_title, search_year, category, debug, attempted + 1, wide_search=True)
+                if result and len(result) > 0:
+                    search_results = result
+        except Exception as e:
+            console.print(f"[bold red]Further reduced name search error:[/bold red] {e}")
 
     if quickie:
-        if results:
-            first_result = results[0]
+        if search_results:
+            first_result = search_results[0]
             if debug:
                 console.print(f"[cyan]Quickie search result: {first_result}[/cyan]")
             node = await safe_get(first_result, ["node"], {})
@@ -562,18 +609,18 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         return imdbID if imdbID else 0
 
     else:
-        if len(results) == 1:
-            imdb_id = await safe_get(results[0], ["node", "title", "id"], "")
+        if len(search_results) == 1:
+            imdb_id = await safe_get(search_results[0], ["node", "title", "id"], "")
             if imdb_id:
                 imdbID = int(imdb_id.replace('tt', '').strip())
                 return imdbID
-        elif len(results) > 1:
+        elif len(search_results) > 1:
             # Calculate similarity for all results
             results_with_similarity = []
             filename_norm = filename.lower().strip()
             search_year_int = int(search_year) if search_year else 0
 
-            for r in results:
+            for r in search_results:
                 node = await safe_get(r, ["node"], {})
                 title = await safe_get(node, ["title"], {})
                 title_text = await safe_get(title, ["titleText", "text"], "")
