@@ -336,9 +336,9 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                     similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (secondary_best * 0.4)
                             else:
                                 if secondary_best == 0.0:
-                                    similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (translated_similarity * 0.4)
+                                    similarity = (main_similarity * 0.5) + (translated_similarity * 0.5)
                                 else:
-                                    similarity = (main_similarity * 0.3) + (original_similarity * 0.3) + (secondary_best * 0.4)
+                                    similarity = (main_similarity * 0.5) + (secondary_best * 0.5)
 
                             result_year = int((r.get('release_date') or r.get('first_air_date') or '0')[:4] or 0)
 
