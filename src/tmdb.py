@@ -584,8 +584,13 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
     # Try searching with year + 1 if search_year is provided
     if not search_results.get('results'):
-        if search_year and search_year.isdigit() and int(search_year) > 0:
-            imdb_year = int(search_year) + 1
+        try:
+            year_int = int(search_year)
+        except Exception:
+            year_int = 0
+
+        if year_int > 0:
+            imdb_year = year_int + 1
             if debug:
                 console.print("[yellow]Retrying with year +1...[/yellow]")
             result = await search_tmdb_id(filename, imdb_year, category, untouched_filename, attempted + 1, debug=debug, secondary_title=secondary_title, path=path, unattended=unattended)
