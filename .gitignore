@@ -16,3 +16,4 @@ tmp/*
 user-args.json
 /.vs
 data/nfos/*
+data/*.json

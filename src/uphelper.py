@@ -1,5 +1,6 @@
 import cli_ui
-from difflib import SequenceMatcher
+import os
+import json
 from rich.console import Console
 from data.config import config
 
@@ -66,7 +67,7 @@ class UploadHelper:
                 console.print()
         console.print(f"[bold]Category:[/bold] {meta['category']}")
         console.print()
-        if meta.get('emby', False) and meta.get('emby_debug', False):
+        if meta.get('emby_debug', False):
             if int(meta.get('original_imdb', 0)) != 0:
                 imdb = str(meta.get('original_imdb', 0)).zfill(7)
                 console.print(f"[bold]IMDB:[/bold] https://www.imdb.com/title/tt{imdb}")
@@ -100,7 +101,7 @@ class UploadHelper:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
 
-        if meta.get('unattended', False) and not meta.get('unattended_confirm', False):
+        if meta.get('unattended', False) and not meta.get('unattended_confirm', False) and not meta.get('emby_debug', False):
             if meta['debug'] is True:
                 console.print("[bold yellow]Unattended mode is enabled, skipping confirmation.[/bold yellow]")
             return True
@@ -126,7 +127,7 @@ class UploadHelper:
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
             elif not meta.get('emby_debug', False):
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-        if meta.get('emby', False) and meta.get('emby_debug', False):
+        if meta.get('emby_debug', False):
             if meta.get('original_imdb', 0) != meta.get('imdb_id', 0):
                 imdb = str(meta.get('imdb_id', 0)).zfill(7)
                 console.print(f"[bold red]IMDB ID changed from {meta['original_imdb']} to {meta['imdb_id']}[/bold red]")
@@ -149,69 +150,75 @@ class UploadHelper:
             console.print()
             if meta.get('original_imdb', 0) == meta.get('imdb_id', 0) and meta.get('original_tmdb', 0) == meta.get('tmdb_id', 0) and meta.get('original_mal', 0) == meta.get('mal_id', 0) and meta.get('original_tvmaze', 0) == meta.get('tvmaze_id', 0) and meta.get('original_tvdb', 0) == meta.get('tvdb_id', 0) and meta.get('original_category', None) == meta.get('category', None):
                 console.print("[bold yellow]Database ID's are correct![/bold yellow]")
-                regex_title = meta.get('regex_title', None)
-                if regex_title:
-                    regex_title = regex_title.replace('&', 'and').replace('  ', ' ').strip()
-                title = meta.get('title', None)
-                if title:
-                    title = title.replace('&', 'and').replace('  ', ' ').strip()
-                original_title = meta.get('original_title', None)
-                if original_title:
-                    original_title = original_title.replace('&', 'and').replace('  ', ' ').strip()
-                secondary_title = meta.get('secondary_title', None)
-                if secondary_title:
-                    secondary_title = secondary_title.replace('&', 'and').replace('  ', ' ').strip()
-                if regex_title and title:
-                    similarity = SequenceMatcher(None, str(regex_title).lower(), str(title).lower()).ratio()
-                    if similarity < 0.80:
-                        if secondary_title:
-                            similarity_secondary = SequenceMatcher(None, str(secondary_title).lower(), str(title).lower()).ratio()
-                            if similarity_secondary < 0.80:
-                                console.print()
-                                console.print("path: ", meta['path'])
-                                console.print()
-                                console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
-                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-                            else:
-                                return True
-                        if original_title:
-                            original_similarity = SequenceMatcher(None, str(original_title).lower(), str(regex_title).lower()).ratio()
-                            if original_similarity < 0.80:
-                                console.print()
-                                console.print("path: ", meta['path'])
-                                console.print()
-                                console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
-                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-                            else:
-                                return True
-                        else:
-                            console.print()
-                            console.print("path: ", meta['path'])
-                            console.print()
-                            console.print(f"[bold cyan]Regex Title Mismatch:[/bold cyan] [yellow]{regex_title}[/yellow], [bold cyan]Title:[/bold cyan] [yellow]{title}[/yellow]")
-                            confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-                    else:
-                        regex_year = meta.get('regex_year', 0)
-                        year = meta.get('year', 0)
-                        imdb_year = meta.get('imdb_info', {}).get('year', 0)
-                        if regex_year and year:
-                            if imdb_year and int(imdb_year) == int(regex_year):
-                                return True
-                            elif int(regex_year) != int(year):
-                                console.print()
-                                console.print(f"[bold cyan]Regex Year Mismatch:[/bold cyan] [yellow]{regex_year}[/yellow], [bold cyan]Year:[/bold cyan] [yellow]{year}[/yellow]")
-                                confirm = console.input("[bold green]Continue?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
-                            else:
-                                return True
-                        else:
-                            return True
-                else:
-                    return True
+                return True
             else:
-                console.print("path: ", meta['path'])
-                console.print()
-                console.print("[bold red]Double check the database information.[/bold red]")
-                confirm = console.input("[bold green]Is the database information correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
+                nfo_dir = os.path.join(f"{meta['base_dir']}/data")
+                os.makedirs(nfo_dir, exist_ok=True)
+                json_file_path = os.path.join(nfo_dir, "db_check.json")
+
+                def imdb_url(imdb_id):
+                    return f"https://www.imdb.com/title/tt{str(imdb_id).zfill(7)}" if imdb_id and str(imdb_id).isdigit() else None
+
+                def tmdb_url(tmdb_id, category):
+                    return f"https://www.themoviedb.org/{str(category).lower()}/{tmdb_id}" if tmdb_id and category else None
+
+                def tvdb_url(tvdb_id):
+                    return f"https://www.thetvdb.com/?id={tvdb_id}&tab=series" if tvdb_id else None
+
+                def tvmaze_url(tvmaze_id):
+                    return f"https://www.tvmaze.com/shows/{tvmaze_id}" if tvmaze_id else None
+
+                def mal_url(mal_id):
+                    return f"https://myanimelist.net/anime/{mal_id}" if mal_id else None
+
+                db_check_entry = {
+                    "path": meta.get('path'),
+                    "original": {
+                        "imdb_id": meta.get('original_imdb', 'N/A'),
+                        "imdb_url": imdb_url(meta.get('original_imdb')),
+                        "tmdb_id": meta.get('original_tmdb', 'N/A'),
+                        "tmdb_url": tmdb_url(meta.get('original_tmdb'), meta.get('original_category')),
+                        "tvdb_id": meta.get('original_tvdb', 'N/A'),
+                        "tvdb_url": tvdb_url(meta.get('original_tvdb')),
+                        "tvmaze_id": meta.get('original_tvmaze', 'N/A'),
+                        "tvmaze_url": tvmaze_url(meta.get('original_tvmaze')),
+                        "mal_id": meta.get('original_mal', 'N/A'),
+                        "mal_url": mal_url(meta.get('original_mal')),
+                        "category": meta.get('original_category', 'N/A')
+                    },
+                    "changed": {
+                        "imdb_id": meta.get('imdb_id', 'N/A'),
+                        "imdb_url": imdb_url(meta.get('imdb_id')),
+                        "tmdb_id": meta.get('tmdb_id', 'N/A'),
+                        "tmdb_url": tmdb_url(meta.get('tmdb_id'), meta.get('category')),
+                        "tvdb_id": meta.get('tvdb_id', 'N/A'),
+                        "tvdb_url": tvdb_url(meta.get('tvdb_id')),
+                        "tvmaze_id": meta.get('tvmaze_id', 'N/A'),
+                        "tvmaze_url": tvmaze_url(meta.get('tvmaze_id')),
+                        "mal_id": meta.get('mal_id', 'N/A'),
+                        "mal_url": mal_url(meta.get('mal_id')),
+                        "category": meta.get('category', 'N/A')
+                    },
+                    "tracker": meta.get('matched_tracker', 'N/A'),
+                }
+
+                # Append to JSON file (as a list of entries)
+                if os.path.exists(json_file_path):
+                    with open(json_file_path, 'r', encoding='utf-8') as f:
+                        try:
+                            db_data = json.load(f)
+                            if not isinstance(db_data, list):
+                                db_data = []
+                        except Exception:
+                            db_data = []
+                else:
+                    db_data = []
+
+                db_data.append(db_check_entry)
+
+                with open(json_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(db_data, f, indent=2, ensure_ascii=False)
+                return True
 
         return confirm
 
