@@ -25,7 +25,7 @@ class PHD(COMMON):
         super().__init__(config)
         self.tracker = "PHD"
         self.source_flag = "PrivateHD"
-        self.banned_groups = ["RARBG", "FGT", "Grym"]
+        self.banned_groups = [""]
         self.base_url = "https://privatehd.to"
         self.auth_token = None
         self.session = requests.Session()
@@ -246,18 +246,23 @@ class PHD(COMMON):
 
     def follow_the_rules(self, meta):
         self.assign_media_properties(meta)
-        compliant = True
+        rule = ''
+        # compliant = True
+
+        is_bd_disc = False
+        if meta.get('is_disc', '') == 'BDMV':
+            is_bd_disc = True
 
         # This also checks the rule "FANRES content is not allowed"
-        rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
         if self.category not in ('MOVIE', 'TV'):
+            rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
         if meta.get('anime', False):
+            rule = "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
         all_countries = CountryInfo().all()
 
@@ -294,101 +299,195 @@ class PHD(COMMON):
         origin_country = meta.get('imdb_info', {}).get('country')
         # language = meta.get('original_language')
 
-        rule = "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
-        if origin_country in european_countries or south_american_countries or african_countries:
+        target_countries = european_countries + south_american_countries + african_countries
+        if origin_country in target_countries:
+            rule = "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
         if origin_country in asian_countries:
+            rule = "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
             console.print(rule)
             console.print(f'Origin country for your upload: {origin_country}')
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
         year = meta.get('year')
         current_year = datetime.now().year
         is_older_than_50_years = (current_year - year) >= 50 if year else False
         if is_older_than_50_years:
+            rule = "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
         if origin_country not in english_speaking_countries_in_north_america:
+            rule = "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
         if meta.get('tag', '').lower() in ('RARBG', 'FGT', 'Grym', 'TBS'):
+            rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
         if meta.get('tag', '').lower() == 'evo' and meta.get('source', '').lower() != 'web':
+            rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "SD (Standard Definition) content is forbidden."
         if meta.get('sd') == 1:
+            rule = "SD (Standard Definition) content is forbidden."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
 
-        rule = "Allowed containers: MKV, MP4."
-        if meta.get('is_disc') != 'BDMV':
+        if not is_bd_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
             allowed_extensions = {'.mkv': "MKV", '.mp4': "MP4"}
             container = allowed_extensions.get(ext)
             if container is None:
+                rule = "Allowed containers: MKV, MP4."
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        video_codec = meta.get('video_codec').lower()
+        # Video codec check
+        """
+        Video Codecs:
+            Allowed:
+                1 - BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265
+                2 - BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)
+                3 - WEB (Untouched): H.264, H.265, VP9
+                4 - WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)
+                5 - x265 encodes must be 10-bit
+                6 - H.264/x264 only allowed for 1080p and below.
+                7 - Not Allowed: Any codec not mentioned above is not allowed.
+        """
+        video_codec = meta.get('video_codec').strip().lower()
 
-        rule = "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
-        if meta.get('is_disc').lower() == 'bdmv' or meta.get('type').lower() == 'remux':
+        type = meta.get('type', '')
+        if type:
+            type = type.strip().lower()
+
+        source = meta.get('source', '')
+        if source:
+            source = source.strip().lower()
+
+        video_encode = meta.get('video_encode', '')
+        if video_encode:
+            video_encode = video_encode.strip().lower()
+
+        # 1
+        if is_bd_disc or type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
+                rule = "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        rule = "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-        if meta.get('type').lower() == 'encode' and meta.get('source').lower() == 'bluray':
-            if video_codec not in ('h.264', 'h.265', 'x264', 'x265'):
+        # 2
+        if type == 'encode' and source == 'bluray':
+            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+                rule = "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        rule = "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
-        if meta.get('type').lower() in ('webdl', 'web-dl') and meta.get('source').lower() == 'web':
+        # 3
+        if type in ('webdl', 'web-dl') and source == 'web':
             if video_codec not in ('h.264', 'h.265', 'vp9'):
+                rule = "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        rule = "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-        if meta.get('type').lower() == 'encode' and meta.get('source').lower() == 'web':
-            if video_codec not in ('h.264', 'h.265', 'x264', 'x265'):
+        # 4
+        if type == 'encode' and source == 'web':
+            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+                rule = "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        rule = "Allowed Video Codecs for x265 encodes must be 10-bit"
-        if meta.get('type').lower() == 'encode':
-            if video_codec == 'x265':
-                if meta.get('bit_depth') != '10':
+        # 5
+        if type == 'encode':
+            if video_encode == 'x265':
+                if meta.get('bit_depth', '') != '10':
+                    rule = "Allowed Video Codecs for x265 encodes must be 10-bit"
                     console.print(rule)
-                    compliant = False
+                    raise UploadException(rule)
 
-        rule = "H.264/x264 only allowed for 1080p and below."
+        # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution >= 1080:
             if video_codec in ('h.264', 'x264'):
+                rule = "H.264/x264 only allowed for 1080p and below."
                 console.print(rule)
-                compliant = False
+                raise UploadException(rule)
 
-        rule = (
-                """Allowed Video Codecs: AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, x265
-                Not Allowed: Any codec not mentioned above is not allowed."""
-                )
-        if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265'):
+        # 7
+        if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
+            rule = f"Video codec not allowed in your upload: {video_codec}. {self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265."
             console.print(rule)
-            compliant = False
+            raise UploadException(rule)
+
+        # Audio codec check
+        """
+        Audio Codecs:
+            1 - Allowed: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.
+            2 - Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc.
+            3 - TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players.
+            4 - Not Allowed: Any codec not mentioned above is not allowed.
+        """
+        if is_bd_disc:
+            pass
+        else:
+            # 1
+            allowed_keywords = ['AC3', 'Dolby Digital', 'Dolby TrueHD', 'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby']
+            # 2
+            forbidden_keywords = ['LPCM', 'PCM', 'Linear PCM']
+
+            audio_tracks_info = []
+            media_tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            for track in media_tracks:
+                if track.get('@type') == 'Audio':
+                    codec = track.get('Format_Commercial_IfAny') or track.get('Format', '')
+                    title = track.get('Title', '')
+                    audio_tracks_info.append({'codec': codec, 'title': title})
+
+            invalid_codecs = []
+            for track_info in audio_tracks_info:
+                codec = track_info['codec']
+
+                is_forbidden = any(kw.lower() in codec.lower() for kw in forbidden_keywords)
+                if is_forbidden:
+                    invalid_codecs.append(codec)
+                    continue
+
+                is_allowed = any(kw.lower() in codec.lower() for kw in allowed_keywords)
+                if not is_allowed:
+                    invalid_codecs.append(codec)
+            # 4
+            if invalid_codecs:
+                unique_invalid_codecs = sorted(list(set(invalid_codecs)))
+                rule = (
+                    f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
+                    f"Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n"
+                    f"Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc."
+                )
+                console.print(rule)
+                raise UploadException(rule)
+
+            # 3
+            all_codecs = [track['codec'].lower() for track in audio_tracks_info]
+
+            has_truehd_atmos = any(
+                'truehd' in track['codec'].lower() and 'atmos' in track['title'].lower()
+                for track in audio_tracks_info
+            )
+
+            has_ac3_compat_track = 'ac3' in all_codecs or 'dolby digital' in all_codecs
+
+            if has_truehd_atmos and not has_ac3_compat_track:
+                rule = (
+                    "TrueHD with Atmos detected, but no AC3 (Dolby Digital) compatibility track found.\n"
+                    "Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players."
+                )
+                console.print(rule)
+                raise UploadException(rule)
 
     def get_resolution(self, meta):
         resolution = ''
