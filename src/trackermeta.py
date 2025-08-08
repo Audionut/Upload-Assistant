@@ -237,7 +237,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
             if len(desc) > 0:
                 description.write((desc or "") + "\n")
-    if category and not meta.get('category'):
+    if category and not meta.get('manual_category', None):
         cat_upper = category.upper()
         if "MOVIE" in cat_upper:
             meta['category'] = "MOVIE"
@@ -373,7 +373,9 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
         if meta.get('imdb_id') or meta.get('tmdb_id'):
             if not meta['unattended']:
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
+                found_match = True
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
+                    found_match = True
                     if meta.get('description') and meta.get('description') != "":
                         description = meta.get('description')
                         console.print("[bold green]Successfully grabbed description from BHD")
@@ -446,7 +448,6 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         if valid_images:
                             meta['image_list'] = valid_images
                             await handle_image_list(meta, tracker_name, valid_images)
-                            found_match = True
                             console.print(f"[green]{tracker_name} data retained.[/green]")
                         else:
                             meta['image_list'] = []
@@ -471,17 +472,17 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                     found_match = False
             else:
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
+                found_match = True
                 if meta.get('image_list'):
                     valid_images = await check_images_concurrently(meta.get('image_list'), meta)
                     if valid_images:
                         meta['image_list'] = valid_images
-                        found_match = True
                     else:
                         meta['image_list'] = []
         else:
             found_match = False
 
-    elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX"]:
+    elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX", "RF", "OTW", "YUS", "DP", "SP"]:
         if meta.get(tracker_key) is not None:
             if meta['debug']:
                 console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")

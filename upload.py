@@ -32,7 +32,9 @@ from src.get_desc import gen_desc
 from discordbot import send_discord_notification, send_upload_status_notification
 from cogs.redaction import clean_meta_for_export
 from src.languages import process_desc_language
+from src.nfo_link import nfo_link
 from bin.get_mkbrr import ensure_mkbrr_binary
+from src.get_tracker_data import get_tracker_data
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -154,26 +156,64 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(f"Error in gather_prep: {e}")
         console.print(traceback.format_exc())
         return
-    meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
+
+    meta['emby_debug'] = meta.get('emby_debug') if meta.get('emby_debug', False) else config['DEFAULT'].get('emby_debug', False)
+    if meta.get('emby_cat', None) == "movie" and meta.get('category', None) != "MOVIE":
+        console.print(f"[red]Wrong category detected! Expected 'MOVIE', but found: {meta.get('category', None)}[/red]")
+        meta['we_are_uploading'] = False
+        return
+    elif meta.get('emby_cat', None) == "tv" and meta.get('category', None) != "TV":
+        console.print("[red]TV content is not supported at this time[/red]")
+        meta['we_are_uploading'] = False
+        return
+
+    # If unattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
+    if meta.get('emby', False) and not meta.get('no_ids', False) and not meta.get('unattended_confirm', False) and meta.get('unattended', False):
+        await nfo_link(meta)
+        meta['we_are_uploading'] = False
+        return
+
     parser = Args(config)
     helper = UploadHelper()
-    if meta.get('trackers'):
-        trackers = meta['trackers']
-    else:
-        default_trackers = config['TRACKERS'].get('default_trackers', '')
-        trackers = [tracker.strip() for tracker in default_trackers.split(',')]
 
-    if isinstance(trackers, str):
-        if "," in trackers:
-            trackers = [t.strip().upper() for t in trackers.split(',')]
+    if not meta.get('emby', False):
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
+
+        if meta.get('trackers'):
+            trackers = meta['trackers']
         else:
-            trackers = [trackers.strip().upper()]  # Make it a list with one element
-    else:
-        trackers = [t.strip().upper() for t in trackers]
-    meta['trackers'] = trackers
-    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-        json.dump(meta, f, indent=4)
-        f.close()
+            default_trackers = config['TRACKERS'].get('default_trackers', '')
+            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
+
+        if isinstance(trackers, str):
+            if "," in trackers:
+                trackers = [t.strip().upper() for t in trackers.split(',')]
+            else:
+                trackers = [trackers.strip().upper()]  # Make it a list with one element
+        else:
+            trackers = [t.strip().upper() for t in trackers]
+        meta['trackers'] = trackers
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+            json.dump(meta, f, indent=4)
+            f.close()
+
+    if meta.get('emby_debug', False):
+        meta['original_imdb'] = meta.get('imdb_id', None)
+        meta['original_tmdb'] = meta.get('tmdb_id', None)
+        meta['original_mal'] = meta.get('mal_id', None)
+        meta['original_tvmaze'] = meta.get('tvmaze_id', None)
+        meta['original_tvdb'] = meta.get('tvdb_id', None)
+        meta['original_category'] = meta.get('category', None)
+        if 'matched_tracker' not in meta:
+            await client.get_pathed_torrents(meta['path'], meta)
+            if meta['is_disc']:
+                search_term = os.path.basename(meta['path'])
+                search_file_folder = 'folder'
+            else:
+                search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
+                search_file_folder = 'file'
+            await get_tracker_data(meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'])
+
     editargs_tracking = ()
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
@@ -194,6 +234,12 @@ async def process_meta(meta, base_dir, bot=None):
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
         confirm = await helper.get_confirmation(meta)
+
+    if meta.get('emby', False):
+        if not meta['debug']:
+            await nfo_link(meta)
+        meta['we_are_uploading'] = False
+        return
 
     console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 
@@ -588,7 +634,8 @@ async def do_the_thing(base_dir):
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):
                 shutil.rmtree(f"{base_dir}/tmp")
-                console.print("[bold green]Successfully emptied tmp directory")
+                console.print("[yellow]Successfully emptied tmp directory[/yellow]")
+                console.print()
             if not meta.get('path') or cleanup_only:
                 exit(0)
 
@@ -606,6 +653,7 @@ async def do_the_thing(base_dir):
         if meta['mkbrr'] and not is_binary:
             console.print("[bold red]mkbrr binary is not available. Please ensure it is installed correctly.[/bold red]")
             console.print("[bold red]Reverting to Torf[/bold red]")
+            console.print()
             meta['mkbrr'] = False
 
         queue, log_file = await handle_queue(path, meta, paths, base_dir)
@@ -629,7 +677,8 @@ async def do_the_thing(base_dir):
                     try:
                         shutil.rmtree(tmp_path)
                         os.makedirs(tmp_path, exist_ok=True)
-                        console.print(f"[bold green]Successfully cleaned temp directory for {os.path.basename(path)}")
+                        console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
+                        console.print()
                     except Exception as e:
                         console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 
@@ -693,12 +742,16 @@ async def do_the_thing(base_dir):
 
             await process_meta(meta, base_dir, bot=bot)
 
-            if 'we_are_uploading' not in meta:
-                console.print("we are not uploading.......")
+            if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
+                if not meta.get('emby', False):
+                    console.print("we are not uploading.......")
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
-                    skipped_files_count += 1
-                    console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
+                    if not meta.get('emby', False):
+                        skipped_files_count += 1
+                        console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
+                    else:
+                        console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
                     if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
                             await save_processed_file(log_file, path)
@@ -729,24 +782,31 @@ async def do_the_thing(base_dir):
                     gc.collect()
                     reset_terminal()
 
-            if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
-                if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
-                    console.print(f"[red]Uploading limit of {meta['limit_queue']} files reached. Stopping queue processing. {skipped_files_count} skipped files.")
-                    break
-
             if meta['debug']:
                 finish_time = time.time()
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
 
             if use_discord and bot:
-                await send_discord_notification(config, bot, f"Finsished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
+                await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
 
-            if sanitize_meta:
+            if sanitize_meta and not meta.get('emby', False):
                 try:
                     await asyncio.sleep(0.3)  # We can't race the status prints
                     meta = await clean_meta_for_export(meta)
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
+
+            if meta.get('delete_tmp', False) and os.path.exists(tmp_path) and meta.get('emby', False):
+                try:
+                    shutil.rmtree(tmp_path)
+                    console.print(f"[yellow]Successfully deleted temp directory for {os.path.basename(path)}[/yellow]")
+                    console.print()
+                except Exception as e:
+                    console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
+
+            if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
+                if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
+                    break
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")

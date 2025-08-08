@@ -917,10 +917,10 @@ class COMMON():
                 # Extract data from the attributes
                 category = attributes.get('category')
                 description = attributes.get('description')
-                tmdb = attributes.get('tmdb_id')
-                tvdb = attributes.get('tvdb_id')
-                mal = attributes.get('mal_id')
-                imdb = attributes.get('imdb_id')
+                tmdb = int(attributes.get('tmdb_id') or 0)
+                tvdb = int(attributes.get('tvdb_id') or 0)
+                mal = int(attributes.get('mal_id') or 0)
+                imdb = int(attributes.get('imdb_id') or 0)
                 infohash = attributes.get('info_hash')
                 tmdb = 0 if tmdb == 0 else tmdb
                 tvdb = 0 if tvdb == 0 else tvdb
@@ -944,10 +944,10 @@ class COMMON():
                     # Extract data from the attributes
                     category = attributes.get('category')
                     description = attributes.get('description')
-                    tmdb = attributes.get('tmdb_id')
-                    tvdb = attributes.get('tvdb_id')
-                    mal = attributes.get('mal_id')
-                    imdb = attributes.get('imdb_id')
+                    tmdb = int(attributes.get('tmdb_id') or 0)
+                    tvdb = int(attributes.get('tvdb_id') or 0)
+                    mal = int(attributes.get('mal_id') or 0)
+                    imdb = int(attributes.get('imdb_id') or 0)
                     infohash = attributes.get('info_hash')
                     tmdb = 0 if tmdb == 0 else tmdb
                     tvdb = 0 if tvdb == 0 else tvdb

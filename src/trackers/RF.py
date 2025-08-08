@@ -27,6 +27,7 @@ class RF():
         self.upload_url = 'https://reelflix.xyz/api/torrents/upload'
         self.search_url = 'https://reelflix.xyz/api/torrents/filter'
         self.torrent_url = 'https://reelflix.xyz/torrents/'
+        self.id_url = 'https://reelflix.xyz/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [""]
         pass

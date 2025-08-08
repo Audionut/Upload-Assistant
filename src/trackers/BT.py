@@ -592,11 +592,8 @@ class BT(COMMON):
         if director:
             unique_names = list(dict.fromkeys(director))[:5]
             return ", ".join(unique_names)
-
-        creator = (meta.get('imdb_info', {}).get('creators') or []) + (meta.get('tmdb_creators') or [])
-        if creator:
-            unique_names = list(dict.fromkeys(creator))[:5]
-            return ", ".join(unique_names)
+        else:
+            return "N/A"
 
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
@@ -621,7 +618,7 @@ class BT(COMMON):
             'idioma_ori': await self.get_original_language(meta) or meta.get('original_language', ''),
             'tags': await self.get_tags(meta),
             'duracao': f"{str(meta.get('runtime', ''))} min",
-            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
+            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path') or meta.get('tmdb_poster', '')}",
             'youtube': await self.get_trailer(meta),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'mediainfo': self.get_file_info(meta),

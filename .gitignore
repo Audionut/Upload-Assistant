@@ -15,3 +15,5 @@ tmp/*
 .DS_Store
 user-args.json
 /.vs
+data/nfos/*
+data/*.json

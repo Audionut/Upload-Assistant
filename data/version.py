@@ -1,4 +1,82 @@
-__version__ = "v5.2.1"
+__version__ = "v5.3.0"
+
+"""
+Release Notes for version v5.3.0 (2025-08-08):
+
+# 
+# ## NOTES
+#  - From the previous release, screenshots in description were modified. Check the options in the example-config to handle to taste, particularly https://github.com/Audionut/Upload-Assistant/blob/f45e4dd87472ab31b79569f97e3bea62e27940e0/data/example-config.py#L70
+# 
+# 
+# ## RELEASE NOTES
+#  - UA will no longer, 'just pick the top result suggested by TMDb'.
+#  - Instead, title parsing has been significantly improved. Now UA will use a weight based system that relies on the title name, AKA name  and year .
+#  - Old scene releases such as  will easily defeat the title parsing, however these releases will get an IMDB ID from srrdb, negating this issue. Poorly named P2P releases are exactly that.
+#  - Unfortunately, not only are there many, many releases that have exactly matching names, and release years, TMDb's own sorting algorithm doesn't perfectly return the correct result, as the first result, always.
+#  - This means that a prompt is required. UA will display a shortened list of results for you to select, an allows manual entry of the correct TMDb ID, such as /.
+#  - Given that UA would have just selected the first result previously, which could have been incorrect, some percentage of time, the net result should be a better overall user experience, since the wrong return previously required manual intervention in any event, and may have been missed previously, leading to lack luster results.
+#  - As always, feeding the correct ID's into UA always leads to a better experience. There are many options to accomplish this task automatically, and users should familiarize themselves with the options outlined in the example.config, and/or user-args.json
+#  - Overall SubsPlease handling should be greatly increased......if you have TVDB login details.
+# 
+#  ## NOTEWORTHY UPDATES
+#   - Two new trackers, BT and BJS have been added thanks to @wastaken7
+#   - PSS was removed as offline
+#   - The edit pathway, when correcting Information, should now correctly handle existing args thanks to @ppkhoa
+#   - Some additional context has been added regarding ffmpeg screen capture issues, particularly on seedboxes, also see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues
+#   - Additional trackers have been added for getting existing ids, but they are currently only available via auto torrent searching
+#   - Getting data from trackers now has a cool off period. This should not be noticed under normal circumstances. PTP has a 60 second cool off period, which was chosen to minimize interference with other tools.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * update install/update instructions by @Audionut in 6793709
+# * TMDB retry (#646) by @Audionut in 84554d8
+# * fix missing tvdb credential checks by @Audionut in 28b0561
+# * cleanup ptp description/images handling by @Audionut in 271fc5f
+# * fix bad copy/paste by @Audionut in d075a11
+# * set the ptp_imagelist by @Audionut in 3905248
+# * add option to select specific new files for queue (#648) by @Audionut in 8de31e3
+# * TMDB retry, set object by @Audionut in 12436ff
+# * robust framerate by @Audionut in 955be6d
+# * add clarity of max workers issues on seedboxes by @Audionut in d38f265
+# * add linux ffmpeg check by @Audionut in 89bf550
+# * ffmpeg - point to wiki by @Audionut in 6d6246b
+# * generic max workers error print by @Audionut in 71d00c0
+# * handle specific ffmpeg complex error by @Audionut in 6e104ea
+# * frame overlay print behind debug by @Audionut in 72804de
+# * Log_file - save debug logs (#653) by @Audionut in 482dce5
+# * SPD - fix imdb in search existing (#656) by @Audionut in a640da6
+# * Skip torrents for AL if they don't have a MAL ID (#651) by @PythonCoderAS in 045bb71
+# * overrides - import at top by @Audionut in bb662e2
+# * ignore mkbrr binaries by @Audionut in 37f3d1c
+# * Don't discard original args, override them (#660) by @Khoa Pham in 9554f21
+# * remove PSS (#663) by @Audionut in 31a6c57
+# * ULCX - remove erroneous space in name by @Audionut in 5bb5806
+# * fix subplease service check by @Audionut in 9fa53ba
+# * fix tmdb secondary title search by @Audionut in bf77018
+# * imdb - get more crew info (#665) by @wastaken7 in 208f65c
+# * Added support for BJS (#649) by @wastaken7 in 61fb607
+# * BJS - add internal flag (#668) by @wastaken7 in 3cb93f5
+# * BT - refactor (#669) by @wastaken7 in d1c6d83
+# * BJS - safe string handling of description file by @Audionut in 7c1ef78
+# * BT - safe string handling of description file by @Audionut in 67b1fce
+# * rTorrent debugging by @Audionut in fb31951
+# * Update release notes handling (#671) by @Audionut in f45e4dd
+# * Fix manual tracker mode (#673) by @Audionut in fdf3b54
+# * BT and BJS fixes (#672) by @wastaken7 in c478149
+# * fix: python compatibility in BJS (#674) by @wastaken7 in 9535259
+# * Add arg, skip-dupe-asking (#675) by @Audionut in 7844ce6
+# * BHD - fix tracker found match by @Audionut in 4a82aed
+# * TL - fix description uploading in api mode by @Audionut in d36002e
+# * ffmpeg - only first video streams by @Audionut in 85fc9ca
+# * Get language from track title (#676) by @Audionut in 013aed1
+# * TMDB/IMDB searching refactor and EMBY handling (#637) by @Audionut in f68625d
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.1...v5.3.0
+"""
+
 
 """
 Release Notes for version v5.2.1 (2025-07-30):
