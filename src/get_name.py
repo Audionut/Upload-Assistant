@@ -343,10 +343,13 @@ async def extract_title_and_year(meta, filename):
         "Extended Edition": '',
         "directors cut": '',
         "director cut": '',
+        "itunes": '',
     }
     filename = re.sub(r'\s+', ' ', filename)
     filename = await multi_replace(title_part, replacements)
-
+    secondary_title = await multi_replace(secondary_title or '', replacements)
+    if not secondary_title:
+        secondary_title = None
     if filename:
         # Look for content in parentheses
         bracket_pattern = r'\s*\(([^)]+)\)\s*'
@@ -354,6 +357,7 @@ async def extract_title_and_year(meta, filename):
 
         if bracket_match:
             bracket_content = bracket_match.group(1).strip()
+            bracket_content = await multi_replace(bracket_content, replacements)
 
             # Only add to secondary_title if we don't already have one
             if not secondary_title and bracket_content:
