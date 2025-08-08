@@ -273,7 +273,7 @@ class TL():
             data = {
                 'announcekey': self.announce_key,
                 'category': cat_id,
-                'nfo': desc_content
+                'description': desc_content
             }
 
             if meta['debug'] is False:

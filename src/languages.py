@@ -2,6 +2,7 @@ import aiofiles
 import os
 import cli_ui
 import re
+import langcodes
 from src.console import console
 
 
@@ -104,54 +105,98 @@ async def process_desc_language(meta, desc=None, tracker=None):
                 meta['subtitle_languages'] = []
             if not audio_languages or not subtitle_languages:
                 if not meta.get('unattended_audio_skip', False) and (not audio_languages or audio_languages is None):
-                    for audio_track in parsed_info.get('audio', []):
-                        if 'language' not in audio_track:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                                console.print("No audio language/s found, you must enter (comma-separated) languages")
-                                audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
-                                if audio_lang:
-                                    audio_languages.extend([lang.strip() for lang in audio_lang.split(',')])
-                                    meta['audio_languages'] = audio_languages
-                                    meta['write_audio_languages'] = True
-                                else:
-                                    meta['audio_languages'] = None
-                                    meta['unattended_audio_skip'] = True
-                                    meta['tracker_status'][tracker]['skip_upload'] = True
+                    found_any_language = False
+                    tracks_without_language = []
+
+                    for track_index, audio_track in enumerate(parsed_info.get('audio', []), 1):
+                        language_found = None
+
+                        # Skip commentary tracks
+                        if "title" in audio_track and "commentary" in audio_track['title'].lower():
+                            if meta['debug']:
+                                console.print(f"Skipping commentary track: {audio_track['title']}")
+                            continue
+
+                        if 'language' in audio_track:
+                            language_found = audio_track['language']
+
+                        if not language_found and 'title' in audio_track:
+                            if meta['debug']:
+                                console.print(f"Attempting to extract language from title: {audio_track['title']}")
+                            title_language = extract_language_from_title(audio_track['title'])
+                            if title_language:
+                                language_found = title_language
+                                console.print(f"Extracted language: {title_language}")
+
+                        if language_found:
+                            meta['audio_languages'].append(language_found)
+                            found_any_language = True
+                        else:
+
+                            track_info = f"Track #{track_index}"
+                            if 'title' in audio_track:
+                                track_info += f" (Title: {audio_track['title']})"
+                            tracks_without_language.append(track_info)
+
+                    if not found_any_language:
+                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                            console.print("No audio language/s found for the following tracks:")
+                            for track_info in tracks_without_language:
+                                console.print(f"  - {track_info}")
+                            console.print("You must enter (comma-separated) languages")
+                            audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
+                            if audio_lang:
+                                audio_languages.extend([lang.strip() for lang in audio_lang.split(',')])
+                                meta['audio_languages'] = audio_languages
+                                meta['write_audio_languages'] = True
                             else:
+                                meta['audio_languages'] = None
                                 meta['unattended_audio_skip'] = True
                                 meta['tracker_status'][tracker]['skip_upload'] = True
                         else:
-                            if "title" in audio_track and "commentary" not in audio_track['title']:
-                                meta['audio_languages'].append(audio_track['language'])
-                            elif "title" not in audio_track:
-                                meta['audio_languages'].append(audio_track['language'])
-                        if meta['audio_languages']:
-                            meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
+                            meta['unattended_audio_skip'] = True
+                            meta['tracker_status'][tracker]['skip_upload'] = True
+
+                    if meta['audio_languages']:
+                        meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
 
                 if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and (not subtitle_languages or subtitle_languages is None):
                     if 'text' in parsed_info:
-                        for text_track in parsed_info.get('text', []):
+                        tracks_without_language = []
+
+                        for track_index, text_track in enumerate(parsed_info.get('text', []), 1):
                             if 'language' not in text_track:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                                    console.print("No subtitle language/s found, you must enter (comma-separated) languages")
-                                    subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
-                                    if subtitle_lang:
-                                        subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
-                                        meta['subtitle_languages'] = subtitle_languages
-                                        meta['write_subtitle_languages'] = True
-                                    else:
-                                        meta['subtitle_languages'] = None
-                                        meta['unattended_subtitle_skip'] = True
-                                        meta['tracker_status'][tracker]['skip_upload'] = True
+                                track_info = f"Track #{track_index}"
+                                if 'title' in text_track:
+                                    track_info += f" (Title: {text_track['title']})"
+                                tracks_without_language.append(track_info)
+                            else:
+                                meta['subtitle_languages'].append(text_track['language'])
+
+                        if tracks_without_language:
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                                console.print("No subtitle language/s found for the following tracks:")
+                                for track_info in tracks_without_language:
+                                    console.print(f"  - {track_info}")
+                                console.print("You must enter (comma-separated) languages")
+                                subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
+                                if subtitle_lang:
+                                    subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
+                                    meta['subtitle_languages'] = subtitle_languages
+                                    meta['write_subtitle_languages'] = True
                                 else:
+                                    meta['subtitle_languages'] = None
                                     meta['unattended_subtitle_skip'] = True
                                     meta['tracker_status'][tracker]['skip_upload'] = True
                             else:
-                                meta['subtitle_languages'].append(text_track['language'])
-                            if meta['subtitle_languages']:
-                                meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
+                                meta['unattended_subtitle_skip'] = True
+                                meta['tracker_status'][tracker]['skip_upload'] = True
+
+                        if meta['subtitle_languages']:
+                            meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
+
                     if meta.get('hardcoded-subs', False):
-                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             hc_lang = cli_ui.ask_string("What language/s are the hardcoded subtitles?")
                             if hc_lang:
                                 meta['subtitle_languages'] = [hc_lang]
@@ -242,3 +287,22 @@ async def has_english_language(languages):
     if not languages:
         return False
     return any('english' in lang.lower() for lang in languages)
+
+
+def extract_language_from_title(title):
+    """Extract language from title field using langcodes library"""
+    if not title:
+        return None
+
+    title_lower = title.lower()
+    words = re.findall(r'\b[a-zA-Z]+\b', title_lower)
+
+    for word in words:
+        try:
+            lang = langcodes.find(word)
+            if lang and lang.is_valid():
+                return lang.display_name()
+        except (langcodes.LanguageTagError, LookupError):
+            continue
+
+    return None
