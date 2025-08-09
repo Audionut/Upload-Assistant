@@ -246,7 +246,7 @@ class PHD(COMMON):
 
     def follow_the_rules(self, meta):
         self.assign_media_properties(meta)
-        warning = f"[yellow]{self.tracker}:[yellow] [red]RULE WARNING:[/red] "
+        warning = f"[yellow]{self.tracker}:[/yellow] [red]RULE WARNING:[/red] "
         rule = ''
         # compliant = True
 
@@ -523,6 +523,65 @@ class PHD(COMMON):
                     return answer
                 else:
                     print("Invalid input. Please enter 'y' or 'n'.")
+
+        """Minimum quality:
+            Only upload proper encodes. Any encodes where the size and/or the bitrate imply a bad quality of the encode will be deleted. Indication of a proper encode:
+                Or a minimum x265 video bitrate  of:
+                    720p HDTV/WEB-DL/WEBRip/HDRip: 1500 Kbps
+                    720p BluRay encode: 2000 Kbps
+                    1080p HDTV/WEB-DL/WEBRip/HDRip: 2500 Kbps
+                    1080p BluRay encode: 3500 Kbps
+                Depending on the content, for example an animation movie or series, a lower bitrate (x264) can be allowed.
+            Video must at least be 720p
+            The above bitrates are subject to staff discretion and uploads may be nuked even if they fulfill the above criteria."""
+
+        BITRATE_RULES = {
+            # x265
+            ('x265', 'web', 720): 1500000,
+            ('x265', 'web', 1080): 2500000,
+            ('x265', 'bluray', 720): 2000000,
+            ('x265', 'bluray', 1080): 3500000,
+
+            # x264
+            ('x264', 'web', 720): 2500000,
+            ('x264', 'web', 1080): 4500000,
+            ('x264', 'bluray', 720): 3500000,
+            ('x264', 'bluray', 1080): 6000000,
+        }
+
+        WEB_SOURCES = ('hdtv', 'web', 'hdrip')
+
+        # Quality check
+        if type == 'encode':
+            bitrate = 0
+            for track in media_tracks:
+                if track.get('@type') == 'Video':
+                    bitrate = int(track.get('BitRate'))
+                    break
+
+            if bitrate == 0:
+                raise UploadException("Não foi possível encontrar a trilha de vídeo ou seu bitrate.")
+
+            source_type = 'bluray' if source == 'bluray' else 'web'
+
+            rule_key = (video_encode, source_type, resolution)
+
+            if rule_key in BITRATE_RULES:
+                min_bitrate = BITRATE_RULES[rule_key]
+
+                if bitrate < min_bitrate:
+                    quality_rule_text = (
+                        "Only upload proper encodes. "
+                        "Any encodes where the size and/or the bitrate imply a bad quality will be deleted. "
+                    )
+                    rule_message = (
+                        f"Your upload was rejected due to low quality. "
+                        f"Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps."
+                    )
+                    raise UploadException(quality_rule_text + rule_message)
+
+        if resolution < 720:
+            raise UploadException("Video must be at least 720p.")
 
         # Hybrid check
         if type in ('remux', 'encode'):
