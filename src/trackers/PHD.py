@@ -258,6 +258,10 @@ class PHD(COMMON):
         if video_codec:
             video_codec = video_codec.strip().lower()
 
+        video_encode = meta.get('video_encode', '')
+        if video_encode:
+            video_encode = video_encode.strip().lower()
+
         type = meta.get('type', '')
         if type:
             type = type.strip().lower()
@@ -266,20 +270,12 @@ class PHD(COMMON):
         if source:
             source = source.strip().lower()
 
-        video_encode = meta.get('video_encode', '')
-        if video_encode:
-            video_encode = video_encode.strip().lower()
-
         # This also checks the rule "FANRES content is not allowed"
         if self.category not in ('MOVIE', 'TV'):
-            rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!")
 
         if meta.get('anime', False):
-            rule = "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
         all_countries = CountryInfo().all()
 
@@ -318,55 +314,42 @@ class PHD(COMMON):
 
         target_countries = european_countries + south_american_countries + african_countries
         if origin_country in target_countries:
-            rule = "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.")
 
         if origin_country in asian_countries:
-            rule = "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
-            console.print(warning + rule)
-            console.print(f'Origin country for your upload: {origin_country}')
-            raise UploadException(warning + rule)
+            raise UploadException(
+                warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). "
+                "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
+                f'Origin country for your upload: {origin_country}'
+            )
 
         year = meta.get('year')
         current_year = datetime.now().year
         is_older_than_50_years = (current_year - year) >= 50 if year else False
         if is_older_than_50_years:
-            rule = "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
 
         if origin_country not in english_speaking_countries_in_north_america:
-            rule = "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand.")
 
         tag = meta.get('tag', '')
         if tag:
             tag = tag.strip().lower()
             if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
-                rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time.")
 
             if tag == 'evo' and source != 'web':
-                rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time.")
 
         if meta.get('sd', '') == 1:
-            rule = "SD (Standard Definition) content is forbidden."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + "SD (Standard Definition) content is forbidden.")
 
         if not is_bd_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
             allowed_extensions = {'.mkv': "MKV", '.mp4': "MP4"}
             container = allowed_extensions.get(ext)
             if container is None:
-                rule = "Allowed containers: MKV, MP4."
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Allowed containers: MKV, MP4.")
 
         # Video codec check
         """
@@ -384,52 +367,38 @@ class PHD(COMMON):
         # 1
         if is_bd_disc or type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
-                rule = "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265")
 
         # 2
         if type == 'encode' and source == 'bluray':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                rule = "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)")
 
         # 3
         if type in ('webdl', 'web-dl') and source == 'web':
-            if video_codec not in ('h.264', 'h.265', 'vp9'):
-                rule = "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+            if video_encode not in ('h.264', 'h.265', 'vp9'):
+                raise UploadException(warning + "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9")
 
         # 4
         if type == 'encode' and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                rule = "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)")
 
         # 5
         if type == 'encode':
             if video_encode == 'x265':
                 if meta.get('bit_depth', '') != '10':
-                    rule = "Allowed Video Codecs for x265 encodes must be 10-bit"
-                    console.print(warning + rule)
-                    raise UploadException(warning + rule)
+                    raise UploadException(warning + "Allowed Video Codecs for x265 encodes must be 10-bit")
 
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution >= 1080:
             if video_codec in ('h.264', 'x264'):
-                rule = "H.264/x264 only allowed for 1080p and below."
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "H.264/x264 only allowed for 1080p and below.")
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
-            rule = f"Video codec not allowed in your upload: {video_codec}. {self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265."
-            console.print(warning + rule)
-            raise UploadException(warning + rule)
+            raise UploadException(warning + f"Video codec not allowed in your upload: {video_codec}. {self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265.")
 
         # Audio codec check
         """
@@ -482,13 +451,11 @@ class PHD(COMMON):
                     )
 
                     if has_truehd_atmos and not has_ac3_compat_track:
-                        rule = (
-                            f"A TrueHD Atmos track was detected in the original language ({original_language}), "
+                        raise UploadException(
+                            warning + f"A TrueHD Atmos track was detected in the original language ({original_language}), "
                             f"but no AC-3 (Dolby Digital) compatibility track was found for that same language.\n"
                             "Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players."
                         )
-                        console.print(warning + rule)
-                        raise UploadException(warning + rule)
 
             # 4
             invalid_codecs = []
@@ -508,13 +475,11 @@ class PHD(COMMON):
 
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
-                rule = (
-                    f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
+                raise UploadException(
+                    warning + f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f"Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n"
                     f"Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc."
                 )
-                console.print(warning + rule)
-                raise UploadException(warning + rule)
 
         def ask_yes_no(prompt_text):
             while True:
@@ -524,7 +489,8 @@ class PHD(COMMON):
                 else:
                     print("Invalid input. Please enter 'y' or 'n'.")
 
-        """Minimum quality:
+        """
+        Minimum quality:
             Only upload proper encodes. Any encodes where the size and/or the bitrate imply a bad quality of the encode will be deleted. Indication of a proper encode:
                 Or a minimum x265 video bitrate  of:
                     720p HDTV/WEB-DL/WEBRip/HDRip: 1500 Kbps
@@ -533,16 +499,16 @@ class PHD(COMMON):
                     1080p BluRay encode: 3500 Kbps
                 Depending on the content, for example an animation movie or series, a lower bitrate (x264) can be allowed.
             Video must at least be 720p
-            The above bitrates are subject to staff discretion and uploads may be nuked even if they fulfill the above criteria."""
+            The above bitrates are subject to staff discretion and uploads may be nuked even if they fulfill the above criteria.
+        """
 
+        # Quality check
         BITRATE_RULES = {
-            # x265
             ('x265', 'web', 720): 1500000,
             ('x265', 'web', 1080): 2500000,
             ('x265', 'bluray', 720): 2000000,
             ('x265', 'bluray', 1080): 3500000,
 
-            # x264
             ('x264', 'web', 720): 2500000,
             ('x264', 'web', 1080): 4500000,
             ('x264', 'bluray', 720): 3500000,
@@ -551,7 +517,6 @@ class PHD(COMMON):
 
         WEB_SOURCES = ('hdtv', 'web', 'hdrip')
 
-        # Quality check
         if type == 'encode':
             bitrate = 0
             for track in media_tracks:
@@ -559,29 +524,32 @@ class PHD(COMMON):
                     bitrate = int(track.get('BitRate'))
                     break
 
-            if bitrate == 0:
-                raise UploadException("Não foi possível encontrar a trilha de vídeo ou seu bitrate.")
+            source_type = None
+            if source in WEB_SOURCES:
+                source_type = 'web'
+            elif source == 'bluray':
+                source_type = 'bluray'
 
-            source_type = 'bluray' if source == 'bluray' else 'web'
+            if source_type:
+                rule_key = (video_encode, source_type, resolution)
 
-            rule_key = (video_encode, source_type, resolution)
+                if rule_key in BITRATE_RULES:
+                    min_bitrate = BITRATE_RULES[rule_key]
 
-            if rule_key in BITRATE_RULES:
-                min_bitrate = BITRATE_RULES[rule_key]
-
-                if bitrate < min_bitrate:
-                    quality_rule_text = (
-                        "Only upload proper encodes. "
-                        "Any encodes where the size and/or the bitrate imply a bad quality will be deleted. "
-                    )
-                    rule_message = (
-                        f"Your upload was rejected due to low quality. "
-                        f"Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps."
-                    )
-                    raise UploadException(quality_rule_text + rule_message)
+                    if bitrate < min_bitrate:
+                        quality_rule_text = (
+                            "Only upload proper encodes."
+                            "Any encodes where the size and/or the bitrate imply a bad quality will be deleted."
+                        )
+                        rule = (
+                            f"Your upload was rejected due to low quality."
+                            f"Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps."
+                        )
+                        raise UploadException(warning + quality_rule_text + rule)
 
         if resolution < 720:
-            raise UploadException("Video must be at least 720p.")
+            rule = "Video must be at least 720p."
+            raise UploadException(warning + rule)
 
         # Hybrid check
         if type in ('remux', 'encode'):
@@ -623,12 +591,11 @@ class PHD(COMMON):
 
         # Log check
         if type == 'remux':
-            rule = "Remuxes must have a demux/eac3to log under spoilers in description."
             remux_log = ask_yes_no(f"{warning + rule}\nDo you have these logs and will you add them to the description after upload?")
             if remux_log == 'y':
                 pass
             else:
-                raise UploadException(warning + rule)
+                raise UploadException(warning + "Remuxes must have a demux/eac3to log under spoilers in description.")
 
         # Bloated check
         if meta.get('bloated', False):
