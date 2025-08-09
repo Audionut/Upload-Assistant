@@ -77,14 +77,19 @@ async def get_audio_v2(mi, meta, bdinfo):
             try:
                 tracks = mi.get('media', {}).get('track', [])
                 has_commentary = False
+                has_compatibility = False
                 has_coms = [t for t in tracks if "commentary" in (t.get('Title') or '').lower()]
+                has_compat = [t for t in tracks if "compatibility" in (t.get('Title') or '').lower()]
                 if has_coms:
                     has_commentary = True
+                if has_compat:
+                    has_compatibility = True
                 if meta['debug']:
                     console.print(f"DEBUG: Found {len(has_coms)} commentary tracks, has_commentary = {has_commentary}")
+                    console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
                 audio_tracks = [
                     t for t in tracks
-                    if t.get('@type') == "Audio" and "commentary" not in (t.get('Title') or '').lower()
+                    if t.get('@type') == "Audio" and not has_commentary and not has_compatibility
                 ]
                 audio_language = None
                 if meta['debug']:
