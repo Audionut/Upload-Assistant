@@ -176,6 +176,8 @@ async def check_image_link(url, timeout=None):
     # Handle when pixhost url points to web_url and convert to raw_url
     if url.startswith("https://pixhost.to/show/"):
         url = url.replace("https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
+    if timeout is None:
+        timeout = aiohttp.ClientTimeout(total=20, connect=10, sock_connect=10)
 
     connector = aiohttp.TCPConnector(ssl=False)  # Disable SSL verification for testing
 
@@ -373,7 +375,6 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
         if meta.get('imdb_id') or meta.get('tmdb_id'):
             if not meta['unattended']:
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
-                found_match = True
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
                     found_match = True
                     if meta.get('description') and meta.get('description') != "":
@@ -448,9 +449,9 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         if valid_images:
                             meta['image_list'] = valid_images
                             await handle_image_list(meta, tracker_name, valid_images)
-                            console.print(f"[green]{tracker_name} data retained.[/green]")
                         else:
                             meta['image_list'] = []
+
                 else:
                     console.print(f"[yellow]{tracker_name} data discarded.[/yellow]")
                     meta[tracker_key] = None

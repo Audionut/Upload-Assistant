@@ -469,7 +469,7 @@ class Prep():
 
             if not meta.get('image_list') and not meta.get('edit', False) and not ids:
                 # Reuse information from trackers with fallback
-                await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'])
+                await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
                 ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
@@ -635,7 +635,7 @@ class Prep():
             if meta['debug']:
                 console.print("[yellow]IMDb ID mismatch detected, attempting to resolve...[/yellow]")
             # with refactored tmdb, it quite likely to be correct
-            meta['imdb_id'] = meta['mismatched_imdb_id']
+            meta['imdb_id'] = meta.get('mismatched_imdb_id', 0)
             meta['imdb_info'] = None
 
         # Get IMDb ID if not set
