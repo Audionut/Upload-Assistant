@@ -246,6 +246,7 @@ class PHD(COMMON):
 
     def follow_the_rules(self, meta):
         self.assign_media_properties(meta)
+        warning = f"[yellow]{self.tracker}:[yellow] [red]RULE WARNING:[/red] "
         rule = ''
         # compliant = True
 
@@ -272,13 +273,13 @@ class PHD(COMMON):
         # This also checks the rule "FANRES content is not allowed"
         if self.category not in ('MOVIE', 'TV'):
             rule = "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!"
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         if meta.get('anime', False):
             rule = "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         all_countries = CountryInfo().all()
 
@@ -318,45 +319,45 @@ class PHD(COMMON):
         target_countries = european_countries + south_american_countries + african_countries
         if origin_country in target_countries:
             rule = "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         if origin_country in asian_countries:
             rule = "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
-            console.print(rule)
+            console.print(warning + rule)
             console.print(f'Origin country for your upload: {origin_country}')
-            raise UploadException(rule)
+            raise UploadException(warning + rule)
 
         year = meta.get('year')
         current_year = datetime.now().year
         is_older_than_50_years = (current_year - year) >= 50 if year else False
         if is_older_than_50_years:
             rule = "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         if origin_country not in english_speaking_countries_in_north_america:
             rule = "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         tag = meta.get('tag', '')
         if tag:
             tag = tag.strip().lower()
             if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
                 rule = "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
             if tag == 'evo' and source != 'web':
                 rule = "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         if meta.get('sd', '') == 1:
             rule = "SD (Standard Definition) content is forbidden."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         if not is_bd_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
@@ -364,8 +365,8 @@ class PHD(COMMON):
             container = allowed_extensions.get(ext)
             if container is None:
                 rule = "Allowed containers: MKV, MP4."
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # Video codec check
         """
@@ -384,51 +385,51 @@ class PHD(COMMON):
         if is_bd_disc or type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
                 rule = "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # 2
         if type == 'encode' and source == 'bluray':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
                 rule = "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # 3
         if type in ('webdl', 'web-dl') and source == 'web':
             if video_codec not in ('h.264', 'h.265', 'vp9'):
                 rule = "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # 4
         if type == 'encode' and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
                 rule = "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # 5
         if type == 'encode':
             if video_encode == 'x265':
                 if meta.get('bit_depth', '') != '10':
                     rule = "Allowed Video Codecs for x265 encodes must be 10-bit"
-                    console.print(rule)
-                    raise UploadException(rule)
+                    console.print(warning + rule)
+                    raise UploadException(warning + rule)
 
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution >= 1080:
             if video_codec in ('h.264', 'x264'):
                 rule = "H.264/x264 only allowed for 1080p and below."
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
             rule = f"Video codec not allowed in your upload: {video_codec}. {self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265."
-            console.print(rule)
-            raise UploadException(rule)
+            console.print(warning + rule)
+            raise UploadException(warning + rule)
 
         # Audio codec check
         """
@@ -443,20 +444,58 @@ class PHD(COMMON):
         else:
             # 1
             allowed_keywords = ['AC3', 'Dolby Digital', 'Dolby TrueHD', 'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby']
+
             # 2
             forbidden_keywords = ['LPCM', 'PCM', 'Linear PCM']
 
-            audio_tracks_info = []
+            audio_tracks = []
             media_tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in media_tracks:
                 if track.get('@type') == 'Audio':
-                    codec = track.get('Format_Commercial_IfAny') or track.get('Format', '')
-                    title = track.get('Title', '')
-                    audio_tracks_info.append({'codec': codec, 'title': title})
+                    codec_info = track.get('Format_Commercial_IfAny')
+                    codec = codec_info if isinstance(codec_info, str) else ''
+                    audio_tracks.append({
+                        'codec': codec,
+                        'language': track.get('Language', '')
+                    })
 
+            # 3
+            original_language = meta.get('original_language', '')
+
+            if original_language:
+                # Filter to only have audio tracks that are in the original language
+                original_language_tracks = [
+                    track for track in audio_tracks if track.get('language', '').lower() == original_language.lower()
+                ]
+
+                # Now checks are ONLY done on the original language track list
+                if original_language_tracks:
+                    has_truehd_atmos = any(
+                        'truehd' in track['codec'].lower() and 'atmos' in track['codec'].lower()
+                        for track in original_language_tracks
+                    )
+
+                    # Check if there is an AC-3 (or Dolby Digital) compatibility track IN THE SAME LANGUAGE
+                    has_ac3_compat_track = any(
+                        'ac-3' in track['codec'].lower() or 'dolby digital' in track['codec'].lower()
+                        for track in original_language_tracks
+                    )
+
+                    if has_truehd_atmos and not has_ac3_compat_track:
+                        rule = (
+                            f"A TrueHD Atmos track was detected in the original language ({original_language}), "
+                            f"but no AC-3 (Dolby Digital) compatibility track was found for that same language.\n"
+                            "Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players."
+                        )
+                        console.print(warning + rule)
+                        raise UploadException(warning + rule)
+
+            # 4
             invalid_codecs = []
-            for track_info in audio_tracks_info:
-                codec = track_info['codec']
+            for track in audio_tracks:
+                codec = track['codec']
+                if not codec:
+                    continue
 
                 is_forbidden = any(kw.lower() in codec.lower() for kw in forbidden_keywords)
                 if is_forbidden:
@@ -466,7 +505,7 @@ class PHD(COMMON):
                 is_allowed = any(kw.lower() in codec.lower() for kw in allowed_keywords)
                 if not is_allowed:
                     invalid_codecs.append(codec)
-            # 4
+
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
                 rule = (
@@ -474,26 +513,8 @@ class PHD(COMMON):
                     f"Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n"
                     f"Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc."
                 )
-                console.print(rule)
-                raise UploadException(rule)
-
-            # 3
-            all_codecs = [track['codec'].lower() for track in audio_tracks_info]
-
-            has_truehd_atmos = any(
-                'truehd' in track['codec'].lower() and 'atmos' in track['title'].lower()
-                for track in audio_tracks_info
-            )
-
-            has_ac3_compat_track = 'ac3' in all_codecs or 'dolby digital' in all_codecs
-
-            if has_truehd_atmos and not has_ac3_compat_track:
-                rule = (
-                    "TrueHD with Atmos detected, but no AC3 (Dolby Digital) compatibility track found.\n"
-                    "Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players."
-                )
-                console.print(rule)
-                raise UploadException(rule)
+                console.print(warning + rule)
+                raise UploadException(warning + rule)
 
         def ask_yes_no(prompt_text):
             while True:
@@ -523,7 +544,7 @@ class PHD(COMMON):
                     print("\n" + "-"*60)
                     print("Important Rule for Hybrid Releases")
                     print("-" * 60)
-                    print(hybrid_rule_text)
+                    print(warning + hybrid_rule_text)
                     print("-" * 60 + "\n")
 
                     continue_upload = ask_yes_no(
@@ -544,11 +565,19 @@ class PHD(COMMON):
         # Log check
         if type == 'remux':
             rule = "Remuxes must have a demux/eac3to log under spoilers in description."
-            remux_log = ask_yes_no(f"{rule}\nDo you have these logs and will you add them to the description after upload?")
+            remux_log = ask_yes_no(f"{warning + rule}\nDo you have these logs and will you add them to the description after upload?")
             if remux_log == 'y':
                 pass
             else:
-                raise UploadException(rule)
+                raise UploadException(warning + rule)
+
+        # Bloated check
+        if meta.get('bloated', False):
+            rule = (
+                "Audio dubs are never preferred and can always be trumped by original audio only rip (Exception for BD50/BD25)."
+                "Do NOT upload a multi audio release when there is already a original audio only release on site."
+            )
+            console.print(warning + rule)
 
     def get_resolution(self, meta):
         resolution = ''
@@ -588,7 +617,6 @@ class PHD(COMMON):
         return keyword_map.get(source_type.lower())
 
     async def validate_credentials(self, meta):
-        self.follow_the_rules(meta)
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
             console.print(f"[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]")
@@ -628,6 +656,7 @@ class PHD(COMMON):
             return False
 
     async def search_existing(self, meta, disctype):
+        self.follow_the_rules(meta)
         await self.validate_credentials(meta)
         await self.get_media_code(meta)
 
