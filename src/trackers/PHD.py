@@ -495,6 +495,61 @@ class PHD(COMMON):
                 console.print(rule)
                 raise UploadException(rule)
 
+        def ask_yes_no(prompt_text):
+            while True:
+                answer = input(f"{prompt_text} (y/n): ").lower()
+                if answer in ['y', 'n']:
+                    return answer
+                else:
+                    print("Invalid input. Please enter 'y' or 'n'.")
+
+        # Hybrid check
+        if type in ('remux', 'encode'):
+
+            if 'hybrid' in meta.get('name', '').lower():
+
+                is_hybrid_confirm = ask_yes_no(
+                    "This release appears to be a 'Hybrid'. Is this correct?"
+                )
+
+                if is_hybrid_confirm == 'y':
+                    hybrid_rule_text = (
+                        "Hybrid Remuxes and Encodes are subject to the following condition:\n\n"
+                        "Hybrid user releases are permitted, but are treated similarly to regular "
+                        "user releases and must be approved by staff before you upload them "
+                        "(please see the torrent approvals forum for details)."
+                    )
+
+                    print("\n" + "-"*60)
+                    print("Important Rule for Hybrid Releases")
+                    print("-" * 60)
+                    print(hybrid_rule_text)
+                    print("-" * 60 + "\n")
+
+                    continue_upload = ask_yes_no(
+                        "Have you already received staff approval for this upload?"
+                        "Do you wish to continue?"
+                    )
+
+                    if continue_upload == 'n':
+                        error_message = "Upload aborted by user. Hybrid releases require prior staff approval."
+                        print(f"{error_message}")
+                        raise UploadException(error_message)
+
+                else:
+                    error_message = "Upload aborted. The term 'Hybrid' in the release name is reserved for approved hybrid releases. Please correct the name if it is not a hybrid."
+                    print(f"{error_message}")
+                    raise UploadException(error_message)
+
+        # Log check
+        if type == 'remux':
+            rule = "Remuxes must have a demux/eac3to log under spoilers in description."
+            remux_log = ask_yes_no(f"{rule}\nDo you have these logs and will you add them to the description after upload?")
+            if remux_log == 'y':
+                pass
+            else:
+                raise UploadException(rule)
+
     def get_resolution(self, meta):
         resolution = ''
         if not meta.get('is_disc') == 'BDMV':
@@ -591,7 +646,6 @@ class PHD(COMMON):
 
         while page_url and page_url not in visited_urls:
 
-            console.log(f"Acessando a página: {page_url}")
             visited_urls.add(page_url)
 
             try:
@@ -645,7 +699,6 @@ class PHD(COMMON):
                 href = media_link.get('href')
                 match = re.search(rf'/{category_path}/(\d+)-', href)
                 self.media_code = match.group(1) if match else None
-                console.print(f"Media code is {self.media_code}")  # delete after finished
             else:
                 console.print(f"No code found for {self.imdb_id} in {search_url}")
 
@@ -743,9 +796,10 @@ class PHD(COMMON):
                     response2 = self.session.post(self.upload_url_step2, data=data2, timeout=120)
 
                     if response2.status_code in [200, 302]:
+                        torrent_url = response2.headers['Location']
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, self.upload_url_step2)
-                        final_message = self.upload_url_step2  # show torrent link in terminal at end of upload
+                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
+                        final_message = torrent_url  # show torrent link in terminal at end of upload
                     else:
                         failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                         with open(failure_path, "w", encoding="utf-8") as f:
