@@ -42,6 +42,7 @@ class BJS(COMMON):
         self.season = meta.get('season_int', '')
         self.episode = meta.get('episode_int', '')
         self.is_tv_pack = meta.get('tv_pack', '') == 1
+        self.cover = ''
 
     async def ptbr_tmdb_data(self, meta):
         self.assign_media_properties(meta)
@@ -128,7 +129,6 @@ class BJS(COMMON):
             return "Outro"
 
     async def search_existing(self, meta, disctype):
-        self.cover = ''
         if meta.get('debug'):
             return []
 
@@ -402,7 +402,7 @@ class BJS(COMMON):
 
         audio_languages = set(meta.get('audio_languages', []))
 
-        portuguese_languages = ['Portuguese', 'Português']
+        portuguese_languages = ['Portuguese', 'Português', 'pt']
 
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
 
@@ -852,13 +852,33 @@ class BJS(COMMON):
             'cast': ('stars', 'tmdb_cast'),
         }
 
+        prompt_name_map = {
+            'director': 'Diretor(es)',
+            'creator': 'Criador(es)',
+            'cast': 'Elenco',
+        }
+
         if role in role_map:
             imdb_key, tmdb_key = role_map[role]
-            names = (meta.get('imdb_info', {}).get(imdb_key) or []) + (meta.get(tmdb_key) or [])
-            unique_names = list(dict.fromkeys(names))[:5]
-            return ", ".join(unique_names) if unique_names else "N/A"
 
-        return "N/A"
+            names = (meta.get('imdb_info', {}).get(imdb_key) or []) + (meta.get(tmdb_key) or [])
+
+            unique_names = list(dict.fromkeys(names))[:5]
+            if unique_names:
+                return ", ".join(unique_names)
+
+            else:
+                if not self.cover:  # Only ask for input if there's no info in the site already
+                    role_display_name = prompt_name_map.get(role, role.capitalize())
+                    prompt_message = (f"{role_display_name} não encontrado(s).\nPor favor, insira manualmente (separados por vírgula): ")
+                    user_input = input(prompt_message)
+
+                    if user_input.strip():
+                        return user_input.strip()
+                    else:
+                        raise UploadException(f"Dados obrigatórios não fornecidos: {role_display_name}")
+                else:
+                    return "N/A"
 
     async def data_prep(self, meta, disctype):
         await self.validate_credentials(meta)
