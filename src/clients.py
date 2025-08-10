@@ -1640,6 +1640,8 @@ class Clients():
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
 
+                        await match_tracker_url([url], meta)
+
                         match_info = {
                             'hash': torrent.hash,
                             'name': torrent.name,
@@ -1717,9 +1719,6 @@ class Clients():
                     if meta['debug']:
                         console.print(f"[yellow]Error processing torrent {torrent.name}: {str(e)}")
                     continue
-
-            tracker_urls = [c['trackers'] for c in meta.get('torrent_comments', []) if isinstance(c, dict) and 'trackers' in c]
-            await match_tracker_url(tracker_urls, meta)
 
             if matching_torrents:
                 def get_priority_score(torrent):
@@ -1897,39 +1896,45 @@ class Clients():
 
 async def match_tracker_url(tracker_urls, meta):
     tracker_url_patterns = {
-        'ptp': "passthepopcorn.me",
-        'aither': "https://aither.cc",
-        'lst': "https://lst.gg",
-        'oe': "https://onlyencodes.cc",
-        'blu': "https://blutopia.cc",
-        'hdb': "https://hdbits.org",
-        'btn': "https://broadcasthe.net",
-        'bhd': "https://beyond-hd.me",
-        'huno': "https://hawke.uno",
-        'ulcx': "https://upload.cx",
-        'rf': "https://reelflix.xyz",
-        'otw': "https://oldtoons.world",
-        'yus': "https://yu-scene.net",
-        'dp': "https://darkpeers.org",
-        'sp': "https://seedpool.org",
-        'nbl': "tracker.nebulance",
-        'mtv': "tracker.morethantv",
-        'ant': "tracker.anthelion.me",
-        'rtf': "peer.retroflix",
-        'fl': "reactor.filelist",
-        'ldu': "theldu.to",
-        'ar': "tracker.alpharatio",
+        'ptp': ["passthepopcorn.me"],
+        'aither': ["https://aither.cc"],
+        'lst': ["https://lst.gg"],
+        'oe': ["https://onlyencodes.cc"],
+        'blu': ["https://blutopia.cc"],
+        'hdb': ["https://hdbits.org"],
+        'btn': ["https://broadcasthe.net"],
+        'bhd': ["https://beyond-hd.me"],
+        'huno': ["https://hawke.uno"],
+        'ulcx': ["https://upload.cx"],
+        'rf': ["https://reelflix.xyz"],
+        'otw': ["https://oldtoons.world"],
+        'yus': ["https://yu-scene.net"],
+        'dp': ["https://darkpeers.org"],
+        'sp': ["https://seedpool.org"],
+        'nbl': ["tracker.nebulance"],
+        'mtv': ["tracker.morethantv"],
+        'ant': ["tracker.anthelion.me"],
+        'rtf': ["peer.retroflix"],
+        'fl': ["reactor.filelist"],
+        'ldu': ["theldu.to"],
+        'ar': ["tracker.alpharatio"],
         'tl': ["tracker.tleechreload", "tracker.torrentleech"],
-        'thr': "torrenthr",
+        'thr': ["torrenthr"],
     }
     found_ids = set()
     for tracker in tracker_urls:
-        for tracker_id, url_substring in tracker_url_patterns.items():
-            if url_substring in tracker:
-                found_ids.add(tracker_id.upper())
-                if meta.get('debug'):
-                    console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {tracker}")
-    # Store found tracker IDs for later removal
-    meta["remove_trackers"] = list(found_ids)
+        for tracker_id, patterns in tracker_url_patterns.items():
+            for pattern in patterns:
+                if pattern in tracker:
+                    found_ids.add(tracker_id.upper())
+                    if meta.get('debug'):
+                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {tracker}")
+
+    if "remove_trackers" not in meta or not isinstance(meta["remove_trackers"], list):
+        meta["remove_trackers"] = []
+
+    for tracker_id in found_ids:
+        if tracker_id not in meta["remove_trackers"]:
+            meta["remove_trackers"].append(tracker_id)
     if meta.get('debug'):
         console.print(f"[bold cyan]Storing matched tracker IDs for later removal: {meta['remove_trackers']}")
