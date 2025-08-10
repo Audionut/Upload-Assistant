@@ -183,7 +183,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
             files_shown = min(batch_size, len(filelist))
 
             # Loop to handle showing more files in batches
-            while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 remaining_files = len(filelist) - files_shown
                 console.print(f"[yellow]... and {remaining_files} more files")
 
@@ -212,7 +212,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                     sys.exit(1)
 
             # Final confirmation if not in unattended mode
-            if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended-confirm', False) and not just_go):
+            if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended_confirm', False) and not just_go):
                 response = input("Continue with incomplete season pack? (y/N): ")
                 if response.lower() != 'y':
                     console.print("[red]Aborting torrent creation due to incomplete season pack")
@@ -252,6 +252,9 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                     console.print(f"[yellow]Setting mkbrr piece length to 2^{power} ({(2**power) / (1024 * 1024):.2f} MiB)")
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
+
+            if meta.get('mkbrr_threads') != '0':
+                cmd.extend(["--workers", meta['mkbrr_threads']])
 
             if not meta.get('is_disc', False):
                 exclude_str = build_mkbrr_exclude_string(str(path), meta['filelist'])

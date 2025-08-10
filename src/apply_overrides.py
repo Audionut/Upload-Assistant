@@ -1,5 +1,8 @@
 import json
+import traceback
 from src.console import console
+from src.args import Args
+from data.config import config
 
 
 async def get_source_override(meta, other_id=False):
@@ -107,9 +110,6 @@ async def parse_tmdb_id(tmdb_id, category=None):
 
 
 async def apply_args_to_meta(meta, args):
-    from src.args import Args
-    from data.config import config
-
     try:
         arg_keys_to_track = set()
         arg_values = {}
@@ -186,7 +186,6 @@ async def apply_args_to_meta(meta, args):
     except Exception as e:
         console.print(f"[red]Error processing arguments: {e}")
         if meta['debug']:
-            import traceback
             console.print(traceback.format_exc())
 
     return meta

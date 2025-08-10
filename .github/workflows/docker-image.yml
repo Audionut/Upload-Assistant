@@ -14,119 +14,72 @@ jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Ensures we get all history for tag retrieval
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
       - name: Get lowercase repo name
-        id: get_lowercase_repo_name
         run: |
           REPO_NAME=${{ env.IMAGE_NAME }} 
           echo "LOWER_CASE_REPO_NAME=${REPO_NAME,,}" >> $GITHUB_ENV
 
-      - name: Get release version or branch name
-        id: get_version_or_branch
+      - name: Get version for tagging
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
             RELEASE_VERSION="${{ github.event.release.tag_name }}"
-            if [ -z "$RELEASE_VERSION" ]; then
-              echo "Error: RELEASE_VERSION is empty. Ensure a valid release tag."
-              exit 1
-            fi
             echo "VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
-            echo "UPDATE_VERSION=true" >> $GITHUB_ENV
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             BRANCH_NAME="${{ github.ref_name }}"
             echo "VERSION=${BRANCH_NAME}" >> $GITHUB_ENV
-            echo "UPDATE_VERSION=false" >> $GITHUB_ENV
-          else
-            echo "Unsupported event: ${{ github.event_name }}"
-            exit 1
           fi
 
-      - name: Get release notes (only for release events)
-        if: github.event_name == 'release'
-        id: get_release_info
-        run: |
-          cat << 'RELEASE_NOTES_EOF' >> $GITHUB_ENV
-          RELEASE_NOTES<<EOF
-          ${{ github.event.release.body }}
-          EOF
-          RELEASE_NOTES_EOF
-
-      - name: Update version.py (only on release)
-        if: github.event_name == 'release' && env.UPDATE_VERSION == 'true'
-        run: |
-          TIMESTAMP=$(date +"%Y-%m-%d")
-          VERSION_FILE="data/version.py"
-
-          # Create version.py if it doesn't exist
-          if [ ! -f "$VERSION_FILE" ]; then
-            echo "__version__ = \"0.0.0\"" > "$VERSION_FILE"
-            echo "" >> "$VERSION_FILE"
-          fi
-
-          # Prepend new release info
-          TEMP_FILE=$(mktemp)
-          echo "__version__ = \"${{ env.VERSION }}\"" > "$TEMP_FILE"
-          echo "" >> "$TEMP_FILE"
-          echo "\"\"\"" >> "$TEMP_FILE"
-          echo "Changelog for version ${{ env.VERSION }} ($TIMESTAMP):" >> "$TEMP_FILE"
-          echo "" >> "$TEMP_FILE"
-          echo "${{ env.RELEASE_NOTES }}" >> "$TEMP_FILE"
-          echo "\"\"\"" >> "$TEMP_FILE"
-          echo "" >> "$TEMP_FILE"
-          cat "$VERSION_FILE" >> "$TEMP_FILE"
-          mv "$TEMP_FILE" "$VERSION_FILE"
-
-      - name: Commit and push version update (only on release)
-        if: github.event_name == 'release' && env.UPDATE_VERSION == 'true'
-        run: |
-          git checkout master  # Ensure we're on master branch
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/version.py
-          git commit -m "Update version.py to ${{ env.VERSION }} with changelog"
-          git push origin master
-
-      - name: Debug VERSION and UPDATE_VERSION
-        run: |
-          echo "VERSION=${{ env.VERSION }}"
-          echo "UPDATE_VERSION=${{ env.UPDATE_VERSION }}"
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:${{ env.VERSION }}
-            ${{ steps.meta.outputs.tags }}
+            ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Output build information
+        run: |
+          echo "✅ Docker images built and pushed successfully!"
+          echo "🐋 Images:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:${{ env.VERSION }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:latest"
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "📝 Triggered by release: ${{ github.event.release.tag_name }}"
+          else
+            echo "📝 Triggered by manual workflow dispatch on branch: ${{ github.ref_name }}"
+          fi

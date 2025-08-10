@@ -180,9 +180,21 @@ async def get_resolution(guess, folder_id, base_dir):
         except Exception:
             width = 0
             height = 0
-        framerate = mi['media']['track'][1].get('FrameRate', '24')
-        if int(float(framerate)) > 30:
-            hfr = True
+
+        framerate = mi['media']['track'][1].get('FrameRate')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Original')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Num')
+        if framerate:
+            try:
+                if int(float(framerate)) > 30:
+                    hfr = True
+            except Exception:
+                hfr = False
+        else:
+            framerate = "24.000"
+
         try:
             scan = mi['media']['track'][1]['ScanType']
         except Exception:
@@ -265,3 +277,25 @@ async def is_sd(resolution):
     else:
         sd = 0
     return sd
+
+
+async def get_video_duration(meta):
+    if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
+        general_track = next((track for track in meta['mediainfo']['media']['track']
+                              if track.get('@type') == 'General'), None)
+
+        if general_track and general_track.get('Duration'):
+            try:
+                media_duration_seconds = float(general_track['Duration'])
+                formatted_duration = int(media_duration_seconds // 60)
+                return formatted_duration
+            except ValueError:
+                if meta['debug']:
+                    console.print(f"[red]Invalid duration value: {general_track['Duration']}[/red]")
+                return None
+        else:
+            if meta['debug']:
+                console.print("[red]No valid duration found in MediaInfo General track[/red]")
+            return None
+    else:
+        return None

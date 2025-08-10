@@ -49,7 +49,7 @@ async def get_disc(meta):
             discs, bdinfo = await parse.get_bdinfo(meta, discs, meta['uuid'], meta['base_dir'], meta.get('discs', []))
         else:
             discs, bdinfo = await parse.get_bdinfo(meta, meta['discs'], meta['uuid'], meta['base_dir'], meta['discs'])
-    elif is_disc == "DVD":
+    elif is_disc == "DVD" and not meta.get('emby', False):
         discs = await parse.get_dvdinfo(discs, base_dir=meta['base_dir'])
         export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')
         export.write(discs[0]['ifo_mi'])

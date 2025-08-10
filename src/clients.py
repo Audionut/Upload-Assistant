@@ -15,6 +15,7 @@ import time
 from src.console import console
 import re
 import platform
+from cogs.redaction import redact_private_info
 
 
 class Clients():
@@ -644,9 +645,14 @@ class Clients():
 
         rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl._create_stdlib_context())
         metainfo = bencode.bread(torrent_path)
+        if meta['debug']:
+            print(f"{rtorrent}: {redact_private_info(rtorrent)}")
+            print(f"{metainfo}: {redact_private_info(metainfo)}")
         try:
             # Use dst path if linking was successful, otherwise use original path
             resume_path = dst if (use_symlink or use_hardlink) and os.path.exists(dst) else path
+            if meta['debug']:
+                console.print(f"[cyan]Using resume path: {resume_path}")
             fast_resume = self.add_fast_resume(metainfo, resume_path, torrent)
         except EnvironmentError as exc:
             console.print("[red]Error making fast-resume data (%s)" % (exc,))
@@ -655,7 +661,8 @@ class Clients():
         new_meta = bencode.bencode(fast_resume)
         if new_meta != metainfo:
             fr_file = torrent_path.replace('.torrent', '-resume.torrent')
-            console.print("Creating fast resume")
+            if meta['debug']:
+                console.print("Creating fast resume file:", fr_file)
             bencode.bwrite(fast_resume, fr_file)
 
         # Use dst path if linking was successful, otherwise use original path
@@ -671,20 +678,32 @@ class Clients():
             shutil.copy(fr_file, f"{path_dir}/fr.torrent")
             fr_file = f"{os.path.dirname(path)}/fr.torrent"
             modified_fr = True
+            if meta['debug']:
+                console.print(f"[cyan]Modified fast resume file path because path mapping: {fr_file}")
         if isdir is False:
             path = os.path.dirname(path)
+        if meta['debug']:
+            console.print(f"[cyan]Final path for rTorrent: {path}")
 
         console.print("[bold yellow]Adding and starting torrent")
         rtorrent.load.start_verbose('', fr_file, f"d.directory_base.set={path}")
+        if meta['debug']:
+            console.print(f"[green]rTorrent load start for {fr_file} with d.directory_base.set={path}")
         time.sleep(1)
         # Add labels
         if client.get('rtorrent_label', None) is not None:
+            if meta['debug']:
+                console.print(f"[cyan]Setting rTorrent label: {client['rtorrent_label']}")
             rtorrent.d.custom1.set(torrent.infohash, client['rtorrent_label'])
         if meta.get('rtorrent_label') is not None:
             rtorrent.d.custom1.set(torrent.infohash, meta['rtorrent_label'])
+            if meta['debug']:
+                console.print(f"[cyan]Setting rTorrent label from meta: {meta['rtorrent_label']}")
 
         # Delete modified fr_file location
         if modified_fr:
+            if meta['debug']:
+                console.print(f"[cyan]Removing modified fast resume file: {fr_file}")
             os.remove(f"{path_dir}/fr.torrent")
         if meta.get('debug', False):
             console.print(f"[cyan]Path: {path}")
@@ -1510,9 +1529,14 @@ class Clients():
                 'bhd': {"url": "https://beyond-hd.me", "pattern": r'details/(\d+)'},
                 'huno': {"url": "https://hawke.uno", "pattern": r'/(\d+)$'},
                 'ulcx': {"url": "https://upload.cx", "pattern": r'/(\d+)$'},
+                'rf': {"url": "https://reelflix.xyz", "pattern": r'/(\d+)$'},
+                'otw': {"url": "https://oldtoons.world", "pattern": r'/(\d+)$'},
+                'yus': {"url": "https://yu-scene.net", "pattern": r'/(\d+)$'},
+                'dp': {"url": "https://darkpeers.org", "pattern": r'/(\d+)$'},
+                'sp': {"url": "https://seedpool.org", "pattern": r'/(\d+)$'},
             }
 
-            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'ptp']
+            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
 
             try:
                 qbt_client = qbittorrentapi.Client(
@@ -1564,7 +1588,9 @@ class Clients():
 
                     if is_disc in ("", None) and len(meta.get('filelist', [])) == 1:
                         file_name = os.path.basename(meta['filelist'][0])
-                        if (torrent_name == meta['uuid'] or torrent_name == file_name) and len(torrent.files) == 1:
+                        if (torrent_name == file_name) and len(torrent.files) == 1:
+                            is_match = True
+                        elif torrent_name == meta['uuid']:
                             is_match = True
                     else:
                         if torrent_name == meta['uuid']:
@@ -1664,6 +1690,16 @@ class Clients():
                                     })
                                     meta['huno'] = huno_id
                                     tracker_found = True
+
+                        if torrent.tracker and 'tracker.anthelion.me' in torrent.tracker:
+                            ant_id = 1
+                            if has_working_tracker:
+                                tracker_urls.append({
+                                    'id': 'ant',
+                                    'tracker_id': ant_id,
+                                })
+                                meta['ant'] = ant_id
+                                tracker_found = True
 
                         match_info['tracker_urls'] = tracker_urls
                         match_info['has_tracker'] = tracker_found
@@ -1828,7 +1864,8 @@ class Clients():
                                             except Exception as e:
                                                 console.print(f"[bold red]Error creating BASE.torrent for alternative: {e}")
                                         else:
-                                            console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
+                                            if meta['debug']:
+                                                console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
                                             if os.path.exists(alt_torrent_file_path) and alt_torrent_file_path.startswith(extracted_torrent_dir):
                                                 os.remove(alt_torrent_file_path)
 

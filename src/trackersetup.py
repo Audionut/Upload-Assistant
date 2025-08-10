@@ -6,6 +6,7 @@ from src.trackers.AR import AR
 from src.trackers.ASC import ASC
 from src.trackers.BHD import BHD
 from src.trackers.BHDTV import BHDTV
+from src.trackers.BJS import BJS
 from src.trackers.BLU import BLU
 from src.trackers.BT import BT
 from src.trackers.CBR import CBR
@@ -28,7 +29,6 @@ from src.trackers.MTV import MTV
 from src.trackers.NBL import NBL
 from src.trackers.OE import OE
 from src.trackers.OTW import OTW
-from src.trackers.PSS import PSS
 from src.trackers.PT import PT
 from src.trackers.PTER import PTER
 from src.trackers.PTP import PTP
@@ -265,7 +265,7 @@ class TRACKER_SETUP:
                     result = True
 
         if result:
-            if not meta['unattended'] or meta.get('unattended-confirm', False):
+            if not meta['unattended'] or meta.get('unattended_confirm', False):
                 if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
                     return False
                 return True
@@ -467,16 +467,16 @@ class TRACKER_SETUP:
 
 
 tracker_class_map = {
-    'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'BHD': BHD, 'BHDTV': BHDTV, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
+    'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
     'DC': DC, 'DP': DP, 'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
-    'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PSS': PSS, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTT': PTT,
+    'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RHD': RHD, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
     'TIK': TIK, 'TL': TL, 'TOCA': TOCA, 'TVC': TVC, 'TTG': TTG, 'UHD': UHD, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
 }
 
 api_trackers = {
     'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
-    'OE', 'OTW', 'PSS', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'RHD', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
+    'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'RHD', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 
 other_api_trackers = {
@@ -484,5 +484,5 @@ other_api_trackers = {
 }
 
 http_trackers = {
-    'AR', 'ASC', 'BT', 'FL', 'HDB', 'HDS', 'HDT', 'MTV', 'PTER', 'TTG'
+    'AR', 'ASC', 'BJS', 'BT', 'FL', 'HDB', 'HDS', 'HDT', 'MTV', 'PTER', 'TTG'
 }

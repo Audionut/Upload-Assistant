@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from http.cookiejar import MozillaCookieJar
 from langcodes.tag_parser import LanguageTagError
 from src.console import console
+from src.exceptions import UploadException
 from src.languages import process_desc_language
 
 
@@ -28,17 +29,16 @@ class BT(COMMON):
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
         target_site_ids = {
-            'danish': '10', 'swedish': '11', 'norwegian': '12', 'romanian': '13',
-            'chinese': '14', 'finnish': '15', 'italian': '16', 'polish': '17',
-            'turkish': '18', 'korean': '19', 'thai': '20', 'arabic': '22',
-            'croatian': '23', 'hungarian': '24', 'vietnamese': '25', 'greek': '26',
-            'icelandic': '28', 'bulgarian': '29', 'english': '3', 'czech': '30',
-            'serbian': '31', 'ukrainian': '34', 'latvian': '37', 'estonian': '38',
-            'lithuanian': '39', 'spanish': '4', 'hebrew': '40', 'hindi': '41',
-            'slovak': '42', 'slovenian': '43', 'indonesian': '47',
-            'português': '49',
-            'french': '5', 'german': '6', 'russian': '7', 'japanese': '8', 'dutch': '9',
-            'english - forçada': '50', 'persian': '52'
+            'arabic': '22', 'bulgarian': '29', 'chinese': '14', 'croatian': '23',
+            'czech': '30', 'danish': '10', 'dutch': '9', 'english - forçada': '50',
+            'english': '3', 'estonian': '38', 'finnish': '15', 'french': '5',
+            'german': '6', 'greek': '26', 'hebrew': '40', 'hindi': '41',
+            'hungarian': '24', 'icelandic': '28', 'indonesian': '47', 'italian': '16',
+            'japanese': '8', 'korean': '19', 'latvian': '37', 'lithuanian': '39',
+            'norwegian': '12', 'persian': '52', 'polish': '17', 'português': '49',
+            'romanian': '13', 'russian': '7', 'serbian': '31', 'slovak': '42',
+            'slovenian': '43', 'spanish': '4', 'swedish': '11', 'thai': '20',
+            'turkish': '18', 'ukrainian': '34', 'vietnamese': '25',
         }
 
         source_alias_map = {
@@ -50,8 +50,8 @@ class BT(COMMON):
             ("Czech", "cze", "cz", "cs"): "czech",
             ("Danish", "dan", "da"): "danish",
             ("Dutch", "dut", "nl"): "dutch",
-            ("English", "eng", "en", "en-US", "en-GB", "English (CC)", "English - SDH"): "english",
             ("English - Forced", "English (Forced)", "en (Forced)", "en-US (Forced)"): "english - forçada",
+            ("English", "eng", "en", "en-US", "en-GB", "English (CC)", "English - SDH"): "english",
             ("Estonian", "est", "et"): "estonian",
             ("Finnish", "fin", "fi"): "finnish",
             ("French", "fre", "fr", "fr-FR", "fr-CA"): "french",
@@ -81,34 +81,6 @@ class BT(COMMON):
             ("Turkish", "tur", "tr"): "turkish",
             ("Ukrainian", "ukr", "uk"): "ukrainian",
             ("Vietnamese", "vie", "vi"): "vietnamese",
-        }
-        self.payload_fields_map = {
-            # Movies
-            '0': [
-                "submit", "auth", "type", "imdb_input", "adulto", "title", "title_br",
-                "nota_imdb", "year", "diretor", "duracao", "idioma_ori", "tags",
-                "image", "youtube", "sinopse", "mediainfo", "format", "audio",
-                "video_c", "audio_c", "legenda", "3d", "resolucao_1", "resolucao_2",
-                "versao", "bitrate", "screen[]", "desc", "especificas", "subtitles[]"
-            ],
-            # TV
-            '1': [
-                "submit", "auth", "type", "imdb_input", "adulto", "title", "title_br",
-                "nota_imdb", "year", "diretor", "duracao", "idioma_ori", "tags",
-                "image", "youtube", "sinopse", "mediainfo", "tipo", "temporada",
-                "temporada_e", "episodio", "ntorrent", "format", "audio", "video_c",
-                "audio_c", "legenda", "3d", "resolucao_1", "resolucao_2", "bitrate",
-                "screen[]", "desc", "especificas", "subtitles[]"
-            ],
-            # Animes
-            '5': [
-                "submit", "auth", "type", "title", "releasedate", "vote", "rating",
-                "year", "diretor", "horas", "minutos", "duracao", "tags", "image",
-                "fundo_torrent", "youtube", "sinopse", "desc", "tipo", "temporada",
-                "temporada_e", "episodio", "mediainfo", "ntorrent", "idioma_ori",
-                "format", "bitrate", "audio", "video_c", "audio_c", "legenda",
-                "resolucao_1", "resolucao_2", "screen[]", "especificas", "subtitles[]"
-            ]
         }
 
         self.ultimate_lang_map = {}
@@ -266,16 +238,15 @@ class BT(COMMON):
     def get_type(self, meta):
         self.assign_media_properties(meta)
 
-        if meta.get('anime', False):
+        if meta.get('anime'):
             return '5'
 
-        if self.category == 'TV' or meta.get('season') is not None:
-            return '1'
+        category_map = {
+            'TV': '1',
+            'MOVIE': '0'
+        }
 
-        if self.category == 'MOVIE':
-            return '0'
-
-        return '0'
+        return category_map.get(self.category)
 
     def get_file_info(self, meta):
         info_file_path = ""
@@ -295,23 +266,20 @@ class BT(COMMON):
             console.print(f"[bold red]Arquivo de info não encontrado: {info_file_path}[/bold red]")
             return ""
 
-    def get_format(self, meta):
-        if meta.get('is_disc') == "BDMV":
-            return "M2TS"
-        elif meta.get('is_disc') == "DVD":
-            return "VOB"
-
-        try:
-            general_track = next(t for t in meta.get('mediainfo', {}).get('media', {}).get('track', []) if t.get('@type') == 'General')
-            file_extension = general_track.get('FileExtension', '').lower()
-            if file_extension == 'mkv':
-                return 'MKV'
-            elif file_extension == 'mp4':
-                return 'MP4'
-            else:
-                return "Outros"
-        except (StopIteration, AttributeError, TypeError):
-            return None
+    def get_container(self, meta):
+        container = None
+        if meta["is_disc"] == "BDMV":
+            container = "M2TS"
+        elif meta['is_disc'] == "DVD":
+            container = "VOB"
+        else:
+            ext = os.path.splitext(meta['filelist'][0])[1]
+            containermap = {
+                '.mkv': "MKV",
+                '.mp4': 'MP4'
+            }
+            container = containermap.get(ext, 'Outro')
+        return container
 
     async def get_subtitles(self, meta):
         if not meta.get('subtitle_languages'):
@@ -325,9 +293,28 @@ class BT(COMMON):
             if target_id:
                 subtitle_ids.add(target_id)
 
+        video_path = meta.get('path')
+        if video_path:
+            directory = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
+            subtitle_extensions = ('.srt', '.sub', '.ass', '.ssa', '.idx', '.smi', '.psb')
+
+            try:
+                if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
+                    if meta.get('keep_folder'):
+                        subtitle_ids.add('49')
+                    else:
+                        meta['tracker_status'][self.tracker]['status_message'] = (
+                            "ERRO: Seu upload contém legendas em arquivos separados. "
+                            "Use [yellow]-kf[/yellow] ou [yellow]--keep-folder[/yellow] para incluir todos os arquivos da pasta."
+                        )
+                        raise UploadException("Legendas externas detectadas sem o uso de -kf/--keep-folder")
+            except (FileNotFoundError, OSError):
+                pass
+
         legenda_value = "Sim" if '49' in subtitle_ids else "Nao"
 
         final_subtitle_ids = sorted(list(subtitle_ids))
+
         if not final_subtitle_ids:
             final_subtitle_ids.append('44')
 
@@ -342,7 +329,7 @@ class BT(COMMON):
 
         audio_languages = set(meta.get('audio_languages', []))
 
-        portuguese_languages = ['Portuguese', 'Português']
+        portuguese_languages = ['Portuguese', 'Português', 'pt']
 
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
 
@@ -464,7 +451,7 @@ class BT(COMMON):
                     return disctype
 
                 try:
-                    size_in_gb = meta['torrent_comments'][0]['size'] / (10**9)
+                    size_in_gb = meta['bdinfo']['size']
                 except (KeyError, IndexError, TypeError):
                     size_in_gb = 0
 
@@ -525,18 +512,17 @@ class BT(COMMON):
 
         description_parts = []
 
-        # WEBDL source note
-        if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
-            source_note = f"[center][quote]Este lançamento tem como fonte o serviço {meta['service_longname']}[/quote][/center]"
-            description_parts.append(source_note)
-
         description_parts.append(base_desc)
+
+        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
+        if custom_description_header:
+            description_parts.append(custom_description_header + "\n")
 
         if self.signature:
             description_parts.append(self.signature)
 
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            final_description = "\n\n".join(filter(None, description_parts))
+            final_description = "\n".join(filter(None, description_parts))
             descfile.write(final_description)
 
     def get_resolution(self, meta):
@@ -554,168 +540,182 @@ class BT(COMMON):
                 pass
 
         else:
-            try:
-                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
-                video_track = next((t for t in tracks if t.get('@type') == 'Video'), None)
-                if video_track:
-                    width = video_track.get('Width', '')
-                    height = video_track.get('Height', '')
-            except (AttributeError, TypeError):
-                pass
+            video_mi = meta['mediainfo']['media']['track'][1]
+            width = video_mi['Width']
+            height = video_mi['Height']
 
         return {
-            'resolucao_1': width,
-            'resolucao_2': height
+            'resolucaow': width,
+            'resolucaoh': height
         }
 
-    async def upload(self, meta, disctype):
+    async def get_trailer(self, meta):
         tmdb_data = await self.tmdb_data(meta)
-        original_language = await self.get_original_language(meta)
+        video_results = tmdb_data.get('videos', {}).get('results', [])
 
-        if not await self.validate_credentials(meta):
-            console.print(f"[bold red]Upload para {self.tracker} abortado.[/bold red]")
-            return
+        youtube = ''
 
-        await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-        await self.edit_desc(meta)
+        if video_results:
+            youtube = video_results[-1].get('key', '')
 
-        category_type = self.get_type(meta)
+        if not youtube:
+            meta_trailer = meta.get('youtube', '')
+            if meta_trailer:
+                youtube = meta_trailer.replace('https://www.youtube.com/watch?v=', '').replace('/', '')
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
+        return youtube
+
+    async def get_tags(self, meta):
+        tmdb_data = await self.tmdb_data(meta)
+        genre_names = []
+
+        if tmdb_data and isinstance(tmdb_data.get('genres'), list):
+            genre_names = [g.get('name', '') for g in tmdb_data['genres'] if 'name' in g]
+
+        # Use meta as fallback
+        elif meta and isinstance(meta.get('genres'), str):
+            genre_names = [g.strip() for g in meta['genres'].split(',') if g.strip()]
+
+        tags = ', '.join(
+            unicodedata.normalize('NFKD', name)
+            .encode('ASCII', 'ignore')
+            .decode('utf-8')
+            .replace(' ', '.')
+            .lower()
+            for name in genre_names
+        )
+
+        return tags
+
+    def get_credits(self, meta):
+        director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
+        if director:
+            unique_names = list(dict.fromkeys(director))[:5]
+            return ", ".join(unique_names)
         else:
-            anon = 1
+            return "N/A"
 
-        all_possible_data = {}
+    async def data_prep(self, meta, disctype):
+        await self.validate_credentials(meta)
+        await self.edit_desc(meta)
+        subtitles_info = await self.get_subtitles(meta)
+        tmdb_data = await self.tmdb_data(meta)
 
-        all_possible_data.update({
+        desc_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        try:
+            with open(desc_file_path, 'r', newline='', encoding='utf-8') as desc_file:
+                especificas_content = desc_file.read()
+        except FileNotFoundError:
+            especificas_content = ""
+
+        data = {
             'submit': 'true',
             'auth': self.auth_token,
-            'type': category_type,
-            'imdb_input': meta.get('imdb_info', {}).get('imdbID', ''),
-            'adulto': '0'
-        })
-
-        all_possible_data.update({
+            'type': self.get_type(meta),
             'title': meta['title'],
-            'title_br': tmdb_data.get('name') or tmdb_data.get('title') or '',
-            'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
             'year': str(meta['year']),
-            'diretor': ", ".join(set(meta.get('tmdb_directors', []))),
-            'idioma_ori': original_language or meta.get('original_language', ''),
-            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
-            'tags': ', '.join(unicodedata.normalize('NFKD', g['name']).encode('ASCII', 'ignore').decode('utf-8').replace(' ', '.').lower() for g in tmdb_data.get('genres', [])),
+            'diretor': self.get_credits(meta),
+            'idioma_ori': await self.get_original_language(meta) or meta.get('original_language', ''),
+            'tags': await self.get_tags(meta),
             'duracao': f"{str(meta.get('runtime', ''))} min",
-            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path', '')}",
-        })
-
-        bt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
-        subtitles_info = await self.get_subtitles(meta)
-        resolution = self.get_resolution(meta)
-
-        all_possible_data.update({
+            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path') or meta.get('tmdb_poster', '')}",
+            'youtube': await self.get_trailer(meta),
+            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'mediainfo': self.get_file_info(meta),
-            'format': self.get_format(meta),
+            'format': self.get_container(meta),
             'audio': await self.get_audio(meta),
             'video_c': self.get_video_codec(meta),
             'audio_c': self.get_audio_codec(meta),
             'legenda': subtitles_info.get('legenda', 'Nao'),
-            'subtitles[]': subtitles_info.get('subtitles[]'),
-            '3d': 'Sim' if meta.get('3d') else 'Nao',
-            'resolucao_1': resolution['resolucao_1'],
-            'resolucao_2': resolution['resolucao_2'],
+            'resolucao_1': self.get_resolution(meta).get('resolucaow'),
+            'resolucao_2': self.get_resolution(meta).get('resolucaoh'),
             'bitrate': self.get_bitrate(meta),
             'screen[]': self.get_screens(meta),
             'desc': '',
-            'especificas': bt_desc
-        })
+            'especificas': especificas_content,
+            'subtitles[]': subtitles_info.get('subtitles[]'),
+        }
 
-        # Movies
-        all_possible_data['versao'] = self.get_edition(meta)
+        # Common data MOVIE/TV
+        if self.category in ('MOVIE', 'TV'):
+            data.update({
+                'imdb_input': meta.get('imdb_info', {}).get('imdbID', ''),
+                'adulto': '0',
+                'title_br': (tmdb_data.get('name') or tmdb_data.get('title')) if (tmdb_data.get('name') or tmdb_data.get('title')) != meta.get('title') else '',
+                'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
+                '3d': 'Sim' if meta.get('3d') else 'Nao',
+            })
 
-        # TV/Anime
-        all_possible_data.update({
-            'ntorrent': f"{self.season}{self.episode}",
-            'tipo': 'ep_individual' if meta.get('tv_pack') == 0 else 'completa',
-            'temporada': self.season if meta.get('tv_pack') == 1 else '',
-            'temporada_e': self.season if meta.get('tv_pack') == 0 else '',
-            'episodio': self.episode
-        })
+        # Common data TV/Anime
+        if self.category == 'TV' or meta.get('anime'):
+            data.update({
+                'tipo': 'ep_individual' if meta.get('tv_pack') == 0 else 'completa',
+                'temporada': self.season if meta.get('tv_pack') == 1 else '',
+                'temporada_e': self.season if meta.get('tv_pack') == 0 else '',
+                'episodio': self.episode,
+                'ntorrent': f"{self.season}{self.episode}",
+            })
 
-        # Anime specific data
-        duracao_min = 0
-        try:
-            duracao_apenas_numeros = re.search(r'\d+', all_possible_data.get('duracao', '0'))
-            if duracao_apenas_numeros:
-                duracao_min = int(duracao_apenas_numeros.group(0))
-        except (ValueError, TypeError):
-            pass
+        # Specific
+        if self.category == 'MOVIE':
+            data['versao'] = self.get_edition(meta)
+        elif meta.get('anime'):
+            data.update({
+                'releasedate': str(meta['year']),
+                'vote': '',
+                'rating': str(meta.get('imdb_info', {}).get('rating', '')),
+                'horas': '',
+                'minutos': '',
+                'fundo_torrent': meta.get('backdrop'),
+            })
 
-        all_possible_data.update({
-            'releasedate': str(all_possible_data.get('year', '')),
-            'rating': str(all_possible_data.get('nota_imdb', '')),
-            'horas': str(duracao_min // 60),
-            'minutos': str(duracao_min % 60),
-            'fundo_torrent': meta.get('backdrop'),
-        })
+        # Anon
+        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+        if anon:
+            data['anonymous'] = '1'
 
-        required_fields = self.payload_fields_map.get(category_type)
-        if not required_fields:
-            console.print(f"[bold red]Erro: Modelo de payload não encontrado para a categoria '{category_type}'. Upload abortado.[/bold red]")
-            return
+        return data
 
-        final_data = {}
-        for field in required_fields:
-            if field in all_possible_data:
-                final_data[field] = all_possible_data[field]
+    async def upload(self, meta, disctype):
+        data = await self.data_prep(meta, disctype)
+        final_message = ''
+        if not meta.get('debug', False):
+            await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
+            upload_url = f"{self.base_url}/upload.php"
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            with open(torrent_path, 'rb') as torrent_file:
+                files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
 
-        if anon == 1:
-            final_data['anonymous'] = '1'
+                try:
+                    response = self.session.post(upload_url, data=data, files=files, timeout=120)
 
-        video_results = tmdb_data.get('videos', {}).get('results', [])
-        youtube_code = video_results[-1].get('key', '') if video_results else ''
-        if youtube_code:
-            final_data['youtube'] = youtube_code
-        else:
-            youtube_url = meta.get('youtube', '')
-            if youtube_url:
-                match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', youtube_url)
-                if match:
-                    final_data['youtube'] = match.group(1)
+                    if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
+                        final_url = str(response.url)
+                        meta['tracker_status'][self.tracker]['status_message'] = final_url
+                        id_match = re.search(r'id=(\d+)', final_url)
 
-        if meta.get('debug', False):
-            console.print(final_data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            return
+                        if id_match:
+                            torrent_id = id_match.group(1)
+                            details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
+                            announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                            await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
+                            final_message = details_url
 
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        if not os.path.exists(torrent_path):
-            return
+                        else:
+                            final_message = "[bold yellow]Upload parece ter sido bem-sucedido, mas não foi possível extrair o ID do torrent da página.[/bold yellow]"
 
-        upload_url = f"{self.base_url}/upload.php"
-        with open(torrent_path, 'rb') as torrent_file:
-            files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
-
-            try:
-                response = self.session.post(upload_url, data=final_data, files=files, timeout=60)
-
-                if response.status_code == 200 and 'torrents.php?id=' in str(response.url):
-                    final_url = str(response.url)
-                    meta['tracker_status'][self.tracker]['status_message'] = final_url
-                    id_match = re.search(r'id=(\d+)', final_url)
-                    if id_match:
-                        torrent_id = id_match.group(1)
-                        details_url = f"{self.base_url}/torrents.php?id={torrent_id}"
-                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
                     else:
-                        console.print(f"[bold yellow]Redirecionamento para a página do torrent ocorreu, mas não foi possível extrair o ID da URL: {final_url}[/bold yellow]")
-                else:
-                    console.print(f"[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red]")
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(failure_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    console.print(f"[yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]")
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                        with open(failure_path, "w", encoding="utf-8") as f:
+                            f.write(response.text)
+                        final_message = f"""[bold red]Falha no upload para {self.tracker}. Status: {response.status_code}, URL: {response.url}[/bold red].
+                                            [yellow]A resposta HTML foi salva em '{failure_path}' para análise.[/yellow]"""
 
-            except requests.exceptions.RequestException as e:
-                console.print(f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]")
+                except requests.exceptions.RequestException as e:
+                    final_message = f"[bold red]Erro de conexão ao fazer upload para {self.tracker}: {e}[/bold red]"
+
+        else:
+            console.print(data)
+            final_message = 'Debug mode enabled, not uploading.'
+
+        meta['tracker_status'][self.tracker]['status_message'] = final_message

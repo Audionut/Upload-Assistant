@@ -28,31 +28,18 @@ WORKDIR /Upload-Assistant
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy the rest of the application's code
+# Copy the download script
+COPY bin/download_mkbrr_for_docker.py bin/
+RUN chmod +x bin/download_mkbrr_for_docker.py
+
+# Download only the required mkbrr binary
+RUN python3 bin/download_mkbrr_for_docker.py
+
+# Copy the rest of the application
 COPY . .
 
-# Detect architecture and keep only the relevant binary
-RUN arch=$(uname -m) && \
-    if [ "$arch" = "x86_64" ]; then \
-      echo "Detected amd64 architecture" && \
-      mkdir -p /tmp/mkbrr-save && \
-      cp -a bin/mkbrr/linux/amd64 /tmp/mkbrr-save/ && \
-      rm -rf bin/mkbrr/* && \
-      mkdir -p bin/mkbrr/linux && \
-      mv /tmp/mkbrr-save/amd64 bin/mkbrr/linux/ && \
-      rm -rf /tmp/mkbrr-save; \
-    elif [ "$arch" = "aarch64" ]; then \
-      echo "Detected arm64 architecture" && \
-      mkdir -p /tmp/mkbrr-save && \
-      cp -a bin/mkbrr/linux/arm64 /tmp/mkbrr-save/ && \
-      rm -rf bin/mkbrr/* && \
-      mkdir -p bin/mkbrr/linux && \
-      mv /tmp/mkbrr-save/arm64 bin/mkbrr/linux/ && \
-      rm -rf /tmp/mkbrr-save; \
-    else \
-      echo "Warning: Unrecognized architecture $arch, keeping all binaries"; \
-    fi && \
-    find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
+# Ensure mkbrr is executable
+RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
 
 # Create tmp directory with appropriate permissions
 RUN mkdir -p /Upload-Assistant/tmp && chmod 777 /Upload-Assistant/tmp

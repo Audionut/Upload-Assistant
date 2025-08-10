@@ -210,3 +210,50 @@ class ANT():
             await asyncio.sleep(5)
 
         return dupes
+
+    async def get_data_from_files(self, meta):
+        if meta.get('is_disc', False):
+            return []
+        filelist = meta.get('filelist', [])
+        filename = [os.path.basename(f) for f in filelist][0]
+        params = {
+            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+            't': 'search',
+            'filename': filename,
+            'o': 'json'
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url='https://anthelion.me/api', params=params)
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        imdb_tmdb_list = []
+                        items = data.get('item', [])
+                        if len(items) == 1:
+                            each = items[0]
+                            imdb_id = each.get('imdb')
+                            tmdb_id = each.get('tmdb')
+                            if imdb_id and imdb_id.startswith('tt'):
+                                imdb_num = int(imdb_id[2:])
+                                imdb_tmdb_list.append({'imdb_id': imdb_num})
+                            if tmdb_id and str(tmdb_id).isdigit() and int(tmdb_id) != 0:
+                                imdb_tmdb_list.append({'tmdb_id': int(tmdb_id)})
+                    except json.JSONDecodeError:
+                        console.print("[bold yellow]Error parsing JSON response from ANT")
+                        imdb_tmdb_list = []
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                    imdb_tmdb_list = []
+        except httpx.TimeoutException:
+            console.print("[bold red]ANT Request timed out after 5 seconds")
+            imdb_tmdb_list = []
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+            imdb_tmdb_list = []
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            imdb_tmdb_list = []
+
+        return imdb_tmdb_list

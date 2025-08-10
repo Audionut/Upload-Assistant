@@ -178,13 +178,13 @@ class HUNO():
         if meta.get('is_disc') == "BDMV":
             common = COMMON(config=self.config)
             if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
                     region_id = await common.unit3d_region_ids(region_name)
                 else:
                     region_id = "SKIPPED"
             if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     distributor_name = cli_ui.ask_string("ULCX: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
                     distributor_id = await common.unit3d_distributor_ids(distributor_name)
 

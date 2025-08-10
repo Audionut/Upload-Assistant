@@ -27,6 +27,7 @@ class OTW():
         self.upload_url = 'https://oldtoons.world/api/torrents/upload'
         self.search_url = 'https://oldtoons.world/api/torrents/filter'
         self.torrent_url = 'https://oldtoons.world/torrents/'
+        self.id_url = 'https://oldtoons.world/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AROMA', 'aXXo', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE', 'eSc', 'FaNGDiNG0', 'FGT', 'Flights',
@@ -214,7 +215,7 @@ class OTW():
 
     async def search_existing(self, meta, disctype):
         if not any(genre in meta['genres'] for genre in ['Animation', 'Family']):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass

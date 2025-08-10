@@ -77,14 +77,19 @@ async def get_audio_v2(mi, meta, bdinfo):
             try:
                 tracks = mi.get('media', {}).get('track', [])
                 has_commentary = False
+                has_compatibility = False
                 has_coms = [t for t in tracks if "commentary" in (t.get('Title') or '').lower()]
+                has_compat = [t for t in tracks if "compatibility" in (t.get('Title') or '').lower()]
                 if has_coms:
                     has_commentary = True
+                if has_compat:
+                    has_compatibility = True
                 if meta['debug']:
                     console.print(f"DEBUG: Found {len(has_coms)} commentary tracks, has_commentary = {has_commentary}")
+                    console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
                 audio_tracks = [
                     t for t in tracks
-                    if t.get('@type') == "Audio" and "commentary" not in (t.get('Title') or '').lower()
+                    if t.get('@type') == "Audio" and not has_commentary and not has_compatibility
                 ]
                 audio_language = None
                 if meta['debug']:
@@ -129,6 +134,7 @@ async def get_audio_v2(mi, meta, bdinfo):
 
                 if ((eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary)) and len(audio_tracks) > 1 and not meta.get('no_dual', False):
                     dual = "Dual-Audio"
+                    meta['dual_audio'] = True
                 elif eng and not orig and orig_lang not in ['zxx', 'xx', 'en', None] and not meta.get('no_dub', False):
                     dual = "Dubbed"
             except Exception:

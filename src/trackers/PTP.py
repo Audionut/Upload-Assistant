@@ -179,17 +179,17 @@ class PTP():
                 for torrent in response['Torrents']:
                     if torrent.get('Id', 0) == str(ptp_torrent_id):
                         ptp_infohash = torrent.get('InfoHash', None)
-                return imdb_id, ptp_infohash, None
+                return imdb_id, ptp_infohash
             elif int(response.status_code) in [400, 401, 403]:
-                console.print("[bold red]PTP Error: 400/401/403 - Invalid request or authentication failed[/bold red]")
-                return None, None, None
+                console.print(response.text)
+                return None, None
             elif int(response.status_code) == 503:
                 console.print("[bold yellow]PTP Unavailable (503)")
-                return None, None, None
+                return None, None
             else:
-                return None, None, None
+                return None, None
         except Exception:
-            return None, None, None
+            return None, None
 
     async def get_ptp_description(self, ptp_torrent_id, meta, is_disc):
         params = {
@@ -213,7 +213,7 @@ class PTP():
         bbcode = BBCODE()
         desc, imagelist = bbcode.clean_ptp_description(ptp_desc, is_disc)
 
-        if meta.get('only_id') is False:
+        if not meta.get('only_id'):
             console.print("[bold green]Successfully grabbed description from PTP")
             console.print(f"Description after cleaning:\n{desc[:1000]}...", markup=False)  # Show first 1000 characters for brevity
 
@@ -239,11 +239,12 @@ class PTP():
             else:
                 meta['description'] = desc
                 meta['saved_description'] = True
-        elif meta.get('keep_images'):
-            console.print("[green]Only keeping images from PTP description")
+        if meta.get('keep_images'):
             imagelist = imagelist
+        else:
+            imagelist = []
 
-        return desc, imagelist
+        return imagelist
 
     async def get_group_by_imdb(self, imdb):
         params = {

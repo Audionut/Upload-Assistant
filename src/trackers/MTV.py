@@ -448,7 +448,7 @@ class MTV():
         vcookie = await self.validate_cookies(meta, cookiefile)
         if vcookie is not True:
             console.print('[red]Failed to validate cookies. Please confirm that the site is up and your username and password is valid.')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 recreate = cli_ui.ask_yes_no("Log in again and create new session?")
             else:
                 recreate = True

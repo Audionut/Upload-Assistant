@@ -26,6 +26,7 @@ class SP():
         self.upload_url = 'https://seedpool.org/api/torrents/upload'
         self.search_url = 'https://seedpool.org/api/torrents/filter'
         self.torrent_url = 'https://seedpool.org/torrents/'
+        self.id_url = 'https://seedpool.org/api/torrents/'
         self.signature = None
         self.banned_groups = [""]
         pass
@@ -38,16 +39,11 @@ class SP():
         category_name = meta.get('category', '').upper()
         release_title = meta.get('name', '')
         mal_id = meta.get('mal_id', 0)
-        tv_pack = meta.get('tv_pack', 0)
 
         # Custom SEEDPOOL category logic
-        # Anime
-        if mal_id != 0:
+        # Anime TV go in the Anime category
+        if mal_id != 0 and category_name == 'TV':
             return '6'
-
-        # Boxset
-        if tv_pack != 0:
-            return '13'
 
         # Sports
         if self.contains_sports_patterns(release_title):

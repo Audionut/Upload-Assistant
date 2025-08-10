@@ -40,20 +40,20 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
   <tr><td>Anthelion</td><td>ANT</td><td>AsianCinema</td><td>ACM</td></tr>
   <tr><td>Beyond-HD</td><td>BHD</td><td>BitHDTV</td><td>BHDTV</td></tr>
-  <tr><td>Blutopia</td><td>BLU</td><td>BrasilTracker</td><td>BT</td></tr>
-  <tr><td>CapybaraBR</td><td>CBR</td><td>Cinematik</td><td>TIK</td></tr>
-  <tr><td>DarkPeers</td><td>DP</td><td>DigitalCore</td><td>DC</td></tr>
-  <tr><td>FearNoPeer</td><td>FNP</td><td>FileList</td><td>FL</td></tr>
-  <tr><td>Friki</td><td>FRIKI</td><td>hawke-uno</td><td>HUNO</td></tr>
-  <tr><td>HDBits</td><td>HDB</td><td>HD-Space</td><td>HDS</td></tr>
-  <tr><td>HD-Torrents</td><td>HDT</td><td>HomieHelpDesk</td><td>HHD</td></tr>
-  <tr><td>ItaTorrents</td><td>ITT</td><td>Last Digital Underground</td><td>LDU</td></tr>
-  <tr><td>Lat-Team</td><td>LT</td><td>Locadora</td><td>LCD</td></tr>
-  <tr><td>LST</td><td>LST</td><td>MoreThanTV</td><td>MTV</td></tr>
-  <tr><td>Nebulance</td><td>NBL</td><td>OldToonsWorld</td><td>OTW</td></tr>
-  <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
-  <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
-  <tr><td>PrivateSilverScreen</td><td>PSS</td><td>PTerClub</td><td>PTER</td></tr>
+  <tr><td>BrasilJapão-Share</td><td>BJS</td><td>Blutopia</td><td>BLU</td></tr>
+  <tr><td>BrasilTracker</td><td>BT</td><td>CapybaraBR</td><td>CBR</td></tr>
+  <tr><td>Cinematik</td><td>TIK</td><td>DarkPeers</td><td>DP</td></tr>
+  <tr><td>DigitalCore</td><td>DC</td><td>FearNoPeer</td><td>FNP</td></tr>
+  <tr><td>FileList</td><td>FL</td><td>Friki</td><td>FRIKI</td></tr>
+  <tr><td>hawke-uno</td><td>HUNO</td><td>HDBits</td><td>HDB</td></tr>
+  <tr><td>HD-Space</td><td>HDS</td><td>HD-Torrents</td><td>HDT</td></tr>
+  <tr><td>HomieHelpDesk</td><td>HHD</td><td>ItaTorrents</td><td>ITT</td></tr>
+  <tr><td>Last Digital Underground</td><td>LDU</td><td>Lat-Team</td><td>LT</td></tr>
+  <tr><td>Locadora</td><td>LCD</td><td>LST</td><td>LST</td></tr>
+  <tr><td>MoreThanTV</td><td>MTV</td><td>Nebulance</td><td>NBL</td></tr>
+  <tr><td>OldToonsWorld</td><td>OTW</td><td>OnlyEncodes+</td><td>OE</td></tr>
+  <tr><td>PassThePopcorn</td><td>PTP</td><td>Polish Torrent</td><td>PTT</td></tr>
+  <tr><td>Portugas</td><td>PT</td><td>PTerClub</td><td>PTER</td></tr>
   <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
   <tr><td>ReelFLiX</td><td>RF</td><td>RocketHD</td><td>RHD</td></tr>
   <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
@@ -73,11 +73,16 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
-   - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git` 
-      - or download a zip of the source
+      - If you have issues with ffmpeg, such as `max workers` errors, see this [wiki](https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues)
+   - Get the source:
+      - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git`
+      - Fetch all of the release tags `git fetch --all --tags`
+      - Check out the specifc release: see [releases](https://github.com/Audionut/Upload-Assistant/releases)
+      - `git checkout tags/tagname` where `tagname` is the release name, eg `v5.0.0`
+      - or download a zip of the source from the releases page and create/overwrite a local copy.
    - Install necessary python modules `pip3 install --user -U -r requirements.txt`
       - `sudo apt install pip` if needed
-  - If you receive an error about externally managed environment
+  - If you receive an error about externally managed environment, or otherwise wish to keep UA python separate:
       - Install virtual python environment `python3 -m venv venv`
       - Activate the virtual environment `source venv/bin/activate`
       - Then install the requirements `pip install -r requirements.txt`
@@ -87,21 +92,22 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Edit `config.py` to use your information (more detailed information in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki))
       - tmdb_api key can be obtained from https://www.themoviedb.org/settings/api
       - image host api keys can be obtained from their respective sites
-     
+
    **Additional Resources are found in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki)**
-   
+
    Feel free to contact me if you need help, I'm not that hard to find.
 
 ## **Updating:**
   - To update first navigate into the Upload-Assistant directory: `cd Upload-Assistant`
-  - Run a `git pull` to grab latest updates
-  - Or download a fresh zip and overwrite existing files
+  - `git fetch --all --tags`
+  - `git checkout tags/tagname`
+  - Or download a fresh zip from the releases page and overwrite existing files
   - Run `python3 -m pip install --user -U -r requirements.txt` to ensure dependencies are up to date
   - Run `python3 config-generator.py` and select to grab new UA config options.
 
 ## **CLI Usage:**
   
-  `python3 upload.py "/downloads/path/to/content" --args`
+  `python3 upload.py "/path/to/content" --args`
   
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.
