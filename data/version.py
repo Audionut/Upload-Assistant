@@ -1,4 +1,23 @@
-__version__ = "v5.3.0"
+__version__ = "v5.3.1"
+
+"""
+Release Notes for version v5.3.1 (2025-08-10):
+
+# ## What's Changed
+# 
+# * TVDB series name not nonetype by @Audionut in 1def355
+# * remove compatibility tracks from dupe/dubbed checking by @Audionut in 48e922e
+# * fix onlyID (#677) by @Audionut in 29b8caf
+# * BT & BJS - fix language, add user input (#678) by @wastaken7 in 51d89c5
+# * fix: update SP category logic (#679) by @groggy9788 in 9ed3b2d
+# * update mkbrr and add threading control (#680) by @Audionut in 316afe1
+# * add tv support for emby (#681) by @Audionut in 0de649b
+# * add service XUMO by @Audionut in 633f151
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.0...v5.3.1
+"""
+
 
 """
 Release Notes for version v5.3.0 (2025-08-08):

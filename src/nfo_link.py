@@ -1,8 +1,33 @@
 import os
 import re
 import subprocess
+import datetime
 from src.console import console
 from data.config import config
+
+
+async def create_season_nfo(season_folder, season_number, season_year, tvdbid, tvmazeid, plot, outline):
+    """Create a season.nfo file in the given season folder."""
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    nfo_content = f'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<season>
+  <plot><![CDATA[{plot}]]></plot>
+  <outline><![CDATA[{outline}]]></outline>
+  <lockdata>false</lockdata>
+  <dateadded>{now}</dateadded>
+  <title>Season {season_number}</title>
+  <year>{season_year}</year>
+  <sorttitle>Season {season_number}</sorttitle>
+  <tvdbid>{tvdbid}</tvdbid>
+  <uniqueid type="tvdb">{tvdbid}</uniqueid>
+  <uniqueid type="tvmaze">{tvmazeid}</uniqueid>
+  <tvmazeid>{tvmazeid}</tvmazeid>
+  <seasonnumber>{season_number}</seasonnumber>
+</season>'''
+    nfo_path = os.path.join(season_folder, "season.nfo")
+    with open(nfo_path, "w", encoding="utf-8") as f:
+        f.write(nfo_content)
+    return nfo_path
 
 
 async def nfo_link(meta):
@@ -11,7 +36,10 @@ async def nfo_link(meta):
         # Get basic info
         imdb_info = meta.get('imdb_info', {})
         title = imdb_info.get('title', meta.get('title', ''))
-        year = imdb_info.get('year', meta.get('year', ''))
+        if meta['category'] == "MOVIE":
+            year = imdb_info.get('year', meta.get('year', ''))
+        else:
+            year = meta.get('search_year', '')
         plot = meta.get('overview', '')
         rating = imdb_info.get('rating', '')
         runtime = imdb_info.get('runtime', meta.get('runtime', ''))
@@ -152,7 +180,22 @@ async def nfo_link(meta):
         else:
             filename = uuid
 
-        if link_dir is not None and not meta.get('linking_failed', False):
+        if meta['category'] == "TV" and link_dir is not None and not meta.get('linking_failed', False):
+            season_number = meta.get('season_int') or meta.get('season') or "1"
+            season_year = meta.get('search_year') or meta.get('year') or ""
+            tvdbid = meta.get('tvdb_id', '')
+            tvmazeid = meta.get('tvmaze_id', '')
+            plot = meta.get('overview', '')
+            outline = imdb_info.get('plot', '')
+
+            season_folder = link_dir
+            if not os.path.exists(f"{season_folder}/season.nfo"):
+                await create_season_nfo(
+                    season_folder, season_number, season_year, tvdbid, tvmazeid, plot, outline
+                )
+            nfo_file_path = os.path.join(season_folder, "season.nfo")
+
+        elif link_dir is not None and not meta.get('linking_failed', False):
             nfo_file_path = os.path.join(link_dir, f"{filename}.nfo")
         else:
             if meta.get('linking_failed', False):
@@ -160,7 +203,6 @@ async def nfo_link(meta):
             nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
             os.makedirs(nfo_dir, exist_ok=True)
             nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
-
         with open(nfo_file_path, 'w', encoding='utf-8') as f:
             f.write(nfo_content)
 
@@ -175,15 +217,44 @@ async def nfo_link(meta):
 
 
 async def linking(meta, movie_name, year):
-    if not meta['is_disc']:
-        folder_name = f"{movie_name} ({year})"
-    elif meta['is_disc'] == "BDMV":
-        folder_name = f"{movie_name} ({year}) - Disc"
+    if meta['category'] == "MOVIE":
+        if not meta['is_disc']:
+            folder_name = f"{movie_name} ({year})"
+        elif meta['is_disc'] == "BDMV":
+            folder_name = f"{movie_name} ({year}) - Disc"
+        else:
+            folder_name = f"{movie_name} ({year}) - {meta['is_disc']}"
     else:
-        folder_name = f"{movie_name} ({year}) - {meta['is_disc']}"
-    target_base = config['DEFAULT'].get('emby_dir', None)
+        if not meta.get('search_year'):
+            if not meta['is_disc']:
+                folder_name = f"{movie_name}"
+            elif meta['is_disc'] == "BDMV":
+                folder_name = f"{movie_name} - Disc"
+            else:
+                folder_name = f"{movie_name} - {meta['is_disc']}"
+        else:
+            if not meta['is_disc']:
+                folder_name = f"{movie_name} ({meta['search_year']})"
+            elif meta['is_disc'] == "BDMV":
+                folder_name = f"{movie_name} ({meta['search_year']}) - Disc"
+            else:
+                folder_name = f"{movie_name} ({meta['search_year']}) - {meta['is_disc']}"
+
+    if meta['category'] == "TV":
+        target_base = config['DEFAULT'].get('emby_tv_dir', None)
+    else:
+        target_base = config['DEFAULT'].get('emby_dir', None)
     if target_base is not None:
-        target_dir = os.path.join(target_base, folder_name)
+        if meta['category'] == "MOVIE":
+            target_dir = os.path.join(target_base, folder_name)
+        else:
+            if meta.get('season') == 'S00':
+                season = "Specials"
+            else:
+                season_int = str(meta.get('season_int')).zfill(2)
+                season = f"Season {season_int}"
+            target_dir = os.path.join(target_base, folder_name, season)
+
         os.makedirs(target_dir, exist_ok=True)
         # Get source path and files
         path = meta.get('path')

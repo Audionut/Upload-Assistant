@@ -830,7 +830,7 @@ async def do_the_thing(base_dir):
 
 async def get_mkbrr_path(meta, base_dir=None):
     try:
-        mkbrr_path = await ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.8.1")
+        mkbrr_path = await ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.14.0")
         return mkbrr_path
     except Exception as e:
         console.print(f"[red]Error setting up mkbrr binary: {e}[/red]")

@@ -88,6 +88,8 @@ class Prep():
         only_id = config['DEFAULT'].get('only_id', False) if meta.get('onlyID') is None else meta.get('onlyID')
         meta['only_id'] = only_id
         meta['keep_images'] = config['DEFAULT'].get('keep_images', True) if not meta.get('keep_images') else True
+        mkbrr_threads = config['DEFAULT'].get('mkbrr_threads', "0")
+        meta['mkbrr_threads'] = mkbrr_threads
 
         # make sure these are set in meta
         meta['we_checked_tvdb'] = False

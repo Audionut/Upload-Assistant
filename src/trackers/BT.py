@@ -329,7 +329,7 @@ class BT(COMMON):
 
         audio_languages = set(meta.get('audio_languages', []))
 
-        portuguese_languages = ['Portuguese', 'Português']
+        portuguese_languages = ['Portuguese', 'Português', 'pt']
 
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
 
