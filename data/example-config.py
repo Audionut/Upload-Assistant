@@ -182,6 +182,11 @@ config = {
         # set true to use mkbrr for torrent creation
         "mkbrr": True,
 
+        # Create using a specific number of worker threads for hashing (e.g., 8) with mkbrr
+        # Experimenting with different values might yield better performance than the default automatic setting.
+        # Conversely, you can set a lower amount such as 1 to protect system resources (default "0" (auto))
+        "mkbrr_threads": "0",
+
         # set true to use argument overrides from data/templates/user-args.json
         "user_overrides": False,
 

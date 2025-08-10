@@ -253,6 +253,9 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
 
+            if meta.get('mkbrr_threads') != '0':
+                cmd.extend(["--workers", meta['mkbrr_threads']])
+
             if not meta.get('is_disc', False):
                 exclude_str = build_mkbrr_exclude_string(str(path), meta['filelist'])
                 cmd.extend(["--exclude", exclude_str])
