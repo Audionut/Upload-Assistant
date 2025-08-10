@@ -241,6 +241,13 @@ async def process_meta(meta, base_dir, bot=None):
         meta['we_are_uploading'] = False
         return
 
+    if 'remove_trackers' in meta and meta['remove_trackers']:
+        for tracker in meta['remove_trackers']:
+            if meta['debug']:
+                console.print(f"[yellow]Removing tracker: {tracker}[/yellow]")
+            if tracker in meta['trackers']:
+                meta['trackers'].remove(tracker)
+
     console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 
     audio_prompted = False

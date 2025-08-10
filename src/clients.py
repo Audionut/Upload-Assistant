@@ -1718,6 +1718,9 @@ class Clients():
                         console.print(f"[yellow]Error processing torrent {torrent.name}: {str(e)}")
                     continue
 
+            tracker_urls = [c['trackers'] for c in meta.get('torrent_comments', []) if isinstance(c, dict) and 'trackers' in c]
+            await match_tracker_url(tracker_urls, meta)
+
             if matching_torrents:
                 def get_priority_score(torrent):
                     # Start with a high score for torrents with no matching trackers
@@ -1890,3 +1893,43 @@ class Clients():
                 import traceback
                 console.print(traceback.format_exc())
             return []
+
+
+async def match_tracker_url(tracker_urls, meta):
+    tracker_url_patterns = {
+        'ptp': "passthepopcorn.me",
+        'aither': "https://aither.cc",
+        'lst': "https://lst.gg",
+        'oe': "https://onlyencodes.cc",
+        'blu': "https://blutopia.cc",
+        'hdb': "https://hdbits.org",
+        'btn': "https://broadcasthe.net",
+        'bhd': "https://beyond-hd.me",
+        'huno': "https://hawke.uno",
+        'ulcx': "https://upload.cx",
+        'rf': "https://reelflix.xyz",
+        'otw': "https://oldtoons.world",
+        'yus': "https://yu-scene.net",
+        'dp': "https://darkpeers.org",
+        'sp': "https://seedpool.org",
+        'nbl': "tracker.nebulance",
+        'mtv': "tracker.morethantv",
+        'ant': "tracker.anthelion.me",
+        'rtf': "peer.retroflix",
+        'fl': "reactor.filelist",
+        'ldu': "theldu.to",
+        'ar': "tracker.alpharatio",
+        'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'thr': "torrenthr",
+    }
+    found_ids = set()
+    for tracker in tracker_urls:
+        for tracker_id, url_substring in tracker_url_patterns.items():
+            if url_substring in tracker:
+                found_ids.add(tracker_id.upper())
+                if meta.get('debug'):
+                    console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {tracker}")
+    # Store found tracker IDs for later removal
+    meta["remove_trackers"] = list(found_ids)
+    if meta.get('debug'):
+        console.print(f"[bold cyan]Storing matched tracker IDs for later removal: {meta['remove_trackers']}")
