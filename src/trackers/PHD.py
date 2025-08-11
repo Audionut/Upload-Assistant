@@ -591,7 +591,8 @@ class PHD(COMMON):
 
         # Log check
         if type == 'remux':
-            remux_log = ask_yes_no(f"{warning + rule}\nDo you have these logs and will you add them to the description after upload?")
+            remux_log = ask_yes_no(warning + "Remuxes must have a demux/eac3to log under spoilers in description."
+                                   "Do you have these logs and will you add them to the description after upload?")
             if remux_log == 'y':
                 pass
             else:
@@ -604,6 +605,22 @@ class PHD(COMMON):
                 "Do NOT upload a multi audio release when there is already a original audio only release on site."
             )
             console.print(warning + rule)
+
+    def sanitize_title(self, meta):
+        upload_name = meta.get('name')
+        forbidden_terms = [
+            r'\bLIMITED\b',
+            r'\bCriterion Collection\b',
+            r'\b\d{1,3}(?:st|nd|rd|th)\s+Anniversary Edition\b'
+        ]
+        for term in forbidden_terms:
+            upload_name = re.sub(term, '', upload_name, flags=re.IGNORECASE).strip()
+
+        upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
+        upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
+        upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
+
+        return upload_name
 
     def get_resolution(self, meta):
         resolution = ''
@@ -794,7 +811,7 @@ class PHD(COMMON):
             '_token': self.auth_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
-            'file_name': meta.get('name'),
+            'file_name': self.sanitize_title(meta),
             'anon_upload': '',
             'description': '',  # Could not find a way to properly handle the description following the rules and supported formatting rules
             'qqfile': '',
