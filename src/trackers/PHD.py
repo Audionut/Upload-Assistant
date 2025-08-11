@@ -747,30 +747,31 @@ class PHD(COMMON):
         await self.validate_credentials(meta)
         self.media_code = ''
 
-        if meta['category'] == 'MOVIE':
-            category_path = 'movie'
-            search_category = 'movies'
-        if meta['category'] == 'TV':
-            category_path = 'tv'
-            search_category = 'tv-shows'
+        category_map = {
+            'MOVIE': '1',
+            'TV': '2'
+        }
+        category_path = category_map.get(meta['category'])
+        if not category_path:
+            console.print(f"[red]Invalid category: {meta['category']}[/red]")
+            return False
 
-        search_url = f"https://privatehd.to/{search_category}?search=&imdb={meta['imdb_info']['imdbID']}"
+        ajax_url = f"https://privatehd.to/ajax/movies/{category_path}?term={meta['imdb_info']['imdbID']}"
+
+        headers = {
+            "Referer": f"https://privatehd.to/upload/{'movie' if category_path == '1' else 'tv'}",
+            "X-Requested-With": "XMLHttpRequest"
+        }
 
         try:
-            response = self.session.get(search_url, timeout=20)
+            response = self.session.get(ajax_url, headers=headers, timeout=20)
             response.raise_for_status()
 
-            html_content = response.text
-            soup = BeautifulSoup(html_content, 'html.parser')
-
-            media_link = soup.find('a', href=re.compile(rf'/{category_path}/\d+'))
-
-            if media_link:
-                href = media_link.get('href')
-                match = re.search(rf'/{category_path}/(\d+)-', href)
-                self.media_code = match.group(1) if match else None
+            data = response.json()
+            if data.get('data'):
+                self.media_code = str(data['data'][0]['id'])
             else:
-                console.print(f"No code found for {meta['imdb_info']['imdbID']} in {search_url}")
+                console.print(f"No code found for {meta['imdb_info']['imdbID']} in {ajax_url}")
 
         except Exception as e:
             console.print(f"[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]")
