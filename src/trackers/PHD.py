@@ -365,7 +365,7 @@ class PHD(COMMON):
         """
 
         # 1
-        if is_bd_disc or type == 'remux':
+        if type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
                 raise UploadException(warning + "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265")
 
@@ -393,7 +393,7 @@ class PHD(COMMON):
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution >= 1080:
-            if video_codec in ('h.264', 'x264'):
+            if video_encode in ('h.264', 'x264'):
                 raise UploadException(warning + "H.264/x264 only allowed for 1080p and below.")
 
         # 7
@@ -645,7 +645,7 @@ class PHD(COMMON):
     async def validate_credentials(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
-            console.print(f"[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]")
+            console.print(f"[red]Cookie file for {self.tracker} not found: {cookie_file}[/red]")
             return False
 
         try:
@@ -653,7 +653,7 @@ class PHD(COMMON):
             jar.load(ignore_discard=True, ignore_expires=True)
             self.session.cookies = jar
         except Exception as e:
-            console.print(f"[bold red]Error loading cookie file. Please check if the format is correct. Error:{e}[/bold red]")
+            console.print(f"[red]Error loading cookie file. Please check if the format is correct. Error:{e}[/red]")
             return False
 
         try:
@@ -661,7 +661,7 @@ class PHD(COMMON):
             response = self.session.get(upload_page_url, timeout=10, allow_redirects=True)
 
             if 'login' in str(response.url):
-                console.print(f"[bold red]{self.tracker} validation failed. The cookie appears to be expired or invalid.[/bold red]")
+                console.print(f"[red]{self.tracker} validation failed. The cookie appears to be expired or invalid.[/red]")
                 return False
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
@@ -670,7 +670,7 @@ class PHD(COMMON):
                 self.auth_token = auth_match.group(1)
                 return True
             else:
-                console.print(f"[bold red]{self.tracker} validation failed. Could not find 'auth' token on upload page.[/bold red]")
+                console.print(f"[red]{self.tracker} validation failed. Could not find 'auth' token on upload page.[/red]")
                 console.print("[yellow]This can happen if the site structure has changed or if the login failed silently..[/yellow]")
                 with open(f"{self.tracker}_auth_failure_{meta['uuid']}.html", "w", encoding="utf-8") as f:
                     f.write(response.text)
@@ -678,7 +678,7 @@ class PHD(COMMON):
                 return False
 
         except Exception as e:
-            console.print(f"[bold red]Error validating credentials for {self.tracker}: {e}[/bold red]")
+            console.print(f"[red]Error validating credentials for {self.tracker}: {e}[/red]")
             return False
 
     async def search_existing(self, meta, disctype):
@@ -758,7 +758,7 @@ class PHD(COMMON):
                 console.print(f"No code found for {self.imdb_id} in {search_url}")
 
         except Exception as e:
-            console.print(f"[bold red]Error trying to fetch media code for tracker {self.tracker}: {e}[/bold red]")
+            console.print(f"[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]")
 
         return bool(self.media_code)
 
@@ -851,7 +851,15 @@ class PHD(COMMON):
                     response2 = self.session.post(self.upload_url_step2, data=data2, timeout=120)
 
                     if response2.status_code in [200, 302]:
-                        torrent_url = response2.headers['Location']
+                        torrent_url = response2.url
+
+                        # Even if you are uploading, you still need to download the .torrent from the website because it needs to be registered as a download before you can start seeding
+                        download_url = torrent_url.replace("/torrent/", "/download/torrent/")
+                        register_download = self.session.get(download_url)
+                        if register_download.status_code != 200:
+                            print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
+                                  f"Error: {register_download.status_code}")
+
                         announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
                         await COMMON(config=self.config).add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
                         final_message = torrent_url  # show torrent link in terminal at end of upload
@@ -859,21 +867,21 @@ class PHD(COMMON):
                         failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                         with open(failure_path, "w", encoding="utf-8") as f:
                             f.write(response2.text)
-                        final_message = f"""[bold red]Step 2 of upload failed to {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/bold red].
+                        final_message = f"""[red]Step 2 of upload failed to {self.tracker}. Status: {response2.status_code}, URL: {response2.url}[/red].
                                             [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
                     with open(failure_path, "w", encoding="utf-8") as f:
                         f.write(response1.text)
-                    final_message = f"""[bold red]Step 1 of upload failed to {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/bold red].
+                    final_message = f"""[red]Step 1 of upload failed to {self.tracker}. Status: {response1.status_code}, URL: {response1.url}[/red].
                                         [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]"""
 
             except requests.exceptions.RequestException as e:
-                final_message = f"[bold red]Connection error while uploading to {self.tracker}: {e}[/bold red]"
+                final_message = f"[red]Connection error while uploading to {self.tracker}: {e}[/red]"
             except UploadException as e:
-                final_message = f"[bold red]Upload error: {e}[/bold red]"
+                final_message = f"[red]Upload error: {e}[/red]"
             except Exception as e:
-                final_message = f"[bold red]An unexpected error occurred while uploading to {self.tracker}: {e}[/bold red]"
+                final_message = f"[red]An unexpected error occurred while uploading to {self.tracker}: {e}[/red]"
 
         else:
             console.print(data1)
