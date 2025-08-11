@@ -5,6 +5,7 @@ beautifulsoup4
 bencode.py
 cli-ui
 click
+countryinfo
 deluge-client
 discord
 ffmpeg-python
