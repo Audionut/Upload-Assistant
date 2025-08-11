@@ -237,18 +237,9 @@ class PHD(COMMON):
             if code2:
                 self.lang_map[code2.lower()] = lang_id
 
-    def assign_media_properties(self, meta):
-        self.imdb_id = meta['imdb_info']['imdbID']
-        self.tmdb_id = meta['tmdb']
-        self.category = meta['category']
-        self.season = meta.get('season', '')
-        self.episode = meta.get('episode', '')
-
     def follow_the_rules(self, meta):
-        self.assign_media_properties(meta)
         warning = f"[yellow]{self.tracker}:[/yellow] [red]RULE WARNING:[/red] "
         rule = ''
-        # compliant = True
 
         is_bd_disc = False
         if meta.get('is_disc', '') == 'BDMV':
@@ -271,7 +262,7 @@ class PHD(COMMON):
             source = source.strip().lower()
 
         # This also checks the rule "FANRES content is not allowed"
-        if self.category not in ('MOVIE', 'TV'):
+        if meta['category'] not in ('MOVIE', 'TV'):
             raise UploadException(warning + "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!")
 
         if meta.get('anime', False):
@@ -310,7 +301,6 @@ class PHD(COMMON):
                 ]
 
         origin_country = meta.get('imdb_info', {}).get('country')
-        # language = meta.get('original_language')
 
         target_countries = european_countries + south_american_countries + african_countries
         if origin_country in target_countries:
@@ -444,7 +434,7 @@ class PHD(COMMON):
                         for track in original_language_tracks
                     )
 
-                    # Check if there is an AC-3 (or Dolby Digital) compatibility track IN THE SAME LANGUAGE
+                    # Check if there is an AC-3 (or Dolby Digital) compatibility track in the same language
                     has_ac3_compat_track = any(
                         'ac-3' in track['codec'].lower() or 'dolby digital' in track['codec'].lower()
                         for track in original_language_tracks
@@ -606,7 +596,7 @@ class PHD(COMMON):
             )
             console.print(warning + rule)
 
-    def sanitize_title(self, meta):
+    def edit_name(self, meta):
         upload_name = meta.get('name')
         forbidden_terms = [
             r'\bLIMITED\b',
@@ -619,6 +609,15 @@ class PHD(COMMON):
         upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
         upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
         upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
+        upload_name = re.sub(r'\s{2,}', ' ', upload_name).strip()
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                upload_name = re.sub(f"-{invalid_tag}", "", upload_name, flags=re.IGNORECASE)
+            upload_name = f"{upload_name}-NOGROUP"
 
         return upload_name
 
@@ -745,18 +744,17 @@ class PHD(COMMON):
         return dupes
 
     async def get_media_code(self, meta):
-        self.assign_media_properties(meta)
         await self.validate_credentials(meta)
         self.media_code = ''
 
-        if self.category == 'MOVIE':
+        if meta['category'] == 'MOVIE':
             category_path = 'movie'
             search_category = 'movies'
-        if self.category == 'TV':
+        if meta['category'] == 'TV':
             category_path = 'tv'
             search_category = 'tv-shows'
 
-        search_url = f"https://privatehd.to/{search_category}?search=&imdb={self.imdb_id}"
+        search_url = f"https://privatehd.to/{search_category}?search=&imdb={meta['imdb_info']['imdbID']}"
 
         try:
             response = self.session.get(search_url, timeout=20)
@@ -772,7 +770,7 @@ class PHD(COMMON):
                 match = re.search(rf'/{category_path}/(\d+)-', href)
                 self.media_code = match.group(1) if match else None
             else:
-                console.print(f"No code found for {self.imdb_id} in {search_url}")
+                console.print(f"No code found for {meta['imdb_info']['imdbID']} in {search_url}")
 
         except Exception as e:
             console.print(f"[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]")
@@ -789,10 +787,9 @@ class PHD(COMMON):
     async def upload(self, meta, disctype):
         lang_info = await self.get_lang(meta)
         await self.validate_credentials(meta)
-        self.assign_media_properties(meta)
         if not await self.get_media_code(meta):
             # maybe create a function to add the media to the database in the future
-            raise UploadException(f"This media ({self.imdb_id}) is not registered in {self.tracker}, please add it to the database by following this link: {self.base_url}/add/{self.category.lower()}")
+            raise UploadException(f"This media ({meta['imdb_info']['imdbID']}) is not registered in {self.tracker}, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}")
 
         final_message = ""
 
@@ -811,7 +808,7 @@ class PHD(COMMON):
             '_token': self.auth_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
-            'file_name': self.sanitize_title(meta),
+            'file_name': self.edit_name(meta),
             'anon_upload': '',
             'description': '',  # Could not find a way to properly handle the description following the rules and supported formatting rules
             'qqfile': '',
@@ -824,6 +821,14 @@ class PHD(COMMON):
             'media_info': await self.get_file_info(meta),
             }
 
+        # TV
+        if meta.get('category') == 'TV':
+            data2.update({
+                'tv_collection': '1' if meta.get('tv_pack') == 0 else '2',
+                'tv_season': meta.get('season_int', ''),
+                'tv_episode': meta.get('episode_int', ''),
+                })
+
         anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:
             data2.update({
@@ -833,7 +838,7 @@ class PHD(COMMON):
         if not meta.get('debug', False):
             try:
                 await COMMON(config=self.config).edit_torrent(meta, self.tracker, self.source_flag)
-                upload_url_step1 = f"{self.base_url}/upload/{self.category.lower()}"
+                upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
                 with open(torrent_path, 'rb') as torrent_file:
@@ -988,20 +993,27 @@ class PHD(COMMON):
         local_files = sorted(screenshot_dir.glob('*.png'))
         results = []
 
+        # Rule: [...] However, you may include only 3 screenshots for single TV show episodes.
+        limit = 6 if meta.get('tv_pack', 0) == 0 else None
+
         if local_files:
             async def upload_local_file(path):
                 with open(path, 'rb') as f:
                     image_bytes = f.read()
                 return await self.img_host(meta, image_bytes, os.path.basename(path))
 
-            paths = local_files[:6]
-            for coro in tqdm(asyncio.as_completed([upload_local_file(p) for p in paths]), total=len(paths), desc=f"Uploading {len(paths)} screenshots to {self.tracker} host"):
+            paths = local_files[:limit] if limit else local_files
+            for coro in tqdm(
+                asyncio.as_completed([upload_local_file(p) for p in paths]),
+                total=len(paths),
+                desc=f"Uploading {len(paths)} screenshots to {self.tracker} host"
+            ):
                 result = await coro
                 if result:
                     results.append(result)
 
         else:
-            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')][:6]
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
             if len(image_links) < 3:
                 raise UploadException(f"UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.")
 
@@ -1016,8 +1028,12 @@ class PHD(COMMON):
                     print(f"Failed to process screenshot from URL {url}: {e}")
                     return None
 
-            links = image_links
-            for coro in tqdm(asyncio.as_completed([upload_remote_file(url) for url in links]), total=len(links), desc=f"Uploading {len(links)} screenshots to {self.tracker} host"):
+            links = image_links[:limit] if limit else image_links
+            for coro in tqdm(
+                asyncio.as_completed([upload_remote_file(url) for url in links]),
+                total=len(links),
+                desc=f"Uploading {len(links)} screenshots to {self.tracker} host"
+            ):
                 result = await coro
                 if result:
                     results.append(result)
