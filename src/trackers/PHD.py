@@ -3,6 +3,7 @@ import asyncio
 import bencodepy
 import hashlib
 import os
+import platform
 import re
 import requests
 import uuid
@@ -30,12 +31,12 @@ class PHD(COMMON):
         self.auth_token = None
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
         })
         self.signature = ""
 
     def rules(self, meta):
-        warning = f"[yellow]{self.tracker} RULE WARNING:[/yellow] "
+        warning = f"{self.tracker} RULE WARNING: "
         rule = ''
 
         is_bd_disc = False
@@ -60,13 +61,16 @@ class PHD(COMMON):
 
         # This also checks the rule "FANRES content is not allowed"
         if meta['category'] not in ('MOVIE', 'TV'):
-            raise UploadException(warning + "The only allowed content to be uploaded are Movies and TV Shows. Anything else, like games, music, software and porn is not allowed!")
+            raise UploadException(
+                warning + "The only allowed content to be uploaded are Movies and TV Shows.\n"
+                "Anything else, like games, music, software and porn is not allowed!"
+            )
 
         if meta.get('anime', False):
             raise UploadException(warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
+        # Country of origin
         all_countries = CountryInfo().all()
-
         european_countries = []
         south_american_countries = []
         african_countries = []
@@ -105,11 +109,12 @@ class PHD(COMMON):
 
         if origin_country in asian_countries:
             raise UploadException(
-                warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1). "
-                "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead."
+                warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n"
+                "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead.\n"
                 f'Origin country for your upload: {origin_country}'
             )
 
+        # Release age
         year = meta.get('year')
         current_year = datetime.now().year
         is_older_than_50_years = (current_year - year) >= 50 if year else False
@@ -117,8 +122,12 @@ class PHD(COMMON):
             raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
 
         if origin_country not in english_speaking_countries_in_north_america:
-            raise UploadException(warning + "Upload content to PrivateHD from all major English speaking countries, including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand.")
+            raise UploadException(
+                warning + "Upload content to PrivateHD from all major English speaking countries.\n"
+                "Including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
+            )
 
+        # Tags
         tag = meta.get('tag', '')
         if tag:
             tag = tag.strip().lower()
@@ -138,7 +147,7 @@ class PHD(COMMON):
             if container is None:
                 raise UploadException(warning + "Allowed containers: MKV, MP4.")
 
-        # Video codec check
+        # Video codec
         """
         Video Codecs:
             Allowed:
@@ -184,9 +193,12 @@ class PHD(COMMON):
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
-            raise UploadException(warning + f"Video codec not allowed in your upload: {video_codec}. {self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265.")
+            raise UploadException(
+                warning + f"Video codec not allowed in your upload: {video_codec}.\n"
+                f"{self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265."
+            )
 
-        # Audio codec check
+        # Audio codec
         """
         Audio Codecs:
             1 - Allowed: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.
@@ -223,14 +235,14 @@ class PHD(COMMON):
                     track for track in audio_tracks if track.get('language', '').lower() == original_language.lower()
                 ]
 
-                # Now checks are ONLY done on the original language track list
+                # Now checks are only done on the original language track list
                 if original_language_tracks:
                     has_truehd_atmos = any(
                         'truehd' in track['codec'].lower() and 'atmos' in track['codec'].lower()
                         for track in original_language_tracks
                     )
 
-                    # Check if there is an AC-3 (or Dolby Digital) compatibility track in the same language
+                    # Check if there is an AC-3 compatibility track in the same language
                     has_ac3_compat_track = any(
                         'ac-3' in track['codec'].lower() or 'dolby digital' in track['codec'].lower()
                         for track in original_language_tracks
@@ -275,6 +287,7 @@ class PHD(COMMON):
                 else:
                     print("Invalid input. Please enter 'y' or 'n'.")
 
+        # Quality check
         """
         Minimum quality:
             Only upload proper encodes. Any encodes where the size and/or the bitrate imply a bad quality of the encode will be deleted. Indication of a proper encode:
@@ -287,8 +300,6 @@ class PHD(COMMON):
             Video must at least be 720p
             The above bitrates are subject to staff discretion and uploads may be nuked even if they fulfill the above criteria.
         """
-
-        # Quality check
         BITRATE_RULES = {
             ('x265', 'web', 720): 1500000,
             ('x265', 'web', 1080): 2500000,
@@ -324,11 +335,11 @@ class PHD(COMMON):
 
                     if bitrate < min_bitrate:
                         quality_rule_text = (
-                            "Only upload proper encodes."
+                            "Only upload proper encodes.\n"
                             "Any encodes where the size and/or the bitrate imply a bad quality will be deleted."
                         )
                         rule = (
-                            f"Your upload was rejected due to low quality."
+                            f"Your upload was rejected due to low quality.\n"
                             f"Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps."
                         )
                         raise UploadException(warning + quality_rule_text + rule)
@@ -337,9 +348,8 @@ class PHD(COMMON):
             rule = "Video must be at least 720p."
             raise UploadException(warning + rule)
 
-        # Hybrid check
+        # Hybrid
         if type in ('remux', 'encode'):
-
             if 'hybrid' in meta.get('name', '').lower():
 
                 is_hybrid_confirm = ask_yes_no(
@@ -375,22 +385,28 @@ class PHD(COMMON):
                     print(f"{error_message}")
                     raise UploadException(error_message)
 
-        # Log check
+        # Log
         if type == 'remux':
-            remux_log = ask_yes_no(warning + "Remuxes must have a demux/eac3to log under spoilers in description."
-                                   "Do you have these logs and will you add them to the description after upload?")
+            remux_log = ask_yes_no(
+                warning + "Remuxes must have a demux/eac3to log under spoilers in description.\n"
+                "Do you have these logs and will you add them to the description after upload?"
+            )
             if remux_log == 'y':
                 pass
             else:
                 raise UploadException(warning + "Remuxes must have a demux/eac3to log under spoilers in description.")
 
-        # Bloated check
+        # Bloated
         if meta.get('bloated', False):
-            rule = (
-                "Audio dubs are never preferred and can always be trumped by original audio only rip (Exception for BD50/BD25)."
-                "Do NOT upload a multi audio release when there is already a original audio only release on site."
+            ask_bloated = ask_yes_no(
+                warning + "Audio dubs are never preferred and can always be trumped by original audio only rip (Exception for BD50/BD25).\n"
+                "Do NOT upload a multi audio release when there is already a original audio only release on site.\n"
+                "Do you want to upload anyway?"
             )
-            console.print(warning + rule)
+            if ask_bloated == 'y':
+                pass
+            else:
+                raise UploadException("Canceled by user. Reason: Bloated")
 
     def edit_name(self, meta):
         upload_name = meta.get('name')
