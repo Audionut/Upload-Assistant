@@ -3,9 +3,6 @@
 import asyncio
 import json
 import re
-import time
-
-import cli_ui
 import requests
 import platform
 import httpx
@@ -30,7 +27,8 @@ class RHD():
         self.search_url = 'https://rocket-hd.cc/api/torrents/filter/'
         self.torrent_url = 'https://rocket-hd.cc/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = ["1XBET", "MEGA", "MTZ", "Whistler", "WOTT", "Taylor.D", "HELD", "FSX", "FuN", "MagicX", "w00t", "PaTroL", "BB", "266ers", "GTF", "JellyfinPlex", "2BA"]
+        self.banned_groups = ["1XBET", "MEGA", "MTZ", "Whistler", "WOTT", "Taylor.D", "HELD", "FSX", "FuN", "MagicX", "w00t", "PaTroL", "BB",
+                              "266ers", "GTF", "JellyfinPlex", "2BA"]
         pass
 
     async def get_cat_id(self, category_name):
@@ -67,10 +65,6 @@ class RHD():
         }.get(resolution, '10')
         return resolution_id
 
-    ###############################################################
-    ######   STOP HERE UNLESS EXTRA MODIFICATION IS NEEDED   ###### noqa E266
-    ###############################################################
-
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
@@ -96,7 +90,7 @@ class RHD():
         open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
         files = {'torrent': open_torrent}
         data = {
-            'name':name,
+            'name': name,
             'description': desc,
             'mediainfo': mi_dump,
             'bdinfo': bd_dump,
@@ -228,7 +222,7 @@ class RHD():
                                     new_format_str = new_format_str.replace(src, target)
 
                                 channel_notation = {'6': '5.1', '8': '7.1'}.get(channels,
-                                                                            f"{channels}.0")
+                                                                                f"{channels}.0")
                                 codec = f"{new_format_str} {channel_notation}{extra_str}"
 
                                 german_audio_tracks.append(
