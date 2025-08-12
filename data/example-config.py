@@ -382,7 +382,8 @@ config = {
             "link_dir_name": "",
             "username": "",
             "password": "",
-            "announce_url": "https://digitalcore.club/tracker.php/<PASSKEY>/announce",
+            # You can find your passkey at Settings -> Security -> Passkey
+            "passkey": "",
             "anon": False,
         },
         "DP": {
@@ -675,7 +676,8 @@ config = {
             # If you are not going to use the API, you will need to export cookies from https://www.torrentleech.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
             # cookies need to be in netscape format and need to be in data/cookies/TL.txt
             "api_upload": True,
-            "announce_key": "TL announce key",
+            # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
+            "passkey": "",
         },
         "TOCA": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

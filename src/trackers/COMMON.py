@@ -46,7 +46,14 @@ class COMMON():
     async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment):
         if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"):
             new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent")
-            new_torrent.metainfo['announce'] = new_tracker
+
+            # handle trackers with multiple announce links
+            if isinstance(new_tracker, list):
+                new_torrent.metainfo['announce'] = new_tracker[0]
+                new_torrent.metainfo['announce-list'] = [new_tracker]
+            else:
+                new_torrent.metainfo['announce'] = new_tracker
+
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
