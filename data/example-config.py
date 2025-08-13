@@ -263,7 +263,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PT, PTER, PTP, PTT, R4E, RAS, RHD, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTT, R4E, RAS, RHD, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -382,7 +382,8 @@ config = {
             "link_dir_name": "",
             "username": "",
             "password": "",
-            "announce_url": "https://digitalcore.club/tracker.php/<PASSKEY>/announce",
+            # You can find your passkey at Settings -> Security -> Passkey
+            "passkey": "",
             "anon": False,
         },
         "DP": {
@@ -543,6 +544,14 @@ config = {
             "modq": False,
             "anon": False,
         },
+        "PHD": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PHD to work you need to export cookies from https://privatehd.to/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
+            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
+            "anon": False,
+        },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -682,7 +691,8 @@ config = {
             # If you are not going to use the API, you will need to export cookies from https://www.torrentleech.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
             # cookies need to be in netscape format and need to be in data/cookies/TL.txt
             "api_upload": True,
-            "announce_key": "TL announce key",
+            # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
+            "passkey": "",
         },
         "TOCA": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

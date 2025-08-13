@@ -40,8 +40,9 @@ class TL():
         self.banned_groups = [""]
         self.session = httpx.AsyncClient(timeout=60.0)
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload')
-        self.announce_key = self.config['TRACKERS'][self.tracker]['announce_key']
-        self.config['TRACKERS'][self.tracker]['announce_url'] = f"https://tracker.torrentleech.org/a/{self.announce_key}/announce"
+        self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
+        self.announce_url_1 = f'https://tracker.torrentleech.org/a/{self.passkey}/announce'
+        self.announce_url_2 = f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
         self.session.headers.update({
             'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
         })
@@ -343,9 +344,12 @@ class TL():
                         torrent_url = f"{self.base_url}/torrent/{torrent_id}"
                         meta['tracker_status'][self.tracker]['status_message'] = torrent_url
 
-                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+                        announce_list = [
+                            self.announce_url_1,
+                            self.announce_url_2
+                        ]
                         common = COMMON(config=self.config)
-                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, torrent_url)
+                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_list, torrent_url)
 
                     else:
                         console.print("[bold red]Upload failed: No success redirect found.[/bold red]")

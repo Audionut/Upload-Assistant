@@ -20,7 +20,9 @@ class DC(COMMON):
 
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        self.api_key = self.config['TRACKERS'][self.tracker].get('announce_url').replace('https://digitalcore.club/tracker.php/', '').replace('/announce', '')
+        self.api_key = self.config['TRACKERS'][self.tracker].get('passkey')
+        self.announce_url_1 = f'https://tracker.digitalcore.club/announce/{self.api_key}'
+        self.announce_url_2 = f'https://trackerprxy.digitalcore.club/announce/{self.api_key}'
         self.username = self.config['TRACKERS'][self.tracker].get('username')
         self.password = self.config['TRACKERS'][self.tracker].get('password')
         self.auth_cookies = None
@@ -271,8 +273,11 @@ class DC(COMMON):
                         details_url = f"{self.base_url}/torrent/{torrent_id}/" if torrent_id else self.base_url
                         if torrent_id:
                             meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                        announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                        await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, details_url)
+                        announce_list = [
+                            self.announce_url_1,
+                            self.announce_url_2
+                        ]
+                        await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_list, details_url)
                     else:
                         raise UploadException(f"{json_response.get('message', 'Unknown API error.')}")
                 else:

@@ -56,6 +56,8 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Portugas</td><td>PT</td><td>PTerClub</td><td>PTER</td></tr>
   <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
   <tr><td>ReelFLiX</td><td>RF</td><td>RocketHD</td><td>RHD</td></tr>
+  <tr><td>PrivateHD</td><td>PHD</td><td>Racing4Everyone</td><td>R4E</td></tr>
+  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
   <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
   <tr><td>seedpool</td><td>SP</td><td>Shareisland</td><td>SHRI</td></tr>
   <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
@@ -106,9 +108,9 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Run `python3 config-generator.py` and select to grab new UA config options.
 
 ## **CLI Usage:**
-  
+
   `python3 upload.py "/path/to/content" --args`
-  
+
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.
 
