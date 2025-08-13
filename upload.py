@@ -35,6 +35,7 @@ from src.languages import process_desc_language
 from src.nfo_link import nfo_link
 from bin.get_mkbrr import ensure_mkbrr_binary
 from src.get_tracker_data import get_tracker_data
+from cogs.redaction import redact_private_info
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -787,7 +788,38 @@ async def do_the_thing(base_dir):
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
 
             if use_discord and bot:
-                await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}", debug=meta.get('debug', False), meta=meta)
+                if config['DISCORD'].get('send_upload_links'):
+                    try:
+                        discord_message = ""
+                        for tracker, status in meta.get('tracker_status', {}).items():
+                            try:
+                                if tracker == "MTV" and 'status_message' in status and "data error" not in str(status['status_message']):
+                                    discord_message += f"{str(status['status_message'])}\n"
+                                if 'torrent_id' in status:
+                                    tracker_class = tracker_class_map[tracker](config=config)
+                                    torrent_url = tracker_class.torrent_url
+                                    discord_message += f"{tracker}: {torrent_url}{status['torrent_id']}\n"
+                                else:
+                                    if (
+                                        'status_message' in status
+                                        and 'torrent_id' not in status
+                                        and "data error" not in str(status['status_message'])
+                                        and tracker != "MTV"
+                                    ):
+                                        discord_message += f"{tracker}: {redact_private_info(status['status_message'])}\n"
+                                    elif 'status_message' in status and "data error" in str(status['status_message']):
+                                        discord_message += f"{tracker}: {str(status['status_message'])}\n"
+                                    else:
+                                        if 'skipping' in status and not status['skipping']:
+                                            discord_message += f"{tracker} gave no useful message.\n"
+                            except Exception as e:
+                                discord_message += f"Error printing {tracker} data: {e}\n"
+                        discord_message += "All tracker uploads processed.\n"
+                        await send_discord_notification(config, bot, discord_message, debug=meta.get('debug', False), meta=meta)
+                    except Exception as e:
+                        console.print(f"[red]Error in tracker print loop: {e}[/red]")
+                else:
+                    await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta)
 
             if sanitize_meta and not meta.get('emby', False):
                 try:

@@ -854,6 +854,8 @@ config = {
         "use_discord": False,
         # Set to True to only run the bot in unattended mode
         "only_unattended": True,
+        # Set to True to send the tracker torrent urls
+        "send_upload_links": True,
         "discord_bot_token": "",
         "discord_channel_id": "",
         "discord_bot_description": "",
