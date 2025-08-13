@@ -281,6 +281,7 @@ class Prep():
                 meta['regex_title'] = title
                 meta['regex_secondary_title'] = secondary_title
                 meta['regex_year'] = extracted_year
+            else:
                 try:
                     filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
                 except Exception:
