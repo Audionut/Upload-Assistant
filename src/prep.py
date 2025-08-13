@@ -281,8 +281,15 @@ class Prep():
                 meta['regex_title'] = title
                 meta['regex_secondary_title'] = secondary_title
                 meta['regex_year'] = extracted_year
-            else:
-                filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
+                try:
+                    filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
+                except Exception:
+                    try:
+                        guess_name = ntpath.basename(video).replace('-', ' ')
+                        filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
+                    except Exception:
+                        console.print("[red]Error extracting title from video name.")
+                        sys.exit(0)
             untouched_filename = os.path.basename(video)
 
             if not meta.get('emby', False):
