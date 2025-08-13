@@ -481,7 +481,6 @@ class AR():
                 if ext.lower() in KNOWN_EXTENSIONS:
                     ar_name = base
                 ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
-                ar_name = re.sub(r'\.{2,}', '.', ar_name)
 
             if meta['tag'] == "":
                 # replacing spaces with . as per rules

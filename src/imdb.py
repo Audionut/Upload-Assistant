@@ -515,13 +515,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             result = await run_imdb_search(parsed_title, search_year, category, debug, attempted + 1, wide_search=True)
             if result and len(result) > 0:
                 search_results = result
-        except Exception:
-            console.print("[bold red]Guessit failed parsing title, trying another method[/bold red]")
+        except Exception as e:
+            console.print(f"[bold red]Failed to parse title for IMDb search: {e}[/bold red]")
 
     # Try with less words in the title
     if not search_results:
         try:
-            words = filename.split()
+            words = title.split()
             extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
             words_lower = [word.lower() for word in words]
 
@@ -545,7 +545,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     # Try with even fewer words
     if not search_results:
         try:
-            words = filename.split()
+            words = title.split()
             extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
             words_lower = [word.lower() for word in words]
 

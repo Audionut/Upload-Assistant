@@ -738,10 +738,7 @@ async def get_tv_data(meta, base_dir, tvdb_api=None, tvdb_token=None):
 
                     result = await get_tvdb_episode_data(base_dir, tvdb_token, meta['tvdb_id'], meta.get('tvdb_season_int'), meta.get('tvdb_episode_int'), api_key=tvdb_api, debug=meta.get('debug', False))
                     if result and result.get('series_name', ""):
-                        if not isinstance(meta.get('tvdb_episode_data'), dict):
-                            meta['tvdb_episode_data'] = result
-                        else:
-                            meta['tvdb_episode_data']['series_name'] = result.get('series_name', "")
+                        meta['tvdb_episode_data']['series_name'] = result.get('series_name', "")
 
                     if meta.get('tvdb_episode_data') and meta['tvdb_episode_data'].get('episode_name') and meta.get('auto_episode_title') is None and meta.get('original_language', "") == "en":
                         episode_name = meta['tvdb_episode_data'].get('episode_name')

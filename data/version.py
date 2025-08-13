@@ -1,18 +1,4 @@
-__version__ = "v5.3.2"
-
-"""
-Release Notes for version v5.3.2 (2025-08-11):
-
-# ## What's Changed
-# 
-# * AR - catch multiple dots in name by @Audionut in 5d5164b
-# * correct meta object before inputting data by @Audionut in 166a1a5
-# * guessit fallback by @Audionut in eccef19
-# * Other minor updates and improvements
-# 
-# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.1...v5.3.2
-"""
-
+__version__ = "v5.3.1"
 
 """
 Release Notes for version v5.3.1 (2025-08-10):
