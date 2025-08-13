@@ -20,11 +20,10 @@ class DC(COMMON):
 
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        self.api_key = self.config['TRACKERS'][self.tracker].get('passkey')
-        self.announce_url_1 = f'https://tracker.digitalcore.club/announce/{self.api_key}'
-        self.announce_url_2 = f'https://trackerprxy.digitalcore.club/announce/{self.api_key}'
-        self.username = self.config['TRACKERS'][self.tracker].get('username')
-        self.password = self.config['TRACKERS'][self.tracker].get('password')
+        self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
+        self.passkey = self.config['TRACKERS'][self.tracker].get('passkey')
+        self.announce_url_1 = f'https://tracker.digitalcore.club/announce/{self.passkey}'
+        self.announce_url_2 = f'https://trackerprxy.digitalcore.club/announce/{self.passkey}'
         self.auth_cookies = None
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
@@ -128,28 +127,25 @@ class DC(COMMON):
         return None
 
     async def login(self):
-        if self.auth_cookies:
-            return True
-        if not all([self.username, self.password, self.api_key]):
-            console.print(f"[bold red]Username, password, or api_key for {self.tracker} is not configured.[/bold red]")
+        if not self.api_key:
+            console.print(f"[bold red]API key for {self.tracker} is not configured.[/bold red]")
             return False
 
-        login_url = f"{self.api_base_url}/auth"
-        auth_params = {'username': self.username, 'password': self.password, 'captcha': self.api_key}
+        url = f"{self.api_base_url}/torrents"
+        headers = {"X-API-KEY": self.api_key}
 
         try:
-            response = self.session.get(login_url, params=auth_params, timeout=10)
-
-            if response.status_code == 200 and response.cookies:
-                self.auth_cookies = response.cookies
+            response = self.session.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                self.auth_headers = headers
                 return True
             else:
-                console.print(f"[bold red]Failed to authenticate or no cookies received. Status: {response.status_code}[/bold red]")
-                self.auth_cookies = None
+                console.print(f"[bold red]Authentication failed for {self.tracker}. Status: {response.status_code}[/bold red]")
+                self.auth_headers = None
                 return False
         except requests.exceptions.RequestException as e:
             console.print(f"[bold red]Error during {self.tracker} authentication: {e}[/bold red]")
-            self.auth_cookies = None
+            self.auth_headers = None
             return False
 
     async def search_existing(self, meta, disctype):
@@ -167,7 +163,7 @@ class DC(COMMON):
         search_params = {'searchText': imdb_id}
 
         try:
-            response = self.session.get(search_url, params=search_params, cookies=self.auth_cookies, timeout=15)
+            response = self.session.get(search_url, params=search_params, headers=self.auth_headers, timeout=15)
             response.raise_for_status()
 
             if response.text and response.text != '[]':
@@ -263,7 +259,7 @@ class DC(COMMON):
                 upload_url = f"{self.api_base_url}/torrents/upload"
 
                 if meta['debug'] is False:
-                    response = self.session.post(upload_url, data=data, files=files, cookies=self.auth_cookies, timeout=90)
+                    response = self.session.post(upload_url, data=data, files=files, headers=self.auth_headers, timeout=90)
                     response.raise_for_status()
                     json_response = response.json()
                     meta['tracker_status'][self.tracker]['status_message'] = response.json()

@@ -380,10 +380,10 @@ config = {
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            "username": "",
-            "password": "",
             # You can find your passkey at Settings -> Security -> Passkey
             "passkey": "",
+            # You can find your api key at Settings -> Security -> API Key -> Generate API Key
+            "api_key": "",
             "anon": False,
         },
         "DP": {
