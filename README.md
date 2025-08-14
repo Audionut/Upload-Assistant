@@ -54,6 +54,8 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>OldToonsWorld</td><td>OTW</td><td>OnlyEncodes+</td><td>OE</td></tr>
   <tr><td>PassThePopcorn</td><td>PTP</td><td>Polish Torrent</td><td>PTT</td></tr>
   <tr><td>Portugas</td><td>PT</td><td>PTerClub</td><td>PTER</td></tr>
+  <tr><td>Racing4Everyone</td><td>R4E</td><td>Rastastugan</td><td>RAS</td></tr>
+  <tr><td>ReelFLiX</td><td>RF</td><td>RocketHD</td><td>RHD</td></tr>
   <tr><td>PrivateHD</td><td>PHD</td><td>Racing4Everyone</td><td>R4E</td></tr>
   <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
   <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
