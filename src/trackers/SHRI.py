@@ -22,7 +22,7 @@ class SHRI():
     def __init__(self, config):
         self.config = config
         self.tracker = 'SHRI'
-        self.source_flag = 'Shareisland'
+        self.source_flag = 'ShareIsland'
         self.search_url = 'https://shareisland.org/api/torrents/filter'
         self.upload_url = 'https://shareisland.org/api/torrents/upload'
         self.torrent_url = 'https://shareisland.org/torrents/'
