@@ -272,7 +272,7 @@ class TL():
                 'torrent': (self.get_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
             }
             data = {
-                'announcekey': self.announce_key,
+                'announcekey': self.passkey,
                 'category': cat_id,
                 'description': desc_content
             }
