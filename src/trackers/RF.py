@@ -109,6 +109,7 @@ class RF():
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             if 'two-factor' in response.json():
                 console.print("[bold red]Two-factor authentication required for upload at RF. Please enable on site and retry.")
+                return
             try:
                 meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
