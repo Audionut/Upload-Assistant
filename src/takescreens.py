@@ -28,6 +28,7 @@ task_limit = int(config['DEFAULT'].get('process_limit', 1))
 threads = str(config['DEFAULT'].get('threads', '1'))
 cutoff = int(config['DEFAULT'].get('cutoff_screens', 1))
 ffmpeg_limit = config['DEFAULT'].get('ffmpeg_limit', False)
+ffmpeg_is_good = config['DEFAULT'].get('ffmpeg_is_good', False)
 
 try:
     task_limit = int(task_limit)  # Convert to integer
@@ -961,24 +962,29 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
     meta['libplacebo'] = False
     if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
-        test_time = ss_times[0] if ss_times else 0
-        test_image = image_path if isinstance(image_path, str) else (
-            image_path[0] if isinstance(image_path, list) and image_path else None
-        )
-        libplacebo, compatible = await check_libplacebo_compatibility(
-            w_sar, h_sar, width, height, path, test_time, test_image, loglevel, meta
-        )
-        if compatible:
-            hdr_tonemap = True
-            meta['tonemapped'] = True
-        if libplacebo:
+        if not ffmpeg_is_good:
+            test_time = ss_times[0] if ss_times else 0
+            test_image = image_path if isinstance(image_path, str) else (
+                image_path[0] if isinstance(image_path, list) and image_path else None
+            )
+            libplacebo, compatible = await check_libplacebo_compatibility(
+                w_sar, h_sar, width, height, path, test_time, test_image, loglevel, meta
+            )
+            if compatible:
+                hdr_tonemap = True
+                meta['tonemapped'] = True
+            if libplacebo:
+                hdr_tonemap = True
+                meta['tonemapped'] = True
+                meta['libplacebo'] = True
+            if not compatible and not libplacebo:
+                hdr_tonemap = False
+            if not libplacebo and "HDR" not in meta.get('hdr'):
+                hdr_tonemap = False
+        else:
             hdr_tonemap = True
             meta['tonemapped'] = True
             meta['libplacebo'] = True
-        if not compatible and not libplacebo:
-            hdr_tonemap = False
-        if not libplacebo and "HDR" not in meta.get('hdr'):
-            hdr_tonemap = False
     else:
         hdr_tonemap = False
 
