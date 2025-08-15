@@ -320,11 +320,11 @@ class Prep():
         meta['filename'] = filename
         meta['bdinfo'] = bdinfo
 
-        conform = await get_conformance_error(meta)
-        if conform:
-            upload = cli_ui.ask_yes_no(f"Found Conformance errors in mediainfo, proceed to upload anyway?", default=False)
+        conform_issues = await get_conformance_error(meta)
+        if conform_issues:
+            upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo, proceed to upload anyway?", default=False)
             if upload is False:
-                console.print(f"[red]Not uploading. Check if the file finished downloading and can be played properly.[/red]")
+                console.print("[red]Not uploading. Check if the file finished downloading and can be played properly.")
                 tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
                 if os.path.exists(tmp_dir):
                     try:
@@ -338,8 +338,8 @@ class Prep():
                         console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
                 sys.exit(0)
             else:
-                console.print(f"Proceeding...")
-        
+                console.print("Proceeding...")
+
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
             valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
