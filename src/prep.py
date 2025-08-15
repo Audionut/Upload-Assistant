@@ -15,7 +15,7 @@ from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
 from src.audio import get_audio_v2
 from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
+from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_conformance_error
 from src.tags import get_tag, tag_override
 from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
