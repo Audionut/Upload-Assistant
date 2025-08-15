@@ -960,7 +960,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     num_workers = min(num_tasks, task_limit)
 
     meta['libplacebo'] = False
-    if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr']):
+    if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
         test_time = ss_times[0] if ss_times else 0
         test_image = image_path if isinstance(image_path, str) else (
             image_path[0] if isinstance(image_path, list) and image_path else None
