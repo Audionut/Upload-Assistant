@@ -305,7 +305,7 @@ async def get_conformance_error(meta):
     if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
         general_track = next((track for track in meta['mediainfo']['media']['track']
                               if track.get('@type') == 'General'), None)
-        if general_track and general_track.get('extra',{}).get('ConformanceErrors', {}):
+        if general_track and general_track.get('extra', {}).get('ConformanceErrors', {}):
             try:
                 return True
             except ValueError:
