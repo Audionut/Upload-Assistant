@@ -29,6 +29,7 @@ try:
     import os
     import re
     import asyncio
+    import cli_ui
     from guessit import guessit
     import ntpath
     from pathlib import Path
@@ -319,6 +320,26 @@ class Prep():
         meta['filename'] = filename
         meta['bdinfo'] = bdinfo
 
+        conform = await get_conformance_error(meta)
+        if conform:
+            upload = cli_ui.ask_yes_no(f"Found Conformance errors in mediainfo, proceed to upload anyway?", default=False)
+            if upload is False:
+                console.print(f"[red]Not uploading. Check if the file finished downloading and can be played properly.[/red]")
+                tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
+                if os.path.exists(tmp_dir):
+                    try:
+                        for file in os.listdir(tmp_dir):
+                            file_path = os.path.join(tmp_dir, file)
+                        if os.path.isfile(file_path) and file.endswith((".txt", ".json")):
+                            os.remove(file_path)
+                            if meta['debug']:
+                                console.print(f"[yellow]Removed temporary metadata file: {file_path}[/yellow]")
+                    except Exception as e:
+                        console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
+                sys.exit(0)
+            else:
+                console.print(f"Proceeding...")
+        
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
             valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
