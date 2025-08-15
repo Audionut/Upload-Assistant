@@ -324,7 +324,7 @@ class Prep():
         if conform_issues:
             upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo, proceed to upload anyway?", default=False)
             if upload is False:
-                console.print("[red]Not uploading. Check if the file finished downloading and can be played properly.")
+                console.print("[red]Not uploading. Check if the file finished downloading and can be played properly (not corrupted).")
                 tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
                 if os.path.exists(tmp_dir):
                     try:
