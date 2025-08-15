@@ -6,7 +6,7 @@ from src.tvmaze import search_tvmaze
 from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
 from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
 from src.region import get_region, get_distributor, get_service
-from src.exportmi import exportInfo, mi_resolution, validate_mediainfo
+from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
 from src.getseasonep import get_season_episode
 from src.get_tracker_data import get_tracker_data, ping_unit3d
 from src.bluray_com import get_bluray_releases
@@ -15,7 +15,7 @@ from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
 from src.audio import get_audio_v2
 from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_conformance_error
+from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
 from src.tags import get_tag, tag_override
 from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
@@ -322,7 +322,9 @@ class Prep():
 
         conform_issues = await get_conformance_error(meta)
         if conform_issues:
-            upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+            upload = False
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
             if upload is False:
                 console.print("[red]Not uploading. Check if the file has finished downloading and can be played back properly (uncorrupted).")
                 tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
@@ -339,8 +341,6 @@ class Prep():
                         console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
                 # Exit with error code for automation
                 sys.exit(1)
-            else:
-                console.print("Proceeding...")
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
