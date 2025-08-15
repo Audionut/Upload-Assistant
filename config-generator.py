@@ -374,7 +374,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
     # Get existing image hosts if available
     existing_hosts = []
     for i in range(1, 11):
-        key = f"image_host_{i}"
+        key = f"img_host_{i}"
         if key in existing_defaults and existing_defaults[key]:
             existing_hosts.append(existing_defaults[key].strip().lower())
 
@@ -404,7 +404,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
 
             if host_input in img_host_api_map:
                 valid_host = True
-                host_key = f"image_host_{i}"
+                host_key = f"img_host_{i}"
                 config_defaults[host_key] = host_input
 
                 # Configure API key(s) for this host, if needed
