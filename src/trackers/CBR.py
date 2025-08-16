@@ -4,10 +4,10 @@ import asyncio
 import requests
 import platform
 import httpx
-import os
 import re
 from src.trackers.COMMON import COMMON
 from src.console import console
+from src.languages import process_desc_language
 
 
 class CBR():
@@ -66,47 +66,6 @@ class CBR():
         }.get(resolution, '10')
         return resolution_id
 
-    def get_audio(self, meta):
-        if meta.get('is_disc') == "BDMV":
-            return ''
-
-        audio_languages = set()
-
-        base_dir = meta.get('base_dir', '.')
-        uuid = meta.get('uuid', 'default_uuid')
-        media_info_path = os.path.join(base_dir, 'tmp', uuid, 'MEDIAINFO.txt')
-
-        try:
-            if os.path.exists(media_info_path):
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                audio_sections = re.findall(
-                    r'Audio(?: #\d+)?\s*\n(.*?)(?=\n\n(?:Audio|Video|Text|Menu)|$)',
-                    media_info_text,
-                    re.DOTALL | re.IGNORECASE
-                )
-
-                for section in audio_sections:
-                    language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
-                    if language_match:
-                        lang_raw = language_match.group(1).strip()
-                        lang_clean = re.sub(r'[/\\].*|\(.*?\)', '', lang_raw).strip()
-                        if lang_clean.lower() not in ["unknown", "und"]:
-                            audio_languages.add(lang_clean.lower())
-
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            print(f"ERRO: Falha ao processar MediaInfo para verificar os idiomas nas faixas de áudio, não sendo possível determinar se é ou não DUAL/MULTI: {e}")
-
-        if len(audio_languages) == 2:
-            return ' DUAL'
-        elif len(audio_languages) >= 3:
-            return ' MULTI'
-        else:
-            return ''
-
     async def edit_name(self, meta):
         name = meta['name'].replace('DD+ ', 'DDP').replace('DD ', 'DD').replace('AAC ', 'AAC').replace('FLAC ', 'FLAC')
 
@@ -131,13 +90,26 @@ class CBR():
         tag_lower = meta['tag'].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
-        audio_tag = self.get_audio(meta)
-        if audio_tag:
-            if '-' in cbr_name:
-                parts = cbr_name.rsplit('-', 1)
-                cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
-            else:
-                cbr_name += audio_tag
+        if meta.get('no_dual', False):
+            if meta.get('dual_audio', False):
+                cbr_name = cbr_name.replace("Dual-Audio ", '')
+        else:
+            if meta.get('audio_languages') and not meta.get('is_disc') == "BDMV":
+                audio_languages = set(meta['audio_languages'])
+                if len(audio_languages) >= 3:
+                    audio_tag = ' MULTI'
+                elif len(audio_languages) == 2:
+                    audio_tag = ' DUAL'
+                else:
+                    audio_tag = ''
+            if audio_tag:
+                if meta.get('dual_audio', False):
+                    cbr_name = cbr_name.replace("Dual-Audio ", '')
+                if '-' in cbr_name:
+                    parts = cbr_name.rsplit('-', 1)
+                    cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
+                else:
+                    cbr_name += audio_tag
 
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
@@ -149,6 +121,7 @@ class CBR():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
+        modq = await self.get_flag(meta, 'modq')
         cat_id = await self.get_cat_id(meta['category'], meta)
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'])
@@ -156,7 +129,7 @@ class CBR():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -193,6 +166,7 @@ class CBR():
             'free': 0,
             'doubleup': 0,
             'sticky': 0,
+            'mod_queue_opt_in': modq,
         }
         # Internal
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
@@ -216,9 +190,10 @@ class CBR():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -226,11 +201,22 @@ class CBR():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def search_existing(self, meta, disctype):
+        if not meta['is_disc'] == "BDMV":
+            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            portuguese_languages = ['Portuguese', 'Português']
+            if not any(lang in meta.get('audio_languages', []) for lang in portuguese_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in portuguese_languages):
+                if not meta['unattended']:
+                    console.print('[bold red]CBR requires at least one Portuguese audio or subtitle track.')
+                meta['skipping'] = "CBR"
+                return
+
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on {self.tracker}...")
+
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
@@ -262,3 +248,10 @@ class CBR():
             await asyncio.sleep(5)
 
         return dupes
+
+    async def get_flag(self, meta, flag_name):
+        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
+        if config_flag is not None:
+            return 1 if config_flag else 0
+
+        return 1 if meta.get(flag_name, False) else 0

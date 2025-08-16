@@ -198,7 +198,7 @@ class ACM():
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         acm_name = await self.edit_name(meta)
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -259,18 +259,18 @@ class ACM():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception:
                 console.print("It may have uploaded, go check")
                 return
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ACM...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],

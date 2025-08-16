@@ -31,6 +31,9 @@ class DiscParse():
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
 
+        if meta.get('emby', False):
+            return discs, meta_discs
+
         for i in range(len(discs)):
             bdinfo_text = None
             path = os.path.abspath(discs[i]['path'])
@@ -143,7 +146,7 @@ class DiscParse():
                     selected_playlists = [max(valid_playlists, key=lambda p: sum(item['size'] for item in p['items']))]
                 else:
                     # Allow user to select playlists
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         if len(valid_playlists) == 1:
                             console.print("[yellow]Only one valid playlist found. Automatically selecting.")
                             selected_playlists = valid_playlists
@@ -255,7 +258,7 @@ class DiscParse():
                                 current_label = bdinfo.get('label', f"Playlist {idx}")
                                 console.print(f"[bold yellow]Current label for playlist {playlist['file']}: {current_label}")
 
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("[bold green]You can create a custom Edition for this playlist.")
                                     user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
                                     if user_input:
@@ -270,7 +273,7 @@ class DiscParse():
                                 discs[i]['summary'] = bd_summary.strip()
                                 discs[i]['bdinfo'] = bdinfo
                                 discs[i]['playlists'] = selected_playlists
-                                if valid_playlists and meta['unattended'] and not meta.get('unattended-confirm', False):
+                                if valid_playlists and meta['unattended'] and not meta.get('unattended_confirm', False):
                                     simplified_playlists = [{"file": p["file"], "duration": p["duration"]} for p in valid_playlists]
                                     duration_map = {}
 
@@ -464,7 +467,7 @@ class DiscParse():
                     filesdict[trimmed[:2]] = []
                 filesdict[trimmed[:2]].append(trimmed)
             main_set_duration = 0
-            mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "mediainfo.exe")
+            mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
 
             for vob_set in filesdict.values():
                 try:
@@ -477,18 +480,13 @@ class DiscParse():
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE
                             )
-                        else:  # Linux or macOS
-                            process = await asyncio.create_subprocess_exec(
-                                "mono", mediainfo_binary, "--Output=JSON", ifo_file,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE
-                            )
-                        stdout, stderr = await process.communicate()
+                            stdout, stderr = await process.communicate()
 
-                        if process.returncode == 0:
-                            vob_set_mi = stdout.decode()
+                            if process and process.returncode == 0:
+                                vob_set_mi = stdout.decode()
+                            else:
+                                vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
                         else:
-                            console.print(f"[yellow]DVD MediaInfo failed for {ifo_file}: {stderr.decode()}")
                             vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
 
                     except Exception as e:
@@ -526,7 +524,7 @@ class DiscParse():
             each['ifo'] = ifo = f"{path}/VTS_{set}_0.IFO"
 
             try:
-                mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "mediainfo.exe")
+                mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
 
                 try:
                     if platform.system() == "Windows":
@@ -535,19 +533,14 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "mono", mediainfo_binary, os.path.basename(vob),
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for VOB: {stderr.decode()}")
-                        each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
+                        each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for VOB: {str(e)}")
                     each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
@@ -559,19 +552,14 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "mono", mediainfo_binary, os.path.basename(ifo),
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for IFO: {stderr.decode()}")
-                        each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
+                        each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for IFO: {str(e)}")
                     each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
@@ -583,19 +571,14 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "mono", mediainfo_binary, vob,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for full VOB: {stderr.decode()}")
-                        each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for full VOB: {str(e)}")
                     each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
@@ -607,19 +590,14 @@ class DiscParse():
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
-                    else:
-                        process = await asyncio.create_subprocess_exec(
-                            "mono", mediainfo_binary, ifo,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                    stdout, stderr = await process.communicate()
+                        stdout, stderr = await process.communicate()
 
-                    if process.returncode != 0:
-                        console.print(f"[yellow]DVD MediaInfo failed for full IFO: {stderr.decode()}")
-                        each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
+                        if process and process.returncode == 0:
+                            each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        else:
+                            each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')
+                        each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for full IFO: {str(e)}")
                     each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
@@ -684,7 +662,7 @@ class DiscParse():
                             key=lambda p: p["totalSize"]
                         )
                     ]
-                elif meta['unattended'] and not meta.get('unattended-confirm', False):
+                elif meta['unattended'] and not meta.get('unattended_confirm', False):
                     console.print("[yellow]Unattended mode: Auto-selecting the largest playlist.")
                     selected_playlists = [
                         max(

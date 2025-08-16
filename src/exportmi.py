@@ -79,7 +79,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False):
+async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False, debug=False):
     def filter_mediainfo(data):
         filtered = {
             "creatingLibrary": data.get("creatingLibrary"),
@@ -114,6 +114,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                     "File_Modified_Date_Local": track.get("File_Modified_Date_Local", {}),
                     "Encoded_Application": track.get("Encoded_Application", {}),
                     "Encoded_Library": track.get("Encoded_Library", {}),
+                    "extra": track.get("extra", {}),
                 })
             elif track["@type"] == "Video":
                 filtered["media"]["track"].append({
@@ -147,6 +148,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                     "DisplayAspectRatio": track.get("DisplayAspectRatio", {}),
                     "FrameRate_Mode": track.get("FrameRate_Mode", {}),
                     "FrameRate": track.get("FrameRate", {}),
+                    "FrameRate_Original": track.get("FrameRate_Original", {}),
                     "FrameRate_Num": track.get("FrameRate_Num", {}),
                     "FrameRate_Den": track.get("FrameRate_Den", {}),
                     "FrameCount": track.get("FrameCount", {}),
@@ -252,24 +254,16 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
 
     mediainfo_cmd = None
     if is_dvd:
-        console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
-        mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "mediainfo.exe")
+        if debug:
+            console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
+        mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
 
-        if platform.system() == "Linux":
-            if os.path.exists(mediainfo_binary):
-                mediainfo_cmd = ["mono", mediainfo_binary]
-                console.print(f"[bold green]Using MediaInfo binary with mono: {mediainfo_binary}")
-            else:
-                console.print("[bold red]Specialized MediaInfo binary not found, falling back to standard MediaInfo")
-        else:
-            if os.path.exists(mediainfo_binary):
-                mediainfo_cmd = mediainfo_binary
-                console.print(f"[bold green]Using MediaInfo binary: {mediainfo_binary}")
-            else:
-                console.print("[bold red]Specialized MediaInfo binary not found, falling back to standard MediaInfo")
+        if platform.system() == "windows" and os.path.exists(mediainfo_binary):
+            mediainfo_cmd = mediainfo_binary
 
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") and export_text:
-        console.print("[bold yellow]Exporting MediaInfo...")
+        if debug:
+            console.print("[bold yellow]Exporting MediaInfo...")
         if not isdir:
             os.chdir(os.path.dirname(video))
 
@@ -304,7 +298,8 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             export.write(filtered_media_info.replace(video, os.path.basename(video)))
         with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
             export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
-        console.print("[bold green]MediaInfo Exported.")
+        if debug:
+            console.print("[bold green]MediaInfo Exported.")
 
     if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json"):
         if mediainfo_cmd:
@@ -334,3 +329,59 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
         mi = json.load(f)
 
     return mi
+
+
+def validate_mediainfo(base_dir, folder_id, path, filelist, debug):
+    if not (path.lower().endswith('.mkv') or any(str(f).lower().endswith('.mkv') for f in filelist)):
+        if debug:
+            console.print(f"[yellow]Skipping {path} (not an .mkv file)[/yellow]")
+        return True
+    mediainfo_path = f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt"
+    unique_id = None
+    in_general = False
+
+    if debug:
+        console.print(f"[cyan]Validating MediaInfo at: {mediainfo_path}")
+
+    try:
+        with open(mediainfo_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip() == "General":
+                    in_general = True
+                    continue
+                if in_general:
+                    if line.strip() == "":
+                        break
+                    if line.strip().startswith("Unique ID"):
+                        unique_id = line.split(":", 1)[1].strip()
+                        break
+    except FileNotFoundError:
+        console.print(f"[red]MediaInfo file not found: {mediainfo_path}[/red]")
+        return False
+
+    if debug:
+        if unique_id:
+            console.print(f"[green]Found Unique ID: {unique_id}[/green]")
+        else:
+            console.print("[yellow]Unique ID not found in General section.[/yellow]")
+
+    return bool(unique_id)
+
+
+async def get_conformance_error(meta):
+    if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
+        general_track = next((track for track in meta['mediainfo']['media']['track']
+                              if track.get('@type') == 'General'), None)
+        if general_track and general_track.get('extra', {}).get('ConformanceErrors', {}):
+            try:
+                return True
+            except ValueError:
+                if meta['debug']:
+                    console.print(f"[red]Unexpected value: {general_track['extra']['ConformanceErrors']}[/red]")
+                return True
+        else:
+            if meta['debug']:
+                console.print("[green]No Conformance errors found in MediaInfo General track[/green]")
+            return False
+    else:
+        return False

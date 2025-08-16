@@ -2,6 +2,7 @@ import os
 import json
 import re
 import glob
+import cli_ui
 from src.console import console
 from src.exportmi import mi_resolution
 
@@ -146,6 +147,16 @@ async def get_video(videoloc, mode):
         for file in globlist:
             if not file.lower().endswith('sample.mkv') or "!sample" in file.lower():
                 filelist.append(os.path.abspath(f"{videoloc}{os.sep}{file}"))
+                filelist = sorted(filelist)
+                if len(filelist) > 1:
+                    for f in filelist:
+                        if "sample" in os.path.basename(f).lower():
+                            console.print("[green]Filelist:[/green]")
+                            for tf in filelist:
+                                console.print(f"[cyan]{tf}")
+                            console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
+                            if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
+                                filelist.remove(f)
         try:
             video = sorted(filelist)[0]
         except IndexError:
@@ -169,9 +180,21 @@ async def get_resolution(guess, folder_id, base_dir):
         except Exception:
             width = 0
             height = 0
-        framerate = mi['media']['track'][1].get('FrameRate', '')
-        if int(float(framerate)) > 30:
-            hfr = True
+
+        framerate = mi['media']['track'][1].get('FrameRate')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Original')
+        if not framerate or framerate == '0':
+            framerate = mi['media']['track'][1].get('FrameRate_Num')
+        if framerate:
+            try:
+                if int(float(framerate)) > 30:
+                    hfr = True
+            except Exception:
+                hfr = False
+        else:
+            framerate = "24.000"
+
         try:
             scan = mi['media']['track'][1]['ScanType']
         except Exception:
@@ -184,7 +207,7 @@ async def get_resolution(guess, folder_id, base_dir):
             scan = "p"
         else:
             # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
-            match = re.search(r'\b(1080p|720p|2160p)\b', folder_id, re.IGNORECASE)
+            match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
             if match:
                 scan = "p"  # Assume progressive based on common resolution markers
             else:
@@ -254,3 +277,25 @@ async def is_sd(resolution):
     else:
         sd = 0
     return sd
+
+
+async def get_video_duration(meta):
+    if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
+        general_track = next((track for track in meta['mediainfo']['media']['track']
+                              if track.get('@type') == 'General'), None)
+
+        if general_track and general_track.get('Duration'):
+            try:
+                media_duration_seconds = float(general_track['Duration'])
+                formatted_duration = int(media_duration_seconds // 60)
+                return formatted_duration
+            except ValueError:
+                if meta['debug']:
+                    console.print(f"[red]Invalid duration value: {general_track['Duration']}[/red]")
+                return None
+        else:
+            if meta['debug']:
+                console.print("[red]No valid duration found in MediaInfo General track[/red]")
+            return None
+    else:
+        return None

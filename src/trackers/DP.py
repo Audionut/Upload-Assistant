@@ -4,13 +4,12 @@ import asyncio
 import requests
 import platform
 import httpx
-import re
 import glob
 import os
 from src.trackers.COMMON import COMMON
 from src.console import console
-from src.rehostimages import check_hosts
 from data.config import config
+from src.languages import process_desc_language
 
 
 class DP():
@@ -21,8 +20,16 @@ class DP():
         self.upload_url = 'https://darkpeers.org/api/torrents/upload'
         self.search_url = 'https://darkpeers.org/api/torrents/filter'
         self.torrent_url = 'https://darkpeers.org/torrents/'
+        self.id_url = 'https://darkpeers.org/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = [""]
+        self.banned_groups = [
+            'aXXo', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL', 'FaNGDiNG0', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime',
+            'iHYTECH', 'ION10', 'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD', 'nikt0', 'nSD',
+            'OFT', 'PRODJi', 'RARBG', 'Rifftrax', 'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
+            'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT', 'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
+            ['EVO', 'web-dl Only']
+        ]
+
         pass
 
     async def get_cat_id(self, category_name):
@@ -61,23 +68,8 @@ class DP():
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        name = await self.edit_name(meta)
-        if meta.get('dp_skipping', False):
-            console.print("[red]Skipping DP upload as language conditions were not met.")
-            return
-        url_host_mapping = {
-            "ibb.co": "imgbb",
-            "pixhost.to": "pixhost",
-            "imgbox.com": "imgbox",
-            "imagebam.com": "bam",
-        }
-        approved_image_hosts = ['imgbox', 'imgbb', 'pixhost', 'bam']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
-        if 'DP_images_key' in meta:
-            image_list = meta['DP_images_key']
-        else:
-            image_list = meta['image_list']
         await common.edit_torrent(meta, self.tracker, self.source_flag)
+        modq = await self.get_flag(meta, 'modq')
         cat_id = await self.get_cat_id(meta['category'])
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'])
@@ -92,10 +84,10 @@ class DP():
             logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
             if logo_path:
                 meta['logo'] = logo_path
-        await common.unit3d_edit_desc(meta, self.tracker, self.signature, image_list=image_list)
+        await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -119,7 +111,7 @@ class DP():
         if nfo_file:
             files['nfo'] = ("nfo_file.nfo", nfo_file, "text/plain")
         data = {
-            'name': name,
+            'name': meta['name'],
             'description': desc,
             'mediainfo': mi_dump,
             'bdinfo': bd_dump,
@@ -140,6 +132,7 @@ class DP():
             'featured': 0,
             'free': 0,
             'doubleup': 0,
+            'mod_queue_opt_in': modq,
             'sticky': 0,
         }
         # Internal
@@ -164,9 +157,10 @@ class DP():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -174,81 +168,28 @@ class DP():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
-    async def edit_name(self, meta):
-        dp_name = meta.get('name')
-        nordic_languages = ['danish', 'swedish', 'norwegian', 'icelandic', 'finnish']
-        english_languages = ['english']
-        meta['dp_skipping'] = False
+    async def get_flag(self, meta, flag_name):
+        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
+        if config_flag is not None:
+            return 1 if config_flag else 0
 
-        if meta['is_disc'] == "BDMV" and 'bdinfo' in meta:
-            has_english_audio = False
-            has_nordic_audio = False
-
-            if 'audio' in meta['bdinfo']:
-                for audio_track in meta['bdinfo']['audio']:
-                    if 'language' in audio_track:
-                        audio_lang = audio_track['language'].lower()
-                        if audio_lang in nordic_languages:
-                            has_nordic_audio = True
-                            break
-                        elif audio_lang in english_languages:
-                            has_english_audio = True
-
-            if not has_english_audio and not has_nordic_audio:
-                has_nordic_subtitle = False
-                if 'subtitles' in meta['bdinfo']:
-                    for subtitle in meta['bdinfo']['subtitles']:
-                        if subtitle.lower() in nordic_languages:
-                            has_nordic_subtitle = True
-                            break
-
-                    if not has_nordic_subtitle:
-                        meta['dp_skipping'] = True
-                        return dp_name
-
-        elif not meta['is_disc'] == "BDMV":
-            media_info_text = None
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-            except (FileNotFoundError, KeyError) as e:
-                print(f"Error processing MEDIAINFO.txt: {e}")
-
-            if media_info_text:
-                audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                subtitle_section = re.findall(r'Text[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-
-                has_nordic_audio = False
-                has_english_audio = False
-                for language in audio_section:
-                    language = language.lower().strip()
-                    if language in nordic_languages:
-                        has_nordic_audio = True
-                        break
-                    elif language in english_languages:
-                        has_english_audio = True
-                        break
-
-                if not has_english_audio and not has_nordic_audio:
-                    has_nordic_sub = False
-                    for language in subtitle_section:
-                        language = language.lower().strip()
-                        if language in nordic_languages:
-                            has_nordic_sub = True
-                            break
-
-                    if not has_nordic_sub:
-                        meta['dp_skipping'] = True
-                        return dp_name
-
-        return dp_name
+        return 1 if meta.get(flag_name, False) else 0
 
     async def search_existing(self, meta, disctype):
+        if not meta['is_disc'] == "BDMV":
+            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
+            if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
+                if not meta['unattended']:
+                    console.print('[bold red]DP requires at least one Nordic/English audio or subtitle track.')
+                meta['skipping'] = "DP"
+                return
+
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on {self.tracker}...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
@@ -278,5 +219,11 @@ class DP():
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
+
+        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower() and len(dupes) > 0:
+            if not meta['unattended']:
+                console.print("[bold red]DP does not allow FGT encodes, skipping upload.")
+            meta['skipping'] = "DP"
+            return []
 
         return dupes

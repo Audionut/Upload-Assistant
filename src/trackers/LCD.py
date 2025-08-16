@@ -23,7 +23,7 @@ class LCD():
         self.tracker = 'LCD'
         self.source_flag = 'LOCADORA'
         self.search_url = 'https://locadora.cc/api/torrents/filter'
-        self.torrent_url = 'https://locadora.cc/api/torrents/'
+        self.torrent_url = 'https://locadora.cc/torrents/'
         self.upload_url = 'https://locadora.cc/api/torrents/upload'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [""]
@@ -39,7 +39,7 @@ class LCD():
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         name = await self.edit_name(meta)
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -108,9 +108,10 @@ class LCD():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://locadora.cc/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -118,6 +119,7 @@ class LCD():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def get_cat_id(self, category_name, edition, meta):
@@ -195,6 +197,6 @@ class LCD():
 
     async def edit_name(self, meta):
 
-        name = meta['uuid'].replace('.mkv', '').replace('.mp4', '').replace(".", " ").replace("DDP2 0", "DDP2.0").replace("DDP5 1", "DDP5.1").replace("H 264", "H.264").replace("H 265", "H.264").replace("DD+7 1", "DD+7.1").replace("AAC2 0", "AAC2.0").replace('DD5 1', 'DD5.1').replace('DD2 0', 'DD2.0').replace('TrueHD 7 1', 'TrueHD 7.1').replace('DTS-HD MA 7 1', 'DTS-HD MA 7.1').replace('-C A A', '-C.A.A'),
+        name = meta['uuid'].replace('.mkv', '').replace('.mp4', '').replace(".", " ").replace("DDP2 0", "DDP2.0").replace("DDP5 1", "DDP5.1").replace("H 264", "H.264").replace("H 265", "H.265").replace("DD+7 1", "DDP7.1").replace("AAC2 0", "AAC2.0").replace('DD5 1', 'DD5.1').replace('DD2 0', 'DD2.0').replace('TrueHD 7 1', 'TrueHD 7.1').replace('DTS-HD MA 7 1', 'DTS-HD MA 7.1').replace('DTS-HD MA 5 1', 'DTS-HD MA 5.1').replace("TrueHD 5 1", "TrueHD 5.1").replace("DTS-X 7 1", "DTS-X 7.1").replace("DTS-X 5 1", "DTS-X 5.1").replace("FLAC 2 0", "FLAC 2.0").replace("FLAC 5 1", "FLAC 5.1").replace("DD1 0", "DD1.0").replace("DTS ES 5 1", "DTS ES 5.1").replace("DTS5 1", "DTS 5.1").replace("AAC1 0", "AAC1.0").replace("DD+5 1", "DDP5.1").replace("DD+2 0", "DDP2.0").replace("DD+1 0", "DDP1.0")
 
         return name

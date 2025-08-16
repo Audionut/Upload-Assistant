@@ -26,6 +26,8 @@ class OTW():
         self.source_flag = 'OTW'
         self.upload_url = 'https://oldtoons.world/api/torrents/upload'
         self.search_url = 'https://oldtoons.world/api/torrents/filter'
+        self.torrent_url = 'https://oldtoons.world/torrents/'
+        self.id_url = 'https://oldtoons.world/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AROMA', 'aXXo', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE', 'eSc', 'FaNGDiNG0', 'FGT', 'Flights',
@@ -43,7 +45,11 @@ class OTW():
         }.get(category_name, '0')
         return category_id
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, type, meta):
+        if meta.get('is_disc') == "BDMV":
+            return '1'
+        elif meta.get('is_disc') and meta.get('is_disc') != "BDMV":
+            return '7'
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -74,9 +80,16 @@ class OTW():
         otw_name = meta['name']
         source = meta['source']
         resolution = meta['resolution']
-        otw_name = otw_name.replace(meta["aka"], '')
+        aka = meta.get('aka', '')
+        type = meta['type']
+        if aka:
+            otw_name = otw_name.replace(meta["aka"], '')
         if meta['is_disc'] == "DVD":
             otw_name = otw_name.replace(source, f"{source} {resolution}")
+        if meta['is_disc'] == "DVD" or type == "REMUX":
+            otw_name = otw_name.replace(meta['audio'], f"{meta.get('video_codec', '')} {meta['audio']}", 1)
+        elif meta['is_disc'] == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
+            otw_name = otw_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
         if meta['category'] == "TV":
             years = []
 
@@ -93,7 +106,7 @@ class OTW():
                 years.append(int(series_year))
             # Use the oldest year if any found, else empty string
             year = str(min(years)) if years else ""
-            if meta.get('no_year', False) is False:
+            if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 otw_name = otw_name.replace(meta['title'], f"{meta['title']} {year}", 1)
 
         return otw_name
@@ -104,12 +117,12 @@ class OTW():
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(meta['category'])
         modq = await self.get_flag(meta, 'modq')
-        type_id = await self.get_type_id(meta['type'])
+        type_id = await self.get_type_id(meta['type'], meta)
         resolution_id = await self.get_res_id(meta['resolution'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -179,9 +192,10 @@ class OTW():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://oldtoons.world/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -189,6 +203,7 @@ class OTW():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def get_flag(self, meta, flag_name):
@@ -200,8 +215,8 @@ class OTW():
 
     async def search_existing(self, meta, disctype):
         if not any(genre in meta['genres'] for genre in ['Animation', 'Family']):
-            console.print('[bold red]Genre does not match Animation or Family needed for OTW.')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -212,20 +227,21 @@ class OTW():
                 return
         disallowed_keywords = {'XXX', 'Erotic', 'Porn', 'Hentai', 'Adult Animation', 'Orgy', 'softcore'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Adult animation not allowed at OTW.')
+            if not meta['unattended']:
+                console.print('[bold red]Adult animation not allowed at OTW.')
             meta['skipping'] = "OTW"
             return []
         if meta['sd'] and 'BluRay' in meta['source']:
-            console.print("[bold red]SD content from HD source not allowed at OTW")
+            if not meta['unattended']:
+                console.print("[bold red]SD content from HD source not allowed")
             meta['skipping'] = "OTW"
             return []
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OTW...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
+            'types[]': await self.get_type_id(meta['type'], meta),
             'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }

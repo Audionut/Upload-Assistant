@@ -1,6 +1,7 @@
 import httpx
 import uuid
 from src.bbcode import BBCODE
+from src.console import console
 
 
 async def generate_guid():
@@ -37,6 +38,10 @@ async def get_btn_torrents(btn_api, btn_id, meta):
         print(f"[ERROR] Failed to fetch BTN data: {e}")
         return meta
 
+    if not data or not isinstance(data, dict):
+        print("[ERROR] BTN API response is empty or invalid.")
+        return meta
+
     if "result" in data and "torrents" in data["result"]:
         torrents = data["result"]["torrents"]
         first_torrent = next(iter(torrents.values()), None)
@@ -46,15 +51,16 @@ async def get_btn_torrents(btn_api, btn_id, meta):
 
             if imdb_id and imdb_id != "0":
                 meta["imdb_id"] = int(imdb_id)
-                print("BTN IMDb ID:", meta["imdb_id"])
 
             if tvdb_id and tvdb_id != "0":
                 meta["tvdb_id"] = int(tvdb_id)
-                print("BTN TVDb ID:", meta["tvdb_id"])
+
+            if meta.get("imdb_id") or meta.get("tvdb_id"):
+                console.print(f"[green]Found BTN IDs: IMDb={meta.get('imdb_id')}, TVDb={meta.get('tvdb_id')}")
 
             return meta
-
-    print("No IMDb or TVDb ID found.")
+    if meta['debug']:
+        console.print("[red]No IMDb or TVDb ID found.")
     return meta
 
 
@@ -171,18 +177,16 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
     elif "flux" in name:
         meta["flux"] = True
     description, imagelist = bbcode.clean_bhd_description(description, meta)
-    if description and not only_id:
+    if not only_id:
         meta["description"] = description
         meta["image_list"] = imagelist
-    elif description and meta.get('keep_images'):
+    elif meta.get('keep_images'):
         meta["description"] = ""
         meta["image_list"] = imagelist
 
-    if meta['debug']:
-        print("BHD IMDb ID:", meta.get("imdb_id"))
-        print("BHD TMDb ID:", meta.get("tmdb_id"))
+    console.print(f"[green]Found BHD IDs: IMDb={meta.get('imdb_id')}, TMDb={meta.get('tmdb_id')}")
 
-    return meta["imdb_id"] or meta["tmdb_id"] or 0
+    return meta["imdb_id"] and meta["tmdb_id"]
 
 
 async def parse_tmdb_id(tmdb_id, category):
@@ -190,10 +194,10 @@ async def parse_tmdb_id(tmdb_id, category):
     tmdb_id = str(tmdb_id).strip().lower()
 
     if tmdb_id.startswith('tv/') and '/' in tmdb_id:
-        tmdb_id = tmdb_id.split('/')[1]
+        tmdb_id = tmdb_id.split('/')[1].split('-')[0]
         category = 'TV'
     elif tmdb_id.startswith('movie/') and '/' in tmdb_id:
-        tmdb_id = tmdb_id.split('/')[1]
+        tmdb_id = tmdb_id.split('/')[1].split('-')[0]
         category = 'MOVIE'
 
     return category, tmdb_id

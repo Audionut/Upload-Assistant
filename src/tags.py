@@ -28,7 +28,7 @@ async def get_tag(video, meta):
             else:
                 # If video is a file, use the filename without extension
                 basename_stripped = os.path.splitext(os.path.basename(video))[0]
-            non_anime_match = re.search(r'(?<=-)((?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
+            non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
             if non_anime_match:
                 release_group = non_anime_match.group(1).strip()
                 if "Z0N3" in release_group:
@@ -64,7 +64,7 @@ async def get_tag(video, meta):
         tag = ""
 
     # Remove generic "no group" tags
-    if tag and tag[1:].lower() in ["nogroup", "nogrp", "hd.ma.5.1"]:
+    if tag and tag[1:].lower() in ["nogroup", "nogrp", "hd.ma.5.1", "untouched"]:
         tag = ""
 
     return tag

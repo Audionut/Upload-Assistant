@@ -5,13 +5,12 @@ import requests
 import platform
 import re
 import os
-import cli_ui
 import httpx
 from src.bbcode import BBCODE
 from src.trackers.COMMON import COMMON
 from src.console import console
-from src.dupe_checking import check_for_english
 from src.rehostimages import check_hosts
+from src.languages import process_desc_language, has_english_language
 
 
 class OE():
@@ -28,7 +27,8 @@ class OE():
         self.source_flag = 'OE'
         self.search_url = 'https://onlyencodes.cc/api/torrents/filter'
         self.upload_url = 'https://onlyencodes.cc/api/torrents/upload'
-        self.torrent_url = 'https://onlyencodes.cc/api/torrents/'
+        self.torrent_url = 'https://onlyencodes.cc/torrents/'
+        self.id_url = 'https://onlyencodes.cc/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             '0neshot', '3LT0N', '4K4U', '4yEo', '$andra', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time',
@@ -50,12 +50,12 @@ class OE():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'oeimg', 'ptscreens', "passtheimage"]
+        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
-            "imgoe.download": "oeimg",
+            "onlyimage.org": "onlyimage",
             "imagebam.com": "bam",
             "ptscreens.com": "ptscreens",
             "img.passtheima.ge": "passtheimage",
@@ -63,18 +63,19 @@ class OE():
 
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         await self.edit_desc(meta, self.tracker, self.signature)
-        if "oe_no_language" in meta:
-            console.print("[red]No language detected in MEDIAINFO.txt[/red]")
+        should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
+        if should_skip:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: oe_no_language"
             return
         cat_id = await self.get_cat_id(meta['category'])
         if meta.get('type') == "DVDRIP":
             meta['type'] = "ENCODE"
-        type_id = await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('video_codec'), meta.get('category', ""))
+        type_id = await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A'))
         resolution_id = await self.get_res_id(meta['resolution'])
         oe_name = await self.edit_name(meta)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -98,7 +99,6 @@ class OE():
             'resolution_id': resolution_id,
             'tmdb': meta['tmdb'],
             'imdb': meta['imdb'],
-            'tvdb': meta['tvdb_id'],
             'mal': meta['mal_id'],
             'igdb': 0,
             'anonymous': anon,
@@ -126,6 +126,9 @@ class OE():
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
+            data['tvdb'] = meta['tvdb_id']
+        elif meta.get('category') == "MOVIE":
+            data['tvdb'] = 0
         headers = {
             'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
         }
@@ -136,9 +139,10 @@ class OE():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://onlyencodes.cc/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -146,16 +150,24 @@ class OE():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta):
         oe_name = meta.get('name')
-        media_info_tracks = meta.get('media_info_tracks', [])  # noqa #F841
         resolution = meta.get('resolution')
         video_encode = meta.get('video_encode')
         name_type = meta.get('type', "")
         tag_lower = meta['tag'].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        imdb_name = meta.get('imdb_info', {}).get('title', "")
+        title = meta.get('title', "")
+        oe_name = oe_name.replace(f"{title}", imdb_name, 1)
+        year = str(meta.get('year', ""))
+        imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        scale = "DS4K" if "DS4K" in meta['uuid'].upper() else "RM4K" if "RM4K" in meta['uuid'].upper() else ""
+        if not meta.get('category') == "TV":
+            oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
         if name_type == "DVDRIP":
             if meta.get('category') == "MOVIE":
@@ -165,34 +177,15 @@ class OE():
                 oe_name = oe_name.replace(f"{meta['source']}", f"{resolution}", 1)
                 oe_name = oe_name.replace(f"{meta['video_codec']}", f"{meta['audio']} {meta['video_codec']}", 1)
 
-        if not meta['is_disc'] == "BDMV":
-            def has_english_audio(media_info_text=None):
-                if media_info_text:
-                    audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    for i, language in enumerate(audio_section):
-                        language = language.lower().strip()
-                        if language.lower().startswith('en'):  # Check if it's English
-                            return True
-                return False
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        elif meta.get('audio_languages'):
+            audio_languages = meta['audio_languages'][0].upper()
+            if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
+                oe_name = oe_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
 
-            def get_audio_lang(media_info_text=None):
-                if media_info_text:
-                    match = re.search(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    if match:
-                        return match.group(1).upper()
-                return ""
-
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                if not has_english_audio(media_info_text=media_info_text):
-                    audio_lang = get_audio_lang(media_info_text=media_info_text)
-                    if audio_lang:
-                        oe_name = oe_name.replace(meta['resolution'], f"{audio_lang} {meta['resolution']}", 1)
-            except (FileNotFoundError, KeyError) as e:
-                print(f"Error processing MEDIAINFO.txt: {e}")
+        if name_type in ["ENCODE", "WEBDL", "WEBRIP"] and scale != "":
+            oe_name = oe_name.replace(f"{resolution}", f"{scale}", 1)
 
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
@@ -208,7 +201,7 @@ class OE():
         }.get(category_name, '0')
         return category_id
 
-    async def get_type_id(self, type, tv_pack, video_codec, category):
+    async def get_type_id(self, type, video_codec):
         type_id = {
             'DISC': '19',
             'REMUX': '20',
@@ -259,50 +252,7 @@ class OE():
             if desc_header != "":
                 descfile.write(desc_header)
 
-            if not meta['is_disc'] == "BDMV":
-                def process_languages(tracks):
-                    audio_languages = []
-                    subtitle_languages = []
-
-                    for track in tracks:
-                        if track.get('@type') == 'Audio':
-                            language = track.get('Language')
-                            if not language or language is None:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                                    audio_lang = cli_ui.ask_string('No audio language present, you must enter one:')
-                                    if audio_lang:
-                                        audio_languages.append(audio_lang)
-                                    else:
-                                        audio_languages.append("")
-                                else:
-                                    meta['oe_no_language'] = True
-                        if track.get('@type') == 'Text':
-                            language = track.get('Language')
-                            if not language or language is None:
-                                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                                    subtitle_lang = cli_ui.ask_string('No subtitle language present, you must enter one:')
-                                    if subtitle_lang:
-                                        subtitle_languages.append(subtitle_lang)
-                                    else:
-                                        subtitle_languages.append("")
-                                else:
-                                    meta['oe_no_language'] = True
-
-                    return audio_languages, subtitle_languages
-
-                media_data = meta.get('mediainfo', {})
-                if media_data:
-                    tracks = media_data.get('media', {}).get('track', [])
-                    if tracks:
-                        audio_languages, subtitle_languages = process_languages(tracks)
-                        if audio_languages:
-                            descfile.write(f"Audio Language: {', '.join(audio_languages)}\n")
-
-                        subtitle_tracks = [track for track in tracks if track.get('@type') == 'Text']
-                        if subtitle_tracks and subtitle_languages:
-                            descfile.write(f"Subtitle Language: {', '.join(subtitle_languages)}\n")
-                else:
-                    console.print("[red]No media information available in meta.[/red]")
+            await process_desc_language(meta, descfile, tracker=self.tracker)
 
             bbcode = BBCODE()
             if meta.get('discs', []) != []:
@@ -346,20 +296,26 @@ class OE():
     async def search_existing(self, meta, disctype):
         disallowed_keywords = {'XXX', 'softcore', 'concert'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Erotic not allowed at RF.')
+            if not meta['unattended']:
+                console.print('[bold red]Erotic not allowed at OE.')
             meta['skipping'] = "OE"
             return
 
-        tracker = self.tracker
-        await check_for_english(meta, tracker)
+        if not meta['is_disc'] == "BDMV":
+            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
+                if not meta['unattended']:
+                    console.print('[bold red]OE requires at least one English audio or subtitle track.')
+                meta['skipping'] = "OE"
+                return
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on OE...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type'], meta.get('tv_pack', 0), meta.get('sd', 0), meta.get('category', "")),
+            'types[]': await self.get_type_id(meta['type'], meta.get('video_codec', 'N/A')),
             'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }

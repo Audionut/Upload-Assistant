@@ -115,7 +115,7 @@ class MTV():
         group_desc = await self.edit_group_desc(meta)
         mtv_name = await self.edit_name(meta)
 
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -155,24 +155,35 @@ class MTV():
             with requests.Session() as session:
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                response = session.post(url=self.upload_url, data=data, files=files)
+                response = session.post(url=self.upload_url, data=data, files=files, allow_redirects=True)
                 try:
-                    if "torrents.php" in response.url:
-                        console.print(response.url)
-                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), response.url)
+                    if "torrents.php" in str(response.url):
+                        meta['tracker_status'][self.tracker]['status_message'] = response.url
+                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+                    elif 'https://www.morethantv.me/upload.php' in str(response.url):
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error - Still on upload page - upload may have failed"
+                        if "error" in response.text.lower() or "failed" in response.text.lower():
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Upload failed - check form data"
+                    elif str(response.url) == "https://www.morethantv.me/" or str(response.url) == "https://www.morethantv.me/index.php":
+                        if "Project Luminance" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Not logged in - session may have expired"
+                        if "'GroupID' cannot be null" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?"
+                        elif "Integrity constraint violation" in response.text:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - Proper site bug"
                     else:
-                        if "authkey.php" in response.url:
-                            console.print("[red]No DL link in response, It may have uploaded, check manually.")
+                        if "authkey.php" in str(response.url):
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error - No DL link in response, It may have uploaded, check manually."
                         else:
-                            console.print("[red]Upload Failed. Either you are not logged in......")
-                            console.print("[red]You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?")
-                            console.print("[red]Or you hit some other error with the torrent upload.")
+                            console.print(f"response URL: {response.url}")
+                            console.print(f"response status: {response.status_code}")
                 except Exception:
-                    console.print("[red]It may have uploaded, check manually.")
+                    meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
                     print(traceback.print_exc())
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
 
     async def edit_desc(self, meta):
@@ -209,7 +220,9 @@ class MTV():
                     img_url = image['img_url']
                     desc.write(f"[url={raw_url}][img=250]{img_url}[/img][/url]")
 
-            desc.write(f"\n\n[hide]{base}[/hide]")
+            base = re.sub(r'\[/?quote\]', '', base, flags=re.IGNORECASE).strip()
+            if base != "":
+                desc.write(f"\n\n[spoiler=Notes]{base}[/spoiler]")
             desc.close()
         return
 
@@ -278,7 +291,6 @@ class MTV():
         mtv_name = ' '.join(mtv_name.split())
         mtv_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", mtv_name)
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')
-        console.print(f"[yellow]Sent this name: {mtv_name}[/yellow]")
         return mtv_name
 
     async def get_res_id(self, resolution):
@@ -436,7 +448,7 @@ class MTV():
         vcookie = await self.validate_cookies(meta, cookiefile)
         if vcookie is not True:
             console.print('[red]Failed to validate cookies. Please confirm that the site is up and your username and password is valid.')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 recreate = cli_ui.ask_yes_no("Log in again and create new session?")
             else:
                 recreate = True
@@ -482,11 +494,6 @@ class MTV():
                     # Add error handling for the request
                     try:
                         resp = session.get(url=url, timeout=10)
-                        if meta['debug']:
-                            console.log('[cyan]Validate Cookies:')
-                            console.log(session.cookies.get_dict())
-                            console.log(resp.url)
-
                         if resp.text.find("Logout") != -1:
                             return True
                         else:
@@ -596,7 +603,6 @@ class MTV():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on MTV...")
 
         # Build request parameters
         params = {

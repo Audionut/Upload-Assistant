@@ -7,6 +7,7 @@ from src.console import console
 
 async def is_scene(video, meta, imdb=None, lower=False):
     scene = False
+    is_all_lowercase = False
     base = os.path.basename(video)
     match = re.match(r"^(.+)\.[a-zA-Z0-9]{3}$", os.path.basename(video))
 
@@ -14,7 +15,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
         base = match.group(1)
         is_all_lowercase = base.islower()
     base = urllib.parse.quote(base)
-    if 'scene' not in meta and not lower:
+    if 'scene' not in meta and not lower and not meta.get('emby_debug', False):
         url = f"https://api.srrdb.com/v1/search/r:{base}"
         if meta['debug']:
             console.print("Using SRRDB url", url)
@@ -29,13 +30,14 @@ async def is_scene(video, meta, imdb=None, lower=False):
                 meta['scene_name'] = first_result['release']
                 video = f"{first_result['release']}.mkv"
                 scene = True
-                if scene and meta.get('isdir', False) and meta.get('queue') is not None:
-                    meta['keep_folder'] = True
                 if is_all_lowercase and not meta.get('tag'):
                     meta['we_need_tag'] = True
+                if first_result.get('imdbId'):
+                    imdb_str = first_result['imdbId']
+                    imdb = int(imdb_str) if imdb_str.isdigit() else 0
 
                 # NFO Download Handling
-                if not meta.get('nfo'):
+                if not meta.get('nfo') and not meta.get('emby', False):
                     if first_result.get("hasNFO") == "yes":
                         try:
                             release = first_result['release']
@@ -54,48 +56,12 @@ async def is_scene(video, meta, imdb=None, lower=False):
                                     f.write(nfo_response.content)
                                     meta['nfo'] = True
                                     meta['auto_nfo'] = True
-                                console.print(f"[green]NFO downloaded to {nfo_file_path}")
+                                if meta['debug']:
+                                    console.print(f"[green]NFO downloaded to {nfo_file_path}")
                             else:
                                 console.print("[yellow]NFO file not available for download.")
                         except Exception as e:
                             console.print("[yellow]Failed to download NFO file:", e)
-
-                # IMDb Handling
-                try:
-                    imdb_response = requests.get(f"https://api.srrdb.com/v1/imdb/{base}", timeout=10)
-
-                    if imdb_response.status_code == 200:
-                        imdb_json = imdb_response.json()
-                        if meta['debug']:
-                            console.print(f"imdb_json: {imdb_json}")
-
-                        if imdb_json.get('releases') and len(imdb_json['releases']) > 0 and imdb == 0:
-                            imdb_str = None
-                            first_release = imdb_json['releases'][0]
-
-                            if 'imdb' in first_release:
-                                imdb_str = first_release['imdb']
-                            elif 'imdbId' in first_release:
-                                imdb_str = first_release['imdbId']
-                            elif 'imdbid' in first_release:
-                                imdb_str = first_release['imdbid']
-
-                            if imdb_str:
-                                imdb_str = str(imdb_str).lstrip('tT')  # Strip 'tt' or 'TT'
-                                imdb = int(imdb_str) if imdb_str.isdigit() else 0
-
-                            first_release_name = imdb_json['releases'][0].get('title', imdb_json.get('query', ['Unknown release'])[0] if isinstance(imdb_json.get('query'), list) else 'Unknown release')
-                            console.print(f"[green]SRRDB: Matched to {first_release_name}")
-                    else:
-                        console.print(f"[yellow]SRRDB API request failed with status: {imdb_response.status_code}")
-
-                except requests.RequestException as e:
-                    console.print(f"[yellow]Failed to fetch IMDb information: {e}")
-                except (KeyError, IndexError, ValueError) as e:
-                    console.print(f"[yellow]Error processing IMDb data: {e}")
-                except Exception as e:
-                    console.print(f"[yellow]Unexpected error during IMDb lookup: {e}")
-
             else:
                 if meta['debug']:
                     console.print("[yellow]SRRDB: No match found")
@@ -103,7 +69,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
         except Exception as e:
             console.print(f"[yellow]SRRDB: No match found, or request has timed out: {e}")
 
-    elif not scene and lower:
+    elif not scene and lower and not meta.get('emby_debug', False):
         release_name = None
         name = meta.get('filename', None).replace(" ", ".")
         tag = meta.get('tag', None).replace("-", "")

@@ -143,7 +143,7 @@ class PTP():
                 return None, None, None
 
             elif response.status_code in [400, 401, 403]:
-                console.print(f"[bold red]PTP: {response.text}")
+                console.print("[bold red]PTP Error: 400/401/403 - Invalid request or authentication failed[/bold red]")
                 return None, None, None
 
             elif response.status_code == 503:
@@ -179,17 +179,17 @@ class PTP():
                 for torrent in response['Torrents']:
                     if torrent.get('Id', 0) == str(ptp_torrent_id):
                         ptp_infohash = torrent.get('InfoHash', None)
-                return imdb_id, ptp_infohash, None
+                return imdb_id, ptp_infohash
             elif int(response.status_code) in [400, 401, 403]:
                 console.print(response.text)
-                return None, None, None
+                return None, None
             elif int(response.status_code) == 503:
                 console.print("[bold yellow]PTP Unavailable (503)")
-                return None, None, None
+                return None, None
             else:
-                return None, None, None
+                return None, None
         except Exception:
-            return None, None, None
+            return None, None
 
     async def get_ptp_description(self, ptp_torrent_id, meta, is_disc):
         params = {
@@ -213,7 +213,7 @@ class PTP():
         bbcode = BBCODE()
         desc, imagelist = bbcode.clean_ptp_description(ptp_desc, is_disc)
 
-        if meta.get('only_id') is False:
+        if not meta.get('only_id'):
             console.print("[bold green]Successfully grabbed description from PTP")
             console.print(f"Description after cleaning:\n{desc[:1000]}...", markup=False)  # Show first 1000 characters for brevity
 
@@ -239,11 +239,12 @@ class PTP():
             else:
                 meta['description'] = desc
                 meta['saved_description'] = True
-        elif meta.get('keep_images'):
-            console.print("[green]Only keeping images from PTP description")
+        if meta.get('keep_images'):
             imagelist = imagelist
+        else:
+            imagelist = []
 
-        return desc, imagelist
+        return imagelist
 
     async def get_group_by_imdb(self, imdb):
         params = {
@@ -404,7 +405,7 @@ class PTP():
         ptpType = None
         if imdb_info['type'] is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
-            if imdbType in ("movie", "tv movie"):
+            if imdbType in ("movie", "tv movie", 'tvmovie'):
                 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
                     ptpType = "Feature Film"
                 else:
@@ -1279,6 +1280,9 @@ class PTP():
                 tinfo = await self.get_torrent_info_tmdb(meta)
             else:
                 tinfo = await self.get_torrent_info(meta.get("imdb"), meta)
+            if meta.get('youtube', None) is None or "youtube" not in str(meta.get('youtube', '')):
+                youtube = "" if meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
+                meta['youtube'] = youtube
             cover = meta["imdb_info"].get("cover")
             if cover is None:
                 cover = meta.get('poster')
@@ -1379,6 +1383,7 @@ class PTP():
                     debug_data['AntiCsrfToken'] = '[REDACTED]'
                 console.log(url)
                 console.log(debug_data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
@@ -1406,5 +1411,6 @@ class PTP():
 
                 # having UA add the torrent link as a comment.
                 if match:
+                    meta['tracker_status'][self.tracker]['status_message'] = response.url
                     common = COMMON(config=self.config)
                     await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), response.url)

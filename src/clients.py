@@ -7,7 +7,6 @@ import qbittorrentapi
 from deluge_client import DelugeRPCClient
 import transmission_rpc
 import base64
-from pyrobase.parts import Bunch
 import errno
 import asyncio
 import ssl
@@ -16,6 +15,7 @@ import time
 from src.console import console
 import re
 import platform
+from cogs.redaction import redact_private_info
 
 
 class Clients():
@@ -202,7 +202,7 @@ class Clients():
             # Reuse if disc and basename matches or --keep-folder was specified
             if meta.get('is_disc', None) is not None or (meta['keep_folder'] and meta['isdir']):
                 torrent_name = torrent.metainfo['info']['name']
-                if meta['uuid'] != torrent_name:
+                if meta['uuid'] != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")
                     valid = False
                 torrent_filepath = os.path.commonpath(torrent.files)
@@ -257,22 +257,28 @@ class Clients():
                     # Piece size and count validations
                     if not meta.get('prefer_small_pieces', False):
                         if reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608:
-                            console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size, regenerating")
+                            if meta['debug']:
+                                console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size")
                             valid = False
-                        elif reuse_torrent.pieces >= 5000 and reuse_torrent.piece_size < 4294304:
-                            console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size, regenerating")
+                        elif reuse_torrent.pieces >= 4000 and reuse_torrent.piece_size < 4294304:
+                            if meta['debug']:
+                                console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size")
                             valid = False
                     elif 'max_piece_size' not in meta and reuse_torrent.pieces >= 12000:
-                        console.print("[bold red]Torrent needs to have less than 12000 pieces to be valid, regenerating")
+                        if meta['debug']:
+                            console.print("[bold red]Torrent needs to have less than 12000 pieces to be valid")
                         valid = False
                     elif reuse_torrent.piece_size < 32768:
-                        console.print("[bold red]Piece size too small to reuse")
+                        if meta['debug']:
+                            console.print("[bold red]Piece size too small to reuse")
                         valid = False
                     elif 'max_piece_size' not in meta and torrent_file_size_kib > 250:
-                        console.print("[bold red]Torrent file size exceeds 250 KiB")
+                        if meta['debug']:
+                            console.log("[bold red]Torrent file size exceeds 250 KiB")
                         valid = False
                     elif wrong_file:
-                        console.print("[bold red]Provided .torrent has files that were not expected")
+                        if meta['debug']:
+                            console.log("[bold red]Provided .torrent has files that were not expected")
                         valid = False
                     else:
                         console.print(f"[bold green]REUSING .torrent with infohash: [bold yellow]{torrenthash}")
@@ -283,7 +289,8 @@ class Clients():
             if meta['debug']:
                 console.log(f"Final validity after piece checks: valid={valid}")
         else:
-            console.print("[bold yellow]Unwanted Files/Folders Identified")
+            if meta['debug']:
+                console.log("[bold yellow]Unwanted Files/Folders Identified")
 
         return valid, torrent_path
 
@@ -365,38 +372,46 @@ class Clients():
 
                 processed_hashes.add(torrent_hash)
 
-                # **Use `torrent_storage_dir` if available**
-                if torrent_storage_dir:
-                    torrent_file_path = os.path.join(torrent_storage_dir, f"{torrent_hash}.torrent")
-                    if not os.path.exists(torrent_file_path):
-                        console.print(f"[yellow]Torrent file not found in storage directory: {torrent_file_path}")
-                        continue
-                else:
-                    # **Fetch from qBittorrent API if no `torrent_storage_dir`**
+            except Exception as e:
+                console.print(f"[bold red]Unexpected error while handling {torrent_hash}: {e}")
+
+            # **Use `torrent_storage_dir` if available**
+            if torrent_storage_dir:
+                torrent_file_path = os.path.join(torrent_storage_dir, f"{torrent_hash}.torrent")
+                if not os.path.exists(torrent_file_path):
+                    console.print(f"[yellow]Torrent file not found in storage directory: {torrent_file_path}")
+                    continue
+            else:
+                # **Fetch from qBittorrent API if no `torrent_storage_dir`**
+                if meta['debug']:
+                    console.print(f"[cyan]Exporting .torrent file for {torrent_hash}")
+
+                try:
+                    torrent_file_content = qbt_client.torrents_export(torrent_hash=torrent_hash)
+                    torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+
+                    with open(torrent_file_path, "wb") as f:
+                        f.write(torrent_file_content)
                     if meta['debug']:
-                        console.print(f"[cyan]Exporting .torrent file for {torrent_hash}")
+                        console.print(f"[green]Successfully saved .torrent file: {torrent_file_path}")
 
-                    try:
-                        torrent_file_content = qbt_client.torrents_export(torrent_hash=torrent_hash)
-                        torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+                except qbittorrentapi.APIError as e:
+                    console.print(f"[bold red]Failed to export .torrent for {torrent_hash}: {e}")
+                    continue  # Skip this torrent if unable to fetch
 
-                        with open(torrent_file_path, "wb") as f:
-                            f.write(torrent_file_content)
-                        if meta['debug']:
-                            console.print(f"[green]Successfully saved .torrent file: {torrent_file_path}")
-
-                    except qbittorrentapi.APIError as e:
-                        console.print(f"[bold red]Failed to export .torrent for {torrent_hash}: {e}")
-                        continue  # Skip this torrent if unable to fetch
-
-                # **Validate the .torrent file**
+            # **Validate the .torrent file**
+            try:
                 valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+            except Exception as e:
+                console.print(f"[bold red]Error validating torrent {torrent_hash}: {e}")
+                valid = False
+                torrent_path = None
 
-                if valid:
-                    if prefer_small_pieces:
-                        if meta['debug']:
-                            console.print("prefersmallpieces", prefer_small_pieces)
-                        # **Track best match based on piece size**
+            if valid:
+                console.print("prefersmallpieces", prefer_small_pieces)
+                if prefer_small_pieces:
+                    # **Track best match based on piece size**
+                    try:
                         torrent_data = Torrent.read(torrent_file_path)
                         piece_size = torrent_data.piece_size
                         if best_match is None or piece_size < best_match['piece_size']:
@@ -406,17 +421,17 @@ class Clients():
                                 'piece_size': piece_size
                             }
                             console.print(f"[green]Updated best match: {best_match}")
-                    else:
-                        # If `prefer_small_pieces` is False, return first valid torrent
-                        console.print(f"[green]Returning first valid torrent: {torrent_hash}")
-                        return torrent_hash
+                    except Exception as e:
+                        console.print(f"[bold red]Error reading torrent data for {torrent_hash}: {e}")
+                        continue
                 else:
-                    if meta['debug']:
-                        console.print(f"[bold red]{torrent_hash} failed validation")
-                    os.remove(torrent_file_path)
-
-            except Exception as e:
-                console.print(f"[bold red]Unexpected error while handling {torrent_hash}: {e}")
+                    # If `prefer_small_pieces` is False, return first valid torrent
+                    console.print(f"[green]Returning first valid torrent: {torrent_hash}")
+                    return torrent_hash
+            else:
+                if meta['debug']:
+                    console.print(f"[bold red]{torrent_hash} failed validation")
+                os.remove(torrent_file_path)
 
         # **Return the best match if `prefer_small_pieces` is enabled**
         if best_match:
@@ -545,7 +560,6 @@ class Clients():
                                     console.print(f"[green]File copied instead: {dst}")
                             else:
                                 # For directories, we need to link each file inside
-                                console.print("[yellow]Cannot hardlink directories directly. Creating directory structure...")
                                 os.makedirs(dst, exist_ok=True)
 
                                 for root, _, files in os.walk(src):
@@ -631,9 +645,14 @@ class Clients():
 
         rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl._create_stdlib_context())
         metainfo = bencode.bread(torrent_path)
+        if meta['debug']:
+            print(f"{rtorrent}: {redact_private_info(rtorrent)}")
+            print(f"{metainfo}: {redact_private_info(metainfo)}")
         try:
             # Use dst path if linking was successful, otherwise use original path
             resume_path = dst if (use_symlink or use_hardlink) and os.path.exists(dst) else path
+            if meta['debug']:
+                console.print(f"[cyan]Using resume path: {resume_path}")
             fast_resume = self.add_fast_resume(metainfo, resume_path, torrent)
         except EnvironmentError as exc:
             console.print("[red]Error making fast-resume data (%s)" % (exc,))
@@ -642,7 +661,8 @@ class Clients():
         new_meta = bencode.bencode(fast_resume)
         if new_meta != metainfo:
             fr_file = torrent_path.replace('.torrent', '-resume.torrent')
-            console.print("Creating fast resume")
+            if meta['debug']:
+                console.print("Creating fast resume file:", fr_file)
             bencode.bwrite(fast_resume, fr_file)
 
         # Use dst path if linking was successful, otherwise use original path
@@ -658,20 +678,32 @@ class Clients():
             shutil.copy(fr_file, f"{path_dir}/fr.torrent")
             fr_file = f"{os.path.dirname(path)}/fr.torrent"
             modified_fr = True
+            if meta['debug']:
+                console.print(f"[cyan]Modified fast resume file path because path mapping: {fr_file}")
         if isdir is False:
             path = os.path.dirname(path)
+        if meta['debug']:
+            console.print(f"[cyan]Final path for rTorrent: {path}")
 
         console.print("[bold yellow]Adding and starting torrent")
         rtorrent.load.start_verbose('', fr_file, f"d.directory_base.set={path}")
+        if meta['debug']:
+            console.print(f"[green]rTorrent load start for {fr_file} with d.directory_base.set={path}")
         time.sleep(1)
         # Add labels
         if client.get('rtorrent_label', None) is not None:
+            if meta['debug']:
+                console.print(f"[cyan]Setting rTorrent label: {client['rtorrent_label']}")
             rtorrent.d.custom1.set(torrent.infohash, client['rtorrent_label'])
         if meta.get('rtorrent_label') is not None:
             rtorrent.d.custom1.set(torrent.infohash, meta['rtorrent_label'])
+            if meta['debug']:
+                console.print(f"[cyan]Setting rTorrent label from meta: {meta['rtorrent_label']}")
 
         # Delete modified fr_file location
         if modified_fr:
+            if meta['debug']:
+                console.print(f"[cyan]Removing modified fast resume file: {fr_file}")
             os.remove(f"{path_dir}/fr.torrent")
         if meta.get('debug', False):
             console.print(f"[cyan]Path: {path}")
@@ -986,15 +1018,11 @@ class Clients():
                     auto_management = True
 
         qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
-
-        if meta['debug']:
-            console.print("qbt_category:", qbt_category)
-
         content_layout = client.get('content_layout', 'Original')
         if meta['debug']:
+            console.print("qbt_category:", qbt_category)
             console.print(f"Content Layout: {content_layout}")
-
-        console.print(f"[bold yellow]qBittorrent save path: {save_path}")
+            console.print(f"[bold yellow]qBittorrent save path: {save_path}")
 
         try:
             qbt_client.torrents_add(
@@ -1102,10 +1130,10 @@ class Clients():
         if single:
             if os.path.isdir(datapath):
                 datapath = os.path.join(datapath, metainfo["info"]["name"])
-            files = [Bunch(
-                path=[os.path.abspath(datapath)],
-                length=metainfo["info"]["length"],
-            )]
+            files = [{
+                "path": [os.path.abspath(datapath)],
+                "length": metainfo["info"]["length"],
+            }]
 
         # Prepare resume data
         resume = metainfo.setdefault("libtorrent_resume", {})
@@ -1295,7 +1323,8 @@ class Clients():
                                 # Validate the .torrent file before saving as BASE.torrent
                                 valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
                                 if not valid:
-                                    console.print(f"[bold red]Validation failed for {torrent_file_path}")
+                                    if meta['debug']:
+                                        console.print(f"[bold red]Validation failed for {torrent_file_path}")
                                     os.remove(torrent_file_path)  # Remove invalid file
                                 else:
                                     from src.torrentcreate import create_base_from_existing_torrent
@@ -1433,7 +1462,8 @@ class Clients():
                     try:
                         from src.torrentcreate import create_base_from_existing_torrent
                         await create_base_from_existing_torrent(resolved_path, meta['base_dir'], meta['uuid'])
-                        console.print("[green]Created BASE.torrent from existing torrent")
+                        if meta['debug']:
+                            console.print("[green]Created BASE.torrent from existing torrent")
                     except Exception as e:
                         console.print(f"[bold red]Error creating BASE.torrent: {e}")
                         try:
@@ -1499,9 +1529,14 @@ class Clients():
                 'bhd': {"url": "https://beyond-hd.me", "pattern": r'details/(\d+)'},
                 'huno': {"url": "https://hawke.uno", "pattern": r'/(\d+)$'},
                 'ulcx': {"url": "https://upload.cx", "pattern": r'/(\d+)$'},
+                'rf': {"url": "https://reelflix.xyz", "pattern": r'/(\d+)$'},
+                'otw': {"url": "https://oldtoons.world", "pattern": r'/(\d+)$'},
+                'yus': {"url": "https://yu-scene.net", "pattern": r'/(\d+)$'},
+                'dp': {"url": "https://darkpeers.org", "pattern": r'/(\d+)$'},
+                'sp': {"url": "https://seedpool.org", "pattern": r'/(\d+)$'},
             }
 
-            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'ptp']
+            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
 
             try:
                 qbt_client = qbittorrentapi.Client(
@@ -1552,7 +1587,10 @@ class Clients():
                     is_disc = meta.get('is_disc', "")
 
                     if is_disc in ("", None) and len(meta.get('filelist', [])) == 1:
-                        if torrent_name == meta['uuid'] and len(torrent.files) == len(meta.get('filelist', [])):
+                        file_name = os.path.basename(meta['filelist'][0])
+                        if (torrent_name == file_name) and len(torrent.files) == 1:
+                            is_match = True
+                        elif torrent_name == meta['uuid']:
                             is_match = True
                     else:
                         if torrent_name == meta['uuid']:
@@ -1601,6 +1639,8 @@ class Clients():
 
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
+
+                        await match_tracker_url([url], meta)
 
                         match_info = {
                             'hash': torrent.hash,
@@ -1652,6 +1692,16 @@ class Clients():
                                     })
                                     meta['huno'] = huno_id
                                     tracker_found = True
+
+                        if torrent.tracker and 'tracker.anthelion.me' in torrent.tracker:
+                            ant_id = 1
+                            if has_working_tracker:
+                                tracker_urls.append({
+                                    'id': 'ant',
+                                    'tracker_id': ant_id,
+                                })
+                                meta['ant'] = ant_id
+                                tracker_found = True
 
                         match_info['tracker_urls'] = tracker_urls
                         match_info['has_tracker'] = tracker_found
@@ -1705,7 +1755,8 @@ class Clients():
                         for tracker in best_match['tracker_urls']:
                             if tracker.get('id') and tracker.get('tracker_id'):
                                 meta[tracker['id']] = tracker['tracker_id']
-                                console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
+                                if meta['debug']:
+                                    console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
 
                     if not meta.get('base_torrent_created'):
                         default_torrent_client = self.config['DEFAULT']['default_torrent_client']
@@ -1750,18 +1801,21 @@ class Clients():
                                 try:
                                     from src.torrentcreate import create_base_from_existing_torrent
                                     await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
-                                    console.print("[green]Created BASE.torrent from existing torrent")
+                                    if meta['debug']:
+                                        console.print("[green]Created BASE.torrent from existing torrent")
                                     meta['base_torrent_created'] = True
                                     found_valid_torrent = True
                                 except Exception as e:
                                     console.print(f"[bold red]Error creating BASE.torrent: {e}")
                             else:
-                                console.print(f"[bold red]Validation failed for best match torrent {torrent_file_path}")
+                                if meta['debug']:
+                                    console.print(f"[bold red]Validation failed for best match torrent {torrent_file_path}")
                                 if os.path.exists(torrent_file_path) and torrent_file_path.startswith(extracted_torrent_dir):
                                     os.remove(torrent_file_path)
 
                                 # Try other matches if the best match isn't valid
-                                console.print("[yellow]Trying other torrent matches...")
+                                if meta['debug']:
+                                    console.print("[yellow]Trying other torrent matches...")
                                 for torrent_match in matching_torrents[1:]:  # Skip the first one since we already tried it
                                     alt_torrent_hash = torrent_match['hash']
                                     alt_torrent_file_path = None
@@ -1803,7 +1857,8 @@ class Clients():
                                             try:
                                                 from src.torrentcreate import create_base_from_existing_torrent
                                                 await create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
-                                                console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
+                                                if meta['debug']:
+                                                    console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
                                                 meta['infohash'] = alt_torrent_hash  # Update infohash to use the valid torrent
                                                 meta['base_torrent_created'] = True
                                                 found_valid_torrent = True
@@ -1811,12 +1866,14 @@ class Clients():
                                             except Exception as e:
                                                 console.print(f"[bold red]Error creating BASE.torrent for alternative: {e}")
                                         else:
-                                            console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
+                                            if meta['debug']:
+                                                console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
                                             if os.path.exists(alt_torrent_file_path) and alt_torrent_file_path.startswith(extracted_torrent_dir):
                                                 os.remove(alt_torrent_file_path)
 
                                 if not found_valid_torrent:
-                                    console.print("[bold red]No valid torrents found after checking all matches")
+                                    if meta['debug']:
+                                        console.print("[bold red]No valid torrents found after checking all matches")
                                     meta['we_checked_them_all'] = True
 
             # Display results summary
@@ -1835,3 +1892,49 @@ class Clients():
                 import traceback
                 console.print(traceback.format_exc())
             return []
+
+
+async def match_tracker_url(tracker_urls, meta):
+    tracker_url_patterns = {
+        'ptp': ["passthepopcorn.me"],
+        'aither': ["https://aither.cc"],
+        'lst': ["https://lst.gg"],
+        'oe': ["https://onlyencodes.cc"],
+        'blu': ["https://blutopia.cc"],
+        'hdb': ["https://hdbits.org"],
+        'btn': ["https://broadcasthe.net"],
+        'bhd': ["https://beyond-hd.me"],
+        'huno': ["https://hawke.uno"],
+        'ulcx': ["https://upload.cx"],
+        'rf': ["https://reelflix.xyz"],
+        'otw': ["https://oldtoons.world"],
+        'yus': ["https://yu-scene.net"],
+        'dp': ["https://darkpeers.org"],
+        'sp': ["https://seedpool.org"],
+        'nbl': ["tracker.nebulance"],
+        'mtv': ["tracker.morethantv"],
+        'ant': ["tracker.anthelion.me"],
+        'rtf': ["peer.retroflix"],
+        'fl': ["reactor.filelist"],
+        'ldu': ["theldu.to"],
+        'ar': ["tracker.alpharatio"],
+        'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'thr': ["torrenthr"],
+    }
+    found_ids = set()
+    for tracker in tracker_urls:
+        for tracker_id, patterns in tracker_url_patterns.items():
+            for pattern in patterns:
+                if pattern in tracker:
+                    found_ids.add(tracker_id.upper())
+                    if meta.get('debug'):
+                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {tracker}")
+
+    if "remove_trackers" not in meta or not isinstance(meta["remove_trackers"], list):
+        meta["remove_trackers"] = []
+
+    for tracker_id in found_ids:
+        if tracker_id not in meta["remove_trackers"]:
+            meta["remove_trackers"].append(tracker_id)
+    if meta.get('debug'):
+        console.print(f"[bold cyan]Storing matched tracker IDs for later removal: {meta['remove_trackers']}")

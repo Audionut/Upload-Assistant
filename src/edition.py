@@ -35,7 +35,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                     console.print(f"[green]Potential match: {edition_info['display_name']} - duration {edition_formatted}, difference: {format_duration(difference)}[/green]")
 
                                 if has_attributes:
-                                    edition_name = " ".join(attr.title() for attr in edition_info['attributes'])
+                                    edition_name = " ".join(smart_title(attr) for attr in edition_info['attributes'])
 
                                     matching_editions.append({
                                         'name': edition_name,
@@ -50,7 +50,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                         console.print("[yellow]Edition without attributes are theatrical editions and skipped[/yellow]")
 
                         if len(matching_editions) > 1:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Media file duration {formatted_duration} matches multiple editions:[/yellow]")
                                 for i, ed in enumerate(matching_editions):
                                     diff_formatted = format_duration(ed['difference'])
@@ -101,7 +101,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                 all_playlists = []
                 for disc in meta['discs']:
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         if disc.get('playlists'):
                             all_playlists.extend(disc['playlists'])
                     else:
@@ -138,7 +138,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                             if difference <= leeway_seconds:
                                 # Store the complete edition info
                                 if edition_info.get('attributes') and len(edition_info['attributes']) > 0:
-                                    edition_name = " ".join(attr.title() for attr in edition_info['attributes'])
+                                    edition_name = " ".join(smart_title(attr) for attr in edition_info['attributes'])
                                 else:
                                     edition_name = f"{edition_info['minutes']} Minute Version (Theatrical)"
 
@@ -152,7 +152,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                         # If multiple editions match this playlist, ask the user
                         if len(matching_editions) > 1:
-                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Playlist edition [green]{playlist_edition} [yellow]using file [green]{playlist_file} [yellow]with duration [green]{formatted_duration} [yellow]matches multiple editions:[/yellow]")
                                 for i, ed in enumerate(matching_editions):
                                     console.print(f"[yellow]{i+1}. [green]{ed['name']} ({ed['display_name']}, diff: {ed['difference']:.2f} seconds)")
@@ -242,12 +242,21 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         if meta['debug']:
                             console.print(f"[bold green]Setting edition from BDMV playlist matches: {edition}[/bold green]")
 
+    if edition and (edition.lower() in ["cut", "approximate"] or len(edition) < 6):
+        edition = ""
+    if edition and "edition" in edition.lower():
+        edition = re.sub(r'\bedition\b', '', edition, flags=re.IGNORECASE).strip()
+    if edition and "extended" in edition.lower():
+        edition = "Extended"
+
     if not edition:
         if video.lower().startswith('dc'):
-            video = video.replace('dc', '', 1)
+            video = video.lower().replace('dc', '', 1)
 
         guess = guessit(video)
         tag = guess.get('release_group', 'NOGROUP')
+        if isinstance(tag, list):
+            tag = " ".join(str(t) for t in tag)
         repack = ""
 
         if bdinfo is not None:
@@ -266,39 +275,39 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                 edition = ""
 
         if isinstance(edition, list):
-            edition = " ".join(edition)
+            edition = " ".join(str(e) for e in edition)
 
         if len(filelist) == 1:
             video = os.path.basename(video)
 
         video = video.upper().replace('.', ' ').replace(tag.upper(), '').replace('-', '')
 
-        if "OPEN MATTE" in video:
+        if "OPEN MATTE" in video.upper():
             edition = edition + " Open Matte"
 
     # Manual edition overrides everything
     if manual_edition:
         if isinstance(manual_edition, list):
-            manual_edition = " ".join(manual_edition)
+            manual_edition = " ".join(str(e) for e in manual_edition)
         edition = str(manual_edition)
 
     edition = edition.replace(",", " ")
 
     # Handle repack info
     repack = ""
-    if "REPACK" in (video or edition.upper()) or "V2" in video:
+    if "REPACK" in (video.upper() or edition.upper()) or "V2" in video:
         repack = "REPACK"
-    if "REPACK2" in (video or edition.upper()) or "V3" in video:
+    if "REPACK2" in (video.upper() or edition.upper()) or "V3" in video:
         repack = "REPACK2"
-    if "REPACK3" in (video or edition.upper()) or "V4" in video:
+    if "REPACK3" in (video.upper() or edition.upper()) or "V4" in video:
         repack = "REPACK3"
-    if "PROPER" in (video or edition.upper()):
+    if "PROPER" in (video.upper() or edition.upper()):
         repack = "PROPER"
-    if "PROPER2" in (video or edition.upper()):
+    if "PROPER2" in (video.upper() or edition.upper()):
         repack = "PROPER2"
-    if "PROPER3" in (video or edition.upper()):
+    if "PROPER3" in (video.upper() or edition.upper()):
         repack = "PROPER3"
-    if "RERIP" in (video or edition.upper()):
+    if "RERIP" in (video.upper() or edition.upper()):
         repack = "RERIP"
 
     # Only remove REPACK, RERIP, or PROPER from edition if not in manual edition
@@ -307,7 +316,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
     if not meta.get('webdv', False):
         hybrid = False
-        if "HYBRID" in video.upper():
+        if "HYBRID" in video.upper() or "HYBRID" in edition.upper():
             hybrid = True
     else:
         hybrid = meta.get('webdv', False)
@@ -317,7 +326,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
         from src.region import get_distributor
         distributors = await get_distributor(edition)
 
-        bad = ['internal', 'limited', 'retail']
+        bad = ['internal', 'limited', 'retail', 'version', 'remastered']
 
         if distributors:
             bad.append(distributors.lower())
@@ -342,3 +351,10 @@ def format_duration(seconds):
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     return f"{hours}:{minutes:02d}:{secs:02d}"
+
+
+def smart_title(s):
+    """Custom title function that doesn't capitalize after apostrophes"""
+    result = s.title()
+    # Fix capitalization after apostrophes
+    return re.sub(r"(\w)'(\w)", lambda m: f"{m.group(1)}'{m.group(2).lower()}", result)

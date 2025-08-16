@@ -10,6 +10,7 @@ import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
+from src.languages import parsed_mediainfo, process_desc_language
 
 
 class HUNO():
@@ -26,7 +27,8 @@ class HUNO():
         self.source_flag = 'HUNO'
         self.search_url = 'https://hawke.uno/api/torrents/filter'
         self.upload_url = 'https://hawke.uno/api/torrents/upload'
-        self.torrent_url = 'https://hawke.uno/api/torrents/'
+        self.torrent_url = 'https://hawke.uno/torrents/'
+        self.id_url = 'https://hawke.uno/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = ["4K4U, Bearfish, BiTOR, BONE, D3FiL3R, d3g, DTR, ELiTE, EVO, eztv, EzzRips, FGT, HashMiner, HETeam, HEVCBay, HiQVE, HR-DR, iFT, ION265, iVy, JATT, Joy, LAMA, m3th, MeGusta, MRN, Musafirboy, OEPlus, Pahe.in, PHOCiS, PSA, RARBG, RMTeam, ShieldBearer, SiQ, TBD, Telly, TSP, VXT, WKS, YAWNiX, YIFY, YTS"]
         pass
@@ -37,7 +39,7 @@ class HUNO():
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         huno_name, region_id, distributor_id = await self.get_name(meta, region_id=region_id, distributor_id=distributor_id)
         if (huno_name or region_id) == "SKIPPED":
-            console.print("[bold red]Skipping upload to HUNO due to missing audio language or region/distributor.")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: huno_missing_data"
             return
 
         url_host_mapping = {
@@ -58,7 +60,7 @@ class HUNO():
         cat_id = await self.get_cat_id(meta['category'])
         type_id = await self.get_type_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -116,96 +118,51 @@ class HUNO():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
+            except Exception as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f" data error - Error uploading torrent: {e}"
+                return
+            try:
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://hawke.uno/torrents/" + t_id)
             except Exception:
-                console.print("It may have uploaded, go check")
+                console.print("Error getting torrent ID from response.")
                 return
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
-    def get_audio(self, meta):
+    async def get_audio(self, meta):
         channels = meta.get('channels', "")
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace(channels, "")
         dual = "Dual-Audio" in meta.get('audio', "")
-        language = ""
+        languages = ""
 
         if dual:
-            language = "Dual"
+            languages = "Dual"
         else:
-            if meta['is_disc'] == "BDMV":
-                # Handle BDMV-specific functionality
-                bdinfo = meta.get('bdinfo', {})
-                audio_tracks = bdinfo.get("audio", [])
-                languages = {track.get("language", "") for track in audio_tracks if "language" in track}
-
+            if not meta.get('audio_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            if meta.get('audio_languages'):
+                languages = meta['audio_languages']
+                languages = set(languages)
                 if len(languages) > 1:
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                        cli_ui.info(f"Multiple audio languages detected: {', '.join(languages)}")
-                        if cli_ui.ask_yes_no("Is this a dual audio release?", default=True):
-                            language = "Dual"
-                    else:
-                        language = "SKIPPED"
-
-                elif languages:
-                    language = list(languages)[0] if languages else "SKIPPED"
+                    languages = "Dual"
                 else:
-                    print("DEBUG: No languages found in BDMV audio tracks.")
+                    languages = next(iter(languages), "SKIPPED")
 
-            else:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
+        if "zxx" in languages:
+            languages = "NONE"
+        elif not languages:
+            languages = "SKIPPED"
 
-                # Extract all audio sections for DVD or other cases
-                audio_sections = re.findall(r'Audio\s+.*?(?=\n\n|Text|Menu|$)', media_info_text, re.DOTALL)
-                if audio_sections:
-                    if meta['is_disc'] == "DVD":
-                        # Aggregate all languages for DVDs
-                        languages = []
-                        for section in audio_sections:
-                            language_match = re.search(r'Language\s*:\s*(\w+.*)', section)
-                            if language_match:
-                                lang = language_match.group(1).strip()
-                                lang = re.sub(r'\(.+\)', '', lang)  # Remove parentheses and extra info
-                                if lang not in languages:
-                                    languages.append(lang)
-
-                        # Combine languages if multiple are found
-                        if len(languages) > 1:
-                            language = "Dual"
-                        elif languages:
-                            language = languages[0]
-                        else:
-                            print("DEBUG: No languages found in audio sections.")
-                    else:
-                        # Use the first audio section for non-DVD cases
-                        first_audio_section = audio_sections[0]
-                        language_match = re.search(r'Language\s*:\s*(\w+.*)', first_audio_section)
-
-                        if language_match:
-                            language = language_match.group(1).strip()
-                            language = re.sub(r'\(.+\)', '', language)
-                        else:
-                            print("DEBUG: No Language match found in the first audio section.")
-                else:
-                    print("DEBUG: No Audio sections found in MEDIAINFO.txt.")
-
-        if language == "zxx":
-            language = "Silent"
-        elif not language:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                language = cli_ui.ask_string('No audio language present, you must enter one:')
-            else:
-                language = "SKIPPED"
-
-        return f'{codec} {channels} {language}'
+        return f'{codec} {channels} {languages}'
 
     def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])
@@ -221,13 +178,13 @@ class HUNO():
         if meta.get('is_disc') == "BDMV":
             common = COMMON(config=self.config)
             if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
                     region_id = await common.unit3d_region_ids(region_name)
                 else:
                     region_id = "SKIPPED"
             if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     distributor_name = cli_ui.ask_string("ULCX: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
                     distributor_id = await common.unit3d_distributor_ids(distributor_name)
 
@@ -240,16 +197,18 @@ class HUNO():
         title = meta.get('title', "")
         year = meta.get('year', "")
         resolution = meta.get('resolution', "")
-        audio = self.get_audio(meta)
+        audio = await self.get_audio(meta)
         if "SKIPPED" in audio:
             return "SKIPPED", "SKIPPED", "SKIPPED"
         service = meta.get('service', "")
         season = meta.get('season', "")
         if meta.get('tvdb_season_number', ""):
-            season = meta.get('tvdb_season_number')
+            season_int = meta.get('tvdb_season_number')
+            season = f"S{str(season_int).zfill(2)}"
         episode = meta.get('episode', "")
         if meta.get('tvdb_episode_number', ""):
-            episode = meta.get('tvdb_episode_number')
+            episode_int = meta.get('tvdb_episode_number')
+            episode = f"E{str(episode_int).zfill(2)}"
         repack = meta.get('repack', "")
         if repack.strip():
             repack = f"[{repack}]"
@@ -258,6 +217,9 @@ class HUNO():
         if tag == "":
             tag = "- NOGRP"
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
+        console.print(f"[bold cyan]Source: {source}")
+        if any(x in source.lower() for x in ["pal", "ntsc"]) and type == "ENCODE":
+            source = "DVD"
         hdr = meta.get('hdr', "")
         if not hdr.strip():
             hdr = "SDR"
@@ -301,6 +263,8 @@ class HUNO():
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {scale} {service} WEB-DL {hybrid} {video_encode} {hfr} {hdr} {audio} {tag}) {repack}"
             elif type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {edition} {hc} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
+            elif type == "DVDRIP":
+                name = f"{title} ({year}) {edition} {hc} ({resolution} {source} {video_encode} {hdr} {audio} {tag}) {repack}"
         elif meta['category'] == "TV":  # TV SPECIFIC
             if type == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
@@ -320,8 +284,6 @@ class HUNO():
             elif type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
 
-        if hc:
-            name = re.sub(r'((\([0-9]{4}\)))', r'\1 Ensubbed', name)
         return ' '.join(name.split()).replace(": ", " - "), region_id, distributor_id
 
     async def get_cat_id(self, category_name):
@@ -374,11 +336,51 @@ class HUNO():
 
     async def search_existing(self, meta, disctype):
         if meta['video_codec'] != "HEVC" and meta['type'] in {"ENCODE", "WEBRIP", "DVDRIP", "HDTV"}:
-            console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
+            if not meta['unattended']:
+                console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
             meta['skipping'] = "HUNO"
             return
+
+        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
+            parsed_info = await parsed_mediainfo(meta)
+            for video_track in parsed_info.get('video', []):
+                encoding_settings = video_track.get('encoding_settings')
+                if not encoding_settings:
+                    if not meta['unattended']:
+                        console.print("No encoding settings found in MEDIAINFO for HUNO")
+                    meta['skipping'] = "HUNO"
+                    return []
+                if encoding_settings:
+                    crf_match = re.search(r'crf[ =:]+([\d.]+)', encoding_settings, re.IGNORECASE)
+                    if crf_match:
+                        crf_value = float(crf_match.group(1))
+                        if crf_value > 22:
+                            if not meta['unattended']:
+                                console.print(f"CRF value too high: {crf_value} for HUNO")
+                            meta['skipping'] = "HUNO"
+                            return []
+                    else:
+                        bit_rate = video_track.get('bit_rate')
+                        if bit_rate and "Animation" not in meta.get('genre', ""):
+                            bit_rate_num = None
+                            # Match number and unit (e.g., 42.4 Mb/s, 42400 kb/s, etc.)
+                            match = re.search(r'([\d.]+)\s*([kM]?b/s)', bit_rate.replace(',', ''), re.IGNORECASE)
+                            if match:
+                                value = float(match.group(1))
+                                unit = match.group(2).lower()
+                                if unit == 'mb/s':
+                                    bit_rate_num = int(value * 1000)
+                                elif unit == 'kb/s':
+                                    bit_rate_num = int(value)
+                                else:
+                                    bit_rate_num = int(value)
+                            if bit_rate_num is not None and bit_rate_num < 3000:
+                                if not meta['unattended']:
+                                    console.print(f"Video bitrate too low: {bit_rate_num} kbps for HUNO")
+                                meta['skipping'] = "HUNO"
+                                return []
+
         dupes = []
-        console.print("[yellow]Searching for existing torrents on HUNO...")
 
         params = {
             'api_token': self.config['TRACKERS']['HUNO']['api_key'].strip(),

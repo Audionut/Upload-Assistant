@@ -120,15 +120,23 @@ class ANT():
                 response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
                 if response.status_code in [200, 201]:
                     response_data = response.json()
+                    meta['tracker_status'][self.tracker]['status_message'] = response_data
+                elif response.status_code == 502:
+                    response_data = {
+                        "error": "Bad Gateway",
+                        "site seems down": "https://ant.trackerstatus.info/"
+                    }
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                 else:
                     response_data = {
                         "error": f"Unexpected status code: {response.status_code}",
-                        "response_content": response.text  # or use response.json() if JSON is expected
+                        "response_content": response.text
                     }
-                console.print(response_data)
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         finally:
             open_torrent.close()
 
@@ -137,11 +145,11 @@ class ANT():
 
     async def search_existing(self, meta, disctype):
         if meta.get('category') == "TV":
-            console.print('[bold red]ANT only ALLOWS Movies.')
+            if not meta['unattended']:
+                console.print('[bold red]ANT only ALLOWS Movies.')
             meta['skipping'] = "ANT"
             return []
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ANT...")
         params = {
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             't': 'search',
@@ -185,18 +193,67 @@ class ANT():
                                 console.print(f"[green]Found potential dupe: {result['name']} ({result['size']} bytes)")
 
                     except json.JSONDecodeError:
-                        console.print("[bold yellow]Response content is not valid JSON. Skipping this API call.")
+                        console.print("[bold yellow]ANT Response content is not valid JSON. Skipping this API call.")
                         meta['skipping'] = "ANT"
                 else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                    console.print(f"[bold red]ANT Failed to search torrents. HTTP Status: {response.status_code}")
                     meta['skipping'] = "ANT"
         except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
+            console.print("[bold red]ANT Request timed out after 5 seconds")
+            meta['skipping'] = "ANT"
         except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+            console.print(f"[bold red]ANT Unable to search for existing torrents: {e}")
             meta['skipping'] = "ANT"
         except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
+            console.print(f"[bold red]ANT Unexpected error: {e}")
+            meta['skipping'] = "ANT"
             await asyncio.sleep(5)
 
         return dupes
+
+    async def get_data_from_files(self, meta):
+        if meta.get('is_disc', False):
+            return []
+        filelist = meta.get('filelist', [])
+        filename = [os.path.basename(f) for f in filelist][0]
+        params = {
+            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+            't': 'search',
+            'filename': filename,
+            'o': 'json'
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url='https://anthelion.me/api', params=params)
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        imdb_tmdb_list = []
+                        items = data.get('item', [])
+                        if len(items) == 1:
+                            each = items[0]
+                            imdb_id = each.get('imdb')
+                            tmdb_id = each.get('tmdb')
+                            if imdb_id and imdb_id.startswith('tt'):
+                                imdb_num = int(imdb_id[2:])
+                                imdb_tmdb_list.append({'imdb_id': imdb_num})
+                            if tmdb_id and str(tmdb_id).isdigit() and int(tmdb_id) != 0:
+                                imdb_tmdb_list.append({'tmdb_id': int(tmdb_id)})
+                    except json.JSONDecodeError:
+                        console.print("[bold yellow]Error parsing JSON response from ANT")
+                        imdb_tmdb_list = []
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                    imdb_tmdb_list = []
+        except httpx.TimeoutException:
+            console.print("[bold red]ANT Request timed out after 5 seconds")
+            imdb_tmdb_list = []
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+            imdb_tmdb_list = []
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            imdb_tmdb_list = []
+
+        return imdb_tmdb_list

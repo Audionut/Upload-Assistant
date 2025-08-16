@@ -94,6 +94,8 @@ class HDT():
             hdt_name = hdt_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1))
         if 'DV' in meta.get('hdr', ''):
             hdt_name = hdt_name.replace(' DV ', ' DoVi ')
+        if 'BluRay REMUX' in hdt_name:
+            hdt_name = hdt_name.replace('BluRay REMUX', 'Blu-ray Remux')
 
         hdt_name = ' '.join(hdt_name.split())
         hdt_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", hdt_name)
@@ -160,7 +162,7 @@ class HDT():
                 data['season'] = 'false'
 
             # Anonymous check
-            if not self.config['TRACKERS'][self.tracker].get('anon', False):
+            if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
                 data['anonymous'] = 'false'
             else:
                 data['anonymous'] = 'true'
@@ -170,6 +172,7 @@ class HDT():
             if meta['debug']:
                 console.print(url)
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/HDT.txt")
@@ -179,27 +182,37 @@ class HDT():
                     torrentFile.close()
 
                     # Match url to verify successful upload
-                    search = re.search(r"download\.php\?id\=([a-z0-9]+)", up.text).group(1)
+                    try:
+                        search = re.search(r"download\.php\?id\=([a-z0-9]+)", up.text).group(1)
+                    except Exception as e:
+                        if meta['debug']:
+                            console.print(f"[red]Error occurred while searching for download link: {e}")
+                        search = None
                     if search:
                         id = search
                         # modding existing torrent for adding to client instead of downloading torrent from site.
-                        console.print(f"[green]{self.base_url}/details.php?id=" + id)
+                        meta['tracker_status'][self.tracker]['status_message'] = f"{self.base_url}/details.php?id=" + id
                         await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS']['HDT'].get('my_announce_url'), f"{self.base_url}/details.php?id=" + id)
                     else:
-                        console.print("[cyan]Request Data:")
-                        console.print("\n\n")
-                        console.print(f'[red]{up.text}')
+                        if meta['debug']:
+                            console.print("[cyan]Request Data:")
+                            console.print("\n\n")
+                            console.print(f'[red]{up.text}')
                         raise UploadException(f"Upload to HDT Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
         return
 
     async def search_existing(self, meta, disctype):
+        if meta['resolution'] not in ['2160p', '1080p', '1080i', '720p']:
+            console.print('[bold red]Resolution must be at least 720p resolution for HDT.')
+            meta['skipping'] = "HDT"
+            return
         dupes = []
         with requests.Session() as session:
             common = COMMON(config=self.config)
             cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/HDT.txt")
             session.cookies.update(await common.parseCookieFile(cookiefile))
 
-            search_url = f"{self.base_url}/torrents.php"
+            search_url = f"{self.base_url}/torrents.php?"
             csrfToken = await self.get_csrfToken(session, search_url)
             if int(meta['imdb_id']) != 0:
                 imdbID = f"tt{meta['imdb']}"
@@ -217,13 +230,19 @@ class HDT():
                     'category[]': await self.get_category_id(meta),
                     'options': '3'
                 }
-
+            if meta['debug']:
+                console.print(f"[cyan]Searching for existing torrents on {search_url} with params: {params}")
             r = session.get(search_url, params=params)
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
             find = soup.find_all('a', href=True)
+            if meta['debug']:
+                console.print(f"[cyan]Found {len(find)} links in the search results.")
+                console.print(f"[cyan]first 30 links: {[each['href'] for each in find[:30]]}")
             for each in find:
                 if each['href'].startswith('details.php?id='):
+                    if meta['debug']:
+                        console.print(f"[cyan]Found wanted links: {each['href']}")
                     dupes.append(each.text)
 
         return dupes
@@ -245,8 +264,6 @@ class HDT():
                 session.cookies.update(await common.parseCookieFile(cookiefile))
                 res = session.get(url=url)
                 if meta['debug']:
-                    console.print('[cyan]Cookies:')
-                    console.print(session.cookies.get_dict())
                     console.print(res.url)
                 if res.text.find("Logout") != -1:
                     return True
@@ -266,8 +283,6 @@ class HDT():
         description = ""
         description += "\n" + subheading + "Links" + heading_end + "\n"
         if 'IMAGES' in self.config:
-            if movie['imdb_id'] != 0:
-                description += f"[URL=https://www.imdb.com/title/tt{movie['imdb_id']}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
             if movie['tmdb'] != 0:
                 description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
             if movie['tvdb_id'] != 0:
@@ -277,8 +292,6 @@ class HDT():
             if movie['mal_id'] != 0:
                 description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
         else:
-            if movie['imdb_id'] != 0:
-                description += f"https://www.imdb.com/title/tt{movie['imdb_id']}"
             if movie['tmdb'] != 0:
                 description += f"\nhttps://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}"
             if movie['tvdb_id'] != 0:
@@ -317,9 +330,9 @@ class HDT():
             # Add Screenshots
             images = meta['image_list']
             if len(images) > 0:
-                for each in range(min(2, len(images))):
-                    img_url = images[each]['img_url']
-                    raw_url = images[each]['raw_url']
+                for image in images:
+                    img_url = image['img_url']
+                    raw_url = image['raw_url']
                     descfile.write(f'<a href="{raw_url}"><img src="{img_url}" height=137></a> ')
 
             descfile.close()

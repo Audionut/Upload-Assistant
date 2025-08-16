@@ -9,6 +9,7 @@ import bencodepy
 import httpx
 import re
 import cli_ui
+import glob
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -27,6 +28,7 @@ class BHD():
         self.tracker = 'BHD'
         self.source_flag = 'BHD'
         self.upload_url = 'https://beyond-hd.me/api/upload/'
+        self.torrent_url = 'https://beyond-hd.me/details/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
         pass
@@ -53,7 +55,7 @@ class BHD():
         tags = await self.get_tags(meta)
         custom, edition = await self.get_edition(meta, tags)
         bhd_name = await self.edit_name(meta)
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -72,6 +74,15 @@ class BHD():
         if os.path.exists(torrent_file):
             open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
             files['file'] = open_torrent.read()
+        base_dir = meta['base_dir']
+        uuid = meta['uuid']
+        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
+        nfo_files = glob.glob(specified_dir_path)
+        nfo_file = None
+        if nfo_files:
+            nfo_file = open(nfo_files[0], 'rb')
+        if nfo_file:
+            files['nfo_file'] = ("nfo_file.nfo", nfo_file, "text/plain")
 
         data = {
             'name': bhd_name,
@@ -132,11 +143,12 @@ class BHD():
                     match = re.search(r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.", response['status_message'])
                     if match:
                         torrent_id = match.group(1)
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                         details_link = f"https://beyond-hd.me/details/{torrent_id}"
                     else:
                         console.print("[yellow]No valid details link found in status_message.")
 
-                console.print(response)
+                meta['tracker_status'][self.tracker]['status_message'] = response
             except Exception as e:
                 console.print("It may have uploaded, go check")
                 console.print(f"Error: {e}")
@@ -144,6 +156,7 @@ class BHD():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
         if details_link:
             try:
@@ -245,6 +258,11 @@ class BHD():
                             desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
                             desc.write("\n")
             desc.write(base.replace("[img]", "[img width=300]"))
+            try:
+                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+                screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
+            except Exception:
+                screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
                 desc.write("[center]")
                 comparison_groups = meta.get('comparison_groups', {})
@@ -285,7 +303,7 @@ class BHD():
                     img_url = images[each]['img_url']
                     if (each == len(images) - 1):
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
-                    elif (each + 1) % 2 == 0:
+                    elif (each + 1) % screensPerRow == 0:
                         desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
                         desc.write("\n")
                     else:
@@ -302,8 +320,8 @@ class BHD():
             "-ncmt", "-tdd", "-flux", "-crfw", "-sonny", "-zr-", "-mkvultra",
             "-rpg", "-w4nk3r", "-irobot", "-beyondhd"
         )):
-            console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -313,12 +331,16 @@ class BHD():
                 meta['skipping'] = "BHD"
                 return []
         if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
-            console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
+            if not meta['unattended']:
+                console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
+            meta['skipping'] = "BHD"
+            return []
+        if meta['bloated'] is True:
+            console.print("[bold red]Non-English dub not allowed at BHD[/bold red]")
             meta['skipping'] = "BHD"
             return []
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on BHD...")
         category = meta['category']
         tmdbID = "movie" if category == 'MOVIE' else "tv"
         if category == 'MOVIE':

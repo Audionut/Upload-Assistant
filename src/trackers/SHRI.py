@@ -4,10 +4,9 @@ import asyncio
 import requests
 import platform
 import os
-import re
 import glob
 import httpx
-
+from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -23,10 +22,10 @@ class SHRI():
     def __init__(self, config):
         self.config = config
         self.tracker = 'SHRI'
-        self.source_flag = 'Shareisland'
+        self.source_flag = 'ShareIsland'
         self.search_url = 'https://shareisland.org/api/torrents/filter'
         self.upload_url = 'https://shareisland.org/api/torrents/upload'
-        self.torrent_url = 'https://shareisland.org/api/torrents/'
+        self.torrent_url = 'https://shareisland.org/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = []
         pass
@@ -42,7 +41,7 @@ class SHRI():
         name = await self.edit_name(meta)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -113,9 +112,10 @@ class SHRI():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://shareisland.org/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -123,6 +123,7 @@ class SHRI():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def get_flag(self, meta, flag_name):
@@ -145,28 +146,15 @@ class SHRI():
             shareisland_name = shareisland_name.replace(f"{meta['source']}", f"{resolution} {meta['source']}", 1)
             shareisland_name = shareisland_name.replace((meta['audio']), f"{meta['audio']}{video_encode}", 1)
 
-        if not meta['is_disc']:
-
-            def get_audio_lang(media_info_text=None):
-                if media_info_text:
-                    audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                    languages = sorted(set(lang.upper() for lang in audio_section))
-                    return " - ".join(languages) if languages else ""
-                return ""
-
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                audio_lang = get_audio_lang(media_info_text=media_info_text)
-                if audio_lang:
-                    if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
-                        shareisland_name = shareisland_name.replace(str(meta['year']), f"{meta['year']} {audio_lang}", 1)
-                    else:
-                        shareisland_name = shareisland_name.replace(meta['resolution'], f"{audio_lang} {meta['resolution']}", 1)
-            except (FileNotFoundError, KeyError) as e:
-                print(f"Error processing MEDIAINFO.txt: {e}")
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        elif meta.get('audio_languages'):
+            audio_languages = meta['audio_languages'][0]
+            if audio_languages:
+                if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
+                    shareisland_name = shareisland_name.replace(str(meta['year']), f"{meta['year']} {audio_languages}", 1)
+                elif not meta.get('is_disc') == "BDMV":
+                    shareisland_name = shareisland_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
 
         if meta['is_disc'] == "DVD" or (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             shareisland_name = shareisland_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
@@ -228,7 +216,6 @@ class SHRI():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on Shareisland...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

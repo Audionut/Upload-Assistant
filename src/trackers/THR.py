@@ -108,7 +108,7 @@ class THR():
                             console.print(response.text[:500] + "...")
 
                         if "uploaded=1" in str(response.url):
-                            console.print(f'[green]Successfully Uploaded at: {response.url}')
+                            meta['tracker_status'][self.tracker]['status_message'] = response.url
                             return True
                         else:
                             console.print(f"[yellow]Upload response didn't contain 'uploaded=1'. URL: {response.url}")
@@ -138,6 +138,7 @@ class THR():
         else:
             console.print("[cyan]Request Data:")
             console.print(payload)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             return False
 
     async def get_cat_id(self, meta):
@@ -294,7 +295,6 @@ class THR():
         imdb_id = meta.get('imdb', '')
         base_search_url = f"https://www.torrenthr.org/browse.php?search={imdb_id}&blah=2&incldead=1"
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on THR using URL {base_search_url}")
 
         if not imdb_id:
             console.print("[red]No IMDb ID available for search", style="bold red")

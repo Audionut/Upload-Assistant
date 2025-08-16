@@ -46,7 +46,7 @@ class BHDTV():
         resolution_id = await self.get_res_id(meta['resolution'])
         # region_id = await common.unit3d_region_ids(meta.get('region'))
         # distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1  # noqa F841
@@ -89,7 +89,7 @@ class BHDTV():
             response = requests.post(url=self.upload_url, data=data, files=files)
             try:
                 # pprint(data)
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception:
                 console.print("[cyan]It may have uploaded, go check")
                 # cprint(f"Request Data:", 'cyan')
@@ -98,6 +98,7 @@ class BHDTV():
         else:
             console.print("[cyan]Request Data:")
             pprint(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         # # adding my anounce url to torrent.
         if 'view' in response.json()['data']:
             await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), response.json()['data']['view'])

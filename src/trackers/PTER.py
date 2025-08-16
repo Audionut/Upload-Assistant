@@ -46,11 +46,6 @@ class PTER():
                 session.cookies.update(await common.parseCookieFile(cookiefile))
                 resp = session.get(url=url)
 
-                if meta['debug']:
-                    console.print('[cyan]Cookies:')
-                    console.print(session.cookies.get_dict())
-                    console.print("\n\n")
-                    console.print(resp.text)
                 if resp.text.find("""<a href="#" data-url="logout.php" id="logout-confirm">""") != -1:
                     return True
                 else:
@@ -330,11 +325,13 @@ class PTER():
         if not os.path.exists(desc_file):
             await self.edit_desc(meta)
 
-        pter_name = await self.edit_name(meta)
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 'no'
         else:
             anon = 'yes'
+
+        pter_name = await self.edit_name(meta)
+
         if meta['bdinfo'] is not None:
             mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
         else:
@@ -381,6 +378,7 @@ class PTER():
             if meta['debug']:
                 console.print(url)
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 cookiefile = f"{meta['base_dir']}/data/cookies/PTER.txt"
                 if os.path.exists(cookiefile):

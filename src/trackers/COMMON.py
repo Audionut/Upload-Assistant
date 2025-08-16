@@ -7,11 +7,12 @@ import click
 import sys
 import glob
 from pymediainfo import MediaInfo
-
+import secrets
 from src.bbcode import BBCODE
 from src.console import console
 from src.uploadscreens import upload_screens
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.languages import process_desc_language
 
 
 class COMMON():
@@ -32,7 +33,10 @@ class COMMON():
                 created_by = new_torrent.metainfo['created by']
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Audionut's Upload Assistant"
-
+            if int(meta.get('entropy', None)) == 32:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)
+            elif int(meta.get('entropy', None)) == 64:
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
 
@@ -42,7 +46,14 @@ class COMMON():
     async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment):
         if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"):
             new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent")
-            new_torrent.metainfo['announce'] = new_tracker
+
+            # handle trackers with multiple announce links
+            if isinstance(new_tracker, list):
+                new_torrent.metainfo['announce'] = new_tracker[0]
+                new_torrent.metainfo['announce-list'] = [new_tracker]
+            else:
+                new_torrent.metainfo['announce'] = new_tracker
+
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
@@ -86,10 +97,10 @@ class COMMON():
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting custom description header: {str(e)}[/yellow]")
         try:
-            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use default
-            screensPerRow = int(self.config['DEFAULT']['screens_per_row'])
+            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+            screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
         except Exception:
-            screensPerRow = None
+            screensPerRow = 2
         try:
             # If custom signature set and isn't empty, use that instead of the signature parameter
             custom_signature = self.config['TRACKERS'][tracker].get('custom_signature', signature)
@@ -103,6 +114,7 @@ class COMMON():
                     descfile.write(desc_header + '\n')
                 else:
                     descfile.write(desc_header)
+            await process_desc_language(meta, descfile, tracker)
             add_logo_enabled = self.config["DEFAULT"].get("add_logo", False)
             if add_logo_enabled and 'logo' in meta:
                 logo = meta['logo']
@@ -198,7 +210,7 @@ class COMMON():
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url]")
+                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
 
                     # If screensPerRow is set and we have reached that number of screenshots, add a new line
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
@@ -244,9 +256,9 @@ class COMMON():
                                 for img in meta[new_images_key]:
                                     web_url = img['web_url']
                                     raw_url = img['raw_url']
-                                    image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                    image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                     descfile.write(image_str)
-                                descfile.write("[/center]\n\n")
+                                descfile.write("[/center]\n ")
                             else:
                                 descfile.write("[center]\n\n")
                                 # Use the summary corresponding to the current bdinfo
@@ -277,9 +289,9 @@ class COMMON():
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
-                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                         descfile.write(image_str)
-                                    descfile.write("[/center]\n\n")
+                                    descfile.write("[/center]\n")
 
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                                 with open(meta_filename, 'w') as f:
@@ -290,6 +302,12 @@ class COMMON():
                 # Initialize retry_count if not already set
                 if 'retry_count' not in meta:
                     meta['retry_count'] = 0
+
+                total_discs_to_process = min(len(discs), process_limit)
+                processed_count = 0
+                if multi_screens != 0:
+                    console.print("[cyan]Processing screenshots for packed content (multiScreens)[/cyan]")
+                    console.print(f"[cyan]{total_discs_to_process} files (processLimit)[/cyan]")
 
                 for i, each in enumerate(discs):
                     # Set a unique key per disc for managing images
@@ -313,7 +331,7 @@ class COMMON():
                         for img_index in range(len(images[:int(meta['screens'])])):
                             web_url = images[img_index]['web_url']
                             raw_url = images[img_index]['raw_url']
-                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                             descfile.write(image_str)
 
                             # If screensPerRow is set and we have reached that number of screenshots, add a new line
@@ -322,6 +340,9 @@ class COMMON():
                         descfile.write("[/center]\n\n")
                     else:
                         if multi_screens != 0:
+                            processed_count += 1
+                            disc_name = each.get('name', f"Disc {i}")
+                            print(f"\rProcessing disc {processed_count}/{total_discs_to_process}: {disc_name[:40]}{'...' if len(disc_name) > 40 else ''}", end="", flush=True)
                             # Check if screenshots exist for the current disc key
                             # Check for saved images first
                             if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
@@ -408,14 +429,15 @@ class COMMON():
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
-                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                         descfile.write(image_str)
-                                    descfile.write("[/center]\n\n")
+                                    descfile.write("[/center]\n")
 
                                 # Save the updated meta to `meta.json` after upload
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                                 with open(meta_filename, 'w') as f:
                                     json.dump(meta, f, indent=4)
+                            console.print()
 
             # Handle single file case
             if len(filelist) == 1:
@@ -455,7 +477,7 @@ class COMMON():
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url]")
+                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
                         descfile.write("\n")
                 descfile.write("[/center]")
@@ -465,6 +487,11 @@ class COMMON():
             char_count = 0
             max_char_limit = char_limit  # Character limit
             other_files_spoiler_open = False  # Track if "Other files" spoiler has been opened
+            total_files_to_process = min(len(filelist), process_limit)
+            processed_count = 0
+            if multi_screens != 0 and total_files_to_process > 1:
+                console.print("[cyan]Processing screenshots for packed content (multiScreens)[/cyan]")
+                console.print(f"[cyan]{total_files_to_process} files (processLimit)[/cyan]")
 
             # First Pass: Create and Upload Images for Each File
             for i, file in enumerate(filelist):
@@ -472,6 +499,10 @@ class COMMON():
                     # console.print("[yellow]Skipping processing more files as they exceed the process limit.")
                     continue
                 if multi_screens != 0:
+                    if total_files_to_process > 1:
+                        processed_count += 1
+                        filename = os.path.basename(file)
+                        print(f"\rProcessing file {processed_count}/{total_files_to_process}: {filename[:40]}{'...' if len(filename) > 40 else ''}", end="", flush=True)
                     if i > 0:
                         new_images_key = f'new_images_file_{i}'
                         # Check for saved images first
@@ -527,7 +558,7 @@ class COMMON():
                     if i >= process_limit:
                         continue
                     # Extract filename directly from the file path
-                    filename = os.path.splitext(os.path.basename(file.strip()))[0]
+                    filename = os.path.splitext(os.path.basename(file.strip()))[0].replace('[', '').replace(']', '')
 
                     # If we are beyond the file limit, add all further files in a spoiler
                     if multi_screens != 0:
@@ -562,7 +593,7 @@ class COMMON():
                             for img_index in range(len(images)):
                                 web_url = images[img_index]['web_url']
                                 raw_url = images[img_index]['raw_url']
-                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                 descfile.write(image_str)
                                 char_count += len(image_str)
 
@@ -578,18 +609,20 @@ class COMMON():
                             for img in meta[new_images_key]:
                                 web_url = img['web_url']
                                 raw_url = img['raw_url']
-                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                 descfile.write(image_str)
                                 char_count += len(image_str)
-                            descfile.write("[/center]\n\n")
+                            descfile.write("[/center]\n")
                             char_count += len("[/center]\n\n")
 
                 if other_files_spoiler_open:
                     descfile.write("[/spoiler][/center]\n")
                     char_count += len("[/spoiler][/center]\n")
 
-            if char_count >= 1:
+            if char_count >= 1 and meta['debug']:
                 console.print(f"[yellow]Total characters written to description: {char_count}")
+            if total_files_to_process > 1:
+                console.print()
 
             # Append signature if provided
             if signature:
@@ -891,10 +924,10 @@ class COMMON():
                 # Extract data from the attributes
                 category = attributes.get('category')
                 description = attributes.get('description')
-                tmdb = attributes.get('tmdb_id')
-                tvdb = attributes.get('tvdb_id')
-                mal = attributes.get('mal_id')
-                imdb = attributes.get('imdb_id')
+                tmdb = int(attributes.get('tmdb_id') or 0)
+                tvdb = int(attributes.get('tvdb_id') or 0)
+                mal = int(attributes.get('mal_id') or 0)
+                imdb = int(attributes.get('imdb_id') or 0)
                 infohash = attributes.get('info_hash')
                 tmdb = 0 if tmdb == 0 else tmdb
                 tvdb = 0 if tvdb == 0 else tvdb
@@ -918,10 +951,10 @@ class COMMON():
                     # Extract data from the attributes
                     category = attributes.get('category')
                     description = attributes.get('description')
-                    tmdb = attributes.get('tmdb_id')
-                    tvdb = attributes.get('tvdb_id')
-                    mal = attributes.get('mal_id')
-                    imdb = attributes.get('imdb_id')
+                    tmdb = int(attributes.get('tmdb_id') or 0)
+                    tvdb = int(attributes.get('tvdb_id') or 0)
+                    mal = int(attributes.get('mal_id') or 0)
+                    imdb = int(attributes.get('imdb_id') or 0)
                     infohash = attributes.get('info_hash')
                     tmdb = 0 if tmdb == 0 else tmdb
                     tvdb = 0 if tvdb == 0 else tvdb
@@ -948,14 +981,18 @@ class COMMON():
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-                    # Skip the ID selection prompt if searching by ID
-                    console.print(f"[green]Valid IDs found: TMDb: {tmdb}, IMDb: {imdb}, TVDb: {tvdb}, MAL: {mal}[/green]")
+                    if imdb != 0:
+                        imdb_str = str(f'tt{imdb}').zfill(7)
+                    else:
+                        imdb_str = None
+
+                    console.print(f"[green]Valid IDs found from {tracker}: TMDb: {tmdb}, IMDb: {imdb_str}, TVDb: {tvdb}, MAL: {mal}[/green]")
 
             if tmdb or imdb or tvdb:
                 if not id:
                     # Only prompt the user for ID selection if not searching by ID
                     try:
-                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name):
+                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
                             console.print("[yellow]User chose to skip based on IDs.[/yellow]")
                             return None, None, None, None, None, None, None, None, None
                     except (KeyboardInterrupt, EOFError):
@@ -989,6 +1026,8 @@ class COMMON():
                             console.print("[green]Keeping the original description.[/green]")
                             meta['description'] = description
                             meta['saved_description'] = True
+                    if not meta.get('keep_images'):
+                        imagelist = []
                 else:
                     description = ""
                     if not meta.get('keep_images'):

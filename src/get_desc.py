@@ -36,10 +36,10 @@ async def gen_desc(meta):
         path = meta['path']
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         source_dir_path = os.path.join(path, "*.nfo")
-        if meta['debug']:
-            console.print(f"specified_dir_path: {specified_dir_path}")
-            console.print(f"sourcedir_path: {source_dir_path}")
         if meta.get('nfo') and not content_written:
+            if meta['debug']:
+                console.print(f"specified_dir_path: {specified_dir_path}")
+                console.print(f"sourcedir_path: {source_dir_path}")
             if 'auto_nfo' in meta and meta['auto_nfo'] is True:
                 nfo_files = glob.glob(specified_dir_path)
                 scene_nfo = True
@@ -114,5 +114,8 @@ async def gen_desc(meta):
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
             if len(description_text) > 0:
                 description.write(description_text + "\n")
+
+    if meta.get('description') in ('None', '', ' '):
+        meta['description'] = None
 
     return meta

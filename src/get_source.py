@@ -50,7 +50,7 @@ async def get_source(type, video, path, is_disc, meta, folder_id, base_dir):
                         system = "NTSC"
                 except Exception:
                     system = ""
-                if system == "" or system is None:
+                if system == "" or system is None or system not in ("PAL", "NTSC"):
                     try:
                         framerate = mi['media']['track'][1].get('FrameRate', '')
                         if '25' in framerate or '50' in framerate:

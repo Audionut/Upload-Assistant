@@ -25,17 +25,25 @@ jobs:
 
       - name: Install Oxipng
         run: |
-          OXIPNG_LATEST_URL=$(curl -s "https://api.github.com/repos/shssoichiro/oxipng/releases/latest" | grep -oP '"browser_download_url": "\K(.*x86_64-unknown-linux-musl.tar.gz)(?=")')
-          if [ -z "$OXIPNG_LATEST_URL" ]; then
+          # Get the latest release info from the correct repository
+          RELEASE_INFO=$(curl -s "https://api.github.com/repos/oxipng/oxipng/releases/latest")
+          
+          # Extract the download URL using jq (more reliable than grep)
+          OXIPNG_LATEST_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | contains("x86_64-unknown-linux-musl.tar.gz")) | .browser_download_url')
+          
+          if [ -z "$OXIPNG_LATEST_URL" ] || [ "$OXIPNG_LATEST_URL" = "null" ]; then
             echo "Failed to find latest Oxipng release URL for x86_64-unknown-linux-musl"
+            echo "Available assets:"
+            echo "$RELEASE_INFO" | jq -r '.assets[].name'
             exit 1
           fi
+          
           echo "Downloading Oxipng from $OXIPNG_LATEST_URL"
           curl -L -o oxipng.tar.gz "$OXIPNG_LATEST_URL"
           tar -xzf oxipng.tar.gz
-          # The extracted folder name might include the version, e.g., oxipng-vX.Y.Z-x86_64-unknown-linux-musl
-          # Find the binary within the extracted folder and move it
-          sudo mv oxipng-*/oxipng /usr/local/bin/
+          
+          # Find the oxipng binary and move it
+          find . -name "oxipng" -type f -executable | head -1 | xargs -I {} sudo mv {} /usr/local/bin/
           sudo chmod +x /usr/local/bin/oxipng
           oxipng --version # Verify installation
 
@@ -162,25 +170,35 @@ jobs:
         run: |
           DATE_STR=$(date -u "+%Y-%m-%d %H:%M UTC")
           
-          # Extract the current version tag from the README
-          CURRENT_TAG=$(grep -o "Test run ([0-9]\+\.[0-9]\+\.[0-9]\+)" README.md | head -1 | sed 's/Test run (\([0-9.]*\))/\1/')
-          if [ -z "$CURRENT_TAG" ]; then
-            # Try with two-digit version if three-digit not found
-            CURRENT_TAG=$(grep -o "Test run ([0-9]\+\.[0-9]\+)" README.md | head -1 | sed 's/Test run (\([0-9.]*\))/\1/')
-          fi
+          # Read the first line of README.md
+          FIRST_LINE=$(head -1 README.md)
+          echo "Current line: $FIRST_LINE"
           
-          # If still not found, default to "5.0.0"
-          if [ -z "$CURRENT_TAG" ]; then
-            CURRENT_TAG="5.0.0"
-          fi
+          # Extract existing badges using WORKING regex patterns
+          DOCKER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Create and publish a Docker image\][^]]*\]([^)]*)' || echo "[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)")
+          echo "Docker badge: $DOCKER_BADGE"
           
-          # Create badges
-          DOCKER_BADGE="[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)"
+          # Extract existing TAG badge (preserve it) - using WORKING pattern
+          TAG_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Test run ([^)]*[0-9][0-9]*\.[0-9][^)]*)\][^]]*\]([^)]*)' || echo "")
+          echo "Tag badge: $TAG_BADGE"
+          
+          # Create new MASTER badge
           MASTER_BADGE="[![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch%20${DATE_STR// /%20}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster)"
-          TAG_BADGE="[![Test run (${CURRENT_TAG})](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=${CURRENT_TAG}&label=Test%20run%20(v${CURRENT_TAG}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A${CURRENT_TAG})"
+          echo "Master badge: $MASTER_BADGE"
           
-          # Combine badges and update the first line
-          echo "$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE" > README.md.new
+          # Combine badges (keep existing TAG badge if present)
+          if [ -n "$TAG_BADGE" ]; then
+            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE"
+            echo "Including TAG badge in output"
+          else
+            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE"
+            echo "No TAG badge found to preserve"
+          fi
+          
+          echo "New line: $NEW_FIRST_LINE"
+          
+          # Update the first line
+          echo "$NEW_FIRST_LINE" > README.md.new
           # Get rest of file (skip first line)
           tail -n +2 README.md >> README.md.new
           # Replace the file
@@ -199,20 +217,35 @@ jobs:
           TAG_NAME="${{ github.event.release.tag_name }}"
           DATE_STR=$(date -u "+%Y-%m-%d %H:%M UTC")
           
-          # Extract the current version tag from the README
-          CURRENT_TAG=$(grep -o "Test run ([0-9]\+\.[0-9]\+\.[0-9]\+)" README.md | head -1 | sed 's/Test run (\([0-9.]*\))/\1/')
-          if [ -z "$CURRENT_TAG" ]; then
-            # Try with two-digit version if three-digit not found
-            CURRENT_TAG=$(grep -o "Test run ([0-9]\+\.[0-9]\+)" README.md | head -1 | sed 's/Test run (\([0-9.]*\))/\1/')
+          # Read the first line of README.md
+          FIRST_LINE=$(head -1 README.md)
+          echo "Current line: $FIRST_LINE"
+          
+          # Extract existing badges using WORKING regex patterns
+          DOCKER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Create and publish a Docker image\][^]]*\]([^)]*)' || echo "[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)")
+          echo "Docker badge: $DOCKER_BADGE"
+          
+          # Extract existing MASTER badge (preserve it) - using WORKING pattern
+          MASTER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Test run (Master Branch)\][^]]*\]([^)]*)' || echo "")
+          echo "Master badge: $MASTER_BADGE"
+          
+          # Create new TAG badge
+          TAG_BADGE="[![Test run (${TAG_NAME})](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=${TAG_NAME}&label=Test%20run%20(${TAG_NAME}%20${DATE_STR// /%20}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A${TAG_NAME})"
+          echo "New Tag badge: $TAG_BADGE"
+          
+          # Combine badges (keep existing MASTER badge if present)
+          if [ -n "$MASTER_BADGE" ]; then
+            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE"
+            echo "Including MASTER badge in output"
+          else
+            NEW_FIRST_LINE="$DOCKER_BADGE $TAG_BADGE"
+            echo "No MASTER badge found to preserve"
           fi
           
-          # Create badges
-          DOCKER_BADGE="[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)"
-          MASTER_BADGE="[![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster)"
-          TAG_BADGE="[![Test run (${TAG_NAME})](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=${TAG_NAME}&label=Test%20run%20(${TAG_NAME}%20${DATE_STR// /%20}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A${TAG_NAME})"
+          echo "New line: $NEW_FIRST_LINE"
           
-          # Combine badges and update the first line
-          echo "$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE" > README.md.new
+          # Update the first line
+          echo "$NEW_FIRST_LINE" > README.md.new
           # Get rest of file (skip first line)
           tail -n +2 README.md >> README.md.new
           # Replace the file
@@ -228,8 +261,8 @@ jobs:
           git fetch origin master:master
           git checkout master
           
-          # Create badges with the same content for master branch
-          echo "$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE" > README.md.new
+          # Apply the same badge update to master branch
+          echo "$NEW_FIRST_LINE" > README.md.new
           tail -n +2 README.md >> README.md.new
           mv README.md.new README.md
           

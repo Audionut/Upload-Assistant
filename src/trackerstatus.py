@@ -21,13 +21,17 @@ async def process_all_trackers(meta):
     tracker_setup = TRACKER_SETUP(config=config)
     helper = UploadHelper()
     meta_lock = asyncio.Lock()  # noqa F841
+    for tracker in meta['trackers']:
+        if 'tracker_status' not in meta:
+            meta['tracker_status'] = {}
+        if tracker not in meta['tracker_status']:
+            meta['tracker_status'][tracker] = {}
 
     async def process_single_tracker(tracker_name, shared_meta):
         nonlocal successful_trackers
         local_meta = copy.deepcopy(shared_meta)  # Ensure each task gets its own copy of meta
         local_tracker_status = {'banned': False, 'skipped': False, 'dupe': False, 'upload': False}
         disctype = local_meta.get('disctype', None)
-        console.print(f"\n[bold yellow]Processing Tracker: {tracker_name}[/bold yellow]")
 
         if local_meta['name'].endswith('DUPE?'):
             local_meta['name'] = local_meta['name'].replace(' DUPE?', '')
@@ -54,7 +58,6 @@ async def process_all_trackers(meta):
 
                         if imdb_id is None or imdb_id.strip() == "":
                             local_meta['imdb_id'] = 0
-                            local_tracker_status['skipped'] = True
                             break
 
                         imdb_id = imdb_id.strip().lower()
@@ -66,25 +69,16 @@ async def process_all_trackers(meta):
                         else:
                             cli_ui.error("Invalid IMDB ID format. Expected format: tt1234567")
 
-            if tracker_name == "PTP":
-                if local_meta.get('imdb_id', 0) != 0:
-                    console.print("[yellow]Searching for Group ID on PTP")
-                    ptp = PTP(config=config)
-                    groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
-                    if groupID is None:
-                        console.print("[yellow]No Existing Group found")
-                        if local_meta.get('youtube', None) is None or "youtube" not in str(local_meta.get('youtube', '')):
-                            youtube = "" if local_meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
-                            local_meta['youtube'] = youtube
-                    meta['ptp_groupID'] = groupID
-                else:
-                    local_tracker_status['skipped'] = True
-
             result = await tracker_setup.check_banned_group(tracker_class.tracker, tracker_class.banned_groups, local_meta)
             if result:
                 local_tracker_status['banned'] = True
             else:
                 local_tracker_status['banned'] = False
+
+            if local_meta['tracker_status'][tracker_name].get('skip_upload'):
+                local_tracker_status['skipped'] = True
+            elif 'skipped' not in local_meta or local_meta['skipped'] is None:
+                local_tracker_status['skipped'] = False
 
             if not local_tracker_status['banned'] and not local_tracker_status['skipped']:
                 if tracker_name == "AITHER":
@@ -93,12 +87,19 @@ async def process_all_trackers(meta):
                     else:
                         local_tracker_status['skipped'] = False
 
-                if tracker_name not in {"PTP", "TL"}:
+                if tracker_name not in {"PTP"} and not local_tracker_status['skipped']:
                     dupes = await tracker_class.search_existing(local_meta, disctype)
                 elif tracker_name == "PTP":
+                    ptp = PTP(config=config)
+                    groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
+                    meta['ptp_groupID'] = groupID
                     dupes = await ptp.search_existing(groupID, local_meta, disctype)
 
-                if ('skipping' not in local_meta or local_meta['skipping'] is None) and tracker_name != "TL":
+                if tracker_name == "ASC" and meta.get('anon', 'false'):
+                    console.print("PT: [yellow]Aviso: Você solicitou um upload anônimo, mas o ASC não suporta essa opção.[/yellow][red] O envio não será anônimo.[/red]")
+                    console.print("EN: [yellow]Warning: You requested an anonymous upload, but ASC does not support this option.[/yellow][red] The upload will not be anonymous.[/red]")
+
+                if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                     dupes = await filter_dupes(dupes, local_meta, tracker_name)
                     local_meta, is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
                     if is_dupe:
@@ -130,10 +131,11 @@ async def process_all_trackers(meta):
 
             if not local_meta['debug']:
                 if not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
-                    console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
+                    if not local_meta.get('unattended', False):
+                        console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
                     if (
                         not local_meta['unattended']
-                        or (local_meta['unattended'] and local_meta.get('unattended-confirm', False))
+                        or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))
                     ) and not we_already_asked:
                         edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
                         if edit_choice.lower() == 'y':
@@ -152,14 +154,41 @@ async def process_all_trackers(meta):
         return tracker_name, local_tracker_status
 
     if meta.get('unattended', False):
+        searching_trackers = [name for name in meta['trackers'] if name in tracker_class_map]
+        if searching_trackers:
+            console.print(f"[yellow]Searching for existing torrents on: {', '.join(searching_trackers)}...")
         tasks = [process_single_tracker(tracker_name, meta) for tracker_name in meta['trackers']]
         results = await asyncio.gather(*tasks)
+
+        # Collect passed trackers and skip reasons
+        passed_trackers = []
+        dupe_trackers = []
+        skipped_trackers = []
+
         for tracker_name, status in results:
             tracker_status[tracker_name] = status
+            if not status['banned'] and not status['skipped'] and not status['dupe']:
+                passed_trackers.append(tracker_name)
+            elif status['dupe']:
+                dupe_trackers.append(tracker_name)
+            elif status['skipped']:
+                skipped_trackers.append(tracker_name)
+
+        if skipped_trackers:
+            console.print(f"[red]Trackers skipped due to conditions: [bold yellow]{', '.join(skipped_trackers)}[/bold yellow].")
+        if dupe_trackers:
+            console.print(f"[red]Found potential dupes on: [bold yellow]{', '.join(dupe_trackers)}[/bold yellow].")
+        if passed_trackers:
+            console.print(f"[bold green]Trackers passed all checks: [bold yellow]{', '.join(passed_trackers)}")
     else:
+        passed_trackers = []
         for tracker_name in meta['trackers']:
+            if tracker_name in tracker_class_map:
+                console.print(f"[yellow]Searching for existing torrents on {tracker_name}...")
             tracker_name, status = await process_single_tracker(tracker_name, meta)
             tracker_status[tracker_name] = status
+            if not status['banned'] and not status['skipped'] and not status['dupe']:
+                passed_trackers.append(tracker_name)
 
     if meta['debug']:
         console.print("\n[bold]Tracker Processing Summary:[/bold]")
@@ -170,6 +199,8 @@ async def process_all_trackers(meta):
             upload_status = 'Yes' if status['upload'] else 'No'
             console.print(f"Tracker: {t_name} | Banned: {banned_status} | Skipped: {skipped_status} | Dupe: {dupe_status} | [yellow]Upload:[/yellow] {upload_status}")
         console.print(f"\n[bold]Trackers Passed all Checks:[/bold] {successful_trackers}")
+        print()
+        console.print("[bold red]DEBUG MODE does not upload to sites")
 
     meta['tracker_status'] = tracker_status
     return successful_trackers

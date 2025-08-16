@@ -214,9 +214,6 @@ class AR():
                 for name, value in cookie_dict.items():
                     self.session.cookie_jar.update_cookies({name: value})
 
-                if meta.get('debug', False):
-                    console.print("[yellow]Loaded cookies:", cookie_dict)
-
                 try:
                     async with self.session.get(f'{self.base_url}/torrents.php', timeout=10) as response:
                         if response.status == 200:
@@ -233,6 +230,7 @@ class AR():
 
             await self.close_session()
             await self.start_session()
+            await self.validate_credentials(meta)
             retry_count += 1
 
         console.print("[red]Failed to reuse session after retries. Either try again or delete the cookie.[/red]")
@@ -365,7 +363,6 @@ class AR():
         return os.path.basename(path)
 
     async def search_existing(self, meta, DISCTYPE):
-        console.print("[yellow]Searching for existing torrents on AR...")
         dupes = {}
 
         # Combine title and year
@@ -475,11 +472,16 @@ class AR():
                 raise Exception("Session cookie not found.")
 
             # must use scene name if scene release
+            KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
             if meta['scene']:
-                ar_name = meta['scene_name']
+                ar_name = meta.get('scene_name')
             else:
-                # name must have . instead of spaces
-                ar_name = meta['name'].replace(' ', ".").replace("'", '').replace(':', '')
+                ar_name = meta['uuid']
+                base, ext = os.path.splitext(ar_name)
+                if ext.lower() in KNOWN_EXTENSIONS:
+                    ar_name = base
+                ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
+                ar_name = re.sub(r'\.{2,}', '.', ar_name)
 
             if meta['tag'] == "":
                 # replacing spaces with . as per rules
@@ -521,14 +523,11 @@ class AR():
                                 async with session.post(self.upload_url, data=form, headers=headers) as response:
                                     if response.status == 200:
                                         # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
-                                        console.print(f"[green]{response.url}")
+                                        meta['tracker_status'][self.tracker]['status_message'] = str(response.url)
                                         match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
                                         if match is None:
                                             await self.close_session()
-                                            console.print(response.url)
-                                            console.print(data)
-                                            raise UploadException(  # noqa F405
-                                                f"Upload to {self.tracker} failed: result URL {response.url} ({response.status}) is not the expected one.")  # noqa F405
+                                            meta['tracker_status'][self.tracker]['status_message'] = f"data error - failed: result URL {response.url} ({response.status}) is not the expected one."
 
                                         # having UA add the torrent link as a comment.
                                         if match:
@@ -537,21 +536,20 @@ class AR():
                                             await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
 
                                     else:
-                                        console.print("[red]Upload failed. Response was not 200.")
+                                        meta['tracker_status'][self.tracker]['status_message'] = "data error - Response was not 200."
                             except Exception:
                                 await self.close_session()
-                                console.print("[red]Error! It may have uploaded, go check")
-                                console.print("[cyan]Request Data:")
-                                console.print_exception()
+                                meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
                                 return
                 except FileNotFoundError:
-                    console.print(f"[red]File not found: {torrent_path}")
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - File not found: {torrent_path}"
                 return aiohttp
             else:
                 await self.close_session()
                 console.print("[cyan]Request Data:")
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
             await self.close_session()
-            console.print(f"[red]Upload failed: {e}")
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error - Upload failed: {e}"
             return

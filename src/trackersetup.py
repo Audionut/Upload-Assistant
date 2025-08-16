@@ -3,27 +3,33 @@ from src.trackers.AITHER import AITHER
 from src.trackers.AL import AL
 from src.trackers.ANT import ANT
 from src.trackers.AR import AR
+from src.trackers.ASC import ASC
 from src.trackers.BHD import BHD
 from src.trackers.BHDTV import BHDTV
+from src.trackers.BJS import BJS
 from src.trackers.BLU import BLU
+from src.trackers.BT import BT
 from src.trackers.CBR import CBR
+from src.trackers.DC import DC
 from src.trackers.DP import DP
 from src.trackers.FL import FL
 from src.trackers.FNP import FNP
 from src.trackers.FRIKI import FRIKI
 from src.trackers.HDB import HDB
+from src.trackers.HDS import HDS
 from src.trackers.HDT import HDT
 from src.trackers.HHD import HHD
 from src.trackers.HUNO import HUNO
 from src.trackers.ITT import ITT
 from src.trackers.LCD import LCD
+from src.trackers.LDU import LDU
 from src.trackers.LST import LST
 from src.trackers.LT import LT
 from src.trackers.MTV import MTV
 from src.trackers.NBL import NBL
 from src.trackers.OE import OE
 from src.trackers.OTW import OTW
-from src.trackers.PSS import PSS
+from src.trackers.PHD import PHD
 from src.trackers.PT import PT
 from src.trackers.PTER import PTER
 from src.trackers.PTP import PTP
@@ -259,7 +265,7 @@ class TRACKER_SETUP:
                     result = True
 
         if result:
-            if not meta['unattended'] or meta.get('unattended-confirm', False):
+            if not meta['unattended'] or meta.get('unattended_confirm', False):
                 if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
                     return False
                 return True
@@ -461,22 +467,22 @@ class TRACKER_SETUP:
 
 
 tracker_class_map = {
-    'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'BHD': BHD, 'BHDTV': BHDTV, 'BLU': BLU, 'CBR': CBR, 'DP': DP,
-    'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT, 'LCD': LCD,
-    'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PSS': PSS, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTT': PTT,
+    'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
+    'DC': DC, 'DP': DP, 'FNP': FNP, 'FL': FL, 'FRIKI': FRIKI, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
+    'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
     'TIK': TIK, 'TL': TL, 'TOCA': TOCA, 'TVC': TVC, 'TTG': TTG, 'UHD': UHD, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
 }
 
 api_trackers = {
-    'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'ITT', 'LCD', 'LST', 'LT',
-    'OE', 'OTW', 'PSS', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
+    'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
+    'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TOCA', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 
 other_api_trackers = {
-    'ANT', 'BHDTV', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
+    'ANT', 'BHDTV', 'DC', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
 }
 
 http_trackers = {
-    'AR', 'FL', 'HDB', 'HDT', 'MTV', 'PTER', 'TTG'
+    'AR', 'ASC', 'BJS', 'BT', 'FL', 'HDB', 'HDS', 'HDT', 'MTV', 'PHD', 'PTER', 'TTG'
 }

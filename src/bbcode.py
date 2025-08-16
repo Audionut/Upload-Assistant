@@ -38,7 +38,6 @@ class BBCODE:
         pass
 
     def clean_hdb_description(self, description):
-        console.print("[yellow]Cleaning HDB description...")
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
@@ -126,6 +125,9 @@ class BBCODE:
             }
             imagelist.append(image_dict)
             desc = desc.replace(f"[url={web_url}][img]{img_url}[/img][/url]", '')
+
+        description = desc.strip()
+        return description, imagelist
 
     def clean_bhd_description(self, description, meta):
         # Unescape html
@@ -261,6 +263,20 @@ class BBCODE:
             desc = desc.replace(comp, f"COMPARISON_PLACEHOLDER-{i} ")
             comp_placeholders.append(comp)
 
+        # as the name implies, protect image links while doing regex things
+        def protect_links(desc):
+            links = re.findall(r'https?://\S+', desc)
+            for i, link in enumerate(links):
+                desc = desc.replace(link, f'__LINK_PLACEHOLDER_{i}__')
+            return desc, links
+
+        def restore_links(desc, links):
+            for i, link in enumerate(links):
+                desc = desc.replace(f'__LINK_PLACEHOLDER_{i}__', link)
+            return desc
+
+        links = []
+
         if is_disc == "DVD":
             desc = re.sub(r"\[mediainfo\][\s\S]*?\[\/mediainfo\]", "", desc)
 
@@ -291,6 +307,8 @@ class BBCODE:
             desc = re.sub(r"(^(video|audio|text)( #\d+)?\nid)(.*?)^$", "", desc, flags=re.MULTILINE | re.IGNORECASE | re.DOTALL)
             desc = re.sub(r"(^(menu)( #\d+)?\n)(.*?)^$", "", f"{desc}\n\n", flags=re.MULTILINE | re.IGNORECASE | re.DOTALL)
 
+            desc, links = protect_links(desc)
+
             desc = re.sub(
                 r"\[b\](.*?)(Matroska|DTS|AVC|x264|Progressive|23\.976 fps|16:9|[0-9]+x[0-9]+|[0-9]+ MiB|[0-9]+ Kbps|[0-9]+ bits|cabac=.*?/ aq=.*?|\d+\.\d+ Mbps)\[/b\]",
                 "",
@@ -318,6 +336,8 @@ class BBCODE:
 
             desc = re.sub(r"^\s+$", "", desc, flags=re.MULTILINE)
             desc = re.sub(r"\n{2,}", "\n", desc)
+
+        desc = restore_links(desc, links)
 
         # Convert Quote tags:
         desc = re.sub(r"\[quote.*?\]", "[code]", desc)

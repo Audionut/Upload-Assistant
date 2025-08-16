@@ -23,9 +23,10 @@ class ShortHelpFormatter(argparse.HelpFormatter):
         short_usage = "usage: upload.py [path...] [options]\n\n"
         short_options = """
 Common options:
-  -dm, --delete-meta         Deletes the cached meta file that stores arguments/processed data
   -tmdb, --tmdb              Specify the TMDb id to use with movie/ or tv/ prefix
   -imdb, --imdb              Specify the IMDb id to use
+  -tvmaze, --tvmaze          Specify the TVMaze id to use
+  -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
   -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
   -df, --descfile            Path to custom description file
@@ -82,9 +83,9 @@ class Args():
         parser.add_argument('-comps', '--comparison', nargs='+', required=False, help="Use comparison images from a folder (input folder path). See: https://github.com/Audionut/Upload-Assistant/pull/487", default=None)
         parser.add_argument('-comps_index', '--comparison_index', nargs=1, required=False, help="Which of your comparison indexes is the main images (required when comps)", type=int, default=None)
         parser.add_argument('-mf', '--manual_frames', nargs=1, required=False, help="Comma-separated frame numbers to use as screenshots", type=str, default=None)
-        parser.add_argument('-c', '--category', nargs=1, required=False, help="Category [MOVIE, TV, FANRES]", choices=['movie', 'tv', 'fanres'])
+        parser.add_argument('-c', '--category', nargs=1, required=False, help="Category [movie, tv, fanres]", choices=['movie', 'tv', 'fanres'], dest="manual_category")
         parser.add_argument('-t', '--type', nargs=1, required=False, help="Type [DISC, REMUX, ENCODE, WEBDL, WEBRIP, HDTV, DVDRIP]", choices=['disc', 'remux', 'encode', 'webdl', 'web-dl', 'webrip', 'hdtv', 'dvdrip'], dest="manual_type")
-        parser.add_argument('--source', nargs=1, required=False, help="Source [Blu-ray, BluRay, DVD, HDDVD, WEB, HDTV, UHDTV, LaserDisc, DCP]", choices=['Blu-ray', 'BluRay', 'DVD', 'HDDVD', 'WEB', 'HDTV', 'UHDTV', 'LaserDisc', 'DCP'], dest="manual_source")
+        parser.add_argument('--source', nargs=1, required=False, help="Source [Blu-ray, BluRay, DVD, DVD5, DVD9, HDDVD, WEB, HDTV, UHDTV, LaserDisc, DCP]", choices=['Blu-ray', 'BluRay', 'DVD', 'DVD5', 'DVD9', 'HDDVD', 'WEB', 'HDTV', 'UHDTV', 'LaserDisc', 'DCP'], dest="manual_source")
         parser.add_argument('-res', '--resolution', nargs=1, required=False, help="Resolution [2160p, 1080p, 1080i, 720p, 576p, 576i, 480p, 480i, 8640p, 4320p, OTHER]", choices=['2160p', '1080p', '1080i', '720p', '576p', '576i', '480p', '480i', '8640p', '4320p', 'other'])
         parser.add_argument('-tmdb', '--tmdb', nargs=1, required=False, help="TMDb ID (use movie/ or tv/ prefix)", type=str, dest='tmdb_manual')
         parser.add_argument('-imdb', '--imdb', nargs=1, required=False, help="IMDb ID", type=str, dest='imdb_manual')
@@ -104,13 +105,16 @@ class Args():
         parser.add_argument('--no-year', dest='no_year', action='store_true', required=False, help="Remove Year from title")
         parser.add_argument('--no-aka', dest='no_aka', action='store_true', required=False, help="Remove AKA from title")
         parser.add_argument('--no-dub', dest='no_dub', action='store_true', required=False, help="Remove Dubbed from title")
+        parser.add_argument('--no-dual', dest='no_dual', action='store_true', required=False, help="Remove Dual-Audio from title")
         parser.add_argument('--no-tag', dest='no_tag', action='store_true', required=False, help="Remove Group Tag from title")
         parser.add_argument('--no-edition', dest='no_edition', action='store_true', required=False, help="Remove Edition from title")
         parser.add_argument('--dual-audio', dest='dual_audio', action='store_true', required=False, help="Add Dual-Audio to the title")
         parser.add_argument('-ol', '--original-language', dest='manual_language', nargs=1, required=False, help="Set original audio language")
-        parser.add_argument('-oil', '--only-if-languages', dest='has_languages',  nargs=1, required=False, help="Require at least one of the languages to upload. Comma separated list e.g. 'en,fr,pt'", type=str)
+        parser.add_argument('-oil', '--only-if-languages', dest='has_languages',  nargs='*', required=False, help="Require at least one of the languages to upload. Comma separated list e.g. 'English, French, Spanish'", type=str)
         parser.add_argument('-ns', '--no-seed', action='store_true', required=False, help="Do not add torrent to the client")
         parser.add_argument('-year', '--year', dest='manual_year', nargs=1, required=False, help="Override the year found", type=int, default=0)
+        parser.add_argument('-mc', '--commentary', dest='manual_commentary', action='store_true', required=False, help="Manually indicate whether commentary tracks are included")
+        parser.add_argument('-e', '--extras', dest='extras', action='store_true', required=False, help="Indicates that extras are included. Mainly used for Blu-rays discs")
         parser.add_argument('-ptp', '--ptp', nargs=1, required=False, help="PTP torrent id/permalink", type=str)
         parser.add_argument('-blu', '--blu', nargs=1, required=False, help="BLU torrent id/link", type=str)
         parser.add_argument('-aither', '--aither', nargs=1, required=False, help="Aither torrent id/link", type=str)
@@ -119,10 +123,10 @@ class Args():
         parser.add_argument('-tik', '--tik', nargs=1, required=False, help="TIK torrent id/link", type=str)
         parser.add_argument('-hdb', '--hdb', nargs=1, required=False, help="HDB torrent id/link", type=str)
         parser.add_argument('-btn', '--btn', nargs=1, required=False, help="BTN torrent id/link", type=str)
-        parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD infohash or torrent_id", type=str)
+        parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD torrent_id/link", type=str)
         parser.add_argument('-huno', '--huno', nargs=1, required=False, help="HUNO torrent id/link", type=str)
         parser.add_argument('-ulcx', '--ulcx', nargs=1, required=False, help="ULCX torrent id/link", type=str)
-        parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.")
+        parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.", default=None)
         parser.add_argument('--foreign', dest='foreign', action='store_true', required=False, help="Set for TIK Foreign category")
         parser.add_argument('--opera', dest='opera', action='store_true', required=False, help="Set for TIK Opera & Musical category")
         parser.add_argument('--asian', dest='asian', action='store_true', required=False, help="Set for TIK Asian category")
@@ -131,7 +135,7 @@ class Args():
         parser.add_argument('-manual_dvds', '--manual_dvds', nargs=1, required=False, help="Override the default number of DVD's (eg: use 2xDVD9+DVD5 instead)", type=str, dest='manual_dvds', default="")
         parser.add_argument('-pb', '--desclink', nargs=1, required=False, help="Custom Description (link to hastebin/pastebin)")
         parser.add_argument('-df', '--descfile', nargs=1, required=False, help="Custom Description (path to file OR filename in current working directory)")
-        parser.add_argument('-ih', '--imghost', nargs=1, required=False, help="Image Host", choices=['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'lensdump', 'ptscreens', 'oeimg', 'dalexni', 'zipline'])
+        parser.add_argument('-ih', '--imghost', nargs=1, required=False, help="Image Host", choices=['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'lensdump', 'ptscreens', 'onlyimage', 'dalexni', 'zipline'])
         parser.add_argument('-siu', '--skip-imagehost-upload', dest='skip_imghost_upload', action='store_true', required=False, help="Skip Uploading to an image host")
         parser.add_argument('-th', '--torrenthash', nargs=1, required=False, help="Torrent Hash to re-use from your client's session directory")
         parser.add_argument('-nfo', '--nfo', action='store_true', required=False, help="Use .nfo in directory for description")
@@ -143,7 +147,8 @@ class Args():
         parser.add_argument('-webdv', '--webdv', action='store_true', required=False, help="Contains a Dolby Vision layer converted using dovi_tool (HYBRID)")
         parser.add_argument('-hc', '--hardcoded-subs', action='store_true', required=False, help="Contains hardcoded subs", dest="hardcoded-subs")
         parser.add_argument('-pr', '--personalrelease', action='store_true', required=False, help="Personal Release")
-        parser.add_argument('-sdc', '--skip-dupe-check', action='store_true', required=False, help="Pass if you know this is a dupe (Skips dupe check)", dest="dupe")
+        parser.add_argument('-sdc', '--skip-dupe-check', action='store_true', required=False, help="Ignore dupes and upload anyway (Skips dupe check)", dest="dupe")
+        parser.add_argument('-sda', '--skip-dupe-asking', action='store_true', required=False, help="Don't prompt about dupes, just treat dupes as actual dupes", dest="ask_dupe")
         parser.add_argument('-debug', '--debug', action='store_true', required=False, help="Debug Mode, will run through all the motions providing extra info, but will not upload to trackers.")
         parser.add_argument('-ffdebug', '--ffdebug', action='store_true', required=False, help="Will show info from ffmpeg while taking screenshots.")
         parser.add_argument('-mps', '--max-piece-size', nargs=1, required=False, help="Set max piece size allowed in MiB for default torrent creation (default 128 MiB)", choices=['2', '4', '8', '16', '32', '64', '128'])
@@ -159,14 +164,18 @@ class Args():
         parser.add_argument('-tk', '--trackers', nargs=1, required=False, help="Upload to these trackers, comma seperated (--trackers blu,bhd) including manual")
         parser.add_argument('-tpc', '--trackers-pass', dest='trackers_pass', nargs=1, required=False, help="How many trackers need to pass all checks (dupe/banned group/etc) to actually proceed to uploading", type=int)
         parser.add_argument('-rt', '--randomized', nargs=1, required=False, help="Number of extra, torrents with random infohash", default=0)
+        parser.add_argument('-entropy', '--entropy', dest='entropy', nargs=1, required=False, help="Use entropy in created torrents. (32 or 64) bits (ie: -entropy 32). Not supported at all sites, you many need to redownload the torrent", type=int, default=0)
         parser.add_argument('-ua', '--unattended', action='store_true', required=False, help=argparse.SUPPRESS)
-        parser.add_argument('-uac', '--unattended-confirm', action='store_true', required=False, help=argparse.SUPPRESS)
+        parser.add_argument('-uac', '--unattended_confirm', action='store_true', required=False, help=argparse.SUPPRESS)
         parser.add_argument('-vs', '--vapoursynth', action='store_true', required=False, help="Use vapoursynth for screens (requires vs install)")
         parser.add_argument('-dm', '--delete-meta', action='store_true', required=False, dest='delete_meta', help="Delete only meta.json from tmp directory")
         parser.add_argument('-dtmp', '--delete-tmp', action='store_true', required=False, dest='delete_tmp', help="Delete tmp directory for the working file/folder")
         parser.add_argument('-cleanup', '--cleanup', action='store_true', required=False, help="Clean up tmp directory")
         parser.add_argument('-fl', '--freeleech', nargs=1, required=False, help="Freeleech Percentage. Any value 1-100 works, but site search is limited to certain values", default=0, dest="freeleech")
         parser.add_argument('--infohash', nargs=1, required=False, help="V1 Info Hash")
+        parser.add_argument('-emby', '--emby', action='store_true', required=False, help="Create an Emby-compliant NFO file and optionally symlink the content")
+        parser.add_argument('-emby_cat', '--emby_cat', nargs=1, required=False, help="Set the expected category for Emby (e.g., 'movie', 'tv')")
+        parser.add_argument('-emby_debug', '--emby_debug', action='store_true', required=False, help="Does debugging stuff for Audionut")
         args, before_args = parser.parse_known_args(input)
         args = vars(args)
         # console.print(args)
@@ -400,7 +409,24 @@ class Args():
         return result
 
     def parse_tmdb_id(self, id, category):
-        id = id.lower().lstrip()
+        id = str(id).lower().strip()
+        if id.startswith('http'):
+            parsed = urllib.parse.urlparse(id)
+            path = parsed.path.strip('/')
+
+            if '/' in path:
+                parts = path.split('/')
+                if len(parts) >= 2:
+                    type_part = parts[-2]
+                    id_part = parts[-1]
+
+                    if type_part == 'tv':
+                        category = 'TV'
+                    elif type_part == 'movie':
+                        category = 'MOVIE'
+
+                    id = id_part
+
         if id.startswith('tv'):
             id = id.split('/')[1]
             category = 'TV'
@@ -409,4 +435,10 @@ class Args():
             category = 'MOVIE'
         else:
             id = id
+
+        if isinstance(id, str) and id.isdigit():
+            id = int(id)
+        else:
+            id = 0
+
         return category, id

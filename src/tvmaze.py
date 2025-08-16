@@ -9,6 +9,8 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     - If `return_full_tuple=True`, returns `(tvmaze_id, imdbID, tvdbID)`.
     - Otherwise, only returns `tvmaze_id`.
     """
+    if debug:
+        console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year})[/cyan]")
     # Convert TVDB ID to integer
     try:
         tvdbID = int(tvdbID) if tvdbID not in (None, '', '0') else 0
@@ -46,26 +48,21 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
             return [response] if isinstance(response, dict) else response
         return []
 
-    # Primary search logic
-    if manual_date is None:
-        if tvdbID:
-            results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"thetvdb": tvdbID}))
+    if tvdbID:
+        results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"thetvdb": tvdbID}))
 
-        if not results and imdbID:
-            results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"imdb": f"tt{imdbID:07d}"}))
+    if not results and imdbID:
+        results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"imdb": f"tt{imdbID:07d}"}))
 
-        if not results:
-            search_resp = await fetch_tvmaze_data("https://api.tvmaze.com/search/shows", {"q": filename})
-            results.extend([each['show'] for each in search_resp if 'show' in each])
-    else:
-        if tvdbID:
-            results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"thetvdb": tvdbID}))
-
-        if imdbID:
-            results.extend(await fetch_tvmaze_data("https://api.tvmaze.com/lookup/shows", {"imdb": f"tt{imdbID:07d}"}))
-
+    if not results:
         search_resp = await fetch_tvmaze_data("https://api.tvmaze.com/search/shows", {"q": filename})
         results.extend([each['show'] for each in search_resp if 'show' in each])
+
+    if not results:
+        first_two_words = " ".join(filename.split()[:2])
+        if first_two_words and first_two_words != filename:
+            search_resp = await fetch_tvmaze_data("https://api.tvmaze.com/search/shows", {"q": first_two_words})
+            results.extend([each['show'] for each in search_resp if 'show' in each])
 
     # Deduplicate results by TVMaze ID
     seen = set()
@@ -112,8 +109,20 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
         if debug:
             console.print(f"[cyan]Automatically selected show: {selected_show.get('name')} (TVmaze ID: {tvmaze_id})[/cyan]")
 
+    if 'externals' in selected_show:
+        if 'thetvdb' in selected_show['externals'] and not tvdbID:
+            tvdbID = selected_show['externals']['thetvdb']
+            if tvdbID:
+                tvdbID = int(tvdbID)
+                return_full_tuple = True
     if debug:
         console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__}), IMDb ID: {imdbID} (type: {type(imdbID).__name__}), TVDB ID: {tvdbID} (type: {type(tvdbID).__name__})[/cyan]")
+    if tvmaze_id is None:
+        tvmaze_id = 0
+    if imdbID is None:
+        imdbID = 0
+    if tvdbID is None:
+        tvdbID = 0
 
     return (tvmaze_id, imdbID, tvdbID) if return_full_tuple else tvmaze_id
 

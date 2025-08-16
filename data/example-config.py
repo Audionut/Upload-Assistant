@@ -21,7 +21,7 @@ config = {
         "btn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, oeimg, dalexni, zipline, passtheimage
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -33,7 +33,7 @@ config = {
         "ptpimg_api": "",
         "lensdump_api": "",
         "ptscreens_api": "",
-        "oeimg_api": "",
+        "onlyimage_api": "",
         "dalexni_api": "",
         "passtheima_ge_api": "",
         # custom zipline url
@@ -78,7 +78,11 @@ config = {
         # Tonemap HDR - DV+HDR screenshots
         "tone_map": True,
 
-        # Tonemap screenshots with the following settings
+        # Set true to skip ffmpeg check, useful if you know your ffmpeg is compatible with libplacebo
+        # Else, when tonemapping is enabled (and used), UA will run a quick check before to decide
+        "ffmpeg_is_good": False,
+
+        # Tonemap screenshots with the following settings (doesn't apply when using libplacebo)
         # See https://ayosec.github.io/ffmpeg-filters-docs/7.1/Filters/Video/tonemap.html
         "algorithm": "mobius",
         "desat": "10.0",
@@ -98,6 +102,9 @@ config = {
         # This is equivalent to the old shared_seedbox setting, however the existing process
         # only used a single process. You probably need to limit this to 1 or 2 to avoid hogging resources.
         "threads": "10",
+
+        # Set true to limit the amount of CPU when running ffmpeg.
+        "ffmpeg_limit": False,
 
         # Number of screenshots to use for each (ALL) disc/episode when uploading packs to supported sites.
         # 0 equals old behavior where only the original description and images are added.
@@ -161,13 +168,28 @@ config = {
         "sonarr_url": "http://localhost:8989",
         "sonarr_api_key": "",
 
+        # details for a second sonarr instance
+        # additional sonarr instances can be added by adding more sonarr_url_x and sonarr_api_key_x entries
+        "sonarr_url_1": "http://my-second-instance:8989",
+        "sonarr_api_key_1": "",
+
         # set true to use radarr for movie searching
         "use_radarr": False,
         "radarr_url": "http://localhost:7878",
         "radarr_api_key": "",
 
+        # details for a second radarr instance
+        # additional radarr instances can be added by adding more radarr_url_x and radarr_api_key_x entries
+        "radarr_url_1": "http://my-second-instance:7878",
+        "radarr_api_key_1": "",
+
         # set true to use mkbrr for torrent creation
         "mkbrr": True,
+
+        # Create using a specific number of worker threads for hashing (e.g., 8) with mkbrr
+        # Experimenting with different values might yield better performance than the default automatic setting.
+        # Conversely, you can set a lower amount such as 1 to protect system resources (default "0" (auto))
+        "mkbrr_threads": "0",
 
         # set true to use argument overrides from data/templates/user-args.json
         "user_overrides": False,
@@ -216,6 +238,22 @@ config = {
         # NOT RECOMMENDED UNLESS YOU KNOW WHAT YOU ARE DOING
         # set true to not delete existing meta.json file before running
         "keep_meta": False,
+
+        # Set true to print the tracker api messages from uploads
+        "print_tracker_messages": False,
+
+        # Whether or not to print direct torrent links for the uploaded content
+        "print_tracker_links": True,
+
+        # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
+        # If not set, Emby linking will not be performed. Symlinking only, linux not tested
+        # path in quotes (double quotes for windows), e.g. "C:\\Emby\\Movies"
+        # this path for movies
+        "emby_dir": None,
+
+        # this path for TV shows
+        "emby_tv_dir": None
+
     },
 
     # these are used for DB links on AR
@@ -229,7 +267,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, BHD, BHDTV, BLU, CBR, DP, FNP, FRIKI, HDB, HDT, HHD, HUNO, ITT, LCD, LST, LT, MTV, NBL, OE, OTW, PSS, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -248,6 +286,8 @@ config = {
             "api_key": "",
             "announce_url": "https://aither.cc/announce/customannounceurl",
             "anon": False,
+            # Send uploads to Aither modq for staff approval
+            "modq": False,
         },
         "AL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -266,10 +306,24 @@ config = {
         "AR": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # anon is not an option when uplaoding you need to change your privacy settings.
+            # anon is not an option when uploading you need to change your privacy settings.
             "username": "",
             "password": "",
             "announce_url": "http://tracker.alpharatio.cc:2710/PASSKEY/announce",
+        },
+        "ASC": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # Set uploader_status to True if you have uploader permissions to automatically approve your uploads
+            "uploader_status": False,
+            # The custom layout default is 2
+            # If you have a custom layout, you'll need to inspect the element on the upload page to find the correct layout value
+            # Don't change it unless you know what you're doing
+            "custom_layout": '2',
+            # anon is not an option when uploading to ASC
+            # for ASC to work you need to export cookies from https://cliente.amigos-share.club/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/ASC.txt
+            "announce_url": "https://amigos-share.club/announce.php?passkey=PASSKEY",
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -292,6 +346,16 @@ config = {
             "my_announce_url": "https://trackerr.bit-hdtv.com/passkey/announce",
             "anon": False,
         },
+        "BJS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for BJS to work you need to export cookies from https://bj-share.info using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/BJS.txt
+            "announce_url": "https://tracker.bj-share.info:2053/<PASSKEY>/announce",
+            "anon": False,
+            # Set to False if during an anonymous upload you want your release group to be hidden
+            "show_group_if_anon": True,
+        },
         "BLU": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -301,11 +365,29 @@ config = {
             "announce_url": "https://blutopia.cc/announce/customannounceurl",
             "anon": False,
         },
+        "BT": {
+            "link_dir_name": "",
+            # for BT to work you need to export cookies from https://brasiltracker.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/BT.txt
+            "announce_url": "https://t.brasiltracker.org/<PASSKEY>/announce",
+            "anon": False,
+        },
         "CBR": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
             "announce_url": "https://capybarabr.com/announce/customannounceurl",
+            "anon": False,
+            # Send uploads to CBR modq for staff approval
+            "modq": False,
+        },
+        "DC": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # You can find your passkey at Settings -> Security -> Passkey
+            "passkey": "",
+            # You can find your api key at Settings -> Security -> API Key -> Generate API Key
+            "api_key": "",
             "anon": False,
         },
         "DP": {
@@ -314,6 +396,8 @@ config = {
             "api_key": "",
             "announce_url": "https://darkpeers.org/announce/customannounceurl",
             "anon": False,
+            # Send uploads to DP modq for staff approval
+            "modq": False,
         },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -348,6 +432,14 @@ config = {
             "passkey": "",
             "announce_url": "https://hdbits.org/announce/Custom_Announce_URL",
             "img_rehost": True,
+        },
+        "HDS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for HDS to work you need to export cookies from https://hd-space.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
+            "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
+            "anon": False,
         },
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -388,6 +480,13 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "announce_url": "https://locadora.cc/announce/customannounceurl",
+            "anon": False,
+        },
+        "LDU": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "announce_url": "https://theldu.to/announce/customannounceurl",
             "anon": False,
         },
         "LST": {
@@ -449,18 +548,19 @@ config = {
             "modq": False,
             "anon": False,
         },
+        "PHD": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PHD to work you need to export cookies from https://privatehd.to/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
+            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
+            "anon": False,
+        },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
             "announce_url": "https://portugas.org/announce/customannounceurl",
-            "anon": False,
-        },
-        "PSS": {
-            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
-            "link_dir_name": "",
-            "api_key": "",
-            "announce_url": "https://privatesilverscreen.cc/announce/customannounceurl",
             "anon": False,
         },
         "PTER": {  # Does not appear to be working at all
@@ -584,7 +684,12 @@ config = {
         "TL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            "announce_key": "TL announce key",
+            # Set to False if you don't have access to the API (e.g., if you're a trial uploader). Note: this may not work sometimes due to Cloudflare restrictions.
+            # If you are not going to use the API, you will need to export cookies from https://www.torrentleech.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/TL.txt
+            "api_upload": True,
+            # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
+            "passkey": "",
         },
         "TOCA": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -747,6 +852,17 @@ config = {
             # /Path/To/Watch/Folder
             "watch_folder": "",
         },
-
+    },
+    "DISCORD": {
+        # Set to True to enable Discord bot functionality
+        "use_discord": False,
+        # Set to True to only run the bot in unattended mode
+        "only_unattended": True,
+        # Set to True to send the tracker torrent urls
+        "send_upload_links": True,
+        "discord_bot_token": "",
+        "discord_channel_id": "",
+        "discord_bot_description": "",
+        "command_prefix": "!"
     },
 }

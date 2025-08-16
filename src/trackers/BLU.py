@@ -24,7 +24,8 @@ class BLU():
         self.tracker = 'BLU'
         self.source_flag = 'BLU'
         self.search_url = 'https://blutopia.cc/api/torrents/filter'
-        self.torrent_url = 'https://blutopia.cc/api/torrents/'
+        self.torrent_url = 'https://blutopia.cc/torrents/'
+        self.id_url = 'https://blutopia.cc/api/torrents/'
         self.upload_url = 'https://blutopia.cc/api/torrents/upload'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionuts Upload Assistant[/url][/center]"
         self.banned_groups = [
@@ -51,7 +52,7 @@ class BLU():
         modq = await self.get_flag(meta, 'modq')
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -125,9 +126,10 @@ class BLU():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://blutopia.cc/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -135,12 +137,19 @@ class BLU():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta):
         blu_name = meta['name']
         if meta['category'] == 'TV' and meta.get('episode_title', "") != "":
             blu_name = blu_name.replace(f"{meta['episode_title']} {meta['resolution']}", f"{meta['resolution']}", 1)
+        imdb_name = meta.get('imdb_info', {}).get('title', "")
+        imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        year = str(meta.get('year', ""))
+        blu_name = blu_name.replace(f"{meta['title']}", imdb_name, 1)
+        if not meta.get('category') == "TV":
+            blu_name = blu_name.replace(f"{year}", imdb_year, 1)
         return blu_name
 
     async def get_flag(self, meta, flag_name):
@@ -215,7 +224,6 @@ class BLU():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on BLU...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

@@ -104,11 +104,6 @@ class TTG():
         await self.edit_desc(meta)
         ttg_name = await self.edit_name(meta)
 
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 'no'
-        else:
-            anon = 'yes'
-
         # FORM
         # type = category dropdown
         # name = name
@@ -118,6 +113,11 @@ class TTG():
         # imdb_c = tt123456
         #
         # POST > upload/upload
+
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 'no'
+        else:
+            anon = 'yes'
 
         if meta['bdinfo'] is not None:
             mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
@@ -155,6 +155,7 @@ class TTG():
             if meta['debug']:
                 console.print(url)
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
@@ -165,19 +166,17 @@ class TTG():
                     mi_dump.close()
 
                     if up.url.startswith("https://totheglory.im/details.php?id="):
-                        console.print(f"[green]Uploaded to: [yellow]{up.url}[/yellow][/green]")
+                        meta['tracker_status'][self.tracker]['status_message'] = up.url
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(id, torrent_path)
                     else:
                         console.print(data)
                         console.print("\n\n")
-                        console.print(up.text)
                         raise UploadException(f"Upload to TTG Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa #F405
         return
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on TTG...")
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
         if not os.path.exists(cookiefile):
             console.print("[bold red]Cookie file not found: TTG.pkl")
@@ -251,7 +250,6 @@ class TTG():
                 resp = session.get(url=url)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
-                    console.print(session.cookies.get_dict())
                     console.print(resp.url)
                 if resp.text.find("""<a href="/logout.php">Logout</a>""") != -1:
                     return True

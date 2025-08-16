@@ -26,6 +26,7 @@ class SP():
         self.upload_url = 'https://seedpool.org/api/torrents/upload'
         self.search_url = 'https://seedpool.org/api/torrents/filter'
         self.torrent_url = 'https://seedpool.org/torrents/'
+        self.id_url = 'https://seedpool.org/api/torrents/'
         self.signature = None
         self.banned_groups = [""]
         pass
@@ -38,16 +39,11 @@ class SP():
         category_name = meta.get('category', '').upper()
         release_title = meta.get('name', '')
         mal_id = meta.get('mal_id', 0)
-        tv_pack = meta.get('tv_pack', 0)
 
         # Custom SEEDPOOL category logic
-        # Anime
-        if mal_id != 0:
+        # Anime TV go in the Anime category
+        if mal_id != 0 and category_name == 'TV':
             return '6'
-
-        # Boxset
-        if tv_pack != 0:
-            return '13'
 
         # Sports
         if self.contains_sports_patterns(release_title):
@@ -81,7 +77,8 @@ class SP():
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
-            'ENCODE': '3'
+            'ENCODE': '3',
+            'DVDRIP': '3'
         }.get(type, '0')
         return type_id
 
@@ -111,7 +108,7 @@ class SP():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -171,9 +168,10 @@ class SP():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -181,6 +179,7 @@ class SP():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta):
@@ -205,7 +204,6 @@ class SP():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print(f"[yellow]Searching for existing torrents on {self.tracker}...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

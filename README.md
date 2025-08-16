@@ -1,4 +1,4 @@
-[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml) [![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster) [![Test run (5.0.3.3)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=5.0.3.3&label=Test%20run%20(5.0.3.3%202025-05-27%2004:54%20UTC))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A5.0.3.3)
+[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml) [![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch%202025-07-04%2006:06%20UTC))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster) [![Test run (5.1.5.2)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=5.1.5.2&label=Test%20run%20(5.1.5.2%202025-07-19%2014:24%20UTC))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A5.1.5.2)
 
 Discord support https://discord.gg/QHHAZu7e2A
 
@@ -17,7 +17,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Generates and Parses MediaInfo/BDInfo.
   - Generates and Uploads screenshots. HDR tonemapping if config.
   - Uses srrdb to fix scene names used at sites.
-  - Can grab descriptions from PTP/BLU/Aither/LST/OE (with config option automatically on filename match, or using arg).
+  - Can grab descriptions from PTP/BLU/Aither/LST/OE/BHD (with config option automatically on filename match, or using arg).
   - Can strip and use existing screenshots from descriptions to skip screenshot generation and uploading.
   - Obtains TMDb/IMDb/MAL/TVDB/TVMAZE identifiers.
   - Converts absolute to season episode numbering for Anime. Non-Anime support with TVDB credentials
@@ -26,10 +26,46 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Can automagically search qBitTorrent version 5+ clients for matching existing torrent.
   - Generates proper name for your upload using Mediainfo/BDInfo and TMDb/IMDb conforming to site rules.
   - Checks for existing releases already on site.
-  - Uploads to ACM/Aither/AL/ANT/AR/BHD/BHDTV/BLU/CBR/DP/FRIKI/FNP/FL/HDB/HDT/HHD/HP/HUNO/ITT/LCD/LST/LT/MTV/NBL/OE/OTW/PSS/PT/PTP/PTER/PTT/RF/R4E(limited)/RAS/RTF/SAM/SHRI/SN/SP/SPD/STC/STT/TLC/THR/TL/TOCA/TVC/TTG/UHD/ULCX/UTP/YOINK/YUS
   - Adds to your client with fast resume, seeding instantly (rtorrent/qbittorrent/deluge/watch folder).
   - ALL WITH MINIMAL INPUT!
   - Currently works with .mkv/.mp4/Blu-ray/DVD/HD-DVDs.
+
+## Supported Sites:
+<table>
+  <tr>
+    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
+    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
+  </tr>
+  <tr><td>Aither</td><td>AITHER</td><td>Alpharatio</td><td>AR</td></tr>
+  <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
+  <tr><td>Anthelion</td><td>ANT</td><td>AsianCinema</td><td>ACM</td></tr>
+  <tr><td>Beyond-HD</td><td>BHD</td><td>BitHDTV</td><td>BHDTV</td></tr>
+  <tr><td>BrasilJapão-Share</td><td>BJS</td><td>Blutopia</td><td>BLU</td></tr>
+  <tr><td>BrasilTracker</td><td>BT</td><td>CapybaraBR</td><td>CBR</td></tr>
+  <tr><td>Cinematik</td><td>TIK</td><td>DarkPeers</td><td>DP</td></tr>
+  <tr><td>DigitalCore</td><td>DC</td><td>FearNoPeer</td><td>FNP</td></tr>
+  <tr><td>FileList</td><td>FL</td><td>Friki</td><td>FRIKI</td></tr>
+  <tr><td>hawke-uno</td><td>HUNO</td><td>HDBits</td><td>HDB</td></tr>
+  <tr><td>HD-Space</td><td>HDS</td><td>HD-Torrents</td><td>HDT</td></tr>
+  <tr><td>HomieHelpDesk</td><td>HHD</td><td>ItaTorrents</td><td>ITT</td></tr>
+  <tr><td>Last Digital Underground</td><td>LDU</td><td>Lat-Team</td><td>LT</td></tr>
+  <tr><td>Locadora</td><td>LCD</td><td>LST</td><td>LST</td></tr>
+  <tr><td>MoreThanTV</td><td>MTV</td><td>Nebulance</td><td>NBL</td></tr>
+  <tr><td>OldToonsWorld</td><td>OTW</td><td>OnlyEncodes+</td><td>OE</td></tr>
+  <tr><td>PassThePopcorn</td><td>PTP</td><td>Polish Torrent</td><td>PTT</td></tr>
+  <tr><td>Portugas</td><td>PT</td><td>PTerClub</td><td>PTER</td></tr>
+  <tr><td>PrivateHD</td><td>PHD</td><td>Racing4Everyone</td><td>R4E</td></tr>
+  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
+  <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
+  <tr><td>seedpool</td><td>SP</td><td>ShareIsland</td><td>SHRI</td></tr>
+  <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
+  <tr><td>Swarmazon</td><td>SN</td><td>Toca Share</td><td>TOCA</td></tr>
+  <tr><td>TorrentHR</td><td>THR</td><td>TorrentLeech</td><td>TL</td></tr>
+  <tr><td>ToTheGlory</td><td>TTG</td><td>TVChaosUK</td><td>TVC</td></tr>
+  <tr><td>UHDShare</td><td>UHD</td><td>ULCX</td><td>ULCX</td></tr>
+  <tr><td>UTOPIA</td><td>UTP</td><td>YOiNKED</td><td>YOINK</td></tr>
+  <tr><td>YUSCENE</td><td>YUS</td><td></td><td></td></tr>
+</table>
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
@@ -37,36 +73,42 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
-   - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git` 
-      - or download a zip of the source
+      - If you have issues with ffmpeg, such as `max workers` errors, see this [wiki](https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues)
+   - Get the source:
+      - Clone the repo to your system `git clone https://github.com/Audionut/Upload-Assistant.git`
+      - Fetch all of the release tags `git fetch --all --tags`
+      - Check out the specifc release: see [releases](https://github.com/Audionut/Upload-Assistant/releases)
+      - `git checkout tags/tagname` where `tagname` is the release name, eg `v5.0.0`
+      - or download a zip of the source from the releases page and create/overwrite a local copy.
    - Install necessary python modules `pip3 install --user -U -r requirements.txt`
       - `sudo apt install pip` if needed
-  - If you receive an error about externally managed environment
+  - If you receive an error about externally managed environment, or otherwise wish to keep UA python separate:
       - Install virtual python environment `python3 -m venv venv`
       - Activate the virtual environment `source venv/bin/activate`
-      - Then install the requirements `pip install -r requirents.txt`
+      - Then install the requirements `pip install -r requirements.txt`
    - From the installation directory, run `python3 config-generator.py`
    - OR
    - Copy and Rename `data/example-config.py` to `data/config.py`
    - Edit `config.py` to use your information (more detailed information in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki))
       - tmdb_api key can be obtained from https://www.themoviedb.org/settings/api
       - image host api keys can be obtained from their respective sites
-     
+
    **Additional Resources are found in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki)**
-   
+
    Feel free to contact me if you need help, I'm not that hard to find.
 
 ## **Updating:**
   - To update first navigate into the Upload-Assistant directory: `cd Upload-Assistant`
-  - Run a `git pull` to grab latest updates
-  - Or download a fresh zip and overwrite existing files
+  - `git fetch --all --tags`
+  - `git checkout tags/tagname`
+  - Or download a fresh zip from the releases page and overwrite existing files
   - Run `python3 -m pip install --user -U -r requirements.txt` to ensure dependencies are up to date
   - Run `python3 config-generator.py` and select to grab new UA config options.
 
 ## **CLI Usage:**
-  
-  `python3 upload.py "/downloads/path/to/content" --args`
-  
+
+  `python3 upload.py "/path/to/content" --args`
+
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.
 
@@ -88,4 +130,3 @@ Built with updated BDInfoCLI from https://github.com/rokibhasansagar/BDInfoCLI-n
   <a href="https://thetvdb.com/"><img src="https://i.postimg.cc/Hs1KKqsS/logo1.png" alt="TheTVDB" height="40px;"></a>&nbsp;&nbsp;
   <a href="https://www.tvmaze.com/"><img src="https://i.postimg.cc/2jdRzkJp/tvm-header-logo.png" alt="TVmaze" height="40px"></a>
 </p>
-

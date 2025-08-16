@@ -6,6 +6,7 @@ from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP
 from src.trackers.COMMON import COMMON
 from src.manualpackage import package
+from cogs.redaction import redact_private_info
 
 
 async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
@@ -39,6 +40,8 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
     enabled_trackers = tracker_setup.trackers_enabled(meta)
 
     async def process_single_tracker(tracker):
+        if not tracker == "MANUAL":
+            tracker_class = tracker_class_map[tracker](config=config)
         if meta['name'].endswith('DUPE?'):
             meta['name'] = meta['name'].replace(' DUPE?', '')
 
@@ -50,11 +53,8 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         tracker = tracker.replace(" ", "").upper().strip()
 
         if tracker in api_trackers:
-            tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     modq, draft = await check_mod_q_and_draft(tracker_class, meta, debug, disctype)
@@ -66,18 +66,18 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
-                    await client.add_to_client(meta, tracker_class.tracker)
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+                status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
+                if 'status_message' in status and "data error" not in str(status['status_message']):
+                    await client.add_to_client(meta, tracker_class.tracker)
 
         elif tracker in other_api_trackers:
-            tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     if tracker == "RTF":
@@ -86,20 +86,20 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     if tracker == 'SN':
                         await asyncio.sleep(16)
-                    await client.add_to_client(meta, tracker_class.tracker)
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+                status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
+                if 'status_message' in status and "data error" not in str(status['status_message']):
+                    await client.add_to_client(meta, tracker_class.tracker)
 
         elif tracker in http_trackers:
-            tracker_class = tracker_class_map[tracker](config=config)
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     if tracker == "AR":
@@ -108,11 +108,14 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
-                    await client.add_to_client(meta, tracker_class.tracker)
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+                status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
+                if 'status_message' in status and "data error" not in str(status['status_message']):
+                    await client.add_to_client(meta, tracker_class.tracker)
 
         elif tracker == "MANUAL":
             if meta['unattended']:
@@ -138,22 +141,19 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         elif tracker == "THR":
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 thr = THR(config=config)
                 try:
                     await thr.upload(meta, disctype)
                 except Exception as e:
                     console.print(f"[red]Upload failed: {e}")
+                    console.print(traceback.format_exc())
                     return
                 await client.add_to_client(meta, "THR")
 
         elif tracker == "PTP":
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
-            color = "green" if upload_status else "red"
-            console.print(f"[yellow]Tracker: {tracker}, Upload: [{color}]{'YES' if upload_status else 'No'}[/{color}]")
             if upload_status:
                 try:
                     ptp = PTP(config=config)
@@ -164,6 +164,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         await asyncio.sleep(5)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     await client.add_to_client(meta, "PTP")
                 except Exception:
@@ -173,3 +174,46 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
     # Process each tracker sequentially
     for tracker in enabled_trackers:
         await process_single_tracker(tracker)
+
+    try:
+        if meta.get('print_tracker_messages', False):
+            for tracker, status in meta.get('tracker_status', {}).items():
+                try:
+                    if 'status_message' in status:
+                        print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                except Exception as e:
+                    console.print(f"[red]Error printing {tracker} status message: {e}[/red]")
+        elif not meta.get('print_tracker_links', True):
+            console.print("[green]All tracker uploads processed.[/green]")
+    except Exception as e:
+        console.print(f"[red]Error printing tracker messages: {e}[/red]")
+        pass
+    if meta.get('print_tracker_links', True):
+        try:
+            for tracker, status in meta.get('tracker_status', {}).items():
+                try:
+                    if tracker == "MTV" and 'status_message' in status and "data error" not in str(status['status_message']):
+                        console.print(f"[green]{str(status['status_message'])}[/green]")
+                    if 'torrent_id' in status:
+                        tracker_class = tracker_class_map[tracker](config=config)
+                        torrent_url = tracker_class.torrent_url
+                        console.print(f"[green]{torrent_url}{status['torrent_id']}[/green]")
+                    else:
+                        if (
+                            'status_message' in status
+                            and 'torrent_id' not in status
+                            and "data error" not in str(status['status_message'])
+                            and tracker != "MTV"
+                        ):
+                            print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                        elif 'status_message' in status and "data error" in str(status['status_message']):
+                            console.print(f"[red]{tracker}: {str(status['status_message'])}[/red]")
+                        else:
+                            if 'skipping' in status and not status['skipping']:
+                                console.print(f"[red]{tracker} gave no useful message.")
+                except Exception as e:
+                    console.print(f"[red]Error printing {tracker} data: {e}[/red]")
+            console.print("[green]All tracker uploads processed.[/green]")
+        except Exception as e:
+            console.print(f"[red]Error in tracker print loop: {e}[/red]")
+            pass

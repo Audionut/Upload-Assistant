@@ -93,6 +93,7 @@ class SPD():
                     try:
                         # torrent may not dl and may not provide error if machine is under load or network connection usage high.
                         if 'downloadUrl' in response.json():
+                            meta['tracker_status'][self.tracker]['status_message'] = response.json()['downloadUrl']
                             with requests.get(url=self.url + response.json()['downloadUrl'], stream=True, headers=headers) as r:
                                 # replacing L4g/torf created torrent so it will be added to the client.
                                 with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent",
@@ -120,6 +121,7 @@ class SPD():
         else:
             console.print("[cyan]Request Data:")
             pprint(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def get_cat_id(self, category_name):
         category_id = {
@@ -131,7 +133,6 @@ class SPD():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on SPD...")
         headers = {
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
@@ -142,7 +143,7 @@ class SPD():
         }
 
         if meta['imdb_id'] != 0:
-            params['imdbId'] = meta['imdb_id'] if str(meta['imdb_id']).startswith("tt") else "tt" + meta['imdb_id']
+            params['imdbId'] = f"tt{meta['imdb']}"
         else:
             params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
 

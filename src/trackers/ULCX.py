@@ -9,7 +9,7 @@ import httpx
 import cli_ui
 from src.trackers.COMMON import COMMON
 from src.console import console
-from src.dupe_checking import check_for_english
+from src.languages import process_desc_language, has_english_language
 
 
 class ULCX():
@@ -20,11 +20,15 @@ class ULCX():
         self.source_flag = 'ULCX'
         self.upload_url = 'https://upload.cx/api/torrents/upload'
         self.search_url = 'https://upload.cx/api/torrents/filter'
-        self.torrent_url = 'https://upload.cx/api/torrents/'
+        self.torrent_url = 'https://upload.cx/torrents/'
+        self.id_url = 'https://upload.cx/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = ['Tigole', 'x0r', 'Judas', 'SPDVD', 'MeGusta', 'YIFY', 'SWTYBLZ', 'TAoE', 'TSP', 'TSPxL', 'LAMA', '4K4U',
-                              'ION10', 'Will1869', 'TGx', 'Sicario', 'QxR', 'Hi10', 'EMBER', 'FGT', 'AROMA', 'd3g', 'nikt0', 'Grym',
-                              'RARBG', 'iVy', 'FnP', 'EDGE2020', 'NuBz', 'NAHOM', 'Ralphy']
+        self.banned_groups = [
+            '4K4U', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym', 'Hi10', 'iAHD', 'INFINITY',
+            'ION10', 'iVy', 'Judas', 'LAMA', 'MeGusta', 'NAHOM', 'Niblets', 'nikt0', ['NuBz', 'Encodes'], 'OFT', 'QxR',
+            ['Ralphy', 'Encodes'], 'RARBG', 'Sicario', 'SM737', 'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP',
+            'TSPxL', 'VXT', 'Vyndros', 'Will1869', 'x0r', 'YIFY', 'Alcaide_Kira'
+        ]
         pass
 
     async def get_cat_id(self, category_name):
@@ -69,13 +73,17 @@ class ULCX():
         type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['resolution'], meta['type'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
+        should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
+        if should_skip:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: ulcx_no_language"
+            return
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         name, region_id, distributor_id = await self.edit_name(meta, region_id, distributor_id)
         if region_id == "SKIPPED" or distributor_id == "SKIPPED":
             console.print("Region or Distributor ID not found; skipping ULCX upload.")
             return
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -130,10 +138,11 @@ class ULCX():
                 data['internal'] = 1
         if meta.get('freeleech', 0) != 0:
             data['free'] = meta.get('freeleech', 0)
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
+        if meta['is_disc'] == "BDMV":
+            if region_id != 0:
+                data['region_id'] = region_id
+            if distributor_id != 0:
+                data['distributor_id'] = distributor_id
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
@@ -147,9 +156,10 @@ class ULCX():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://upload.cx/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -157,18 +167,23 @@ class ULCX():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta, region_id, distributor_id):
         common = COMMON(config=self.config)
         ulcx_name = meta['name']
-        if meta['category'] == 'TV':
-            ulcx_name = ulcx_name.replace(f"{meta['title']} {meta['year']}", f"{meta['title']}", 1)
-        else:
-            ulcx_name = ulcx_name
+        imdb_name = meta.get('imdb_info', {}).get('title', "")
+        imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        year = str(meta.get('year', ""))
+        ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
+        if not meta.get('category') == "TV":
+            ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
+        if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":
+            ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
         if meta.get('is_disc') == "BDMV":
             if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
                     region_id = await common.unit3d_region_ids(region_name)
                     if not meta.get('edition', ""):
@@ -178,17 +193,11 @@ class ULCX():
                 else:
                     region_id = "SKIPPED"
             if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     distributor_name = cli_ui.ask_string("ULCX: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
                     distributor_id = await common.unit3d_distributor_ids(distributor_name)
                 else:
                     distributor_id = "SKIPPED"
-
-        if meta.get('webdv', False):
-            if meta.get('repack', "") != "":
-                ulcx_name = ulcx_name.replace(f"{meta['repack']} {meta['resolution']}", f"HYBRID {meta['repack']} {meta['resolution']}", 1)
-            else:
-                ulcx_name = ulcx_name.replace(f"{meta['resolution']}", f"HYBRID {meta['resolution']}", 1)
 
         return ulcx_name, region_id, distributor_id
 
@@ -201,8 +210,8 @@ class ULCX():
 
     async def search_existing(self, meta, disctype):
         if 'concert' in meta['keywords']:
-            console.print('[bold red]Concerts not allowed at ULCX.')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Concerts not allowed at ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -212,8 +221,8 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
-            console.print('[bold red]This content might not fit HEVC rules for ULCX.')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]This content might not fit HEVC rules for ULCX.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -223,15 +232,25 @@ class ULCX():
                 meta['skipping'] = "ULCX"
                 return
         if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
-            console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
+            if not meta['unattended']:
+                console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
             meta['skipping'] = "ULCX"
             return
+        if meta['bloated'] is True:
+            console.print("[bold red]Non-English dub not allowed at ULCX[/bold red]")
+            meta['skipping'] = "ULCX"
+            return []
 
-        tracker = self.tracker
-        await check_for_english(meta, tracker)
+        if not meta['is_disc'] == "BDMV":
+            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+            if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
+                if not meta['unattended']:
+                    console.print('[bold red]ULCX requires at least one English audio or subtitle track.')
+                meta['skipping'] = "ULCX"
+                return
 
         dupes = []
-        console.print("[yellow]Searching for existing torrents on ULCX...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

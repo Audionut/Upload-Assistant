@@ -1,3 +1,507 @@
+__version__ = "v5.3.3"
+
+"""
+Release Notes for version v5.3.3 (2025-08-14):
+
+# 
+# ## RELEASE NOTES
+#  - New module added requiring update via requirements.txt. See README for instructions.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * use all of result when specific is NoneType by @Audionut in 15faaad
+# * don't print guessit error in imdb by @Audionut in 3b21998
+# * add support for multiple announce links (#691) by @wastaken7 in 4a623d7
+# * Added support for PHD (#689) by @wastaken7 in 1170f46
+# * pass meta to romaji by @Audionut in 6594f2c
+# * DC - API update (#695) by @wastaken7 in 14380f2
+# * remove trackers found in client (#683) by @Audionut in 3207fd3
+# * Add service Chorki (#690) by @razinares in fa16ebf
+# * fix docker mediainfo install (#699) by @Audionut in aa84c07
+# * Option - send upload urls to discord (#694) by @Audionut in 29fbcf5
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.2...v5.3.3
+"""
+
+
+"""
+Release Notes for version v5.3.2 (2025-08-11):
+
+# ## What's Changed
+# 
+# * AR - catch multiple dots in name by @Audionut in 5d5164b
+# * correct meta object before inputting data by @Audionut in 166a1a5
+# * guessit fallback by @Audionut in eccef19
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.1...v5.3.2
+"""
+
+
+"""
+Release Notes for version v5.3.1 (2025-08-10):
+
+# ## What's Changed
+# 
+# * TVDB series name not nonetype by @Audionut in 1def355
+# * remove compatibility tracks from dupe/dubbed checking by @Audionut in 48e922e
+# * fix onlyID (#677) by @Audionut in 29b8caf
+# * BT & BJS - fix language, add user input (#678) by @wastaken7 in 51d89c5
+# * fix: update SP category logic (#679) by @groggy9788 in 9ed3b2d
+# * update mkbrr and add threading control (#680) by @Audionut in 316afe1
+# * add tv support for emby (#681) by @Audionut in 0de649b
+# * add service XUMO by @Audionut in 633f151
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.0...v5.3.1
+"""
+
+
+"""
+Release Notes for version v5.3.0 (2025-08-08):
+
+# 
+# ## NOTES
+#  - From the previous release, screenshots in description were modified. Check the options in the example-config to handle to taste, particularly https://github.com/Audionut/Upload-Assistant/blob/f45e4dd87472ab31b79569f97e3bea62e27940e0/data/example-config.py#L70
+# 
+# 
+# ## RELEASE NOTES
+#  - UA will no longer, 'just pick the top result suggested by TMDb'.
+#  - Instead, title parsing has been significantly improved. Now UA will use a weight based system that relies on the title name, AKA name  and year .
+#  - Old scene releases such as  will easily defeat the title parsing, however these releases will get an IMDB ID from srrdb, negating this issue. Poorly named P2P releases are exactly that.
+#  - Unfortunately, not only are there many, many releases that have exactly matching names, and release years, TMDb's own sorting algorithm doesn't perfectly return the correct result, as the first result, always.
+#  - This means that a prompt is required. UA will display a shortened list of results for you to select, an allows manual entry of the correct TMDb ID, such as /.
+#  - Given that UA would have just selected the first result previously, which could have been incorrect, some percentage of time, the net result should be a better overall user experience, since the wrong return previously required manual intervention in any event, and may have been missed previously, leading to lack luster results.
+#  - As always, feeding the correct ID's into UA always leads to a better experience. There are many options to accomplish this task automatically, and users should familiarize themselves with the options outlined in the example.config, and/or user-args.json
+#  - Overall SubsPlease handling should be greatly increased......if you have TVDB login details.
+# 
+#  ## NOTEWORTHY UPDATES
+#   - Two new trackers, BT and BJS have been added thanks to @wastaken7
+#   - PSS was removed as offline
+#   - The edit pathway, when correcting Information, should now correctly handle existing args thanks to @ppkhoa
+#   - Some additional context has been added regarding ffmpeg screen capture issues, particularly on seedboxes, also see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues
+#   - Additional trackers have been added for getting existing ids, but they are currently only available via auto torrent searching
+#   - Getting data from trackers now has a cool off period. This should not be noticed under normal circumstances. PTP has a 60 second cool off period, which was chosen to minimize interference with other tools.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * update install/update instructions by @Audionut in 6793709
+# * TMDB retry (#646) by @Audionut in 84554d8
+# * fix missing tvdb credential checks by @Audionut in 28b0561
+# * cleanup ptp description/images handling by @Audionut in 271fc5f
+# * fix bad copy/paste by @Audionut in d075a11
+# * set the ptp_imagelist by @Audionut in 3905248
+# * add option to select specific new files for queue (#648) by @Audionut in 8de31e3
+# * TMDB retry, set object by @Audionut in 12436ff
+# * robust framerate by @Audionut in 955be6d
+# * add clarity of max workers issues on seedboxes by @Audionut in d38f265
+# * add linux ffmpeg check by @Audionut in 89bf550
+# * ffmpeg - point to wiki by @Audionut in 6d6246b
+# * generic max workers error print by @Audionut in 71d00c0
+# * handle specific ffmpeg complex error by @Audionut in 6e104ea
+# * frame overlay print behind debug by @Audionut in 72804de
+# * Log_file - save debug logs (#653) by @Audionut in 482dce5
+# * SPD - fix imdb in search existing (#656) by @Audionut in a640da6
+# * Skip torrents for AL if they don't have a MAL ID (#651) by @PythonCoderAS in 045bb71
+# * overrides - import at top by @Audionut in bb662e2
+# * ignore mkbrr binaries by @Audionut in 37f3d1c
+# * Don't discard original args, override them (#660) by @Khoa Pham in 9554f21
+# * remove PSS (#663) by @Audionut in 31a6c57
+# * ULCX - remove erroneous space in name by @Audionut in 5bb5806
+# * fix subplease service check by @Audionut in 9fa53ba
+# * fix tmdb secondary title search by @Audionut in bf77018
+# * imdb - get more crew info (#665) by @wastaken7 in 208f65c
+# * Added support for BJS (#649) by @wastaken7 in 61fb607
+# * BJS - add internal flag (#668) by @wastaken7 in 3cb93f5
+# * BT - refactor (#669) by @wastaken7 in d1c6d83
+# * BJS - safe string handling of description file by @Audionut in 7c1ef78
+# * BT - safe string handling of description file by @Audionut in 67b1fce
+# * rTorrent debugging by @Audionut in fb31951
+# * Update release notes handling (#671) by @Audionut in f45e4dd
+# * Fix manual tracker mode (#673) by @Audionut in fdf3b54
+# * BT and BJS fixes (#672) by @wastaken7 in c478149
+# * fix: python compatibility in BJS (#674) by @wastaken7 in 9535259
+# * Add arg, skip-dupe-asking (#675) by @Audionut in 7844ce6
+# * BHD - fix tracker found match by @Audionut in 4a82aed
+# * TL - fix description uploading in api mode by @Audionut in d36002e
+# * ffmpeg - only first video streams by @Audionut in 85fc9ca
+# * Get language from track title (#676) by @Audionut in 013aed1
+# * TMDB/IMDB searching refactor and EMBY handling (#637) by @Audionut in f68625d
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.1...v5.3.0
+"""
+
+
+"""
+Release Notes for version v5.2.1 (2025-07-30):
+
+# ## What's Changed
+# 
+# * fix no_subs meta by @Audionut in 86f2bcf
+# * Robust id from mediainfo (#645) by @Audionut in 9c43584
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.0...v5.2.1
+"""
+
+
+"""
+Release Notes for version v5.2.0 (2025-07-29):
+
+# ## What's Changed
+# 
+# * hc subs language handling by @Audionut in 762eed8
+# * pack check also being cat by @Audionut in 9279b8e
+# * CBR - bdmv language check by @Audionut in de461fb
+# * set hc_language meta object by @Audionut in 0bd92d7
+# * LT Spanish catches by @Audionut in ac9dc35
+# * Revert LT Spanish catches by @Audionut in 51c64f2
+# * remove verbose print by @Audionut in fc3d1b8
+# * LT.py SUBS parser failed Spanish (AR) (#626) by @Hielito in 7b6292e
+# * clarify image size else print by @Audionut in a13211b
+# * fix tvmaze returning None ids by @Audionut in 0769997
+# * move tvdb search outside tv_pack by @Audionut in 6573337
+# * get_tracker_data.py - lower HUNO priority (#629) by @wastaken7 in 8156bc8
+# * ASC - type mapping and description fix (#628) by @wastaken7 in f0defc9
+# * debug status message by @Audionut in 26038d4
+# * OE - DS4K in name by @Audionut in 84e7517
+# * Update languages.py (#633) by @wastaken7 in ae963ab
+# * Add option to use entropy by @Audionut in dbba7f0
+# * queue update by @Audionut in 9b1775d
+# * don't add useless folders to queue by @Audionut in 63113d6
+# * ffmpeg only video stream by @Audionut in 049697a
+# * Merge branch 'queue-update' by @Audionut
+# * group check dvd by @Audionut in 7b68370
+# * Better matching of files against foldered torrents by @Audionut in 6af32a9
+# * Add linux option to use custom ffmpeg binary by @Audionut in 3baa389
+# * Give screenshots some spaces to breathe (#639) by @Khoa Pham in aba0bb6
+# * Merge branch 'ffmpeg' by @Audionut
+# * ASC - strengthen the description against NoneType errors (#638) by @wastaken7 in c2cdba6
+# * CBR - handle no_dual by @Audionut in 7133915
+# * CBR also remove the dual-audio by @Audionut in f62247f
+# * set dual-audio meta by @Audionut in afb8175
+# * mkbrr - only wanted binary by @Audionut in 57d9c5d
+# * correct call by @Audionut in d005b37
+# * Note about ffmpeg linux binary by @Audionut in f792c56
+# * TL - add http upload option (#627) by @wastaken7 in 5d27d27
+# * Merge branch 'auto-torrent-searching' by @Audionut
+# * clarify usage in arg by @Audionut in 639328e
+# * Merge branch 'entropy' by @Audionut
+# * Prioritize arg descriptions by @Audionut in c11c3a4
+# * fix id from mi by @Audionut in 694c331
+# * docker mkbrr binary by @Audionut in 9077df6
+# * correct filename by @Audionut in 6a6e8e8
+# * Merge branch 'mkbrr-binaries' by @Audionut
+# * Correct versioning in releases (#644) by @Audionut in a279a6a
+# * Improve metadata finding (#636) by @Audionut in 9e32eaa
+# * correct base_dir by @Audionut in 9bb68fd
+# * fix docker do not tag manual as latest by @Audionut in f373286
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.5.2...v5.2.0
+"""
+
+
+"""
+Changelog for version 5.1.5.2 (2025-07-19):
+
+## What's Changed
+* Update README to include supported trackers list by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/619
+* Get correct discord config in upload.py by @ppkhoa in https://github.com/Audionut/Upload-Assistant/pull/621
+* DC - Remove file extensions from upload filename before torrent upload by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/622
+* Fixed a DC edition check
+* Fixed a tracker status check
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.5.1...5.1.5.2
+"""
+
+__version__ = "5.1.5.1"
+
+"""
+Changelog for version 5.1.5.1 (2025-07-19):
+
+- Language bases fixes.
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.5...5.1.5.1
+"""
+
+__version__ = "5.1.5"
+
+"""
+Changelog for version 5.1.5 (2025-07-18):
+
+## What's Changed
+* Fix LT edit name by @Hielito2 in https://github.com/Audionut/Upload-Assistant/pull/595
+* HUNO encode checks by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/600
+* Update ULCX Banned Release Groups by @backstab5983 in https://github.com/Audionut/Upload-Assistant/pull/601
+* Fix filenames in Description when uploading TV [ ] by @Hielito2 in https://github.com/Audionut/Upload-Assistant/pull/603
+* Handles None imdb_id string by @jacobcxdev in https://github.com/Audionut/Upload-Assistant/pull/606
+* Fix variable reuse by @moontime-goose in https://github.com/Audionut/Upload-Assistant/pull/607
+* Add image restriction to DigitalCore by @PythonCoderAS in https://github.com/Audionut/Upload-Assistant/pull/609
+* Dp banned groups by @OrbitMPGH in https://github.com/Audionut/Upload-Assistant/pull/611
+* centralized language handling by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/604
+* Add randomness to image taking function and cleanup by @Hielito2 in https://github.com/Audionut/Upload-Assistant/pull/608
+* ASC - remove dependency on tracker API by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/610
+* BT - remove dependency on tracker API by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/612
+* Add LDU support by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/613
+* Other fixes here and there.
+
+## New Contributors
+* @jacobcxdev made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/606
+* @moontime-goose made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/607
+* @PythonCoderAS made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/609
+* @OrbitMPGH made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/611
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.4.1...5.1.5
+"""
+
+__version__ = "5.1.4.1"
+
+"""
+Changelog for version 5.1.4.1 (2025-07-11):
+
+* Fix: string year for replacement.
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.4...5.1.4.1
+"""
+
+__version__ = "5.1.4"
+
+"""
+Changelog for version 5.1.4 (2025-07-10):
+
+## What's Changed
+* DP - remove image host requirements by @jschavey in https://github.com/Audionut/Upload-Assistant/pull/593
+* Fixed torf torrent creation when a single file from folder
+* Fixed some year matching regex that was regressing title searching
+* Fixed torrent id searching from support sites
+* Updated ULCX banned groups and naming standards
+* Updated BLU to use name as per IMDb
+
+## New Contributors
+* @jschavey made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/593
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.3.1...5.1.4
+"""
+
+__version__ = "5.1.3.1"
+
+"""
+Changelog for version 5.1.3.1 (2025-07-08):
+
+* Fixed disc based torrent creation
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.3...5.1.3.1
+"""
+
+__version__ = "5.1.3"
+
+"""
+Changelog for version 5.1.3 (2025-07-08):
+
+* Fixed en checking in audio
+* Fixed torrent links
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.2.4...5.1.3
+"""
+
+__version__ = "5.1.2.4"
+
+"""
+Changelog for version 5.1.2.4 (2025-07-08):
+
+## What's Changed
+* Update example-config.py by @backstab5983 in https://github.com/Audionut/Upload-Assistant/pull/589
+* Correct mediainfo validation
+
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.2.3...5.1.2.4
+"""
+
+__version__ = "5.1.2.3"
+
+"""
+Changelog for version 5.1.2.3 (2025-07-07):
+
+## What's Changed
+* region.py - add Pluto TV by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/583
+* Onlyimage by @edge20200 in https://github.com/Audionut/Upload-Assistant/pull/582
+* ASC - changes and fixes by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/581
+* Print cleaning and sanitation by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/580
+* HDS - description tweaks by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/585
+* (Update) ULCX banned groups by @AnabolicsAnonymous in https://github.com/Audionut/Upload-Assistant/pull/586
+* ASC - add custom layout config by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/584
+* Added support for DigitalCore by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/577
+* Fix upload to UTP by @IevgenSobko in https://github.com/Audionut/Upload-Assistant/pull/587
+* Fix torrent creation for foldered content to properly exclude bad files
+* Validate Unique ID in mediainfo
+* Cleaned up the UA presentation in console (see below)
+* Refactored the dual/dubbed/bloated audio handling to catch some edge cases
+* Fix linux dvd handling. maybe......
+* Updated auto torrent matching to catch more matches
+* Run an auto config updater for edge's image host change
+* Added a catch for incorrect tmdb id from BHD. Instead of allowing only an int for tmdb id, BHD changed to a string movie or tv/id arrangement, which means all manner of *plainly incorrect* ids can be returned from their API. 
+* Added language printing handling in descriptions using common.py, when language is not in mediainfo
+* Added non-en dub warning, and skips for BHD/ULCX
+* Changed -fl to be set at 100% by default
+* Better auto IMDb edition handling
+* Fixed an OE existing search bug that's been in the code since day dot
+* Other little tweaks
+
+## Notes
+Some large changes to the UA feedback during processing. Much more streamlined.
+Two new config options:
+* print_tracker_messages: False, - controls whether to print site api/html feedback on upload.
+* print_tracker_links: True, - controls whether to print direct uploaded torrent links where possible.
+
+Even in debug mode, the console should now be sanitized of private details. There may be some edge cases, please report.
+
+## New Contributors
+* @IevgenSobko made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/587
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.1...5.1.2
+"""
+
+__version__ = "5.1.1"
+
+"""
+Changelog for version 5.1.1 (2025-06-28):
+
+## What's Changed
+* HDT - screens and description changes by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/575
+* HDS - load custom descriptions by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/576
+* fix DVD processing on linux by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/574
+* ASC - improve fallback data by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/578
+* is_scene - Fix crash when is_all_lowercase is not defined by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/579
+* fixed the test run prints in the readme
+* OTW - add resolution to name with DVD type sources
+* BHD - nfo file uploads
+* ULCX - fix search_year: aka - year in title when tv and condition met
+* PTP - move the youtube check so that it only asks when actually uploading
+
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.0...5.1.1
+"""
+
+__version__ = "5.1.0"
+
+"""
+Changelog for version 5.1.0 (2025-06-22):
+
+## What's Changed
+* Updated get category function by @b-igu in https://github.com/Audionut/Upload-Assistant/pull/536
+* Set default value for FrameRate by @minicoz in https://github.com/Audionut/Upload-Assistant/pull/555
+* Update LCD.py by @a1Thiago in https://github.com/Audionut/Upload-Assistant/pull/562
+* DP - Fix: Subtitle language check ignores English by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/561
+* refactor id handling by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/548
+* make discord bot work by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/551
+* Added support for HD-Space by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/568
+* Added support for BrasilTracker by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/569
+* Added support for ASC by @wastaken7 in https://github.com/Audionut/Upload-Assistant/pull/560
+* Properly restore  key to original value by @ppkhoa in https://github.com/Audionut/Upload-Assistant/pull/573
+* OTW - update naming for DVD and REMUX
+* Fixed an outlier is DVD source handling
+* Fixed the discord bot to only load when being used and skip when debug
+* Fixed existing image handling from PTP when not single files
+* Added feedback when trackers were being skipped because of language checks
+* Better dupe check handling for releases that only list DV when they're actually DV+HDR
+* Fixed manual tag handling when anime
+* Fixed only_id arg handling
+* Fixed an aka bug from the last release that could skip aka
+* Fixed double HC in HUNO name
+* Added language checking for CBR
+* Fixed only use tvdb if valid credentials
+
+## New Contributors
+* @minicoz made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/555
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.5.1...5.1.0
+"""
+
+__version__ = "5.0.5.1"
+
+"""
+Changelog for version 5.0.5.1 (2025-06-02):
+
+* Ensure proper category sets from sites
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.5...5.0.5.1
+"""
+
+__version__ = "5.0.5"
+
+"""
+Changelog for version 5.0.5 (2025-06-02):
+
+## What's Changed
+* CBR - Initial modq setup by @a1Thiago in https://github.com/Audionut/Upload-Assistant/pull/546
+* Remove 'pyrobase' requirement by @ambroisie in https://github.com/Audionut/Upload-Assistant/pull/547
+* DP - fixed to allow when en subs
+* fixed cat set from auto unit3d
+* updated AR naming to take either scene name or folder/file name.
+* changed the aka diff check to only allow (automated) aka when difference is greater than 70%
+* protect screenshots from ptp through bbcode shenanigans
+* added some filtering for automated imdb edition handling
+
+## New Contributors
+* @a1Thiago made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/546
+* @ambroisie made their first contribution in https://github.com/Audionut/Upload-Assistant/pull/547
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.4.2...5.0.5
+"""
+
+__version__ = "5.0.4.2"
+
+"""
+Changelog for version 5.0.4.2 (2025-05-30):
+
+* Fix the validation check when torrent_storage_dir
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.4.1...5.0.4.2
+"""
+
+__version__ = "5.0.4.1"
+
+"""
+Changelog for version 5.0.4.1 (2025-05-30):
+
+* Fixed an issue from the last release that broke existing torrent validation in qbittorent
+* DP - added modq option
+* Better handling of REPACK detection
+* Console cleaning
+* Add Hybrid to filename detection 
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.4...5.0.4.1
+"""
+
+__version__ = "5.0.4"
+
+"""
+Changelog for version 5.0.4 (2025-05-28):
+
+## What's Changed
+* Add additional arr instance support by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/544
+* fixed anon arg
+* fixed tvdb season/episode naming at HUNO
+* fixed python title handling for edition and added some bad editions to skip
+* fixed blank BHD descriptions also skipping images
+* HDT - added quick skip for non-supported resolutions
+* more tag regex shenanigans
+* PTT - use only Polish name when original language is Polish (no aka)
+* arr handling fixes
+* PTP - if only_id, then skip if imdb_id != 0
+* reduced is_scene to one api all
+
+
+**Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.3.3...5.0.4
+"""
+
 __version__ = "5.0.3.3"
 
 """

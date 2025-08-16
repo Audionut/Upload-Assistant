@@ -34,7 +34,7 @@ class R4E():
         type_id = await self.get_type_id(meta['resolution'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         name = await self.edit_name(meta)
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -90,13 +90,14 @@ class R4E():
             response = requests.post(url=url, files=files, data=data, headers=headers)
             try:
 
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception:
                 console.print("It may have uploaded, go check")
                 return
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def edit_name(self, meta):
@@ -147,7 +148,6 @@ class R4E():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on R4E...")
         url = "https://racing4everyone.eu/api/torrents/filter"
         params = {
             'api_token': self.config['TRACKERS']['R4E']['api_key'].strip(),

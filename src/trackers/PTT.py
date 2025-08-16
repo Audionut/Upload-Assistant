@@ -26,6 +26,7 @@ class PTT():
         self.source_flag = 'PTT'
         self.upload_url = 'https://polishtorrent.top/api/torrents/upload'
         self.search_url = 'https://polishtorrent.top/api/torrents/filter'
+        self.torrent_url = 'https://polishtorrent.top/torrents/'
         self.signature = "\n[center]Created by Audionut's Upload Assistant[/center]"
         self.banned_groups = ['ViP', 'BiRD', 'M@RTiNU$', 'inTGrity', 'CiNEMAET', 'MusicET', 'TeamET', 'R2D2']
         pass
@@ -64,6 +65,13 @@ class PTT():
         }.get(resolution, '10')
         return resolution_id
 
+    async def edit_name(self, meta):
+        ptt_name = meta['name']
+        if meta.get('original_language', '') == 'pl' and meta.get('imdb_info'):
+            ptt_name = ptt_name.replace(meta.get('aka', ''), '')
+            ptt_name = ptt_name.replace(meta['title'], meta['imdb_info']['aka'])
+        return ptt_name.strip()
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
@@ -73,7 +81,8 @@ class PTT():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if not self.config['TRACKERS'][self.tracker].get('anon', False):
+        ptt_name = await self.edit_name(meta)
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
             anon = 1
@@ -97,7 +106,7 @@ class PTT():
         if nfo_file:
             files['nfo'] = ("nfo_file.nfo", nfo_file, "text/plain")
         data = {
-            'name': meta['name'],
+            'name': ptt_name,
             'description': desc,
             'mediainfo': mi_dump,
             'bdinfo': bd_dump,
@@ -142,9 +151,10 @@ class PTT():
         if meta['debug'] is False:
             response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
-                console.print(response.json())
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
                 await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://polishtorrent.top/torrents/" + t_id)
             except Exception:
                 console.print("It may have uploaded, go check")
@@ -152,11 +162,11 @@ class PTT():
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        console.print("[yellow]Searching for existing torrents on PTT...")
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],

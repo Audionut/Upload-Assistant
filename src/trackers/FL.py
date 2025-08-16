@@ -170,6 +170,7 @@ class FL():
             if meta['debug']:
                 console.print(url)
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
@@ -181,6 +182,7 @@ class FL():
                     # Match url to verify successful upload
                     match = re.match(r".*?filelist\.io/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
                     if match:
+                        meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(session, id, torrent_path)
                     else:
@@ -261,8 +263,6 @@ class FL():
                     session.cookies.update(pickle.load(cf))
                 resp = session.get(url=url)
                 if meta['debug']:
-                    console.print('[cyan]Cookies:')
-                    console.print(session.cookies.get_dict())
                     console.print(resp.url)
                 if resp.text.find("Logout") != -1:
                     return True

@@ -40,16 +40,21 @@ async def get_season_episode(video, meta):
                         guess_year = guessit(video)['year']
                     except Exception:
                         guess_year = ""
-                    if guessit(video)["season"] == guess_year:
-                        if f"s{guessit(video)['season']}" in video.lower():
+                    try:
+                        if guessit(video)["season"] == guess_year:
+                            if f"s{guessit(video)['season']}" in video.lower():
+                                season_int = str(guessit(video)["season"])
+                                season = "S" + season_int.zfill(2)
+                            else:
+                                season_int = "1"
+                                season = "S01"
+                        else:
                             season_int = str(guessit(video)["season"])
                             season = "S" + season_int.zfill(2)
-                        else:
-                            season_int = "1"
-                            season = "S01"
-                    else:
-                        season_int = str(guessit(video)["season"])
-                        season = "S" + season_int.zfill(2)
+                    except Exception:
+                        console.print("[bold yellow]There was an error guessing the season number. Guessing S01. Use [bold green]--season #[/bold green] to correct if needed")
+                        season_int = "1"
+                        season = "S01"
 
             except Exception:
                 console.print_exception()
@@ -84,11 +89,9 @@ async def get_season_episode(video, meta):
             # if the mal id is set, then we've already run get_romaji in tmdb.py
             if meta.get('mal_id') == 0 and meta['category'] == "TV":
                 parsed = anitopy.parse(Path(video).name)
-                romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta['demographic'] = await get_romaji(parsed['anime_title'], meta.get('mal_id', 0))
+                romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta['demographic'] = await get_romaji(parsed['anime_title'], meta.get('mal_id', 0), meta)
                 if mal_id:
                     meta['mal_id'] = mal_id
-                if meta.get('mal_id') != 0:
-                    mal_id = meta.get('mal_id')
                 if meta.get('tmdb_id') == 0:
                     year = parsed.get('anime_year', str(seasonYear))
                     meta = await get_tmdb_id(guessit(parsed['anime_title'], {"excludes": ["country", "language"]})['title'], year, meta, meta['category'])
@@ -96,7 +99,7 @@ async def get_season_episode(video, meta):
             if meta.get('mal_id') != 0 and meta['category'] == "TV":
                 parsed = anitopy.parse(Path(video).name)
                 tag = parsed.get('release_group', "")
-                if tag != "":
+                if tag != "" and meta.get('tag') is None:
                     meta['tag'] = f"-{tag}"
                 if len(filelist) == 1:
                     try:
@@ -110,9 +113,33 @@ async def get_season_episode(video, meta):
                             episode_int = int(episodes)  # Convert to integer
                             episode = f"E{str(episode_int).zfill(2)}"
                     except Exception:
+                        episode_int = 1
                         episode = "E01"
-                        episode_int = 1  # Ensure it's an integer
-                        console.print('[bold yellow]There was an error guessing the episode number. Guessing E01. Use [bold green]--episode #[/bold green] to correct if needed')
+
+                        if meta.get('uuid'):
+                            # Look for episode patterns in uuid
+                            episode_patterns = [
+                                r'[Ee](\d+)[Ee](\d+)',
+                                r'[Ee](\d+)',
+                                r'[Ee]pisode[\s_]*(\d+)',
+                                r'[\s_\-](\d+)[\s_\-]',
+                                r'[\s_\-](\d+)$',
+                                r'^(\d+)[\s_\-]',
+                            ]
+
+                            for pattern in episode_patterns:
+                                match = re.search(pattern, meta['uuid'], re.IGNORECASE)
+                                if match:
+                                    try:
+                                        episode_int = int(match.group(1))
+                                        episode = f"E{str(episode_int).zfill(2)}"
+                                        break
+                                    except (ValueError, IndexError):
+                                        continue
+
+                        if episode_int == 1:  # Still using fallback
+                            console.print('[bold yellow]There was an error guessing the episode number. Guessing E01. Use [bold green]--episode #[/bold green] to correct if needed')
+
                         await asyncio.sleep(1.5)
                 else:
                     episode = ""

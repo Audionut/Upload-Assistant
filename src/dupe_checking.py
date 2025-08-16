@@ -1,5 +1,4 @@
 import re
-import cli_ui
 from src.console import console
 
 
@@ -137,7 +136,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             return True
 
         if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-            if len(dupes) > 1 and tag == "":
+            if len(each) > 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:
                 return False
@@ -147,7 +146,15 @@ async def filter_dupes(dupes, meta, tracker_name):
             if any(str(res) in each for res in [1080, 720, 2160]):
                 return False
 
+        if target_hdr and '1080p' in target_resolution and '2160p' in each:
+            await log_exclusion("No 1080p HDR when 4K exists", each)
+            return False
+
         if tracker_name in ["AITHER", "LST"] and is_dvd:
+            if len(each) >= 1 and tag == "":
+                return False
+            if tag and tag.strip() and tag.strip() in normalized:
+                return False
             return True
 
         if web_dl:
@@ -164,7 +171,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             if target_resolution and target_resolution not in each:
                 await log_exclusion(f"resolution '{target_resolution}' mismatch", each)
                 return True
-            if not await has_matching_hdr(file_hdr, target_hdr, meta):
+            if not await has_matching_hdr(file_hdr, target_hdr, meta, tracker=tracker_name):
                 await log_exclusion(f"HDR mismatch: Expected {target_hdr}, got {file_hdr}", each)
                 return True
 
@@ -196,7 +203,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                 return False
 
         if len(dupes) == 1 and meta.get('is_disc') != "BDMV":
-            if tracker_name in ["AITHER", "BHD", "HUNO", "OE", "ULCX", "RF"]:
+            if tracker_name in ["AITHER", "BHD", "HUNO", "OE", "ULCX"]:
                 if fileSize and "1080" in target_resolution and 'x264' in video_encode:
                     target_size = int(fileSize)
                     dupe_size = sized
@@ -208,6 +215,12 @@ async def filter_dupes(dupes, meta, tracker_name):
                         if size_difference >= 0.20:
                             await log_exclusion(f"Your file is significantly larger ({size_difference * 100:.2f}%)", each)
                             return True
+            if tracker_name == "RF":
+                if tag and tag.strip() and tag.strip() in normalized:
+                    return False
+                elif tag and tag.strip() and tag.strip() not in normalized:
+                    await log_exclusion(f"Tag '{tag}' not found in normalized name", each)
+                    return True
 
         if meta['debug']:
             console.log(f"[debug] Passed all checks: {each}")
@@ -217,7 +230,7 @@ async def filter_dupes(dupes, meta, tracker_name):
         if not await process_exclusion(each):
             new_dupes.append(each)
 
-    if new_dupes and not meta.get('unattended', False):
+    if new_dupes and not meta.get('unattended', False) and meta['debug']:
         console.print(f"[cyan]Final dupes on {tracker_name}: {new_dupes}")
 
     return new_dupes
@@ -284,23 +297,25 @@ async def refine_hdr_terms(hdr):
     return terms
 
 
-async def has_matching_hdr(file_hdr, target_hdr, meta):
+async def has_matching_hdr(file_hdr, target_hdr, meta, tracker=None):
     """
     Check if the HDR terms match or are compatible.
     """
-    def simplify_hdr(hdr_set):
+    def simplify_hdr(hdr_set, tracker=None):
         """Simplify HDR terms to just HDR and DV."""
         simplified = set()
         if any(h in hdr_set for h in {"HDR", "HDR10", "HDR10+"}):
             simplified.add("HDR")
         if "DV" in hdr_set or "DOVI" in hdr_set:
             simplified.add("DV")
-            if "framestor" in meta['tag'].lower():
+            if 'web' not in meta['type'].lower():
+                simplified.add("HDR")
+            if tracker == "ANT":
                 simplified.add("HDR")
         return simplified
 
-    file_hdr_simple = simplify_hdr(file_hdr)
-    target_hdr_simple = simplify_hdr(target_hdr)
+    file_hdr_simple = simplify_hdr(file_hdr, tracker)
+    target_hdr_simple = simplify_hdr(target_hdr, tracker)
 
     if file_hdr_simple == {"DV", "HDR"} or file_hdr_simple == {"HDR", "DV"}:
         file_hdr_simple = {"HDR"}
@@ -308,80 +323,3 @@ async def has_matching_hdr(file_hdr, target_hdr, meta):
             target_hdr_simple = {"HDR"}
 
     return file_hdr_simple == target_hdr_simple
-
-
-async def check_for_english(meta, tracker):
-    english_languages = ['english']
-    if meta['is_disc'] == "BDMV" and 'bdinfo' in meta:
-        async def has_english_stuff():
-            has_english_audio = False
-            if 'audio' in meta['bdinfo']:
-                for audio_track in meta['bdinfo']['audio']:
-                    if 'language' in audio_track:
-                        audio_lang = audio_track['language'].lower()
-                        if audio_lang in english_languages:
-                            has_english_audio = True
-                            return True
-
-            if not has_english_audio:
-                has_english_subtitle = False
-                if 'subtitles' in meta['bdinfo']:
-                    for subtitle in meta['bdinfo']['subtitles']:
-                        if subtitle.lower() in english_languages:
-                            has_english_subtitle = True
-                            return True
-
-                    if not has_english_subtitle:
-                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                            console.print(f'[bold red]No English audio or subtitles found in BDINFO required for {tracker}.')
-                            if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                return True
-                            else:
-                                return False
-                        return False
-                return False
-        if not await has_english_stuff():
-            meta['skipping'] = {tracker}
-            return
-
-    elif not meta['is_disc'] == "BDMV":
-        async def has_english(media_info_text=None):
-            if media_info_text:
-                audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                subtitle_section = re.findall(r'Text[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                has_english_audio = False
-                for language in audio_section:
-                    language = language.lower().strip()
-                    if language in english_languages:
-                        has_english_audio = True
-                        return True
-
-                if not has_english_audio:
-                    has_english_sub = False
-                    for language in subtitle_section:
-                        language = language.lower().strip()
-                        if language in english_languages:
-                            has_english_sub = True
-                            return True
-
-                    if not has_english_sub:
-                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
-                            console.print(f'[bold red]No English audio or subtitles found in MEDIAINFO required for {tracker}.')
-                            if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                return True
-                            else:
-                                return False
-                        return False
-
-        try:
-            media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-            with open(media_info_path, 'r', encoding='utf-8') as f:
-                media_info_text = f.read()
-
-            if not await has_english(media_info_text=media_info_text):
-                meta['skipping'] = {tracker}
-                return
-        except (FileNotFoundError, KeyError) as e:
-            print(f"Error processing MEDIAINFO.txt: {e}")
-            meta['skipping'] = {tracker}
-            return
