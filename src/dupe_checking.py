@@ -1,4 +1,5 @@
 import re
+import os
 from src.console import console
 
 
@@ -10,19 +11,21 @@ async def filter_dupes(dupes, meta, tracker_name):
     if meta['debug']:
         console.log(f"[cyan]Pre-filtered dupes from {tracker_name}")
         console.log(dupes)
-
+    meta['trumpable'] = False
     processed_dupes = []
     for d in dupes:
         if isinstance(d, str):
             # Case 1: Simple string (just name)
-            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0})
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'details_link': None})
         elif isinstance(d, dict):
             # Create a base entry with default values
             entry = {
                 'name': d.get('name', ''),
                 'size': d.get('size'),
                 'files': [],
-                'file_count': 0
+                'file_count': 0,
+                'trumpable': d.get('trumpable', False),
+                'details_link': d.get('details_link', None)
             }
 
             # Case 3: Dict with files and file_count
@@ -62,7 +65,6 @@ async def filter_dupes(dupes, meta, tracker_name):
         filenames = []
         if meta.get('filelist'):
             for file_path in meta.get('filelist', []):
-                import os
                 # Extract just the filename without the path
                 filename = os.path.basename(file_path)
                 filenames.append(filename)
@@ -95,7 +97,7 @@ async def filter_dupes(dupes, meta, tracker_name):
     async def process_exclusion(entry):
         """
         Determine if an entry should be excluded.
-        Returns True if the entry should be excluded, otherwise allowed as dupe.
+        Return True to immediately exclude entry as dupe, otherwise send as potential dupe.
         """
         each = entry.get('name', '')
         sized = entry.get('size')
@@ -128,6 +130,9 @@ async def filter_dupes(dupes, meta, tracker_name):
                     meta['filename_match'] = True
                     return False
 
+        if tracker_name == "AITHER" and entry.get('trumpable', False):
+            meta['trumpable'] = entry.get('details_link', None)
+
         if has_is_disc and each.lower().endswith(".m2ts"):
             return False
 
@@ -136,7 +141,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             return True
 
         if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-            if len(each) > 1 and tag == "":
+            if len(each) >= 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:
                 return False
@@ -231,7 +236,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             new_dupes.append(each)
 
     if new_dupes and not meta.get('unattended', False) and meta['debug']:
-        console.print(f"[cyan]Final dupes on {tracker_name}: {new_dupes}")
+        console.log(f"[yellow]Filtered dupes on {tracker_name}: {new_dupes}")
 
     return new_dupes
 
@@ -306,7 +311,7 @@ async def has_matching_hdr(file_hdr, target_hdr, meta, tracker=None):
         simplified = set()
         if any(h in hdr_set for h in {"HDR", "HDR10", "HDR10+"}):
             simplified.add("HDR")
-        if "DV" in hdr_set or "DOVI" in hdr_set:
+        if ".DV." in hdr_set or " DV " in hdr_set or "DOVI" in hdr_set:
             simplified.add("DV")
             if 'web' not in meta['type'].lower():
                 simplified.add("HDR")
