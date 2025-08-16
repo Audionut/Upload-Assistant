@@ -338,7 +338,7 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
                 is_password=is_password,
                 existing_value=existing_defaults.get(key)
             )
-            
+
             if default_value is None and (value == "" or value == "None"):
                 config_defaults[key] = None
             else:
