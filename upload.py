@@ -254,6 +254,8 @@ async def process_meta(meta, base_dir, bot=None):
         console.print("[red]No trackers remain after removal. Exiting.[/red]")
         sys.exit(1)
 
+    console.print(f"[green]Processing {meta['name']} for upload...[/green]")
+
     audio_prompted = False
     for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR", "ASC", "BT", "LDU", "BJS"]:
         if tracker in trackers:

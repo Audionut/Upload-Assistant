@@ -79,6 +79,7 @@ config = {
         "tone_map": True,
 
         # Set true to skip ffmpeg check, useful if you know your ffmpeg is compatible with libplacebo
+        # Else, when tonemapping is enabled (and used), UA will run a quick check before to decide
         "ffmpeg_is_good": False,
 
         # Tonemap screenshots with the following settings (doesn't apply when using libplacebo)

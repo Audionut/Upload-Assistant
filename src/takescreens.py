@@ -1277,7 +1277,7 @@ async def capture_screenshot(args):
             if hdr_tonemap:
                 if meta.get('libplacebo', False):
                     # libplacebo
-                    filter_parts.append(f"{input_label}libplacebo=tonemapping=auto:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[out]")
+                    filter_parts.append(f"{input_label}libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[out]")
                 else:
                     filter_parts.append(f"{input_label}zscale=linear:tonemap={algorithm}:desat={desat}[out]")
                 output_map = "[out]"
