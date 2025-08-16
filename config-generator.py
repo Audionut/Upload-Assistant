@@ -332,12 +332,17 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
                     skip_settings.update(linked_group["settings"])
         else:
             is_password = key in ["api_key", "passkey", "rss_key", "tvdb_token", "tmdb_api", "tvdb_api", "btn_api"] or "password" in key.lower() or key.endswith("_key") or key.endswith("_api") or key.endswith("_url")
-            config_defaults[key] = get_user_input(
+            value = get_user_input(
                 f"Setting '{key}'",
                 default=str(default_value),
                 is_password=is_password,
                 existing_value=existing_defaults.get(key)
             )
+
+            if default_value is None and (value == "" or value == "None"):
+                config_defaults[key] = None
+            else:
+                config_defaults[key] = value
 
             if key in linked_settings:
                 linked_group = linked_settings[key]
@@ -374,7 +379,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
     # Get existing image hosts if available
     existing_hosts = []
     for i in range(1, 11):
-        key = f"image_host_{i}"
+        key = f"img_host_{i}"
         if key in existing_defaults and existing_defaults[key]:
             existing_hosts.append(existing_defaults[key].strip().lower())
 
@@ -404,7 +409,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
 
             if host_input in img_host_api_map:
                 valid_host = True
-                host_key = f"image_host_{i}"
+                host_key = f"img_host_{i}"
                 config_defaults[host_key] = host_input
 
                 # Configure API key(s) for this host, if needed
@@ -823,6 +828,9 @@ def generate_config_file(config_data, existing_path=None):
                 elif isinstance(value, bool):
                     # Ensure booleans are capitalized
                     file.write(f"{str(value).capitalize()},\n")
+                elif isinstance(value, type(None)):
+                    # Handle None values
+                    file.write("None,\n")
                 else:
                     # Other values with trailing comma
                     file.write(f"{json.dumps(value, ensure_ascii=False)},\n")

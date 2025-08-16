@@ -38,6 +38,10 @@ async def get_btn_torrents(btn_api, btn_id, meta):
         print(f"[ERROR] Failed to fetch BTN data: {e}")
         return meta
 
+    if not data or not isinstance(data, dict):
+        print("[ERROR] BTN API response is empty or invalid.")
+        return meta
+
     if "result" in data and "torrents" in data["result"]:
         torrents = data["result"]["torrents"]
         first_torrent = next(iter(torrents.values()), None)

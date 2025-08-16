@@ -224,6 +224,11 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                 }}
             }}
             }}
+            countriesOfOrigin {{
+                countries {{
+                    text
+                    }}
+                }}
             }}
         }}
         """
@@ -247,7 +252,15 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
     imdb_info['imdbID'] = imdbID
     imdb_info['title'] = await safe_get(title_data, ['titleText', 'text'])
-    imdb_info['country'] = await safe_get(title_data, ['titleText', 'country', 'text'])
+    countries_list = await safe_get(title_data, ['countriesOfOrigin', 'countries'], [])
+    if isinstance(countries_list, list) and countries_list:
+        # First country for 'country'
+        imdb_info['country'] = countries_list[0].get('text', '')
+        # All countries joined for 'country_list'
+        imdb_info['country_list'] = ', '.join([c.get('text', '') for c in countries_list if isinstance(c, dict) and 'text' in c])
+    else:
+        imdb_info['country'] = ''
+        imdb_info['country_list'] = ''
     imdb_info['year'] = await safe_get(title_data, ['releaseYear', 'year'])
     imdb_info['end_year'] = await safe_get(title_data, ['releaseYear', 'endYear'])
     original_title = await safe_get(title_data, ['originalTitleText', 'text'], '')

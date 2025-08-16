@@ -366,3 +366,22 @@ def validate_mediainfo(base_dir, folder_id, path, filelist, debug):
             console.print("[yellow]Unique ID not found in General section.[/yellow]")
 
     return bool(unique_id)
+
+
+async def get_conformance_error(meta):
+    if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
+        general_track = next((track for track in meta['mediainfo']['media']['track']
+                              if track.get('@type') == 'General'), None)
+        if general_track and general_track.get('extra', {}).get('ConformanceErrors', {}):
+            try:
+                return True
+            except ValueError:
+                if meta['debug']:
+                    console.print(f"[red]Unexpected value: {general_track['extra']['ConformanceErrors']}[/red]")
+                return True
+        else:
+            if meta['debug']:
+                console.print("[green]No Conformance errors found in MediaInfo General track[/green]")
+            return False
+    else:
+        return False

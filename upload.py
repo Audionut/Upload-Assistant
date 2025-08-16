@@ -243,13 +243,16 @@ async def process_meta(meta, base_dir, bot=None):
         return
 
     if 'remove_trackers' in meta and meta['remove_trackers']:
+        removed = []
         for tracker in meta['remove_trackers']:
-            if meta['debug']:
-                console.print(f"[yellow]Removing tracker: {tracker}[/yellow]")
             if tracker in meta['trackers']:
                 meta['trackers'].remove(tracker)
-
-    console.print(f"[green]Processing {meta['name']} for upload...[/green]")
+                removed.append(tracker)
+        if removed:
+            console.print(f"[yellow]Removing trackers already in your client: {', '.join(removed)}[/yellow]")
+    if not meta['trackers']:
+        console.print("[red]No trackers remain after removal. Exiting.[/red]")
+        sys.exit(1)
 
     audio_prompted = False
     for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR", "ASC", "BT", "LDU", "BJS"]:

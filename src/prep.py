@@ -6,7 +6,7 @@ from src.tvmaze import search_tvmaze
 from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
 from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
 from src.region import get_region, get_distributor, get_service
-from src.exportmi import exportInfo, mi_resolution, validate_mediainfo
+from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
 from src.getseasonep import get_season_episode
 from src.get_tracker_data import get_tracker_data, ping_unit3d
 from src.bluray_com import get_bluray_releases
@@ -29,6 +29,7 @@ try:
     import os
     import re
     import asyncio
+    import cli_ui
     from guessit import guessit
     import ntpath
     from pathlib import Path
@@ -318,6 +319,28 @@ class Prep():
             filename = filename.split('AKA')[0]
         meta['filename'] = filename
         meta['bdinfo'] = bdinfo
+
+        conform_issues = await get_conformance_error(meta)
+        if conform_issues:
+            upload = False
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+            if upload is False:
+                console.print("[red]Not uploading. Check if the file has finished downloading and can be played back properly (uncorrupted).")
+                tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
+                # Cleanup meta so we don't reuse it later
+                if os.path.exists(tmp_dir):
+                    try:
+                        for file in os.listdir(tmp_dir):
+                            file_path = os.path.join(tmp_dir, file)
+                        if os.path.isfile(file_path) and file.endswith((".txt", ".json")):
+                            os.remove(file_path)
+                            if meta['debug']:
+                                console.print(f"[yellow]Removed temporary metadata file: {file_path}[/yellow]")
+                    except Exception as e:
+                        console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
+                # Exit with error code for automation
+                sys.exit(1)
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
