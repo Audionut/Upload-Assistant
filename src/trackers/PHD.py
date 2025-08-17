@@ -93,25 +93,34 @@ class PHD(COMMON):
             except KeyError:
                 pass
 
-                english_speaking_countries_in_north_america = [
-                    "Anguilla", "Antigua and Barbuda", "Bahamas", "Barbados", "Belize", "Bermuda",
-                    "British Virgin Islands", "Canada", "Cayman Islands", "Curaçao", "Dominica",
-                    "Grenada", "Jamaica", "Montserrat", "Puerto Rico", "Saint Kitts and Nevis",
-                    "Saint Lucia", "Saint Vincent and the Grenadines", "Trinidad and Tobago",
-                    "Turks and Caicos Islands", "United States", "United States Virgin Islands"
-                ]
+        phd_allowed_countries = [
+            "Anguilla", "Antigua and Barbuda", "Bahamas", "Barbados", "Belize", "Bermuda",
+            "British Virgin Islands", "Canada", "Cayman Islands", "Curaçao", "Dominica",
+            "Grenada", "Jamaica", "Montserrat", "Puerto Rico", "Saint Kitts and Nevis",
+            "Saint Lucia", "Saint Vincent and the Grenadines", "Trinidad and Tobago",
+            "Turks and Caicos Islands", "United States", "United States Virgin Islands",
+            "United Kingdom", "Ireland", "Australia", "New Zealand"
+        ]
 
         origin_country = meta.get('imdb_info', {}).get('country')
 
-        target_countries = european_countries + south_american_countries + african_countries
-        if origin_country in target_countries:
+        # CinemaZ
+        cinemaz_countries = european_countries + south_american_countries + african_countries
+        if origin_country in cinemaz_countries:
             raise UploadException(warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.")
 
-        if origin_country in asian_countries:
+        # AvistaZ
+        elif origin_country in asian_countries:
             raise UploadException(
                 warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n"
                 "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead.\n"
                 f'Origin country for your upload: {origin_country}'
+            )
+
+        elif origin_country not in phd_allowed_countries:
+            raise UploadException(
+                warning + "Only upload content to PrivateHD from all major English speaking countries.\n"
+                "Including United States, Canada, UK, Ireland, Australia, and New Zealand."
             )
 
         # Release age
@@ -120,12 +129,6 @@ class PHD(COMMON):
         is_older_than_50_years = (current_year - year) >= 50 if year else False
         if is_older_than_50_years:
             raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
-
-        if origin_country not in english_speaking_countries_in_north_america:
-            raise UploadException(
-                warning + "Upload content to PrivateHD from all major English speaking countries.\n"
-                "Including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
-            )
 
         # Tags
         tag = meta.get('tag', '')
