@@ -103,11 +103,17 @@ class PHD(COMMON):
         ]
 
         origin_country = meta.get('imdb_info', {}).get('country')
+        year = meta.get('year')
+        current_year = datetime.now().year
+        is_older_than_50_years = (current_year - year) >= 50 if year else False
 
         # CinemaZ
         cinemaz_countries = european_countries + south_american_countries + african_countries
-        if origin_country in cinemaz_countries:
-            raise UploadException(warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.")
+        if origin_country in cinemaz_countries or is_older_than_50_years:
+            if is_older_than_50_years:
+                raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
+            else:
+                raise UploadException(warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.")
 
         # AvistaZ
         elif origin_country in asian_countries:
@@ -122,13 +128,6 @@ class PHD(COMMON):
                 warning + "Only upload content to PrivateHD from all major English speaking countries.\n"
                 "Including United States, Canada, UK, Ireland, Australia, and New Zealand."
             )
-
-        # Release age
-        year = meta.get('year')
-        current_year = datetime.now().year
-        is_older_than_50_years = (current_year - year) >= 50 if year else False
-        if is_older_than_50_years:
-            raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
 
         # Tags
         tag = meta.get('tag', '')
