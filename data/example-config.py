@@ -399,6 +399,14 @@ config = {
             # Send uploads to DP modq for staff approval
             "modq": False,
         },
+        "FF": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "username": "",
+            "password": "",
+            "announce_url": "https://tracker.funfile.org:2711/<PASSKEY>/announce",
+            "anon": False,
+        },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
