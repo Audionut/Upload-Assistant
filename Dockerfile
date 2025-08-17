@@ -16,17 +16,15 @@ RUN apt-get update && \
     mktorrent \
     rustc \
     mono-complete \
-    nano \
-    libmms0 && \
+    nano && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install mediainfo v25.07
-RUN wget https://mediaarea.net/download/binary/mediainfo/25.07/mediainfo_25.07-1_amd64.Debian_12.deb && \
-    wget https://mediaarea.net/download/binary/libmediainfo0/25.07/libmediainfo0v5_25.07-1_amd64.Debian_12.deb && \
-    wget https://mediaarea.net/download/binary/libzen0/0.4.41/libzen0v5_0.4.41-1_amd64.Debian_12.deb && \
-    apt-get install -y ./libzen0v5_0.4.41-1_amd64.Debian_12.deb ./libmediainfo0v5_25.07-1_amd64.Debian_12.deb ./mediainfo_25.07-1_amd64.Debian_12.deb && \
-    rm mediainfo_25.07-1_amd64.Debian_12.deb libmediainfo0v5_25.07-1_amd64.Debian_12.deb libzen0v5_0.4.41-1_amd64.Debian_12.deb && \
-    rm -rf /var/lib/apt/lists/*
+# Download and install mediainfo 23.04-1
+RUN wget https://mediaarea.net/download/binary/mediainfo/23.04/mediainfo_23.04-1_amd64.Debian_9.0.deb && \
+    wget https://mediaarea.net/download/binary/libmediainfo0/23.04/libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb && \
+    wget https://mediaarea.net/download/binary/libzen0/0.4.41/libzen0v5_0.4.41-1_amd64.Debian_9.0.deb && \
+    apt-get install -y ./libzen0v5_0.4.41-1_amd64.Debian_9.0.deb ./libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb ./mediainfo_23.04-1_amd64.Debian_9.0.deb && \
+    rm mediainfo_23.04-1_amd64.Debian_9.0.deb libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb libzen0v5_0.4.41-1_amd64.Debian_9.0.deb
 
 # Create working directory and tmp directory first
 RUN mkdir -p /Upload-Assistant/tmp && \
