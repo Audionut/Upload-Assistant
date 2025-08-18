@@ -705,28 +705,29 @@ async def tmdb_other_meta(
     tmdb_metadata = {}
 
     # Initialize variables that might not be set in all code paths
-    retrieved_aka = ""
-    year = None
-    title = None
-    youtube = None
-    overview = ""
-    genres = ""
-    genre_ids = ""
-    keywords = ""
-    creators = []
-    directors = []
-    cast = []
-    original_title = ""
-    runtime = 60
-    certification = ""
     backdrop = ""
-    logo_path = ""
-    poster_path = ""
-    tmdb_type = ""
-    mal_id = 0
+    cast = []
+    certification = ""
+    creators = []
     demographic = ""
+    directors = []
+    genre_ids = ""
+    genres = ""
     imdb_mismatch = False
+    keywords = ""
+    logo_path = ""
+    mal_id = 0
     mismatched_imdb_id = 0
+    origin_country = []
+    original_title = ""
+    overview = ""
+    poster_path = ""
+    retrieved_aka = ""
+    runtime = 60
+    title = None
+    tmdb_type = ""
+    year = None
+    youtube = None
 
     if tmdb_id == 0:
         try:
@@ -923,6 +924,8 @@ async def tmdb_other_meta(
                 console.print("[bold red]Failed to process keywords[/bold red]")
                 keywords = ""
 
+        origin_country = list(media_data.get("origin_country", []))
+
         # Process credits
         creators = []
         for each in media_data.get("created_by", []):
@@ -1002,6 +1005,7 @@ async def tmdb_other_meta(
         'year': year,
         'imdb_id': imdb_id,
         'tvdb_id': tvdb_id,
+        'origin_country': origin_country,
         'original_language': original_language,
         'original_title': original_title,
         'keywords': keywords,
