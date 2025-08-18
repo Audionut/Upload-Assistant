@@ -255,7 +255,7 @@ class TL():
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
+        await common.edit_torrent(meta, self.tracker, self.source_flag, self.announce_url_1)
         cat_id = await self.get_cat_id(common, meta)
 
         if self.api_upload:
