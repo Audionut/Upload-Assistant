@@ -427,7 +427,7 @@ class FF(COMMON):
             'MAX_FILE_SIZE': 10000000,
             'type': self.get_type_id(meta),
             'tags': '',
-            'descr': await self.generate_description(meta).encode("utf-8"),
+            'descr': await self.generate_description(meta),
         }
 
         if meta['category'] == 'MOVIE':
