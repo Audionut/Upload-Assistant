@@ -4,10 +4,10 @@ import os
 import platform
 import re
 from .COMMON import COMMON
-from bs4 import BeautifulSoup
 from src.console import console
 from src.exceptions import UploadException
 from pymediainfo import MediaInfo
+from src.languages import process_desc_language
 
 
 class FF(COMMON):
@@ -183,32 +183,284 @@ class FF(COMMON):
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
 
+        return desc
+
     def get_type_id(self, meta):
-        return
+        category = meta['category']
+
+        if category == 'MOVIE':
+            return '19'
+
+        elif category == 'TV':
+            return '7'
+
+        else:
+            raise UploadException("Unrecognized category.")
+
+    def media_info(self, meta):
+        vc = meta.get('video_codec', '')
+        if vc:
+            self.video_codec = vc.strip().lower()
+
+        ve = meta.get('video_encode', '')
+        if ve:
+            self.video_encode = ve.strip().lower()
+
+        vs = meta.get('source', '')
+        if vs:
+            self.video_source = vs.strip().lower()
+
+        vt = meta.get('type', '')
+        if vt:
+            self.video_type = vt.strip().lower()
 
     def movie_type(self, meta):
-        return
+        # Possible values: "XviD", "DVDR", "x264", "x265", "MP4", "VCD"
+
+        if self.video_source == 'dvd':
+            return "DVDR"
+
+        if self.media_info == 'hevc':
+            return "x265"
+        else:
+            return "x264"
+
+    def tv_type(self, meta):
+        # Possible values: "XviD", "HR-XviD", "x264-SD", "x264-HD", "x265-SD", "x265-HD", "Web-SD", "Web-HD", "DVDR", "MP4"
+
+        if self.video_source == 'dvd':
+            return "DVDR"
+
+        if self.video_source == 'web':
+            if meta.get('sd'):
+                return "Web-SD"
+            else:
+                return "Web-HD"
+
+        if self.media_info == 'hevc':
+            if meta.get('sd'):
+                return "x265-SD"
+            else:
+                return "x265-HD"
+        else:
+            if meta.get('sd'):
+                return "x264-SD"
+            else:
+                return "x264-HD"
+
+    def anime_type(self, meta):
+        # Possible values: "TVSeries", "TVSpecial", "Movie", "OVA", "ONA", "DVDSpecial"
+        if meta.get('tvmaze_episode_data', {}).get('season_number') == 0:
+            return "TVSpecial"
+
+        if self.video_source == 'dvd':
+            return "DVDSpecial"
+
+        category = meta['category']
+
+        if category == 'TV':
+            return "TVSeries"
+
+        if category == 'MOVIE':
+            return "Movie"
 
     def movie_source(self, meta):
-        return
+        # Possible values: "DVD", "DVDSCR", "Workprint", "TeleCine", "TeleSync", "CAM", "BluRay", "HD-DVD", "HDTV", "R5", "WebRIP"
+
+        mapping = {
+            "dvd": "DVD",
+            "dvdscr": "DVDSCR",
+            "workprint": "Workprint",
+            "telecine": "TeleCine",
+            "telesync": "TeleSync",
+            "cam": "CAM",
+            "bluray": "BluRay",
+            "blu-ray": "BluRay",
+            "hd-dvd": "HD-DVD",
+            "hdtv": "HDTV",
+            "r5": "R5",
+            "web": "WebRIP",
+            "webrip": "WebRIP"
+        }
+
+        src = (self.video_source or "").strip().lower()
+        return mapping.get(src, None)
+
+    def tv_source(self, meta):
+        # Possible values: "HDTV", "DSR", "PDTV", "TV", "DVD", "DvdScr", "BluRay", "WebRIP"
+
+        mapping = {
+            "hdtv": "HDTV",
+            "dsr": "DSR",
+            "pdtv": "PDTV",
+            "tv": "TV",
+            "dvd": "DVD",
+            "dvdscr": "DvdScr",
+            "bluray": "BluRay",
+            "blu-ray": "BluRay",
+            "web": "WebRIP",
+            "webrip": "WebRIP"
+        }
+
+        src = (self.video_source or "").strip().lower()
+        return mapping.get(src, None)
+
+    def anime_source(self):
+        # Possible values: "DVD", "BluRay", "Anime Series", "HDTV"
+
+        mapping = {
+            "hdtv": "HDTV",
+            "tv": "HDTV",
+            "dvd": "DVD",
+            "bluray": "BluRay",
+            "blu-ray": "BluRay",
+            "web": "Anime Series",
+            "webrip": "Anime Series"
+        }
+
+        src = (self.video_source or "").strip().lower()
+        return mapping.get(src, None)
+
+    def anime_v_dar(self, meta):
+        # Possible values: "16_9", "4_3"
+        if meta.get('is_disc') != "BDMV":
+            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            for track in tracks:
+                if track.get('@type') == "Video":
+                    dar_str = track.get('DisplayAspectRatio')
+                    if dar_str:
+                        try:
+                            dar = float(dar_str)
+                            return "16_9" if dar > 1.34 else "4_3"
+                        except (ValueError, TypeError):
+                            return "16_9"
+
+            return "16_9"
+        else:
+            return "16_9"
+
+    def anime_v_codec(codec, encode):
+        # Possible values: "x264", "h264", "XviD", "DivX", "WMV", "VC1"
+
+        if codec.media_info == 'vc-1':
+            return "VC1"
+
+        if encode.video_encode == 'h.264':
+            return "h264"
+        else:
+            return 'x264'
+
+    async def languages(self, meta):
+        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        lang_map = {
+            'english': 'en',
+            'japanese': 'jp',
+            'korean': 'kr',
+            'thai': 'th',
+            'chinese': 'zh',
+        }
+
+        anime_a_codec = []
+        anime_a_ch = []
+        anime_a_lang = []
+
+        anime_s_format = []
+        anime_s_type = []
+        anime_s_lang = []
+
+        audio_languages = meta.get('audio_languages', [])
+        if audio_languages:
+            audio_desc = meta.get('audio', '').lower()
+            found_codec = '0'
+            codec_options = {
+                'aac': 'aac', 'ac3': 'ac3', 'dd+': 'ac3', 'dolby digital': 'ac3', 'ogg': 'ogg', 'mp3': 'mp3',
+                'dts-es': 'dtses', 'dtses': 'dtses', 'dts': 'dts', 'flac': 'flac', 'pcm': 'pcm', 'wma': 'wma'
+            }
+            for key, value in codec_options.items():
+                if key in audio_desc:
+                    found_codec = value
+                    break
+
+            channels_desc = meta.get('channels', '')
+            channel_map = {
+                '2.0': '2',
+                '5.1': '5_1',
+                '7.1': '7_1'
+            }
+            found_channel = channel_map.get(channels_desc, '0')
+
+            for lang_str in audio_languages:
+                lang_code = lang_map.get(lang_str.lower(), '1')
+
+                anime_a_codec.append(found_codec)
+                anime_a_ch.append(found_channel)
+                anime_a_lang.append(lang_code)
+
+        subtitle_languages = meta.get('subtitle_languages', [])
+        if subtitle_languages:
+            subtitle_format = 'srt'
+            subtitle_type = 'sub'
+
+            for lang_str in subtitle_languages:
+                lang_code = lang_map.get(lang_str.lower(), '1')
+
+                anime_s_format.append(subtitle_format)
+                anime_s_type.append(subtitle_type)
+                anime_s_lang.append(lang_code)
+
+        return {
+            'anime_a_codec': anime_a_codec,
+            'anime_a_ch': anime_a_ch,
+            'anime_a_lang': anime_a_lang,
+            'anime_s_format': anime_s_format,
+            'anime_s_type': anime_s_type,
+            'anime_s_lang': anime_s_lang,
+        }
 
     async def gather_data(self, meta, disctype):
         await self.validate_credentials(meta)
+        self.media_info(meta)
 
-        data = {}
-
-        data.update({
+        data = {
             'MAX_FILE_SIZE': 10000000,
             'type': self.get_type_id(meta),
-            'movie_type': self.movie_type(meta),
-            'movie_source': self.movie_source(meta),
-            'movie_imdb': meta.get('imdb_info', {}).get('imdbID', ''),
-            'pack': 0,
             'tags': '',
             'descr': await self.generate_description(meta),
-            })
+        }
 
-        # File: torrent, poster,
+        if meta['category'] == 'MOVIE':
+            data.update({
+                'movie_type': self.movie_type(meta),
+                'movie_source': self.movie_source(meta),
+                'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                'pack': 0,
+                })
+
+        if meta['category'] == 'TV':
+            data.update({
+                'tv_type': self.tv_type(meta),
+                'tv_source': self.tv_source(meta),
+                'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                'pack': 1 if meta.get('tv_pack') else 0,
+                })
+
+        if meta.get('anime'):
+            data.update({
+                'anime_type': self.anime_type(meta),
+                'anime_source': self.anime_source(meta),
+                'anime_container': 'mkv',
+                'anime_v_res': meta.get('resolution'),
+                'anime_v_dar': self.anime_v_dar(meta),
+                'anime_v_codec': self.anime_v_codec(meta),
+                'anime_a_codec[]': self.languages(meta).get('anime_a_codec'),
+                'anime_a_ch[]': self.languages(meta).get('anime_a_ch'),
+                'anime_a_lang[]': self.languages(meta).get('anime_a_lang'),
+                'anime_s_format[]': self.languages(meta).get('anime_s_format'),
+                'anime_s_type[]': self.languages(meta).get('anime_s_type'),
+                'anime_s_lang[]': self.languages(meta).get('anime_s_lang'),
+                })
 
         return data
 
@@ -219,39 +471,47 @@ class FF(COMMON):
 
         if not meta.get('debug', False):
             torrent_id = ''
-            upload_url = f"{self.base_url}/upload.php"
+            upload_url = f"{self.base_url}/takeupload.php"
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            poster_url = meta.get('poster')
+
+            poster_file = None
+            if poster_url:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(poster_url)
+                    if response.status_code == 200:
+                        poster_ext = os.path.splitext(poster_url)[1] or ".jpg"
+                        poster_filename = f"{meta.get('name')}{poster_ext}"
+                        poster_file = (poster_filename, response.content, "image/jpeg")
 
             with open(torrent_path, 'rb') as torrent_file:
-                files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
+                files = {
+                    'file': (f"{meta.get('name')}.torrent", torrent_file, "application/x-bittorrent"),
+                }
+                if poster_file:
+                    files['poster'] = poster_file
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-                soup = BeautifulSoup(response.text, 'html.parser')
 
-                if 'Clique em baixar para entrar de' in response.text:
-                    page_element = soup.select_one('div#wrapper div#content p font')
+                response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Upload.html"
+                with open(response_save_path, "w", encoding="utf-8") as f:
+                    f.write(response.text)
 
+                if response.status_code == 302:
                     # Find the torrent id
-                    match = re.search(r'action=download&id=(\d+)', response.text)
+                    match = re.search(r'details\.php\?id=(\d+)', response.text)
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 else:
-                    page_element = soup.select_one("div.thin p[style*='color: red']")
-
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
-                    console.print(f"Falha no upload, a resposta HTML foi salva em: {response_save_path}")
+                    console.print(f"Upload failed, HTML response was saved to: {response_save_path}")
                     meta['tracker_status'][self.tracker]['skipped'] = True
                     meta['tracker_status'][self.tracker]['upload'] = False
-
-                # Find the response text
-                page_message = ""
-                if page_element:
-                    page_message = page_element.get_text(strip=True)
-                    status_message = page_message
+                    status_message = 'Upload failed.'
 
             await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
