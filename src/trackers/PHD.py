@@ -71,6 +71,13 @@ class PHD(COMMON):
             meta['phd_rule'] = warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
             return False
 
+        year = meta.get('year')
+        current_year = datetime.now().year
+        is_older_than_50_years = (current_year - year) >= 50
+        if is_older_than_50_years:
+            meta['phd_rule'] = warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
+            return False
+
         # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
         africa = [
@@ -116,21 +123,13 @@ class PHD(COMMON):
 
         origin_countries_codes = meta.get("origin_country", [])
 
-        year = meta.get('year')
-        current_year = datetime.now().year
-        is_older_than_50_years = (current_year - year) >= 50 if year else False
-
         if any(code in phd_allowed_countries for code in origin_countries_codes):
             return True
 
         # CinemaZ
-        elif any(code in cinemaz_countries for code in origin_countries_codes) or is_older_than_50_years:
-            if is_older_than_50_years:
-                meta['phd_rule'] = warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
-                return False
-            else:
-                meta['phd_rule'] = warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
-                return False
+        elif any(code in cinemaz_countries for code in origin_countries_codes):
+            meta['phd_rule'] = warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
+            return False
 
         # AvistaZ
         elif any(code in asia for code in origin_countries_codes):
