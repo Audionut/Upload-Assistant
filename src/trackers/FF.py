@@ -183,7 +183,7 @@ class FF(COMMON):
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
 
-        return desc
+        return desc.encode("utf-8")
 
     def get_type_id(self, meta):
         category = meta['category']
@@ -427,7 +427,7 @@ class FF(COMMON):
             'MAX_FILE_SIZE': 10000000,
             'type': self.get_type_id(meta),
             'tags': '',
-            'descr': await self.generate_description(meta),
+            'descr': await self.generate_description(meta).encode("utf-8"),
         }
 
         if meta['category'] == 'MOVIE':
@@ -474,6 +474,8 @@ class FF(COMMON):
             upload_url = f"{self.base_url}/takeupload.php"
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
             poster_url = meta.get('poster')
+            is_scene = bool(meta.get('scene_name'))
+            torrent_name = meta['scene_name'] if is_scene else meta['name']
 
             poster_file = None
             if poster_url:
@@ -486,16 +488,12 @@ class FF(COMMON):
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {
-                    'file': (f"{meta.get('name')}.torrent", torrent_file, "application/x-bittorrent"),
+                    'file': (f"{torrent_name}.torrent", torrent_file, "application/x-bittorrent"),
                 }
                 if poster_file:
                     files['poster'] = poster_file
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-
-                response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Upload.html"
-                with open(response_save_path, "w", encoding="utf-8") as f:
-                    f.write(response.text)
 
                 if response.status_code == 302:
                     # Find the torrent id
