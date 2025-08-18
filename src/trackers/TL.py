@@ -285,6 +285,14 @@ class TL():
                 )
                 if not response.text.isnumeric():
                     meta['tracker_status'][self.tracker]['status_message'] = response.text
+
+                announce_list = [
+                    self.announce_url_1,
+                    self.announce_url_2
+                ]
+                common = COMMON(config=self.config)
+                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_list, comment='')
+
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
