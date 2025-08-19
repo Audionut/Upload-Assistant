@@ -7,6 +7,7 @@ import platform
 import re
 import unicodedata
 from .COMMON import COMMON
+from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
 from src.console import console
 from src.exceptions import UploadException
@@ -98,6 +99,66 @@ class FF(COMMON):
             return items
 
         return []
+
+    async def get_requests(self, meta):
+        if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False:
+            return False
+        else:
+            category = self.get_type_id(meta)
+
+            query_1 = meta['title']
+            query_2 = meta['title'].replace(' ', '.')
+
+            print(f'{self.tracker}: Searching for requests using terms "{query_1}" and "{query_2}"...')
+
+            search_url_1 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_1}"
+            search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
+
+            try:
+                response_1, response_2 = await asyncio.gather(
+                    self.session.get(search_url_1),
+                    self.session.get(search_url_2)
+                )
+
+                response_1.raise_for_status()
+                response_2.raise_for_status()
+
+                response_results_text = response_1.text + response_2.text
+                soup = BeautifulSoup(response_results_text, "html.parser")
+                request_rows = soup.select("td.mf_content table tr")
+
+                results = []
+                for row in request_rows:
+                    name_element = row.select_one("td.row3 nobr a b")
+                    if not name_element:
+                        continue
+
+                    name = name_element.text.strip()
+                    link_element = name_element.find_parent("a")
+                    link = link_element["href"] if link_element else None
+
+                    all_tds = row.find_all("td", class_="row3")
+                    reward = all_tds[2].text.strip() if len(all_tds) > 2 else None
+
+                    results.append({
+                        "Name": name,
+                        "Link": link,
+                        "Reward": reward
+                    })
+
+                if results:
+                    message = f"\n{self.tracker}: [bold yellow]Your upload may fulfill the following requests, check it out:[/bold yellow]\n\n"
+                    for r in results:
+                        message += f"[bold green]Name:[/bold green] {r['Name']}\n"
+                        message += f"[bold green]Reward:[/bold green] {r['Reward']}\n"
+                        message += f"[bold green]Link:[/bold green] {r['Link']}\n\n"
+                    console.print(message)
+
+                return results
+
+            except Exception as e:
+                print(f"An error occurred while fetching requests: {e}")
+                return []
 
     async def generate_description(self, meta):
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
@@ -538,8 +599,9 @@ class FF(COMMON):
 
     async def upload(self, meta, disctype):
         await self.validate_credentials(meta)
-        data = await self.fetch_data(meta, disctype)
         await self.edit_torrent(meta, self.tracker, self.source_flag)
+        data = await self.fetch_data(meta, disctype)
+        requests = await self.get_requests(meta)
         status_message = ''
 
         if not meta.get('debug', False):
@@ -565,6 +627,9 @@ class FF(COMMON):
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
+                    if requests:
+                        status_message += ' Your upload may fulfill existing requests, check prior console logs.'
 
                 else:
                     status_message = 'The upload appears to have failed. It may have uploaded, go check.'

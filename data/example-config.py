@@ -405,7 +405,8 @@ config = {
             "username": "",
             "password": "",
             "announce_url": "https://tracker.funfile.org:2711/<PASSKEY>/announce",
-            "anon": False,
+            # Set to True if you want to check whether your upload fulfills corresponding requests. This may slightly slow down the upload process.
+            "check_requests": False,
         },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
