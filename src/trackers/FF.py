@@ -150,7 +150,7 @@ class FF(COMMON):
                     })
 
                 if results:
-                    message = f"\n{self.tracker}: [bold yellow]Your upload may fulfill the following requests, check it out:[/bold yellow]\n\n"
+                    message = f"\n{self.tracker}: [bold yellow]Your upload may fulfill the following request(s), check it out:[/bold yellow]\n\n"
                     for r in results:
                         message += f"[bold green]Name:[/bold green] {r['Name']}\n"
                         message += f"[bold green]Reward:[/bold green] {r['Reward']}\n"
