@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import httpx
 import os
 import platform
 import re
+import unicodedata
 from .COMMON import COMMON
+from pymediainfo import MediaInfo
 from src.console import console
 from src.exceptions import UploadException
-from pymediainfo import MediaInfo
 from src.languages import process_desc_language
 
 
@@ -89,8 +91,6 @@ class FF(COMMON):
 
         search_url = f"{self.base_url}/suggest.php?q={query}"
         response = await self.session.get(search_url)
-        console.print(search_url)
-        console.print(response.text)
 
         if response.status_code == 200 and 'suggest.php' in str(response.url):
             items = [line.strip() for line in response.text.splitlines() if line.strip()]
@@ -186,6 +186,8 @@ class FF(COMMON):
         return desc.encode("utf-8")
 
     def get_type_id(self, meta):
+        if meta.get('anime'):
+            return '44'
         category = meta['category']
 
         if category == 'MOVIE':
@@ -197,7 +199,7 @@ class FF(COMMON):
         else:
             raise UploadException("Unrecognized category.")
 
-    def media_info(self, meta):
+    def file_information(self, meta):
         vc = meta.get('video_codec', '')
         if vc:
             self.video_codec = vc.strip().lower()
@@ -220,7 +222,7 @@ class FF(COMMON):
         if self.video_source == 'dvd':
             return "DVDR"
 
-        if self.media_info == 'hevc':
+        if self.video_codec == 'hevc':
             return "x265"
         else:
             return "x264"
@@ -237,7 +239,7 @@ class FF(COMMON):
             else:
                 return "Web-HD"
 
-        if self.media_info == 'hevc':
+        if self.video_codec == 'hevc':
             if meta.get('sd'):
                 return "x265-SD"
             else:
@@ -305,7 +307,7 @@ class FF(COMMON):
         src = (self.video_source or "").strip().lower()
         return mapping.get(src, None)
 
-    def anime_source(self):
+    def anime_source(self, meta):
         # Possible values: "DVD", "BluRay", "Anime Series", "HDTV"
 
         mapping = {
@@ -339,16 +341,27 @@ class FF(COMMON):
         else:
             return "16_9"
 
-    def anime_v_codec(codec, encode):
+    def anime_v_codec(self, meta):
         # Possible values: "x264", "h264", "XviD", "DivX", "WMV", "VC1"
 
-        if codec.media_info == 'vc-1':
+        if self.video_codec == 'vc-1':
             return "VC1"
 
-        if encode.video_encode == 'h.264':
+        if self.video_encode == 'h.264':
             return "h264"
         else:
             return 'x264'
+
+    def edit_name(self, meta):
+        is_scene = bool(meta.get('scene_name'))
+        torrent_name = meta['scene_name'] if is_scene else meta['name']
+
+        name = torrent_name.replace(':', '-')
+        name = unicodedata.normalize("NFKD", name)
+        name = name.encode("ascii", "ignore").decode("ascii")
+        name = re.sub(r'[\\/*?"<>|]', '', name)
+
+        return name
 
     async def languages(self, meta):
         if not meta.get('subtitle_languages') or meta.get('audio_languages'):
@@ -419,9 +432,24 @@ class FF(COMMON):
             'anime_s_lang': anime_s_lang,
         }
 
-    async def gather_data(self, meta, disctype):
+    async def get_poster(self, meta):
+        poster_url = meta.get('poster')
+
+        poster_file = None
+        if poster_url:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(poster_url)
+                if response.status_code == 200:
+                    poster_ext = os.path.splitext(poster_url)[1] or ".jpg"
+                    poster_filename = f"{meta.get('name')}{poster_ext}"
+                    poster_file = (poster_filename, response.content, "image/jpeg")
+
+                    return poster_file
+
+    async def fetch_data(self, meta, disctype):
         await self.validate_credentials(meta)
-        self.media_info(meta)
+        languages = await self.languages(meta)
+        self.file_information(meta)
 
         data = {
             'MAX_FILE_SIZE': 10000000,
@@ -429,22 +457,6 @@ class FF(COMMON):
             'tags': '',
             'descr': await self.generate_description(meta),
         }
-
-        if meta['category'] == 'MOVIE':
-            data.update({
-                'movie_type': self.movie_type(meta),
-                'movie_source': self.movie_source(meta),
-                'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
-                'pack': 0,
-                })
-
-        if meta['category'] == 'TV':
-            data.update({
-                'tv_type': self.tv_type(meta),
-                'tv_source': self.tv_source(meta),
-                'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
-                'pack': 1 if meta.get('tv_pack') else 0,
-                })
 
         if meta.get('anime'):
             data.update({
@@ -454,18 +466,35 @@ class FF(COMMON):
                 'anime_v_res': meta.get('resolution'),
                 'anime_v_dar': self.anime_v_dar(meta),
                 'anime_v_codec': self.anime_v_codec(meta),
-                'anime_a_codec[]': self.languages(meta).get('anime_a_codec'),
-                'anime_a_ch[]': self.languages(meta).get('anime_a_ch'),
-                'anime_a_lang[]': self.languages(meta).get('anime_a_lang'),
-                'anime_s_format[]': self.languages(meta).get('anime_s_format'),
-                'anime_s_type[]': self.languages(meta).get('anime_s_type'),
-                'anime_s_lang[]': self.languages(meta).get('anime_s_lang'),
+                'anime_a_codec[]': ['0'] + languages.get('anime_a_codec'),
+                'anime_a_ch[]': ['0'] + languages.get('anime_a_ch'),
+                'anime_a_lang[]': ['0'] + languages.get('anime_a_lang'),
+                'anime_s_format[]': ['0'] + languages.get('anime_s_format'),
+                'anime_s_type[]': ['0'] + languages.get('anime_s_type'),
+                'anime_s_lang[]': ['0'] + languages.get('anime_s_lang'),
                 })
+
+        else:
+            if meta['category'] == 'MOVIE':
+                data.update({
+                    'movie_type': self.movie_type(meta),
+                    'movie_source': self.movie_source(meta),
+                    'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'pack': 0,
+                    })
+
+            if meta['category'] == 'TV':
+                data.update({
+                    'tv_type': self.tv_type(meta),
+                    'tv_source': self.tv_source(meta),
+                    'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'pack': 1 if meta.get('tv_pack') else 0,
+                    })
 
         return data
 
     async def upload(self, meta, disctype):
-        data = await self.gather_data(meta, disctype)
+        data = await self.fetch_data(meta, disctype)
         await self.edit_torrent(meta, self.tracker, self.source_flag)
         status_message = ''
 
@@ -473,29 +502,18 @@ class FF(COMMON):
             torrent_id = ''
             upload_url = f"{self.base_url}/takeupload.php"
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-            poster_url = meta.get('poster')
-            is_scene = bool(meta.get('scene_name'))
-            torrent_name = meta['scene_name'] if is_scene else meta['name']
-
-            poster_file = None
-            if poster_url:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(poster_url)
-                    if response.status_code == 200:
-                        poster_ext = os.path.splitext(poster_url)[1] or ".jpg"
-                        poster_filename = f"{meta.get('name')}{poster_ext}"
-                        poster_file = (poster_filename, response.content, "image/jpeg")
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {
-                    'file': (f"{torrent_name}.torrent", torrent_file, "application/x-bittorrent"),
+                    'file': (f"{self.edit_name(meta)}.torrent", torrent_file, "application/x-bittorrent"),
                 }
-                if poster_file:
-                    files['poster'] = poster_file
+
+                files['poster'] = await self.get_poster(meta)
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
 
                 if response.status_code == 302:
+                    status_message = 'Upload successful'
                     # Find the torrent id
                     match = re.search(r'details\.php\?id=(\d+)', response.text)
                     if match:
@@ -511,10 +529,11 @@ class FF(COMMON):
                     meta['tracker_status'][self.tracker]['upload'] = False
                     status_message = 'Upload failed.'
 
+            await asyncio.sleep(3)  # the tracker takes a while to register the hash
             await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
         else:
             console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+            status_message = 'Debug mode enabled, not uploading'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
