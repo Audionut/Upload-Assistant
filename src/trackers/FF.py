@@ -103,27 +103,32 @@ class FF(COMMON):
     async def get_requests(self, meta):
         if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False:
             return False
+
         else:
-            category = self.get_type_id(meta)
-
-            query_1 = meta['title']
-            query_2 = meta['title'].replace(' ', '.')
-
-            print(f'{self.tracker}: Searching for requests using terms "{query_1}" and "{query_2}"...')
-
-            search_url_1 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_1}"
-            search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
-
             try:
-                response_1, response_2 = await asyncio.gather(
-                    self.session.get(search_url_1),
-                    self.session.get(search_url_2)
-                )
+                category = self.get_type_id(meta)
 
-                response_1.raise_for_status()
-                response_2.raise_for_status()
+                query_1 = meta['title']
+                query_2 = meta['title'].replace(' ', '.')
 
-                response_results_text = response_1.text + response_2.text
+                search_url_1 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_1}"
+
+                if query_1 != query_2:
+                    print(f'{self.tracker}: Searching for requests using terms "{query_1}" and "{query_2}"...')
+                    search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
+                    responses = await asyncio.gather(
+                        self.session.get(search_url_1),
+                        self.session.get(search_url_2)
+                    )
+                    response_results_text = responses[0].text + responses[1].text
+                    responses[0].raise_for_status()
+                    responses[1].raise_for_status()
+                else:
+                    print(f'{self.tracker}: Searching for requests using terms "{query_1}"...')
+                    response = await self.session.get(search_url_1)
+                    response.raise_for_status()
+                    response_results_text = response.text
+
                 soup = BeautifulSoup(response_results_text, "html.parser")
                 request_rows = soup.select("td.mf_content table tr")
 
