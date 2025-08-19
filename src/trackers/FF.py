@@ -114,7 +114,6 @@ class FF(COMMON):
                 search_url_1 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_1}"
 
                 if query_1 != query_2:
-                    print(f'{self.tracker}: Searching for requests using terms "{query_1}" and "{query_2}"...')
                     search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
                     responses = await asyncio.gather(
                         self.session.get(search_url_1),
@@ -124,7 +123,6 @@ class FF(COMMON):
                     responses[0].raise_for_status()
                     responses[1].raise_for_status()
                 else:
-                    print(f'{self.tracker}: Searching for requests using terms "{query_1}"...')
                     response = await self.session.get(search_url_1)
                     response.raise_for_status()
                     response_results_text = response.text
