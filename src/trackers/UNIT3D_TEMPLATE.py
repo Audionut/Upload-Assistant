@@ -81,6 +81,11 @@ class UNIT3D_TEMPLATE():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
+        tvdb = meta.get('tvdb_id', 0)
+        if meta['category'] == "TV":
+            tvdb = meta.get('tvdb_id', 0)
+        else:
+            tvdb = 0
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
@@ -105,7 +110,7 @@ class UNIT3D_TEMPLATE():
             'resolution_id': resolution_id,
             'tmdb': meta['tmdb'],
             'imdb': meta['imdb'],
-            'tvdb': meta['tvdb_id'],
+            'tvdb': tvdb,
             'mal': meta['mal_id'],
             'igdb': 0,
             'anonymous': anon,

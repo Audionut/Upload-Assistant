@@ -9,7 +9,6 @@ import requests
 import uuid
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
-from countryinfo import CountryInfo
 from datetime import datetime
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
@@ -36,6 +35,7 @@ class PHD(COMMON):
         self.signature = ""
 
     def rules(self, meta):
+        meta['phd_rule'] = ''
         warning = f"{self.tracker} RULE WARNING: "
         rule = ''
 
@@ -61,91 +61,116 @@ class PHD(COMMON):
 
         # This also checks the rule "FANRES content is not allowed"
         if meta['category'] not in ('MOVIE', 'TV'):
-            raise UploadException(
+            meta['phd_rule'] = (
                 warning + "The only allowed content to be uploaded are Movies and TV Shows.\n"
                 "Anything else, like games, music, software and porn is not allowed!"
             )
+            return False
 
         if meta.get('anime', False):
-            raise UploadException(warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
+            meta['phd_rule'] = warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
+            return False
 
-        # Country of origin
-        all_countries = CountryInfo().all()
-        european_countries = []
-        south_american_countries = []
-        african_countries = []
-        asian_countries = []
-
-        for country_name in all_countries:
-            try:
-                info = CountryInfo(country_name)
-                region = info.region()
-
-                if region == 'Europe' and country_name not in ["United Kingdom", "Ireland"]:
-                    european_countries.append(country_name)
-                elif region == 'Americas' and info.subregion() == 'South America':
-                    south_american_countries.append(country_name)
-                elif region == 'Africa':
-                    african_countries.append(country_name)
-                elif region == 'Asia':
-                    asian_countries.append(country_name)
-
-            except KeyError:
-                pass
-
-                english_speaking_countries_in_north_america = [
-                    "Anguilla", "Antigua and Barbuda", "Bahamas", "Barbados", "Belize", "Bermuda",
-                    "British Virgin Islands", "Canada", "Cayman Islands", "Curaçao", "Dominica",
-                    "Grenada", "Jamaica", "Montserrat", "Puerto Rico", "Saint Kitts and Nevis",
-                    "Saint Lucia", "Saint Vincent and the Grenadines", "Trinidad and Tobago",
-                    "Turks and Caicos Islands", "United States", "United States Virgin Islands"
-                ]
-
-        origin_country = meta.get('imdb_info', {}).get('country')
-
-        target_countries = european_countries + south_american_countries + african_countries
-        if origin_country in target_countries:
-            raise UploadException(warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.")
-
-        if origin_country in asian_countries:
-            raise UploadException(
-                warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n"
-                "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead.\n"
-                f'Origin country for your upload: {origin_country}'
-            )
-
-        # Release age
         year = meta.get('year')
         current_year = datetime.now().year
-        is_older_than_50_years = (current_year - year) >= 50 if year else False
+        is_older_than_50_years = (current_year - year) >= 50
         if is_older_than_50_years:
-            raise UploadException(warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead.")
+            meta['phd_rule'] = warning + "Upload movies/series 50+ years old to our sister site CinemaZ.to instead."
+            return False
 
-        if origin_country not in english_speaking_countries_in_north_america:
-            raise UploadException(
-                warning + "Upload content to PrivateHD from all major English speaking countries.\n"
-                "Including United States, Canada, UK, Ireland, Scotland, Australia, and New Zealand."
+        # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+
+        africa = [
+            "AO", "BF", "BI", "BJ", "BW", "CD", "CF", "CG", "CI", "CM", "CV", "DJ", "DZ", "EG", "EH",
+            "ER", "ET", "GA", "GH", "GM", "GN", "GQ", "GW", "IO", "KE", "KM", "LR", "LS", "LY", "MA",
+            "MG", "ML", "MR", "MU", "MW", "MZ", "NA", "NE", "NG", "RE", "RW", "SC", "SD", "SH", "SL",
+            "SN", "SO", "SS", "ST", "SZ", "TD", "TF", "TG", "TN", "TZ", "UG", "YT", "ZA", "ZM", "ZW"
+        ]
+
+        america = [
+            "AG", "AI", "AR", "AW", "BB", "BL", "BM", "BO", "BQ", "BR", "BS", "BV", "BZ", "CA", "CL",
+            "CO", "CR", "CU", "CW", "DM", "DO", "EC", "FK", "GD", "GF", "GL", "GP", "GS", "GT", "GY",
+            "HN", "HT", "JM", "KN", "KY", "LC", "MF", "MQ", "MS", "MX", "NI", "PA", "PE", "PM", "PR",
+            "PY", "SR", "SV", "SX", "TC", "TT", "US", "UY", "VC", "VE", "VG", "VI"
+        ]
+
+        asia = [
+            "AE", "AF", "AM", "AZ", "BD", "BH", "BN", "BT", "CN", "CY", "GE", "HK", "ID", "IL", "IN",
+            "IQ", "IR", "JO", "JP", "KG", "KH", "KP", "KR", "KW", "KZ", "LA", "LB", "LK", "MM", "MN",
+            "MO", "MV", "MY", "NP", "OM", "PH", "PK", "PS", "QA", "SA", "SG", "SY", "TH", "TJ", "TL",
+            "TM", "TR", "TW", "UZ", "VN", "YE"
+        ]
+
+        europe = [
+            "AD", "AL", "AT", "AX", "BA", "BE", "BG", "BY", "CH", "CZ", "DE", "DK", "EE", "ES", "FI",
+            "FO", "FR", "GB", "GG", "GI", "GR", "HR", "HU", "IE", "IM", "IS", "IT", "JE", "LI", "LT",
+            "LU", "LV", "MC", "MD", "ME", "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "RU", "SE",
+            "SI", "SJ", "SK", "SM", "UA", "VA"
+        ]
+
+        oceania = [
+            "AS", "AU", "CC", "CK", "CX", "FJ", "FM", "GU", "HM", "KI", "MH", "MP", "NC", "NF", "NR",
+            "NU", "NZ", "PF", "PG", "PN", "PW", "SB", "TK", "TO", "TV", "UM", "VU", "WF", "WS"
+        ]
+
+        phd_allowed_countries = [
+            "AG", "AI", "AU", "BB", "BM", "BS", "BZ", "CA", "CW", "DM", "GB", "GD", "IE",
+            "JM", "KN", "KY", "LC", "MS", "NZ", "PR", "TC", "TT", "US", "VC", "VG", "VI",
+        ]
+
+        all_countries = africa + america + europe + oceania
+        cinemaz_countries = list(set(all_countries) - set(phd_allowed_countries))
+
+        origin_countries_codes = meta.get("origin_country", [])
+
+        if any(code in phd_allowed_countries for code in origin_countries_codes):
+            return True
+
+        # CinemaZ
+        elif any(code in cinemaz_countries for code in origin_countries_codes):
+            meta['phd_rule'] = warning + "Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead."
+            return False
+
+        # AvistaZ
+        elif any(code in asia for code in origin_countries_codes):
+            origin_country_str = ", ".join(origin_countries_codes)
+            meta['phd_rule'] = (
+                warning + "DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n"
+                "In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead.\n"
+                f'Origin country for your upload: {origin_country_str}'
             )
+            return False
+
+        elif not any(code in phd_allowed_countries for code in origin_countries_codes):
+            meta['phd_rule'] = (
+                warning + "Only upload content to PrivateHD from all major English speaking countries.\n"
+                "Including United States, Canada, UK, Ireland, Australia, and New Zealand."
+            )
+            return False
 
         # Tags
         tag = meta.get('tag', '')
         if tag:
             tag = tag.strip().lower()
             if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
-                raise UploadException(warning + "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time.")
+                meta['phd_rule'] = warning + "Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time."
+                return False
 
             if tag == 'evo' and source != 'web':
-                raise UploadException(warning + "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time.")
+                meta['phd_rule'] = warning + "Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time."
+                return False
 
         if meta.get('sd', '') == 1:
-            raise UploadException(warning + "SD (Standard Definition) content is forbidden.")
+            meta['phd_rule'] = warning + "SD (Standard Definition) content is forbidden."
+            return False
 
         if not is_bd_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
             allowed_extensions = {'.mkv': "MKV", '.mp4': "MP4"}
             container = allowed_extensions.get(ext)
             if container is None:
-                raise UploadException(warning + "Allowed containers: MKV, MP4.")
+                meta['phd_rule'] = warning + "Allowed containers: MKV, MP4."
+                return False
 
         # Video codec
         """
@@ -162,41 +187,45 @@ class PHD(COMMON):
         # 1
         if type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
-                raise UploadException(warning + "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265")
+                meta['phd_rule'] = warning + "Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265"
+                return False
 
         # 2
         if type == 'encode' and source == 'bluray':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                raise UploadException(warning + "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)")
+                meta['phd_rule'] = warning + "Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
+                return False
 
         # 3
         if type in ('webdl', 'web-dl') and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'vp9'):
-                raise UploadException(warning + "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9")
+                meta['phd_rule'] = warning + "Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9"
+                return False
 
         # 4
         if type == 'encode' and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                raise UploadException(warning + "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)")
+                meta['phd_rule'] = warning + "Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)"
+                return False
 
         # 5
         if type == 'encode':
             if video_encode == 'x265':
                 if meta.get('bit_depth', '') != '10':
-                    raise UploadException(warning + "Allowed Video Codecs for x265 encodes must be 10-bit")
+                    meta['phd_rule'] = warning + "Allowed Video Codecs for x265 encodes must be 10-bit"
+                    return False
 
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution > 1080:
             if video_encode in ('h.264', 'x264'):
-                raise UploadException(warning + "H.264/x264 only allowed for 1080p and below.")
+                meta['phd_rule'] = warning + "H.264/x264 only allowed for 1080p and below."
+                return False
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
-            raise UploadException(
-                warning + f"Video codec not allowed in your upload: {video_codec}.\n"
-                f"{self.tracker} only allows AVC, MPEG-2, VC-1, AVC, H.264, VP9, H.265, x264, and x265."
-            )
+            meta['phd_rule'] = warning + f"Video codec not allowed in your upload: {video_codec}."
+            return False
 
         # Audio codec
         """
@@ -249,11 +278,12 @@ class PHD(COMMON):
                     )
 
                     if has_truehd_atmos and not has_ac3_compat_track:
-                        raise UploadException(
+                        meta['phd_rule'] = (
                             warning + f"A TrueHD Atmos track was detected in the original language ({original_language}), "
                             f"but no AC-3 (Dolby Digital) compatibility track was found for that same language.\n"
                             "Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players."
                         )
+                        return False
 
             # 4
             invalid_codecs = []
@@ -273,11 +303,12 @@ class PHD(COMMON):
 
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
-                raise UploadException(
+                meta['phd_rule'] = (
                     warning + f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f"Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n"
                     f"Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc."
                 )
+                return False
 
         def ask_yes_no(prompt_text):
             while True:
@@ -342,11 +373,11 @@ class PHD(COMMON):
                             f"Your upload was rejected due to low quality.\n"
                             f"Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps."
                         )
-                        raise UploadException(warning + quality_rule_text + rule)
+                        meta['phd_rule'] = (warning + quality_rule_text + rule)
 
         if resolution < 720:
             rule = "Video must be at least 720p."
-            raise UploadException(warning + rule)
+            meta['phd_rule'] = (warning + rule)
 
         # Hybrid
         if type in ('remux', 'encode'):
@@ -378,12 +409,12 @@ class PHD(COMMON):
                     if continue_upload == 'n':
                         error_message = "Upload aborted by user. Hybrid releases require prior staff approval."
                         print(f"{error_message}")
-                        raise UploadException(error_message)
+                        meta['phd_rule'] = error_message
 
                 else:
                     error_message = "Upload aborted. The term 'Hybrid' in the release name is reserved for approved hybrid releases. Please correct the name if it is not a hybrid."
                     print(f"{error_message}")
-                    raise UploadException(error_message)
+                    meta['phd_rule'] = error_message
 
         # Log
         if type == 'remux':
@@ -394,7 +425,8 @@ class PHD(COMMON):
             if remux_log == 'y':
                 pass
             else:
-                raise UploadException(warning + "Remuxes must have a demux/eac3to log under spoilers in description.")
+                meta['phd_rule'] = (warning + "Remuxes must have a demux/eac3to log under spoilers in description.")
+                return False
 
         # Bloated
         if meta.get('bloated', False):
@@ -406,7 +438,10 @@ class PHD(COMMON):
             if ask_bloated == 'y':
                 pass
             else:
-                raise UploadException("Canceled by user. Reason: Bloated")
+                meta['phd_rule'] = "Canceled by user. Reason: Bloated"
+                return False
+
+        return True
 
     def edit_name(self, meta):
         upload_name = meta.get('name')
@@ -510,7 +545,11 @@ class PHD(COMMON):
             return False
 
     async def search_existing(self, meta, disctype):
-        self.rules(meta)
+        upload_ok = self.rules(meta)
+        if not upload_ok:
+            console.print(f"[red]{meta['phd_rule']}[/red]")
+            meta['skipping'] = "PHD"
+            return
         await self.validate_credentials(meta)
         await self.get_media_code(meta)
 

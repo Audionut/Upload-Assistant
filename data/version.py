@@ -1,4 +1,39 @@
-__version__ = "v5.3.3"
+__version__ = "v5.3.4"
+
+"""
+Release Notes for version v5.3.4 (2025-08-18):
+
+# 
+# ## RELEASE NOTES
+#  - UA can now tonemap Dolby Vision profile 5 and HLG files.
+#  - Requires a compatible ffmpeg (get latest), see https://github.com/Audionut/Upload-Assistant/pull/706
+#  - Adjust the related ffmpeg option in config, if you have a suitable ffmpeg installed, in order to skip the automated check
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * RF - now needs 2fa enabled to upload by @Audionut in e731e27
+# * TL - fix outdated attribute (#701) by @wastaken7 in ebabb5d
+# * Fix typo in source flag when uploading to SHRI (#703) by @backstab5983 in 0e5bb28
+# * Catch conformance error from mediainfo and warn users (#704) by @Khoa Pham in febe0f1
+# * Add correct country get to IMDb (#708) by @Audionut in e09dbf2
+# * catch empty array from btn by @Audionut in 77b539a
+# * highlight tracker removal by @Audionut in 95a9e54
+# * Fix img_host and None types (#707) by @frenchcutgreenbean in c34e6be
+# * Option - libplacebo tonemapping (#706) by @Audionut in 3fc3c1a
+# * fix docker tagging by @Audionut in 0071c71
+# * clean empty bbcode from descriptions by @Audionut in 73b40b9
+# * require api key to search by @Audionut in ce7bec6
+# * Dockerfile Improvements (#710) by @Slikkster in 0b50d36
+# * restore docker apt update by @Audionut in a57e514
+# * PHD - fix region logic (#709) by @wastaken7 in 5e1c541
+# * fix unit3d trackers not accept valid tvdb by @Audionut in 309c54e
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.3...v5.3.4
+"""
+
 
 """
 Release Notes for version v5.3.3 (2025-08-14):
