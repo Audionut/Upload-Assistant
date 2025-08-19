@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import glob
 import httpx
 import os
 import platform
@@ -24,7 +25,7 @@ class FF(COMMON):
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
-        }, timeout=60.0)
+        }, timeout=30.0)
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def validate_credentials(self, meta):
@@ -35,13 +36,13 @@ class FF(COMMON):
         test_url = f"{self.base_url}/upload.php"
         try:
             self.session.cookies.update(await self.parseCookieFile(self.cookie_file))
-            response = await self.session.get(test_url, timeout=10)
+            response = await self.session.get(test_url, timeout=30)
 
             if response.status_code == 200 and 'login.php' not in str(response.url):
                 return True
             else:
                 await self.login(meta)
-                response = await self.session.get(test_url, timeout=10)
+                response = await self.session.get(test_url, timeout=30)
                 if response.status_code == 200 and 'login.php' not in str(response.url):
                     return True
                 else:
@@ -141,17 +142,19 @@ class FF(COMMON):
 
         # Screenshots
         images = meta.get('image_list', [])
-        if not images or len(images) < 3:
-            raise UploadException("[red]HDS requires at least 3 screenshots.[/red]")
+        if images:
+            screenshots_block = "[center]"
+            for image in images:
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+            screenshots_block += "[/center]"
 
-        screenshots_block = "[center][b]Screenshots[/b]\n\n"
-        for image in images:
-            img_url = image['img_url']
-            web_url = image['web_url']
-            screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url] "
-        screenshots_block += "[/center]"
+            description_parts.append(screenshots_block)
 
-        description_parts.append(screenshots_block)
+        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
+        if custom_description_header:
+            description_parts.append(custom_description_header)
 
         if self.signature:
             description_parts.append(self.signature)
@@ -160,6 +163,7 @@ class FF(COMMON):
         from src.bbcode import BBCODE
         bbcode = BBCODE()
         desc = final_description
+        desc = re.sub(r'\n{3,}', '\n\n', desc)
         desc = desc.replace("[user]", "").replace("[/user]", "")
         desc = desc.replace("[align=left]", "").replace("[/align]", "")
         desc = desc.replace("[right]", "").replace("[/right]", "")
@@ -175,10 +179,34 @@ class FF(COMMON):
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
         desc = desc.replace("[hide]", "").replace("[/hide]", "")
-        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"NFO:[code][pre]\1[/pre][/code]", desc, flags=re.DOTALL)
-        desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+        desc = desc.replace("•", "-").replace("“", '"').replace("”", '"')
+        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
         desc = bbcode.remove_spoiler(desc)
+
+        # [url][img=000]...[/img][/url]
+        desc = re.sub(
+            r"\[url=(?P<href>[^\]]+)\]\[img=(?P<width>\d+)\](?P<src>[^\[]+)\[/img\]\[/url\]",
+            r'<a href="\g<href>" target="_blank"><img src="\g<src>" width="\g<width>"></a>',
+            desc,
+            flags=re.IGNORECASE
+        )
+
+        # [url][img]...[/img][/url]
+        desc = re.sub(
+            r"\[url=(?P<href>[^\]]+)\]\[img\](?P<src>[^\[]+)\[/img\]\[/url\]",
+            r'<a href="\g<href>" target="_blank"><img src="\g<src>" width="220"></a>',
+            desc,
+            flags=re.IGNORECASE
+        )
+
+        # [img=200]...[/img] (no [url])
+        desc = re.sub(
+            r"\[img=(?P<width>\d+)\](?P<src>[^\[]+)\[/img\]",
+            r'<img src="\g<src>" width="\g<width>">',
+            desc,
+            flags=re.IGNORECASE
+        )
 
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
@@ -388,7 +416,7 @@ class FF(COMMON):
             audio_desc = meta.get('audio', '').lower()
             found_codec = '0'
             codec_options = {
-                'aac': 'aac', 'ac3': 'ac3', 'dd+': 'ac3', 'dolby digital': 'ac3', 'ogg': 'ogg', 'mp3': 'mp3',
+                'aac': 'aac', 'ac3': 'ac3', 'dd': 'ac3', 'dolby digital': 'ac3', 'ogg': 'ogg', 'mp3': 'mp3',
                 'dts-es': 'dtses', 'dtses': 'dtses', 'dts': 'dts', 'flac': 'flac', 'pcm': 'pcm', 'wma': 'wma'
             }
             for key, value in codec_options.items():
@@ -446,8 +474,23 @@ class FF(COMMON):
 
                     return poster_file
 
+    def get_nfo(self, meta):
+        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
+
+        if nfo_files:
+            nfo_path = nfo_files[0]
+
+            return {
+                'nfo': (
+                    os.path.basename(nfo_path),
+                    open(nfo_path, "rb"),
+                    "application/octet-stream"
+                )
+            }
+        return {}
+
     async def fetch_data(self, meta, disctype):
-        await self.validate_credentials(meta)
         languages = await self.languages(meta)
         self.file_information(meta)
 
@@ -494,6 +537,7 @@ class FF(COMMON):
         return data
 
     async def upload(self, meta, disctype):
+        await self.validate_credentials(meta)
         data = await self.fetch_data(meta, disctype)
         await self.edit_torrent(meta, self.tracker, self.source_flag)
         status_message = ''
@@ -507,13 +551,15 @@ class FF(COMMON):
                 files = {
                     'file': (f"{self.edit_name(meta)}.torrent", torrent_file, "application/x-bittorrent"),
                 }
-
                 files['poster'] = await self.get_poster(meta)
+                nfo = self.get_nfo(meta)
+                if nfo:
+                    files['nfo'] = nfo['nfo']
 
-                response = await self.session.post(upload_url, data=data, files=files, timeout=120)
+                response = await self.session.post(upload_url, data=data, files=files, timeout=30)
 
                 if response.status_code == 302:
-                    status_message = 'Upload successful'
+                    status_message = 'Torrent uploaded successfully.'
                     # Find the torrent id
                     match = re.search(r'details\.php\?id=(\d+)', response.text)
                     if match:
@@ -521,15 +567,17 @@ class FF(COMMON):
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 else:
+                    status_message = 'The upload appears to have failed. It may have uploaded, go check.'
+
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
                     console.print(f"Upload failed, HTML response was saved to: {response_save_path}")
-                    meta['tracker_status'][self.tracker]['skipped'] = True
-                    meta['tracker_status'][self.tracker]['upload'] = False
-                    status_message = 'Upload failed.'
 
-            await asyncio.sleep(3)  # the tracker takes a while to register the hash
+                    meta['skipping'] = f"{self.tracker}"
+                    return
+
+            await asyncio.sleep(5)  # the tracker takes a while to register the hash
             await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
         else:
