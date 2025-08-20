@@ -94,7 +94,7 @@ class FF(COMMON):
         search_url = f"{self.base_url}/suggest.php?q={query}"
         response = await self.session.get(search_url)
 
-        if response.status_code == 200 and 'suggest.php' in str(response.url):
+        if response.status_code == 200 and 'login' not in str(response.url):
             items = [line.strip() for line in response.text.splitlines() if line.strip()]
             return items
 
@@ -227,7 +227,6 @@ class FF(COMMON):
         from src.bbcode import BBCODE
         bbcode = BBCODE()
         desc = final_description
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
         desc = desc.replace("[user]", "").replace("[/user]", "")
         desc = desc.replace("[align=left]", "").replace("[/align]", "")
         desc = desc.replace("[right]", "").replace("[/right]", "")
@@ -272,6 +271,8 @@ class FF(COMMON):
             flags=re.IGNORECASE
         )
 
+        desc = re.sub(r'\n{3,}', '\n\n', desc)
+
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(desc)
 
@@ -310,7 +311,6 @@ class FF(COMMON):
 
     def movie_type(self, meta):
         # Possible values: "XviD", "DVDR", "x264", "x265", "MP4", "VCD"
-
         if self.video_source == 'dvd':
             return "DVDR"
 
@@ -321,7 +321,6 @@ class FF(COMMON):
 
     def tv_type(self, meta):
         # Possible values: "XviD", "HR-XviD", "x264-SD", "x264-HD", "x265-SD", "x265-HD", "Web-SD", "Web-HD", "DVDR", "MP4"
-
         if self.video_source == 'dvd':
             return "DVDR"
 
@@ -360,7 +359,6 @@ class FF(COMMON):
 
     def movie_source(self, meta):
         # Possible values: "DVD", "DVDSCR", "Workprint", "TeleCine", "TeleSync", "CAM", "BluRay", "HD-DVD", "HDTV", "R5", "WebRIP"
-
         mapping = {
             "dvd": "DVD",
             "dvdscr": "DVDSCR",
@@ -382,7 +380,6 @@ class FF(COMMON):
 
     def tv_source(self, meta):
         # Possible values: "HDTV", "DSR", "PDTV", "TV", "DVD", "DvdScr", "BluRay", "WebRIP"
-
         mapping = {
             "hdtv": "HDTV",
             "dsr": "DSR",
@@ -401,7 +398,6 @@ class FF(COMMON):
 
     def anime_source(self, meta):
         # Possible values: "DVD", "BluRay", "Anime Series", "HDTV"
-
         mapping = {
             "hdtv": "HDTV",
             "tv": "HDTV",
@@ -435,7 +431,6 @@ class FF(COMMON):
 
     def anime_v_codec(self, meta):
         # Possible values: "x264", "h264", "XviD", "DivX", "WMV", "VC1"
-
         if self.video_codec == 'vc-1':
             return "VC1"
 
@@ -595,7 +590,7 @@ class FF(COMMON):
                     'tv_type': self.tv_type(meta),
                     'tv_source': self.tv_source(meta),
                     'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
-                    'pack': 1 if meta.get('tv_pack') else 0,
+                    'pack': 1 if meta.get('tv_pack', 0) else 0,
                     })
 
         return data
