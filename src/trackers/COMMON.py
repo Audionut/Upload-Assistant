@@ -21,13 +21,13 @@ class COMMON():
         self.parser = self.MediaInfoParser()
         pass
 
-    async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE"):
+    async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"):
             new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent")
             for each in list(new_torrent.metainfo):
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)
-            new_torrent.metainfo['announce'] = self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
+            new_torrent.metainfo['announce'] = announce_url if announce_url else self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
                 created_by = new_torrent.metainfo['created by']

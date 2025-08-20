@@ -120,7 +120,10 @@ class ANT():
                 response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
                 if response.status_code in [200, 201]:
                     response_data = response.json()
-                    meta['tracker_status'][self.tracker]['status_message'] = response_data
+                    if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
+                        meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
+                    else:
+                        meta['tracker_status'][self.tracker]['status_message'] = response_data
                 elif response.status_code == 502:
                     response_data = {
                         "error": "Bad Gateway",
