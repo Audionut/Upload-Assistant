@@ -535,7 +535,11 @@ class TRACKER_SETUP:
                 return False
 
             tracker_instance = tracker_class(self.config)
-            url = tracker_instance.requests_url
+            try:
+                url = tracker_instance.requests_url
+            except AttributeError:
+                # tracker without requests url not supported
+                return
             requests = await self.get_tracker_requests(meta, tracker, url)
             all_types = await tracker_instance.get_type_id()
             if not isinstance(all_types, dict):
