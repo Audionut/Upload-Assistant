@@ -42,11 +42,11 @@ class FNP():
         type_id = {
             'DISC': '1',
             'REMUX': '2',
-            'ENCODE': '3'
+            'ENCODE': '3',
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
-            'SDTV': '7',
+            'SDTV': '7'
         }.get(type, '0')
         return type_id
 
