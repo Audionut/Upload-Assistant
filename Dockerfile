@@ -47,12 +47,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY bin/download_mkbrr_for_docker.py bin/
 RUN chmod +x bin/download_mkbrr_for_docker.py && \
     python bin/download_mkbrr_for_docker.py && \
-    chmod -R 766 /Upload-Assistant/bin/mkbrr && \
+    chmod -R 777 /Upload-Assistant/bin/mkbrr && \
     find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
 
 # Copy the rest of the application
 COPY . .
-RUN chmod -R 766 /Upload-Assistant/data
+RUN chmod -R 777 /Upload-Assistant/data
 
 # Don't run as root
 USER nobody:nogroup
