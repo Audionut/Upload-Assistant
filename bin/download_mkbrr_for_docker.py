@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-def download_mkbrr_for_docker(base_dir=".", version="v1.8.1"):
+def download_mkbrr_for_docker(base_dir=".", version="v1.14.0"):
     """Download mkbrr binary for Docker - synchronous version"""
 
     system = platform.system().lower()
