@@ -42,10 +42,11 @@ class FNP():
         type_id = {
             'DISC': '1',
             'REMUX': '2',
+            'ENCODE': '3'
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
-            'ENCODE': '3'
+            'SDTV': '7',
         }.get(type, '0')
         return type_id
 
@@ -54,12 +55,12 @@ class FNP():
             '4320p': '1',
             '2160p': '2',
             '1080p': '3',
-            '1080i': '11',
+            '1080i': '4',
             '720p': '5',
             '576p': '6',
-            '576i': '15',
+            '576i': '7',
             '480p': '8',
-            '480i': '14'
+            '480i': '9'
         }.get(resolution, '10')
         return resolution_id
 
