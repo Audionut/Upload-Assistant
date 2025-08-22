@@ -1,10 +1,8 @@
 FROM python:3.12
 
-# Define user and group variables
-ARG USERNAME=UploadAssistant
-ARG USERGROUP=UploadAssistant
-ARG UID=1000
-ARG GID=1000
+# No venv required in a docker container
+ARG PIP_BREAK_SYSTEM_PACKAGES=1
+ARG PIP_ROOT_USER_ACTION=ignore
 
 # Update the package list and install system dependencies including mono
 RUN apt-get update && \
@@ -19,33 +17,20 @@ RUN apt-get update && \
     nano && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install mediainfo 23.04-1
-RUN wget https://mediaarea.net/download/binary/mediainfo/23.04/mediainfo_23.04-1_amd64.Debian_9.0.deb && \
-    wget https://mediaarea.net/download/binary/libmediainfo0/23.04/libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb && \
-    wget https://mediaarea.net/download/binary/libzen0/0.4.41/libzen0v5_0.4.41-1_amd64.Debian_9.0.deb && \
+# Download and install mediainfo 23.04-1 -- must use this version as newer ones break DVD support
+RUN wget -q https://mediaarea.net/download/binary/mediainfo/23.04/mediainfo_23.04-1_amd64.Debian_9.0.deb && \
+    wget -q https://mediaarea.net/download/binary/libmediainfo0/23.04/libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb && \
+    wget -q https://mediaarea.net/download/binary/libzen0/0.4.41/libzen0v5_0.4.41-1_amd64.Debian_9.0.deb && \
     apt-get update && \
-    apt-get install -y ./libzen0v5_0.4.41-1_amd64.Debian_9.0.deb ./libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb ./mediainfo_23.04-1_amd64.Debian_9.0.deb && \
-    rm mediainfo_23.04-1_amd64.Debian_9.0.deb libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb libzen0v5_0.4.41-1_amd64.Debian_9.0.deb
+    apt-get install -y --no-install-recommends ./libzen0v5_0.4.41-1_amd64.Debian_9.0.deb ./libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb ./mediainfo_23.04-1_amd64.Debian_9.0.deb && \
+    rm mediainfo_23.04-1_amd64.Debian_9.0.deb libmediainfo0v5_23.04-1_amd64.Debian_9.0.deb libzen0v5_0.4.41-1_amd64.Debian_9.0.deb && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create working directory and tmp directory first
 RUN mkdir -p /Upload-Assistant/tmp && \
     chmod 755 /Upload-Assistant && \
     chmod 777 /Upload-Assistant/tmp
 
-# Create a custom user with UID 1000 and GID 1000
-RUN groupadd -g ${GID} ${USERGROUP} && \
-    useradd -m -u ${UID} -g ${USERGROUP} ${USERNAME}
-
-# Set up a virtual environment in user's home directory
-RUN python -m venv /home/${USERNAME}/venv && \
-    chown -R ${USERNAME}:${USERGROUP} /home/${USERNAME}/venv && \
-    chown -R ${USERNAME}:${USERGROUP} /Upload-Assistant
-
-# Switch to the custom user
-USER ${USERNAME}
-
-# Set up environment
-ENV PATH="/home/${USERNAME}/venv/bin:$PATH"
 ENV TMPDIR=/Upload-Assistant/tmp
 
 # Install wheel and other Python dependencies
@@ -55,21 +40,22 @@ RUN pip install --upgrade --no-cache-dir pip wheel
 WORKDIR /Upload-Assistant
 
 # Copy the Python requirements file and install Python dependencies
-COPY --chown=${USERNAME}:${USERGROUP} requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the download script
-COPY --chown=${USERNAME}:${USERGROUP} bin/download_mkbrr_for_docker.py bin/
-RUN chmod +x bin/download_mkbrr_for_docker.py
-
-# Download only the required mkbrr binary
-RUN python bin/download_mkbrr_for_docker.py
+# Download only the required mkbrr binary and ensure it is executable
+COPY bin/download_mkbrr_for_docker.py bin/
+RUN chmod +x bin/download_mkbrr_for_docker.py && \
+    python bin/download_mkbrr_for_docker.py && \
+    chmod -R 777 /Upload-Assistant/bin/mkbrr && \
+    find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
 
 # Copy the rest of the application
-COPY --chown=${USERNAME}:${USERGROUP} . .
+COPY . .
+RUN chmod -R 777 /Upload-Assistant/data
 
-# Ensure mkbrr is executable
-RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
+# Don't run as root
+USER nobody:nogroup
 
 # Set the entry point for the container
 ENTRYPOINT ["python", "/Upload-Assistant/upload.py"]
