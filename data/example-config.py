@@ -662,8 +662,13 @@ config = {
         "SPD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # You can create an API key here https://speedapp.io/profile/api-tokens. Premissions needed: Upload torrents, Read torrents
             "api_key": "",
-            "announce_url": "https://ramjet.speedapp.io/<PASSKEY>/announce",
+            # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
+            "passkey": "",
+            # Select the upload channel, if you don't know what this is, leave it empty.
+            # You can also set this mannualy using the args -ch or --channel, without '@'. Example: '-ch spd'.
+            "channel": "",
         },
         "STC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
