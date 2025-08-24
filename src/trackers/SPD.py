@@ -2,6 +2,7 @@
 # import discord
 import base64
 import bencodepy
+import glob
 import hashlib
 import httpx
 import os
@@ -30,7 +31,7 @@ class SPD(COMMON):
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = ['']
-        self.signature = "Created by Audionut's Upload Assistant"
+        self.signature = "Shared with Audionut's Upload Assistant"
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Audionut's Upload Assistant",
             'accept': 'application/json',
@@ -104,14 +105,13 @@ class SPD(COMMON):
 
         search_url = 'https://speedapp.io/api/torrent'
 
-        params = {
-            'includingDead': '1'
-        }
+        params = {}
 
         if meta['imdb_id'] != 0:
             params['imdbId'] = f"{meta.get('imdb_info', {}).get('imdbID', '')}"
         else:
             params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
+
         try:
             response = await self.session.get(url=search_url, params=params, headers=self.session.headers)
             if response.status_code == 200:
@@ -119,7 +119,7 @@ class SPD(COMMON):
                 for each in data:
                     result = each['name']
                     dupes.append(result)
-                    return dupes
+                return dupes
             else:
                 console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
 
@@ -229,14 +229,25 @@ class SPD(COMMON):
 
         return
 
+    async def encode_to_base64(self, file_path):
+        with open(file_path, 'rb') as binary_file:
+            binary_file_data = binary_file.read()
+            base64_encoded_data = base64.b64encode(binary_file_data)
+            return base64_encoded_data.decode('utf-8')
+
+    async def get_nfo(self, meta):
+        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
+
+        if nfo_files:
+            nfo = await self.encode_to_base64(nfo_files[0])
+            return nfo
+
+        return None
+
     async def fetch_data(self, meta):
         await self.get_source_flag(meta)
         media_info, bd_info = await self.get_file_info(meta)
-
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent", 'rb') as binary_file:
-            binary_file_data = binary_file.read()
-            base64_encoded_data = base64.b64encode(binary_file_data)
-            base64_message = base64_encoded_data.decode('utf-8')
 
         data = {
             'bdInfo': bd_info,
@@ -244,6 +255,8 @@ class SPD(COMMON):
             'description': meta.get('genres', ''),
             'media_info': media_info,
             'name': await self.edit_name(meta),
+            'nfo': await self.get_nfo(meta),
+            'plot': meta.get('overview_meta', '') or meta.get('overview', ''),
             'poster': meta.get('poster', ''),
             'releaseInfo': await self.edit_desc(meta),
             'screenshots': await self.get_screenshots(meta),
@@ -252,7 +265,7 @@ class SPD(COMMON):
         }
 
         if not meta.get('debug', False):
-            data['file'] = base64_message
+            data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
 
         return data
 
