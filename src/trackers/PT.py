@@ -99,13 +99,16 @@ class PT():
                         audio_sections = re.findall(r'Audio(?: #\d+)?\s*\n(.*?)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
                         for section in audio_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
-                            if language_match:
-                                lang_raw = language_match.group(1).strip()
-                                # Clean "Portuguese (Brazil)" variation.
-                                lang_clean = re.sub(r'[/\\].*|\(.*?\)', '', lang_raw).strip()
-                                if lang_clean.lower() == "portuguese":
-                                    found_portuguese_audio = True
-                                    break
+                            title_match = re.search(r'Title\s*:\s*(.+)', section, re.IGNORECASE)
+
+                            lang_raw = language_match.group(1).strip() if language_match else ""
+                            title_raw = title_match.group(1).strip() if title_match else ""
+
+                            text = f'{lang_raw} {title_raw}'.lower()
+
+                            if "portuguese" in text and not any(keyword in text for keyword in ["(br)", "brazilian"]):
+                                found_portuguese_audio = True
+                                break
 
             except FileNotFoundError:
                 pass
@@ -146,13 +149,16 @@ class PT():
 
                         for section in text_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
-                            if language_match:
-                                lang_raw = language_match.group(1).strip()
-                                # Clean "Portuguese (Brazil)" variation.
-                                lang_clean = re.sub(r'[/\\].*|\(.*?\)', '', lang_raw).strip()
-                                if lang_clean.lower() == "portuguese":
-                                    found_portuguese_subtitle = True
-                                    break
+                            title_match = re.search(r'Title\s*:\s*(.+)', section, re.IGNORECASE)
+
+                            lang_raw = language_match.group(1).strip() if language_match else ""
+                            title_raw = title_match.group(1).strip() if title_match else ""
+
+                            text = f'{lang_raw} {title_raw}'.lower()
+
+                            if "portuguese" in text and not any(keyword in text for keyword in ["(br)", "brazilian"]):
+                                found_portuguese_subtitle = True
+                                break
 
             except FileNotFoundError:
                 pass
