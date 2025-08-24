@@ -176,7 +176,7 @@ class Args():
         parser.add_argument('-emby', '--emby', action='store_true', required=False, help="Create an Emby-compliant NFO file and optionally symlink the content")
         parser.add_argument('-emby_cat', '--emby_cat', nargs=1, required=False, help="Set the expected category for Emby (e.g., 'movie', 'tv')")
         parser.add_argument('-emby_debug', '--emby_debug', action='store_true', required=False, help="Does debugging stuff for Audionut")
-        parser.add_argument('-ch', '--channel', nargs=1, required=False, help="(SPD only) Channel tag to upload to, without '@'. Example: '-ch spd'", type=str, dest='spd_channel', default="")
+        parser.add_argument('-ch', '--channel', nargs=1, required=False, help="SPD only: Channel ID number or tag to upload to (preferably the ID), without '@'. Example: '-ch spd' when using a tag, or '-ch 1' when using an ID.", type=str, dest='spd_channel', default="")
         args, before_args = parser.parse_known_args(input)
         args = vars(args)
         # console.print(args)

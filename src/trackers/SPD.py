@@ -136,7 +136,7 @@ class SPD(COMMON):
         if not spd_channel:
             return 1
 
-        # if the user input is an integer already
+        # return the channel as int if it's already an integer
         if isinstance(spd_channel, int):
             return spd_channel
 
@@ -207,8 +207,7 @@ class SPD(COMMON):
         return desc
 
     async def edit_name(self, meta):
-        is_scene = bool(meta.get('scene_name'))
-        torrent_name = meta['scene_name'] if is_scene else meta['name']
+        torrent_name = meta['name']
 
         name = torrent_name.replace(':', '-')
         name = unicodedata.normalize("NFKD", name)
@@ -224,7 +223,7 @@ class SPD(COMMON):
             torrent_data = bencodepy.decode(f.read())
             info = bencodepy.encode(torrent_data[b'info'])
             source_flag = hashlib.sha1(info).hexdigest()
-            self.source_flag = f"speedapp.io-{source_flag}"
+            self.source_flag = f"speedapp.io-{source_flag}-"
             await self.edit_torrent(meta, self.tracker, self.source_flag)
 
         return
@@ -276,7 +275,8 @@ class SPD(COMMON):
         if channel is None:
             meta['skipping'] = f"{self.tracker}"
             return
-        data['channel'] = "1" if channel == 1 else str(channel)
+        channel = str(channel)
+        data['channel'] = channel
 
         status_message = ''
         torrent_id = ''
@@ -297,15 +297,15 @@ class SPD(COMMON):
                 else:
                     console.print("[bold red]No downloadUrl in response.")
                     console.print("[bold red]Confirm it uploaded correctly and try to download manually")
-                    console.print({response.json()})
+                    console.print(response)
 
             else:
                 console.print(f"[bold red]Failed to upload got status code: {response.status_code}")
 
-            await self.add_tracker_torrent(meta, self.tracker, self.source_flag + f"-{channel}", self.announce_list, self.torrent_url + torrent_id)
-
         else:
             console.print(data)
             status_message = "Debug mode enabled, not uploading."
+
+        await self.add_tracker_torrent(meta, self.tracker, self.source_flag + channel, self.announce_list, self.torrent_url + torrent_id)
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
