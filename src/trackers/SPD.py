@@ -7,6 +7,7 @@ import httpx
 import os
 import re
 import unicodedata
+from src.languages import process_desc_language
 from src.console import console
 from .COMMON import COMMON
 
@@ -37,36 +38,48 @@ class SPD(COMMON):
         }, timeout=30.0)
 
     async def get_cat_id(self, meta):
-        category_id = None
+        languages = (meta.get('subtitle_languages') or []) + (meta.get('audio_languages') or [])
 
+        if not languages:
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        langs = [lang.lower() for lang in languages]
+        romanian = 'romanian' in langs
+
+        if 'RO' in meta.get('origin_country', []):
+            if meta.get('category') == 'TV':
+                return '60'
+            elif meta.get('category') == 'MOVIE':
+                return '59'
+
+        # documentary
+        if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
+            return '63' if romanian else '9'
+
+        # anime
         if meta.get('anime'):
-            category_id = '3'
+            return '3'
 
-        elif meta.get('category') == 'TV':
+        # TV
+        if meta.get('category') == 'TV':
             if meta.get('tv_pack'):
-                category_id = '41'
+                return '66' if romanian else '41'
             elif meta.get('sd'):
-                category_id = '45'
-            else:
-                category_id = '43'
+                return '46' if romanian else '45'
+            return '44' if romanian else '43'
 
-        elif meta.get('category') == 'MOVIE':
+        # MOVIE
+        if meta.get('category') == 'MOVIE':
             if meta.get('resolution') == '2160p' and meta.get('type') != 'DISC':
-                category_id = '61'
+                return '57' if romanian else '61'
+            if meta.get('type') in ('REMUX', 'WEBDL', 'WEBRIP', 'HDTV', 'ENCODE'):
+                return '29' if romanian else '8'
+            if meta.get('type') == 'DISC':
+                return '24' if romanian else '17'
+            if meta.get('type') == 'SD':
+                return '35' if romanian else '10'
 
-            else:
-                movie_type_to_id = {
-                    'DISC': '17',
-                    'REMUX': '8',
-                    'WEBDL': '8',
-                    'WEBRIP': '8',
-                    'HDTV': '8',
-                    'ENCODE': '8',
-                    'SD': '10',
-                }
-                category_id = movie_type_to_id.get(meta.get('type'))
-
-        return category_id
+        return None
 
     async def get_file_info(self, meta):
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}"
@@ -119,8 +132,21 @@ class SPD(COMMON):
     async def search_channel(self, meta):
         spd_channel = meta.get('spd_channel', '') or self.config['TRACKERS'][self.tracker].get('channel', '')
 
+        # if no channel is specified, use the default
         if not spd_channel:
             return 1
+
+        # if the user input is an integer already
+        if isinstance(spd_channel, int):
+            return spd_channel
+
+        # if user enters id as a string number
+        if isinstance(spd_channel, str):
+            if spd_channel.isdigit():
+                return int(spd_channel)
+            # if user enter tag then it will use API to search
+            else:
+                pass
 
         params = {
             'search': spd_channel

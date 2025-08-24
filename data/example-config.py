@@ -662,7 +662,7 @@ config = {
         "SPD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # You can create an API key here https://speedapp.io/profile/api-tokens. Premissions needed: Upload torrents, Read torrents
+            # You can create an API key here https://speedapp.io/profile/api-tokens. Required Permissions: Upload torrents, Read torrents
             "api_key": "",
             # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
             "passkey": "",
