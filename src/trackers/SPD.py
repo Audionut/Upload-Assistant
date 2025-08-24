@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 # import discord
-import asyncio
 import base64
 import bencodepy
 import hashlib
 import httpx
 import os
-import unicodedata
 import re
-from pprint import pprint
+import unicodedata
 from src.console import console
-from src.trackers.COMMON import COMMON
+from .COMMON import COMMON
 
 
 class SPD(COMMON):
@@ -130,11 +128,9 @@ class SPD(COMMON):
 
         try:
             response = await self.session.get(url=self.url + '/api/channel', params=params, headers=self.session.headers)
-            console.print(response)
 
             if response.status_code == 200:
                 data = response.json()
-                console.print(data)
                 for entry in data:
                     id = entry['id']
                     tag = entry['tag']
@@ -258,8 +254,6 @@ class SPD(COMMON):
                     torrent_id = str(response.get('torrent', {}).get('id', ''))
                     if torrent_id:
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                        # torrent hash changes depending on the channel id
-                        # await self.download_torrent(meta, torrent_id)
 
                 else:
                     console.print("[bold red]No downloadUrl in response.")
@@ -272,19 +266,7 @@ class SPD(COMMON):
             await self.add_tracker_torrent(meta, self.tracker, self.source_flag + f"-{channel}", self.announce_list, self.torrent_url + torrent_id)
 
         else:
-            console.print("[cyan]Request Data:")
-            pprint(data)
+            console.print(data)
             status_message = "Debug mode enabled, not uploading."
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
-
-    async def download_torrent(self, meta, torrent_id):
-        url = f"{self.url}/api/torrent/{torrent_id}/download"
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-
-        async with httpx.AsyncClient(headers=self.session.headers, timeout=None) as client:
-            async with client.stream("GET", url) as r:
-                r.raise_for_status()
-                with open(torrent_path, "wb") as f:
-                    async for chunk in r.aiter_bytes():
-                        f.write(chunk)
