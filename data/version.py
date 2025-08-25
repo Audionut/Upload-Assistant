@@ -22,7 +22,7 @@ Release Notes for version v5.3.5 (2025-08-22):
 # * Added support for FunFile (#717) by @wastaken7 in 6436d34
 # * ULCX - aka check by @Audionut in 3b30132
 # * ANT - manual commentary flag (#720) by @wastaken7 in d8fd725
-# * [FnP] Fix resolutions, types and add banned release groups (#721) by @flower in 5e38b0e
+# * [FnP] Fix resolutions, types and add banned release groups (#721) by @flowerey in 5e38b0e
 # * Revert "Dockerfile Improvements (#710)" by @Audionut in c85e83d
 # * fix release script by @Audionut in d86999d
 # * Other minor updates and improvements
@@ -1524,6 +1524,7 @@ Changelog for version 3.6.0 (2025-02-28):
 
 ## What's Changed
 * cleanup tasks by @Audionut in https://github.com/Audionut/Upload-Assistant/pull/364
+
 
 
 **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/3.5.3.3...3.6.0
