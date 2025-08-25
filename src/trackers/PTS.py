@@ -230,14 +230,6 @@ class PTS(COMMON):
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 else:
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    page_element = soup.select_one("div.thin p[style*='color: red']")
-
-                    page_message = ""
-                    if page_element:
-                        page_message = page_element.get_text(strip=True)
-                        status_message = page_message
-
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
