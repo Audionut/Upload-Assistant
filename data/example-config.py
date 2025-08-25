@@ -598,8 +598,8 @@ config = {
         "PTS": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # for PTSKIT to work you need to export cookies from https://www.ptskit.org using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
-            # cookies need to be in netscape format and need to be in data/cookies/PTSKIT.txt
+            # for PTS to work you need to export cookies from https://www.ptskit.org using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/PTS.txt
             "announce_url": "https://ptskit.kqbhek.com/announce.php?passkey=<PASSKEY>",
         },
         "PTT": {

@@ -34,7 +34,7 @@ from src.trackers.PHD import PHD
 from src.trackers.PT import PT
 from src.trackers.PTER import PTER
 from src.trackers.PTP import PTP
-from trackers.PTS import PTS
+from src.trackers.PTS import PTS
 from src.trackers.PTT import PTT
 from src.trackers.R4E import R4E
 from src.trackers.RAS import RAS

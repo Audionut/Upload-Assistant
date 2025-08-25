@@ -23,7 +23,7 @@ class PTS(COMMON):
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = "Shared with Audionut's Upload Assistant"
+        self.signature = "[center]Shared with Audionut's Upload Assistant[center]"
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -138,7 +138,6 @@ class PTS(COMMON):
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
         desc = desc.replace("[hide]", "").replace("[/hide]", "")
-        desc = desc.replace("•", "-").replace("“", '"').replace("”", '"')
         desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
         desc = bbcode.remove_spoiler(desc)
