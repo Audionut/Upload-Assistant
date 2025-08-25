@@ -23,7 +23,7 @@ class PTS(COMMON):
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = "[center]Shared with Audionut's Upload Assistant[center]"
+        self.signature = "[center]Created by Audionut's Upload Assistant[/center]"
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
