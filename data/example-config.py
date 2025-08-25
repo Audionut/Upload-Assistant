@@ -252,7 +252,10 @@ config = {
         "emby_dir": None,
 
         # this path for TV shows
-        "emby_tv_dir": None
+        "emby_tv_dir": None,
+
+        # Set true to search for matching requests on supported trackers
+        "search_requests": False,
 
     },
 

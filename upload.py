@@ -36,6 +36,7 @@ from src.nfo_link import nfo_link
 from bin.get_mkbrr import ensure_mkbrr_binary
 from src.get_tracker_data import get_tracker_data
 from cogs.redaction import redact_private_info
+from src.trackersetup import TRACKER_SETUP
 
 
 cli_ui.setup(color='always', title="Audionut's Upload Assistant")
@@ -832,6 +833,11 @@ async def do_the_thing(base_dir):
                         console.print(f"[red]Error in tracker print loop: {e}[/red]")
                 else:
                     await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta)
+
+            find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
+            if find_requests:
+                tracker_setup = TRACKER_SETUP(config=config)
+                await tracker_setup.tracker_request(meta, meta['trackers'])
 
             if sanitize_meta and not meta.get('emby', False):
                 try:
