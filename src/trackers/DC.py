@@ -126,7 +126,7 @@ class DC(COMMON):
         desc = desc.replace('[ul]', '').replace('[/ul]', '')
         desc = desc.replace('[ol]', '').replace('[/ol]', '')
         desc = re.sub(r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', r'[nfo]\1[/nfo]', desc, flags=re.DOTALL)
-        desc = re.sub(r'(\[img=\d+)]', '[img]', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
         desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
         desc = re.sub(r'\n{3,}', '\n\n', desc)
