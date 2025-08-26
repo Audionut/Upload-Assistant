@@ -90,10 +90,13 @@ class DC(COMMON):
             images = meta['image_list']
         if images:
             screenshots_block = '[center]\n'
-            for image in images:
+            for i, image in enumerate(images, start=1):
                 img_url = image['img_url']
                 web_url = image['web_url']
-                screenshots_block += f'[url={web_url}][img]{img_url}[/img][/url]'
+                screenshots_block += f'[url={web_url}][img]{img_url}[/img][/url] '
+                # limits to 2 screens per line, as the description box is small
+                if i % 2 == 0:
+                    screenshots_block += '\n'
             screenshots_block += '\n[/center]'
             description_parts.append(screenshots_block)
 
