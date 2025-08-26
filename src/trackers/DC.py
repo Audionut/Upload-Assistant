@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import httpx
 import os
-import platform
 import re
 from .COMMON import COMMON
 from src.console import console
@@ -25,7 +24,6 @@ class DC(COMMON):
             f'https://trackerprxy.digitalcore.club/announce/{self.passkey}'
         ]
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})",
             'X-API-KEY': self.api_key
         }, timeout=30.0)
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
