@@ -316,7 +316,7 @@ class HDS(COMMON):
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {
-                    'file': (f'[{self.tracker}].torrent', torrent_file, 'application/x-bittorrent'),
+                    'torrent': (f'[{self.tracker}].torrent', torrent_file, 'application/x-bittorrent'),
                 }
                 nfo = await self.get_nfo(meta)
                 if nfo:
