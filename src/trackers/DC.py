@@ -137,11 +137,11 @@ class DC(COMMON):
         return desc
 
     async def get_category_id(self, meta):
-        resolution = meta.get('resolution')
-        category = meta.get('category')
-        is_disc = meta.get('is_disc')
-        tv_pack = meta.get('tv_pack')
-        sd = meta.get('sd')
+        resolution = meta.get('resolution', '')
+        category = meta.get('category', '')
+        is_disc = meta.get('is_disc', '')
+        tv_pack = meta.get('tv_pack', '')
+        sd = meta.get('sd', '')
 
         if is_disc == 'BDMV':
             if resolution == '1080p' and category == 'MOVIE':
@@ -196,21 +196,21 @@ class DC(COMMON):
 
         search_url = f'{self.api_base_url}/torrents'
         search_params = {'searchText': imdb_id}
-        self.search_results = []
+        search_results = []
         try:
             response = await self.session.get(search_url, params=search_params, headers=self.session.headers, timeout=15)
             response.raise_for_status()
 
             if response.text and response.text != '[]':
-                self.search_results = response.json()
-                results = self.search_results
-                if self.search_results and isinstance(self.search_results, list):
+                search_results = response.json()
+                results = search_results
+                if search_results and isinstance(search_results, list):
                     should_continue = await self.get_title(meta, results)
                     if not should_continue:
                         print('An UNRAR duplicate of this specific release already exists on site.')
                         meta['skipping'] = f'{self.tracker}'
                         return
-                    return self.search_results
+                    return search_results
 
         except Exception as e:
             console.print(f'[bold red]Error searching for IMDb ID {imdb_id} on {self.tracker}: {e}[/bold red]')
@@ -301,7 +301,7 @@ class DC(COMMON):
                 status_message = response.json()
 
                 if response.status_code == 200 and status_message.get('id'):
-                    torrent_id = status_message.get('id', '')
+                    torrent_id = str(status_message.get('id', ''))
                     if torrent_id:
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
@@ -314,6 +314,6 @@ class DC(COMMON):
             console.print(data)
             status_message = 'Debug mode enabled, not uploading'
 
-        await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + str(torrent_id) + '/')
+        await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id + '/')
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
