@@ -10,7 +10,6 @@ import uuid
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from datetime import datetime
-from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
@@ -34,7 +33,7 @@ class PHD(COMMON):
         }, timeout=60.0)
         self.signature = ''
 
-    def rules(self, meta):
+    async def rules(self, meta):
         meta['phd_rule'] = ''
         warning = f'{self.tracker} RULE WARNING: '
         rule = ''
@@ -505,23 +504,20 @@ class PHD(COMMON):
 
         return keyword_map.get(source_type.lower())
 
-    async def validate_credentials(self, meta):
+    async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f'{meta['base_dir']}/data/cookies/{self.tracker}.txt')
         if not os.path.exists(cookie_file):
-            console.print(f'[red]Cookie file for {self.tracker} not found: {cookie_file}[/red]')
+            console.print(f'[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
             return False
 
-        try:
-            jar = MozillaCookieJar(cookie_file)
-            jar.load(ignore_discard=True, ignore_expires=True)
-            self.session.cookies = jar
-        except Exception as e:
-            console.print(f'[red]Error loading cookie file. Please check if the format is correct. Error:{e}[/red]')
-            return False
+        self.session.cookies = await self.parseCookieFile(cookie_file)
 
+    async def validate_credentials(self, meta):
+        await self.load_cookies(meta)
         try:
             upload_page_url = f'{self.base_url}/upload'
             response = await self.session.get(upload_page_url, timeout=10)
+            response.raise_for_status()
 
             if 'login' in str(response.url):
                 console.print(f'[red]{self.tracker} validation failed. The cookie appears to be expired or invalid.[/red]')
@@ -529,28 +525,35 @@ class PHD(COMMON):
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
 
-            if auth_match:
-                self.auth_token = auth_match.group(1)
-                return True
-            else:
-                console.print(f"[red]{self.tracker} validation failed. Could not find 'auth' token on upload page.[/red]")
+            if not auth_match:
+                console.print(f"{self.tracker} validation failed. Could not find 'auth' token on upload page.[/bold red]")
                 console.print('[yellow]This can happen if the site structure has changed or if the login failed silently..[/yellow]')
-                with open(f'{self.tracker}_auth_failure_{meta['uuid']}.html', 'w', encoding='utf-8') as f:
+
+                failure_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html'
+                with open(failure_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
-                console.print(f"[yellow]The server response was saved to '{self.tracker}_auth_failure_{meta['uuid']}.html' for analysis.[/yellow]")
+                console.print(f'[yellow]The server response was saved to {failure_path} for analysis.[/yellow]')
                 return False
 
-        except Exception as e:
-            console.print(f'[red]Error validating credentials for {self.tracker}: {e}[/red]')
+            self.auth_token = auth_match.group(1)
+            return True
+
+        except httpx.TimeoutException:
+            console.print(f'[bold red]Error in {self.tracker}: Timeout while trying to validate credentials.[/bold red]')
+            return False
+        except httpx.HTTPStatusError as e:
+            console.print(f'[bold red]HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.[/bold red]')
+            return False
+        except httpx.RequestError as e:
+            console.print(f'[bold red]Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
 
     async def search_existing(self, meta, disctype):
-        upload_ok = self.rules(meta)
+        upload_ok = await self.rules(meta)
         if not upload_ok:
             console.print(f'[red]{meta['phd_rule']}[/red]')
             meta['skipping'] = 'PHD'
             return
-        await self.validate_credentials(meta)
         await self.get_media_code(meta)
 
         if meta.get('resolution') == '2160p':
@@ -595,7 +598,6 @@ class PHD(COMMON):
         return dupes
 
     async def get_media_code(self, meta):
-        await self.validate_credentials(meta)
         self.media_code = ''
 
         category_map = {
@@ -697,7 +699,7 @@ class PHD(COMMON):
         files = {'qqfile': (filename, image_bytes, 'image/png')}
 
         try:
-            response = await self.session.post(upload_url, headers=headers, data=data, files=files, timeout=120)
+            response = await self.session.post(upload_url, headers=headers, data=data, files=files, timeout=30)
 
             if response.is_success:
                 json_data = response.json()
@@ -729,14 +731,13 @@ class PHD(COMMON):
                 return await self.img_host(meta, image_bytes, path.name)
 
             paths = local_files[:limit] if limit else local_files
-            tasks = [upload_local_file(p) for p in paths]
 
-            for coro in tqdm(
-                asyncio.as_completed(tasks),
+            for path in tqdm(
+                paths,
                 total=len(paths),
                 desc=f'Uploading screenshots to {self.tracker}'
             ):
-                result = await coro
+                result = await upload_local_file(path)
                 if result:
                     results.append(result)
 
@@ -747,7 +748,7 @@ class PHD(COMMON):
 
             async def upload_remote_file(url):
                 try:
-                    response = await self.session.get(url, timeout=120)
+                    response = await self.session.get(url, timeout=30)
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
@@ -757,14 +758,13 @@ class PHD(COMMON):
                     return None
 
             links = image_links[:limit] if limit else image_links
-            tasks = [upload_remote_file(url) for url in links]
 
-            for coro in tqdm(
-                asyncio.as_completed(tasks),
+            for url in tqdm(
+                links,
                 total=len(links),
                 desc=f'Uploading screenshots to {self.tracker}'
             ):
-                result = await coro
+                result = await upload_remote_file(url)
                 if result:
                     results.append(result)
 
@@ -785,13 +785,6 @@ class PHD(COMMON):
                     query = meta['title'] + f' {meta.get('season', '')}{meta.get('episode', '')}'
                 else:
                     query = meta['title']
-
-                # Debug
-                if meta.get('debug', False):
-                    console.print('DEBUG: Please input the query for searching requests:')
-                    query = input().lower()
-                    console.print('DEBUG: Please input the category for searching requests (tv or movie):')
-                    category = input().lower()
 
                 search_url = f'{self.base_url}/requests?type={category}&search={query}&condition=new'
 
@@ -840,7 +833,6 @@ class PHD(COMMON):
                 return []
 
     async def create_task_id(self, meta):
-        await self.validate_credentials(meta)
         await self.get_media_code(meta)
 
         data = {
