@@ -722,7 +722,7 @@ class PHD(COMMON):
         local_files = sorted(screenshot_dir.glob('*.png'))
         results = []
 
-        limit = 3 if meta.get('tv_pack', '') == 0 else None
+        limit = 3 if meta.get('tv_pack', '') == 0 else 15
 
         if local_files:
             async def upload_local_file(path):
