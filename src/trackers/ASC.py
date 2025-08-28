@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import json
 import httpx
 import os
 import platform
@@ -10,6 +11,7 @@ from datetime import datetime
 from pymediainfo import MediaInfo
 from src.console import console
 from src.languages import process_desc_language
+from src.tmdb import get_tmdb_localized_data
 
 
 class ASC(COMMON):
@@ -78,79 +80,42 @@ class ASC(COMMON):
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}. Verifique sua conexão.[/bold red]')
             return False
 
-    async def fetch_tmdb_data(self, endpoint):
-        tmdb_api = self.config['DEFAULT']['tmdb_api']
-        base_url = 'https://api.themoviedb.org/3/'
+    def load_localized_data(self, meta):
+        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
 
-        url = f'{base_url}{endpoint}'
-
-        params = {
-            'api_key': tmdb_api,
-            'language': 'pt-BR',
-            'append_to_response': 'credits,videos,content_ratings'
-        }
-
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url, params=params, headers=headers)
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    print(f'Error fetching {url}: Status {response.status_code}')
-                    return None
-        except httpx.RequestError as e:
-            print(f'Request failed for {url}: {e}')
-            return None
+        if os.path.isfile(localized_data_file):
+            with open(localized_data_file, "r", encoding="utf-8") as f:
+                self.tmdb_data = json.load(f)
+        else:
+            self.tmdb_data = {}
 
     async def main_tmdb_data(self, meta):
-        brazil_data_in_meta = meta.get('tmdb_localized_data', {}).get('brazil', {}).get('main')
+        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
         if brazil_data_in_meta:
             return brazil_data_in_meta
 
-        endpoint = f'{meta['category'].lower()}/{meta['tmdb']}'
-        data = await self.fetch_tmdb_data(endpoint)
-
-        if data:
-            meta.setdefault('tmdb_localized_data', {}).setdefault('brazil', {})['main'] = data
+        data = await get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings')
+        self.load_localized_data(meta)
 
         return data
 
     async def season_tmdb_data(self, meta):
-        brazil_data_in_meta = meta.get('tmdb_localized_data', {}).get('brazil', {}).get('season')
+        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('season')
         if brazil_data_in_meta:
             return brazil_data_in_meta
 
-        season = meta.get('season_int')
-        if not season:
-            return None
-
-        endpoint = f'tv/{meta['tmdb']}/season/{season}'
-        data = await self.fetch_tmdb_data(endpoint)
-
-        if data:
-            meta.setdefault('tmdb_localized_data', {}).setdefault('brazil', {})['season'] = data
+        data = await get_tmdb_localized_data(meta, data_type='season', language='pt-BR', append_to_response='')
+        self.load_localized_data(meta)
 
         return data
 
     async def episode_tmdb_data(self, meta):
-        brazil_data_in_meta = meta.get('tmdb_localized_data', {}).get('brazil', {}).get('episode')
+        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('episode')
         if brazil_data_in_meta:
             return brazil_data_in_meta
 
-        season = meta.get('season_int')
-        episode = meta.get('episode_int')
-        if not all([season, episode]):
-            return None
-
-        endpoint = f'tv/{meta['tmdb']}/season/{season}/episode/{episode}'
-        data = await self.fetch_tmdb_data(endpoint)
-
-        if data:
-            meta.setdefault('tmdb_localized_data', {}).setdefault('brazil', {})['episode'] = data
+        data = await get_tmdb_localized_data(meta, data_type='episode', language='pt-BR', append_to_response='')
+        self.load_localized_data(meta)
 
         return data
 
@@ -373,7 +338,6 @@ class ASC(COMMON):
             season_tmdb = await self.season_tmdb_data(meta)
             if not meta.get('tv_pack', False):
                 episode_tmdb = await self.episode_tmdb_data(meta)
-
         user_layout = await self.fetch_layout_data(meta)
         fileinfo_dump = await self.media_info(meta)
 
@@ -798,7 +762,8 @@ class ASC(COMMON):
                 console.print(traceback.format_exc())
                 return []
 
-    async def gather_data(self, meta):
+    async def fetch_data(self, meta):
+        self.load_localized_data(meta)
         await process_desc_language(meta, desc=None, tracker=self.tracker)
         main_tmdb = await self.main_tmdb_data(meta)
         resolution = await self.get_resolution(meta)
@@ -847,7 +812,7 @@ class ASC(COMMON):
 
     async def upload(self, meta, disctype):
         await self.load_cookies(meta)
-        data = await self.gather_data(meta)
+        data = await self.fetch_data(meta)
         requests = await self.get_requests(meta)
         await self.edit_torrent(meta, self.tracker, self.source_flag)
         status_message = ''
