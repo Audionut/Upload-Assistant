@@ -423,12 +423,11 @@ class BJS(COMMON):
 
         return tags
 
-    async def search_existing(self, meta, disctype):
+    def _extract_upload_params(self, meta):
         is_tv_pack = bool(meta.get('tv_pack'))
         upload_season_num = None
         upload_episode_num = None
         upload_resolution = meta.get('resolution')
-        process_folder_name = False
 
         if meta['category'] == 'TV':
             season_match = meta.get('season', '').replace('S', '')
@@ -440,52 +439,198 @@ class BJS(COMMON):
                 if episode_match:
                     upload_episode_num = episode_match
 
-        search_url = f'{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}'
+        return {
+            'is_tv_pack': is_tv_pack,
+            'upload_season_num': upload_season_num,
+            'upload_episode_num': upload_episode_num,
+            'upload_resolution': upload_resolution
+        }
+
+    def _check_episode_on_page(self, torrent_table, upload_season_num, upload_episode_num):
+        if not upload_season_num or not upload_episode_num:
+            return False
+
+        temp_season_on_page = None
+        upload_episode_str = f'E{upload_episode_num}'
+
+        for row in torrent_table.find_all('tr'):
+            if 'season_header' in row.get('class', []):
+                s_match = re.search(r'Temporada (\d+)', row.get_text(strip=True))
+                if s_match:
+                    temp_season_on_page = s_match.group(1)
+                continue
+
+            if (temp_season_on_page == upload_season_num and row.get('id', '').startswith('torrent')):
+                link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+                if (link and re.search(r'\b' + re.escape(upload_episode_str) + r'\b', link.get_text(strip=True))):
+                    return True
+        return False
+
+    def _should_process_torrent(self, row, current_season, current_resolution, params, episode_found_on_page, meta):
+        description_text = ' '.join(row.find('a', onclick=re.compile(r'loadIfNeeded\(')).get_text(strip=True).split())
+
+        # TV Logic
+        if meta['category'] == 'TV':
+            if current_season == params['upload_season_num']:
+                existing_episode_match = re.search(r'E(\d+)', description_text)
+                is_current_row_a_pack = not existing_episode_match
+
+                if params['is_tv_pack']:
+                    return is_current_row_a_pack, False
+                else:
+                    if episode_found_on_page:
+                        if existing_episode_match:
+                            existing_episode_num = existing_episode_match.group(1)
+                            return existing_episode_num == params['upload_episode_num'], False
+                    else:
+                        return is_current_row_a_pack, True
+
+        # Movie Logic
+        elif meta['category'] == 'MOVIE':
+            if params['upload_resolution'] and current_resolution == params['upload_resolution']:
+                return True, False
+
+        return False, False
+
+    def _extract_torrent_ids(self, rows_to_process):
+        ajax_tasks = []
+
+        for row, process_folder_name in rows_to_process:
+            id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+            if not id_link:
+                continue
+
+            onclick_attr = id_link['onclick']
+            id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
+            if not id_match:
+                continue
+
+            torrent_id = id_match.group(1)
+            group_id = id_match.group(2)
+            description_text = ' '.join(id_link.get_text(strip=True).split())
+
+            ajax_tasks.append({
+                'torrent_id': torrent_id,
+                'group_id': group_id,
+                'description_text': description_text,
+                'process_folder_name': process_folder_name
+            })
+
+        return ajax_tasks
+
+    async def _fetch_torrent_content(self, task_info):
+        torrent_id = task_info['torrent_id']
+        group_id = task_info['group_id']
+        ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
+
+        try:
+            ajax_response = await self.session.get(ajax_url)
+            ajax_response.raise_for_status()
+            ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
+
+            return {
+                'success': True,
+                'soup': ajax_soup,
+                'task_info': task_info
+            }
+        except Exception as e:
+            console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]')
+            return {
+                'success': False,
+                'error': e,
+                'task_info': task_info
+            }
+
+    def _extract_item_name(self, ajax_soup, description_text, is_tv_pack, process_folder_name):
+        item_name = None
+        is_existing_torrent_a_disc = any(
+            keyword in description_text.lower()
+            for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts']
+        )
+
+        if is_existing_torrent_a_disc or is_tv_pack or process_folder_name:
+            path_div = ajax_soup.find('div', class_='filelist_path')
+            if path_div and path_div.get_text(strip=True):
+                item_name = path_div.get_text(strip=True).strip('/')
+            else:
+                file_table = ajax_soup.find('table', class_='filelist_table')
+                if file_table:
+                    first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
+                    if first_file_row and first_file_row.find('td'):
+                        item_name = first_file_row.find('td').get_text(strip=True)
+        else:
+            file_table = ajax_soup.find('table', class_='filelist_table')
+            if file_table:
+                first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
+                if first_row and first_row.find('td'):
+                    item_name = first_row.find('td').get_text(strip=True)
+
+        return item_name
+
+    async def _process_ajax_responses(self, ajax_tasks, params):
+        if not ajax_tasks:
+            return []
+
+        ajax_results = await asyncio.gather(
+            *[self._fetch_torrent_content(task) for task in ajax_tasks],
+            return_exceptions=True
+        )
 
         found_items = []
+        for result in ajax_results:
+            if isinstance(result, Exception):
+                console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
+                continue
+
+            if not result['success']:
+                continue
+
+            task_info = result['task_info']
+            item_name = self._extract_item_name(
+                result['soup'],
+                task_info['description_text'],
+                params['is_tv_pack'],
+                task_info['process_folder_name']
+            )
+
+            if item_name:
+                found_items.append(item_name)
+
+        return found_items
+
+    async def _fetch_search_page(self, meta):
+        search_url = f'{self.base_url}/torrents.php?searchstr={meta["imdb_info"]["imdbID"]}'
+
+        response = await self.session.get(search_url)
+        if response.status_code in [301, 302, 307] and 'Location' in response.headers:
+            redirect_url = f'{self.base_url}/{response.headers["Location"]}'
+            response = await self.session.get(redirect_url)
+        response.raise_for_status()
+
+        return BeautifulSoup(response.text, 'html.parser')
+
+    async def search_existing(self, meta, disctype):
         try:
-            response = await self.session.get(search_url)
-            if response.status_code in [301, 302, 307] and 'Location' in response.headers:
-                redirect_url = f'{self.base_url}/{response.headers['Location']}'
-                response = await self.session.get(redirect_url)
-            response.raise_for_status()
+            params = self._extract_upload_params(meta)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = await self._fetch_search_page(meta)
             torrent_details_table = soup.find('div', class_='main_column')
-
-            episode_found_on_page = False
-            if meta['category'] == 'TV' and not is_tv_pack and upload_season_num and upload_episode_num:
-                temp_season_on_page = None
-                upload_episode_str = f'E{upload_episode_num}'
-                for r in torrent_details_table.find_all('tr'):
-                    if 'season_header' in r.get('class', []):
-                        s_match = re.search(r'Temporada (\d+)', r.get_text(strip=True))
-                        if s_match:
-                            temp_season_on_page = s_match.group(1)
-                        continue
-                    if temp_season_on_page == upload_season_num and r.get('id', '').startswith('torrent'):
-                        link = r.find('a', onclick=re.compile(r'loadIfNeeded\('))
-                        if link and re.search(r'\b' + re.escape(upload_episode_str) + r'\b', link.get_text(strip=True)):
-                            episode_found_on_page = True
-                            break
-
-            # Get the cover while searching for dupes
-            cover_div = soup.find('div', id='cover_div_0')
-            image_url = None
-
-            if cover_div:
-                link_tag = cover_div.find('a')
-                if link_tag and link_tag.get('href'):
-                    image_url = link_tag['href']
-
-            if image_url:
-                self.cover = image_url
 
             if not torrent_details_table:
                 return []
 
+            episode_found_on_page = False
+            if (meta['category'] == 'TV' and not params['is_tv_pack'] and params['upload_season_num'] and params['upload_episode_num']):
+                episode_found_on_page = self._check_episode_on_page(
+                    torrent_details_table,
+                    params['upload_season_num'],
+                    params['upload_episode_num']
+                )
+
+            rows_to_process = []
             current_season_on_page = None
             current_resolution_on_page = None
+
             for row in torrent_details_table.find_all('tr'):
                 if 'resolution_header' in row.get('class', []):
                     header_text = row.get_text(strip=True)
@@ -493,6 +638,7 @@ class BJS(COMMON):
                     if resolution_match:
                         current_resolution_on_page = resolution_match.group(1)
                     continue
+
                 if 'season_header' in row.get('class', []):
                     season_header_text = row.get_text(strip=True)
                     season_match = re.search(r'Temporada (\d+)', season_header_text)
@@ -503,94 +649,28 @@ class BJS(COMMON):
                 if not row.get('id', '').startswith('torrent'):
                     continue
 
-                torrent_row = row
-                id_link = torrent_row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+                id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
                 if not id_link:
                     continue
 
-                description_text = ' '.join(id_link.get_text(strip=True).split())
+                should_process, process_folder_name = self._should_process_torrent(
+                    row, current_season_on_page, current_resolution_on_page,
+                    params, episode_found_on_page, meta
+                )
 
-                should_make_ajax_call = False
+                if should_process:
+                    rows_to_process.append((row, process_folder_name))
 
-                # TV
-                if meta['category'] == 'TV':
-                    if current_season_on_page == upload_season_num:
-                        existing_episode_match = re.search(r'E(\d+)', description_text)
-                        is_current_row_a_pack = not existing_episode_match
+            ajax_tasks = self._extract_torrent_ids(rows_to_process)
+            found_items = await self._process_ajax_responses(ajax_tasks, params)
 
-                        # Case 1: We are uploading a SEASON PACK
-                        if is_tv_pack:
-                            if is_current_row_a_pack:
-                                should_make_ajax_call = True
-
-                        # Case 2: We are uploading a SINGLE EPISODE
-                        else:
-                            # Subcase 2a: Exact episode was found on the page. Only process that match.
-                            if episode_found_on_page:
-                                if existing_episode_match:
-                                    existing_episode_num = existing_episode_match.group(1)
-                                    if existing_episode_num == upload_episode_num:
-                                        should_make_ajax_call = True
-                            # Subcase 2b: Exact episode not found. Process season packs instead.
-                            else:
-                                if is_current_row_a_pack:
-                                    process_folder_name = True
-                                    should_make_ajax_call = True
-
-                # MOVIE
-                if meta['category'] == 'MOVIE':
-                    # Only process matching resolution
-                    if upload_resolution and current_resolution_on_page == upload_resolution:
-                        should_make_ajax_call = True
-
-                if should_make_ajax_call:
-                    onclick_attr = id_link['onclick']
-                    id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
-                    if not id_match:
-                        continue
-
-                    torrent_id = id_match.group(1)
-                    group_id = id_match.group(2)
-                    ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
-
-                    try:
-                        ajax_response = await self.session.get(ajax_url)
-                        ajax_response.raise_for_status()
-                        ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
-                    except Exception as e:
-                        console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]')
-                        continue
-
-                    item_name = None
-                    is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
-
-                    if is_existing_torrent_a_disc or is_tv_pack or process_folder_name:
-                        path_div = ajax_soup.find('div', class_='filelist_path')
-                        if path_div and path_div.get_text(strip=True):
-                            item_name = path_div.get_text(strip=True).strip('/')
-                        else:
-                            file_table = ajax_soup.find('table', class_='filelist_table')
-                            if file_table:
-                                first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                                if first_file_row and first_file_row.find('td'):
-                                    item_name = first_file_row.find('td').get_text(strip=True)
-                    else:
-                        file_table = ajax_soup.find('table', class_='filelist_table')
-                        if file_table:
-                            first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                            if first_row and first_row.find('td'):
-                                item_name = first_row.find('td').get_text(strip=True)
-
-                    if item_name:
-                        found_items.append(item_name)
+            return found_items
 
         except Exception as e:
             console.print(f'[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]')
             import traceback
             traceback.print_exc()
             return []
-
-        return found_items
 
     def get_edition(self, meta):
         edition_str = meta.get('edition', '').lower()
@@ -694,29 +774,24 @@ class BJS(COMMON):
             print(f'Exceção no upload de {filename}: {e}')
             return None
 
-    async def get_cover(self, meta, disctype):
-        await self.search_existing(meta, disctype)
-        # Use an existing cover instead of uploading a new one
-        if self.cover:
-            return self.cover
-        else:
-            tmdb_data = await self.ptbr_tmdb_data(meta)
-            cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
-            if not cover_path:
-                print('Nenhum poster_path encontrado nos dados do TMDB.')
-                return None
+    async def get_cover(self, meta):
+        tmdb_data = await self.ptbr_tmdb_data(meta)
+        cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
+        if not cover_path:
+            print('Nenhum poster_path encontrado nos dados do TMDB.')
+            return None
 
-            cover_tmdb_url = f'https://image.tmdb.org/t/p/w500{cover_path}'
-            try:
-                response = await self.session.get(cover_tmdb_url, timeout=120)
-                response.raise_for_status()
-                image_bytes = response.content
-                filename = os.path.basename(cover_path)
+        cover_tmdb_url = f'https://image.tmdb.org/t/p/w500{cover_path}'
+        try:
+            response = await self.session.get(cover_tmdb_url, timeout=120)
+            response.raise_for_status()
+            image_bytes = response.content
+            filename = os.path.basename(cover_path)
 
-                return await self.img_host(image_bytes, filename)
-            except Exception as e:
-                print(f'Falha ao processar pôster da URL {cover_tmdb_url}: {e}')
-                return None
+            return await self.img_host(image_bytes, filename)
+        except Exception as e:
+            print(f'Falha ao processar pôster da URL {cover_tmdb_url}: {e}')
+            return None
 
     async def get_screenshots(self, meta):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
