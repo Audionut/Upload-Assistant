@@ -1,18 +1,19 @@
-from src.console import console
-from src.imdb import get_imdb_info_api
-from src.args import Args
-from data.config import config
-import re
-from guessit import guessit
-import cli_ui
 import anitopy
+import asyncio
+import cli_ui
+import httpx
+import json
+import os
+import re
+import requests
+import sys
+from data.config import config
 from datetime import datetime
 from difflib import SequenceMatcher
-import requests
-import json
-import httpx
-import asyncio
-import sys
+from guessit import guessit
+from src.args import Args
+from src.console import console
+from src.imdb import get_imdb_info_api
 
 TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -1573,3 +1574,66 @@ async def set_tmdb_metadata(meta, filename=None):
                     console.print(f"[red]Catastrophic error getting TMDB data using ID {meta['tmdb_id']}[/red]")
                     console.print(f"[red]Check category is set correctly, UA was using {meta.get('category', None)}[/red]")
                     raise RuntimeError(error_msg) from e
+
+
+async def get_tmdb_localized_data(meta, data_type, language, append_to_response):
+    endpoint = None
+    if data_type == 'main':
+        endpoint = f'/{meta["category"].lower()}/{meta["tmdb"]}'
+    elif data_type == 'season':
+        season = meta.get('season_int')
+        if season is None:
+            return None
+        endpoint = f'/tv/{meta["tmdb"]}/season/{season}'
+    elif data_type == 'episode':
+        season = meta.get('season_int')
+        episode = meta.get('episode_int')
+        if season is None or episode is None:
+            return None
+        endpoint = f'/tv/{meta["tmdb"]}/season/{season}/episode/{episode}'
+
+    url = f'{TMDB_BASE_URL}{endpoint}'
+    params = {
+        'api_key': TMDB_API_KEY,
+        'language': language
+    }
+    if append_to_response:
+        params.update({'append_to_response': append_to_response})
+
+    if meta.get('debug', False):
+        console.print(
+                    '[green]Requesting localized data from TMDB.\n'
+                    f"Type: '{data_type}'.\n"
+                    f"Language: '{language}'\n"
+                    f"Append to response: '{append_to_response}'\n"
+                    f"Endpoint: '{endpoint}'[/green]\n"
+        )
+
+    save_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}/"
+    filename = f"{save_dir}tmdb_localized_data.json"
+    localized_data = {}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+
+                if os.path.exists(filename):
+                    with open(filename, 'r', encoding='utf-8') as f:
+                        localized_data = json.load(f)
+                else:
+                    localized_data = {}
+
+                localized_data.setdefault(language, {})[data_type] = data
+
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(localized_data, f, ensure_ascii=False, indent=4)
+
+                return data
+            else:
+                print(f'Error fetching {url}: Status {response.status_code}')
+                return None
+    except httpx.RequestError as e:
+        print(f'Request failed for {url}: {e}')
+        return None
