@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import bencodepy
 import hashlib
 import httpx
@@ -516,7 +515,7 @@ class PHD(COMMON):
         await self.load_cookies(meta)
         try:
             upload_page_url = f'{self.base_url}/upload'
-            response = await self.session.get(upload_page_url, timeout=10)
+            response = await self.session.get(upload_page_url)
             response.raise_for_status()
 
             if 'login' in str(response.url):
@@ -629,7 +628,7 @@ class PHD(COMMON):
         }
 
         try:
-            response = await self.session.get(ajax_url, headers=headers, timeout=20)
+            response = await self.session.get(ajax_url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -719,7 +718,7 @@ class PHD(COMMON):
         files = {'qqfile': (filename, image_bytes, 'image/png')}
 
         try:
-            response = await self.session.post(upload_url, headers=headers, data=data, files=files, timeout=30)
+            response = await self.session.post(upload_url, headers=headers, data=data, files=files)
 
             if response.is_success:
                 json_data = response.json()
@@ -768,7 +767,7 @@ class PHD(COMMON):
 
             async def upload_remote_file(url):
                 try:
-                    response = await self.session.get(url, timeout=30)
+                    response = await self.session.get(url)
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
@@ -872,7 +871,7 @@ class PHD(COMMON):
                     info = bencodepy.encode(torrent_data[b'info'])
                     info_hash = hashlib.sha1(info).hexdigest()
 
-                    task_response = await self.session.post(upload_url_step1, data=data, files=files, timeout=120)
+                    task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
                     if task_response.status_code == 302 and 'Location' in task_response.headers:
                         redirect_url = task_response.headers['Location']
@@ -967,7 +966,7 @@ class PHD(COMMON):
         status_message = ''
 
         if not meta.get('debug', False):
-            response = await self.session.post(self.upload_url_step2, data=data, timeout=120)
+            response = await self.session.post(self.upload_url_step2, data=data)
 
             if response.status_code == 302:
                 torrent_url = response.headers['Location']
