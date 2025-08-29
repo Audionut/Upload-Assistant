@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import bencodepy
 import hashlib
 import httpx
@@ -849,6 +850,50 @@ class PHD(COMMON):
                 console.print(f'[bold red]An error occurred while fetching requests for {self.tracker}: {e}[/bold red]')
                 return []
 
+    async def fetch_tag_id(self, meta, word):
+        tags_url = f'{self.base_url}/ajax/tags'
+        params = {'term': word}
+
+        headers = {
+            'Referer': f'{self.base_url}/upload',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        try:
+            response = await self.session.get(tags_url, headers=headers, params=params)
+            response.raise_for_status()
+
+            json_data = response.json()
+
+            for tag_info in json_data.get('data', []):
+                if tag_info.get('tag') == word:
+                    return tag_info.get('id')
+
+        except Exception as e:
+            print(f"An unexpected error occurred while processing the tag '{word}': {e}")
+
+        return None
+
+    async def get_tags(self, meta):
+        genres = meta.get('keywords', '')
+        if not genres:
+            return []
+
+        # divides by commas, cleans spaces and normalizes to lowercase
+        phrases = [re.sub(r'\s+', ' ', x.strip().lower()) for x in re.split(r',+', genres) if x.strip()]
+
+        words_to_search = set(phrases)
+
+        tasks = [self.fetch_tag_id(self.session, word) for word in words_to_search]
+
+        tag_ids_results = await asyncio.gather(*tasks)
+
+        tags = [str(tag_id) for tag_id in tag_ids_results if tag_id is not None]
+
+        if meta.get('personalrelease', False):
+            tags.insert(0, '1448')
+
+        return tags
+
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
 
@@ -928,6 +973,7 @@ class PHD(COMMON):
             'languages[]': lang_info.get('languages[]'),
             'subtitles[]': lang_info.get('subtitles[]'),
             'media_info': await self.get_file_info(meta),
+            'tags[]': await self.get_tags(meta),
             }
 
         # TV
