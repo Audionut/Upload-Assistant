@@ -198,6 +198,7 @@ class SPD(COMMON):
         final_description = "\n\n".join(filter(None, description_parts))
         desc = final_description
         desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
+        desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
         desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
         desc = re.sub(r'\n{3,}', '\n\n', desc)
 
