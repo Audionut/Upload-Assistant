@@ -848,8 +848,6 @@ class PHD(COMMON):
 
             except Exception as e:
                 console.print(f'[bold red]An error occurred while fetching requests for {self.tracker}: {e}[/bold red]')
-                import traceback
-                console.print(traceback.format_exc())
                 return []
 
     async def create_task_id(self, meta):
@@ -877,7 +875,6 @@ class PHD(COMMON):
                     task_response = await self.session.post(upload_url_step1, data=data, files=files, timeout=120)
 
                     if task_response.status_code == 302 and 'Location' in task_response.headers:
-                        await asyncio.sleep(5)
                         redirect_url = task_response.headers['Location']
 
                         match = re.search(r'/(\d+)$', redirect_url)
@@ -912,13 +909,10 @@ class PHD(COMMON):
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
-    async def upload(self, meta, disctype):
+    async def fetch_data(self, meta):
         await self.validate_credentials(meta)
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
-        requests = await self.get_requests(meta)
-
-        status_message = ''
 
         data = {
             '_token': self.auth_token,
@@ -962,50 +956,48 @@ class PHD(COMMON):
                     'screenshots[]': await self.get_screenshots(meta),
                 })
 
-                response = await self.session.post(self.upload_url_step2, data=data, timeout=120)
-
-                if response.status_code == 302:
-                    torrent_url = response.headers['Location']
-
-                    torrent_id = ''
-                    match = re.search(r'/torrent/(\d+)', torrent_url)
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                    # Even if you are uploading, you still need to download the .torrent from the website
-                    # because it needs to be registered as a download before you can start seeding
-                    download_url = torrent_url.replace('/torrent/', '/download/torrent/')
-                    register_download = await self.session.get(download_url)
-                    if register_download.status_code != 200:
-                        status_message = (
-                            f'Unable to register your upload in your download history.\n'
-                            f'Please visit the following URL and manually download the torrent file before starting to seed:\n'
-                            f'{torrent_url}\n'
-                            f'(Error code: {register_download.status_code})'
-                        )
-
-                    announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-                    await self.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_url, self.torrent_url + torrent_id)
-                    status_message = 'Torrent uploaded successfully.'
-
-                    if requests:
-                        status_message += ' Your upload may fulfill existing requests, check prior console logs.'
-
-                else:
-                    failure_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html'
-                    with open(failure_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-
-                    status_message = (
-                        f'Step 2 of upload to {self.tracker} failed.\n'
-                        f'Status code: {response.status_code}\n'
-                        f'URL: {response.url}\n'
-                        f"The HTML response has been saved to '{failure_path}' for analysis."
-                    )
-
             except Exception as e:
-                status_message = f'[red]An unexpected error occurred while uploading to {self.tracker}: {e}[/red]'
+                console.print(f'[red]An unexpected error occurred while uploading to {self.tracker}: {e}[/red]')
+
+        return data
+
+    async def upload(self, meta, disctype):
+        data = await self.fetch_data(meta)
+        requests = await self.get_requests(meta)
+        status_message = ''
+
+        if not meta.get('debug', False):
+            response = await self.session.post(self.upload_url_step2, data=data, timeout=120)
+
+            if response.status_code == 302:
+                torrent_url = response.headers['Location']
+
+                torrent_id = ''
+                match = re.search(r'/torrent/(\d+)', torrent_url)
+                if match:
+                    torrent_id = match.group(1)
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
+                # Even if you are uploading, you still need to download the .torrent from the website
+                # because it needs to be registered as a download before you can start seeding
+                download_url = torrent_url.replace('/torrent/', '/download/torrent/')
+                await self.unit3d_download_torrent(meta, self.session, self.tracker, download_url)
+                status_message = 'Torrent uploaded successfully.'
+
+                if requests:
+                    status_message += ' Your upload may fulfill existing requests, check prior console logs.'
+
+            else:
+                failure_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html'
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+
+                status_message = (
+                    f'Step 2 of upload to {self.tracker} failed.\n'
+                    f'Status code: {response.status_code}\n'
+                    f'URL: {response.url}\n'
+                    f"The HTML response has been saved to '{failure_path}' for analysis."
+                )
                 meta['skipping'] = f'{self.tracker}'
                 return
 
