@@ -31,7 +31,7 @@ class SPD(COMMON):
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = ['']
-        self.signature = "Shared with Audionut's Upload Assistant"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Audionut's Upload Assistant",
             'accept': 'application/json',
@@ -198,7 +198,7 @@ class SPD(COMMON):
         final_description = "\n\n".join(filter(None, description_parts))
         desc = final_description
         desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
-        desc = re.sub(r'\[/?.*?\]', '', desc)
+        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
         desc = re.sub(r'\n{3,}', '\n\n', desc)
 
         with open(final_desc_path, 'w', encoding='utf-8') as f:
@@ -257,7 +257,7 @@ class SPD(COMMON):
             'nfo': await self.get_nfo(meta),
             'plot': meta.get('overview_meta', '') or meta.get('overview', ''),
             'poster': meta.get('poster', ''),
-            'releaseInfo': await self.edit_desc(meta),
+            'technicalDetails': await self.edit_desc(meta),
             'screenshots': await self.get_screenshots(meta),
             'type': await self.get_cat_id(meta),
             'url': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
