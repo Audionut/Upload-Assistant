@@ -549,12 +549,15 @@ class PHD(COMMON):
             return False
 
     async def search_existing(self, meta, disctype):
-        upload_ok = await self.rules(meta)
-        if not upload_ok:
+        if not await self.rules(meta):
             console.print(f'[red]{meta['phd_rule']}[/red]')
-            meta['skipping'] = 'PHD'
+            meta['skipping'] = f'{self.tracker}'
             return
-        await self.get_media_code(meta)
+
+        if not await self.get_media_code(meta):
+            console.print((f"[{self.tracker}]: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            meta['skipping'] = f'{self.tracker}'
+            return
 
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
@@ -609,7 +612,16 @@ class PHD(COMMON):
             console.print(f'[red]Invalid category: {meta['category']}[/red]')
             return False
 
-        ajax_url = f'https://privatehd.to/ajax/movies/{category_path}?term={meta['imdb_info']['imdbID']}'
+        search_term = ''
+        imdb_info = meta.get('imdb_info', {})
+        imdb_id = imdb_info.get('imdbID') if isinstance(imdb_info, dict) else None
+
+        if imdb_id:
+            search_term = imdb_id
+        else:
+            search_term = meta['title']
+
+        ajax_url = f'https://privatehd.to/ajax/movies/{category_path}?term={search_term}'
 
         headers = {
             'Referer': f'https://privatehd.to/upload/{'movie' if category_path == '1' else 'tv'}',
@@ -621,16 +633,24 @@ class PHD(COMMON):
             response.raise_for_status()
 
             data = response.json()
+
             if data.get('data'):
-                self.media_code = str(data['data'][0]['id'])
-            else:
-                # maybe create a function to add the media to the database in the future
-                console.print(f'This media ({meta['imdb_info']['imdbID']}) is not registered in {self.tracker}, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}')
-                meta['skipping'] = f'{self.tracker}'
-                return
+                match = None
+                for item in data['data']:
+                    if imdb_id and item.get('imdb') == imdb_id:
+                        match = item
+                        break
+                    elif not imdb_id and item.get('tmdb') == str(meta.get('tmdb')):
+                        match = item
+                        break
+
+                if match:
+                    self.media_code = str(match['id'])
+                else:
+                    console.print(f'[yellow]No exact match found for imdb:{imdb_id} tmdb:{meta.get('tmdb')}[/yellow]')
 
         except Exception as e:
-            console.print(f'[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]')
+            console.print(f"[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]")
 
         return bool(self.media_code)
 
@@ -906,7 +926,7 @@ class PHD(COMMON):
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
             'anon_upload': '',
-            'description': '',  # Could not find a way to properly handle the description following the rules and supported formatting rules
+            'description': '',
             'qqfile': '',
             'rip_type_id': self.get_rip_type(meta),
             'video_quality_id': self.get_video_quality(meta),
