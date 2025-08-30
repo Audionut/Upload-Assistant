@@ -1903,7 +1903,7 @@ async def match_tracker_url(tracker_urls, meta):
         'blu': ["https://blutopia.cc"],
         'hdb': ["https://hdbits.org"],
         'btn': ["https://broadcasthe.net"],
-        'bhd': ["https://beyond-hd.me"],
+        'bhd': ["https://beyond-hd.me", "tracker.beyond-hd.me"],
         'huno': ["https://hawke.uno"],
         'ulcx': ["https://upload.cx"],
         'rf': ["https://reelflix.xyz"],
