@@ -555,7 +555,7 @@ class PHD(COMMON):
             return
 
         if not await self.get_media_code(meta):
-            console.print((f"[{self.tracker}]: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
             meta['skipping'] = f'{self.tracker}'
             return
 
@@ -603,56 +603,110 @@ class PHD(COMMON):
     async def get_media_code(self, meta):
         self.media_code = ''
 
-        category_map = {
-            'MOVIE': '1',
-            'TV': '2'
-        }
-        category_path = category_map.get(meta['category'])
-        if not category_path:
-            console.print(f'[red]Invalid category: {meta['category']}[/red]')
+        if meta['category'] == 'MOVIE':
+            category = '1'
+        elif meta['category'] == 'TV':
+            category = '2'
+        else:
             return False
 
         search_term = ''
         imdb_info = meta.get('imdb_info', {})
         imdb_id = imdb_info.get('imdbID') if isinstance(imdb_info, dict) else None
+        tmdb_id = meta.get('tmdb')
+        title = meta['title']
 
         if imdb_id:
             search_term = imdb_id
         else:
-            search_term = meta['title']
+            search_term = title
 
-        ajax_url = f'https://privatehd.to/ajax/movies/{category_path}?term={search_term}'
+        ajax_url = f'https://privatehd.to/ajax/movies/{category}?term={search_term}'
 
         headers = {
-            'Referer': f'https://privatehd.to/upload/{'movie' if category_path == '1' else 'tv'}',
+            'Referer': f'https://privatehd.to/upload/{meta['category'].lower()}',
             'X-Requested-With': 'XMLHttpRequest'
         }
 
-        try:
-            response = await self.session.get(ajax_url, headers=headers)
-            response.raise_for_status()
+        for attempt in range(2):
+            try:
+                if attempt == 1:
+                    console.print(f"[{self.tracker}] Trying to search again by ID after adding to media to database...")
+                    await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
-            data = response.json()
+                response = await self.session.get(ajax_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
 
-            if data.get('data'):
-                match = None
-                for item in data['data']:
-                    if imdb_id and item.get('imdb') == imdb_id:
-                        match = item
+                if data.get('data'):
+                    match = None
+                    for item in data['data']:
+                        if imdb_id and item.get('imdb') == imdb_id:
+                            match = item
+                            break
+                        elif not imdb_id and item.get('tmdb') == str(tmdb_id):
+                            match = item
+                            break
+
+                    if match:
+                        self.media_code = str(match['id'])
+                        return True
+
+            except Exception as e:
+                console.print(f"[{self.tracker}] Error while trying to fetch media code in attempt {attempt + 1}: {e}")
+                break
+
+            if attempt == 0 and not self.media_code:
+                console.print(f"[{self.tracker}] No media ID found for IMDB:{imdb_id} TMDB:{tmdb_id}")
+
+                user_choice = input(f"[{self.tracker}] Do you want to add '{title}' to the tracker database? (y/n): ").lower()
+
+                if user_choice in ['y', 'yes']:
+                    console.print(f'[{self.tracker}] Trying to add to database...')
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
+                    if not added_successfully:
+                        console.print(f"[{self.tracker}] Failed to add media. Aborting.")
                         break
-                    elif not imdb_id and item.get('tmdb') == str(meta.get('tmdb')):
-                        match = item
-                        break
-
-                if match:
-                    self.media_code = str(match['id'])
                 else:
-                    console.print(f'[yellow]No exact match found for imdb:{imdb_id} tmdb:{meta.get('tmdb')}[/yellow]')
+                    console.print(f"[{self.tracker}] User chose not to add media. Aborting.")
+                    break
 
-        except Exception as e:
-            console.print(f"[red]Error trying to fetch media code for tracker {self.tracker}: {e}[/red]")
+        if not self.media_code:
+            console.print(f"[{self.tracker}] Unable to get media code.")
 
         return bool(self.media_code)
+
+    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
+        data = {
+            '_token': self.auth_token,
+            'type_id': category,
+            'title': title,
+            'imdb_id': imdb_id if imdb_id else '',
+            'tmdb_id': tmdb_id if tmdb_id else '',
+        }
+
+        if meta['category'] == 'TV':
+            tvdb_id = meta.get('tvdb')
+            if tvdb_id:
+                data['tvdb_id'] = str(tvdb_id)
+
+        url = f'{self.base_url}/add/{meta['category'].lower()}'
+
+        headers = {
+            'Referer': f'{self.base_url}/upload',
+        }
+
+        try:
+            response = await self.session.post(url, data=data, headers=headers)
+            if response.status_code == 302:
+                console.print(f"[{self.tracker}] Adding the media to the database appears to have been successful.")
+                return True
+            else:
+                console.print(f'[{self.tracker}] Error adding media. Status: {response.status}')
+                return False
+        except Exception as e:
+            console.print(f'[{self.tracker}] Exception when trying to add media to database: {e}')
+            return False
 
     async def get_cat_id(self, category_name):
         category_id = {
