@@ -507,7 +507,7 @@ class PHD(COMMON):
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f'{meta['base_dir']}/data/cookies/{self.tracker}.txt')
         if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
+            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
             return False
 
         self.session.cookies = await self.parseCookieFile(cookie_file)
@@ -520,32 +520,32 @@ class PHD(COMMON):
             response.raise_for_status()
 
             if 'login' in str(response.url):
-                console.print(f'[red]{self.tracker} validation failed. The cookie appears to be expired or invalid.[/red]')
+                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
                 return False
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
 
             if not auth_match:
-                console.print(f"{self.tracker} validation failed. Could not find 'auth' token on upload page.[/bold red]")
-                console.print('[yellow]This can happen if the site structure has changed or if the login failed silently..[/yellow]')
+                console.print(f"{self.tracker} Validation failed. Could not find 'auth' token on upload page.")
+                console.print('This can happen if the site HTML has changed or if the login failed silently..')
 
                 failure_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html'
                 with open(failure_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
-                console.print(f'[yellow]The server response was saved to {failure_path} for analysis.[/yellow]')
+                console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
             self.auth_token = auth_match.group(1)
             return True
 
         except httpx.TimeoutException:
-            console.print(f'[bold red]Error in {self.tracker}: Timeout while trying to validate credentials.[/bold red]')
+            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
             return False
         except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.[/bold red]')
+            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
             return False
         except httpx.RequestError as e:
-            console.print(f'[bold red]Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.[/bold red]')
+            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
             return False
 
     async def search_existing(self, meta, disctype):
@@ -631,7 +631,7 @@ class PHD(COMMON):
         for attempt in range(2):
             try:
                 if attempt == 1:
-                    console.print(f"[{self.tracker}] Trying to search again by ID after adding to media to database...")
+                    console.print(f"[{self.tracker}] Trying to search again by ID after adding to media to database...\n")
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
                 response = await self.session.get(ajax_url, headers=headers)
@@ -650,6 +650,8 @@ class PHD(COMMON):
 
                     if match:
                         self.media_code = str(match['id'])
+                        if attempt == 1:
+                            console.print(f"[{self.tracker}] [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
                         return True
 
             except Exception as e:
@@ -657,9 +659,9 @@ class PHD(COMMON):
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"[{self.tracker}] No media ID found for IMDB:{imdb_id} TMDB:{tmdb_id}")
+                console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
 
-                user_choice = input(f"[{self.tracker}] Do you want to add '{title}' to the tracker database? (y/n): ").lower()
+                user_choice = input(f"[{self.tracker}] Do you want to add '{title}' to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
                     console.print(f'[{self.tracker}] Trying to add to database...')
@@ -699,13 +701,13 @@ class PHD(COMMON):
         try:
             response = await self.session.post(url, data=data, headers=headers)
             if response.status_code == 302:
-                console.print(f"[{self.tracker}] Adding the media to the database appears to have been successful.")
+                console.print(f"[{self.tracker}] The attempt to add the media to the database appears to have been successful..")
                 return True
             else:
-                console.print(f'[{self.tracker}] Error adding media. Status: {response.status}')
+                console.print(f'[{self.tracker}] Error adding media to the database. Status: {response.status}')
                 return False
         except Exception as e:
-            console.print(f'[{self.tracker}] Exception when trying to add media to database: {e}')
+            console.print(f'[{self.tracker}] Exception when trying to add media to the database: {e}')
             return False
 
     async def get_cat_id(self, category_name):
@@ -901,7 +903,7 @@ class PHD(COMMON):
                 return results
 
             except Exception as e:
-                console.print(f'[bold red]An error occurred while fetching requests for {self.tracker}: {e}[/bold red]')
+                console.print(f'[{self.tracker}] An error occurred while fetching requests: {e}')
                 return []
 
     async def fetch_tag_id(self, meta, word):
@@ -977,7 +979,7 @@ class PHD(COMMON):
 
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
-                            console.print(f"Could not extract 'task_id' from redirect URL:{redirect_url}")
+                            console.print(f"[{self.tracker}] Could not extract 'task_id' from redirect URL: {redirect_url}")
                             meta['skipping'] = f'{self.tracker}'
                             return
 
@@ -1003,7 +1005,7 @@ class PHD(COMMON):
 
         else:
             console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
@@ -1056,7 +1058,7 @@ class PHD(COMMON):
                 })
 
             except Exception as e:
-                console.print(f'[red]An unexpected error occurred while uploading to {self.tracker}: {e}[/red]')
+                console.print(f'[{self.tracker}] An unexpected error occurred while uploading: {e}')
 
         return data
 
@@ -1102,7 +1104,7 @@ class PHD(COMMON):
 
         else:
             console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
