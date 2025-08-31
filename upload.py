@@ -250,7 +250,7 @@ async def process_meta(meta, base_dir, bot=None):
                 removed.append(tracker)
         if removed:
             console.print(f"[yellow]Removing trackers already in your client: {', '.join(removed)}[/yellow]")
-    if not meta['trackers']:
+    if not meta['trackers'] and not 'queue' in meta and meta.get('queue') is not None:
         console.print("[red]No trackers remain after removal.[/red]")
         successful_trackers = 0
         meta['skip_uploading'] = 10
