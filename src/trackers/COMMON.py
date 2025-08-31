@@ -6,6 +6,8 @@ import json
 import click
 import sys
 import glob
+import httpx
+import asyncio
 from pymediainfo import MediaInfo
 import secrets
 from src.bbcode import BBCODE
@@ -43,29 +45,33 @@ class COMMON():
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
 
     # used to add tracker url, comment and source flag to torrent file
-    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment):
-        if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"):
-            new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent")
+    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None):
+        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        if downurl is not None:
+            session = httpx.AsyncClient(headers=headers, params=params, timeout=30.0)
+            try:
+                async with session.stream("GET", downurl) as r:
+                    r.raise_for_status()
+                    with open(path, "wb") as f:
+                        async for chunk in r.aiter_bytes():
+                            f.write(chunk)
+                    return
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
+                console.print("[yellow]Download manually from the tracker.[/yellow]")
+                return
 
-            # handle trackers with multiple announce links
+        if await self.path_exists(path):
+            loop = asyncio.get_running_loop()
+            new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             if isinstance(new_tracker, list):
                 new_torrent.metainfo['announce'] = new_tracker[0]
                 new_torrent.metainfo['announce-list'] = [new_tracker]
             else:
                 new_torrent.metainfo['announce'] = new_tracker
-
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
-            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
-
-    async def unit3d_download_torrent(self, meta, session, tracker, download_url):
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
-
-        async with session.stream("GET", download_url) as r:
-            r.raise_for_status()
-            with open(torrent_path, "wb") as f:
-                async for chunk in r.aiter_bytes():
-                    f.write(chunk)
+            await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None):
         if image_list is not None:
