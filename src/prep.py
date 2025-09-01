@@ -79,7 +79,7 @@ class Prep():
         base_dir = meta['base_dir']
         meta['saved_description'] = False
         client = Clients(config=config)
-        meta['skip_auto_torrent'] = config['DEFAULT'].get('skip_auto_torrent', False)
+        meta['skip_auto_torrent'] = meta.get('skip_auto_torrent', False) or config['DEFAULT'].get('skip_auto_torrent', False)
         hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
         tracker_ids = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
         use_sonarr = config['DEFAULT'].get('use_sonarr', False)
@@ -388,7 +388,7 @@ class Prep():
                 meta['skip_trackers'] = True
 
         # auto torrent searching with qbittorrent that grabs torrent ids for metadata searching
-        if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False):
+        if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False) and not meta.get('edit', False):
             await client.get_pathed_torrents(meta['path'], meta)
 
         # Ensure all manual IDs have proper default values

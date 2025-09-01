@@ -28,7 +28,7 @@ class FNP():
         self.search_url = 'https://fearnopeer.com/api/torrents/filter'
         self.torrent_url = 'https://fearnopeer.com/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = [""]
+        self.banned_groups = ["4K4U, BiTOR,	d3g, FGT, FRDS, FTUApps, GalaxyRG, LAMA, MeGusta, NeoNoir, PSA, RARBG, YAWNiX, YTS, YIFY, x0r"]
         pass
 
     async def get_cat_id(self, category_name):
@@ -42,10 +42,11 @@ class FNP():
         type_id = {
             'DISC': '1',
             'REMUX': '2',
+            'ENCODE': '3',
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
-            'ENCODE': '3'
+            'SDTV': '7'
         }.get(type, '0')
         return type_id
 
@@ -54,12 +55,12 @@ class FNP():
             '4320p': '1',
             '2160p': '2',
             '1080p': '3',
-            '1080i': '11',
+            '1080i': '4',
             '720p': '5',
             '576p': '6',
-            '576i': '15',
+            '576i': '7',
             '480p': '8',
-            '480i': '14'
+            '480i': '9'
         }.get(resolution, '10')
         return resolution_id
 

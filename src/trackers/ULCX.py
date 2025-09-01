@@ -7,6 +7,7 @@ import os
 import glob
 import httpx
 import cli_ui
+from difflib import SequenceMatcher
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.languages import process_desc_language, has_english_language
@@ -194,7 +195,14 @@ class ULCX():
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
         year = str(meta.get('year', ""))
+        aka = meta.get('aka', "")
+        difference = SequenceMatcher(None, imdb_name, aka).ratio()
+        if difference >= 0.7 or not aka or aka in imdb_name:
+            if meta['aka'] != "":
+                ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
         ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
+        if "Hybrid" in ulcx_name:
+            ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
         if not meta.get('category') == "TV":
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
         if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":

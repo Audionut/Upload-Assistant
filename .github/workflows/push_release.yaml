@@ -243,7 +243,9 @@ jobs:
           echo "\"\"\"" >> "$TEMP_FILE"
           echo "Release Notes for version ${{ env.VERSION }} ($TIMESTAMP):" >> "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
-          echo "${{ env.CHANGELOG }}" | sed 's/^/# /' >> "$TEMP_FILE"
+          cat <<EOF | sed 's/^/# /' >> "$TEMP_FILE"
+          ${{ env.CHANGELOG }}
+          EOF
           echo "\"\"\"" >> "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
           

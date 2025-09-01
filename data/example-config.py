@@ -270,7 +270,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTT, R4E, RAS, RF, RTF, SAM, SN, STC, THR, TIK, TL, TOCA, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FF, FL, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -598,6 +598,13 @@ config = {
             "password": "",
             "announce_url": "",
         },
+        "PTS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PTS to work you need to export cookies from https://www.ptskit.org using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/PTS.txt
+            "announce_url": "https://ptskit.kqbhek.com/announce.php?passkey=<PASSKEY>",
+        },
         "PTT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -665,8 +672,13 @@ config = {
         "SPD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # You can create an API key here https://speedapp.io/profile/api-tokens. Required Permission: Upload torrents
             "api_key": "",
-            "announce_url": "https://ramjet.speedapp.io/<PASSKEY>/announce",
+            # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
+            "passkey": "",
+            # Select the upload channel, if you don't know what this is, leave it empty.
+            # You can also set this mannualy using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
+            "channel": "",
         },
         "STC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -803,7 +815,7 @@ config = {
             # when linking error. eg: unsupported file system.
             "allow_fallback": True,
             # A folder or list of folders that will contain the linked content
-            # if using hardlinking, the linked folder must be on the same drive/volume as the original contnt,
+            # if using hardlinking, the linked folder must be on the same drive/volume as the original content,
             # with UA mapping the correct location if multiple paths are specified.
             # Use local paths, remote path mapping will be handled.
             # only single \ on windows, path will be handled by UA

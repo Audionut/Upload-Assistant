@@ -1,4 +1,35 @@
-__version__ = "v5.3.4"
+__version__ = "v5.3.6"
+
+"""
+Release Notes for version v5.3.6 (2025-08-22):
+
+# ## What's Changed
+# 
+# * fix docker mkbrr version by @Audionut in 69a1384
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.5...v5.3.6
+"""
+
+
+"""
+Release Notes for version v5.3.5 (2025-08-22):
+
+# ## What's Changed
+# 
+# * TL - cleanup torrent file handling (#714) by @wastaken7 in 011d588
+# * ANT tag reminder by @Audionut in fbb8c2f
+# * Added support for FunFile (#717) by @wastaken7 in 6436d34
+# * ULCX - aka check by @Audionut in 3b30132
+# * ANT - manual commentary flag (#720) by @wastaken7 in d8fd725
+# * [FnP] Fix resolutions, types and add banned release groups (#721) by @flower in 5e38b0e
+# * Revert "Dockerfile Improvements (#710)" by @Audionut in c85e83d
+# * fix release script by @Audionut in d86999d
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.4...v5.3.5
+"""
+
 
 """
 Release Notes for version v5.3.4 (2025-08-18):

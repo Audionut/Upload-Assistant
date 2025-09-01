@@ -45,16 +45,17 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   <tr><td>Cinematik</td><td>TIK</td><td>DarkPeers</td><td>DP</td></tr>
   <tr><td>DigitalCore</td><td>DC</td><td>FearNoPeer</td><td>FNP</td></tr>
   <tr><td>FileList</td><td>FL</td><td>Friki</td><td>FRIKI</td></tr>
-  <tr><td>hawke-uno</td><td>HUNO</td><td>HDBits</td><td>HDB</td></tr>
-  <tr><td>HD-Space</td><td>HDS</td><td>HD-Torrents</td><td>HDT</td></tr>
-  <tr><td>HomieHelpDesk</td><td>HHD</td><td>ItaTorrents</td><td>ITT</td></tr>
-  <tr><td>Last Digital Underground</td><td>LDU</td><td>Lat-Team</td><td>LT</td></tr>
-  <tr><td>Locadora</td><td>LCD</td><td>LST</td><td>LST</td></tr>
-  <tr><td>MoreThanTV</td><td>MTV</td><td>Nebulance</td><td>NBL</td></tr>
-  <tr><td>OldToonsWorld</td><td>OTW</td><td>OnlyEncodes+</td><td>OE</td></tr>
-  <tr><td>PassThePopcorn</td><td>PTP</td><td>Polish Torrent</td><td>PTT</td></tr>
-  <tr><td>Portugas</td><td>PT</td><td>PTerClub</td><td>PTER</td></tr>
-  <tr><td>PrivateHD</td><td>PHD</td><td>Racing4Everyone</td><td>R4E</td></tr>
+  <tr><td>FunFile</td><td>FF</td><td>hawke-uno</td><td>HUNO</td></tr>
+  <tr><td>HDBits</td><td>HDB</td><td>HD-Space</td><td>HDS</td></tr>
+  <tr><td>HD-Torrents</td><td>HDT</td><td>HomieHelpDesk</td><td>HHD</td></tr>
+  <tr><td>ItaTorrents</td><td>ITT</td><td>Last Digital Underground</td><td>LDU</td></tr>
+  <tr><td>Lat-Team</td><td>LT</td><td>Locadora</td><td>LCD</td></tr>
+  <tr><td>LST</td><td>LST</td><td>MoreThanTV</td><td>MTV</td></tr>
+  <tr><td>Nebulance</td><td>NBL</td><td>OldToonsWorld</td><td>OTW</td></tr>
+  <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
+  <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
+  <tr><td>PTerClub</td><td>PTER</td><td>PrivateHD</td><td>PHD</td></tr>
+  <tr><td>PTSKIT</td><td>PTS</td><td>Racing4Everyone</td><td>R4E</td></tr>
   <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
   <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
   <tr><td>seedpool</td><td>SP</td><td>ShareIsland</td><td>SHRI</td></tr>

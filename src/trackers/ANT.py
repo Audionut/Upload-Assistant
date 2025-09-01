@@ -48,7 +48,7 @@ class ANT():
         for each in ['Dual-Audio', 'Atmos']:
             if each in meta['audio']:
                 flags.append(each.replace('-', ''))
-        if meta.get('has_commentary', False):
+        if meta.get('has_commentary', False) or meta.get('manual_commentary', False):
             flags.append('Commentary')
         if meta['3D'] == "3D":
             flags.append('3D')
