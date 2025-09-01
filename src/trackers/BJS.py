@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import httpx
+import json
 import langcodes
 import os
 import platform
@@ -15,6 +16,7 @@ from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
+from src.tmdb import get_tmdb_localized_data
 from tqdm import tqdm
 from typing import Optional
 from urllib.parse import urlparse
@@ -80,38 +82,24 @@ class BJS(COMMON):
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
 
+    def load_localized_data(self, meta):
+        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+
+        if os.path.isfile(localized_data_file):
+            with open(localized_data_file, "r", encoding="utf-8") as f:
+                self.tmdb_data = json.load(f)
+        else:
+            self.tmdb_data = {}
+
     async def ptbr_tmdb_data(self, meta):
-        brazil_data_in_meta = meta.get('tmdb_localized_data', {}).get('brazil', {}).get('main', {})
+        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
         if brazil_data_in_meta:
             return brazil_data_in_meta
 
-        tmdb_api = self.config['DEFAULT']['tmdb_api']
+        data = await get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings')
+        self.load_localized_data(meta)
 
-        base_url = 'https://api.themoviedb.org/3'
-        url = f'{base_url}/{meta['category'].lower()}/{meta['tmdb']}'
-
-        params = {
-            'api_key': tmdb_api,
-            'language': 'pt-BR',
-            'append_to_response': 'credits,videos,content_ratings'
-        }
-
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, params=params, headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    meta.setdefault('tmdb_localized_data', {}).setdefault('brazil', {})['main'] = data
-
-                    return data
-                else:
-                    return None
-        except httpx.RequestError:
-            return None
+        return data
 
     def get_container(self, meta):
         container = None
