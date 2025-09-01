@@ -695,7 +695,7 @@ class ASC(COMMON):
         return ''.join(parts)
 
     async def get_requests(self, meta):
-        if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False and not meta.get('search_requests'):
+        if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
             try:
