@@ -44,6 +44,8 @@ async def get_tag(video, meta):
         try:
             parsed = guessit(video)
             release_group = parsed.get('release_group')
+            if "TAoE" in release_group:
+                release_group = "TAoE"
             if meta['debug']:
                 console.print(f"Guessit match: {release_group}")
 
