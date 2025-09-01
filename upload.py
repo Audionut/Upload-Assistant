@@ -251,38 +251,41 @@ async def process_meta(meta, base_dir, bot=None):
         if removed:
             console.print(f"[yellow]Removing trackers already in your client: {', '.join(removed)}[/yellow]")
     if not meta['trackers']:
-        console.print("[red]No trackers remain after removal. Exiting.[/red]")
-        sys.exit(1)
+        console.print("[red]No trackers remain after removal.[/red]")
+        successful_trackers = 0
+        meta['skip_uploading'] = 10
 
-    console.print(f"[green]Processing {meta['name']} for upload...[/green]")
-
-    audio_prompted = False
-    for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR", "ASC", "BT", "LDU", "BJS", "FF", "PTS", "SPD"]:
-        if tracker in trackers:
-            if not audio_prompted:
-                await process_desc_language(meta, desc=None, tracker=tracker)
-                audio_prompted = True
-            else:
-                if 'tracker_status' not in meta:
-                    meta['tracker_status'] = {}
-                if tracker not in meta['tracker_status']:
-                    meta['tracker_status'][tracker] = {}
-                if meta.get('unattended_audio_skip', False) or meta.get('unattended_subtitle_skip', False):
-                    meta['tracker_status'][tracker]['skip_upload'] = True
-                else:
-                    meta['tracker_status'][tracker]['skip_upload'] = False
-
-    await asyncio.sleep(0.2)
-    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-        json.dump(meta, f, indent=4)
-    await asyncio.sleep(0.2)
-
-    successful_trackers = await process_all_trackers(meta)
-
-    if meta.get('trackers_pass') is not None:
-        meta['skip_uploading'] = meta.get('trackers_pass')
     else:
-        meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
+        console.print(f"[green]Processing {meta['name']} for upload...[/green]")
+
+        audio_prompted = False
+        for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR", "LDU"]:
+            if tracker in trackers:
+                if not audio_prompted:
+                    await process_desc_language(meta, desc=None, tracker=tracker)
+                    audio_prompted = True
+                else:
+                    if 'tracker_status' not in meta:
+                        meta['tracker_status'] = {}
+                    if tracker not in meta['tracker_status']:
+                        meta['tracker_status'][tracker] = {}
+                    if meta.get('unattended_audio_skip', False) or meta.get('unattended_subtitle_skip', False):
+                        meta['tracker_status'][tracker]['skip_upload'] = True
+                    else:
+                        meta['tracker_status'][tracker]['skip_upload'] = False
+
+        await asyncio.sleep(0.2)
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+            json.dump(meta, f, indent=4)
+        await asyncio.sleep(0.2)
+
+        successful_trackers = await process_all_trackers(meta)
+
+        if meta.get('trackers_pass') is not None:
+            meta['skip_uploading'] = meta.get('trackers_pass')
+        else:
+            meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
+
     if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
         console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). EXITING........[/red]")
 

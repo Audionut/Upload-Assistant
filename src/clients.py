@@ -74,6 +74,7 @@ class Clients():
             return None
 
         client = self.config['TORRENT_CLIENTS'][default_torrent_client]
+        client_name = client.get('torrent_client', '').lower()
         torrent_storage_dir = client.get('torrent_storage_dir')
         torrent_client = client.get('torrent_client', '').lower()
         mtv_config = self.config['TRACKERS'].get('MTV')
@@ -93,6 +94,9 @@ class Clients():
                 if torrent_storage_dir:
                     torrent_path = os.path.join(torrent_storage_dir, f"{hash_value}.torrent")
                 else:
+                    if client_name != 'qbit':
+                        return None
+
                     # Fetch from qBittorrent since we don't have torrent_storage_dir
                     console.print(f"[yellow]Fetching .torrent file from qBittorrent for hash: {hash_value}")
 
@@ -1903,7 +1907,7 @@ async def match_tracker_url(tracker_urls, meta):
         'blu': ["https://blutopia.cc"],
         'hdb': ["https://hdbits.org"],
         'btn': ["https://broadcasthe.net"],
-        'bhd': ["https://beyond-hd.me"],
+        'bhd': ["https://beyond-hd.me", "tracker.beyond-hd.me"],
         'huno': ["https://hawke.uno"],
         'ulcx': ["https://upload.cx"],
         'rf': ["https://reelflix.xyz"],
@@ -1911,6 +1915,9 @@ async def match_tracker_url(tracker_urls, meta):
         'yus': ["https://yu-scene.net"],
         'dp': ["https://darkpeers.org"],
         'sp': ["https://seedpool.org"],
+        'fnp': ["https://fearnopeer.com"],
+        'hhd': ["https://homiehelpdesk.net"],
+        'phd': ["tracker.privatehd"],
         'nbl': ["tracker.nebulance"],
         'mtv': ["tracker.morethantv"],
         'ant': ["tracker.anthelion.me"],

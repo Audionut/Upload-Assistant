@@ -183,6 +183,8 @@ class ULCX():
             if meta['aka'] != "":
                 ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
         ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
+        if "Hybrid" in ulcx_name:
+            ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
         if not meta.get('category') == "TV":
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
         if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":

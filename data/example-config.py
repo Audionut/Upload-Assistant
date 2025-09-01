@@ -812,7 +812,7 @@ config = {
             # when linking error. eg: unsupported file system.
             "allow_fallback": True,
             # A folder or list of folders that will contain the linked content
-            # if using hardlinking, the linked folder must be on the same drive/volume as the original contnt,
+            # if using hardlinking, the linked folder must be on the same drive/volume as the original content,
             # with UA mapping the correct location if multiple paths are specified.
             # Use local paths, remote path mapping will be handled.
             # only single \ on windows, path will be handled by UA
