@@ -252,7 +252,10 @@ config = {
         "emby_dir": None,
 
         # this path for TV shows
-        "emby_tv_dir": None
+        "emby_tv_dir": None,
+
+        # Set true to search for matching requests on supported trackers
+        "search_requests": False,
 
     },
 
@@ -670,8 +673,13 @@ config = {
         "SPD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # You can create an API key here https://speedapp.io/profile/api-tokens. Required Permission: Upload torrents
             "api_key": "",
-            "announce_url": "https://ramjet.speedapp.io/<PASSKEY>/announce",
+            # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
+            "passkey": "",
+            # Select the upload channel, if you don't know what this is, leave it empty.
+            # You can also set this mannualy using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
+            "channel": "",
         },
         "STC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -808,7 +816,7 @@ config = {
             # when linking error. eg: unsupported file system.
             "allow_fallback": True,
             # A folder or list of folders that will contain the linked content
-            # if using hardlinking, the linked folder must be on the same drive/volume as the original contnt,
+            # if using hardlinking, the linked folder must be on the same drive/volume as the original content,
             # with UA mapping the correct location if multiple paths are specified.
             # Use local paths, remote path mapping will be handled.
             # only single \ on windows, path will be handled by UA
