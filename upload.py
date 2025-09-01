@@ -195,6 +195,8 @@ async def process_meta(meta, base_dir, bot=None):
         else:
             trackers = [t.strip().upper() for t in trackers]
         meta['trackers'] = trackers
+        if meta['debug']:
+            console.print(f"Trackers list before editing: {meta['trackers']}")
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
             f.close()
@@ -232,6 +234,8 @@ async def process_meta(meta, base_dir, bot=None):
                 meta['trackers'] = [meta['trackers'].strip().upper()]
         elif isinstance(meta.get('trackers'), list):
             meta['trackers'] = [t.strip().upper() for t in meta['trackers'] if isinstance(t, str)]
+        if meta['debug']:
+            console.print(f"Trackers list during edit process: {meta['trackers']}")
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
