@@ -1200,7 +1200,6 @@ class BJS(COMMON):
                 files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-                soup = BeautifulSoup(response.text, 'html.parser')
 
                 if 'action=download&id=' in response.text:
                     status_message = 'Enviado com sucesso.'
@@ -1216,12 +1215,6 @@ class BJS(COMMON):
 
                 else:
                     status_message = 'O upload pode ter falhado, verifique. '
-                    page_message = ''
-                    page_element = soup.select_one("div.thin p[style*='color: red']")
-                    if page_element:
-                        page_message = page_element.get_text(strip=True)
-                        status_message += page_message
-
                     response_save_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html'
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
