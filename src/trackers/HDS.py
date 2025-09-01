@@ -128,7 +128,7 @@ class HDS(COMMON):
         desc = desc.replace('[ol]', '').replace('[/ol]', '')
         desc = desc.replace('[hide]', '').replace('[/hide]', '')
         desc = re.sub(r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', r'', desc, flags=re.DOTALL)
-        desc = re.sub(r'(\[img=\d+)]', '[img]', desc, flags=re.IGNORECASE)
+        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
         desc = bbcode.convert_comparison_to_centered(desc, 1000)
         desc = bbcode.remove_spoiler(desc)
         desc = re.sub(r'\n{3,}', '\n\n', desc)
@@ -322,14 +322,13 @@ class HDS(COMMON):
                 if nfo:
                     files['nfo'] = nfo['nfo']
 
-                # self.session.headers.update({'Referer': f'{self.base_url}/index.php?page=upload'})
                 response = await self.session.post(upload_url, data=data, files=files, timeout=30)
 
                 if 'download.php?id=' in response.text:
                     status_message = 'Torrent uploaded successfully.'
 
                     # Find the torrent id
-                    match = re.search(r'download\.php\?id=(\d+)', response.text)
+                    match = re.search(r'download\.php\?id=([^&]+)', response.text)
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
