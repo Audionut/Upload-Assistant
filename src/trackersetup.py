@@ -484,7 +484,9 @@ class TRACKER_SETUP:
                 response = await client.get(url=url, headers=headers, params=params)
                 if response.status_code == 200:
                     data = response.json()
-                    if 'results' in data:
+                    if 'data' in data and isinstance(data['data'], list):
+                        results_list = data['data']
+                    elif 'results' in data and isinstance(data['results'], list):
                         results_list = data['results']
                     else:
                         console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
@@ -492,7 +494,7 @@ class TRACKER_SETUP:
 
                     try:
                         for each in results_list:
-                            attributes = each.get('results', each)  # fallback to each if 'results' missing
+                            attributes = each
                             result = {
                                 'id': attributes.get('id'),
                                 'name': attributes.get('name'),
@@ -502,12 +504,13 @@ class TRACKER_SETUP:
                                 'resolution': attributes.get('resolution_id'),
                                 'bounty': attributes.get('bounty'),
                                 'status': attributes.get('status'),
-                                'claimed': attributes.get('claimed')
+                                'claimed': attributes.get('claimed'),
+                                'season': attributes.get('season_number'),
+                                'episode': attributes.get('episode_number'),
                             }
                             requests.append(result)
                     except Exception as e:
                         console.print(f"[bold red]Error processing response data: {e}[/bold red]")
-                        console.print(f"[bold red]Response data: {data}[/bold red]")
                         return requests
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
@@ -585,30 +588,62 @@ class TRACKER_SETUP:
             for each in requests:
                 type_name = False
                 resolution = False
+                season = False
+                episode = False
+                double_check = False
                 api_id = each.get('id')
                 api_category = each.get('category')
                 api_name = each.get('name')
                 api_type = each.get('type')
                 if str(api_type) in [str(tid) for tid in type_ids]:
                     type_name = True
+                elif api_type is None:
+                    type_name = True
+                    double_check = True
                 api_resolution = each.get('resolution')
                 if str(api_resolution) in [str(rid) for rid in resolution_ids]:
                     resolution = True
+                elif api_resolution is None:
+                    resolution = True
+                    double_check = True
                 api_bounty = each.get('bounty')
                 api_status = each.get('status')
                 api_claimed = each.get('claimed')
                 api_description = each.get('description')
+                api_season = int(each.get('season'))
+                if api_season == meta.get('season_int'):
+                    season = True
+                api_episode = each.get('episode')
+                meta['episode_int'] = int(api_episode) if api_episode is not None else 0
+                if api_episode == meta.get('episode_int'):
+                    episode = True
                 if str(api_category) in [str(cid) for cid in category_ids]:
                     new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
-                    if type_name and resolution and not api_claimed:
+                    if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:
                         console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
                         console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
                         console.print()
+                        if double_check:
+                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                            console.print()
+                    elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                        console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
+                        console.print()
+                        if double_check:
+                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                            console.print()
                     else:
                         console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
-                        console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
+                        if meta.get('category') == "MOVIE":
+                            console.print(f"[bold yellow]{api_name}:[/bold yellow] {new_url}")
+                        else:
+                            console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
                         console.print(f"[bold green]Request desc: {api_description[:100]}[/bold green]")
                         console.print()
 
