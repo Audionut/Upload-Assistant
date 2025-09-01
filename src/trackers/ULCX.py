@@ -23,6 +23,7 @@ class ULCX():
         self.search_url = 'https://upload.cx/api/torrents/filter'
         self.torrent_url = 'https://upload.cx/torrents/'
         self.id_url = 'https://upload.cx/api/torrents/'
+        self.requests_url = 'https://upload.cx/api/requests/filter'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             '4K4U', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym', 'Hi10', 'iAHD', 'INFINITY',
@@ -32,26 +33,38 @@ class ULCX():
         ]
         pass
 
-    async def get_cat_id(self, category_name):
-        category_id = {
+    async def get_cat_id(self, category_name=None, reverse=False):
+        category_mapping = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(category_name, '0')
-        return category_id
+        }
 
-    async def get_type_id(self, type):
-        type_id = {
+        if reverse:
+            return {v: k for k, v in category_mapping.items()}
+        elif category_name is not None:
+            return category_mapping.get(category_name, '0')
+        else:
+            return category_mapping
+
+    async def get_type_id(self, type=None, reverse=False):
+        type_mapping = {
             'DISC': '1',
             'REMUX': '2',
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
-        return type_id
+        }
 
-    async def get_res_id(self, resolution, type):
-        resolution_id = {
+        if reverse:
+            return {v: k for k, v in type_mapping.items()}
+        elif type is not None:
+            return type_mapping.get(type, '0')
+        else:
+            return type_mapping
+
+    async def get_res_id(self, resolution=None, reverse=False):
+        resolution_mapping = {
             '8640p': '10',
             '4320p': '1',
             '2160p': '2',
@@ -63,8 +76,13 @@ class ULCX():
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(resolution, '10')
-        return resolution_id
+        }
+        if reverse:
+            return {v: k for k, v in resolution_mapping.items()}
+        elif resolution is not None:
+            return resolution_mapping.get(resolution, '10')
+        else:
+            return resolution_mapping
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
@@ -72,7 +90,7 @@ class ULCX():
         cat_id = await self.get_cat_id(meta['category'])
         modq = await self.get_flag(meta, 'modq')
         type_id = await self.get_type_id(meta['type'])
-        resolution_id = await self.get_res_id(meta['resolution'], meta['type'])
+        resolution_id = await self.get_res_id(meta['resolution'])
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
         should_skip = meta['tracker_status'][self.tracker].get('skip_upload', False)
         if should_skip:
@@ -264,7 +282,7 @@ class ULCX():
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_cat_id(meta['category']),
             'types[]': await self.get_type_id(meta['type']),
-            'resolutions[]': await self.get_res_id(meta['resolution'], meta['type']),
+            'resolutions[]': await self.get_res_id(meta['resolution']),
             'name': ""
         }
         if meta['category'] == 'TV':
