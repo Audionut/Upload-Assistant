@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import httpx
+import json
 import langcodes
 import os
 import platform
@@ -11,6 +12,7 @@ from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
 from src.console import console
 from src.languages import process_desc_language
+from src.tmdb import get_tmdb_localized_data
 
 
 class BT(COMMON):
@@ -140,29 +142,24 @@ class BT(COMMON):
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
 
+    def load_localized_data(self, meta):
+        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+
+        if os.path.isfile(localized_data_file):
+            with open(localized_data_file, "r", encoding="utf-8") as f:
+                self.tmdb_data = json.load(f)
+        else:
+            self.tmdb_data = {}
+
     async def tmdb_data(self, meta):
-        brazil_data_in_meta = meta.get('tmdb_localized_data', {}).get('brazil', {}).get('main', {})
+        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
         if brazil_data_in_meta:
             return brazil_data_in_meta
 
-        tmdb_api = self.config['DEFAULT']['tmdb_api']
+        data = await get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings')
+        self.load_localized_data(meta)
 
-        base_url = 'https://api.themoviedb.org/3'
-        url = f'{base_url}/{meta['category'].lower()}/{meta['tmdb']}?api_key={tmdb_api}&language=pt-BR&append_to_response=credits,videos,content_ratings'
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    if 'tmdb_localized_data' not in meta:
-                        meta['tmdb_localized_data'] = {}
-                    meta['tmdb_localized_data']['brazil']['main'] = response.json()
-
-                    return response.json()
-                else:
-                    return None
-        except httpx.RequestError:
-            return None
+        return data
 
     async def get_container(self, meta):
         container = None
