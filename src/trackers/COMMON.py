@@ -58,6 +58,15 @@ class COMMON():
             new_torrent.metainfo['info']['source'] = source_flag
             Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
 
+    async def unit3d_download_torrent(self, meta, session, tracker, download_url):
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+
+        async with session.stream("GET", download_url) as r:
+            r.raise_for_status()
+            with open(torrent_path, "wb") as f:
+                async for chunk in r.aiter_bytes():
+                    f.write(chunk)
+
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None):
         if image_list is not None:
             images = image_list

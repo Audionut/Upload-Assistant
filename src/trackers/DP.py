@@ -6,6 +6,7 @@ import platform
 import httpx
 import glob
 import os
+import re
 from src.trackers.COMMON import COMMON
 from src.console import console
 from data.config import config
@@ -87,6 +88,7 @@ class DP():
         await common.unit3d_edit_desc(meta, self.tracker, self.signature)
         region_id = await common.unit3d_region_ids(meta.get('region'))
         distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
+        dp_name = await self.edit_name(meta)
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
@@ -111,7 +113,7 @@ class DP():
         if nfo_file:
             files['nfo'] = ("nfo_file.nfo", nfo_file, "text/plain")
         data = {
-            'name': meta['name'],
+            'name': dp_name,
             'description': desc,
             'mediainfo': mi_dump,
             'bdinfo': bd_dump,
@@ -177,6 +179,16 @@ class DP():
             return 1 if config_flag else 0
 
         return 1 if meta.get(flag_name, False) else 0
+
+    async def edit_name(self, meta):
+        dp_name = meta.get('name')
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        tag_lower = meta['tag'].lower()
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
+            dp_name = f"{dp_name}-NOGROUP"
+        return dp_name
 
     async def search_existing(self, meta, disctype):
         if not meta['is_disc'] == "BDMV":
