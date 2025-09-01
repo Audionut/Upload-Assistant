@@ -126,6 +126,8 @@ class Args():
         parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD torrent_id/link", type=str)
         parser.add_argument('-huno', '--huno', nargs=1, required=False, help="HUNO torrent id/link", type=str)
         parser.add_argument('-ulcx', '--ulcx', nargs=1, required=False, help="ULCX torrent id/link", type=str)
+        parser.add_argument('-req', '--search_requests', action='store_true', required=False, help="Search for matching requests on supported trackers", default=None)
+        parser.add_argument('-sat', '--skip_auto_torrent', action='store_true', required=False, help="Skip automated qbittorrent client torrent searching", default=None)
         parser.add_argument('-onlyID', '--onlyID', action='store_true', required=False, help="Only grab meta ids (tmdb/imdb/etc) from tracker, not description/image links.", default=None)
         parser.add_argument('--foreign', dest='foreign', action='store_true', required=False, help="Set for TIK Foreign category")
         parser.add_argument('--opera', dest='opera', action='store_true', required=False, help="Set for TIK Opera & Musical category")

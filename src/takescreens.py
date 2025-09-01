@@ -1285,7 +1285,7 @@ async def capture_screenshot(args):
                 if filter_parts:
                     output_map = "[scaled]"
                 else:
-                    output_map = "0:v"
+                    output_map = "v:0"
 
             cmd = [
                 "ffmpeg",
@@ -1300,7 +1300,7 @@ async def capture_screenshot(args):
                     "-map", output_map
                 ])
             else:
-                cmd.extend(["-map", "0:v"])
+                cmd.extend(["-map", "v:0"])
 
             cmd.extend([
                 "-vframes", "1",
@@ -1325,7 +1325,7 @@ async def capture_screenshot(args):
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(),
-                    timeout=20.0  # 20 second timeout
+                    timeout=120.0  # 20 second timeout
                 )
             except asyncio.TimeoutError:
                 console.print("[red]FFmpeg process timed out after 120 seconds, killing process[/red]")
