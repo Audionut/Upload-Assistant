@@ -566,9 +566,6 @@ config = {
             "link_dir_name": "",
             # for PHD to work you need to export cookies from https://privatehd.to/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
             # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
-            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
-            # Set to True if you want to check whether your upload fulfills corresponding requests. This may slightly slow down the upload process.
-            "check_requests": False,
             "anon": False,
         },
         "PT": {

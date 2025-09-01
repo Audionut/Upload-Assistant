@@ -850,7 +850,7 @@ class PHD(COMMON):
         return results
 
     async def get_requests(self, meta):
-        if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False:
+        if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
 
         else:
