@@ -725,6 +725,7 @@ class BJS(COMMON):
             'webdl': 'WEB-DL',
             'webrip': 'WEBRip',
             'web': 'WEB',
+            'remux': 'Blu-ray',
             'encode': 'Blu-ray',
             'bdrip': 'BDRip',
             'brrip': 'BRRip',
@@ -997,7 +998,7 @@ class BJS(COMMON):
                     return 'N/A'
 
     async def get_requests(self, meta):
-        if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False and not meta.get('search_requests'):
+        if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
             try:
@@ -1067,7 +1068,8 @@ class BJS(COMMON):
                 console.print(traceback.format_exc())
                 return []
 
-    async def gather_data(self, meta, disctype):
+    async def fetch_data(self, meta, disctype):
+        self.load_localized_data(meta)
         await self.validate_credentials(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
         category = meta['category']
@@ -1184,7 +1186,7 @@ class BJS(COMMON):
         return data
 
     async def upload(self, meta, disctype):
-        data = await self.gather_data(meta, disctype)
+        data = await self.fetch_data(meta, disctype)
         requests = await self.get_requests(meta)
         await self.edit_torrent(meta, self.tracker, self.source_flag)
         status_message = ''
