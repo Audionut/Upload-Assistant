@@ -64,6 +64,7 @@ import json
 import cli_ui
 from datetime import datetime, timedelta
 import asyncio
+import re
 
 
 class TRACKER_SETUP:
@@ -461,6 +462,192 @@ class TRACKER_SETUP:
                 import traceback
                 console.print(traceback.format_exc())
                 return False
+
+        results = await asyncio.gather(*[process_single_tracker(tracker) for tracker in trackers])
+        match_found = any(results)
+
+        return match_found
+
+    async def get_tracker_requests(self, meta, tracker, url):
+        if meta['debug']:
+            console.print(f"[bold green]Searching for existing requests on {tracker}[/bold green]")
+        requests = []
+        headers = {
+            'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
+            'Accept': 'application/json'
+        }
+        params = {
+            'tmdb': meta['tmdb'],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url=url, headers=headers, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'data' in data and isinstance(data['data'], list):
+                        results_list = data['data']
+                    elif 'results' in data and isinstance(data['results'], list):
+                        results_list = data['results']
+                    else:
+                        console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
+                        return requests
+
+                    try:
+                        for each in results_list:
+                            attributes = each
+                            result = {
+                                'id': attributes.get('id'),
+                                'name': attributes.get('name'),
+                                'description': attributes.get('description'),
+                                'category': attributes.get('category_id'),
+                                'type': attributes.get('type_id'),
+                                'resolution': attributes.get('resolution_id'),
+                                'bounty': attributes.get('bounty'),
+                                'status': attributes.get('status'),
+                                'claimed': attributes.get('claimed'),
+                                'season': attributes.get('season_number'),
+                                'episode': attributes.get('episode_number'),
+                            }
+                            requests.append(result)
+                    except Exception as e:
+                        console.print(f"[bold red]Error processing response data: {e}[/bold red]")
+                        return requests
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 5 seconds")
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+
+        return requests
+
+    async def tracker_request(self, meta, tracker):
+        if isinstance(tracker, str):
+            trackers = [tracker.strip().upper()]
+        elif isinstance(tracker, list):
+            trackers = [s.upper() for s in tracker]
+        else:
+            console.print("[red]Invalid trackers input format.[/red]")
+            return False
+
+        async def process_single_tracker(tracker):
+            tracker_class = tracker_class_map.get(tracker)
+            if not tracker_class:
+                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+                return False
+
+            tracker_instance = tracker_class(self.config)
+            try:
+                url = tracker_instance.requests_url
+            except AttributeError:
+                # tracker without requests url not supported
+                return
+            requests = await self.get_tracker_requests(meta, tracker, url)
+            all_types = await tracker_instance.get_type_id()
+            if not isinstance(all_types, dict):
+                console.print(f"[red]Error: get_type_id() for {tracker} did not return a dict. Got: {type(all_types)}[/red]")
+                return False
+            type_names = meta.get('type', [])
+            if isinstance(type_names, str):
+                type_names = [type_names]
+
+            type_ids = [all_types.get(type_name) for type_name in type_names]
+            if None in type_ids:
+                console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
+
+            all_resolutions = await tracker_instance.get_res_id()
+            resolution_names = meta.get('resolution', [])
+            if isinstance(resolution_names, str):
+                resolution_names = [resolution_names]
+
+            resolution_ids = [all_resolutions.get(res_name) for res_name in resolution_names]
+            if None in resolution_ids:
+                console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
+
+            all_categories = await tracker_instance.get_cat_id()
+            categories = meta.get('category', [])
+            if isinstance(categories, str):
+                categories = [categories]
+
+            category_ids = [all_categories.get(cat_name) for cat_name in categories]
+            if None in category_ids:
+                console.print("[yellow]Warning: Some categories in meta not found in tracker category mapping.[/yellow]")
+
+            tmdb_id = meta.get('tmdb', [])
+            if isinstance(tmdb_id, int):
+                tmdb_id = [tmdb_id]
+            elif isinstance(tmdb_id, str):
+                tmdb_id = [int(tmdb_id)]
+            elif isinstance(tmdb_id, list):
+                tmdb_id = [int(id) for id in tmdb_id]
+            else:
+                console.print(f"[red]Invalid TMDB ID format in meta: {tmdb_id}[/red]")
+                return False
+            for each in requests:
+                type_name = False
+                resolution = False
+                season = False
+                episode = False
+                double_check = False
+                api_id = each.get('id')
+                api_category = each.get('category')
+                api_name = each.get('name')
+                api_type = each.get('type')
+                if str(api_type) in [str(tid) for tid in type_ids]:
+                    type_name = True
+                elif api_type is None:
+                    type_name = True
+                    double_check = True
+                api_resolution = each.get('resolution')
+                if str(api_resolution) in [str(rid) for rid in resolution_ids]:
+                    resolution = True
+                elif api_resolution is None:
+                    resolution = True
+                    double_check = True
+                api_bounty = each.get('bounty')
+                api_status = each.get('status')
+                api_claimed = each.get('claimed')
+                api_description = each.get('description')
+                api_season = int(each.get('season'))
+                if api_season == meta.get('season_int'):
+                    season = True
+                api_episode = each.get('episode')
+                meta['episode_int'] = int(api_episode) if api_episode is not None else 0
+                if api_episode == meta.get('episode_int'):
+                    episode = True
+                if str(api_category) in [str(cid) for cid in category_ids]:
+                    new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
+                    if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                        console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
+                        console.print()
+                        if double_check:
+                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                            console.print()
+                    elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                        console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
+                        console.print()
+                        if double_check:
+                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                            console.print()
+                    else:
+                        console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                        if meta.get('category') == "MOVIE":
+                            console.print(f"[bold yellow]{api_name}:[/bold yellow] {new_url}")
+                        else:
+                            console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
+                        console.print(f"[bold green]Request desc: {api_description[:100]}[/bold green]")
+                        console.print()
+
+            return requests
 
         results = await asyncio.gather(*[process_single_tracker(tracker) for tracker in trackers])
         match_found = any(results)
