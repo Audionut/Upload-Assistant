@@ -354,8 +354,12 @@ class BJS(COMMON):
 
         final_desc_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt'
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            all_parts = '\n\n'.join(filter(None, description))
-            final_description = re.sub(r'\n{3,}', '\n\n', all_parts)
+            desc = '\n\n'.join(filter(None, description))
+            desc = re.sub(r"\[spoiler=([^]]+)]", r"[hide=\1]", desc, flags=re.IGNORECASE)
+            desc = re.sub(r"\[spoiler\]", "[hide]", desc, flags=re.IGNORECASE)
+            desc = re.sub(r"\[/spoiler\]", "[/hide]", desc, flags=re.IGNORECASE)
+            desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
+            final_description = re.sub(r'\n{3,}', '\n\n', desc)
             descfile.write(final_description)
 
         return final_description
@@ -774,7 +778,7 @@ class BJS(COMMON):
             print(f'Exceção no upload de {filename}: {e}')
             return None
 
-    async def get_cover(self, meta):
+    async def get_cover(self, meta, disctype):
         tmdb_data = await self.ptbr_tmdb_data(meta)
         cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
