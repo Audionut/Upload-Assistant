@@ -7,17 +7,18 @@ import os
 import platform
 import re
 import unicodedata
-from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
 from src.console import console
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
+from src.trackers.COMMON import COMMON
 
 
-class BT(COMMON):
+class BT():
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'BT'
         self.banned_groups = ['']
         self.source_flag = 'BT'
@@ -98,7 +99,7 @@ class BT(COMMON):
             console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
             return False
 
-        self.session.cookies = await self.parseCookieFile(cookie_file)
+        self.session.cookies = await self.common.parseCookieFile(cookie_file)
 
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
@@ -668,7 +669,7 @@ class BT(COMMON):
 
     async def upload(self, meta, disctype):
         await self.load_cookies(meta)
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.gather_data(meta, disctype)
         status_message = ''
 
@@ -694,7 +695,7 @@ class BT(COMMON):
                     meta['skipping'] = f'{self.tracker}'
                     return
 
-            await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
         else:
             console.print(data)
