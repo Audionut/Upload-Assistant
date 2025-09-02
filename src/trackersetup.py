@@ -230,6 +230,10 @@ class TRACKER_SETUP:
         if not meta['tag']:
             return False
 
+        group_tags = meta['tag'][1:].lower()
+        if 'taoe' in group_tags:
+            group_tags = 'taoe'
+
         if tracker.upper() in ("AITHER", "LST"):
             file_path = await self.get_banned_groups(meta, tracker)
             if file_path == "empty":
@@ -256,13 +260,13 @@ class TRACKER_SETUP:
 
         for tag in banned_group_list:
             if isinstance(tag, list):
-                if meta['tag'][1:].lower() == tag[0].lower():
+                if group_tags == tag[0].lower():
                     console.print(f"[bold yellow]{meta['tag'][1:]}[/bold yellow][bold red] was found on [bold yellow]{tracker}'s[/bold yellow] list of banned groups.")
                     console.print(f"[bold red]NOTE: [bold yellow]{tag[1]}")
                     await asyncio.sleep(5)
                     result = True
             else:
-                if meta['tag'][1:].lower() == tag.lower():
+                if group_tags == tag.lower():
                     console.print(f"[bold yellow]{meta['tag'][1:]}[/bold yellow][bold red] was found on [bold yellow]{tracker}'s[/bold yellow] list of banned groups.")
                     await asyncio.sleep(5)
                     result = True

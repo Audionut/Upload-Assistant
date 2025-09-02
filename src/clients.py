@@ -1935,7 +1935,7 @@ async def match_tracker_url(tracker_urls, meta):
                 if pattern in tracker:
                     found_ids.add(tracker_id.upper())
                     if meta.get('debug'):
-                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {tracker}")
+                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {redact_private_info(tracker)}")
 
     if "remove_trackers" not in meta or not isinstance(meta["remove_trackers"], list):
         meta["remove_trackers"] = []
