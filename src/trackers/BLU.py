@@ -5,6 +5,7 @@ import glob
 import httpx
 import os
 import platform
+import requests
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -33,15 +34,6 @@ class BLU():
             'TRiToN', 'UPiNSMOKE', 'URANiME', 'WAF', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT', 'AOC',
             ['EVO', 'Raw Content Only'], ['TERMiNAL', 'Raw Content Only'], ['ViSION', 'Note the capitalization and characters used'], ['CMRG', 'Raw Content Only']
         ]
-        self.session = httpx.AsyncClient(
-            headers={
-                'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
-            },
-            params={
-                'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
-            },
-            timeout=30.0
-        )
         pass
 
     async def upload(self, meta, disctype):
@@ -122,17 +114,21 @@ class BLU():
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
+        headers = {
+            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+        }
+        params = {
+            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
+        }
 
         if meta['debug'] is False:
-            response = await self.session.post(url=self.upload_url, files=files, data=data)
+            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
             try:
                 meta['tracker_status'][self.tracker]['status_message'] = response.json()
                 # adding torrent link to comment of torrent file
                 t_id = response.json()['data'].split(".")[1].split("/")[3]
                 meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                download_url = response.json()['data']
-                await common.unit3d_download_torrent(meta, self.session, self.tracker, download_url)
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://blutopia.cc/torrents/" + t_id)
+                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://blutopia.cc/torrents/" + t_id, headers=headers, params=params, downurl=response.json()['data'])
             except Exception:
                 console.print("It may have uploaded, go check")
                 return
