@@ -1,4 +1,60 @@
-__version__ = "v5.3.6"
+__version__ = "v5.4.0"
+
+"""
+Release Notes for version v5.4.0 (2025-09-02):
+
+# 
+# ## RELEASE NOTES
+#  - Blutopia has a peer scraping issue that resulted in UNIT3D codebase being updated, requiring torrent files to be created site side. See https://github.com/HDInnovations/UNIT3D/pull/4910
+#  - With the infohash being randomized site side, UA can no longer create valid torrent files for client injection, and instead the torrent file needs to be downloaded for client injection.
+#  - All UNIT3D based sites have been updated to prevent any issues moving forward as other sites update their UNIT3D codebase.
+#  - This will cause small slowdown in the upload process, as each torrent file is downloaded from corresponding sites.
+#  - Announce URLS for the supported sites are no longer needed in config, check example-config.py for the removed announce urls.
+# 
+# ## WHAT'S NEW
+#  - UA can now search for related requests for the uploaded content, allowing you to quickly and easily see which requests can be filled by your upload.
+#  - Request checking via config option (see example-config) or new arg (see --help)
+#  - Only ASC, BJS and ULCX supported currently
+#  - Added a new arg to skip auto torrent searching
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * Added support for PTSKIT (#730) by @wastaken7 in 19ccbe5
+# * add missing site details (#731) by @wastaken7 in e96cd15
+# * LCD - fix region, mediainfo, naming (#732) by @wastaken7 in de38dba
+# * SPD - fix and changes (#727) by @wastaken7 in 16d310c
+# * BLU - update torrent injection (#736) by @wastaken7 in a2d14af
+# * Fix BHD tracker matching (#740) by @backstab5983 in 80b4337
+# * fix(SPD): send description to BBCode-compatible field (#738) by @wastaken7 in 95e5ab7
+# * Update HDB.py to clean size bbcode (#734) by @9Oc in 8d15765
+# * Update existing client-tracker search to add 3 more trackers (#728) by @FortKnox1337 in 3dcbb7c
+# * correct screens track mapping and timeout by @Audionut in c9d5466
+# * skip auto torrent as arg by @Audionut in b78bb0a
+# * fix queue handling when all trackers already in client by @Audionut in aae803f
+# * skip pathed torrents when edit mode by @Audionut in eafb38c
+# * preserve sat true by @Audionut in ffaddd4
+# * ULCX - remove hybrid from name by @Audionut in 1f02274
+# * fix existing torrent search when not storage directory and not qbit by @Audionut in 85e653f
+# * DP - no group tagging by @Audionut in f4e236d
+# * HDB - music category by @Audionut in 6a12335
+# * Option - search tracker requests (#718) by @Audionut in 2afce5b
+# * add tracker list debug by @Audionut in 5418f05
+# * enhance(ASC): add localized TMDB data and search requests option (#743) by @wastaken7 in e2a3963
+# * refactor unit3d torrent handling (#741) by @Audionut in 56b3b14
+# * enhance(DC): httpx, MediaInfo for BDs, and upload split (#744) by @wastaken7 in de98c6e
+# * PT- ensure audio_pt and legenda_pt flags only apply to European Portuguese (#725) by @Thiago in f238fc9
+# * fix TAoE banned group checking by @Audionut in 1e8633c
+# * enhance(BJS): add localized TMDB data and search requests option (#746) by @wastaken7 in e862496
+# * redact passkeys from debug prints by @Audionut in 89809bb
+# * clarify request usage by @Audionut in 5afafc0
+# * BJS also does request searching by @Audionut in d87f060
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.6...v5.4.0
+"""
+
 
 """
 Release Notes for version v5.3.6 (2025-08-22):

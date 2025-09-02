@@ -9,8 +9,8 @@ SENSITIVE_KEYS = {
 def redact_value(val):
     """Redact sensitive values, including passkeys in URLs."""
     if isinstance(val, str):
-        # Redact passkeys/hashes in URLs (e.g. .../download/45626.ABCDEFGHIJKLMNOP...)
-        val = re.sub(r'(\.[a-zA-Z0-9]{10,})(?=[^a-zA-Z0-9]|$)', '.[REDACTED]', val)
+        # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
+        val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
         # Redact query params like ?passkey=... or &token=...
         val = re.sub(r'([?&](passkey|key|token|auth|info_hash)=)[^&]+', r'\1[REDACTED]', val, flags=re.I)
         # Redact long hex or base64-like strings (common for tokens)
