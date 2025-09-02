@@ -557,6 +557,7 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
+            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
         },
         "PTER": {  # Does not appear to be working at all

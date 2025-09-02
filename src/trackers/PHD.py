@@ -7,26 +7,28 @@ import os
 import platform
 import re
 import uuid
-from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
+from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
 from typing import Optional
 from urllib.parse import urlparse
 
 
-class PHD(COMMON):
+class PHD():
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'PHD'
         self.source_flag = 'PrivateHD'
         self.banned_groups = ['']
         self.base_url = 'https://privatehd.to'
         self.torrent_url = 'https://privatehd.to/torrent/'
+        self.announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
@@ -510,7 +512,7 @@ class PHD(COMMON):
             console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
             return False
 
-        self.session.cookies = await self.parseCookieFile(cookie_file)
+        self.session.cookies = await self.common.parseCookieFile(cookie_file)
 
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
@@ -962,7 +964,7 @@ class PHD(COMMON):
 
         if not meta.get('debug', False):
             try:
-                await self.edit_torrent(meta, self.tracker, self.source_flag)
+                await self.common.edit_torrent(meta, self.tracker, self.source_flag)
                 upload_url_step1 = f'{self.base_url}/upload/{meta['category'].lower()}'
                 torrent_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent'
 
@@ -1082,7 +1084,13 @@ class PHD(COMMON):
                 # Even if you are uploading, you still need to download the .torrent from the website
                 # because it needs to be registered as a download before you can start seeding
                 download_url = torrent_url.replace('/torrent/', '/download/torrent/')
-                await self.unit3d_download_torrent(meta, self.session, self.tracker, download_url)
+                register_download = await self.session.get(download_url)
+                if register_download.status_code != 200:
+                    print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
+                          f"Error: {register_download.status_code}")
+
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
+
                 status_message = 'Torrent uploaded successfully.'
 
                 if requests:
