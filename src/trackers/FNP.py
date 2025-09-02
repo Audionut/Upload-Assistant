@@ -28,7 +28,7 @@ class FNP():
         self.search_url = 'https://fearnopeer.com/api/torrents/filter'
         self.torrent_url = 'https://fearnopeer.com/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = ["4K4U, BiTOR,	d3g, FGT, FRDS, FTUApps, GalaxyRG, LAMA, MeGusta, NeoNoir, PSA, RARBG, YAWNiX, YTS, YIFY, x0r"]
+        self.banned_groups = ["4K4U", "BiTOR", "d3g", "FGT", "FRDS", "FTUApps", "GalaxyRG", "LAMA", "MeGusta", "NeoNoir", "PSA", "RARBG", "YAWNiX", "YTS", "YIFY", "x0r", "O(logN)"]
         pass
 
     async def get_cat_id(self, category_name):
