@@ -5,16 +5,17 @@ import httpx
 import os
 import platform
 import re
-from .COMMON import COMMON
+from src.trackers.COMMON import COMMON
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
 from src.console import console
 from src.exceptions import UploadException
 
 
-class HDS(COMMON):
+class HDS():
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'HDS'
         self.source_flag = 'HD-Space'
         self.banned_groups = ['']
@@ -32,7 +33,7 @@ class HDS(COMMON):
             console.print(f'[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
             return False
 
-        self.session.cookies = await self.parseCookieFile(cookie_file)
+        self.session.cookies = await self.common.parseCookieFile(cookie_file)
 
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
@@ -304,7 +305,7 @@ class HDS(COMMON):
 
     async def upload(self, meta, disctype):
         await self.load_cookies(meta)
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta)
         requests = await self.get_requests(meta)
         status_message = ''
@@ -347,7 +348,7 @@ class HDS(COMMON):
                     meta['skipping'] = f'{self.tracker}'
                     return
 
-            await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
         else:
             console.print(data)
