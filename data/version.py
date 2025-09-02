@@ -1,4 +1,17 @@
-__version__ = "v5.4.0"
+__version__ = "v5.4.1"
+
+"""
+Release Notes for version v5.4.1 (2025-09-02):
+
+# ## What's Changed
+# 
+# * fix missing trackers for language processing (#747) by @wastaken7 in 34d0b4b
+# * add missing function to common by @Audionut in 33d5aec
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.0...v5.4.1
+"""
+
 
 """
 Release Notes for version v5.4.0 (2025-09-02):

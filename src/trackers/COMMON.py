@@ -23,6 +23,11 @@ class COMMON():
         self.parser = self.MediaInfoParser()
         pass
 
+    async def path_exists(self, path):
+        """Async wrapper for os.path.exists"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, os.path.exists, path)
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"):
             new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent")
