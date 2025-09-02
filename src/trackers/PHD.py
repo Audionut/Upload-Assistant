@@ -305,7 +305,7 @@ class PHD():
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
                 meta['phd_rule'] = (
-                    warning + f'Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n'
+                    warning + f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n'
                     f'Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc.'
                 )
@@ -626,7 +626,7 @@ class PHD():
         ajax_url = f'https://privatehd.to/ajax/movies/{category}?term={search_term}'
 
         headers = {
-            'Referer': f'https://privatehd.to/upload/{meta['category'].lower()}',
+            'Referer': f"https://privatehd.to/upload/{meta['category'].lower()}",
             'X-Requested-With': 'XMLHttpRequest'
         }
 
@@ -860,7 +860,7 @@ class PHD():
                 category = meta.get('category').lower()
 
                 if category == 'tv':
-                    query = meta['title'] + f' {meta.get('season', '')}{meta.get('episode', '')}'
+                    query = meta['title'] + f" {meta.get('season', '')}{meta.get('episode', '')}"
                 else:
                     query = meta['title']
 
