@@ -59,7 +59,7 @@ class ASC(COMMON):
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
         try:
-            test_url = f'{self.base_url}/gerador.php'
+            test_url = f"{self.base_url}/gerador.php"
             response = await self.session.get(test_url, timeout=30.0)
 
             response.raise_for_status()
@@ -360,7 +360,7 @@ class ASC(COMMON):
 
         # Poster
         poster_path = (season_tmdb or {}).get('poster_path') or (main_tmdb or {}).get('poster_path') or meta.get('tmdb_poster')
-        poster = f'https://image.tmdb.org/t/p/w500{poster_path}' if poster_path else ''
+        poster = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ''
         await append_section('BARRINHA_CAPA', await self.format_image(poster))
 
         # Overview
@@ -374,7 +374,7 @@ class ASC(COMMON):
             still_path = episode_tmdb.get('still_path')
 
             if episode_name and episode_overview and still_path:
-                still_url = f'https://image.tmdb.org/t/p/w300{still_path}'
+                still_url = f"https://image.tmdb.org/t/p/w300{still_path}"
                 description_parts.append(f'\n[size=4][b]Episódio:[/b] {episode_name}[/size]\n')
                 description_parts.append(f'\n{await self.format_image(still_url)}\n\n{episode_overview}\n')
 
@@ -389,11 +389,11 @@ class ASC(COMMON):
             release_date = (episode_tmdb or {}).get('air_date') or (season_tmdb or {}).get('air_date') if meta['category'] != 'MOVIE' else main_tmdb.get('release_date')
 
             sheet_items = [
-                f'Duração: {formatted_runtime}' if formatted_runtime else None,
-                f'País de Origem: {', '.join(c['name'] for c in main_tmdb.get('production_countries', []))}' if main_tmdb.get('production_countries') else None,
-                f'Gêneros: {', '.join(g['name'] for g in main_tmdb.get('genres', []))}' if main_tmdb.get('genres') else None,
-                f'Data de Lançamento: {await self.format_date(release_date)}' if release_date else None,
-                f'Site: [url={main_tmdb.get('homepage')}]Clique aqui[/url]' if main_tmdb.get('homepage') else None
+                f"Duração: {formatted_runtime}" if formatted_runtime else None,
+                f"País de Origem: {', '.join(c['name'] for c in main_tmdb.get('production_countries', []))}" if main_tmdb.get('production_countries') else None,
+                f"Gêneros: {', '.join(g['name'] for g in main_tmdb.get('genres', []))}" if main_tmdb.get('genres') else None,
+                f"Data de Lançamento: {await self.format_date(release_date)}" if release_date else None,
+                f"Site: [url={main_tmdb.get('homepage')}]Clique aqui[/url]" if main_tmdb.get('homepage') else None
             ]
             await append_section('BARRINHA_FICHA_TECNICA', '\n'.join(filter(None, sheet_items)))
 
@@ -420,8 +420,8 @@ class ASC(COMMON):
         if meta['category'] == 'TV' and main_tmdb and main_tmdb.get('seasons'):
             seasons_content = []
             for seasons in main_tmdb.get('seasons', []):
-                season_name = seasons.get('name', f'Temporada {seasons.get('season_number')}').strip()
-                poster_temp = await self.format_image(f'https://image.tmdb.org/t/p/w185{seasons.get('poster_path')}') if seasons.get('poster_path') else ''
+                season_name = seasons.get('name', f"Temporada {seasons.get('season_number')}").strip()
+                poster_temp = await self.format_image(f"https://image.tmdb.org/t/p/w185{seasons.get('poster_path')}") if seasons.get('poster_path') else ''
                 overview_temp = f"\n\nSinopse:\n{seasons.get('overview')}" if seasons.get('overview') else ''
 
                 inner_content_parts = []
@@ -444,10 +444,10 @@ class ASC(COMMON):
         ratings_list = user_layout.get('Ratings', [])
         if not ratings_list:
             if imdb_rating := meta.get('imdb_info', {}).get('rating'):
-                ratings_list.append({'Source': 'Internet Movie Database', 'Value': f'{imdb_rating}/10'})
+                ratings_list.append({'Source': 'Internet Movie Database', 'Value': f"{imdb_rating}/10"})
         if main_tmdb and (tmdb_rating := main_tmdb.get('vote_average')):
             if not any(r.get('Source') == 'TMDb' for r in ratings_list):
-                ratings_list.append({'Source': 'TMDb', 'Value': f'{tmdb_rating:.1f}/10'})
+                ratings_list.append({'Source': 'TMDb', 'Value': f"{tmdb_rating:.1f}/10"})
 
         criticas_key = 'BARRINHA_INFORMACOES' if meta['category'] == 'MOVIE' and 'BARRINHA_INFORMACOES' in layout_image else 'BARRINHA_CRITICAS'
         await append_section(criticas_key, await self.build_ratings_bbcode(meta, ratings_list))
@@ -497,7 +497,7 @@ class ASC(COMMON):
         video_results = tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
-            youtube = f'http://www.youtube.com/watch?v={youtube_code}'
+            youtube = f"http://www.youtube.com/watch?v={youtube_code}"
         else:
             youtube = meta.get('youtube') or ''
 
@@ -514,7 +514,7 @@ class ASC(COMMON):
 
         if not tags:
             tags = meta.get('genre') or await asyncio.to_thread(
-                input, f'Digite os gêneros (no formato do {self.tracker}): '
+                input, f"Digite os gêneros (no formato do {self.tracker}): "
             )
 
         return tags
@@ -524,7 +524,7 @@ class ASC(COMMON):
         if meta.get('anime'):
             search_name = await self.get_title(meta)
             search_query = search_name.replace(' ', '+')
-            search_url = f'{self.base_url}/torrents-search.php?search={search_query}'
+            search_url = f"{self.base_url}/torrents-search.php?search={search_query}"
 
         if meta['category'] == 'MOVIE':
             search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={meta['imdb_info']['imdbID']}"
@@ -570,7 +570,7 @@ class ASC(COMMON):
                         elif any(term in badge_text_upper for term in disc_types):
                             disk_type = badge_text
 
-                    dupe_string = f'{name} {year} {resolution} {disk_type} {video_codec} {audio_codec}'
+                    dupe_string = f"{name} {year} {resolution} {disk_type} {video_codec} {audio_codec}"
                     found_items.append(dupe_string)
                 else:
                     details_link_tag = release.find('a', href=lambda href: href and 'torrents-details.php?id=' in href)
@@ -578,7 +578,7 @@ class ASC(COMMON):
                         continue
 
                     torrent_id = details_link_tag['href'].split('id=')[-1]
-                    file_page_url = f'{self.base_url}/torrents-arquivos.php?id={torrent_id}'
+                    file_page_url = f"{self.base_url}/torrents-arquivos.php?id={torrent_id}"
                     file_page_response = await self.session.get(file_page_url, timeout=15)
                     file_page_response.raise_for_status()
                     file_page_soup = BeautifulSoup(file_page_response.text, 'html.parser')
@@ -595,14 +595,14 @@ class ASC(COMMON):
 
     async def get_upload_url(self, meta):
         if meta.get('anime'):
-            return f'{self.base_url}/enviar-anime.php'
+            return f"{self.base_url}/enviar-anime.php"
         elif meta['category'] == 'MOVIE':
-            return f'{self.base_url}/enviar-filme.php'
+            return f"{self.base_url}/enviar-filme.php"
         else:
-            return f'{self.base_url}/enviar-series.php'
+            return f"{self.base_url}/enviar-series.php"
 
     async def format_image(self, url):
-        return f'[img]{url}[/img]' if url else ''
+        return f"[img]{url}[/img]" if url else ''
 
     async def format_date(self, date_str):
         if not date_str or date_str == 'N/A':
@@ -628,14 +628,14 @@ class ASC(COMMON):
                     video_file,
                     output='STRING',
                     full=False,
-                    mediainfo_options={'inform': f'file://{template_path}'}
+                    mediainfo_options={'inform': f"file://{template_path}"}
                 )
                 return str(mi_output).replace('\r', '')
 
         return None
 
     async def fetch_layout_data(self, meta):
-        url = f'{self.base_url}/search.php'
+        url = f"{self.base_url}/search.php"
 
         async def _fetch(payload):
             try:
@@ -687,10 +687,10 @@ class ASC(COMMON):
         parts = []
         for person in cast_list[:10]:
             profile_path = person.get('profile_path')
-            profile_url = f'https://image.tmdb.org/t/p/w45{profile_path}' if profile_path else 'https://i.imgur.com/eCCCtFA.png'
-            tmdb_url = f'https://www.themoviedb.org/person/{person.get('id')}?language=pt-BR'
+            profile_url = f"https://image.tmdb.org/t/p/w45{profile_path}" if profile_path else 'https://i.imgur.com/eCCCtFA.png'
+            tmdb_url = f"https://www.themoviedb.org/person/{person.get('id')}?language=pt-BR"
             img_tag = await self.format_image(profile_url)
-            character_info = f'({person.get('name', '')}) como {person.get('character', '')}'
+            character_info = f"({person.get('name', '')}) como {person.get('character', '')}"
             parts.append(f'[url={tmdb_url}]{img_tag}[/url]\n[size=2][b]{character_info}[/b][/size]\n')
         return ''.join(parts)
 
@@ -713,7 +713,7 @@ class ASC(COMMON):
 
                 query = meta['title']
 
-                search_url = f'{self.base_url}/pedidos.php?search={query}&category={category}'
+                search_url = f"{self.base_url}/pedidos.php?search={query}&category={category}"
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -747,7 +747,7 @@ class ASC(COMMON):
                     })
 
                 if results:
-                    message = f'\n{self.tracker}: [bold yellow]Seu upload pode atender o(s) seguinte(s) pedido(s), confira:[/bold yellow]\n\n'
+                    message = f"\n{self.tracker}: [bold yellow]Seu upload pode atender o(s) seguinte(s) pedido(s), confira:[/bold yellow]\n\n"
                     for r in results:
                         message += f"[bold green]Nome:[/bold green] {r['Name']}\n"
                         message += f"[bold green]Recompensa:[/bold green] {r['Reward']}\n"
@@ -771,7 +771,7 @@ class ASC(COMMON):
         data = {
             'ano': str(meta['year']),
             'audio': await self.get_audio(meta),
-            'capa': f'https://image.tmdb.org/t/p/w500{main_tmdb.get('poster_path') or meta.get('tmdb_poster')}',
+            'capa': f"https://image.tmdb.org/t/p/w500{main_tmdb.get('poster_path') or meta.get('tmdb_poster')}",
             'codecaudio': await self.get_audio_codec(meta),
             'codecvideo': await self.get_video_codec(meta),
             'descr': await self.build_description(meta),
@@ -850,7 +850,7 @@ class ASC(COMMON):
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
                     print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
-                    meta['skipping'] = f'{self.tracker}'
+                    meta['skipping'] = f"{self.tracker}"
                     return
 
             await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
@@ -863,7 +863,7 @@ class ASC(COMMON):
 
     async def auto_approval(self, torrent_id):
         try:
-            approval_url = f'{self.base_url}/uploader_app.php?id={torrent_id}'
+            approval_url = f"{self.base_url}/uploader_app.php?id={torrent_id}"
             approval_response = await self.session.get(approval_url, timeout=30)
             approval_response.raise_for_status()
         except Exception as e:
