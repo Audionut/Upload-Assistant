@@ -152,7 +152,9 @@ class HUNO():
             if meta.get('audio_languages'):
                 languages = meta['audio_languages']
                 languages = set(languages)
-                if len(languages) > 1:
+                if len(languages) > 2:
+                    languages = "Multi"
+                elif len(languages) > 1:
                     languages = "Dual"
                 else:
                     languages = next(iter(languages), "SKIPPED")
@@ -217,7 +219,6 @@ class HUNO():
         if tag == "":
             tag = "- NOGRP"
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
-        console.print(f"[bold cyan]Source: {source}")
         if any(x in source.lower() for x in ["pal", "ntsc"]) and type == "ENCODE":
             source = "DVD"
         hdr = meta.get('hdr', "")
