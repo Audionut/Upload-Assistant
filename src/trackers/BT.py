@@ -152,7 +152,7 @@ class BT():
         else:
             self.tmdb_data = {}
 
-    async def tmdb_data(self, meta):
+    async def ptbr_tmdb_data(self, meta):
         brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
         if brazil_data_in_meta:
             return brazil_data_in_meta
@@ -189,7 +189,7 @@ class BT():
         return category_map.get(meta['category'])
 
     async def get_languages(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         lang_code = tmdb_data.get('original_language')
 
         if not lang_code:
@@ -344,7 +344,7 @@ class BT():
         return 'Outro'
 
     async def get_title(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
 
         title = tmdb_data.get('name') or tmdb_data.get('title') or ''
 
@@ -376,7 +376,7 @@ class BT():
         return final_description
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         video_results = tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
@@ -392,7 +392,7 @@ class BT():
         return youtube
 
     async def get_tags(self, meta):
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         tags = ''
 
         if tmdb_data and isinstance(tmdb_data.get('genres'), list):
@@ -591,9 +591,10 @@ class BT():
         else:
             return 'N/A'
 
-    async def gather_data(self, meta, disctype):
+    async def fetch_data(self, meta, disctype):
+        self.load_localized_data(meta)
         await self.validate_credentials(meta)
-        tmdb_data = await self.tmdb_data(meta)
+        tmdb_data = await self.ptbr_tmdb_data(meta)
         subtitles_info = await self.get_subtitle(meta)
         resolution = await self.get_resolution(meta)
 
@@ -670,7 +671,7 @@ class BT():
     async def upload(self, meta, disctype):
         await self.load_cookies(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-        data = await self.gather_data(meta, disctype)
+        data = await self.fetch_data(meta, disctype)
         status_message = ''
 
         if not meta.get('debug', False):
