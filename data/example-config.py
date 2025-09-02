@@ -551,13 +551,13 @@ config = {
             "link_dir_name": "",
             # for PHD to work you need to export cookies from https://privatehd.to/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
             # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
+            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
         },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
-            "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
         },
         "PTER": {  # Does not appear to be working at all
