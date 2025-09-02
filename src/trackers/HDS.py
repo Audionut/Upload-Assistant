@@ -24,7 +24,7 @@ class HDS():
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
-        }, timeout=30.0)
+        }, timeout=30)
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def load_cookies(self, meta):
@@ -38,9 +38,13 @@ class HDS():
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
         try:
-            test_url = f'{self.base_url}/index.php?page=upload'
+            test_url = f'{self.base_url}/index.php?'
 
-            response = await self.session.get(test_url, timeout=10)
+            params = {
+                'page': 'upload'
+            }
+
+            response = await self.session.get(test_url, params=params)
 
             if response.status_code == 200 and 'index.php?page=upload' in str(response.url):
                 return True
@@ -146,10 +150,17 @@ class HDS():
             cli_ui.info(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
             return dupes
 
-        search_url = f'{self.base_url}/index.php?page=torrents&search={imdb_id}&active=0&options=2'
+        search_url = f'{self.base_url}/index.php?'
+
+        params = {
+            'page': 'torrents',
+            'search': imdb_id,
+            'active': '0',
+            'options': '2'
+        }
 
         try:
-            response = await self.session.get(search_url, timeout=20)
+            response = await self.session.get(search_url, params=params)
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -212,15 +223,20 @@ class HDS():
         return 38
 
     async def get_requests(self, meta):
-        if self.config['TRACKERS'][self.tracker].get('check_requests', False) is False:
+        if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
-
         else:
             try:
                 query = meta['title']
-                search_url = f'{self.base_url}/index.php?page=viewrequests&search={query}&filter=true'
+                search_url = f'{self.base_url}/index.php?'
 
-                response = await self.session.get(search_url, cookies=self.session.cookies)
+                params = {
+                    'page': 'viewrequests',
+                    'search': query,
+                    'filter': 'true'
+                }
+
+                response = await self.session.get(search_url, params=params, cookies=self.session.cookies)
                 response.raise_for_status()
                 response_results_text = response.text
 
@@ -312,8 +328,11 @@ class HDS():
 
         if not meta.get('debug', False):
             torrent_id = ''
-            upload_url = f'{self.base_url}/index.php?page=upload'
             torrent_path = f'{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent'
+            upload_url = f'{self.base_url}/index.php?'
+            params = {
+                'page': 'upload'
+            }
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {
@@ -323,7 +342,7 @@ class HDS():
                 if nfo:
                     files['nfo'] = nfo['nfo']
 
-                response = await self.session.post(upload_url, data=data, files=files, timeout=30)
+                response = await self.session.post(upload_url, data=data, params=params, files=files)
 
                 if 'download.php?id=' in response.text:
                     status_message = 'Torrent uploaded successfully.'

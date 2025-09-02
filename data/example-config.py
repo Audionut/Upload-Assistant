@@ -445,7 +445,6 @@ config = {
             # for HDS to work you need to export cookies from https://hd-space.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
             # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
             "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
-            "check_requests": False,
             "anon": False,
         },
         "HDT": {
