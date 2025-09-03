@@ -219,6 +219,8 @@ class HUNO():
         if tag == "":
             tag = "- NOGRP"
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
+        if source == "BluRay" and "2160" in resolution:
+            source = "UHD BluRay"
         if any(x in source.lower() for x in ["pal", "ntsc"]) and type == "ENCODE":
             source = "DVD"
         hdr = meta.get('hdr', "")
