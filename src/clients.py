@@ -1917,6 +1917,7 @@ async def match_tracker_url(tracker_urls, meta):
         'sp': ["https://seedpool.org"],
         'fnp': ["https://fearnopeer.com"],
         'hhd': ["https://homiehelpdesk.net"],
+        'hdt': ["https://hdts-announce.ru"],
         'phd': ["tracker.privatehd"],
         'nbl': ["tracker.nebulance"],
         'mtv': ["tracker.morethantv"],
