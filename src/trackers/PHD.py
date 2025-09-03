@@ -981,15 +981,15 @@ class PHD():
 
         final_description = '\n\n'.join(filter(None, description_parts))
         desc = final_description
-        patern = [
-                (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
-                (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
-                (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
-                (r'\n{3,}', 0, 'Line break(s)')
-            ]
+        cleanup_patterns = [
+            (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
+            (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
+            (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
+            (r'\n{3,}', 0, 'Line break(s)')
+        ]
 
-        for padrao, flag, removed_type in patern:
-            desc, amount = re.subn(padrao, '', desc, flags=flag)
+        for pattern, flag, removed_type in cleanup_patterns:
+            desc, amount = re.subn(pattern, '', desc, flags=flag)
             if amount > 0:
                 console.print(f'[{self.tracker}] Deleted {amount} {removed_type} from description.')
 
