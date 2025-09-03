@@ -445,7 +445,7 @@ class PHD():
         return True
 
     def edit_name(self, meta):
-        upload_name = meta.get('name')
+        upload_name = meta.get('name').replace(meta["aka"], '')
         forbidden_terms = [
             r'\bLIMITED\b',
             r'\bCriterion Collection\b',
@@ -471,9 +471,25 @@ class PHD():
 
     def get_resolution(self, meta):
         resolution = ''
-        if not meta.get('is_disc') == 'BDMV':
-            video_mi = meta['mediainfo']['media']['track'][1]
-            resolution = f"{video_mi['Width']}x{video_mi['Height']}"
+        width, height = None, None
+
+        try:
+            if meta.get('is_disc') == 'BDMV':
+                resolution_str = meta.get('resolution', '')
+                height_num = int(resolution_str.lower().replace('p', '').replace('i', ''))
+                height = str(height_num)
+                width = str(round((16 / 9) * height_num))
+            else:
+                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+                if len(tracks) > 1:
+                    video_mi = tracks[1]
+                    width = video_mi.get('Width')
+                    height = video_mi.get('Height')
+        except (ValueError, TypeError, KeyError, IndexError):
+            return ''
+
+        if width and height:
+            resolution = f'{width}x{height}'
 
         return resolution
 
@@ -952,6 +968,36 @@ class PHD():
 
         return tags
 
+    async def edit_desc(self, meta):
+        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+
+        description_parts = []
+
+        if os.path.exists(base_desc_path):
+            with open(base_desc_path, 'r', encoding='utf-8') as f:
+                manual_desc = f.read()
+            description_parts.append(manual_desc)
+
+        final_description = '\n\n'.join(filter(None, description_parts))
+        desc = final_description
+        patern = [
+                (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
+                (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
+                (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
+                (r'\n{3,}', 0, 'Line break(s)')
+            ]
+
+        for padrao, flag, removed_type in patern:
+            desc, amount = re.subn(padrao, '', desc, flags=flag)
+            if amount > 0:
+                console.print(f'[{self.tracker}] Deleted {amount} {removed_type} from description.')
+
+        with open(final_desc_path, 'w', encoding='utf-8') as f:
+            f.write(desc)
+
+        return desc
+
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
 
@@ -1022,7 +1068,7 @@ class PHD():
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
             'anon_upload': '',
-            'description': '',
+            'description': await self.edit_desc(meta),
             'qqfile': '',
             'rip_type_id': self.get_rip_type(meta),
             'video_quality_id': self.get_video_quality(meta),
