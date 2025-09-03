@@ -829,7 +829,7 @@ class PHD():
             for path in tqdm(
                 paths,
                 total=len(paths),
-                desc=f'Uploading screenshots to {self.tracker}'
+                desc=f'[{self.tracker}] Uploading screenshots'
             ):
                 result = await upload_local_file(path)
                 if result:
@@ -856,7 +856,7 @@ class PHD():
             for url in tqdm(
                 links,
                 total=len(links),
-                desc=f'Uploading screenshots to {self.tracker}'
+                desc=f'[{self.tracker}] Uploading screenshots'
             ):
                 result = await upload_remote_file(url)
                 if result:
@@ -993,10 +993,25 @@ class PHD():
             if amount > 0:
                 console.print(f'[{self.tracker}] Deleted {amount} {removed_type} from description.')
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
+        desc = desc.strip()
+        desc = desc.replace('\r\n', '\n').replace('\r', '\n')
 
-        return desc
+        paragraphs = re.split(r'\n\s*\n', desc)
+
+        html_parts = []
+        for p in paragraphs:
+            if not p.strip():
+                continue
+
+            p_with_br = p.replace('\n', '<br>')
+            html_parts.append(f'<p>{p_with_br}</p>')
+
+        final_html_desc = '\r\n'.join(html_parts)
+
+        with open(final_desc_path, 'w', encoding='utf-8') as f:
+            f.write(final_html_desc)
+
+        return final_html_desc
 
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
