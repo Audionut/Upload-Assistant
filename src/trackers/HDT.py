@@ -20,7 +20,7 @@ class HDT():
         self.username = config['TRACKERS'][self.tracker].get('username', '').strip()
         self.password = config['TRACKERS'][self.tracker].get('password', '').strip()
         self.signature = None
-        self.base_url = "https://hd-torrents.net"
+        self.base_url = "https://hd-torrents.org"
         self.banned_groups = [""]
 
     async def get_category_id(self, meta):
