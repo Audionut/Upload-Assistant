@@ -31,42 +31,39 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Currently works with .mkv/.mp4/Blu-ray/DVD/HD-DVDs.
 
 ## Supported Sites:
-<table>
-  <tr>
-    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
-    <td align="center"><b>Name</b></td><td align="center"><b>Acronym</b></td>
-  </tr>
-  <tr><td>Aither</td><td>AITHER</td><td>Alpharatio</td><td>AR</td></tr>
-  <tr><td>Amigos Share Club</td><td>ASC</td><td>AnimeLovers</td><td>AL</td></tr>
-  <tr><td>Anthelion</td><td>ANT</td><td>AsianCinema</td><td>ACM</td></tr>
-  <tr><td>Beyond-HD</td><td>BHD</td><td>BitHDTV</td><td>BHDTV</td></tr>
-  <tr><td>BrasilJapão-Share</td><td>BJS</td><td>Blutopia</td><td>BLU</td></tr>
-  <tr><td>BrasilTracker</td><td>BT</td><td>CapybaraBR</td><td>CBR</td></tr>
-  <tr><td>Cinematik</td><td>TIK</td><td>DarkPeers</td><td>DP</td></tr>
-  <tr><td>DigitalCore</td><td>DC</td><td>FearNoPeer</td><td>FNP</td></tr>
-  <tr><td>FileList</td><td>FL</td><td>Friki</td><td>FRIKI</td></tr>
-  <tr><td>FunFile</td><td>FF</td><td>hawke-uno</td><td>HUNO</td></tr>
-  <tr><td>HDBits</td><td>HDB</td><td>HD-Space</td><td>HDS</td></tr>
-  <tr><td>HD-Torrents</td><td>HDT</td><td>HomieHelpDesk</td><td>HHD</td></tr>
-  <tr><td>ItaTorrents</td><td>ITT</td><td>Last Digital Underground</td><td>LDU</td></tr>
-  <tr><td>Lat-Team</td><td>LT</td><td>Locadora</td><td>LCD</td></tr>
-  <tr><td>LST</td><td>LST</td><td>MoreThanTV</td><td>MTV</td></tr>
-  <tr><td>Nebulance</td><td>NBL</td><td>OldToonsWorld</td><td>OTW</td></tr>
-  <tr><td>OnlyEncodes+</td><td>OE</td><td>PassThePopcorn</td><td>PTP</td></tr>
-  <tr><td>Polish Torrent</td><td>PTT</td><td>Portugas</td><td>PT</td></tr>
-  <tr><td>PTerClub</td><td>PTER</td><td>PrivateHD</td><td>PHD</td></tr>
-  <tr><td>PTSKIT</td><td>PTS</td><td>Racing4Everyone</td><td>R4E</td></tr>
-  <tr><td>Rastastugan</td><td>RAS</td><td>ReelFLiX</td><td>RF</td></tr>
-  <tr><td>RetroFlix</td><td>RTF</td><td>Samaritano</td><td>SAM</td></tr>
-  <tr><td>seedpool</td><td>SP</td><td>ShareIsland</td><td>SHRI</td></tr>
-  <tr><td>SkipTheCommericals</td><td>STC</td><td>SpeedApp</td><td>SPD</td></tr>
-  <tr><td>Swarmazon</td><td>SN</td><td>Toca Share</td><td>TOCA</td></tr>
-  <tr><td>TorrentHR</td><td>THR</td><td>TorrentLeech</td><td>TL</td></tr>
-  <tr><td>ToTheGlory</td><td>TTG</td><td>TVChaosUK</td><td>TVC</td></tr>
-  <tr><td>UHDShare</td><td>UHD</td><td>ULCX</td><td>ULCX</td></tr>
-  <tr><td>UTOPIA</td><td>UTP</td><td>YOiNKED</td><td>YOINK</td></tr>
-  <tr><td>YUSCENE</td><td>YUS</td><td></td><td></td></tr>
-</table>
+
+|Name|Acronym|Name|Acronym|
+|-|:-:|-|:-:|
+|Aither|AITHER|Alpharatio|AR|
+|AmigosShareClub|ASC|AnimeLovers|AL|
+|Anthelion|ANT|AsianCinema|ACM|
+|AvistaZ|AZ|Beyond-HD|BHD|
+|BitHDTV|BHDTV|Blutopia|BLU|
+|BrasilJapão-Share|BJS|BrasilTracker|BT|
+|CapybaraBR|CBR|Cinematik|TIK|
+|DarkPeers|DP|DigitalCore|DC|
+|FearNoPeer|FNP|FileList|FL|
+|Friki|FRIKI|FunFile|FF|
+|hawke-uno|HUNO|HDBits|HDB|
+|HD-Space|HDS|HD-Torrents|HDT|
+|HomieHelpDesk|HHD|ItaTorrents|ITT|
+|LastDigitalUnderground|LDU|Lat-Team|LT|
+|Locadora|LCD|LST|LST|
+|MoreThanTV|MTV|Nebulance|NBL|
+|OldToonsWorld|OTW|OnlyEncodes+|OE|
+|PassThePopcorn|PTP|PolishTorrent|PTT|
+|Portugas|PT|PTerClub|PTER|
+|PrivateHD|PHD|PTSKIT|PTS|
+|Racing4Everyone|R4E|Rastastugan|RAS|
+|ReelFLiX|RF|RetroFlix|RTF|
+|Samaritano|SAM|seedpool|SP|
+|ShareIsland|SHRI|SkipTheCommericals|STC|
+|SpeedApp|SPD|Swarmazon|SN|
+|TocaShare|TOCA|TorrentHR|THR|
+|TorrentLeech|TL|ToTheGlory|TTG|
+|TVChaosUK|TVC|UHDShare|UHD|
+|ULCX|ULCX|UTOPIA|UTP|
+|YOiNKED|YOINK|YUSCENE|YUS|
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
