@@ -280,9 +280,9 @@ class AZ():
         return keyword_map.get(resolution.lower())
 
     def get_rip_type(self, meta):
-        source_type = meta.get('type', '').strip().lower()
-        source = meta.get('source', '').strip().lower()
-        is_disc = meta.get('is_disc', '').strip().upper()
+        source_type = str(meta.get('type', '') or '').strip().lower()
+        source = str(meta.get('source', '') or '').strip().lower()
+        is_disc = str(meta.get('is_disc', '') or '').strip().upper()
 
         if is_disc == 'BDMV':
             return '15'
@@ -760,7 +760,7 @@ class AZ():
         tags = [str(tag_id) for tag_id in tag_ids_results if tag_id is not None]
 
         if meta.get('personalrelease', False):
-            tags.insert(0, '1448')
+            tags.insert(0, '3773')
 
         return tags
 
@@ -821,7 +821,7 @@ class AZ():
 
         if not meta.get('debug', False):
             try:
-                await self.common.edit_torrent(meta, self.tracker, self.source_flag)
+                await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=f'[{self.tracker}]', announce_url='https://tracker.avistaz.to/announce')
                 upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
