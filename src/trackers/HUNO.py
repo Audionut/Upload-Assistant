@@ -256,7 +256,7 @@ class HUNO():
                     name = f"{title} ({year}) {distributor} {edition} {hc} ({resolution} {source} {dvd_size} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} ({year}) {distributor} {edition} {hc} ({resolution} {source} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
-            elif type == "REMUX" and source == "BluRay":  # BluRay Remux
+            elif type == "REMUX" and source.endswith("BluRay"):  # BluRay Remux
                 name = f"{title} ({year}) {edition} ({resolution} {three_d} {source} {hybrid} REMUX {video_codec} {hfr} {hdr} {audio} {tag}) {repack}"
             elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {source} {hybrid} REMUX {video_codec} {hdr} {audio} {tag}) {repack}"
