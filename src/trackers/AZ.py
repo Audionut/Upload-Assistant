@@ -266,6 +266,9 @@ class AZ():
     def get_video_quality(self, meta):
         resolution = meta.get('resolution')
 
+        if meta.get('sd', False):
+            return '1'
+
         keyword_map = {
             '1080i': '7',
             '1080p': '3',
@@ -277,17 +280,40 @@ class AZ():
         return keyword_map.get(resolution.lower())
 
     def get_rip_type(self, meta):
-        source_type = meta.get('type')
+        source_type = meta.get('type', '').strip().lower()
+        source = meta.get('source', '').strip().lower()
+        is_disc = meta.get('is_disc', '').strip().upper()
+
+        if is_disc == 'BDMV':
+            return '15'
+        if is_disc == 'HDDVD':
+            return '4'
+        if is_disc == 'DVD':
+            return '4'
+
+        if source == 'dvd' and source_type == 'remux':
+            return '17'
+
+        if source_type == 'remux':
+            if source == 'dvd':
+                return '17'
+            if source in ('bluray', 'blu-ray'):
+                return '14'
 
         keyword_map = {
             'bdrip': '1',
+            'brrip': '3',
             'encode': '2',
-            'disc': '3',
+            'dvdrip': '5',
             'hdrip': '6',
             'hdtv': '7',
+            'sdtv': '16',
+            'vcd': '8',
+            'vcdrip': '8',
+            'vhsrip': '10',
+            'vodrip': '11',
             'webdl': '12',
             'webrip': '13',
-            'remux': '14',
         }
 
         return keyword_map.get(source_type.lower())
@@ -972,7 +998,7 @@ class AZ():
             ('Bislama', 'bis', 'bi'): '21',
             ('Bokmål, Norwegian', 'nob', 'nb'): '22',
             ('Bosnian', 'bos', 'bs'): '23',
-            ('Brazilian Portuguese', 'por', 'pt'): '187',
+            ('Brazilian Portuguese', 'por', 'pt'): '189',
             ('Breton', 'bre', 'br'): '24',
             ('Bulgarian', 'bul', 'bg'): '25',
             ('Burmese', 'mya', 'my'): '26',
@@ -1000,7 +1026,7 @@ class AZ():
             ('Ewe', 'ewe', 'ee'): '48',
             ('Faroese', 'fao', 'fo'): '49',
             ('Fijian', 'fij', 'fj'): '50',
-            ('Filipino', 'fil', 'fil'): '189',
+            ('Filipino', 'fil', 'fil'): '188',
             ('Finnish', 'fin', 'fi'): '51',
             ('French', 'fra', 'fr'): '52',
             ('Fulah', 'ful', 'ff'): '53',
@@ -1063,7 +1089,7 @@ class AZ():
             ('Marathi', 'mar', 'mr'): '110',
             ('Marshallese', 'mah', 'mh'): '111',
             ('Mongolian', 'mon', 'mn'): '112',
-            ('Mooré', 'mos', 'mos'): '188',
+            ('Mooré', 'mos', 'mos'): '187',
             ('Nauru', 'nau', 'na'): '113',
             ('Navajo', 'nav', 'nv'): '114',
             ('Ndebele, North', 'nde', 'nd'): '115',
@@ -1071,8 +1097,8 @@ class AZ():
             ('Ndonga', 'ndo', 'ng'): '117',
             ('Nepali', 'nep', 'ne'): '118',
             ('Northern Sami', 'sme', 'se'): '119',
-            ('Norwegian', 'nor', 'no'): '120',
             ('Norwegian Nynorsk', 'nno', 'nn'): '121',
+            ('Norwegian', 'nor', 'no'): '120',
             ('Occitan (post 1500)', 'oci', 'oc'): '122',
             ('Ojibwa', 'oji', 'oj'): '123',
             ('Oriya', 'ori', 'or'): '124',
