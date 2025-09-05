@@ -820,7 +820,7 @@ class AZ():
                 thumb_links_limited = thumb_links[:limit]
             else:
                 image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/reuploaded_images.json"
-                if os.path.exists(image_data_file) and not meta.get('image_list'):
+                if os.path.exists(image_data_file):
                     try:
                         with open(image_data_file, 'r') as img_file:
                             image_data = json.load(img_file)
