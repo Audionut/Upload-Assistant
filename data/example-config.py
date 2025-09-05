@@ -331,7 +331,7 @@ config = {
             "link_dir_name": "",
             # for AZ to work you need to export cookies from https://avistaz.to using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
             # cookies need to be in netscape format and need to be in data/cookies/AZ.txt
-            "announce_url": "https://tracker.cinemaz.to/<PASSKEY>/announce",
+            "announce_url": "https://tracker.avistaz.to/<PASSKEY>/announce",
             "anon": False,
         },
         "BHD": {

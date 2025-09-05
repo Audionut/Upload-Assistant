@@ -101,24 +101,24 @@ class AZ():
             'NU', 'NZ', 'PF', 'PG', 'PN', 'PW', 'SB', 'TK', 'TO', 'TV', 'UM', 'VU', 'WF', 'WS'
         ]
 
+        az_allowed_countries = [
+            'BD', 'BN', 'BT', 'CN', 'HK', 'ID', 'IN', 'JP', 'KH', 'KP', 'KR', 'LA', 'LK',
+            'MM', 'MN', 'MO', 'MY', 'NP', 'PH', 'PK', 'SG', 'TH', 'TL', 'TW', 'VN'
+        ]
+
         phd_countries = [
             'AG', 'AI', 'AU', 'BB', 'BM', 'BS', 'BZ', 'CA', 'CW', 'DM', 'GB', 'GD', 'IE',
             'JM', 'KN', 'KY', 'LC', 'MS', 'NZ', 'PR', 'TC', 'TT', 'US', 'VC', 'VG', 'VI',
         ]
 
-        az_allowed_countries = asia
-
-        # Countries that belong on CinemaZ (all others, excluding AZ and PHD)
-        all_countries = africa + america + europe + oceania
-        cinemaz_countries = list(set(all_countries) - set(phd_countries))
+        all_countries = africa + america + asia + europe + oceania
+        cinemaz_countries = list(set(all_countries) - set(phd_countries) - set(az_allowed_countries))
 
         origin_countries_codes = meta.get('origin_country', [])
 
-        # 1. If the content is Asian, it's allowed on AvistaZ.
         if any(code in az_allowed_countries for code in origin_countries_codes):
             return True
 
-        # 2. If it's from a major English-speaking country, direct to PrivateHD.
         elif any(code in phd_countries for code in origin_countries_codes):
             meta['az_rule'] = (
                 warning + 'DO NOT upload content from major English speaking countries '
@@ -126,11 +126,10 @@ class AZ():
             )
             return False
 
-        # 3. If it's from Europe (non-UK/IE), America, Africa, or Oceania, direct to CinemaZ.
         elif any(code in cinemaz_countries for code in origin_countries_codes):
             meta['az_rule'] = (
-                warning + 'DO NOT upload Western content. '
-                'Upload content from Europe, the Americas, Africa and Oceania to our sister site CinemaZ.to instead.'
+                warning + 'DO NOT upload non-allowed Asian or Western content. '
+                'Upload this content to our sister site CinemaZ.to instead.'
             )
             return False
 
@@ -184,7 +183,8 @@ class AZ():
             ]
 
             is_untouched_opus = False
-            if 'opus' in meta.get('audio', '').lower() and meta.get('untouched', False):
+            audio_field = meta.get('audio', '')
+            if isinstance(audio_field, str) and 'opus' in audio_field.lower() and bool(meta.get('untouched', False)):
                 is_untouched_opus = True
 
             audio_tracks = []
@@ -227,7 +227,7 @@ class AZ():
         return True
 
     def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta["aka"], '')
+        upload_name = meta.get('name').replace(meta['aka'], '')
 
         tag_lower = meta['tag'].lower()
         invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
@@ -321,7 +321,7 @@ class AZ():
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
-            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
+            console.print(f'{self.tracker}: Cookie file for {self.tracker} not found: {cookie_file}')
             return False
 
         self.session.cookies = await self.common.parseCookieFile(cookie_file)
@@ -334,7 +334,7 @@ class AZ():
             response.raise_for_status()
 
             if 'login' in str(response.url):
-                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
+                console.print(f'{self.tracker}: Validation failed. The cookie appears to be expired or invalid.')
                 return False
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
@@ -353,24 +353,24 @@ class AZ():
             return True
 
         except httpx.TimeoutException:
-            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
+            console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
             return False
         except httpx.HTTPStatusError as e:
-            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
+            console.print(f'{self.tracker}: HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
             return False
         except httpx.RequestError as e:
-            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
+            console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
             return False
 
     async def search_existing(self, meta, disctype):
         if not await self.rules(meta):
             console.print(f"[red]{meta['az_rule']}[/red]")
-            meta['skipping'] = f"{self.tracker}"
+            meta['skipping'] = f'{self.tracker}'
             return
 
         if not await self.get_media_code(meta):
-            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
-            meta['skipping'] = f"{self.tracker}"
+            console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            meta['skipping'] = f'{self.tracker}'
             return
 
         if meta.get('resolution') == '2160p':
@@ -445,7 +445,7 @@ class AZ():
         for attempt in range(2):
             try:
                 if attempt == 1:
-                    console.print(f"[{self.tracker}] Trying to search again by ID after adding to media to database...\n")
+                    console.print(f'{self.tracker}: Trying to search again by ID after adding to media to database...\n')
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
                 response = await self.session.get(ajax_url, headers=headers)
@@ -465,30 +465,30 @@ class AZ():
                     if match:
                         self.media_code = str(match['id'])
                         if attempt == 1:
-                            console.print(f"[{self.tracker}] [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
+                            console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
                         return True
 
             except Exception as e:
-                console.print(f"[{self.tracker}] Error while trying to fetch media code in attempt {attempt + 1}: {e}")
+                console.print(f'{self.tracker}: Error while trying to fetch media code in attempt {attempt + 1}: {e}')
                 break
 
             if attempt == 0 and not self.media_code:
                 console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
 
-                user_choice = input(f"[{self.tracker}] Do you want to add '{title}' to the site database? (y/n): \n").lower()
+                user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
-                    console.print(f'[{self.tracker}] Trying to add to database...')
+                    console.print(f'{self.tracker}: Trying to add to database...')
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
-                        console.print(f"[{self.tracker}] Failed to add media. Aborting.")
+                        console.print(f'{self.tracker}: Failed to add media. Aborting.')
                         break
                 else:
-                    console.print(f"[{self.tracker}] User chose not to add media. Aborting.")
+                    console.print(f'{self.tracker}: User chose not to add media. Aborting.')
                     break
 
         if not self.media_code:
-            console.print(f"[{self.tracker}] Unable to get media code.")
+            console.print(f'{self.tracker}: Unable to get media code.')
 
         return bool(self.media_code)
 
@@ -509,19 +509,19 @@ class AZ():
         url = f"{self.base_url}/add/{meta['category'].lower()}"
 
         headers = {
-            'Referer': f"{self.base_url}/upload",
+            'Referer': f'{self.base_url}/upload',
         }
 
         try:
             response = await self.session.post(url, data=data, headers=headers)
             if response.status_code == 302:
-                console.print(f"[{self.tracker}] The attempt to add the media to the database appears to have been successful..")
+                console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
                 return True
             else:
-                console.print(f'[{self.tracker}] Error adding media to the database. Status: {response.status}')
+                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
                 return False
         except Exception as e:
-            console.print(f'[{self.tracker}] Exception when trying to add media to the database: {e}')
+            console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
 
     async def get_cat_id(self, category_name):
@@ -625,7 +625,7 @@ class AZ():
             for path in tqdm(
                 paths,
                 total=len(paths),
-                desc=f'[{self.tracker}] Uploading screenshots'
+                desc=f'{self.tracker}: Uploading screenshots'
             ):
                 result = await upload_local_file(path)
                 if result:
@@ -652,7 +652,7 @@ class AZ():
             for url in tqdm(
                 links,
                 total=len(links),
-                desc=f'[{self.tracker}] Uploading screenshots'
+                desc=f'{self.tracker}: Uploading screenshots'
             ):
                 result = await upload_remote_file(url)
                 if result:
@@ -717,7 +717,7 @@ class AZ():
                 return results
 
             except Exception as e:
-                console.print(f'[{self.tracker}] An error occurred while fetching requests: {e}')
+                console.print(f'{self.tracker}: An error occurred while fetching requests: {e}')
                 return []
 
     async def fetch_tag_id(self, meta, word):
@@ -787,7 +787,7 @@ class AZ():
         for pattern, flag, removed_type in cleanup_patterns:
             desc, amount = re.subn(pattern, '', desc, flags=flag)
             if amount > 0:
-                console.print(f'[{self.tracker}] Deleted {amount} {removed_type} from description.')
+                console.print(f'{self.tracker}: Deleted {amount} {removed_type} from description.')
 
         desc = desc.strip()
         desc = desc.replace('\r\n', '\n').replace('\r', '\n')
@@ -821,7 +821,7 @@ class AZ():
 
         if not meta.get('debug', False):
             try:
-                await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=f'[{self.tracker}]', announce_url='https://tracker.avistaz.to/announce')
+                await self.common.edit_torrent(meta, self.tracker, self.source_flag, announce_url='https://tracker.avistaz.to/announce')
                 upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
@@ -838,7 +838,7 @@ class AZ():
 
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
-                            console.print(f"[{self.tracker}] Could not extract 'task_id' from redirect URL: {redirect_url}")
+                            console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
                             meta['skipping'] = f'{self.tracker}'
                             return
 
@@ -864,7 +864,7 @@ class AZ():
 
         else:
             console.print(data)
-            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
+            status_message = f'{self.tracker}: Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
@@ -917,7 +917,7 @@ class AZ():
                 })
 
             except Exception as e:
-                console.print(f'[{self.tracker}] An unexpected error occurred while uploading: {e}')
+                console.print(f'{self.tracker}: An unexpected error occurred while uploading: {e}')
 
         return data
 
@@ -943,8 +943,8 @@ class AZ():
                 download_url = torrent_url.replace('/torrent/', '/download/torrent/')
                 register_download = await self.session.get(download_url)
                 if register_download.status_code != 200:
-                    print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
-                          f"Error: {register_download.status_code}")
+                    print(f'Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}'
+                          f'Error: {register_download.status_code}')
 
                 await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
 
@@ -969,7 +969,7 @@ class AZ():
 
         else:
             console.print(data)
-            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
+            status_message = f'{self.tracker}: Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
