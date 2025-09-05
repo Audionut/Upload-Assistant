@@ -815,10 +815,9 @@ class AZ():
             raw_links = []
             thumb_links_limited = []
 
-            if len(image_links) >= 3:
-                if 'imgbox.com' in image_links[0]:
-                    raw_links = image_links[:limit]
-                    thumb_links_limited = thumb_links[:limit]
+            if len(image_links) >= 3 and 'imgbox.com' in image_links[0]:
+                raw_links = image_links[:limit]
+                thumb_links_limited = thumb_links[:limit]
             else:
                 image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
                 if os.path.exists(image_data_file) and not meta.get('image_list'):
