@@ -326,6 +326,14 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/ASC.txt
             "announce_url": "https://amigos-share.club/announce.php?passkey=PASSKEY"
         },
+        "AZ": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for AZ to work you need to export cookies from https://avistaz.to using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/AZ.txt
+            "announce_url": "https://tracker.cinemaz.to/<PASSKEY>/announce",
+            "anon": False,
+        },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
