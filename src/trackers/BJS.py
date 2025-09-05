@@ -918,23 +918,10 @@ class BJS(COMMON):
         if meta.get('has_commentary', False) or meta.get('manual_commentary', False):
             found_tags.add('Com comentários')
 
-        if meta['is_disc'] != 'BDMV':
-            for track in meta['mediainfo']['media']['track']:
-                if track['@type'] == 'Video':
-                    dar_str = track.get('DisplayAspectRatio', '')
-                    if dar_str:
-                        try:
-                            dar = float(dar_str)
-                            if dar > 2.0:
-                                found_tags.add('Ultrawide')
-                        except ValueError:
-                            pass
-
         return found_tags
 
     def build_remaster_title(self, meta):
         tag_priority = [
-            'Ultrawide',
             'Dolby Atmos',
             'Remux',
             "Director's Cut",
