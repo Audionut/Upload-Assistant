@@ -1904,7 +1904,7 @@ async def match_tracker_url(tracker_urls, meta):
         'ant': ["tracker.anthelion.me"],
         'ar': ["tracker.alpharatio"],
         'asc': ["amigos-share.club"],
-        'az': ["tracker.cinemaz.to"],
+        'az': ["tracker.avistaz.to"],
         'bhd': ["https://beyond-hd.me", "tracker.beyond-hd.me"],
         'bjs': ["tracker.bj-share.info"],
         'blu': ["https://blutopia.cc"],
