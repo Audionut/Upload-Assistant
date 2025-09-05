@@ -3,6 +3,7 @@ import asyncio
 import bencodepy
 import hashlib
 import httpx
+import json
 import os
 import platform
 import re
@@ -29,6 +30,7 @@ class PHD():
         self.base_url = 'https://privatehd.to'
         self.torrent_url = 'https://privatehd.to/torrent/'
         self.announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
+        self.rehost_images = config['TRACKERS']['PHD'].get('img_rehost', True)
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
@@ -747,7 +749,7 @@ class PHD():
                 return f.read()
 
     async def get_lang(self, meta):
-        self.language_map()
+        self.common.z_language_map()
         if not meta.get('subtitle_languages') or meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
@@ -1008,6 +1010,44 @@ class PHD():
 
         final_html_desc = '\r\n'.join(html_parts)
 
+        meta['z_images'] = False
+        if not self.rehost_images:
+            limit = 3 if meta.get('tv_pack', '') == 0 else 15
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
+            thumb_links = [img.get('img_url') for img in meta.get('image_list', []) if img.get('img_url')]
+
+            raw_links = []
+            thumb_links_limited = []
+
+            if len(image_links) >= 3:
+                if 'imgbox.com' in image_links[0]:
+                    raw_links = image_links[:limit]
+                    thumb_links_limited = thumb_links[:limit]
+            else:
+                image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
+                if os.path.exists(image_data_file) and not meta.get('image_list'):
+                    try:
+                        with open(image_data_file, 'r') as img_file:
+                            image_data = json.load(img_file)
+
+                            if 'image_list' in image_data and image_data.get('image_list') and 'imgbox.com' in image_data.get('image_list', [{}])[0].get('raw_url', ''):
+                                if len(image_data.get('image_list', [])) >= 3:
+                                    json_raw_links = [img.get('raw_url') for img in image_data.get('image_list', []) if img.get('raw_url')]
+                                    json_thumb_links = [img.get('img_url') for img in image_data.get('image_list', []) if img.get('img_url')]
+
+                                    raw_links = json_raw_links[:limit]
+                                    thumb_links_limited = json_thumb_links[:limit]
+
+                    except Exception as e:
+                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
+
+            if len(raw_links) >= 3:
+                image_html = '<br><br>'
+                for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
+                    image_html += f'<a href="{raw_url}"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                final_html_desc += image_html
+                meta['z_images'] = True
+
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(final_html_desc)
 
@@ -1117,11 +1157,14 @@ class PHD():
                 data.update({
                     'info_hash': task_info.get('info_hash'),
                     'task_id': task_info.get('task_id'),
-                    'screenshots[]': await self.get_screenshots(meta),
                 })
+                if not meta['z_images']:
+                    data.update({
+                        'screenshots[]': await self.get_screenshots(meta),
+                    })
 
             except Exception as e:
-                console.print(f'[{self.tracker}] An unexpected error occurred while uploading: {e}')
+                console.print(f'{self.tracker}: An unexpected error occurred while uploading: {e}')
 
         return data
 
@@ -1176,207 +1219,3 @@ class PHD():
             status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
-
-    def language_map(self):
-        self.all_lang_map = {
-            ('Abkhazian', 'abk', 'ab'): '1',
-            ('Afar', 'aar', 'aa'): '2',
-            ('Afrikaans', 'afr', 'af'): '3',
-            ('Akan', 'aka', 'ak'): '4',
-            ('Albanian', 'sqi', 'sq'): '5',
-            ('Amharic', 'amh', 'am'): '6',
-            ('Arabic', 'ara', 'ar'): '7',
-            ('Aragonese', 'arg', 'an'): '8',
-            ('Armenian', 'hye', 'hy'): '9',
-            ('Assamese', 'asm', 'as'): '10',
-            ('Avaric', 'ava', 'av'): '11',
-            ('Avestan', 'ave', 'ae'): '12',
-            ('Aymara', 'aym', 'ay'): '13',
-            ('Azerbaijani', 'aze', 'az'): '14',
-            ('Bambara', 'bam', 'bm'): '15',
-            ('Bashkir', 'bak', 'ba'): '16',
-            ('Basque', 'eus', 'eu'): '17',
-            ('Belarusian', 'bel', 'be'): '18',
-            ('Bengali', 'ben', 'bn'): '19',
-            ('Bihari languages', 'bih', 'bh'): '20',
-            ('Bislama', 'bis', 'bi'): '21',
-            ('Bokmål, Norwegian', 'nob', 'nb'): '22',
-            ('Bosnian', 'bos', 'bs'): '23',
-            ('Brazilian Portuguese', 'por', 'pt'): '187',
-            ('Breton', 'bre', 'br'): '24',
-            ('Bulgarian', 'bul', 'bg'): '25',
-            ('Burmese', 'mya', 'my'): '26',
-            ('Cantonese', 'yue', 'zh'): '27',
-            ('Catalan', 'cat', 'ca'): '28',
-            ('Central Khmer', 'khm', 'km'): '29',
-            ('Chamorro', 'cha', 'ch'): '30',
-            ('Chechen', 'che', 'ce'): '31',
-            ('Chichewa', 'nya', 'ny'): '32',
-            ('Chinese', 'zho', 'zh'): '33',
-            ('Church Slavic', 'chu', 'cu'): '34',
-            ('Chuvash', 'chv', 'cv'): '35',
-            ('Cornish', 'cor', 'kw'): '36',
-            ('Corsican', 'cos', 'co'): '37',
-            ('Cree', 'cre', 'cr'): '38',
-            ('Croatian', 'hrv', 'hr'): '39',
-            ('Czech', 'ces', 'cs'): '40',
-            ('Danish', 'dan', 'da'): '41',
-            ('Dhivehi', 'div', 'dv'): '42',
-            ('Dutch', 'nld', 'nl'): '43',
-            ('Dzongkha', 'dzo', 'dz'): '44',
-            ('English', 'eng', 'en'): '45',
-            ('Esperanto', 'epo', 'eo'): '46',
-            ('Estonian', 'est', 'et'): '47',
-            ('Ewe', 'ewe', 'ee'): '48',
-            ('Faroese', 'fao', 'fo'): '49',
-            ('Fijian', 'fij', 'fj'): '50',
-            ('Filipino', 'fil', 'fil'): '189',
-            ('Finnish', 'fin', 'fi'): '51',
-            ('French', 'fra', 'fr'): '52',
-            ('Fulah', 'ful', 'ff'): '53',
-            ('Gaelic', 'gla', 'gd'): '54',
-            ('Galician', 'glg', 'gl'): '55',
-            ('Ganda', 'lug', 'lg'): '56',
-            ('Georgian', 'kat', 'ka'): '57',
-            ('German', 'deu', 'de'): '58',
-            ('Greek', 'ell', 'el'): '59',
-            ('Guarani', 'grn', 'gn'): '60',
-            ('Gujarati', 'guj', 'gu'): '61',
-            ('Haitian', 'hat', 'ht'): '62',
-            ('Hausa', 'hau', 'ha'): '63',
-            ('Hebrew', 'heb', 'he'): '64',
-            ('Herero', 'her', 'hz'): '65',
-            ('Hindi', 'hin', 'hi'): '66',
-            ('Hiri Motu', 'hmo', 'ho'): '67',
-            ('Hungarian', 'hun', 'hu'): '68',
-            ('Icelandic', 'isl', 'is'): '69',
-            ('Ido', 'ido', 'io'): '70',
-            ('Igbo', 'ibo', 'ig'): '71',
-            ('Indonesian', 'ind', 'id'): '72',
-            ('Interlingua', 'ina', 'ia'): '73',
-            ('Interlingue', 'ile', 'ie'): '74',
-            ('Inuktitut', 'iku', 'iu'): '75',
-            ('Inupiaq', 'ipk', 'ik'): '76',
-            ('Irish', 'gle', 'ga'): '77',
-            ('Italian', 'ita', 'it'): '78',
-            ('Japanese', 'jpn', 'ja'): '79',
-            ('Javanese', 'jav', 'jv'): '80',
-            ('Kalaallisut', 'kal', 'kl'): '81',
-            ('Kannada', 'kan', 'kn'): '82',
-            ('Kanuri', 'kau', 'kr'): '83',
-            ('Kashmiri', 'kas', 'ks'): '84',
-            ('Kazakh', 'kaz', 'kk'): '85',
-            ('Kikuyu', 'kik', 'ki'): '86',
-            ('Kinyarwanda', 'kin', 'rw'): '87',
-            ('Kirghiz', 'kir', 'ky'): '88',
-            ('Komi', 'kom', 'kv'): '89',
-            ('Kongo', 'kon', 'kg'): '90',
-            ('Korean', 'kor', 'ko'): '91',
-            ('Kuanyama', 'kua', 'kj'): '92',
-            ('Kurdish', 'kur', 'ku'): '93',
-            ('Lao', 'lao', 'lo'): '94',
-            ('Latin', 'lat', 'la'): '95',
-            ('Latvian', 'lav', 'lv'): '96',
-            ('Limburgan', 'lim', 'li'): '97',
-            ('Lingala', 'lin', 'ln'): '98',
-            ('Lithuanian', 'lit', 'lt'): '99',
-            ('Luba-Katanga', 'lub', 'lu'): '100',
-            ('Luxembourgish', 'ltz', 'lb'): '101',
-            ('Macedonian', 'mkd', 'mk'): '102',
-            ('Malagasy', 'mlg', 'mg'): '103',
-            ('Malay', 'msa', 'ms'): '104',
-            ('Malayalam', 'mal', 'ml'): '105',
-            ('Maltese', 'mlt', 'mt'): '106',
-            ('Mandarin', 'cmn', 'zh'): '107',
-            ('Manx', 'glv', 'gv'): '108',
-            ('Maori', 'mri', 'mi'): '109',
-            ('Marathi', 'mar', 'mr'): '110',
-            ('Marshallese', 'mah', 'mh'): '111',
-            ('Mongolian', 'mon', 'mn'): '112',
-            ('Mooré', 'mos', 'mos'): '188',
-            ('Nauru', 'nau', 'na'): '113',
-            ('Navajo', 'nav', 'nv'): '114',
-            ('Ndebele, North', 'nde', 'nd'): '115',
-            ('Ndebele, South', 'nbl', 'nr'): '116',
-            ('Ndonga', 'ndo', 'ng'): '117',
-            ('Nepali', 'nep', 'ne'): '118',
-            ('Northern Sami', 'sme', 'se'): '119',
-            ('Norwegian', 'nor', 'no'): '120',
-            ('Norwegian Nynorsk', 'nno', 'nn'): '121',
-            ('Occitan (post 1500)', 'oci', 'oc'): '122',
-            ('Ojibwa', 'oji', 'oj'): '123',
-            ('Oriya', 'ori', 'or'): '124',
-            ('Oromo', 'orm', 'om'): '125',
-            ('Ossetian', 'oss', 'os'): '126',
-            ('Pali', 'pli', 'pi'): '127',
-            ('Panjabi', 'pan', 'pa'): '128',
-            ('Persian', 'fas', 'fa'): '129',
-            ('Polish', 'pol', 'pl'): '130',
-            ('Portuguese', 'por', 'pt'): '131',
-            ('Pushto', 'pus', 'ps'): '132',
-            ('Quechua', 'que', 'qu'): '133',
-            ('Romanian', 'ron', 'ro'): '134',
-            ('Romansh', 'roh', 'rm'): '135',
-            ('Rundi', 'run', 'rn'): '136',
-            ('Russian', 'rus', 'ru'): '137',
-            ('Samoan', 'smo', 'sm'): '138',
-            ('Sango', 'sag', 'sg'): '139',
-            ('Sanskrit', 'san', 'sa'): '140',
-            ('Sardinian', 'srd', 'sc'): '141',
-            ('Serbian', 'srp', 'sr'): '142',
-            ('Shona', 'sna', 'sn'): '143',
-            ('Sichuan Yi', 'iii', 'ii'): '144',
-            ('Sindhi', 'snd', 'sd'): '145',
-            ('Sinhala', 'sin', 'si'): '146',
-            ('Slovak', 'slk', 'sk'): '147',
-            ('Slovenian', 'slv', 'sl'): '148',
-            ('Somali', 'som', 'so'): '149',
-            ('Sotho, Southern', 'sot', 'st'): '150',
-            ('Spanish', 'spa', 'es'): '151',
-            ('Sundanese', 'sun', 'su'): '152',
-            ('Swahili', 'swa', 'sw'): '153',
-            ('Swati', 'ssw', 'ss'): '154',
-            ('Swedish', 'swe', 'sv'): '155',
-            ('Tagalog', 'tgl', 'tl'): '156',
-            ('Tahitian', 'tah', 'ty'): '157',
-            ('Tajik', 'tgk', 'tg'): '158',
-            ('Tamil', 'tam', 'ta'): '159',
-            ('Tatar', 'tat', 'tt'): '160',
-            ('Telugu', 'tel', 'te'): '161',
-            ('Thai', 'tha', 'th'): '162',
-            ('Tibetan', 'bod', 'bo'): '163',
-            ('Tigrinya', 'tir', 'ti'): '164',
-            ('Tongan', 'ton', 'to'): '165',
-            ('Tsonga', 'tso', 'ts'): '166',
-            ('Tswana', 'tsn', 'tn'): '167',
-            ('Turkish', 'tur', 'tr'): '168',
-            ('Turkmen', 'tuk', 'tk'): '169',
-            ('Twi', 'twi', 'tw'): '170',
-            ('Uighur', 'uig', 'ug'): '171',
-            ('Ukrainian', 'ukr', 'uk'): '172',
-            ('Urdu', 'urd', 'ur'): '173',
-            ('Uzbek', 'uzb', 'uz'): '174',
-            ('Venda', 'ven', 've'): '175',
-            ('Vietnamese', 'vie', 'vi'): '176',
-            ('Volapük', 'vol', 'vo'): '177',
-            ('Walloon', 'wln', 'wa'): '178',
-            ('Welsh', 'cym', 'cy'): '179',
-            ('Western Frisian', 'fry', 'fy'): '180',
-            ('Wolof', 'wol', 'wo'): '181',
-            ('Xhosa', 'xho', 'xh'): '182',
-            ('Yiddish', 'yid', 'yi'): '183',
-            ('Yoruba', 'yor', 'yo'): '184',
-            ('Zhuang', 'zha', 'za'): '185',
-            ('Zulu', 'zul', 'zu'): '186',
-        }
-        self.lang_map = {}
-        for key_tuple, lang_id in self.all_lang_map.items():
-            lang_name, code3, code2 = key_tuple
-
-            self.lang_map[lang_name.lower()] = lang_id
-
-            if code3:
-                self.lang_map[code3.lower()] = lang_id
-
-            if code2:
-                self.lang_map[code2.lower()] = lang_id
