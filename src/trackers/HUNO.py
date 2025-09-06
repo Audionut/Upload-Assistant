@@ -11,6 +11,7 @@ from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
 from src.languages import parsed_mediainfo, process_desc_language
+from src.audio import get_channels, get_codec
 
 
 class HUNO():
