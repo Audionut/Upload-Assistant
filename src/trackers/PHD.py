@@ -15,6 +15,7 @@ from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
+from src.trackers.AZ_COMMON import AZ_COMMON
 from tqdm.asyncio import tqdm
 from typing import Optional
 from urllib.parse import urlparse
@@ -24,6 +25,7 @@ class PHD():
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
+        self.az_common = AZ_COMMON(config)
         self.tracker = 'PHD'
         self.source_flag = 'PrivateHD'
         self.banned_groups = ['']
@@ -471,43 +473,6 @@ class PHD():
 
         return upload_name
 
-    def get_resolution(self, meta):
-        resolution = ''
-        width, height = None, None
-
-        try:
-            if meta.get('is_disc') == 'BDMV':
-                resolution_str = meta.get('resolution', '')
-                height_num = int(resolution_str.lower().replace('p', '').replace('i', ''))
-                height = str(height_num)
-                width = str(round((16 / 9) * height_num))
-            else:
-                tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
-                if len(tracks) > 1:
-                    video_mi = tracks[1]
-                    width = video_mi.get('Width')
-                    height = video_mi.get('Height')
-        except (ValueError, TypeError, KeyError, IndexError):
-            return ''
-
-        if width and height:
-            resolution = f'{width}x{height}'
-
-        return resolution
-
-    def get_video_quality(self, meta):
-        resolution = meta.get('resolution')
-
-        keyword_map = {
-            '1080i': '7',
-            '1080p': '3',
-            '2160p': '6',
-            '4320p': '8',
-            '720p': '2',
-        }
-
-        return keyword_map.get(resolution.lower())
-
     def get_rip_type(self, meta):
         source_type = meta.get('type')
 
@@ -574,168 +539,24 @@ class PHD():
             meta['skipping'] = f"{self.tracker}"
             return
 
-        if not await self.get_media_code(meta):
+        if not await self.az_common.get_media_code(
+            meta,
+            tracker=self.tracker,
+            tracker_url=self.base_url,
+            session=self.session,
+            auth_token=self.auth_token
+        ):
             console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
             meta['skipping'] = f"{self.tracker}"
             return
 
-        if meta.get('resolution') == '2160p':
-            resolution = 'UHD'
-        elif meta.get('resolution') in ('720p', '1080p'):
-            resolution = meta.get('resolution')
-        else:
-            resolution = 'all'
-
-        page_url = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
-
-        dupes = []
-
-        visited_urls = set()
-
-        while page_url and page_url not in visited_urls:
-
-            visited_urls.add(page_url)
-
-            try:
-                response = await self.session.get(page_url)
-                response.raise_for_status()
-
-                soup = BeautifulSoup(response.text, 'html.parser')
-                torrent_links = soup.find_all('a', class_='torrent-filename')
-
-                for link in torrent_links:
-                    dupes.append(link.get_text(strip=True))
-
-                # Finds the next page
-                next_page_tag = soup.select_one('a[rel="next"]')
-                if next_page_tag and 'href' in next_page_tag.attrs:
-                    page_url = next_page_tag['href']
-                else:
-                    # if no rel="next", we are at the last page
-                    page_url = None
-
-            except httpx.RequestError as e:
-                console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
-                return dupes
-
-        return dupes
-
-    async def get_media_code(self, meta):
-        self.media_code = ''
-
-        if meta['category'] == 'MOVIE':
-            category = '1'
-        elif meta['category'] == 'TV':
-            category = '2'
-        else:
-            return False
-
-        search_term = ''
-        imdb_info = meta.get('imdb_info', {})
-        imdb_id = imdb_info.get('imdbID') if isinstance(imdb_info, dict) else None
-        tmdb_id = meta.get('tmdb')
-        title = meta['title']
-
-        if imdb_id:
-            search_term = imdb_id
-        else:
-            search_term = title
-
-        ajax_url = f'https://privatehd.to/ajax/movies/{category}?term={search_term}'
-
-        headers = {
-            'Referer': f"https://privatehd.to/upload/{meta['category'].lower()}",
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-
-        for attempt in range(2):
-            try:
-                if attempt == 1:
-                    console.print(f"[{self.tracker}] Trying to search again by ID after adding to media to database...\n")
-                    await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
-
-                response = await self.session.get(ajax_url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
-
-                if data.get('data'):
-                    match = None
-                    for item in data['data']:
-                        if imdb_id and item.get('imdb') == imdb_id:
-                            match = item
-                            break
-                        elif not imdb_id and item.get('tmdb') == str(tmdb_id):
-                            match = item
-                            break
-
-                    if match:
-                        self.media_code = str(match['id'])
-                        if attempt == 1:
-                            console.print(f"[{self.tracker}] [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
-                        return True
-
-            except Exception as e:
-                console.print(f"[{self.tracker}] Error while trying to fetch media code in attempt {attempt + 1}: {e}")
-                break
-
-            if attempt == 0 and not self.media_code:
-                console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
-
-                user_choice = input(f"[{self.tracker}] Do you want to add '{title}' to the site database? (y/n): \n").lower()
-
-                if user_choice in ['y', 'yes']:
-                    console.print(f'[{self.tracker}] Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
-                    if not added_successfully:
-                        console.print(f"[{self.tracker}] Failed to add media. Aborting.")
-                        break
-                else:
-                    console.print(f"[{self.tracker}] User chose not to add media. Aborting.")
-                    break
-
-        if not self.media_code:
-            console.print(f"[{self.tracker}] Unable to get media code.")
-
-        return bool(self.media_code)
-
-    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
-        data = {
-            '_token': self.auth_token,
-            'type_id': category,
-            'title': title,
-            'imdb_id': imdb_id if imdb_id else '',
-            'tmdb_id': tmdb_id if tmdb_id else '',
-        }
-
-        if meta['category'] == 'TV':
-            tvdb_id = meta.get('tvdb')
-            if tvdb_id:
-                data['tvdb_id'] = str(tvdb_id)
-
-        url = f"{self.base_url}/add/{meta['category'].lower()}"
-
-        headers = {
-            'Referer': f"{self.base_url}/upload",
-        }
-
-        try:
-            response = await self.session.post(url, data=data, headers=headers)
-            if response.status_code == 302:
-                console.print(f"[{self.tracker}] The attempt to add the media to the database appears to have been successful..")
-                return True
-            else:
-                console.print(f'[{self.tracker}] Error adding media to the database. Status: {response.status}')
-                return False
-        except Exception as e:
-            console.print(f'[{self.tracker}] Exception when trying to add media to the database: {e}')
-            return False
-
-    async def get_cat_id(self, category_name):
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-        }.get(category_name, '0')
-        return category_id
+        return await self.az_common.search_existing(
+            meta,
+            tracker=self.tracker,
+            tracker_url=self.base_url,
+            media_code=self.az_common.media_code,
+            session=self.session
+        )
 
     async def get_file_info(self, meta):
         info_file_path = ''
@@ -749,14 +570,14 @@ class PHD():
                 return f.read()
 
     async def get_lang(self, meta):
-        self.common.z_language_map()
+        self.az_common.language_map(self.tracker)
         if not meta.get('subtitle_languages') or meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_subs_strings = meta.get('subtitle_languages', [])
         subtitle_ids = set()
         for lang_str in found_subs_strings:
-            target_id = self.lang_map.get(lang_str.lower())
+            target_id = self.az_common.lang_map.get(lang_str.lower())
             if target_id:
                 subtitle_ids.add(target_id)
         final_subtitle_ids = sorted(list(subtitle_ids))
@@ -764,7 +585,7 @@ class PHD():
         found_audio_strings = meta.get('audio_languages', [])
         audio_ids = set()
         for lang_str in found_audio_strings:
-            target_id = self.lang_map.get(lang_str.lower())
+            target_id = self.az_common.lang_map.get(lang_str.lower())
             if target_id:
                 audio_ids.add(target_id)
         final_audio_ids = sorted(list(audio_ids))
@@ -1053,12 +874,12 @@ class PHD():
         return final_html_desc
 
     async def create_task_id(self, meta):
-        await self.get_media_code(meta)
+        await self.az_common.get_media_code(meta, tracker=self.tracker, tracker_url=self.base_url, session=self.session, auth_token=self.auth_token)
 
         data = {
             '_token': self.auth_token,
-            'type_id': await self.get_cat_id(meta['category']),
-            'movie_id': self.media_code,
+            'type_id': await self.az_common.get_cat_id(meta['category']),
+            'movie_id': self.az_common.media_code,
             'media_info': await self.get_file_info(meta),
         }
 
@@ -1107,7 +928,7 @@ class PHD():
 
         else:
             console.print(data)
-            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
+            status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
@@ -1119,15 +940,15 @@ class PHD():
         data = {
             '_token': self.auth_token,
             'torrent_id': '',
-            'type_id': await self.get_cat_id(meta['category']),
+            'type_id': await self.az_common.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
             'anon_upload': '',
             'description': await self.edit_desc(meta),
             'qqfile': '',
             'rip_type_id': self.get_rip_type(meta),
-            'video_quality_id': self.get_video_quality(meta),
-            'video_resolution': self.get_resolution(meta),
-            'movie_id': self.media_code,
+            'video_quality_id': self.az_common.get_video_quality(meta),
+            'video_resolution': self.az_common.get_resolution(meta),
+            'movie_id': self.az_common.media_code,
             'languages[]': lang_info.get('languages[]'),
             'subtitles[]': lang_info.get('subtitles[]'),
             'media_info': await self.get_file_info(meta),
@@ -1215,6 +1036,6 @@ class PHD():
 
         else:
             console.print(data)
-            status_message = f'[{self.tracker}] Debug mode enabled, not uploading.'
+            status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
