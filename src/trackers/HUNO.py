@@ -332,8 +332,30 @@ class HUNO():
     async def is_plex_friendly(self, meta):
         lossy_audio_codecs = ["AAC", "DD", "DD+", "OPUS"]
 
-        if any(l in meta["audio"] for l in lossy_audio_codecs):  # noqa E741
-            return 1
+        if meta['bdinfo'] is not None:
+            if any(l in meta["audio"] for l in lossy_audio_codecs):  # noqa E741
+                return 1
+        else:
+            track_codecs = []
+
+            mediainfo = meta.get('mediainfo', {})
+            audio_tracks = [track for track in mediainfo.get("media", {}).get("track", []) if track.get("@type") == "Audio"]
+
+            for track in audio_tracks:
+                format = track.get('Format', '')
+                additional = track.get('Format_AdditionalFeatures', '')
+                commercial = track.get('Format_Commercial', '') or track.get('Format_Commercial_IfAny', '')
+                settings = track.get('Format_Settings', '')
+                profile = track.get('Format_Profile', '')
+                channels = get_channels(track)
+
+                if not isinstance(settings, str):
+                    settings = ""
+
+                track_codecs.append(get_codec(format, additional, commercial, settings, profile, channels))
+
+            if all(any(codec in track for codec in lossy_audio_codecs) for track in track_codecs):
+                return 1
 
         return 0
 
