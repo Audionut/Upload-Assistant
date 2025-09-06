@@ -941,7 +941,11 @@ class PTP():
                 file = filelist[0]
                 if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None and self.web_source is True:
                     desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
-                mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+                if meta.get('valid_mi', True) is False:
+                    # Use custom MediaInfo with Unique ID for PTP
+                    mi_dump = await self.create_custom_mediainfo_for_ptp(meta)
+                else:
+                    mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
                 desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                 base2ptp = self.convert_bbcode(base)
                 if base2ptp.strip() != "":
@@ -990,7 +994,11 @@ class PTP():
                         if base2ptp.strip() != "":
                             desc.write(base2ptp)
                             desc.write("\n\n")
-                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+                        if meta.get('valid_mi', True) is False:
+                            # Use custom MediaInfo with Unique ID for PTP
+                            mi_dump = await self.create_custom_mediainfo_for_ptp(meta)
+                        else:
+                            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         for img_index in range(min(multi_screens, len(meta['image_list']))):
                             raw_url = meta['image_list'][img_index]['raw_url']
@@ -1000,7 +1008,11 @@ class PTP():
                         mi_dump = MediaInfo.parse(file, output="STRING", full=False)
                         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "w", newline="", encoding="utf-8") as f:
                             f.write(mi_dump.replace(file, os.path.basename(file)))
-                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "r", encoding="utf-8").read()
+                        if meta.get('valid_mi', True) is False:
+                            # Use custom MediaInfo with Unique ID for PTP
+                            mi_dump = await self.create_custom_mediainfo_for_ptp(meta, f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt")
+                        else:
+                            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "r", encoding="utf-8").read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         new_images_key = f'new_images_file_{i}'
                         # Check for saved images first
@@ -1050,6 +1062,45 @@ class PTP():
                         meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                         with open(meta_filename, 'w') as f:
                             json.dump(meta, f, indent=4)
+
+    async def create_custom_mediainfo_for_ptp(self, meta, temp_file_path=None):
+        """Create a custom MediaInfo string for PTP when valid_mi is False"""
+        try:
+            if temp_file_path:
+                mediainfo_path = temp_file_path
+            else:
+                mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+
+            with open(mediainfo_path, 'r', encoding='utf-8') as f:
+                original_mi = f.read()
+
+            lines = original_mi.splitlines()
+            output_lines = []
+            in_general_section = False
+
+            for line in lines:
+                if line.strip() == "General":
+                    in_general_section = True
+                    output_lines.append(line)
+                    output_lines.append("Unique ID                                 : 0x0")
+                    continue
+
+                if in_general_section and line.strip() and not line.startswith(' ') and ':' not in line:
+                    in_general_section = False
+
+                output_lines.append(line)
+
+            return '\n'.join(output_lines)
+
+        except Exception as e:
+            console.print(f"[red]Error creating custom MediaInfo: {e}[/red]")
+            # Fallback to original file
+            try:
+                fallback_path = temp_file_path if temp_file_path else f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+                with open(fallback_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except Exception:
+                return "MediaInfo not available"
 
     async def save_image_links(self, meta, image_key, image_list=None):
         if image_list is None:
