@@ -333,6 +333,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/AZ.txt
             "announce_url": "https://tracker.avistaz.to/<PASSKEY>/announce",
             "anon": False,
+            # Set false to use imgbox links if available
+            "img_rehost": True,
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -560,6 +562,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
             "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
+            # Set false to use imgbox links if available
+            "img_rehost": True,
         },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
