@@ -1,17 +1,20 @@
 import asyncio
 import httpx
+import json
 import os
+import re
 import uuid
+import bencodepy
+import hashlib
 from bs4 import BeautifulSoup
 from pathlib import Path
+from src.console import console
+from src.exceptions import UploadException
 from src.languages import process_desc_language
-import re
+from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
 from typing import Optional
-from src.exceptions import UploadException
 from urllib.parse import urlparse
-from src.console import console
-from src.trackers.COMMON import COMMON
 
 
 class AZ_COMMON():
@@ -56,7 +59,7 @@ class AZ_COMMON():
 
         return keyword_map.get(resolution.lower())
 
-    async def get_media_code(self, meta, tracker, tracker_url, session, auth_token):
+    async def get_media_code(self, meta, tracker, base_url, session, auth_token):
         self.media_code = ''
 
         if meta['category'] == 'MOVIE':
@@ -77,10 +80,10 @@ class AZ_COMMON():
         else:
             search_term = title
 
-        ajax_url = f'{tracker_url}/ajax/movies/{category}?term={search_term}'
+        ajax_url = f'{base_url}/ajax/movies/{category}?term={search_term}'
 
         headers = {
-            'Referer': f"{tracker_url}/upload/{meta['category'].lower()}",
+            'Referer': f"{base_url}/upload/{meta['category'].lower()}",
             'X-Requested-With': 'XMLHttpRequest'
         }
 
@@ -107,7 +110,7 @@ class AZ_COMMON():
                     if match:
                         self.media_code = str(match['id'])
                         if attempt == 1:
-                            console.print(f"{tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
+                            console.print(f"{tracker}: [green]Found new ID at:[/green] {base_url}/{meta['category'].lower()}/{self.media_code}")
                         return True
 
             except Exception as e:
@@ -134,7 +137,7 @@ class AZ_COMMON():
 
         return bool(self.media_code)
 
-    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id, tracker, tracker_url, session, auth_token):
+    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id, tracker, base_url, session, auth_token):
         data = {
             '_token': auth_token,
             'type_id': category,
@@ -148,10 +151,10 @@ class AZ_COMMON():
             if tvdb_id:
                 data['tvdb_id'] = str(tvdb_id)
 
-        url = f"{tracker_url}/add/{meta['category'].lower()}"
+        url = f"{base_url}/add/{meta['category'].lower()}"
 
         headers = {
-            'Referer': f'{tracker_url}/upload',
+            'Referer': f'{base_url}/upload',
         }
 
         try:
@@ -166,7 +169,7 @@ class AZ_COMMON():
             console.print(f'{tracker}: Exception when trying to add media to the database: {e}')
             return False
 
-    async def search_existing(self, meta, tracker, tracker_url, media_code, session):
+    async def search_existing(self, meta, tracker, base_url, media_code, session):
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
         elif meta.get('resolution') in ('720p', '1080p'):
@@ -174,7 +177,7 @@ class AZ_COMMON():
         else:
             resolution = 'all'
 
-        page_url = f'{tracker_url}/movies/torrents/{media_code}?quality={resolution}'
+        page_url = f'{base_url}/movies/torrents/{media_code}?quality={resolution}'
 
         dupes = []
 
@@ -215,9 +218,9 @@ class AZ_COMMON():
         }.get(category_name, '0')
         return category_id
 
-    async def validate_credentials(self, meta, tracker, tracker_url, session):
+    async def validate_credentials(self, meta, tracker, base_url, session):
         try:
-            upload_page_url = f'{tracker_url}/upload'
+            upload_page_url = f'{base_url}/upload'
             response = await session.get(upload_page_url)
             response.raise_for_status()
 
@@ -287,14 +290,14 @@ class AZ_COMMON():
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta, tracker, tracker_url, session, referer, image_bytes: bytes, filename: str) -> Optional[str]:
-        upload_url = f'{tracker_url}/upload'
+    async def img_host(self, meta, tracker, base_url, session, referer, image_bytes: bytes, filename: str) -> Optional[str]:
+        upload_url = f'{base_url}/upload'
 
         headers = {
             'Referer': referer,
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json',
-            'Origin': tracker_url,
+            'Origin': base_url,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'
         }
 
@@ -353,7 +356,7 @@ class AZ_COMMON():
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
             if len(image_links) < 3:
-                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.')
+                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {tracker}.')
 
             async def upload_remote_file(url):
                 try:
@@ -381,6 +384,364 @@ class AZ_COMMON():
             raise UploadException('UPLOAD FAILED: The image host did not return the minimum number of screenshots.')
 
         return results
+
+    async def get_requests(self, meta, tracker, base_url, session):
+        if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
+            return False
+
+        else:
+            try:
+                category = meta.get('category').lower()
+
+                if category == 'tv':
+                    query = meta['title'] + f" {meta.get('season', '')}{meta.get('episode', '')}"
+                else:
+                    query = meta['title']
+
+                search_url = f'{base_url}/requests?type={category}&search={query}&condition=new'
+
+                response = await session.get(search_url)
+                response.raise_for_status()
+                response_results_text = response.text
+
+                soup = BeautifulSoup(response_results_text, 'html.parser')
+
+                request_rows = soup.select('.table-responsive table tbody tr')
+
+                results = []
+                for row in request_rows:
+                    link_element = row.select_one('a.torrent-filename')
+
+                    if not link_element:
+                        continue
+
+                    name = link_element.text.strip()
+                    link = link_element.get('href')
+
+                    all_tds = row.find_all('td')
+
+                    reward = all_tds[5].text.strip() if len(all_tds) > 5 else 'N/A'
+
+                    results.append({
+                        'Name': name,
+                        'Link': link,
+                        'Reward': reward
+                    })
+
+                if results:
+                    message = f'\n{tracker}: [bold yellow]Your upload may fulfill the following request(s), check it out:[/bold yellow]\n\n'
+                    for r in results:
+                        message += f"[bold green]Name:[/bold green] {r['Name']}\n"
+                        message += f"[bold green]Reward:[/bold green] {r['Reward']}\n"
+                        message += f"[bold green]Link:[/bold green] {r['Link']}\n\n"
+                    console.print(message)
+
+                return results
+
+            except Exception as e:
+                console.print(f'[{tracker}] An error occurred while fetching requests: {e}')
+                return []
+
+    async def fetch_tag_id(self, base_url, session, word):
+        tags_url = f'{base_url}/ajax/tags'
+        params = {'term': word}
+
+        headers = {
+            'Referer': f'{base_url}/upload',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        try:
+            response = await session.get(tags_url, headers=headers, params=params)
+            response.raise_for_status()
+
+            json_data = response.json()
+
+            for tag_info in json_data.get('data', []):
+                if tag_info.get('tag') == word:
+                    return tag_info.get('id')
+
+        except Exception as e:
+            print(f"An unexpected error occurred while processing the tag '{word}': {e}")
+
+        return None
+
+    async def get_tags(self, meta, base_url, session):
+        genres = meta.get('keywords', '')
+        if not genres:
+            return []
+
+        # divides by commas, cleans spaces and normalizes to lowercase
+        phrases = [re.sub(r'\s+', ' ', x.strip().lower()) for x in re.split(r',+', genres) if x.strip()]
+
+        words_to_search = set(phrases)
+
+        tasks = [self.fetch_tag_id(base_url, session, word) for word in words_to_search]
+
+        tag_ids_results = await asyncio.gather(*tasks)
+
+        tags = [str(tag_id) for tag_id in tag_ids_results if tag_id is not None]
+
+        if meta.get('personalrelease', False):
+            tags.insert(0, '3773')
+
+        return tags
+
+    async def edit_desc(self, meta, tracker):
+        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt"
+
+        description_parts = []
+
+        if os.path.exists(base_desc_path):
+            with open(base_desc_path, 'r', encoding='utf-8') as f:
+                manual_desc = f.read()
+            description_parts.append(manual_desc)
+
+        final_description = '\n\n'.join(filter(None, description_parts))
+        desc = final_description
+        cleanup_patterns = [
+            (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
+            (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
+            (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
+            (r'\n{3,}', 0, 'Line break(s)')
+        ]
+
+        for pattern, flag, removed_type in cleanup_patterns:
+            desc, amount = re.subn(pattern, '', desc, flags=flag)
+            if amount > 0:
+                console.print(f'{tracker}: Deleted {amount} {removed_type} from description.')
+
+        desc = desc.strip()
+        desc = desc.replace('\r\n', '\n').replace('\r', '\n')
+
+        paragraphs = re.split(r'\n\s*\n', desc)
+
+        html_parts = []
+        for p in paragraphs:
+            if not p.strip():
+                continue
+
+            p_with_br = p.replace('\n', '<br>')
+            html_parts.append(f'<p>{p_with_br}</p>')
+
+        final_html_desc = '\r\n'.join(html_parts)
+
+        meta['z_images'] = False
+        rehost_images = self.config['TRACKERS'][tracker].get('img_rehost', True)
+        if not rehost_images:
+            limit = 3 if meta.get('tv_pack', '') == 0 else 15
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
+            thumb_links = [img.get('img_url') for img in meta.get('image_list', []) if img.get('img_url')]
+
+            raw_links = []
+            thumb_links_limited = []
+
+            if len(image_links) >= 3 and 'imgbox.com' in image_links[0]:
+                raw_links = image_links[:limit]
+                thumb_links_limited = thumb_links[:limit]
+            else:
+                image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/reuploaded_images.json"
+                if os.path.exists(image_data_file):
+                    try:
+                        with open(image_data_file, 'r') as img_file:
+                            image_data = json.load(img_file)
+
+                            if 'image_list' in image_data and image_data.get('image_list') and 'imgbox.com' in image_data.get('image_list', [{}])[0].get('raw_url', ''):
+                                if len(image_data.get('image_list', [])) >= 3:
+                                    json_raw_links = [img.get('raw_url') for img in image_data.get('image_list', []) if img.get('raw_url')]
+                                    json_thumb_links = [img.get('img_url') for img in image_data.get('image_list', []) if img.get('img_url')]
+
+                                    raw_links = json_raw_links[:limit]
+                                    thumb_links_limited = json_thumb_links[:limit]
+
+                    except Exception as e:
+                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
+
+            if len(raw_links) >= 3:
+                image_html = '<br><br>'
+                for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
+                    image_html += f'<a href="{raw_url}"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                final_html_desc += image_html
+                meta['z_images'] = True
+
+        with open(final_desc_path, 'w', encoding='utf-8') as f:
+            f.write(final_html_desc)
+
+        return final_html_desc
+
+    async def create_task_id(self, meta, tracker, base_url, session, auth_token, source_flag, announce_url):
+        await self.get_media_code(meta, tracker, base_url, session, auth_token)
+
+        data = {
+            '_token': self.auth_token,
+            'type_id': await self.get_cat_id(meta['category']),
+            'movie_id': self.media_code,
+            'media_info': await self.get_file_info(meta),
+        }
+
+        if not meta.get('debug', False):
+            try:
+                await self.common.edit_torrent(meta, tracker, source_flag, announce_url)
+                upload_url_step1 = f"{base_url}/upload/{meta['category'].lower()}"
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+
+                with open(torrent_path, 'rb') as torrent_file:
+                    files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
+                    torrent_data = bencodepy.decode(torrent_file.read())
+                    info = bencodepy.encode(torrent_data[b'info'])
+                    info_hash = hashlib.sha1(info).hexdigest()
+
+                    task_response = await session.post(upload_url_step1, data=data, files=files)
+
+                    if task_response.status_code == 302 and 'Location' in task_response.headers:
+                        redirect_url = task_response.headers['Location']
+
+                        match = re.search(r'/(\d+)$', redirect_url)
+                        if not match:
+                            console.print(f"{tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
+                            meta['skipping'] = f'{tracker}'
+                            return
+
+                        task_id = match.group(1)
+
+                        return {
+                            'task_id': task_id,
+                            'info_hash': info_hash,
+                            'redirect_url': redirect_url,
+                        }
+
+                    else:
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload_Step1.html"
+                        with open(failure_path, 'w', encoding='utf-8') as f:
+                            f.write(task_response.text)
+                        status_message = f'''[red]Step 1 of upload failed to {tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
+                                            [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]'''
+
+            except Exception as e:
+                status_message = f'[red]An unexpected error occurred while uploading to {tracker}: {e}[/red]'
+                meta['skipping'] = f'{tracker}'
+                return
+
+        else:
+            console.print(data)
+            status_message = 'Debug mode enabled, not uploading.'
+
+        meta['tracker_status'][tracker]['status_message'] = status_message
+
+    async def fetch_data(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url):
+        task_info = await self.create_task_id(
+            meta,
+            tracker,
+            base_url,
+            session,
+            auth_token,
+            source_flag,
+            announce_url
+        )
+        lang_info = await self.get_lang(meta, tracker) or {}
+
+        data = {
+            '_token': self.auth_token,
+            'torrent_id': '',
+            'type_id': await self.get_cat_id(meta['category']),
+            'file_name': name,
+            'anon_upload': '',
+            'description': await self.edit_desc(meta, tracker),
+            'qqfile': '',
+            'rip_type_id': rip_type,
+            'video_quality_id': self.get_video_quality(meta),
+            'video_resolution': self.get_resolution(meta),
+            'movie_id': self.media_code,
+            'languages[]': lang_info.get('languages[]'),
+            'subtitles[]': lang_info.get('subtitles[]'),
+            'media_info': await self.get_file_info(meta),
+            'tags[]': await self.get_tags(meta, base_url, session),
+            }
+
+        # TV
+        if meta.get('category') == 'TV':
+            data.update({
+                'tv_collection': '1' if meta.get('tv_pack') == 0 else '2',
+                'tv_season': meta.get('season_int', ''),
+                'tv_episode': meta.get('episode_int', ''),
+                })
+
+        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][tracker].get('anon', False))
+        if anon:
+            data.update({
+                'anon_upload': '1'
+            })
+
+        if not meta.get('debug', False):
+            try:
+                self.upload_url_step2 = task_info.get('redirect_url')
+
+                # task_id and screenshot cannot be called until Step 1 is completed
+                data.update({
+                    'info_hash': task_info.get('info_hash'),
+                    'task_id': task_info.get('task_id'),
+                })
+                if not meta['z_images']:
+                    data.update({
+                        'screenshots[]': await self.get_screenshots(meta, tracker, session, referer=self.upload_url_step2)
+                    })
+
+            except Exception as e:
+                console.print(f'{tracker}: An unexpected error occurred while uploading: {e}')
+
+        return data
+
+    async def upload(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url):
+        data = await self.fetch_data(meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url)
+        requests = await self.get_requests(meta, tracker, base_url, session)
+        status_message = ''
+
+        if not meta.get('debug', False):
+            response = await session.post(self.upload_url_step2, data=data)
+
+            if response.status_code == 302:
+                torrent_url = response.headers['Location']
+
+                torrent_id = ''
+                match = re.search(r'/torrent/(\d+)', torrent_url)
+                if match:
+                    torrent_id = match.group(1)
+                    meta['tracker_status'][tracker]['torrent_id'] = torrent_id
+
+                # Even if you are uploading, you still need to download the .torrent from the website
+                # because it needs to be registered as a download before you can start seeding
+                download_url = torrent_url.replace('/torrent/', '/download/torrent/')
+                register_download = await session.get(download_url)
+                if register_download.status_code != 200:
+                    print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
+                          f"Error: {register_download.status_code}")
+
+                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url, torrent_url)
+
+                status_message = 'Torrent uploaded successfully.'
+
+                if requests:
+                    status_message += ' Your upload may fulfill existing requests, check prior console logs.'
+
+            else:
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload_Step2.html"
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+
+                status_message = (
+                    f'Step 2 of upload to {tracker} failed.\n'
+                    f'Status code: {response.status_code}\n'
+                    f'URL: {response.url}\n'
+                    f"The HTML response has been saved to '{failure_path}' for analysis."
+                )
+                meta['skipping'] = f'{tracker}'
+                return
+
+        else:
+            console.print(data)
+            status_message = 'Debug mode enabled, not uploading.'
+
+        meta['tracker_status'][tracker]['status_message'] = status_message
 
     def language_map(self, tracker):
         self.all_lang_map = {
