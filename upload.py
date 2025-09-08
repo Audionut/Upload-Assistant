@@ -267,7 +267,7 @@ async def process_meta(meta, base_dir, bot=None):
         console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 
         audio_prompted = False
-        for tracker in ["HUNO", "OE", "AITHER", "ULCX", "DP", "CBR", "ASC", "BT", "LDU", "BJS", "FF", "PTS", "SPD", "AZ"]:
+        for tracker in ["AITHER", "ASC", "AZ", "BJS", "BT", "CBR", "CZ", "DP", "FF", "HUNO", "LDU", "OE", "PTS", "SPD", "ULCX"]:
             if tracker in trackers:
                 if not audio_prompted:
                     await process_desc_language(meta, desc=None, tracker=tracker)

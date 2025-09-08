@@ -611,10 +611,12 @@ class AZTrackerBase():
             'media_info': await self.get_file_info(meta),
         }
 
-        if self.tracker == 'PHD':
-            default_announce = 'https://tracker.privatehd.to/announce'
-        elif self.tracker == 'AZ':
+        if self.tracker == 'AZ':
             default_announce = 'https://tracker.avistaz.to/announce'
+        elif self.tracker == 'CZ':
+            default_announce = 'https://tracker.cinemaz.to/announce'
+        elif self.tracker == 'PHD':
+            default_announce = 'https://tracker.privatehd.to/announce'
 
         if not meta.get('debug', False):
             try:
@@ -666,10 +668,48 @@ class AZTrackerBase():
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def edit_name(self, meta):
-        return meta.get('name')
+        upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+
+        return upload_name
 
     def get_rip_type(self, meta):
-        raise NotImplementedError('Every tracker must implement get_rip_type.')
+        source_type = str(meta.get('type', '') or '').strip().lower()
+        source = str(meta.get('source', '') or '').strip().lower()
+        is_disc = str(meta.get('is_disc', '') or '').strip().upper()
+
+        if is_disc == 'BDMV':
+            return '15'
+        if is_disc == 'HDDVD':
+            return '4'
+        if is_disc == 'DVD':
+            return '4'
+
+        if source == 'dvd' and source_type == 'remux':
+            return '17'
+
+        if source_type == 'remux':
+            if source == 'dvd':
+                return '17'
+            if source in ('bluray', 'blu-ray'):
+                return '14'
+
+        keyword_map = {
+            'bdrip': '1',
+            'brrip': '3',
+            'encode': '2',
+            'dvdrip': '5',
+            'hdrip': '6',
+            'hdtv': '7',
+            'sdtv': '16',
+            'vcd': '8',
+            'vcdrip': '9',
+            'vhsrip': '10',
+            'vodrip': '11',
+            'webdl': '12',
+            'webrip': '13',
+        }
+
+        return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
         await self.validate_credentials(meta)
@@ -692,6 +732,7 @@ class AZTrackerBase():
             'subtitles[]': lang_info.get('subtitles[]'),
             'media_info': await self.get_file_info(meta),
             'tags[]': await self.get_tags(meta),
+            'screenshots[]': [''],
             }
 
         # TV

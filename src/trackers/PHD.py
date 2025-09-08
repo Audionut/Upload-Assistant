@@ -15,7 +15,7 @@ class PHD(AZTrackerBase):
         self.source_flag = 'PrivateHD'
         self.banned_groups = ['']
         self.base_url = 'https://privatehd.to'
-        self.torrent_url = 'https://privatehd.to/torrent/'
+        self.torrent_url = f'{self.base_url}/torrent/'
 
     async def rules(self, meta):
         meta['phd_rule'] = ''

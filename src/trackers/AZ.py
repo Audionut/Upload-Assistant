@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import re
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 
@@ -14,7 +13,7 @@ class AZ(AZTrackerBase):
         self.source_flag = 'AvistaZ'
         self.banned_groups = ['']
         self.base_url = 'https://avistaz.to'
-        self.torrent_url = 'https://avistaz.to/torrent/'
+        self.torrent_url = f'{self.base_url}/torrent/'
 
     async def rules(self, meta):
         meta['az_rule'] = ''
@@ -207,55 +206,3 @@ class AZ(AZTrackerBase):
                 return False
 
         return True
-
-    def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
-
-        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
-            upload_name = f'{upload_name}-NoGroup'
-
-        return upload_name
-
-    def get_rip_type(self, meta):
-        source_type = str(meta.get('type', '') or '').strip().lower()
-        source = str(meta.get('source', '') or '').strip().lower()
-        is_disc = str(meta.get('is_disc', '') or '').strip().upper()
-
-        if is_disc == 'BDMV':
-            return '15'
-        if is_disc == 'HDDVD':
-            return '4'
-        if is_disc == 'DVD':
-            return '4'
-
-        if source == 'dvd' and source_type == 'remux':
-            return '17'
-
-        if source_type == 'remux':
-            if source == 'dvd':
-                return '17'
-            if source in ('bluray', 'blu-ray'):
-                return '14'
-
-        keyword_map = {
-            'bdrip': '1',
-            'brrip': '3',
-            'encode': '2',
-            'dvdrip': '5',
-            'hdrip': '6',
-            'hdtv': '7',
-            'sdtv': '16',
-            'vcd': '8',
-            'vcdrip': '8',
-            'vhsrip': '10',
-            'vodrip': '11',
-            'webdl': '12',
-            'webrip': '13',
-        }
-
-        return keyword_map.get(source_type.lower())
