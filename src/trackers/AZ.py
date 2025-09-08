@@ -324,5 +324,5 @@ class AZ():
             session=self.session,
             auth_token=self.auth_token,
             source_flag=self.source_flag,
-            announce_url='https://tracker.avistaz.to/announce'
+            default_announce='https://tracker.avistaz.to/announce'
         )

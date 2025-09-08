@@ -569,11 +569,10 @@ class AZ_COMMON():
 
         return final_html_desc
 
-    async def create_task_id(self, meta, tracker, base_url, session, auth_token, source_flag, announce_url):
+    async def create_task_id(self, meta, tracker, base_url, session, auth_token, source_flag, default_announce):
         await self.get_media_code(meta, tracker, base_url, session, auth_token)
-
         data = {
-            '_token': auth_token,
+            '_token': self.auth_token,
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -581,7 +580,7 @@ class AZ_COMMON():
 
         if not meta.get('debug', False):
             try:
-                await self.common.edit_torrent(meta, tracker, source_flag, announce_url=announce_url)
+                await self.common.edit_torrent(meta, tracker, source_flag, announce_url=default_announce)
                 upload_url_step1 = f"{base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
 
@@ -628,7 +627,7 @@ class AZ_COMMON():
 
         meta['tracker_status'][tracker]['status_message'] = status_message
 
-    async def fetch_data(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url):
+    async def fetch_data(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce):
         task_info = await self.create_task_id(
             meta,
             tracker,
@@ -636,7 +635,7 @@ class AZ_COMMON():
             session,
             auth_token,
             source_flag,
-            announce_url
+            default_announce
         )
         lang_info = await self.get_lang(meta, tracker) or {}
 
@@ -691,8 +690,8 @@ class AZ_COMMON():
 
         return data
 
-    async def upload(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url):
-        data = await self.fetch_data(meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, announce_url)
+    async def upload(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce):
+        data = await self.fetch_data(meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce)
         requests = await self.get_requests(meta, tracker, base_url, session)
         status_message = ''
 
@@ -716,7 +715,8 @@ class AZ_COMMON():
                     print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
                           f"Error: {register_download.status_code}")
 
-                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url=self.config['TRACKERS'][tracker]['announce_url'], torrent_url=torrent_url)
+                announce_url = self.config['TRACKERS'][tracker]['announce_url']
+                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url, torrent_url)
 
                 status_message = 'Torrent uploaded successfully.'
 

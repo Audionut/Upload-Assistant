@@ -531,5 +531,5 @@ class PHD():
             session=self.session,
             auth_token=self.auth_token,
             source_flag=self.source_flag,
-            announce_url='https://tracker.privatehd.to/announce'
+            default_announce='https://tracker.privatehd.to/announce'
         )
