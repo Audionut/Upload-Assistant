@@ -1,11 +1,11 @@
 import asyncio
+import bencodepy
+import hashlib
 import httpx
 import json
 import os
 import re
 import uuid
-import bencodepy
-import hashlib
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
@@ -124,7 +124,7 @@ class AZ_COMMON():
 
                 if user_choice in ['y', 'yes']:
                     console.print(f'{tracker}: Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, auth_token)
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, tracker, base_url, session, auth_token)
                     if not added_successfully:
                         console.print(f'{tracker}: Failed to add media. Aborting.')
                         break
@@ -291,7 +291,7 @@ class AZ_COMMON():
         }
 
     async def img_host(self, meta, tracker, base_url, session, referer, image_bytes: bytes, filename: str) -> Optional[str]:
-        upload_url = f'{base_url}/upload'
+        upload_url = f'{base_url}/ajax/image/upload'
 
         headers = {
             'Referer': referer,
@@ -329,7 +329,7 @@ class AZ_COMMON():
             print(f'{tracker}: Exception when uploading {filename}: {e}')
             return None
 
-    async def get_screenshots(self, meta, tracker, session, referer):
+    async def get_screenshots(self, meta, tracker, base_url, session, referer):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
         local_files = sorted(screenshot_dir.glob('*.png'))
         results = []
@@ -340,7 +340,7 @@ class AZ_COMMON():
             async def upload_local_file(path):
                 with open(path, 'rb') as f:
                     image_bytes = f.read()
-                return await self.img_host(meta, referer, image_bytes, path.name)
+                return await self.img_host(meta, tracker, base_url, session, referer, image_bytes, path.name)
 
             paths = local_files[:limit] if limit else local_files
 
@@ -364,7 +364,7 @@ class AZ_COMMON():
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
-                    return await self.img_host(meta, referer, image_bytes, filename)
+                    return await self.img_host(meta, tracker, base_url, session, referer, image_bytes, filename)
                 except Exception as e:
                     print(f'Failed to process screenshot from URL {url}: {e}')
                     return None
@@ -573,7 +573,7 @@ class AZ_COMMON():
         await self.get_media_code(meta, tracker, base_url, session, auth_token)
 
         data = {
-            '_token': self.auth_token,
+            '_token': auth_token,
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -581,7 +581,7 @@ class AZ_COMMON():
 
         if not meta.get('debug', False):
             try:
-                await self.common.edit_torrent(meta, tracker, source_flag, announce_url)
+                await self.common.edit_torrent(meta, tracker, source_flag, announce_url=announce_url)
                 upload_url_step1 = f"{base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
 
@@ -683,7 +683,7 @@ class AZ_COMMON():
                 })
                 if not meta['z_images']:
                     data.update({
-                        'screenshots[]': await self.get_screenshots(meta, tracker, session, referer=self.upload_url_step2)
+                        'screenshots[]': await self.get_screenshots(meta, tracker, base_url, session, referer=self.upload_url_step2)
                     })
 
             except Exception as e:
@@ -716,7 +716,7 @@ class AZ_COMMON():
                     print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
                           f"Error: {register_download.status_code}")
 
-                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url, torrent_url)
+                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url=self.config['TRACKERS'][tracker]['announce_url'], torrent_url=torrent_url)
 
                 status_message = 'Torrent uploaded successfully.'
 
