@@ -4,6 +4,7 @@ import hashlib
 import httpx
 import json
 import os
+import platform
 import re
 import uuid
 from bs4 import BeautifulSoup
@@ -17,10 +18,23 @@ from typing import Optional
 from urllib.parse import urlparse
 
 
-class AZ_COMMON():
-    def __init__(self, config):
+class AZTrackerBase():
+    def __init__(self, config, tracker_name):
         self.config = config
+        self.tracker = tracker_name
         self.common = COMMON(config)
+
+        tracker_config = self.config['TRACKERS'][self.tracker]
+        self.base_url = tracker_config.get('base_url')
+        self.announce_url = tracker_config.get('announce_url')
+        self.source_flag = tracker_config.get('source_flag')
+
+        self.auth_token = None
+        self.session = httpx.AsyncClient(headers={
+            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
+        }, timeout=60.0)
+        self.signature = ''
+        self.media_code = ''
 
     def get_resolution(self, meta):
         resolution = ''
@@ -59,7 +73,7 @@ class AZ_COMMON():
 
         return keyword_map.get(resolution.lower())
 
-    async def get_media_code(self, meta, tracker, base_url, session, auth_token):
+    async def get_media_code(self, meta):
         self.media_code = ''
 
         if meta['category'] == 'MOVIE':
@@ -80,20 +94,20 @@ class AZ_COMMON():
         else:
             search_term = title
 
-        ajax_url = f'{base_url}/ajax/movies/{category}?term={search_term}'
+        ajax_url = f'{self.base_url}/ajax/movies/{category}?term={search_term}'
 
         headers = {
-            'Referer': f"{base_url}/upload/{meta['category'].lower()}",
+            'Referer': f"{self.base_url}/upload/{meta['category'].lower()}",
             'X-Requested-With': 'XMLHttpRequest'
         }
 
         for attempt in range(2):
             try:
                 if attempt == 1:
-                    console.print(f'{tracker}: Trying to search again by ID after adding to media to database...\n')
+                    console.print(f'{self.tracker}: Trying to search again by ID after adding to media to database...\n')
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
-                response = await session.get(ajax_url, headers=headers)
+                response = await self.session.get(ajax_url, headers=headers)
                 response.raise_for_status()
                 data = response.json()
 
@@ -110,36 +124,36 @@ class AZ_COMMON():
                     if match:
                         self.media_code = str(match['id'])
                         if attempt == 1:
-                            console.print(f"{tracker}: [green]Found new ID at:[/green] {base_url}/{meta['category'].lower()}/{self.media_code}")
+                            console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
                         return True
 
             except Exception as e:
-                console.print(f'{tracker}: Error while trying to fetch media code in attempt {attempt + 1}: {e}')
+                console.print(f'{self.tracker}: Error while trying to fetch media code in attempt {attempt + 1}: {e}')
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n[{tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
+                console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
 
-                user_choice = input(f"{tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
+                user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
-                    console.print(f'{tracker}: Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, tracker, base_url, session, auth_token)
+                    console.print(f'{self.tracker}: Trying to add to database...')
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, self.tracker)
                     if not added_successfully:
-                        console.print(f'{tracker}: Failed to add media. Aborting.')
+                        console.print(f'{self.tracker}: Failed to add media. Aborting.')
                         break
                 else:
-                    console.print(f'{tracker}: User chose not to add media. Aborting.')
+                    console.print(f'{self.tracker}: User chose not to add media. Aborting.')
                     break
 
         if not self.media_code:
-            console.print(f'{tracker}: Unable to get media code.')
+            console.print(f'{self.tracker}: Unable to get media code.')
 
         return bool(self.media_code)
 
-    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id, tracker, base_url, session, auth_token):
+    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
         data = {
-            '_token': auth_token,
+            '_token': self.auth_token,
             'type_id': category,
             'title': title,
             'imdb_id': imdb_id if imdb_id else '',
@@ -151,25 +165,43 @@ class AZ_COMMON():
             if tvdb_id:
                 data['tvdb_id'] = str(tvdb_id)
 
-        url = f"{base_url}/add/{meta['category'].lower()}"
+        url = f"{self.base_url}/add/{meta['category'].lower()}"
 
         headers = {
-            'Referer': f'{base_url}/upload',
+            'Referer': f'{self.base_url}/upload',
         }
 
         try:
-            response = await session.post(url, data=data, headers=headers)
+            response = await self.session.post(url, data=data, headers=headers)
             if response.status_code == 302:
-                console.print(f'{tracker}: The attempt to add the media to the database appears to have been successful..')
+                console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
                 return True
             else:
-                console.print(f'{tracker}: Error adding media to the database. Status: {response.status}')
+                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
                 return False
         except Exception as e:
-            console.print(f'{tracker}: Exception when trying to add media to the database: {e}')
+            console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
 
-    async def search_existing(self, meta, tracker, base_url, media_code, session):
+    async def load_cookies(self, meta):
+        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
+        if not os.path.exists(cookie_file):
+            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
+            return False
+
+        self.session.cookies = await self.common.parseCookieFile(cookie_file)
+
+    async def search_existing(self, meta, disctype):
+        if not await self.rules(meta):
+            console.print(f"[red]{meta[f'{self.tracker}_rule']}[/red]")
+            meta['skipping'] = f"{self.tracker}"
+            return
+
+        if not await self.get_media_code(meta):
+            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            meta['skipping'] = f"{self.tracker}"
+            return
+
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
         elif meta.get('resolution') in ('720p', '1080p'):
@@ -177,7 +209,7 @@ class AZ_COMMON():
         else:
             resolution = 'all'
 
-        page_url = f'{base_url}/movies/torrents/{media_code}?quality={resolution}'
+        page_url = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
 
         dupes = []
 
@@ -188,7 +220,7 @@ class AZ_COMMON():
             visited_urls.add(page_url)
 
             try:
-                response = await session.get(page_url)
+                response = await self.session.get(page_url)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -206,7 +238,7 @@ class AZ_COMMON():
                     page_url = None
 
             except httpx.RequestError as e:
-                console.log(f'{tracker}: Failed to search for duplicates. {e.request.url}: {e}')
+                console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
                 return dupes
 
         return dupes
@@ -218,23 +250,24 @@ class AZ_COMMON():
         }.get(category_name, '0')
         return category_id
 
-    async def validate_credentials(self, meta, tracker, base_url, session):
+    async def validate_credentials(self, meta):
+        await self.load_cookies(meta)
         try:
-            upload_page_url = f'{base_url}/upload'
-            response = await session.get(upload_page_url)
+            upload_page_url = f'{self.base_url}/upload'
+            response = await self.session.get(upload_page_url)
             response.raise_for_status()
 
             if 'login' in str(response.url):
-                console.print(f'[{tracker}] Validation failed. The cookie appears to be expired or invalid.')
+                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
                 return False
 
             auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
 
             if not auth_match:
-                console.print(f"{tracker} Validation failed. Could not find 'auth' token on upload page.")
+                console.print(f"{self.tracker} Validation failed. Could not find 'auth' token on upload page.")
                 console.print('This can happen if the site HTML has changed or if the login failed silently..')
 
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload.html"
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                 with open(failure_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
                 console.print(f'The server response was saved to {failure_path} for analysis.')
@@ -244,13 +277,13 @@ class AZ_COMMON():
             return True
 
         except httpx.TimeoutException:
-            console.print(f'[{tracker}] Error in {tracker}: Timeout while trying to validate credentials.')
+            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
             return False
         except httpx.HTTPStatusError as e:
-            console.print(f'[{tracker}] HTTP error validating credentials for {tracker}: Status {e.response.status_code}.')
+            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
             return False
         except httpx.RequestError as e:
-            console.print(f'[{tracker}] Network error while validating credentials for {tracker}: {e.__class__.__name__}.')
+            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
             return False
 
     async def get_file_info(self, meta):
@@ -264,10 +297,10 @@ class AZ_COMMON():
             with open(info_file_path, 'r', encoding='utf-8') as f:
                 return f.read()
 
-    async def get_lang(self, meta, tracker):
-        self.language_map(tracker)
+    async def get_lang(self, meta):
+        self.language_map()
         if not meta.get('subtitle_languages') or meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=tracker)
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_subs_strings = meta.get('subtitle_languages', [])
         subtitle_ids = set()
@@ -290,14 +323,14 @@ class AZ_COMMON():
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta, tracker, base_url, session, referer, image_bytes: bytes, filename: str) -> Optional[str]:
-        upload_url = f'{base_url}/ajax/image/upload'
+    async def img_host(self, meta, referer, image_bytes: bytes, filename: str) -> Optional[str]:
+        upload_url = f'{self.base_url}/ajax/image/upload'
 
         headers = {
             'Referer': referer,
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json',
-            'Origin': base_url,
+            'Origin': self.base_url,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'
         }
 
@@ -311,7 +344,7 @@ class AZ_COMMON():
         files = {'qqfile': (filename, image_bytes, 'image/png')}
 
         try:
-            response = await session.post(upload_url, headers=headers, data=data, files=files)
+            response = await self.session.post(upload_url, headers=headers, data=data, files=files)
 
             if response.is_success:
                 json_data = response.json()
@@ -320,16 +353,16 @@ class AZ_COMMON():
                     return str(image_id)
                 else:
                     error_message = json_data.get('error', 'Unknown image host error.')
-                    print(f'{tracker}: Error uploading {filename}: {error_message}')
+                    print(f'{self.tracker}: Error uploading {filename}: {error_message}')
                     return None
             else:
-                print(f'{tracker}: Error uploading {filename}: Status {response.status_code} - {response.text}')
+                print(f'{self.tracker}: Error uploading {filename}: Status {response.status_code} - {response.text}')
                 return None
         except Exception as e:
-            print(f'{tracker}: Exception when uploading {filename}: {e}')
+            print(f'{self.tracker}: Exception when uploading {filename}: {e}')
             return None
 
-    async def get_screenshots(self, meta, tracker, base_url, session, referer):
+    async def get_screenshots(self, meta):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
         local_files = sorted(screenshot_dir.glob('*.png'))
         results = []
@@ -340,14 +373,14 @@ class AZ_COMMON():
             async def upload_local_file(path):
                 with open(path, 'rb') as f:
                     image_bytes = f.read()
-                return await self.img_host(meta, tracker, base_url, session, referer, image_bytes, path.name)
+                return await self.img_host(meta, self.tracker, image_bytes, path.name)
 
             paths = local_files[:limit] if limit else local_files
 
             for path in tqdm(
                 paths,
                 total=len(paths),
-                desc=f'{tracker}: Uploading screenshots'
+                desc=f'{self.tracker}: Uploading screenshots'
             ):
                 result = await upload_local_file(path)
                 if result:
@@ -356,15 +389,15 @@ class AZ_COMMON():
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
             if len(image_links) < 3:
-                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {tracker}.')
+                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.')
 
             async def upload_remote_file(url):
                 try:
-                    response = await session.get(url)
+                    response = await self.session.get(url)
                     response.raise_for_status()
                     image_bytes = response.content
                     filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
-                    return await self.img_host(meta, tracker, base_url, session, referer, image_bytes, filename)
+                    return await self.img_host(meta, self.tracker, image_bytes, filename)
                 except Exception as e:
                     print(f'Failed to process screenshot from URL {url}: {e}')
                     return None
@@ -374,7 +407,7 @@ class AZ_COMMON():
             for url in tqdm(
                 links,
                 total=len(links),
-                desc=f'{tracker}: Uploading screenshots'
+                desc=f'{self.tracker}: Uploading screenshots'
             ):
                 result = await upload_remote_file(url)
                 if result:
@@ -385,7 +418,7 @@ class AZ_COMMON():
 
         return results
 
-    async def get_requests(self, meta, tracker, base_url, session):
+    async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
 
@@ -398,9 +431,9 @@ class AZ_COMMON():
                 else:
                     query = meta['title']
 
-                search_url = f'{base_url}/requests?type={category}&search={query}&condition=new'
+                search_url = f'{self.base_url}/requests?type={category}&search={query}&condition=new'
 
-                response = await session.get(search_url)
+                response = await self.session.get(search_url)
                 response.raise_for_status()
                 response_results_text = response.text
 
@@ -429,7 +462,7 @@ class AZ_COMMON():
                     })
 
                 if results:
-                    message = f'\n{tracker}: [bold yellow]Your upload may fulfill the following request(s), check it out:[/bold yellow]\n\n'
+                    message = f'\n{self.tracker}: [bold yellow]Your upload may fulfill the following request(s), check it out:[/bold yellow]\n\n'
                     for r in results:
                         message += f"[bold green]Name:[/bold green] {r['Name']}\n"
                         message += f"[bold green]Reward:[/bold green] {r['Reward']}\n"
@@ -439,19 +472,19 @@ class AZ_COMMON():
                 return results
 
             except Exception as e:
-                console.print(f'[{tracker}] An error occurred while fetching requests: {e}')
+                console.print(f'[{self.tracker}] An error occurred while fetching requests: {e}')
                 return []
 
-    async def fetch_tag_id(self, base_url, session, word):
-        tags_url = f'{base_url}/ajax/tags'
+    async def fetch_tag_id(self, word):
+        tags_url = f'{self.base_url}/ajax/tags'
         params = {'term': word}
 
         headers = {
-            'Referer': f'{base_url}/upload',
+            'Referer': f'{self.base_url}/upload',
             'X-Requested-With': 'XMLHttpRequest'
         }
         try:
-            response = await session.get(tags_url, headers=headers, params=params)
+            response = await self.session.get(tags_url, headers=headers, params=params)
             response.raise_for_status()
 
             json_data = response.json()
@@ -465,7 +498,7 @@ class AZ_COMMON():
 
         return None
 
-    async def get_tags(self, meta, base_url, session):
+    async def get_tags(self, meta):
         genres = meta.get('keywords', '')
         if not genres:
             return []
@@ -475,7 +508,7 @@ class AZ_COMMON():
 
         words_to_search = set(phrases)
 
-        tasks = [self.fetch_tag_id(base_url, session, word) for word in words_to_search]
+        tasks = [self.fetch_tag_id(word) for word in words_to_search]
 
         tag_ids_results = await asyncio.gather(*tasks)
 
@@ -486,9 +519,9 @@ class AZ_COMMON():
 
         return tags
 
-    async def edit_desc(self, meta, tracker):
+    async def edit_desc(self, meta):
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt"
+        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
 
         description_parts = []
 
@@ -509,7 +542,7 @@ class AZ_COMMON():
         for pattern, flag, removed_type in cleanup_patterns:
             desc, amount = re.subn(pattern, '', desc, flags=flag)
             if amount > 0:
-                console.print(f'{tracker}: Deleted {amount} {removed_type} from description.')
+                console.print(f'{self.tracker}: Deleted {amount} {removed_type} from description.')
 
         desc = desc.strip()
         desc = desc.replace('\r\n', '\n').replace('\r', '\n')
@@ -527,7 +560,7 @@ class AZ_COMMON():
         final_html_desc = '\r\n'.join(html_parts)
 
         meta['z_images'] = False
-        rehost_images = self.config['TRACKERS'][tracker].get('img_rehost', True)
+        rehost_images = self.config['TRACKERS'][self.tracker].get('img_rehost', True)
         if not rehost_images:
             limit = 3 if meta.get('tv_pack', '') == 0 else 15
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
@@ -569,8 +602,8 @@ class AZ_COMMON():
 
         return final_html_desc
 
-    async def create_task_id(self, meta, tracker, base_url, session, auth_token, source_flag, default_announce):
-        await self.get_media_code(meta, tracker, base_url, session, auth_token)
+    async def create_task_id(self, meta):
+        await self.get_media_code(meta)
         data = {
             '_token': self.auth_token,
             'type_id': await self.get_cat_id(meta['category']),
@@ -578,11 +611,16 @@ class AZ_COMMON():
             'media_info': await self.get_file_info(meta),
         }
 
+        if self.tracker == 'PHD':
+            default_announce = 'https://tracker.privatehd.to/announce'
+        elif self.tracker == 'AZ':
+            default_announce = 'https://tracker.avistaz.to/announce'
+
         if not meta.get('debug', False):
             try:
-                await self.common.edit_torrent(meta, tracker, source_flag, announce_url=default_announce)
-                upload_url_step1 = f"{base_url}/upload/{meta['category'].lower()}"
-                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+                await self.common.edit_torrent(meta, self.tracker, self.source_flag, announce_url=default_announce)
+                upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
                 with open(torrent_path, 'rb') as torrent_file:
                     files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
@@ -590,15 +628,15 @@ class AZ_COMMON():
                     info = bencodepy.encode(torrent_data[b'info'])
                     info_hash = hashlib.sha1(info).hexdigest()
 
-                    task_response = await session.post(upload_url_step1, data=data, files=files)
+                    task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
                     if task_response.status_code == 302 and 'Location' in task_response.headers:
                         redirect_url = task_response.headers['Location']
 
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
-                            console.print(f"{tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            meta['skipping'] = f'{tracker}'
+                            console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
+                            meta['skipping'] = f'{self.tracker}'
                             return
 
                         task_id = match.group(1)
@@ -610,51 +648,50 @@ class AZ_COMMON():
                         }
 
                     else:
-                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload_Step1.html"
+                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
                         with open(failure_path, 'w', encoding='utf-8') as f:
                             f.write(task_response.text)
-                        status_message = f'''[red]Step 1 of upload failed to {tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
+                        status_message = f'''[red]Step 1 of upload failed to {self.tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
                                             [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]'''
 
             except Exception as e:
-                status_message = f'[red]An unexpected error occurred while uploading to {tracker}: {e}[/red]'
-                meta['skipping'] = f'{tracker}'
+                status_message = f'[red]An unexpected error occurred while uploading to {self.tracker}: {e}[/red]'
+                meta['skipping'] = f'{self.tracker}'
                 return
 
         else:
             console.print(data)
             status_message = 'Debug mode enabled, not uploading.'
 
-        meta['tracker_status'][tracker]['status_message'] = status_message
+        meta['tracker_status'][self.tracker]['status_message'] = status_message
 
-    async def fetch_data(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce):
-        task_info = await self.create_task_id(
-            meta,
-            tracker,
-            base_url,
-            session,
-            auth_token,
-            source_flag,
-            default_announce
-        )
-        lang_info = await self.get_lang(meta, tracker) or {}
+    def edit_name(self, meta):
+        return meta.get('name')
+
+    def get_rip_type(self, meta):
+        raise NotImplementedError('Every tracker must implement get_rip_type.')
+
+    async def fetch_data(self, meta):
+        await self.validate_credentials(meta)
+        task_info = await self.create_task_id(meta)
+        lang_info = await self.get_lang(meta) or {}
 
         data = {
             '_token': self.auth_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
-            'file_name': name,
+            'file_name': self.edit_name(meta),
             'anon_upload': '',
-            'description': await self.edit_desc(meta, tracker),
+            'description': await self.edit_desc(meta),
             'qqfile': '',
-            'rip_type_id': rip_type,
+            'rip_type_id': self.get_rip_type(meta),
             'video_quality_id': self.get_video_quality(meta),
             'video_resolution': self.get_resolution(meta),
             'movie_id': self.media_code,
             'languages[]': lang_info.get('languages[]'),
             'subtitles[]': lang_info.get('subtitles[]'),
             'media_info': await self.get_file_info(meta),
-            'tags[]': await self.get_tags(meta, base_url, session),
+            'tags[]': await self.get_tags(meta),
             }
 
         # TV
@@ -665,7 +702,7 @@ class AZ_COMMON():
                 'tv_episode': meta.get('episode_int', ''),
                 })
 
-        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][tracker].get('anon', False))
+        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:
             data.update({
                 'anon_upload': '1'
@@ -682,22 +719,21 @@ class AZ_COMMON():
                 })
                 if not meta['z_images']:
                     data.update({
-                        'screenshots[]': await self.get_screenshots(meta, tracker, base_url, session, referer=self.upload_url_step2)
+                        'screenshots[]': await self.get_screenshots(meta)
                     })
 
             except Exception as e:
-                console.print(f'{tracker}: An unexpected error occurred while uploading: {e}')
+                console.print(f'{self.tracker}: An unexpected error occurred while uploading: {e}')
 
         return data
 
-    async def upload(self, meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce):
-        data = await self.fetch_data(meta, name, rip_type, tracker, base_url, session, auth_token, source_flag, default_announce)
-        requests = await self.get_requests(meta, tracker, base_url, session)
+    async def upload(self, meta, disctype):
+        data = await self.fetch_data(meta)
+        requests = await self.get_requests(meta)
         status_message = ''
 
         if not meta.get('debug', False):
-            response = await session.post(self.upload_url_step2, data=data)
-
+            response = await self.session.post(self.upload_url_step2, data=data)
             if response.status_code == 302:
                 torrent_url = response.headers['Location']
 
@@ -705,18 +741,17 @@ class AZ_COMMON():
                 match = re.search(r'/torrent/(\d+)', torrent_url)
                 if match:
                     torrent_id = match.group(1)
-                    meta['tracker_status'][tracker]['torrent_id'] = torrent_id
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 # Even if you are uploading, you still need to download the .torrent from the website
                 # because it needs to be registered as a download before you can start seeding
                 download_url = torrent_url.replace('/torrent/', '/download/torrent/')
-                register_download = await session.get(download_url)
+                register_download = await self.session.get(download_url)
                 if register_download.status_code != 200:
-                    print(f"Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}"
-                          f"Error: {register_download.status_code}")
+                    print(f'Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}'
+                          f'Error: {register_download.status_code}')
 
-                announce_url = self.config['TRACKERS'][tracker]['announce_url']
-                await self.common.add_tracker_torrent(meta, tracker, source_flag, announce_url, torrent_url)
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
 
                 status_message = 'Torrent uploaded successfully.'
 
@@ -724,26 +759,26 @@ class AZ_COMMON():
                     status_message += ' Your upload may fulfill existing requests, check prior console logs.'
 
             else:
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload_Step2.html"
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
                 with open(failure_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
 
                 status_message = (
-                    f'Step 2 of upload to {tracker} failed.\n'
+                    f'Step 2 of upload to {self.tracker} failed.\n'
                     f'Status code: {response.status_code}\n'
                     f'URL: {response.url}\n'
                     f"The HTML response has been saved to '{failure_path}' for analysis."
                 )
-                meta['skipping'] = f'{tracker}'
+                meta['skipping'] = f'{self.tracker}'
                 return
 
         else:
             console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+            status_message = f'{self.tracker}: Debug mode enabled, not uploading.'
 
-        meta['tracker_status'][tracker]['status_message'] = status_message
+        meta['tracker_status'][self.tracker]['status_message'] = status_message
 
-    def language_map(self, tracker):
+    def language_map(self):
         self.all_lang_map = {
             ('Abkhazian', 'abk', 'ab'): '1',
             ('Afar', 'aar', 'aa'): '2',
@@ -933,21 +968,21 @@ class AZ_COMMON():
             ('Zulu', 'zul', 'zu'): '186',
         }
 
-        if tracker == 'PHD':
+        if self.tracker == 'PHD':
             self.all_lang_map.update({
                 ('Brazilian Portuguese', 'por', 'pt'): '187',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Mooré', 'mos', 'mos'): '188',
             })
 
-        if tracker == 'AZ':
+        if self.tracker == 'AZ':
             self.all_lang_map.update({
                 ('Brazilian Portuguese', 'por', 'pt'): '189',
                 ('Filipino', 'fil', 'fil'): '188',
                 ('Mooré', 'mos', 'mos'): '187',
             })
 
-        if tracker == 'CZ':
+        if self.tracker == 'CZ':
             self.all_lang_map.update({
                 ('Brazilian Portuguese', 'por', 'pt'): '187',
                 ('Mooré', 'mos', 'mos'): '188',

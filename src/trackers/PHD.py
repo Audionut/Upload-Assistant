@@ -1,30 +1,21 @@
 # -*- coding: utf-8 -*-
-import httpx
 import os
-import platform
 import re
 from datetime import datetime
-from src.console import console
 from src.trackers.COMMON import COMMON
-from src.trackers.AVISTAZ_NETWORK import AZ_COMMON
+from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 
 
-class PHD():
+class PHD(AZTrackerBase):
     def __init__(self, config):
+        super().__init__(config, tracker_name='PHD')
         self.config = config
         self.common = COMMON(config)
-        self.az_common = AZ_COMMON(config)
         self.tracker = 'PHD'
         self.source_flag = 'PrivateHD'
         self.banned_groups = ['']
         self.base_url = 'https://privatehd.to'
         self.torrent_url = 'https://privatehd.to/torrent/'
-        self.announce_url = self.config['TRACKERS'][self.tracker].get('announce_url')
-        self.auth_token = None
-        self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
-        }, timeout=60.0)
-        self.signature = ''
 
     async def rules(self, meta):
         meta['phd_rule'] = ''
@@ -475,61 +466,3 @@ class PHD():
         }
 
         return keyword_map.get(source_type.lower())
-
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
-            return False
-
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
-
-    async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        await self.az_common.validate_credentials(
-            meta,
-            tracker=self.tracker,
-            base_url=self.base_url,
-            session=self.session
-        )
-        self.auth_token = self.az_common.auth_token
-
-    async def search_existing(self, meta, disctype):
-        if not await self.rules(meta):
-            console.print(f"[red]{meta['phd_rule']}[/red]")
-            meta['skipping'] = f"{self.tracker}"
-            return
-
-        if not await self.az_common.get_media_code(
-            meta,
-            tracker=self.tracker,
-            base_url=self.base_url,
-            session=self.session,
-            auth_token=self.auth_token
-        ):
-            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
-            meta['skipping'] = f"{self.tracker}"
-            return
-
-        return await self.az_common.search_existing(
-            meta,
-            tracker=self.tracker,
-            base_url=self.base_url,
-            media_code=self.az_common.media_code,
-            session=self.session
-        )
-
-    async def upload(self, meta, disctype):
-        await self.validate_credentials(meta)
-
-        await self.az_common.upload(
-            meta,
-            name=self.edit_name(meta),
-            rip_type=self.get_rip_type(meta),
-            tracker=self.tracker,
-            base_url=self.base_url,
-            session=self.session,
-            auth_token=self.auth_token,
-            source_flag=self.source_flag,
-            default_announce='https://tracker.privatehd.to/announce'
-        )
