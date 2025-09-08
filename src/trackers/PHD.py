@@ -7,18 +7,11 @@ import json
 import os
 import platform
 import re
-import uuid
 from bs4 import BeautifulSoup
 from datetime import datetime
-from pathlib import Path
 from src.console import console
-from src.exceptions import UploadException
-from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.AZ_COMMON import AZ_COMMON
-from tqdm.asyncio import tqdm
-from typing import Optional
-from urllib.parse import urlparse
 
 
 class PHD():
@@ -449,7 +442,7 @@ class PHD():
         return True
 
     def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta["aka"], '')
+        upload_name = meta.get('name').replace(meta["aka"], '').replace('Dubbed', '').replace('Dual-Audio', '')
         forbidden_terms = [
             r'\bLIMITED\b',
             r'\bCriterion Collection\b',
@@ -499,39 +492,13 @@ class PHD():
 
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload'
-            response = await self.session.get(upload_page_url)
-            response.raise_for_status()
-
-            if 'login' in str(response.url):
-                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
-                return False
-
-            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f"{self.tracker} Validation failed. Could not find 'auth' token on upload page.")
-                console.print('This can happen if the site HTML has changed or if the login failed silently..')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'The server response was saved to {failure_path} for analysis.')
-                return False
-
-            self.auth_token = auth_match.group(1)
-            return True
-
-        except httpx.TimeoutException:
-            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
-            return False
+        await self.az_common.validate_credentials(
+            meta,
+            tracker=self.tracker,
+            tracker_url=self.base_url,
+            session=self.session
+        )
+        self.auth_token = self.az_common.auth_token
 
     async def search_existing(self, meta, disctype):
         if not await self.rules(meta):
@@ -557,138 +524,6 @@ class PHD():
             media_code=self.az_common.media_code,
             session=self.session
         )
-
-    async def get_file_info(self, meta):
-        info_file_path = ''
-        if meta.get('is_disc') == 'BDMV':
-            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
-        else:
-            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
-
-        if os.path.exists(info_file_path):
-            with open(info_file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-
-    async def get_lang(self, meta):
-        self.az_common.language_map(self.tracker)
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        found_subs_strings = meta.get('subtitle_languages', [])
-        subtitle_ids = set()
-        for lang_str in found_subs_strings:
-            target_id = self.az_common.lang_map.get(lang_str.lower())
-            if target_id:
-                subtitle_ids.add(target_id)
-        final_subtitle_ids = sorted(list(subtitle_ids))
-
-        found_audio_strings = meta.get('audio_languages', [])
-        audio_ids = set()
-        for lang_str in found_audio_strings:
-            target_id = self.az_common.lang_map.get(lang_str.lower())
-            if target_id:
-                audio_ids.add(target_id)
-        final_audio_ids = sorted(list(audio_ids))
-
-        return {
-            'subtitles[]': final_subtitle_ids,
-            'languages[]': final_audio_ids
-        }
-
-    async def img_host(self, meta, image_bytes: bytes, filename: str) -> Optional[str]:
-        upload_url = f'{self.base_url}/ajax/image/upload'
-
-        headers = {
-            'Referer': self.upload_url_step2,
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json',
-            'Origin': self.base_url,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'
-        }
-
-        data = {
-            '_token': self.auth_token,
-            'qquuid': str(uuid.uuid4()),
-            'qqfilename': filename,
-            'qqtotalfilesize': str(len(image_bytes))
-        }
-
-        files = {'qqfile': (filename, image_bytes, 'image/png')}
-
-        try:
-            response = await self.session.post(upload_url, headers=headers, data=data, files=files)
-
-            if response.is_success:
-                json_data = response.json()
-                if json_data.get('success'):
-                    image_id = json_data.get('imageId')
-                    return str(image_id)
-                else:
-                    error_message = json_data.get('error', 'Unknown image host error.')
-                    print(f'Error uploading {filename}: {error_message}')
-                    return None
-            else:
-                print(f'Error uploading {filename}: Status {response.status_code} - {response.text}')
-                return None
-        except Exception as e:
-            print(f'Exception when uploading {filename}: {e}')
-            return None
-
-    async def get_screenshots(self, meta):
-        screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
-        local_files = sorted(screenshot_dir.glob('*.png'))
-        results = []
-
-        limit = 3 if meta.get('tv_pack', '') == 0 else 15
-
-        if local_files:
-            async def upload_local_file(path):
-                with open(path, 'rb') as f:
-                    image_bytes = f.read()
-                return await self.img_host(meta, image_bytes, path.name)
-
-            paths = local_files[:limit] if limit else local_files
-
-            for path in tqdm(
-                paths,
-                total=len(paths),
-                desc=f'[{self.tracker}] Uploading screenshots'
-            ):
-                result = await upload_local_file(path)
-                if result:
-                    results.append(result)
-
-        else:
-            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-            if len(image_links) < 3:
-                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.')
-
-            async def upload_remote_file(url):
-                try:
-                    response = await self.session.get(url)
-                    response.raise_for_status()
-                    image_bytes = response.content
-                    filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
-                    return await self.img_host(meta, image_bytes, filename)
-                except Exception as e:
-                    print(f'Failed to process screenshot from URL {url}: {e}')
-                    return None
-
-            links = image_links[:limit] if limit else image_links
-
-            for url in tqdm(
-                links,
-                total=len(links),
-                desc=f'[{self.tracker}] Uploading screenshots'
-            ):
-                result = await upload_remote_file(url)
-                if result:
-                    results.append(result)
-
-        if len(results) < 3:
-            raise UploadException('UPLOAD FAILED: The image host did not return the minimum number of screenshots.')
-
-        return results
 
     async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
@@ -880,7 +715,7 @@ class PHD():
             '_token': self.auth_token,
             'type_id': await self.az_common.get_cat_id(meta['category']),
             'movie_id': self.az_common.media_code,
-            'media_info': await self.get_file_info(meta),
+            'media_info': await self.az_common.get_file_info(meta),
         }
 
         if not meta.get('debug', False):
@@ -935,7 +770,7 @@ class PHD():
     async def fetch_data(self, meta):
         await self.validate_credentials(meta)
         task_info = await self.create_task_id(meta)
-        lang_info = await self.get_lang(meta) or {}
+        lang_info = await self.az_common.get_lang(meta, tracker=self.tracker) or {}
 
         data = {
             '_token': self.auth_token,
@@ -951,7 +786,7 @@ class PHD():
             'movie_id': self.az_common.media_code,
             'languages[]': lang_info.get('languages[]'),
             'subtitles[]': lang_info.get('subtitles[]'),
-            'media_info': await self.get_file_info(meta),
+            'media_info': await self.az_common.get_file_info(meta),
             'tags[]': await self.get_tags(meta),
             }
 
@@ -980,7 +815,7 @@ class PHD():
                 })
                 if not meta['z_images']:
                     data.update({
-                        'screenshots[]': await self.get_screenshots(meta),
+                        'screenshots[]': await self.az_common.get_screenshots(meta, tracker=self.tracker, session=self.session, referer=self.upload_url_step2),
                     })
 
             except Exception as e:

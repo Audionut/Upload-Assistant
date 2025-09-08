@@ -1,12 +1,23 @@
 import asyncio
 import httpx
+import os
+import uuid
 from bs4 import BeautifulSoup
+from pathlib import Path
+from src.languages import process_desc_language
+import re
+from tqdm.asyncio import tqdm
+from typing import Optional
+from src.exceptions import UploadException
+from urllib.parse import urlparse
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 class AZ_COMMON():
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
 
     def get_resolution(self, meta):
         resolution = ''
@@ -203,6 +214,173 @@ class AZ_COMMON():
             'TV': '2',
         }.get(category_name, '0')
         return category_id
+
+    async def validate_credentials(self, meta, tracker, tracker_url, session):
+        try:
+            upload_page_url = f'{tracker_url}/upload'
+            response = await session.get(upload_page_url)
+            response.raise_for_status()
+
+            if 'login' in str(response.url):
+                console.print(f'[{tracker}] Validation failed. The cookie appears to be expired or invalid.')
+                return False
+
+            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
+
+            if not auth_match:
+                console.print(f"{tracker} Validation failed. Could not find 'auth' token on upload page.")
+                console.print('This can happen if the site HTML has changed or if the login failed silently..')
+
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]FailedUpload.html"
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                console.print(f'The server response was saved to {failure_path} for analysis.')
+                return False
+
+            self.auth_token = auth_match.group(1)
+            return True
+
+        except httpx.TimeoutException:
+            console.print(f'[{tracker}] Error in {tracker}: Timeout while trying to validate credentials.')
+            return False
+        except httpx.HTTPStatusError as e:
+            console.print(f'[{tracker}] HTTP error validating credentials for {tracker}: Status {e.response.status_code}.')
+            return False
+        except httpx.RequestError as e:
+            console.print(f'[{tracker}] Network error while validating credentials for {tracker}: {e.__class__.__name__}.')
+            return False
+
+    async def get_file_info(self, meta):
+        info_file_path = ''
+        if meta.get('is_disc') == 'BDMV':
+            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
+        else:
+            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
+
+        if os.path.exists(info_file_path):
+            with open(info_file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+
+    async def get_lang(self, meta, tracker):
+        self.language_map(tracker)
+        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=tracker)
+
+        found_subs_strings = meta.get('subtitle_languages', [])
+        subtitle_ids = set()
+        for lang_str in found_subs_strings:
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                subtitle_ids.add(target_id)
+        final_subtitle_ids = sorted(list(subtitle_ids))
+
+        found_audio_strings = meta.get('audio_languages', [])
+        audio_ids = set()
+        for lang_str in found_audio_strings:
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                audio_ids.add(target_id)
+        final_audio_ids = sorted(list(audio_ids))
+
+        return {
+            'subtitles[]': final_subtitle_ids,
+            'languages[]': final_audio_ids
+        }
+
+    async def img_host(self, meta, tracker, tracker_url, session, referer, image_bytes: bytes, filename: str) -> Optional[str]:
+        upload_url = f'{tracker_url}/upload'
+
+        headers = {
+            'Referer': referer,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+            'Origin': tracker_url,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'
+        }
+
+        data = {
+            '_token': self.auth_token,
+            'qquuid': str(uuid.uuid4()),
+            'qqfilename': filename,
+            'qqtotalfilesize': str(len(image_bytes))
+        }
+
+        files = {'qqfile': (filename, image_bytes, 'image/png')}
+
+        try:
+            response = await session.post(upload_url, headers=headers, data=data, files=files)
+
+            if response.is_success:
+                json_data = response.json()
+                if json_data.get('success'):
+                    image_id = json_data.get('imageId')
+                    return str(image_id)
+                else:
+                    error_message = json_data.get('error', 'Unknown image host error.')
+                    print(f'{tracker}: Error uploading {filename}: {error_message}')
+                    return None
+            else:
+                print(f'{tracker}: Error uploading {filename}: Status {response.status_code} - {response.text}')
+                return None
+        except Exception as e:
+            print(f'{tracker}: Exception when uploading {filename}: {e}')
+            return None
+
+    async def get_screenshots(self, meta, tracker, session, referer):
+        screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
+        local_files = sorted(screenshot_dir.glob('*.png'))
+        results = []
+
+        limit = 3 if meta.get('tv_pack', '') == 0 else 15
+
+        if local_files:
+            async def upload_local_file(path):
+                with open(path, 'rb') as f:
+                    image_bytes = f.read()
+                return await self.img_host(meta, referer, image_bytes, path.name)
+
+            paths = local_files[:limit] if limit else local_files
+
+            for path in tqdm(
+                paths,
+                total=len(paths),
+                desc=f'{tracker}: Uploading screenshots'
+            ):
+                result = await upload_local_file(path)
+                if result:
+                    results.append(result)
+
+        else:
+            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
+            if len(image_links) < 3:
+                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.')
+
+            async def upload_remote_file(url):
+                try:
+                    response = await session.get(url)
+                    response.raise_for_status()
+                    image_bytes = response.content
+                    filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
+                    return await self.img_host(meta, referer, image_bytes, filename)
+                except Exception as e:
+                    print(f'Failed to process screenshot from URL {url}: {e}')
+                    return None
+
+            links = image_links[:limit] if limit else image_links
+
+            for url in tqdm(
+                links,
+                total=len(links),
+                desc=f'{tracker}: Uploading screenshots'
+            ):
+                result = await upload_remote_file(url)
+                if result:
+                    results.append(result)
+
+        if len(results) < 3:
+            raise UploadException('UPLOAD FAILED: The image host did not return the minimum number of screenshots.')
+
+        return results
 
     def language_map(self, tracker):
         self.all_lang_map = {
