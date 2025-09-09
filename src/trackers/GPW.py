@@ -2,17 +2,16 @@
 import asyncio
 import httpx
 import json
-import langcodes
 import os
 import platform
 import re
 import unicodedata
 from bs4 import BeautifulSoup
-from langcodes.tag_parser import LanguageTagError
 from src.console import console
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
+from typing import Dict
 
 
 class GPW():
@@ -101,16 +100,6 @@ class GPW():
         return data
 
     async def get_container(self, meta):
-        '''
-        AVI
-        MPG
-        MP4
-        MKV
-        VOB IFO
-        ISO
-        m2ts
-        Other
-        '''
         container = None
         if meta['is_disc'] == 'BDMV':
             container = 'm2ts'
@@ -136,49 +125,25 @@ class GPW():
         else:
             return 3
 
-    async def codec(self, meta):
-        '''
-        * DivX
-        * XviD
-        * x264
-        * H.264
-        * x265
-        * H.265
-        * Other
-        '''
+    async def get_codec(self, meta):
         video_encode = meta.get('video_encode', '').strip().lower()
-        codec_final = meta.get('video_codec', '')
-        is_hdr = bool(meta.get('hdr'))
-
-        encode_map = {
-            'x265': 'x265',
-            'h.265': 'H.265',
-            'x264': 'x264',
-            'h.264': 'H.264',
-            'vp9': 'VP9',
-            'xvid': 'XviD',
-        }
-
-        for key, value in encode_map.items():
-            if key in video_encode:
-                if value in ['x265', 'H.265'] and is_hdr:
-                    return f'{value} HDR'
-                return value
-
-        codec_lower = codec_final.lower()
+        codec_final = meta.get('video_codec', '').strip().lower()
 
         codec_map = {
-            'hevc': 'x265',
-            'avc': 'x264',
-            'mpeg-2': 'MPEG-2',
-            'vc-1': 'VC-1',
+            'divx': 'DivX',
+            'xvid': 'XviD',
+            'x264': 'x264',
+            'h.264': 'H.264',
+            'x265': 'x265',
+            'h.265': 'H.265',
+            'hevc': 'H.265',
         }
 
         for key, value in codec_map.items():
-            if key in codec_lower:
-                return f"{value} HDR" if value == "x265" and is_hdr else value
+            if key in video_encode or key in codec_final:
+                return value
 
-        return codec_final if codec_final else "Outro"
+        return 'Other'
 
     async def get_audio_codec(self, meta):
         priority_order = [
@@ -225,7 +190,7 @@ class GPW():
 
         return title if title and title != meta.get('title') else ''
 
-    async def build_description(self, meta):
+    async def get_release_desc(self, meta):
         description = []
 
         base_desc = ''
@@ -267,12 +232,12 @@ class GPW():
         return youtube
 
     async def get_tags(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
         tags = ''
 
-        if tmdb_data and isinstance(tmdb_data.get('genres'), list):
+        genres = meta.get('genres')
+        if genres and isinstance(genres, list):
             genre_names = [
-                g.get('name', '') for g in tmdb_data['genres']
+                g.get('name', '') for g in genres
                 if isinstance(g.get('name'), str) and g.get('name').strip()
             ]
 
@@ -287,78 +252,81 @@ class GPW():
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = await asyncio.to_thread(input, f'Enter the genres (in {self.tracker} format): ')
 
         return tags
 
     async def search_existing(self, meta, disctype):
-        is_tv_pack = bool(meta.get('tv_pack'))
+        group_id = await self.get_groupid(meta)
+        if not group_id:
+            return []
 
-        search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
-
+        search_url = f'{self.base_url}/torrents.php?id={group_id}'
         found_items = []
+        upload_resolution = meta.get('resolution')
+
         try:
             response = await self.session.get(search_url)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            torrent_table = soup.find('table', id='torrent_table')
+            torrent_table = soup.find('table', id='torrent_details')
             if not torrent_table:
                 return []
 
-            group_links = set()
-            for group_row in torrent_table.find_all('tr'):
-                link = group_row.find('a', href=re.compile(r'torrents\.php\?id=\d+'))
-                if link and 'torrentid' not in link.get('href', ''):
-                    group_links.add(link['href'])
+            for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
+                title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
+                if not title_link:
+                    continue
 
-            if not group_links:
-                return []
+                description_text = ' '.join(title_link.get_text(strip=True).split())
 
-            for group_link in group_links:
-                group_url = f'{self.base_url}/{group_link}'
-                group_response = await self.session.get(group_url)
-                group_response.raise_for_status()
-                group_soup = BeautifulSoup(group_response.text, 'html.parser')
+                if upload_resolution and upload_resolution not in description_text:
+                    continue
 
-                for torrent_row in group_soup.find_all('tr', id=re.compile(r'^torrent\d+$')):
-                    desc_link = torrent_row.find('a', onclick=re.compile(r'gtoggle'))
-                    if not desc_link:
-                        continue
-                    description_text = ' '.join(desc_link.get_text(strip=True).split())
+                torrent_id = torrent_row.get('id', '').replace('torrent', '')
 
-                    torrent_id = torrent_row.get('id', '').replace('torrent', '')
-                    file_div = group_soup.find('div', id=f'files_{torrent_id}')
-                    if not file_div:
-                        continue
+                filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
+                filelist_response = await self.session.get(filelist_url)
+                filelist_response.raise_for_status()
+                filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
 
-                    is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
+                is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
 
-                    if is_existing_torrent_a_disc or is_tv_pack:
-                        path_div = file_div.find('div', class_='filelist_path')
-                        if path_div:
-                            folder_name = path_div.get_text(strip=True).strip('/')
-                            if folder_name:
-                                found_items.append(folder_name)
+                if is_existing_torrent_a_disc:
+                    root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
+                    if root_folder_item:
+                        folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
+                        if folder_name_tag:
+                            folder_name = folder_name_tag.get_text(strip=True)
+                            found_items.append(folder_name)
+                else:
+                    file_table = filelist_soup.find('table', class_='filelist_table')
+                    if not file_table:
+                        file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
+                        if file_list_container:
+                            for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
+                                filename = file_item.get_text(strip=True)
+                                if filename:
+                                    found_items.append(filename)
+                                    break
                     else:
-                        file_table = file_div.find('table', class_='filelist_table')
-                        if file_table:
-                            for row in file_table.find_all('tr'):
-                                if 'colhead_dark' not in row.get('class', []):
-                                    cell = row.find('td')
-                                    if cell:
-                                        filename = cell.get_text(strip=True)
-                                        if filename:
-                                            found_items.append(filename)
-                                            break
+                        for row in file_table.find_all('tr'):
+                            if 'colhead' not in row.get('class', []):
+                                cell = row.find('td')
+                                if cell:
+                                    filename = cell.get_text(strip=True)
+                                    if filename:
+                                        found_items.append(filename)
+                                        break
 
         except Exception as e:
-            console.print(f'[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]')
+            print(f'Ocorreu um erro inesperado ao processar a busca: {e}')
             return []
 
         return found_items
 
-    async def media_info(self, meta):
+    async def get_media_info(self, meta):
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
@@ -398,7 +366,7 @@ class GPW():
 
         return ''
 
-    async def processing_other(self, meta):
+    async def get_processing_other(self, meta):
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
 
@@ -445,103 +413,310 @@ class GPW():
             return 'N/A'
 
     async def get_remaster_title(self, meta):
-        '''
-        Collections
-        - Masters of Cinema → 'masters_of_cinema'
-        - The Criterion Collection → 'the_criterion_collection'
-        - Warner Archive Collection → 'warner_archive_collection'
+        REMMASTER_TAGS = {
+            # Collections
+            'masters_of_cinema': 'Masters of Cinema',
+            'the_criterion_collection': 'The Criterion Collection',
+            'warner_archive_collection': 'Warner Archive Collection',
+            # Editions
+            'director_s_cut': "Director's Cut",
+            'extended_edition': 'Extended Edition',
+            'rifftrax': 'Rifftrax',
+            'theatrical_cut': 'Theatrical Cut',
+            'uncut': 'Uncut',
+            'unrated': 'Unrated',
+            # Features
+            '2d_3d_edition': '2D/3D Edition',
+            '3d_anaglyph': '3D Anaglyph',
+            '3d_full_sbs': '3D Full SBS',
+            '3d_half_ou': '3D Half OU',
+            '3d_half_sbs': '3D Half SBS',
+            '2_disc_set': '2-Disc Set',
+            '2_in_1': '2in1',
+            '4k_restoration': '4K Restoration',
+            '4k_remaster': '4K Remaster',
+            'remaster': 'Remaster',
+            'extras': 'Extras',
+            'with_commentary': 'With Commentary',
+            # Other
+            'remux': 'Remux',
+            'dts_x': 'DTS:X',
+            'dolby_atmos': 'Dolby Atmos',
+            'dual_audio': 'Dual Audio',
+            'english_dub': 'English Dub',
+            '10_bit': '10-bit',
+            'dolby_vision': 'Dolby Vision',
+            'hdr10_plus': 'HDR10+',
+            'hdr10': 'HDR10',
+            'hlg': 'HLG'
+        }
 
-        Editions
-        - Director's Cut → 'director_s_cut'
-        - Extended Edition → 'extended_edition'
-        - Rifftrax → 'rifftrax'
-        - Theatrical Cut → 'theatrical_cut'
-        - Uncut → 'uncut'
-        - Unrated → 'unrated'
+        found_tags = []
 
-        Features
-        - 2D/3D Edition → '2d_3d_edition'
-        - 3D Anaglyph → '3d_anaglyph'
-        - 3D Full SBS → '3d_full_sbs'
-        - 3D Half OU → '3d_half_ou'
-        - 3D Half SBS → '3d_half_sbs'
-        - 2-Disc Set → '2_disc_set'
-        - 2in1 → '2_in_1'
-        - 4K Restoration → '4k_restoration'
-        - 4K Remaster → '4k_remaster'
-        - Remaster → 'remaster'
-        - Dual Audio → 'dual_audio'
-        - English Dub → 'english_dub'
-        - Extras → 'extras'
-        - With Commentary → 'with_commentary'
-        '''
+        def add_tag(tag_id):
+            if tag_id and tag_id not in found_tags:
+                found_tags.append(tag_id)
+
+        # Collections
+        distributor = meta.get('distributor', '').upper()
+        if distributor in ('WARNER ARCHIVE', 'WARNER ARCHIVE COLLECTION', 'WAC'):
+            add_tag('warner_archive_collection')
+        elif distributor in ('CRITERION', 'CRITERION COLLECTION', 'CC'):
+            add_tag('the_criterion_collection')
+        elif distributor in ('MASTERS OF CINEMA', 'MOC'):
+            add_tag('masters_of_cinema')
+
+        # Editions
+        edition = meta.get('edition', '').lower()
+        if "director's cut" in edition:
+            add_tag('director_s_cut')
+        elif 'extended' in edition:
+            add_tag('extended_edition')
+        elif 'theatrical' in edition:
+            add_tag('theatrical_cut')
+        elif 'rifftrax' in edition:
+            add_tag('rifftrax')
+        elif 'uncut' in edition:
+            add_tag('uncut')
+        elif 'unrated' in edition:
+            add_tag('unrated')
+
+        # Audio
+        audio = meta.get('audio', '')
+        if 'DTS:X' in audio:
+            add_tag('dts_x')
+        if 'Atmos' in audio:
+            add_tag('dolby_atmos')
+        if meta.get('dual_audio', False):
+            add_tag('dual_audio')
+
+        is_10_bit = False
+        if meta.get('is_disc') == 'BDMV':
+            try:
+                bit_depth_str = meta['discs'][0]['bdinfo']['video'][0]['bit_depth']
+                if '10' in bit_depth_str:
+                    is_10_bit = True
+            except (KeyError, IndexError, TypeError):
+                pass
+        else:
+            if str(meta.get('bit_depth')) == '10':
+                is_10_bit = True
+
+        # Video / HDR
+        hdr = meta.get('hdr', '')
+        if not hdr and is_10_bit:
+            add_tag('10_bit')
+        if 'DV' in hdr:
+            add_tag('dolby_vision')
+        if 'HDR' in hdr:
+            if 'HDR10+' in hdr:
+                add_tag('hdr10_plus')
+            else:
+                add_tag('hdr10')
+        if 'HLG' in hdr:
+            add_tag('hlg')
+
+        if meta.get('extras'):
+            add_tag('extras')
+
+        # Commentary
+        has_commentary = meta.get('has_commentary', False) or meta.get('manual_commentary', False)
+
+        # Ensure 'with_commentary' is last if it exists
+        if has_commentary:
+            add_tag('with_commentary')
+            if 'with_commentary' in found_tags:
+                found_tags.remove('with_commentary')
+                found_tags.append('with_commentary')
+
+        if not found_tags:
+            return '', ''
+
+        remaster_title_show = ' / '.join(found_tags)
+
+        display_titles = [REMMASTER_TAGS.get(tag, tag) for tag in found_tags]
+        remaster_title = ' / '.join(display_titles)
+
+        return remaster_title, remaster_title_show
 
     async def get_groupid(self, meta):
-        ''''''
+        url = f'{self.base_url}/upload.php'
+        params = {
+            'action': 'movie_info',
+            'imdbid': meta.get('imdb_info', {}).get('imdbID')
+        }
 
-    async def source(self, meta):
-        '''
-        * VHS
-        * DVD
-        * HD-DVD
-        * TV
-        * HDTV
-        * WEB
-        * Blu-ray
-        * Other
-        '''
+        try:
+            response = await self.session.get(url, params=params)
+            response.raise_for_status()
+        except httpx.RequestError as e:
+            console.print(f'[bold red]Erro de rede ao buscar groupid: {e}[/bold red]')
+            return None
+        except httpx.HTTPStatusError as e:
+            console.print(f'[bold red]Erro HTTP ao buscar groupid: Status {e.response.status_code}[/bold red]')
+            return None
 
-    async def processing(self, meta):
-        '''
-        * Encode
-        * Remux
-        * DIY
-        * Untouched
-        '''
+        try:
+            data = response.json()
+        except Exception as e:
+            console.print(f'[bold red]Erro ao decodificar JSON da resposta groupid: {e}[/bold red]')
+            return None
 
-    async def codec_other(self, meta):
-        '''
-        Se não tiver nos codecs abaixo, tem que retornar nessa função o codec manualmente, senão retornar ''
-        * DivX
-        * XviD
-        * x264
-        * H.264
-        * x265
-        * H.265
-        * Other
-        '''
+        if data.get('status', '') == 'success':
+            return False
+        elif data.get('error', {}).get('Dupe') is True:
+            groupid = data.get('error', {}).get('GroupID')
+            return str(groupid)
+
+        return None
+
+    async def get_additional_data(self, meta):
+        tmdb_data = await self.ch_tmdb_data(self, meta)
+        data = {
+            'desc': tmdb_data.get('overview', ''),
+            'image': meta.get('poster'),
+            'imdb': meta.get('imdb_info', {}).get('imdbID'),
+            'maindesc': meta.get('overview', ''),
+            'name': meta.get('title'),
+            'releasetype': await self._get_movie_type,
+            'subname': await self.get_title(meta),
+            'tags': await self.get_tags(meta),
+            'year': meta.get('year'),
+        }
+
+        data.update({await self._get_artist_data(meta)})
+
+        return data
+
+    def _get_artist_data(self, meta) -> Dict[str, str]:
+        console.print('--- Please enter the artist details ---')
+
+        imdb_id = input('Enter IMDb ID (e.g., nm0000138): ')
+        english_name = input('Enter English name: ')
+        chinese_name = input('Enter Chinese name (optional, press Enter to skip): ')
+
+        roles = {
+            '1': 'Director',
+            '2': 'Writer',
+            '3': 'Producer',
+            '4': 'Composer',
+            '5': 'Cinematographer',
+            '6': 'Actor'
+        }
+
+        console.print('\nSelect the artist\'s role:')
+        for key, value in roles.items():
+            console.print(f'  {key}: {value}')
+
+        importance_choice = ''
+        while importance_choice not in roles:
+            importance_choice = input('Enter the number for the role (1-6): ')
+            if importance_choice not in roles:
+                console.print('Invalid selection. Please choose a number between 1 and 6.')
+
+        post_data = {
+            'artist_ids[]': imdb_id,
+            'artists[]': english_name,
+            'artists_sub[]': chinese_name,
+            'importance[]': importance_choice
+        }
+
+        return post_data
+
+    async def _get_movie_type(self, meta):
+        movie_type = ''
+        imdb_info = meta.get('imdb_info', {})
+        if imdb_info:
+            imdbType = imdb_info.get('type', 'movie').lower()
+            if imdbType in ("movie", "tv movie", 'tvmovie'):
+                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
+                    movie_type = "Feature Film"
+                else:
+                    movie_type = "Short Film"
+
+        return movie_type
+
+    async def get_source(self, meta):
+        source_type = meta.get('type', '').lower()
+
+        if source_type == 'disc':
+            is_disc = meta.get('is_disc', '').upper()
+            if is_disc == 'BDMV':
+                return 'Blu-ray'
+            elif is_disc in ('HDDVD', 'DVD'):
+                return 'DVD'
+            else:
+                return 'Other'
+
+        keyword_map = {
+            'webdl': 'WEB',
+            'webrip': 'WEB',
+            'web': 'WEB',
+            'remux': 'Blu-ray',
+            'encode': 'Blu-ray',
+            'bdrip': 'Blu-ray',
+            'brrip': 'Blu-ray',
+            'hdtv': 'HDTV',
+            'sdtv': 'TV',
+            'dvdrip': 'DVD',
+            'hd-dvd': 'HD-DVD',
+            'dvdscr': 'DVD',
+            'pdtv': 'TV',
+            'uhdtv': 'HDTV',
+            'vhs': 'VHS',
+            'tvrip': 'TVRip',
+        }
+
+        return keyword_map.get(source_type, 'Other')
+
+    async def get_processing(self, meta):
+        type_map = {
+            'ENCODE': 'Encode',
+            'REMUX': 'Remux',
+            'DIY': 'DIY',
+            'UNTOUCHED': 'Untouched'
+        }
+        release_type = meta.get('type', '').strip().upper()
+        return type_map.get(release_type, 'Untouched')
 
     async def fetch_data(self, meta, disctype):
         self.load_localized_data(meta)
         await self.validate_credentials(meta)
-        remaster_title = await self.get_remaster_title(meta)
+        remaster_title, remaster_title_show = await self.get_remaster_title(meta)
+        codec = await self.get_codec(meta)
+        groupid = await self.get_groupid(meta)
 
-        data = {
+        data = {}
+
+        if not groupid:
+            data.update({await self.get_additional_data(meta)})
+
+        data.update({
             'audio_51': 'on' if meta.get('channels', '') == '5.1' else 'off',
             'audio_71': 'on' if meta.get('channels', '') == '7.1' else 'off',
             'auth': self.auth_token,
-            'codec_other': await self.codec_other(meta),
-            'codec': await self.codec(meta),
+            'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
+            'codec': codec,
             'container': await self.get_container(meta),
             'dolby_atmos': 'on' if 'atmos' in meta.get('audio', '').lower() else 'off',
-            'groupid': await self.get_groupid(meta),
-            'mediainfo[]': await self.media_info(meta),
+            'groupid': groupid if groupid else '',
+            'mediainfo[]': await self.get_media_info(meta),
             'movie_edition_information': 'on' if remaster_title else 'off',
-            'processing_other': await self.processing_other(meta) if meta.get('type') == 'DISC' else '',
-            'processing': await self.processing(meta),
-            'release_desc': await self.build_description(meta),
+            'processing_other': await self.get_processing_other(meta) if meta.get('type') == 'DISC' else '',
+            'processing': await self.get_processing(meta),
+            'release_desc': await self.get_release_desc(meta),
             'remaster_custom_title': '',
-            'remaster_title_show': remaster_title.get('remaster_title_show'),
-            'remaster_title': remaster_title.get('remaster_title'),
+            'remaster_title_show': remaster_title_show,
+            'remaster_title': remaster_title,
             'remaster_year': '',
             'resolution_height': '',
             'resolution_width': '',
             'resolution': meta.get('resolution'),
             'source_other': '',
-            'source': await self.source(meta),
+            'source': await self.get_source(meta),
             'submit': 'true',
             'subtitle_type': '1' if meta.get('subtitle_languages', []) else '3',  # 1. Softcoded subtitles / 2.  Hardcoded subtitles / 3. No Subtitles
-        }
+        })
 
         return data
 
