@@ -97,10 +97,7 @@ class AZ(AZTrackerBase):
 
         origin_countries_codes = meta.get('origin_country', [])
 
-        if any(code in az_allowed_countries for code in origin_countries_codes):
-            return True
-
-        elif any(code in phd_countries for code in origin_countries_codes):
+        if any(code in phd_countries for code in origin_countries_codes):
             meta['az_rule'] = (
                 warning + 'DO NOT upload content from major English speaking countries '
                 '(USA, UK, Canada, etc). Upload this to our sister site PrivateHD.to instead.'
