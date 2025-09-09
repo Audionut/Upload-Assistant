@@ -515,7 +515,12 @@ class AZTrackerBase():
         tags = [str(tag_id) for tag_id in tag_ids_results if tag_id is not None]
 
         if meta.get('personalrelease', False):
-            tags.insert(0, '3773')
+            if self.tracker == 'AZ':
+                tags.insert(0, '3773')
+            elif self.tracker == 'CZ':
+                tags.insert(0, '1594')
+            elif self.tracker == 'PHD':
+                tags.insert(0, '1448')
 
         return tags
 
