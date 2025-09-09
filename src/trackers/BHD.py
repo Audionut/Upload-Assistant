@@ -292,6 +292,15 @@ class BHD():
                                 desc.write(f"{img_url}\n")
 
                 desc.write("[/comparison][/center]\n\n")
+
+            try:
+                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                    desc.write(tonemapped_header)
+                    desc.write("\n\n")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+
             if f'{self.tracker}_images_key' in meta:
                 images = meta[f'{self.tracker}_images_key']
             else:

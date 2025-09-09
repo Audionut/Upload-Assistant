@@ -36,10 +36,11 @@ class TL():
         self.base_url = 'https://www.torrentleech.org'
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
+        self.torrent_url = f'{self.base_url}/torrent/'
         self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant</a></center>"""
         self.banned_groups = [""]
         self.session = httpx.AsyncClient(timeout=60.0)
-        self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload')
+        self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload', False)
         self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
         self.announce_url_1 = f'https://tracker.torrentleech.org/a/{self.passkey}/announce'
         self.announce_url_2 = f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
@@ -47,8 +48,8 @@ class TL():
             'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
         })
 
-    async def login(self, meta):
-        if self.api_upload:
+    async def login(self, meta, force=False):
+        if self.api_upload and not force:
             return True
 
         self.cookies_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/TL.txt")
@@ -62,9 +63,21 @@ class TL():
         self.session.cookies.update(await common.parseCookieFile(self.cookies_file))
 
         try:
-            response = await self.session.get(self.http_upload_url, timeout=10)
-            if response.status_code == 200 and 'torrents/upload' in str(response.url):
-                return True
+            if force:
+                response = await self.session.get('https://www.torrentleech.org/torrents/browse/index', timeout=10)
+                if response.status_code == 301 and 'torrents/browse' in str(response.url):
+                    if meta['debug']:
+                        console.print(f"[bold green]Logged in to '{self.tracker}' with cookies.[/bold green]")
+                    return True
+            elif not force:
+                response = await self.session.get(self.http_upload_url, timeout=10)
+                if response.status_code == 200 and 'torrents/upload' in str(response.url):
+                    if meta['debug']:
+                        console.print(f"[bold green]Logged in to '{self.tracker}' with cookies.[/bold green]")
+                    return True
+            else:
+                console.print(f"[bold red]Login to '{self.tracker}' with cookies failed. Please check your cookies.[/bold red]")
+                return False
 
         except httpx.RequestError as e:
             console.print(f"[bold red]Error while validating credentials for '{self.tracker}': {e}[/bold red]")
@@ -199,14 +212,15 @@ class TL():
         return name
 
     async def search_existing(self, meta, disctype):
-        await self.login(meta)
+        login = await self.login(meta, force=True)
+        if not login:
+            meta['skipping'] = "TL"
+            if meta['debug']:
+                console.print(f"[bold red]Skipping upload to '{self.tracker}' as login failed.[/bold red]")
+            return
         cat_id = await self.get_cat_id(self, meta)
 
         dupes = []
-
-        if self.api_upload:
-            console.print(f"[bold yellow]Cannot search for duplicates on {self.tracker} when using API upload.[/bold yellow]")
-            return dupes
 
         search_name = meta["title"]
         resolution = meta["resolution"]
@@ -284,22 +298,21 @@ class TL():
                     data=data
                 )
                 if not response.text.isnumeric():
-                    meta['tracker_status'][self.tracker]['status_message'] = response.text
+                    meta['tracker_status'][self.tracker]['status_message'] = "data error: " + response.text
 
-                announce_list = [
-                    self.announce_url_1,
-                    self.announce_url_2
-                ]
-                common = COMMON(config=self.config)
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_list, comment='')
+                if response.text.isnumeric():
+                    meta['tracker_status'][self.tracker]['status_message'] = f"{self.torrent_url}{response.text}"
+                    meta['tracker_status'][self.tracker]['torrent_id'] = response.text
+                    await self.api_torrent_download(meta, self.passkey, response.text)
 
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
 
     async def upload_http(self, meta, cat_id):
-        if not await self.login(meta):
-            meta['tracker_status'][self.tracker]['status_message'] = "Login with cookies failed."
+        login = await self.login(meta)
+        if not login:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: Login with cookies failed."
             return
 
         await self.generate_description(meta)
@@ -351,6 +364,7 @@ class TL():
                         torrent_id = response.headers['location'].replace('/successfulupload?torrentID=', '')
                         torrent_url = f"{self.base_url}/torrent/{torrent_id}"
                         meta['tracker_status'][self.tracker]['status_message'] = torrent_url
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                         announce_list = [
                             self.announce_url_1,
@@ -373,3 +387,25 @@ class TL():
                     meta['tracker_status'][self.tracker]['status_message'] = str(e)
             else:
                 console.print(data)
+
+    async def api_torrent_download(self, meta, passkey, torrent_id):
+        torrent_url = f"{self.http_upload_url}apidownload"
+        data = {
+            'announcekey': passkey,
+            'torrentID': torrent_id
+        }
+
+        try:
+            response = await self.session.post(torrent_url, data=data)
+            response.raise_for_status()
+
+            torrent_filename = f"[{self.tracker}].torrent"
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}"
+
+            with open(torrent_path, 'wb') as f:
+                f.write(response.content)
+
+            console.print(f"[green]Downloaded torrent: {torrent_filename}[/green]")
+
+        except Exception as e:
+            console.print(f"[bold red]Error downloading torrent from {self.tracker}: {e}[/bold red]")

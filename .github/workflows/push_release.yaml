@@ -185,6 +185,13 @@ jobs:
                   DISPLAY_AUTHOR="@$AUTHOR"
                 fi
                 
+                # Map known username variations
+                case "$DISPLAY_AUTHOR" in
+                  "@flower"|"@Flower") DISPLAY_AUTHOR="@flowerey" ;;
+                  # Add other mappings as needed
+                  # "@oldname") DISPLAY_AUTHOR="@newname" ;;
+                esac
+                
                 echo "* ${TITLE} by ${DISPLAY_AUTHOR} in https://github.com/${{ github.repository }}/pull/${PR_NUMBER}"
                 FOUND_CHANGES=true
                 
@@ -195,7 +202,13 @@ jobs:
                 # Clean up branch name for display
                 CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's|-| |g' | sed 's/_/ /g')
                 
-                echo "* Merge branch '${BRANCH_NAME}' by @${AUTHOR}"
+                # Apply username mapping to commit author as well
+                MAPPED_AUTHOR="@$AUTHOR"
+                case "$MAPPED_AUTHOR" in
+                  "@flower"|"@Flower") MAPPED_AUTHOR="@flowerey" ;;
+                esac
+                
+                echo "* Merge branch '${BRANCH_NAME}' by ${MAPPED_AUTHOR}"
                 FOUND_CHANGES=true
                 
               # Handle direct commits (non-merge commits that might be significant)
@@ -204,7 +217,13 @@ jobs:
                 if [[ ! $SUBJECT =~ ^Update\ version\.py ]] && [[ ! $SUBJECT =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! $AUTHOR =~ github-actions ]]; then
                   # Only include if it looks like a meaningful change
                   if [[ $SUBJECT =~ ^(feat|fix|add|update|improve|remove|refactor): ]] || [[ ${#SUBJECT} -gt 10 ]]; then
-                    echo "* ${SUBJECT} by @${AUTHOR} in ${COMMIT_HASH:0:7}"
+                    # Apply username mapping to commit author
+                    MAPPED_AUTHOR="@$AUTHOR"
+                    case "$MAPPED_AUTHOR" in
+                      "@flower"|"@Flower") MAPPED_AUTHOR="@flowerey" ;;
+                    esac
+                    
+                    echo "* ${SUBJECT} by ${MAPPED_AUTHOR} in ${COMMIT_HASH:0:7}"
                     FOUND_CHANGES=true
                   fi
                 fi

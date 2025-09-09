@@ -90,7 +90,7 @@ async def gen_desc(meta):
                 console.print(f"[ERROR] Failed to fetch description from link: {e}")
 
         if descfile and os.path.isfile(descfile) and not content_written:
-            with open(descfile, 'r') as f:
+            with open(descfile, 'r', encoding='utf-8') as f:
                 file_content = f.read()
             if clean_text(file_content):
                 description.write(file_content)

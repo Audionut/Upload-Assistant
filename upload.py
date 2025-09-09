@@ -330,6 +330,11 @@ async def process_meta(meta, base_dir, bot=None):
                                 meta['image_sizes'] = image_data['image_sizes']
                                 if meta.get('debug'):
                                     console.print("[cyan]Loaded previously saved image sizes")
+
+                            if 'tonemapped' in image_data and not meta.get('tonemapped'):
+                                meta['tonemapped'] = image_data['tonemapped']
+                                if meta.get('debug'):
+                                    console.print("[cyan]Loaded previously saved tonemapped status[/cyan]")
                     except Exception as e:
                         console.print(f"[yellow]Could not load saved image data: {str(e)}")
 
@@ -456,7 +461,8 @@ async def process_meta(meta, base_dir, bot=None):
                     try:
                         image_data = {
                             "image_list": meta.get('image_list', []),
-                            "image_sizes": meta.get('image_sizes', {})
+                            "image_sizes": meta.get('image_sizes', {}),
+                            "tonemapped": meta.get('tonemapped', False)
                         }
 
                         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json", 'w') as img_file:

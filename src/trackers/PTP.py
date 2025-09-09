@@ -666,6 +666,8 @@ class PTP():
         desc = desc.replace("[list]", "").replace("[/list]", "")
         desc = desc.replace("[ul]", "").replace("[/ul]", "")
         desc = desc.replace("[ol]", "").replace("[/ol]", "")
+        desc = desc.replace('[code', '[quote')
+        desc = desc.replace('[/code]', '[/quote]')
         desc = re.sub(r"\[img=[^\]]+\]", "[img]", desc)
         return desc
 
@@ -707,6 +709,14 @@ class PTP():
                     if base2ptp.strip() != "":
                         desc.write(base2ptp)
                         desc.write("\n\n")
+                    try:
+                        if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                            tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                            tonemapped_header = self.convert_bbcode(tonemapped_header)
+                            desc.write(tonemapped_header)
+                            desc.write("\n\n")
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
                     for img_index in range(len(images[:int(meta['screens'])])):
                         raw_url = meta['image_list'][img_index]['raw_url']
                         desc.write(f"[img]{raw_url}[/img]\n")
@@ -809,6 +819,14 @@ class PTP():
                             if base2ptp.strip() != "":
                                 desc.write(base2ptp)
                                 desc.write("\n\n")
+                            try:
+                                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                                    tonemapped_header = self.convert_bbcode(tonemapped_header)
+                                    desc.write(tonemapped_header)
+                                    desc.write("\n\n")
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
                             for img_index in range(min(multi_screens, len(meta['image_list']))):
                                 raw_url = meta['image_list'][img_index]['raw_url']
                                 desc.write(f"[img]{raw_url}[/img]\n")
@@ -971,6 +989,15 @@ class PTP():
 
                         desc.write("[/comparison]\n\n")
 
+                try:
+                    if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                        tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                        tonemapped_header = self.convert_bbcode(tonemapped_header)
+                        desc.write(tonemapped_header)
+                        desc.write("\n\n")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+
                 for img_index in range(len(images[:int(meta['screens'])])):
                     raw_url = meta['image_list'][img_index]['raw_url']
                     desc.write(f"[img]{raw_url}[/img]\n")
@@ -992,6 +1019,14 @@ class PTP():
                             desc.write("\n\n")
                         mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
+                        try:
+                            if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                                tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                                tonemapped_header = self.convert_bbcode(tonemapped_header)
+                                desc.write(tonemapped_header)
+                                desc.write("\n\n")
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
                         for img_index in range(min(multi_screens, len(meta['image_list']))):
                             raw_url = meta['image_list'][img_index]['raw_url']
                             desc.write(f"[img]{raw_url}[/img]\n")

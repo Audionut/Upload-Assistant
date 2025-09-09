@@ -183,9 +183,9 @@ class HDB():
             if 'HDR10+' not in meta['hdr']:
                 hdb_name = hdb_name.replace('HDR', 'HDR10')
         if meta.get('type') in ('WEBDL', 'WEBRIP', 'ENCODE'):
-            hdb_name = hdb_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1).replace('Atmos', ''))
+            hdb_name = hdb_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1).replace(' Atmos', ''))
         else:
-            hdb_name = hdb_name.replace(meta['audio'], meta['audio'].replace('Atmos', ''))
+            hdb_name = hdb_name.replace(meta['audio'], meta['audio'].replace(' Atmos', ''))
         hdb_name = hdb_name.replace(meta.get('aka', ''), '')
         if meta.get('imdb_info'):
             hdb_name = hdb_name.replace(meta['title'], meta['imdb_info']['aka'])

@@ -210,6 +210,15 @@ class MTV():
             ):
                 desc.write("[mediainfo]" + meta['discs'][0]['vob_mi'] + "[/mediainfo]\n\n")
 
+            try:
+                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                    console.print("[green]Adding tonemapped header to description")
+                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                    desc.write(tonemapped_header)
+                    desc.write("\n\n")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+
             if f'{self.tracker}_images_key' in meta:
                 images = meta[f'{self.tracker}_images_key']
             else:

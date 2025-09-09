@@ -274,7 +274,13 @@ class OE():
             desc = bbcode.convert_pre_to_code(desc)
             desc = bbcode.convert_hide_to_spoiler(desc)
             desc = bbcode.convert_comparison_to_collapse(desc, 1000)
-
+            try:
+                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                    desc = desc + tonemapped_header
+                    desc = desc + "\n\n"
+            except Exception as e:
+                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
             desc = desc.replace('[img]', '[img=300]')
             descfile.write(desc)
             if f'{self.tracker}_images_key' in meta:
