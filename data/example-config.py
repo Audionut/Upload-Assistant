@@ -270,7 +270,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FF, FL, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -433,6 +433,12 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
+        },
+        "GPW": {
+            "link_dir_name": "",
+            # for GPW to work you need to export cookies from https://greatposterwall.com using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/GPW.txt
+            "announce_url": "https://tracker.greatposterwall.com/<PASSKEY>/announce",
         },
         "HDB": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
