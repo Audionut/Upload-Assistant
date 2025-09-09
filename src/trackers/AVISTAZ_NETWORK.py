@@ -193,13 +193,13 @@ class AZTrackerBase():
 
     async def search_existing(self, meta, disctype):
         if not await self.rules(meta):
-            console.print(f"[red]{meta[f'{self.tracker}_rule']}[/red]")
-            meta['skipping'] = f"{self.tracker}"
+            console.print(f"[red]{meta[f'{self.tracker.lower()}_rule']}[/red]")
+            meta['skipping'] = f'{self.tracker}'
             return
 
         if not await self.get_media_code(meta):
             console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
-            meta['skipping'] = f"{self.tracker}"
+            meta['skipping'] = f'{self.tracker}'
             return
 
         if meta.get('resolution') == '2160p':

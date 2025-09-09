@@ -143,7 +143,7 @@ class AZ(AZTrackerBase):
                 return False
 
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-        if resolution > 600:
+        if resolution < 600:
             meta['az_rule'] = warning + 'Video: A minimum resolution of 600 pixel width.'
             return False
 
