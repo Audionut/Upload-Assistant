@@ -123,7 +123,7 @@ class GPW():
         if found_language_strings:
             return [lang.lower() for lang in found_language_strings]
         else:
-            return 3
+            return []
 
     async def get_codec(self, meta):
         video_encode = meta.get('video_encode', '').strip().lower()
@@ -234,13 +234,10 @@ class GPW():
     async def get_tags(self, meta):
         tags = ''
 
-        genres = meta.get('genres')
-        if genres and isinstance(genres, list):
-            genre_names = [
-                g.get('name', '') for g in genres
-                if isinstance(g.get('name'), str) and g.get('name').strip()
-            ]
-
+        genres = meta.get('genres', '')
+        # Handle if genres is a string like "War, History, Thriller"
+        if genres and isinstance(genres, str):
+            genre_names = [g.strip() for g in genres.split(',') if g.strip()]
             if genre_names:
                 tags = ', '.join(
                     unicodedata.normalize('NFKD', name)
@@ -571,25 +568,24 @@ class GPW():
         return None
 
     async def get_additional_data(self, meta):
-        tmdb_data = await self.ch_tmdb_data(self, meta)
+        tmdb_data = await self.ch_tmdb_data(meta)
         data = {
             'desc': tmdb_data.get('overview', ''),
             'image': meta.get('poster'),
             'imdb': meta.get('imdb_info', {}).get('imdbID'),
             'maindesc': meta.get('overview', ''),
             'name': meta.get('title'),
-            'releasetype': await self._get_movie_type,
+            'releasetype': self._get_movie_type(meta),
             'subname': await self.get_title(meta),
             'tags': await self.get_tags(meta),
             'year': meta.get('year'),
         }
-
-        data.update({await self._get_artist_data(meta)})
+        data.update(self._get_artist_data(meta))
 
         return data
 
     def _get_artist_data(self, meta) -> Dict[str, str]:
-        console.print('--- Please enter the artist details ---')
+        console.print('--- This film is not registered, please enter details of 1 artist ---')
 
         imdb_id = input('Enter IMDb ID (e.g., nm0000138): ')
         english_name = input('Enter English name: ')
@@ -623,7 +619,7 @@ class GPW():
 
         return post_data
 
-    async def _get_movie_type(self, meta):
+    def _get_movie_type(self, meta):
         movie_type = ''
         imdb_info = meta.get('imdb_info', {})
         if imdb_info:
@@ -689,7 +685,7 @@ class GPW():
         data = {}
 
         if not groupid:
-            data.update({await self.get_additional_data(meta)})
+            data.update(await self.get_additional_data(meta))
 
         data.update({
             'audio_51': 'on' if meta.get('channels', '') == '5.1' else 'off',
@@ -715,7 +711,8 @@ class GPW():
             'source_other': '',
             'source': await self.get_source(meta),
             'submit': 'true',
-            'subtitle_type': '1' if meta.get('subtitle_languages', []) else '3',  # 1. Softcoded subtitles / 2.  Hardcoded subtitles / 3. No Subtitles
+            'subtitle_type': ('2' if meta.get('hardcoded-subs', False) else '1' if meta.get('subtitle_languages', []) else '3'),
+            'subtitles[]': await self.get_subtitle(meta),
         })
 
         return data
@@ -736,11 +733,15 @@ class GPW():
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
 
-                if response.status_code in (302, 303):
-                    status_message = 'Enviado com sucesso.'
+                # Try to find the torrent id from the response HTML
+                match = re.search(r'torrentid=(\d+)', response.text)
+                if match:
+                    torrent_id = match.group(1)
+                    status_message = 'Uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 else:
-                    status_message = 'O upload pode ter falhado, verifique. '
+                    status_message = 'It may have uploaded, go check '
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
