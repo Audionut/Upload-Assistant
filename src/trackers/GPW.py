@@ -249,7 +249,6 @@ class GPW():
         tags = ''
 
         genres = meta.get('genres', '')
-        # Handle if genres is a string like "War, History, Thriller"
         if genres and isinstance(genres, str):
             genre_names = [g.strip() for g in genres.split(',') if g.strip()]
             if genre_names:
@@ -268,6 +267,11 @@ class GPW():
         return tags
 
     async def search_existing(self, meta, disctype):
+        if meta['category'] != 'MOVIE':
+            console.print(f'{self.tracker}: Only feature film, short film, live performance and live performance are allowed on {self.tracker}')
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         group_id = await self.get_groupid(meta)
         if not group_id:
             return []
@@ -646,14 +650,22 @@ class GPW():
         audio = meta.get('audio', '').lower()
         hdr = meta.get('hdr', '')
         bit_depth = meta.get('bit_depth', '')
+        channels = meta.get('channels', '')
 
         flags = {}
 
         # audio flags
         if 'atmos' in audio:
             flags['dolby_atmos'] = 'on'
+
         if 'dts:x' in audio:
             flags['dts_x'] = 'on'
+
+        if channels == '5.1':
+            flags['audio_51'] = 'on'
+
+        if channels == '7.1':
+            flags['audio_71'] = 'on'
 
         # video flags
         if not hdr.strip() and bit_depth == '10':
@@ -661,6 +673,7 @@ class GPW():
 
         if 'DV' in hdr:
             flags['dolby_vision'] = 'on'
+
             if 'HDR' in hdr:
                 flags['hdr10plus' if 'HDR10+' in hdr else 'hdr10'] = 'on'
 
@@ -678,14 +691,12 @@ class GPW():
             data.update(await self.get_additional_data(meta))
 
         data.update({
-            'audio_51': 'on' if meta.get('channels', '') == '5.1' else 'off',
-            'audio_71': 'on' if meta.get('channels', '') == '7.1' else 'off',
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
             'container': await self.get_container(meta),
             'groupid': groupid if groupid else '',
             'mediainfo[]': await self.get_media_info(meta),
-            'movie_edition_information': 'on' if remaster_title else 'off',
+            'movie_edition_information': 'on' if remaster_title else '',
             'processing_other': await self.get_processing_other(meta) if meta.get('type') == 'DISC' else '',
             'processing': await self.get_processing(meta),
             'release_desc': await self.get_release_desc(meta),
@@ -710,6 +721,11 @@ class GPW():
         if meta.get('sfx_subtitles', False):
             data.update({
                 'special_effects_subtitles': 'on'
+            })
+
+        if meta.get('scene', False):
+            data.update({
+                'scene': 'on'
             })
 
         data.update(self.get_media_flags(meta))
