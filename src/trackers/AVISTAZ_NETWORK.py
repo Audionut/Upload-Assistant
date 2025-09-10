@@ -783,23 +783,26 @@ class AZTrackerBase():
             if response.status_code == 302:
                 torrent_url = response.headers['Location']
 
-                torrent_id = ''
-                match = re.search(r'/torrent/(\d+)', torrent_url)
-                if match:
-                    torrent_id = match.group(1)
-                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
                 # Even if you are uploading, you still need to download the .torrent from the website
                 # because it needs to be registered as a download before you can start seeding
                 download_url = torrent_url.replace('/torrent/', '/download/torrent/')
                 register_download = await self.session.get(download_url)
                 if register_download.status_code != 200:
-                    print(f'Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}'
-                          f'Error: {register_download.status_code}')
+                    status_message = (
+                        f'data error - Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}\n'
+                        f'Error: {register_download.status_code}'
+                    )
+                    meta['tracker_status'][self.tracker]['status_message'] = status_message
+                    return
 
                 await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
 
                 status_message = 'Torrent uploaded successfully.'
+
+                match = re.search(r'/torrent/(\d+)', torrent_url)
+                if match:
+                    torrent_id = match.group(1)
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                 if requests:
                     status_message += ' Your upload may fulfill existing requests, check prior console logs.'
@@ -810,12 +813,13 @@ class AZTrackerBase():
                     f.write(response.text)
 
                 status_message = (
+                    f"data error - It may have uploaded, go check\n"
                     f'Step 2 of upload to {self.tracker} failed.\n'
                     f'Status code: {response.status_code}\n'
                     f'URL: {response.url}\n'
                     f"The HTML response has been saved to '{failure_path}' for analysis."
                 )
-                meta['skipping'] = f'{self.tracker}'
+                meta['tracker_status'][self.tracker]['status_message'] = status_message
                 return
 
         else:
