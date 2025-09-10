@@ -9,6 +9,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 from src.console import console
 from src.languages import process_desc_language
+from src.rehostimages import check_hosts
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
 from typing import Dict
@@ -201,6 +202,34 @@ class GPW():
                 if base_desc:
                     description.append(base_desc)
 
+        # Screenshots
+        # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
+        approved_image_hosts = ['kshare', 'pixhost', 'ptpimg', 'pterclub', 'ilikeshots', 'imgbox']
+        url_host_mapping = {
+            'kshare.club': 'kshare',
+            'pixhost.to': 'pixhost',
+            'imgbox.com': 'imgbox',
+            'ptpimg.me': 'ptpimg',
+            'img.pterclub.com': 'pterclub',
+            'yes.ilikeshots.club': 'ilikeshots',
+        }
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+
+        if f'{self.tracker}_images_key' in meta:
+            images = meta[f'{self.tracker}_images_key']
+        else:
+            images = meta['image_list']
+        if images:
+            screenshots_block = '[center]\n'
+            for i, image in enumerate(images, start=1):
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f'[url={web_url}][img=350]{img_url}[/img][/url] '
+                if i % 2 == 0:
+                    screenshots_block += '\n'
+            screenshots_block += '\n[/center]'
+            description.append(screenshots_block)
+
         custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
         if custom_description_header:
             description.append(custom_description_header + '\n')
@@ -210,7 +239,16 @@ class GPW():
 
         final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            final_description = '\n'.join(filter(None, description))
+            from src.bbcode import BBCODE
+            bbcode = BBCODE()
+            desc = '\n\n'.join(filter(None, description))
+            desc = desc.replace('[sup]', '').replace('[/sup]', '')
+            desc = desc.replace('[sub]', '').replace('[/sub]', '')
+            desc = bbcode.remove_spoiler(desc)
+            desc = bbcode.convert_code_to_quote(desc)
+            desc = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", desc)
+            desc = re.sub(r'\[/(right|center|left)\]', "[/align]", desc)
+            final_description = re.sub(r'\n{3,}', '\n\n', desc)
             descfile.write(final_description)
 
         return final_description
@@ -436,16 +474,8 @@ class GPW():
             'extras': 'Extras',
             'with_commentary': 'With Commentary',
             # Other
-            'remux': 'Remux',
-            'dts_x': 'DTS:X',
-            'dolby_atmos': 'Dolby Atmos',
             'dual_audio': 'Dual Audio',
             'english_dub': 'English Dub',
-            '10_bit': '10-bit',
-            'dolby_vision': 'Dolby Vision',
-            'hdr10_plus': 'HDR10+',
-            'hdr10': 'HDR10',
-            'hlg': 'HLG'
         }
 
         found_tags = []
@@ -479,39 +509,8 @@ class GPW():
             add_tag('unrated')
 
         # Audio
-        audio = meta.get('audio', '')
-        if 'DTS:X' in audio:
-            add_tag('dts_x')
-        if 'Atmos' in audio:
-            add_tag('dolby_atmos')
         if meta.get('dual_audio', False):
             add_tag('dual_audio')
-
-        is_10_bit = False
-        if meta.get('is_disc') == 'BDMV':
-            try:
-                bit_depth_str = meta['discs'][0]['bdinfo']['video'][0]['bit_depth']
-                if '10' in bit_depth_str:
-                    is_10_bit = True
-            except (KeyError, IndexError, TypeError):
-                pass
-        else:
-            if str(meta.get('bit_depth')) == '10':
-                is_10_bit = True
-
-        # Video / HDR
-        hdr = meta.get('hdr', '')
-        if not hdr and is_10_bit:
-            add_tag('10_bit')
-        if 'DV' in hdr:
-            add_tag('dolby_vision')
-        if 'HDR' in hdr:
-            if 'HDR10+' in hdr:
-                add_tag('hdr10_plus')
-            else:
-                add_tag('hdr10')
-        if 'HLG' in hdr:
-            add_tag('hlg')
 
         if meta.get('extras'):
             add_tag('extras')
@@ -694,7 +693,6 @@ class GPW():
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
             'container': await self.get_container(meta),
-            'dolby_atmos': 'on' if 'atmos' in meta.get('audio', '').lower() else 'off',
             'groupid': groupid if groupid else '',
             'mediainfo[]': await self.get_media_info(meta),
             'movie_edition_information': 'on' if remaster_title else 'off',
@@ -714,6 +712,11 @@ class GPW():
             'subtitle_type': ('2' if meta.get('hardcoded-subs', False) else '1' if meta.get('subtitle_languages', []) else '3'),
             'subtitles[]': await self.get_subtitle(meta),
         })
+
+        if 'atmos' in meta.get('audio', '').lower():
+            data.update({
+                'dolby_atmos': 'on',
+            })
 
         return data
 
