@@ -20,66 +20,30 @@ class GPW():
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'GPW'
-        self.banned_groups = ['']
         self.source_flag = 'GreatPosterWall'
         self.base_url = 'https://greatposterwall.com'
         self.torrent_url = 'https://greatposterwall.com/torrents.php?torrentid='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
+        self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
         }, timeout=60.0)
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.banned_groups = [
+            'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
+            'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'EVO (WEB-DL 允许)', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
+            'HDT', 'Huawei', 'GPTHD', 'ION10', 'iPlanet', 'KiNGDOM', 'Leffe', 'Mp4Ba', 'mHD', 'MiniHD', 'mSD', 'MOMOWEB',
+            'nHD', 'nikt0', 'NSBC', 'nSD', 'NhaNc3', 'NukeHD', 'OFT', 'PRODJi', 'RARBG', 'RDN', 'SANTi', 'SeeHD', 'SeeWEB',
+            'SM737', 'SonyHD', 'STUTTERSHIT', 'TAGWEB', 'ViSION', 'VXT', 'WAF', 'x0r', 'Xiaomi', 'YIFY'
+        ]
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
             return False
 
         self.session.cookies = await self.common.parseCookieFile(cookie_file)
-
-    async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload.php'
-            response = await self.session.get(upload_page_url, timeout=30.0)
-            response.raise_for_status()
-
-            if 'login.php' in str(response.url):
-                console.print(f'[bold red]{self.tracker} validation failed. Cookie appears to be expired (redirected to login).[/bold red]')
-                return False
-
-            auth_match = re.search(r'name="auth" value="([^"]+)"', response.text)
-
-            user_link = re.search(r'user\.php\?id=(\d+)', response.text)
-            if user_link:
-                self.user_id = user_link.group(1)
-            else:
-                self.user_id = ''
-
-            if not auth_match:
-                console.print(f'[bold red]{self.tracker} validation failed. Auth token not found.[/bold red]')
-                console.print('[yellow]The site structure may have changed or login failed silently.[/yellow]')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'[yellow]The server response was saved to {failure_path} for analysis.[/yellow]')
-                return False
-
-            self.auth_token = auth_match.group(1)
-            return True
-
-        except httpx.TimeoutException:
-            console.print(f'[bold red]Error in {self.tracker}: Timeout while trying to validate credentials.[/bold red]')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.[/bold red]')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[bold red]Network error validating credentials for {self.tracker}: {e.__class__.__name__}.[/bold red]')
-            return False
 
     def load_localized_data(self, meta):
         localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
@@ -296,70 +260,101 @@ class GPW():
         if not group_id:
             return []
 
-        search_url = f'{self.base_url}/torrents.php?id={group_id}'
-        found_items = []
-        upload_resolution = meta.get('resolution')
+        cookies = await self.load_cookies(meta)
+        if not cookies:
+            search_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=torrent&imdbID={meta.get("imdb_info", {}).get("imdbID")}'
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(search_url)
+                    response.raise_for_status()
+                    data = response.json()
 
-        try:
-            response = await self.session.get(search_url)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+                    if data.get('status') == 200 and 'response' in data:
+                        results = []
+                        for item in data['response']:
+                            name = item.get('Name', '')
+                            year = item.get('Year', '')
+                            resolution = item.get('Resolution', '')
+                            source = item.get('Source', '')
+                            processing = item.get('Processing', '')
+                            remaster = item.get('RemasterTitle', '')
+                            codec = item.get('Codec', '')
 
-            torrent_table = soup.find('table', id='torrent_details')
-            if not torrent_table:
-                return []
-
-            for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
-                title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
-                if not title_link:
-                    continue
-
-                description_text = ' '.join(title_link.get_text(strip=True).split())
-
-                if upload_resolution and upload_resolution not in description_text:
-                    continue
-
-                torrent_id = torrent_row.get('id', '').replace('torrent', '')
-
-                filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
-                filelist_response = await self.session.get(filelist_url)
-                filelist_response.raise_for_status()
-                filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
-
-                is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
-
-                if is_existing_torrent_a_disc:
-                    root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
-                    if root_folder_item:
-                        folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
-                        if folder_name_tag:
-                            folder_name = folder_name_tag.get_text(strip=True)
-                            found_items.append(folder_name)
-                else:
-                    file_table = filelist_soup.find('table', class_='filelist_table')
-                    if not file_table:
-                        file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
-                        if file_list_container:
-                            for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
-                                filename = file_item.get_text(strip=True)
-                                if filename:
-                                    found_items.append(filename)
-                                    break
+                            formatted = f'{name} {year} {resolution} {source} {processing} {remaster} {codec}'.strip()
+                            formatted = re.sub(r'\s{2,}', ' ', formatted)
+                            results.append(formatted)
+                        return results
                     else:
-                        for row in file_table.find_all('tr'):
-                            if 'colhead' not in row.get('class', []):
-                                cell = row.find('td')
-                                if cell:
-                                    filename = cell.get_text(strip=True)
+                        return []
+            except Exception as e:
+                print(f'An unexpected error occurred while processing the search: {e}')
+            return []
+
+        else:
+            search_url = f'{self.base_url}/torrents.php?id={group_id}'
+            found_items = []
+            upload_resolution = meta.get('resolution')
+
+            try:
+                response = await self.session.get(search_url)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                torrent_table = soup.find('table', id='torrent_details')
+                if not torrent_table:
+                    return []
+
+                for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
+                    title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
+                    if not title_link:
+                        continue
+
+                    description_text = ' '.join(title_link.get_text(strip=True).split())
+
+                    if upload_resolution and upload_resolution not in description_text:
+                        continue
+
+                    torrent_id = torrent_row.get('id', '').replace('torrent', '')
+
+                    filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
+                    filelist_response = await self.session.get(filelist_url)
+                    filelist_response.raise_for_status()
+                    filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
+
+                    is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
+
+                    if is_existing_torrent_a_disc:
+                        root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
+                        if root_folder_item:
+                            folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
+                            if folder_name_tag:
+                                folder_name = folder_name_tag.get_text(strip=True)
+                                found_items.append(folder_name)
+                    else:
+                        file_table = filelist_soup.find('table', class_='filelist_table')
+                        if not file_table:
+                            file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
+                            if file_list_container:
+                                for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
+                                    filename = file_item.get_text(strip=True)
                                     if filename:
                                         found_items.append(filename)
                                         break
+                        else:
+                            for row in file_table.find_all('tr'):
+                                if 'colhead' not in row.get('class', []):
+                                    cell = row.find('td')
+                                    if cell:
+                                        filename = cell.get_text(strip=True)
+                                        if filename:
+                                            found_items.append(filename)
+                                            break
 
-        except Exception as e:
-            print(f'Ocorreu um erro inesperado ao processar a busca: {e}')
-            return []
+            except Exception as e:
+                print(f'Ocorreu um erro inesperado ao processar a busca: {e}')
+                return []
 
-        return found_items
+            return found_items
 
     async def get_media_info(self, meta):
         info_file_path = ''
@@ -448,36 +443,6 @@ class GPW():
             return 'N/A'
 
     async def get_remaster_title(self, meta):
-        REMMASTER_TAGS = {
-            # Collections
-            'masters_of_cinema': 'Masters of Cinema',
-            'the_criterion_collection': 'The Criterion Collection',
-            'warner_archive_collection': 'Warner Archive Collection',
-            # Editions
-            'director_s_cut': "Director's Cut",
-            'extended_edition': 'Extended Edition',
-            'rifftrax': 'Rifftrax',
-            'theatrical_cut': 'Theatrical Cut',
-            'uncut': 'Uncut',
-            'unrated': 'Unrated',
-            # Features
-            '2d_3d_edition': '2D/3D Edition',
-            '3d_anaglyph': '3D Anaglyph',
-            '3d_full_sbs': '3D Full SBS',
-            '3d_half_ou': '3D Half OU',
-            '3d_half_sbs': '3D Half SBS',
-            '2_disc_set': '2-Disc Set',
-            '2_in_1': '2in1',
-            '4k_restoration': '4K Restoration',
-            '4k_remaster': '4K Remaster',
-            'remaster': 'Remaster',
-            'extras': 'Extras',
-            'with_commentary': 'With Commentary',
-            # Other
-            'dual_audio': 'Dual Audio',
-            'english_dub': 'English Dub',
-        }
-
         found_tags = []
 
         def add_tag(tag_id):
@@ -530,21 +495,16 @@ class GPW():
 
         remaster_title_show = ' / '.join(found_tags)
 
-        display_titles = [REMMASTER_TAGS.get(tag, tag) for tag in found_tags]
-        remaster_title = ' / '.join(display_titles)
-
-        return remaster_title, remaster_title_show
+        return remaster_title_show
 
     async def get_groupid(self, meta):
-        url = f'{self.base_url}/upload.php'
-        params = {
-            'action': 'movie_info',
-            'imdbid': meta.get('imdb_info', {}).get('imdbID')
-        }
+        search_url = f"{self.base_url}/api.php?api_key={self.api_key}&action=torrent&req=group&imdbID={meta.get('imdb_info', {}).get('imdbID')}"
 
         try:
-            response = await self.session.get(url, params=params)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(search_url)
+                response.raise_for_status()
+
         except httpx.RequestError as e:
             console.print(f'[bold red]Network error fetching groupid: {e}[/bold red]')
             return None
@@ -558,12 +518,8 @@ class GPW():
             console.print(f'[bold red]Error decoding JSON from groupid response: {e}[/bold red]')
             return None
 
-        if data.get('status', '') == 'success':
-            return False
-        elif data.get('error', {}).get('Dupe') is True:
-            groupid = data.get('error', {}).get('GroupID')
-            return str(groupid)
-
+        if data.get('status') == 200 and 'response' in data and 'ID' in data['response']:
+            return str(data['response']['ID'])
         return None
 
     async def get_additional_data(self, meta):
@@ -676,8 +632,7 @@ class GPW():
 
     async def fetch_data(self, meta, disctype):
         self.load_localized_data(meta)
-        await self.validate_credentials(meta)
-        remaster_title, remaster_title_show = await self.get_remaster_title(meta)
+        remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
         groupid = await self.get_groupid(meta)
 
@@ -689,7 +644,7 @@ class GPW():
         data.update({
             'audio_51': 'on' if meta.get('channels', '') == '5.1' else 'off',
             'audio_71': 'on' if meta.get('channels', '') == '7.1' else 'off',
-            'auth': self.auth_token,
+            # 'auth': self.auth_token,
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
             'container': await self.get_container(meta),
@@ -700,7 +655,6 @@ class GPW():
             'processing': await self.get_processing(meta),
             'release_desc': await self.get_release_desc(meta),
             'remaster_custom_title': '',
-            'remaster_title_show': remaster_title_show,
             'remaster_title': remaster_title,
             'remaster_year': '',
             'resolution_height': '',
@@ -721,35 +675,28 @@ class GPW():
         return data
 
     async def upload(self, meta, disctype):
-        await self.load_cookies(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta, disctype)
         status_message = ''
 
         if not meta.get('debug', False):
             torrent_id = ''
-            upload_url = f'{self.base_url}/upload.php'
+            upload_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=upload'
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
 
-                response = await self.session.post(upload_url, data=data, files=files, timeout=120)
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(url=upload_url, files=files, data=data)
+                    data = response.json()
 
-                # Try to find the torrent id from the response HTML
-                match = re.search(r'torrentid=(\d+)', response.text)
-                if match:
-                    torrent_id = match.group(1)
-                    status_message = 'Uploaded successfully.'
+                if data.get('status') == 200 and 'torrent_id' in data.get('response', {}):
+                    torrent_id = str(data['response']['torrent_id'])
+                    status_message = f'Uploaded successfully. {data}'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
                 else:
-                    status_message = 'It may have uploaded, go check '
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-                    console.print(f'Upload failed, HTML response was saved to: {response_save_path}')
-                    meta['skipping'] = f'{self.tracker}'
+                    status_message = f'data error - It may have uploaded, go check. {data}'
                     return
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)

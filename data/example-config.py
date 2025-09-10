@@ -436,8 +436,12 @@ config = {
         },
         "GPW": {
             "link_dir_name": "",
-            # for GPW to work you need to export cookies from https://greatposterwall.com using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
-            # cookies need to be in netscape format and need to be in data/cookies/GPW.txt
+            # You can find your API key in Profile Settings -> Access Settings -> API Key. If there is no API, click "Reset your api key" and Save Profile.
+            "api_key": "",
+            # Optionally, you can export cookies from GPW to improve duplicate searches.
+            # If you do this, you must export cookies from https://greatposterwall.com using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # Cookies must be in Netscape format and must be located in data/cookies/GPW.txt
+            # You can find your announce URL at https://greatposterwall.com/upload.php
             "announce_url": "https://tracker.greatposterwall.com/<PASSKEY>/announce",
         },
         "HDB": {
