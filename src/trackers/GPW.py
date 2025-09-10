@@ -29,12 +29,12 @@ class GPW():
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
+            console.print(f'[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
             return False
 
         self.session.cookies = await self.common.parseCookieFile(cookie_file)
@@ -47,7 +47,7 @@ class GPW():
             response.raise_for_status()
 
             if 'login.php' in str(response.url):
-                console.print(f'[bold red]Falha na validação do {self.tracker}. O cookie parece estar expirado (redirecionado para login).[/bold red]')
+                console.print(f'[bold red]{self.tracker} validation failed. Cookie appears to be expired (redirected to login).[/bold red]')
                 return False
 
             auth_match = re.search(r'name="auth" value="([^"]+)"', response.text)
@@ -59,26 +59,26 @@ class GPW():
                 self.user_id = ''
 
             if not auth_match:
-                console.print(f'[bold red]Falha na validação do {self.tracker}. Token auth não encontrado.[/bold red]')
-                console.print('[yellow]A estrutura do site pode ter mudado ou o login falhou silenciosamente.[/yellow]')
+                console.print(f'[bold red]{self.tracker} validation failed. Auth token not found.[/bold red]')
+                console.print('[yellow]The site structure may have changed or login failed silently.[/yellow]')
 
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                 with open(failure_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
-                console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
+                console.print(f'[yellow]The server response was saved to {failure_path} for analysis.[/yellow]')
                 return False
 
             self.auth_token = auth_match.group(1)
             return True
 
         except httpx.TimeoutException:
-            console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
+            console.print(f'[bold red]Error in {self.tracker}: Timeout while trying to validate credentials.[/bold red]')
             return False
         except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]Erro HTTP ao validar credenciais do {self.tracker}: Status {e.response.status_code}.[/bold red]')
+            console.print(f'[bold red]HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.[/bold red]')
             return False
         except httpx.RequestError as e:
-            console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
+            console.print(f'[bold red]Network error validating credentials for {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
 
     def load_localized_data(self, meta):
@@ -373,10 +373,10 @@ class GPW():
                 with open(info_file_path, 'r', encoding='utf-8') as f:
                     return f.read()
             except Exception as e:
-                console.print(f'[bold red]Erro ao ler o arquivo de info em {info_file_path}: {e}[/bold red]')
+                console.print(f'[bold red]Error reading info file at {info_file_path}: {e}[/bold red]')
                 return ''
         else:
-            console.print(f'[bold red]Arquivo de info não encontrado: {info_file_path}[/bold red]')
+            console.print(f'[bold red]Info file not found: {info_file_path}[/bold red]')
             return ''
 
     async def get_edition(self, meta):
@@ -546,16 +546,16 @@ class GPW():
             response = await self.session.get(url, params=params)
             response.raise_for_status()
         except httpx.RequestError as e:
-            console.print(f'[bold red]Erro de rede ao buscar groupid: {e}[/bold red]')
+            console.print(f'[bold red]Network error fetching groupid: {e}[/bold red]')
             return None
         except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]Erro HTTP ao buscar groupid: Status {e.response.status_code}[/bold red]')
+            console.print(f'[bold red]HTTP error when fetching groupid: Status {e.response.status_code}[/bold red]')
             return None
 
         try:
             data = response.json()
         except Exception as e:
-            console.print(f'[bold red]Erro ao decodificar JSON da resposta groupid: {e}[/bold red]')
+            console.print(f'[bold red]Error decoding JSON from groupid response: {e}[/bold red]')
             return None
 
         if data.get('status', '') == 'success':
@@ -748,7 +748,7 @@ class GPW():
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
-                    console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
+                    console.print(f'Upload failed, HTML response was saved to: {response_save_path}')
                     meta['skipping'] = f'{self.tracker}'
                     return
 
