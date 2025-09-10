@@ -90,6 +90,18 @@ class GPW():
         else:
             return []
 
+    async def get_ch_dubs(self, meta):
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        found_language_strings = meta.get('audio_languages', [])
+
+        chinese_languages = {'mandarin', 'chinese', 'zh', 'zh-cn', 'zh-hans', 'zh-hant', 'putonghua', '国语', '普通话'}
+        for lang in found_language_strings:
+            if lang.strip().lower() in chinese_languages:
+                return True
+        return False
+
     async def get_codec(self, meta):
         video_encode = meta.get('video_encode', '').strip().lower()
         codec_final = meta.get('video_codec', '').strip().lower()
@@ -630,6 +642,30 @@ class GPW():
         release_type = meta.get('type', '').strip().upper()
         return type_map.get(release_type, 'Untouched')
 
+    def get_media_flags(self, meta):
+        audio = meta.get('audio', '').lower()
+        hdr = meta.get('hdr', '')
+        bit_depth = meta.get('bit_depth', '')
+
+        flags = {}
+
+        # audio flags
+        if 'atmos' in audio:
+            flags['dolby_atmos'] = 'on'
+        if 'dts:x' in audio:
+            flags['dts_x'] = 'on'
+
+        # video flags
+        if not hdr.strip() and bit_depth == '10':
+            flags['10_bit'] = 'on'
+
+        if 'DV' in hdr:
+            flags['dolby_vision'] = 'on'
+            if 'HDR' in hdr:
+                flags['hdr10plus' if 'HDR10+' in hdr else 'hdr10'] = 'on'
+
+        return flags
+
     async def fetch_data(self, meta, disctype):
         self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
@@ -644,7 +680,6 @@ class GPW():
         data.update({
             'audio_51': 'on' if meta.get('channels', '') == '5.1' else 'off',
             'audio_71': 'on' if meta.get('channels', '') == '7.1' else 'off',
-            # 'auth': self.auth_token,
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
             'container': await self.get_container(meta),
@@ -667,10 +702,17 @@ class GPW():
             'subtitles[]': await self.get_subtitle(meta),
         })
 
-        if 'atmos' in meta.get('audio', '').lower():
+        if await self.get_ch_dubs(meta):
             data.update({
-                'dolby_atmos': 'on',
+                'chinese_dubbed': 'on'
             })
+
+        if meta.get('sfx_subtitles', False):
+            data.update({
+                'special_effects_subtitles': 'on'
+            })
+
+        data.update(self.get_media_flags(meta))
 
         return data
 
