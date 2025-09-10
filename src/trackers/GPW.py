@@ -3,7 +3,6 @@ import asyncio
 import httpx
 import json
 import os
-import platform
 import re
 import unicodedata
 from bs4 import BeautifulSoup
@@ -26,9 +25,6 @@ class GPW():
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
-        self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
-        }, timeout=60.0)
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
@@ -43,7 +39,7 @@ class GPW():
         if not os.path.exists(cookie_file):
             return False
 
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
+        return await self.common.parseCookieFile(cookie_file)
 
     def load_localized_data(self, meta):
         localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
@@ -169,6 +165,17 @@ class GPW():
 
     async def get_release_desc(self, meta):
         description = []
+
+        # Disc
+        region = meta.get('region', '')
+        distributor = meta.get('distributor', '')
+        if region or distributor:
+            disc_info = ''
+            if region:
+                disc_info += f'[b]Disc Region:[/b] {region}\n'
+            if distributor:
+                disc_info += f'[b]Disc Distributor:[/b] {distributor.title()}'
+            description.append(disc_info)
 
         base_desc = ''
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
@@ -312,59 +319,60 @@ class GPW():
             upload_resolution = meta.get('resolution')
 
             try:
-                response = await self.session.get(search_url)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+                async with httpx.AsyncClient(cookies=cookies, timeout=10.0, headers={'User-Agent': "Audionut's Upload Assistant"}) as client:
+                    response = await client.get(search_url)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.text, 'html.parser')
 
-                torrent_table = soup.find('table', id='torrent_details')
-                if not torrent_table:
-                    return []
+                    torrent_table = soup.find('table', id='torrent_details')
+                    if not torrent_table:
+                        return []
 
-                for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
-                    title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
-                    if not title_link:
-                        continue
+                    for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
+                        title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
+                        if not title_link:
+                            continue
 
-                    description_text = ' '.join(title_link.get_text(strip=True).split())
+                        description_text = ' '.join(title_link.get_text(strip=True).split())
 
-                    if upload_resolution and upload_resolution not in description_text:
-                        continue
+                        if upload_resolution and upload_resolution not in description_text:
+                            continue
 
-                    torrent_id = torrent_row.get('id', '').replace('torrent', '')
+                        torrent_id = torrent_row.get('id', '').replace('torrent', '')
 
-                    filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
-                    filelist_response = await self.session.get(filelist_url)
-                    filelist_response.raise_for_status()
-                    filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
+                        filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
+                        filelist_response = await client.get(filelist_url)
+                        filelist_response.raise_for_status()
+                        filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
 
-                    is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
+                        is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
 
-                    if is_existing_torrent_a_disc:
-                        root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
-                        if root_folder_item:
-                            folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
-                            if folder_name_tag:
-                                folder_name = folder_name_tag.get_text(strip=True)
-                                found_items.append(folder_name)
-                    else:
-                        file_table = filelist_soup.find('table', class_='filelist_table')
-                        if not file_table:
-                            file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
-                            if file_list_container:
-                                for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
-                                    filename = file_item.get_text(strip=True)
-                                    if filename:
-                                        found_items.append(filename)
-                                        break
+                        if is_existing_torrent_a_disc:
+                            root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
+                            if root_folder_item:
+                                folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
+                                if folder_name_tag:
+                                    folder_name = folder_name_tag.get_text(strip=True)
+                                    found_items.append(folder_name)
                         else:
-                            for row in file_table.find_all('tr'):
-                                if 'colhead' not in row.get('class', []):
-                                    cell = row.find('td')
-                                    if cell:
-                                        filename = cell.get_text(strip=True)
+                            file_table = filelist_soup.find('table', class_='filelist_table')
+                            if not file_table:
+                                file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
+                                if file_list_container:
+                                    for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
+                                        filename = file_item.get_text(strip=True)
                                         if filename:
                                             found_items.append(filename)
                                             break
+                            else:
+                                for row in file_table.find_all('tr'):
+                                    if 'colhead' not in row.get('class', []):
+                                        cell = row.find('td')
+                                        if cell:
+                                            filename = cell.get_text(strip=True)
+                                            if filename:
+                                                found_items.append(filename)
+                                                break
 
             except Exception as e:
                 print(f'Ocorreu um erro inesperado ao processar a busca: {e}')
@@ -726,6 +734,11 @@ class GPW():
         if meta.get('scene', False):
             data.update({
                 'scene': 'on'
+            })
+
+        if meta.get('personalrelease', False):
+            data.update({
+                'self_rip': 'on'
             })
 
         data.update(self.get_media_flags(meta))
