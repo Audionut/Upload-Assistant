@@ -21,7 +21,7 @@ class LDU():
         self.search_url = 'https://theldu.to/api/torrents/filter'
         self.torrent_url = 'https://theldu.to/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = []
+        self.banned_groups = [""]
         pass
 
     async def get_cat_id(self, meta):
