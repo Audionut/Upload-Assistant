@@ -27,7 +27,7 @@ class YOINK():
         self.search_url = 'https://yoinked.org/api/torrents/filter'
         self.torrent_url = 'https://yoinked.org/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = ["YTS,YiFY,LAMA,MeGUSTA,NAHOM,GalaxyRG,RARBG"]
+        self.banned_groups = ["YTS", "YiFY", "LAMA", "MeGUSTA", "NAHOM", "GalaxyRG", "RARBG", "INFINITY"]
         pass
 
     async def get_cat_id(self, category_name):
