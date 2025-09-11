@@ -276,7 +276,7 @@ class GPW():
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'MOVIE':
-            console.print(f'{self.tracker}: Only feature film, short film, live performance and live performance are allowed on {self.tracker}')
+            console.print(f'{self.tracker}: Only feature films, short films, and live performances are permitted on {self.tracker}')
             meta['skipping'] = f'{self.tracker}'
             return
 
