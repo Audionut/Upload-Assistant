@@ -712,6 +712,8 @@ config = {
             "api_upload": True,
             # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
             "passkey": "",
+            # If you are not using the API upload and will be uploading anonymously, make sure to enable "Anonymous Gallery Uploads" in your profile settings, otherwise your username will be leaked
+            "anon": False,
         },
         "TOCA": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

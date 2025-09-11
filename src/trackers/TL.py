@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+import asyncio
 import httpx
 import os
 import re
@@ -10,27 +11,9 @@ from pymediainfo import MediaInfo
 
 
 class TL():
-    CATEGORIES = {
-        'Anime': 34,
-        'Movie4K': 47,
-        'MovieBluray': 13,
-        'MovieBlurayRip': 14,
-        'MovieCam': 8,
-        'MovieTS': 9,
-        'MovieDocumentary': 29,
-        'MovieDvd': 12,
-        'MovieDvdRip': 11,
-        'MovieForeign': 36,
-        'MovieHdRip': 43,
-        'MovieWebrip': 37,
-        'TvBoxsets': 27,
-        'TvEpisodes': 26,
-        'TvEpisodesHd': 32,
-        'TvForeign': 44
-    }
-
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'TL'
         self.source_flag = 'TorrentLeech.org'
         self.base_url = 'https://www.torrentleech.org'
@@ -42,8 +25,10 @@ class TL():
         self.session = httpx.AsyncClient(timeout=60.0)
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload', False)
         self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
-        self.announce_url_1 = f'https://tracker.torrentleech.org/a/{self.passkey}/announce'
-        self.announce_url_2 = f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
+        self.announce_list = [
+            f'https://tracker.torrentleech.org/a/{self.passkey}/announce',
+            f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
+        ]
         self.session.headers.update({
             'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
         })
@@ -59,8 +44,7 @@ class TL():
             console.print(f"[bold red]'{self.tracker}' Cookies not found at: {cookie_path}[/bold red]")
             return False
 
-        common = COMMON(config=self.config)
-        self.session.cookies.update(await common.parseCookieFile(self.cookies_file))
+        self.session.cookies.update(await self.common.parseCookieFile(self.cookies_file))
 
         try:
             if force:
@@ -124,15 +108,16 @@ class TL():
                 manual_desc = f.read()
             description_parts.append(manual_desc)
 
-        # Add screenshots to description only if it is an anonymous upload as TL does not support anonymous upload in the screenshots section
-        if meta.get('anon', False) or self.api_upload:
+        if self.api_upload:
             images = meta.get('image_list', [])
 
-            screenshots_block = "<center>Screenshots\n\n"
-            for image in images:
+            screenshots_block = "<center>\n"
+            for i, image in enumerate(images, start=1):
                 img_url = image['img_url']
                 web_url = image['web_url']
                 screenshots_block += f"""<a href="{web_url}"><img src="{img_url}"></a> """
+                if i % 2 == 0:
+                    screenshots_block += "<br>\n"
             screenshots_block += "\n</center>"
 
             description_parts.append(screenshots_block)
@@ -158,38 +143,57 @@ class TL():
 
         return desc
 
-    async def get_cat_id(self, common, meta):
+    def get_cat_id(self, meta):
+        categories = {
+            'Anime': 34,
+            'Movie4K': 47,
+            'MovieBluray': 13,
+            'MovieBlurayRip': 14,
+            'MovieCam': 8,
+            'MovieTS': 9,
+            'MovieDocumentary': 29,
+            'MovieDvd': 12,
+            'MovieDvdRip': 11,
+            'MovieForeign': 36,
+            'MovieHdRip': 43,
+            'MovieWebrip': 37,
+            'TvBoxsets': 27,
+            'TvEpisodes': 26,
+            'TvEpisodesHd': 32,
+            'TvForeign': 44
+        }
+
         if meta.get('anime', 0):
-            return self.CATEGORIES['Anime']
+            return categories['Anime']
 
         if meta['category'] == 'MOVIE':
             if meta['original_language'] != 'en':
-                return self.CATEGORIES['MovieForeign']
+                return categories['MovieForeign']
             elif 'Documentary' in meta['genres']:
-                return self.CATEGORIES['MovieDocumentary']
+                return categories['MovieDocumentary']
             elif meta['resolution'] == '2160p':
-                return self.CATEGORIES['Movie4K']
+                return categories['Movie4K']
             elif meta['is_disc'] in ('BDMV', 'HDDVD') or (meta['type'] == 'REMUX' and meta['source'] in ('BluRay', 'HDDVD')):
-                return self.CATEGORIES['MovieBluray']
+                return categories['MovieBluray']
             elif meta['type'] == 'ENCODE' and meta['source'] in ('BluRay', 'HDDVD'):
-                return self.CATEGORIES['MovieBlurayRip']
+                return categories['MovieBlurayRip']
             elif meta['is_disc'] == 'DVD' or (meta['type'] == 'REMUX' and 'DVD' in meta['source']):
-                return self.CATEGORIES['MovieDvd']
+                return categories['MovieDvd']
             elif meta['type'] == 'ENCODE' and 'DVD' in meta['source']:
-                return self.CATEGORIES['MovieDvdRip']
+                return categories['MovieDvdRip']
             elif 'WEB' in meta['type']:
-                return self.CATEGORIES['MovieWebrip']
+                return categories['MovieWebrip']
             elif meta['type'] == 'HDTV':
-                return self.CATEGORIES['MovieHdRip']
+                return categories['MovieHdRip']
         elif meta['category'] == 'TV':
             if meta['original_language'] != 'en':
-                return self.CATEGORIES['TvForeign']
+                return categories['TvForeign']
             elif meta.get('tv_pack', 0):
-                return self.CATEGORIES['TvBoxsets']
+                return categories['TvBoxsets']
             elif meta['sd']:
-                return self.CATEGORIES['TvEpisodes']
+                return categories['TvEpisodes']
             else:
-                return self.CATEGORIES['TvEpisodesHd']
+                return categories['TvEpisodesHd']
 
         raise NotImplementedError('Failed to determine TL category!')
 
@@ -207,7 +211,7 @@ class TL():
         if is_scene:
             name = meta['scene_name']
         else:
-            name = meta['name']
+            name = meta['name'].replace(meta['aka'], '')
 
         return name
 
@@ -218,7 +222,7 @@ class TL():
             if meta['debug']:
                 console.print(f"[bold red]Skipping upload to '{self.tracker}' as login failed.[/bold red]")
             return
-        cat_id = await self.get_cat_id(self, meta)
+        cat_id = self.get_cat_id(meta)
 
         dupes = []
 
@@ -267,17 +271,34 @@ class TL():
 
         return dupes
 
+    async def get_anilist_id(self, meta):
+        url = 'https://graphql.anilist.co'
+        query = '''
+        query ($idMal: Int) {
+        Media(idMal: $idMal, type: ANIME) {
+            id
+        }
+        }
+        '''
+        variables = {'idMal': meta.get('mal_id')}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json={'query': query, 'variables': variables})
+            response.raise_for_status()
+            data = response.json()
+
+            media = data.get('data', {}).get('Media')
+            return media['id'] if media else None
+
     async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag, announce_url=self.announce_url_1)
-        cat_id = await self.get_cat_id(common, meta)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
 
         if self.api_upload:
-            await self.upload_api(meta, cat_id)
+            await self.upload_api(meta)
         else:
-            await self.upload_http(meta, cat_id)
+            await self.upload_http(meta)
 
-    async def upload_api(self, meta, cat_id):
+    async def upload_api(self, meta):
         desc_content = await self.generate_description(meta)
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
@@ -285,11 +306,33 @@ class TL():
             files = {
                 'torrent': (self.get_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
             }
+
             data = {
                 'announcekey': self.passkey,
-                'category': cat_id,
-                'description': desc_content
+                'category': self.get_cat_id(meta),
+                'description': desc_content,
+                'name': self.get_name(meta),
+                'nonscene': 'on' if not meta.get('scene') else 'off',
             }
+
+            if meta.get('anime', False):
+                anilist_id = await self.get_anilist_id(meta)
+                if anilist_id:
+                    data.update({'animeid': f"https://anilist.co/anime/{anilist_id}"})
+
+            else:
+                if meta['category'] == 'MOVIE':
+                    data.update({'imdb': meta.get('imdb_info', {}).get('imdbID', '')})
+
+                if meta['category'] == 'TV':
+                    data.update({
+                        'tvmazeid': meta.get('tvmaze_id'),
+                        'tvmazetype': meta.get('tv_pack'),
+                    })
+
+            anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+            if anon:
+                data.update({'is_anonymous_upload': 'on'})
 
             if meta['debug'] is False:
                 response = await self.session.post(
@@ -297,16 +340,22 @@ class TL():
                     files=files,
                     data=data
                 )
+
                 if not response.text.isnumeric():
-                    meta['tracker_status'][self.tracker]['status_message'] = "data error: " + response.text
+                    meta['tracker_status'][self.tracker]['status_message'] = 'data error: ' + response.text
 
                 if response.text.isnumeric():
-                    meta['tracker_status'][self.tracker]['status_message'] = f"{self.torrent_url}{response.text}"
-                    meta['tracker_status'][self.tracker]['torrent_id'] = response.text
-                    await self.api_torrent_download(meta, self.passkey, response.text)
+                    torrent_id = str(response.text)
+                    meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
+                    url = f'{self.base_url}/torrents/upload/apidownload'
+                    params = {'announcekey': self.passkey, 'torrentID': response.text}
+                    await self.session.get(url=url, params=params)  # cannot start seeding until someone downloads it
+
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
 
             else:
-                console.print("[cyan]Request Data:")
                 console.print(data)
 
     async def upload_http(self, meta, cat_id):
@@ -366,12 +415,7 @@ class TL():
                         meta['tracker_status'][self.tracker]['status_message'] = torrent_url
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
-                        announce_list = [
-                            self.announce_url_1,
-                            self.announce_url_2
-                        ]
-                        common = COMMON(config=self.config)
-                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, announce_list, torrent_url)
+                        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
 
                     else:
                         console.print("[bold red]Upload failed: No success redirect found.[/bold red]")
@@ -387,25 +431,3 @@ class TL():
                     meta['tracker_status'][self.tracker]['status_message'] = str(e)
             else:
                 console.print(data)
-
-    async def api_torrent_download(self, meta, passkey, torrent_id):
-        torrent_url = f"{self.http_upload_url}apidownload"
-        data = {
-            'announcekey': passkey,
-            'torrentID': torrent_id
-        }
-
-        try:
-            response = await self.session.post(torrent_url, data=data)
-            response.raise_for_status()
-
-            torrent_filename = f"[{self.tracker}].torrent"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}"
-
-            with open(torrent_path, 'wb') as f:
-                f.write(response.content)
-
-            console.print(f"[green]Downloaded torrent: {torrent_filename}[/green]")
-
-        except Exception as e:
-            console.print(f"[bold red]Error downloading torrent from {self.tracker}: {e}[/bold red]")
