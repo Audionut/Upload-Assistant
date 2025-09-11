@@ -43,7 +43,6 @@ class OTW():
             ['ViSION', 'Note the capitalization and characters used'],
             ['CMRG', 'Raw Content Only']
         ]
-
         pass
 
     async def get_cat_id(self, category_name):
