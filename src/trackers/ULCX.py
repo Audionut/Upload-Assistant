@@ -26,11 +26,13 @@ class ULCX():
         self.requests_url = 'https://upload.cx/api/requests/filter'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
-            '4K4U', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym', 'Hi10', 'iAHD', 'INFINITY',
-            'ION10', 'iVy', 'Judas', 'LAMA', 'MeGusta', 'NAHOM', 'Niblets', 'nikt0', ['NuBz', 'Encodes'], 'OFT', 'QxR',
-            ['Ralphy', 'Encodes'], 'RARBG', 'Sicario', 'SM737', 'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP',
-            'TSPxL', 'VXT', 'Vyndros', 'Will1869', 'x0r', 'YIFY', 'Alcaide_Kira', 'PHOCiS'
+            '4K4U', 'Alcaide_Kira', 'AROMA', 'd3g', ['EDGE2020', 'Encodes'], 'EMBER', 'FGT', 'FnP', 'FRDS', 'Grym',
+            'Hi10', 'iAHD', 'INFINITY', 'ION10', 'iVy', 'Judas', 'LAMA', 'MeGusta', 'NAHOM', 'Niblets', 'nikt0',
+            ['NuBz', 'Encodes'], 'OFT', 'PHOCiS', 'QxR', ['Ralphy', 'Encodes'], 'RARBG', 'Sicario', 'SM737',
+            'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP', 'TSPxL', 'VXT', 'Vyndros', 'Will1869',
+            'x0r', 'YIFY'
         ]
+
         pass
 
     async def get_cat_id(self, category_name=None, reverse=False):
