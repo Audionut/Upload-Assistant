@@ -21,9 +21,23 @@ class HHD():
         self.torrent_url = 'https://homiehelpdesk.net/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
-            'aXXo', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'd3g', 'DNL', 'FaNGDiNG0', 'GalaxyTV', 'HD2DVD', 'HDTime', 'iHYTECH', 'ION10',
-            'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD', 'nikt0', 'nSD', 'OFT', 'PRODJi', 'RARBG', 'Rifftrax', 'SANTi', 'SasukeducK',
-            'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TGALAXY', 'TORRENTGALAXY', 'TSP', 'TSPxL', 'ViSION', 'VXT', 'WAF', 'WKS', 'x0r', 'YAWNiX', 'YIFY', 'YTS', 'PSA']
+            'aXXo', 'BONE', 'BRrip', 'CM8',
+            'CrEwSaDe', 'CTFOH', 'dAV1nci', 'd3g',
+            'DNL', 'FaNGDiNG0', 'GalaxyTV', 'HD2DVD',
+            'HDTime', 'iHYTECH', 'ION10', 'iPlanet',
+            'KiNGDOM', 'LAMA', 'MeGusta', 'mHD',
+            'mSD', 'NaNi', 'NhaNc3', 'nHD',
+            'nikt0', 'nSD', 'OFT', 'PRODJi',
+            'RARBG', 'Rifftrax', 'SANTi', 'SasukeducK',
+            'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TGALAXY',
+            'TORRENTGALAXY', 'TSP', 'TSPxL', 'ViSION',
+            'VXT', 'WAF', 'WKS', 'x0r',
+            'YAWNiX', 'YIFY', 'YTS', 'PSA',
+            ['EVO', 'WEB-DLs are allowed'],
+            ['HDT', 'Remuxes or similar automated remuxes'],
+            ['FGT', 'Unless no other encode is available']
+        ]
+
         pass
 
     async def get_cat_id(self, category_name):
