@@ -32,7 +32,6 @@ class ULCX():
             'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP', 'TSPxL', 'VXT', 'Vyndros', 'Will1869',
             'x0r', 'YIFY'
         ]
-
         pass
 
     async def get_cat_id(self, category_name=None, reverse=False):
