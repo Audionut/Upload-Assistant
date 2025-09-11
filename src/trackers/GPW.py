@@ -21,18 +21,28 @@ class GPW():
         self.tracker = 'GPW'
         self.source_flag = 'GreatPosterWall'
         self.base_url = 'https://greatposterwall.com'
-        self.torrent_url = 'https://greatposterwall.com/torrents.php?torrentid='
+        self.torrent_url = f'{self.base_url}/torrents.php?torrentid='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
             'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
-            'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'EVO (WEB-DL 允许)', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
+            'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
             'HDT', 'Huawei', 'GPTHD', 'ION10', 'iPlanet', 'KiNGDOM', 'Leffe', 'Mp4Ba', 'mHD', 'MiniHD', 'mSD', 'MOMOWEB',
             'nHD', 'nikt0', 'NSBC', 'nSD', 'NhaNc3', 'NukeHD', 'OFT', 'PRODJi', 'RARBG', 'RDN', 'SANTi', 'SeeHD', 'SeeWEB',
-            'SM737', 'SonyHD', 'STUTTERSHIT', 'TAGWEB', 'ViSION', 'VXT', 'WAF', 'x0r', 'Xiaomi', 'YIFY'
+            'SM737', 'SonyHD', 'STUTTERSHIT', 'TAGWEB', 'ViSION', 'VXT', 'WAF', 'x0r', 'Xiaomi', 'YIFY',
+            ['EVO', 'web-dl Only']
         ]
+        self.approved_image_hosts = ['kshare', 'pixhost', 'ptpimg', 'pterclub', 'ilikeshots', 'imgbox']
+        self.url_host_mapping = {
+            'kshare.club': 'kshare',
+            'pixhost.to': 'pixhost',
+            'imgbox.com': 'imgbox',
+            'ptpimg.me': 'ptpimg',
+            'img.pterclub.com': 'pterclub',
+            'yes.ilikeshots.club': 'ilikeshots',
+        }
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -187,16 +197,7 @@ class GPW():
 
         # Screenshots
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
-        approved_image_hosts = ['kshare', 'pixhost', 'ptpimg', 'pterclub', 'ilikeshots', 'imgbox']
-        url_host_mapping = {
-            'kshare.club': 'kshare',
-            'pixhost.to': 'pixhost',
-            'imgbox.com': 'imgbox',
-            'ptpimg.me': 'ptpimg',
-            'img.pterclub.com': 'pterclub',
-            'yes.ilikeshots.club': 'ilikeshots',
-        }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
         if f'{self.tracker}_images_key' in meta:
             images = meta[f'{self.tracker}_images_key']
@@ -548,9 +549,17 @@ class GPW():
 
     async def get_additional_data(self, meta):
         tmdb_data = await self.ch_tmdb_data(meta)
+        poster_url = ''
+        while True:
+            poster_url = input(f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n").strip()
+            if any(host in poster_url for host in self.approved_image_hosts):
+                break
+            else:
+                console.print('[red]Invalid host. Please use a URL from the allowed hosts.[/red]')
+
         data = {
             'desc': tmdb_data.get('overview', ''),
-            'image': meta.get('poster'),
+            'image': poster_url,
             'imdb': meta.get('imdb_info', {}).get('imdbID'),
             'maindesc': meta.get('overview', ''),
             'name': meta.get('title'),
@@ -564,36 +573,24 @@ class GPW():
         return data
 
     def _get_artist_data(self, meta) -> Dict[str, str]:
-        console.print('--- This film is not registered, please enter details of 1 artist ---')
+        directors = meta.get('imdb_info', {}).get('directors', [])
+        directors_id = meta.get('imdb_info', {}).get('directors_id', [])
 
-        imdb_id = input('Enter IMDb ID (e.g., nm0000138): ')
-        english_name = input('Enter English name: ')
-        chinese_name = input('Enter Chinese name (optional, press Enter to skip): ')
-
-        roles = {
-            '1': 'Director',
-            '2': 'Writer',
-            '3': 'Producer',
-            '4': 'Composer',
-            '5': 'Cinematographer',
-            '6': 'Actor'
-        }
-
-        console.print('\nSelect the artist\'s role:')
-        for key, value in roles.items():
-            console.print(f'  {key}: {value}')
-
-        importance_choice = ''
-        while importance_choice not in roles:
-            importance_choice = input('Enter the number for the role (1-6): ')
-            if importance_choice not in roles:
-                console.print('Invalid selection. Please choose a number between 1 and 6.')
+        if directors and directors_id:
+            imdb_id = directors_id[0]
+            english_name = directors[0]
+            chinese_name = ''
+        else:
+            console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
+            imdb_id = input('Enter Director IMDb ID (e.g., nm0000138): ')
+            english_name = input('Enter Director English name: ')
+            chinese_name = input('Enter Director Chinese name (optional, press Enter to skip): ')
 
         post_data = {
             'artist_ids[]': imdb_id,
             'artists[]': english_name,
             'artists_sub[]': chinese_name,
-            'importance[]': importance_choice
+            'importance[]': '1'
         }
 
         return post_data
@@ -605,9 +602,9 @@ class GPW():
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie'):
                 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
-                    movie_type = "Feature Film"
+                    movie_type = '1'  # Feature Film
                 else:
-                    movie_type = "Short Film"
+                    movie_type = '2'  # Short Film
 
         return movie_type
 
@@ -696,6 +693,7 @@ class GPW():
         data = {}
 
         if not groupid:
+            console.print(f'{self.tracker}: This movie is not registered in the database, please enter additional information.')
             data.update(await self.get_additional_data(meta))
 
         data.update({
