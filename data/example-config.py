@@ -270,7 +270,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, DC, DP, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -333,6 +333,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/AZ.txt
             "announce_url": "https://tracker.avistaz.to/<PASSKEY>/announce",
             "anon": False,
+            # Set false to use imgbox links if available
+            "img_rehost": True,
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -387,6 +389,16 @@ config = {
             "anon": False,
             # Send uploads to CBR modq for staff approval
             "modq": False,
+        },
+        "CZ": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for CZ to work you need to export cookies from https://cinemaz.to using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # cookies need to be in netscape format and need to be in data/cookies/CZ.txt
+            "announce_url": "https://tracker.cinemaz.to/<PASSKEY>/announce",
+            "anon": False,
+            # Set false to use imgbox links if available
+            "img_rehost": True,
         },
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -570,6 +582,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
             "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
+            # Set false to use imgbox links if available
+            "img_rehost": True,
         },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
