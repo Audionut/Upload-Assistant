@@ -30,12 +30,20 @@ class OTW():
         self.id_url = 'https://oldtoons.world/api/torrents/'
         self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
         self.banned_groups = [
-            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AROMA', 'aXXo', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE', 'eSc', 'FaNGDiNG0', 'FGT', 'Flights',
-            'FRDS', 'FUM', 'GalaxyRG', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'Lama', 'Leffe', 'LOAD', 'mHD', 'NhaNc3', 'nHD', 'NOIVTC',
-            'nSD', 'PiRaTeS', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'SANTi', 'SicFoI', 'SPASM', 'STUTTERSHIT', 'Telly', 'TM',
-            'UPiNSMOKE', 'WAF', 'xRed', 'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN', '4f8c4100292', 'Azkars', 'Sync0rdi',
-            ['EVO', 'Raw Content Only'], ['TERMiNAL', 'Raw Content Only'], ['ViSION', 'Note the capitalization and characters used'], ['CMRG', 'Raw Content Only']
+            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AROMA',
+            'aXXo', 'CM8', 'CrEwSaDe', 'DeadFish', 'DNL', 'ELiTE', 'eSc', 'FaNGDiNG0', 'FGT',
+            'Flights', 'FRDS', 'FUM', 'GalaxyRG', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime', 'Hi10',
+            'INFINITY', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'LAMA', 'Leffe', 'LOAD', 'mHD',
+            'NhaNc3', 'nHD', 'NOIVTC', 'nSD', 'PiRaTeS', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN',
+            'REsuRRecTioN', 'RMTeam', 'SANTi', 'SicFoI', 'SPASM', 'STUTTERSHIT', 'Telly', 'TM',
+            'UPiNSMOKE', 'WAF', 'xRed', 'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN',
+            '4f8c4100292', 'Azkars', 'Syncr0ndi',
+            ['EVO', 'Raw Content Only'],
+            ['TERMiNAL', 'Raw Content Only'],
+            ['ViSION', 'Note the capitalization and characters used'],
+            ['CMRG', 'Raw Content Only']
         ]
+
         pass
 
     async def get_cat_id(self, category_name):
