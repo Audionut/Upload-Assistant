@@ -246,10 +246,23 @@ class AITHER():
                 if response.status_code == 200:
                     data = response.json()
                     for each in data['data']:
-                        result = {
-                            'name': each['attributes']['name'],
-                            'size': each['attributes']['size']
-                        }
+                        attributes = each['attributes']
+                        if not meta['is_disc']:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size'],
+                                'files': [file['name'] for file in attributes.get('files', []) if isinstance(file, dict) and 'name' in file],
+                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
+                                'trumpable': attributes['trumpable'],
+                                'details_link': attributes['details_link']
+                            }
+                        else:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size'],
+                                'trumpable': attributes['trumpable'],
+                                'details_link': attributes['details_link']
+                            }
                         dupes.append(result)
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
