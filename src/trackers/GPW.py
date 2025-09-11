@@ -284,9 +284,11 @@ class GPW():
         if not group_id:
             return []
 
+        imdb = meta.get("imdb_info", {}).get("imdbID")
+
         cookies = await self.load_cookies(meta)
         if not cookies:
-            search_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=torrent&imdbID={meta.get("imdb_info", {}).get("imdbID")}'
+            search_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=torrent&imdbID={imdb}'
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     response = await client.get(search_url)
@@ -315,71 +317,33 @@ class GPW():
             return []
 
         else:
-            search_url = f'{self.base_url}/torrents.php?id={group_id}'
+            search_url = f'{self.base_url}/torrents.php?groupname={imdb.upper()}'  # using TT in imdb returns the search page instead of redirecting to the group page
             found_items = []
-            upload_resolution = meta.get('resolution')
 
             try:
-                async with httpx.AsyncClient(cookies=cookies, timeout=10.0, headers={'User-Agent': "Audionut's Upload Assistant"}) as client:
+                async with httpx.AsyncClient(cookies=cookies, timeout=10.0, headers={'User-Agent': 'your-custom-user-agent'}) as client:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     soup = BeautifulSoup(response.text, 'html.parser')
 
-                    torrent_table = soup.find('table', id='torrent_details')
+                    torrent_table = soup.find('table', id='torrent_table')
                     if not torrent_table:
                         return []
 
-                    for torrent_row in torrent_table.find_all('tr', id=re.compile(r'^torrent\d+$')):
-                        title_link = torrent_row.find('a', class_='TableTorrent-titleTitle')
-                        if not title_link:
-                            continue
+                    for torrent_row in torrent_table.find_all('tr', class_='TableTorrent-rowTitle'):
+                        title_link = torrent_row.find('a', href=re.compile(r'torrentid=\d+'))
 
-                        description_text = ' '.join(title_link.get_text(strip=True).split())
+                        if title_link and title_link.get('data-tooltip'):
+                            file_name = title_link['data-tooltip']
+                            found_items.append(file_name)
 
-                        if upload_resolution and upload_resolution not in description_text:
-                            continue
-
-                        torrent_id = torrent_row.get('id', '').replace('torrent', '')
-
-                        filelist_url = f'{self.base_url}/torrents.php?action=filelist&torrentid={torrent_id}'
-                        filelist_response = await client.get(filelist_url)
-                        filelist_response.raise_for_status()
-                        filelist_soup = BeautifulSoup(filelist_response.text, 'html.parser')
-
-                        is_existing_torrent_a_disc = any(keyword in description_text.lower() for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts'])
-
-                        if is_existing_torrent_a_disc:
-                            root_folder_item = filelist_soup.find('li', class_='TorrentDetailfileListItem-fileListItem', variant='root')
-                            if root_folder_item:
-                                folder_name_tag = root_folder_item.find('a', class_='TorrentDetailfileList-fileName')
-                                if folder_name_tag:
-                                    folder_name = folder_name_tag.get_text(strip=True)
-                                    found_items.append(folder_name)
-                        else:
-                            file_table = filelist_soup.find('table', class_='filelist_table')
-                            if not file_table:
-                                file_list_container = filelist_soup.find('div', class_='TorrentDetail-row is-fileList is-block')
-                                if file_list_container:
-                                    for file_item in file_list_container.find_all('div', class_='TorrentDetailfileList-fileName'):
-                                        filename = file_item.get_text(strip=True)
-                                        if filename:
-                                            found_items.append(filename)
-                                            break
-                            else:
-                                for row in file_table.find_all('tr'):
-                                    if 'colhead' not in row.get('class', []):
-                                        cell = row.find('td')
-                                        if cell:
-                                            filename = cell.get_text(strip=True)
-                                            if filename:
-                                                found_items.append(filename)
-                                                break
-
-            except Exception as e:
-                print(f'Ocorreu um erro inesperado ao processar a busca: {e}')
+                return found_items
+            except httpx.HTTPError as e:
+                print(f'An HTTP error occurred: {e}')
                 return []
-
-            return found_items
+            except Exception as e:
+                print(f'An unexpected error occurred while processing the search: {e}')
+                return []
 
     async def get_media_info(self, meta):
         info_file_path = ''
