@@ -37,7 +37,6 @@ class HHD():
             ['HDT', 'Remuxes or similar automated remuxes'],
             ['FGT', 'Unless no other encode is available']
         ]
-
         pass
 
     async def get_cat_id(self, category_name):
