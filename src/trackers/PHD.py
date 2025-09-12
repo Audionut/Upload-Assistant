@@ -452,6 +452,9 @@ class PHD(AZTrackerBase):
                 upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
             upload_name = f'{upload_name}-NOGROUP'
 
+        if meta.get('has_encode_settings', False):
+            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
+
         return upload_name
 
     def get_rip_type(self, meta):
