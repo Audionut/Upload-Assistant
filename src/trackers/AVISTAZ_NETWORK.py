@@ -11,7 +11,6 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
-from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
 from typing import Optional
@@ -304,23 +303,39 @@ class AZTrackerBase():
 
     async def get_lang(self, meta):
         self.language_map()
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        found_subs_strings = meta.get('subtitle_languages', [])
-        subtitle_ids = set()
-        for lang_str in found_subs_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                subtitle_ids.add(target_id)
-        final_subtitle_ids = sorted(list(subtitle_ids))
-
-        found_audio_strings = meta.get('audio_languages', [])
         audio_ids = set()
-        for lang_str in found_audio_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                audio_ids.add(target_id)
+        subtitle_ids = set()
+
+        try:
+            with open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                content = f.read()
+                data = json.loads(content)
+
+            tracks = data.get('media', {}).get('track', [])
+
+            for track in tracks:
+                track_type = track.get('@type')
+                language_code = track.get('Language')
+
+                if not language_code:
+                    continue
+
+                target_id = self.lang_map.get(language_code.lower())
+
+                if not target_id and '-' in language_code:
+                    primary_code = language_code.split('-')[0]
+                    target_id = self.lang_map.get(primary_code.lower())
+
+                if target_id:
+                    if track_type == 'Audio':
+                        audio_ids.add(target_id)
+                    elif track_type == 'Text':
+                        subtitle_ids.add(target_id)
+
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f'Error processing MediaInfo.json: {e}')
+
+        final_subtitle_ids = sorted(list(subtitle_ids))
         final_audio_ids = sorted(list(audio_ids))
 
         return {
@@ -834,7 +849,7 @@ class AZTrackerBase():
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def language_map(self):
-        self.all_lang_map = {
+        all_lang_map = {
             ('Abkhazian', 'abk', 'ab'): '1',
             ('Afar', 'aar', 'aa'): '2',
             ('Afrikaans', 'afr', 'af'): '3',
@@ -1024,21 +1039,21 @@ class AZTrackerBase():
         }
 
         if self.tracker == 'PHD':
-            self.all_lang_map.update({
+            all_lang_map.update({
                 ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Mooré', 'mos', 'mos'): '188',
             })
 
         if self.tracker == 'AZ':
-            self.all_lang_map.update({
+            all_lang_map.update({
                 ('Portuguese (BR)', 'por', 'pt-br'): '189',
                 ('Filipino', 'fil', 'fil'): '188',
                 ('Mooré', 'mos', 'mos'): '187',
             })
 
         if self.tracker == 'CZ':
-            self.all_lang_map.update({
+            all_lang_map.update({
                 ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Mooré', 'mos', 'mos'): '188',
                 ('Filipino', 'fil', 'fil'): '189',
@@ -1047,13 +1062,7 @@ class AZTrackerBase():
             })
 
         self.lang_map = {}
-        for key_tuple, lang_id in self.all_lang_map.items():
-            lang_name, code3, code2 = key_tuple
-
-            self.lang_map[lang_name.lower()] = lang_id
-
-            if code3:
-                self.lang_map[code3.lower()] = lang_id
-
-            if code2:
-                self.lang_map[code2.lower()] = lang_id
+        for key_tuple, lang_id in all_lang_map.items():
+            for alias in key_tuple:
+                if alias:
+                    self.lang_map[alias.lower()] = lang_id
