@@ -299,7 +299,6 @@ class TL():
             await self.upload_http(meta)
 
     async def upload_api(self, meta):
-        desc_content = await self.generate_description(meta)
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         with open(torrent_path, 'rb') as open_torrent:
@@ -310,7 +309,7 @@ class TL():
             data = {
                 'announcekey': self.passkey,
                 'category': self.get_cat_id(meta),
-                'description': desc_content,
+                'description': await self.generate_description(meta),
                 'name': self.get_name(meta),
                 'nonscene': 'on' if not meta.get('scene') else 'off',
             }
@@ -350,15 +349,27 @@ class TL():
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                     url = f'{self.base_url}/torrents/upload/apidownload'
-                    params = {'announcekey': self.passkey, 'torrentID': response.text}
-                    await self.session.get(url=url, params=params)  # cannot start seeding until someone downloads it
+                    params = {
+                        'announcekey': self.passkey,
+                        'torrentID': response.text
+                    }
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id, params=params, downurl=url)
 
-                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
+                    delay = self.config['TRACKERS'][self.tracker].get('injection_delay', 1)
+                    try:
+                        delay = float(delay)
+                        if delay < 0:
+                            raise ValueError
+                    except (ValueError, TypeError):
+                        delay = 1
+                    if delay > 5:
+                        console.print(f'TL: Waiting {delay} second(s) before adding the torrent to the client...')
+                    await asyncio.sleep(delay)
 
             else:
                 console.print(data)
 
-    async def upload_http(self, meta, cat_id):
+    async def upload_http(self, meta):
         login = await self.login(meta)
         if not login:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: Login with cookies failed."
@@ -387,7 +398,7 @@ class TL():
 
             data = {
                 'name': self.get_name(meta),
-                'category': cat_id,
+                'category': self.get_cat_id(meta),
                 'nonscene': 'on' if not meta.get("scene") else 'off',
                 'imdbURL': imdbURL,
                 'tvMazeURL': tvMazeURL,
@@ -397,9 +408,13 @@ class TL():
                 'nfotextbox': '',
                 'torrentComment': '0',
                 'uploaderComments': '',
-                'is_anonymous_upload': 'on' if meta.get('anon', False) else 'off',
+                'is_anonymous_upload': 'off',
                 'screenshots[]': '' if meta.get('anon', False) else self.get_screens(meta),  # It is not possible to upload screenshots anonymously
             }
+
+            anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+            if anon:
+                data.update({'is_anonymous_upload': 'on'})
 
             if meta['debug'] is False:
                 try:
