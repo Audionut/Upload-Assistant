@@ -335,8 +335,8 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
-            # If True, the script will check for rules compliance.
-            # Set to False to skip this check.
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
             "check_for_rules": True,
         },
         "BHD": {
@@ -402,8 +402,8 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
-            # If True, the script will check for rules compliance.
-            # Set to False to skip this check.
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
             "check_for_rules": True,
         },
         "DC": {
@@ -590,8 +590,8 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
-            # If True, the script will check for rules compliance.
-            # Set to False to skip this check.
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
             "check_for_rules": True,
         },
         "PT": {
