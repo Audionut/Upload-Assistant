@@ -331,11 +331,15 @@ class AZTrackerBase():
 
                 tracks = data.get('media', {}).get('track', [])
 
+                missing_audio_languages = []
+
                 for track in tracks:
                     track_type = track.get('@type')
                     language_code = track.get('Language')
 
                     if not language_code:
+                        if track_type == 'Audio':
+                            missing_audio_languages.append(track)
                         continue
 
                     target_id = self.lang_map.get(language_code.lower())
@@ -349,6 +353,17 @@ class AZTrackerBase():
                             audio_ids.add(target_id)
                         elif track_type == 'Text':
                             subtitle_ids.add(target_id)
+
+                if missing_audio_languages:
+                    console.print('No audio language/s found for the following tracks:')
+                    console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
+                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+
+                    langs = [lang.strip() for lang in user_input.split(',')]
+                    for lang in langs:
+                        target_id = self.lang_map.get(lang.lower())
+                        if target_id:
+                            audio_ids.add(target_id)
 
             except FileNotFoundError:
                 print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.')
