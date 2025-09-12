@@ -203,3 +203,11 @@ class AZ(AZTrackerBase):
                 return False
 
         return True
+
+    def edit_name(self, meta):
+        upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+
+        if meta.get('has_encode_settings', False):
+            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
+
+        return upload_name

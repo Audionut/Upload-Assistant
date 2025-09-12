@@ -137,6 +137,9 @@ class CZ(AZTrackerBase):
     def edit_name(self, meta):
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
+        if meta.get('has_encode_settings', False):
+            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
+
         tag_lower = meta['tag'].lower()
         invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
 

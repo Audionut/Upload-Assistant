@@ -158,7 +158,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                             meta['tracker_status'][tracker]['skip_upload'] = True
 
                     if meta['audio_languages']:
-                        meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
+                        meta['audio_languages'] = [lang for lang in meta['audio_languages']]
 
                 if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and (not subtitle_languages or subtitle_languages is None):
                     if 'text' in parsed_info:
@@ -193,7 +193,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 meta['tracker_status'][tracker]['skip_upload'] = True
 
                         if meta['subtitle_languages']:
-                            meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
+                            meta['subtitle_languages'] = [lang for lang in meta['subtitle_languages']]
 
                     if meta.get('hardcoded-subs', False):
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):

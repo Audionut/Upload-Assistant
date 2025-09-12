@@ -138,7 +138,7 @@ class AZTrackerBase():
 
                 if user_choice in ['y', 'yes']:
                     console.print(f'{self.tracker}: Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, self.tracker)
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
                         break
@@ -1020,21 +1020,21 @@ class AZTrackerBase():
 
         if self.tracker == 'PHD':
             self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Mooré', 'mos', 'mos'): '188',
             })
 
         if self.tracker == 'AZ':
             self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '189',
+                ('Portuguese (BR)', 'por', 'pt-br'): '189',
                 ('Filipino', 'fil', 'fil'): '188',
                 ('Mooré', 'mos', 'mos'): '187',
             })
 
         if self.tracker == 'CZ':
             self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Mooré', 'mos', 'mos'): '188',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Bissa', 'bib', 'bib'): '190',
