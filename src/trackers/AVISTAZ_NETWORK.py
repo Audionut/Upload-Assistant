@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
 from src.exceptions import UploadException
+from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
 from typing import Optional
@@ -261,7 +262,7 @@ class AZTrackerBase():
             response = await self.session.get(upload_page_url)
             response.raise_for_status()
 
-            if 'login' in str(response.url):
+            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
                 console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
                 return False
 
@@ -306,34 +307,52 @@ class AZTrackerBase():
         audio_ids = set()
         subtitle_ids = set()
 
-        try:
-            with open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
-                content = f.read()
-                data = json.loads(content)
+        if meta.get('is_disc', False):
+            if not meta.get('subtitle_languages') or not meta.get('audio_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-            tracks = data.get('media', {}).get('track', [])
-
-            for track in tracks:
-                track_type = track.get('@type')
-                language_code = track.get('Language')
-
-                if not language_code:
-                    continue
-
-                target_id = self.lang_map.get(language_code.lower())
-
-                if not target_id and '-' in language_code:
-                    primary_code = language_code.split('-')[0]
-                    target_id = self.lang_map.get(primary_code.lower())
-
+            found_subs_strings = meta.get('subtitle_languages', [])
+            for lang_str in found_subs_strings:
+                target_id = self.lang_map.get(lang_str.lower())
                 if target_id:
-                    if track_type == 'Audio':
-                        audio_ids.add(target_id)
-                    elif track_type == 'Text':
-                        subtitle_ids.add(target_id)
+                    subtitle_ids.add(target_id)
 
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f'Error processing MediaInfo.json: {e}')
+            found_audio_strings = meta.get('audio_languages', [])
+            for lang_str in found_audio_strings:
+                target_id = self.lang_map.get(lang_str.lower())
+                if target_id:
+                    audio_ids.add(target_id)
+        else:
+            try:
+                media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
+                with open(media_info_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                tracks = data.get('media', {}).get('track', [])
+
+                for track in tracks:
+                    track_type = track.get('@type')
+                    language_code = track.get('Language')
+
+                    if not language_code:
+                        continue
+
+                    target_id = self.lang_map.get(language_code.lower())
+
+                    if not target_id and '-' in language_code:
+                        primary_code = language_code.split('-')[0]
+                        target_id = self.lang_map.get(primary_code.lower())
+
+                    if target_id:
+                        if track_type == 'Audio':
+                            audio_ids.add(target_id)
+                        elif track_type == 'Text':
+                            subtitle_ids.add(target_id)
+
+            except FileNotFoundError:
+                print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.')
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}')
 
         final_subtitle_ids = sorted(list(subtitle_ids))
         final_audio_ids = sorted(list(audio_ids))
