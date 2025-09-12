@@ -63,6 +63,11 @@ class AZTrackerBase():
     def get_video_quality(self, meta):
         resolution = meta.get('resolution')
 
+        if self.tracker != 'PHD':
+            resolution_int = int(resolution.lower().replace('p', '').replace('i', ''))
+            if resolution_int < 720 or meta.get('sd', False):
+                return '1'
+
         keyword_map = {
             '1080i': '7',
             '1080p': '3',

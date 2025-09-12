@@ -335,6 +335,9 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
+            # If True, the script will check for rules compliance.
+            # Set to False to skip this check.
+            "check_for_rules": True,
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -399,6 +402,9 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
+            # If True, the script will check for rules compliance.
+            # Set to False to skip this check.
+            "check_for_rules": True,
         },
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -584,6 +590,9 @@ config = {
             "anon": False,
             # Set false to use imgbox links if available
             "img_rehost": True,
+            # If True, the script will check for rules compliance.
+            # Set to False to skip this check.
+            "check_for_rules": True,
         },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
