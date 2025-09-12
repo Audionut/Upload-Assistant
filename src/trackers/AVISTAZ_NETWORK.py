@@ -681,8 +681,7 @@ class AZTrackerBase():
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
                             console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            meta['skipping'] = f'{self.tracker}'
-                            return
+                            console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
 
                         task_id = match.group(1)
 

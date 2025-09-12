@@ -1,6 +1,7 @@
 aiofiles
 aiohttp
 anitopy
+bbcode
 beautifulsoup4
 bencode.py
 cli-ui
