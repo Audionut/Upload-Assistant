@@ -142,11 +142,6 @@ class AZ(AZTrackerBase):
                                     )
                     return False
 
-                resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-                if resolution < 600:
-                    meta['az_rule'] = warning + 'Video: A minimum resolution of 600 pixel width.'
-                    return False
-
             '''
             Audio Codecs:
                 Allowed: MP3, AAC, HE-AAC, AC3 (Dolby Digital), E-AC3, Dolby TrueHD, DTS, DTS-HD (MA), FLAC

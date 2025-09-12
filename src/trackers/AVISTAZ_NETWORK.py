@@ -1,4 +1,5 @@
 import asyncio
+import bbcode
 import bencodepy
 import hashlib
 import httpx
@@ -574,34 +575,32 @@ class AZTrackerBase():
                 manual_desc = f.read()
             description_parts.append(manual_desc)
 
-        final_description = '\n\n'.join(filter(None, description_parts))
-        desc = final_description
-        cleanup_patterns = [
-            (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
-            (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
-            (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
-            (r'\n{3,}', 0, 'Line break(s)')
-        ]
+        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
 
-        for pattern, flag, removed_type in cleanup_patterns:
-            desc, amount = re.subn(pattern, '', desc, flags=flag)
-            if amount > 0:
-                console.print(f'{self.tracker}: Deleted {amount} {removed_type} from description.')
+        processed_desc, amount = re.subn(
+            r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
+            '',
+            raw_bbcode_desc,
+            flags=re.DOTALL
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
 
-        desc = desc.strip()
-        desc = desc.replace('\r\n', '\n').replace('\r', '\n')
+        processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
 
-        paragraphs = re.split(r'\n\s*\n', desc)
+        bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
+        processed_desc, amount = re.subn(
+            bbcode_tags_pattern,
+            '',
+            processed_desc,
+            flags=re.IGNORECASE
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
 
-        html_parts = []
-        for p in paragraphs:
-            if not p.strip():
-                continue
-
-            p_with_br = p.replace('\n', '<br>')
-            html_parts.append(f'<p>{p_with_br}</p>')
-
-        final_html_desc = '\r\n'.join(html_parts)
+        final_html_desc = bbcode.render_html(processed_desc)
 
         meta['z_images'] = False
         rehost_images = self.config['TRACKERS'][self.tracker].get('img_rehost', True)
@@ -622,22 +621,22 @@ class AZTrackerBase():
                     try:
                         with open(image_data_file, 'r') as img_file:
                             image_data = json.load(img_file)
+                            image_list = image_data.get('image_list', [])
+                            if image_list and len(image_list) >= 3 and 'imgbox.com' in image_list[0].get('raw_url', ''):
+                                json_raw_links = [img.get('raw_url') for img in image_list if img.get('raw_url')]
+                                json_thumb_links = [img.get('img_url') for img in image_list if img.get('img_url')]
 
-                            if 'image_list' in image_data and image_data.get('image_list') and 'imgbox.com' in image_data.get('image_list', [{}])[0].get('raw_url', ''):
-                                if len(image_data.get('image_list', [])) >= 3:
-                                    json_raw_links = [img.get('raw_url') for img in image_data.get('image_list', []) if img.get('raw_url')]
-                                    json_thumb_links = [img.get('img_url') for img in image_data.get('image_list', []) if img.get('img_url')]
-
-                                    raw_links = json_raw_links[:limit]
-                                    thumb_links_limited = json_thumb_links[:limit]
-
+                                raw_links = json_raw_links[:limit]
+                                thumb_links_limited = json_thumb_links[:limit]
                     except Exception as e:
-                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
+                        console.print(f'[yellow]Could not load saved image data: {str(e)}[/yellow]')
 
             if len(raw_links) >= 3:
-                image_html = '<br><br>'
+                image_html = '<div>'
                 for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
-                    image_html += f'<a href="{raw_url}"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                    image_html += f'<a href="{raw_url}" target="_blank" rel="noopener noreferrer"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                image_html += '</div>'
+
                 final_html_desc += image_html
                 meta['z_images'] = True
 

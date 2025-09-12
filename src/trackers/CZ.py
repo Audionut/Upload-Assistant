@@ -130,12 +130,6 @@ class CZ(AZTrackerBase):
                 )
                 return False
 
-            if not meta.get('is_disc', False):
-                resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-                if resolution < 600:
-                    meta['cz_rule'] = warning + 'Video: A minimum resolution of 600 pixel width.'
-                    return False
-
             return True
 
     def edit_name(self, meta):
