@@ -1,4 +1,5 @@
 import asyncio
+import bbcode
 import bencodepy
 import hashlib
 import httpx
@@ -62,6 +63,11 @@ class AZTrackerBase():
 
     def get_video_quality(self, meta):
         resolution = meta.get('resolution')
+
+        if self.tracker != 'PHD':
+            resolution_int = int(resolution.lower().replace('p', '').replace('i', ''))
+            if resolution_int < 720 or meta.get('sd', False):
+                return '1'
 
         keyword_map = {
             '1080i': '7',
@@ -138,7 +144,7 @@ class AZTrackerBase():
 
                 if user_choice in ['y', 'yes']:
                     console.print(f'{self.tracker}: Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, self.tracker)
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
                         break
@@ -257,7 +263,7 @@ class AZTrackerBase():
             response = await self.session.get(upload_page_url)
             response.raise_for_status()
 
-            if 'login' in str(response.url):
+            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
                 console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
                 return False
 
@@ -299,23 +305,72 @@ class AZTrackerBase():
 
     async def get_lang(self, meta):
         self.language_map()
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        found_subs_strings = meta.get('subtitle_languages', [])
-        subtitle_ids = set()
-        for lang_str in found_subs_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                subtitle_ids.add(target_id)
-        final_subtitle_ids = sorted(list(subtitle_ids))
-
-        found_audio_strings = meta.get('audio_languages', [])
         audio_ids = set()
-        for lang_str in found_audio_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                audio_ids.add(target_id)
+        subtitle_ids = set()
+
+        if meta.get('is_disc', False):
+            if not meta.get('subtitle_languages') or not meta.get('audio_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+            found_subs_strings = meta.get('subtitle_languages', [])
+            for lang_str in found_subs_strings:
+                target_id = self.lang_map.get(lang_str.lower())
+                if target_id:
+                    subtitle_ids.add(target_id)
+
+            found_audio_strings = meta.get('audio_languages', [])
+            for lang_str in found_audio_strings:
+                target_id = self.lang_map.get(lang_str.lower())
+                if target_id:
+                    audio_ids.add(target_id)
+        else:
+            try:
+                media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
+                with open(media_info_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                tracks = data.get('media', {}).get('track', [])
+
+                missing_audio_languages = []
+
+                for track in tracks:
+                    track_type = track.get('@type')
+                    language_code = track.get('Language')
+
+                    if not language_code:
+                        if track_type == 'Audio':
+                            missing_audio_languages.append(track)
+                        continue
+
+                    target_id = self.lang_map.get(language_code.lower())
+
+                    if not target_id and '-' in language_code:
+                        primary_code = language_code.split('-')[0]
+                        target_id = self.lang_map.get(primary_code.lower())
+
+                    if target_id:
+                        if track_type == 'Audio':
+                            audio_ids.add(target_id)
+                        elif track_type == 'Text':
+                            subtitle_ids.add(target_id)
+
+                if missing_audio_languages:
+                    console.print('No audio language/s found for the following tracks:')
+                    console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
+                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+
+                    langs = [lang.strip() for lang in user_input.split(',')]
+                    for lang in langs:
+                        target_id = self.lang_map.get(lang.lower())
+                        if target_id:
+                            audio_ids.add(target_id)
+
+            except FileNotFoundError:
+                print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.')
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}')
+
+        final_subtitle_ids = sorted(list(subtitle_ids))
         final_audio_ids = sorted(list(audio_ids))
 
         return {
@@ -535,34 +590,32 @@ class AZTrackerBase():
                 manual_desc = f.read()
             description_parts.append(manual_desc)
 
-        final_description = '\n\n'.join(filter(None, description_parts))
-        desc = final_description
-        cleanup_patterns = [
-            (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
-            (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
-            (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
-            (r'\n{3,}', 0, 'Line break(s)')
-        ]
+        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
 
-        for pattern, flag, removed_type in cleanup_patterns:
-            desc, amount = re.subn(pattern, '', desc, flags=flag)
-            if amount > 0:
-                console.print(f'{self.tracker}: Deleted {amount} {removed_type} from description.')
+        processed_desc, amount = re.subn(
+            r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
+            '',
+            raw_bbcode_desc,
+            flags=re.DOTALL
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
 
-        desc = desc.strip()
-        desc = desc.replace('\r\n', '\n').replace('\r', '\n')
+        processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
 
-        paragraphs = re.split(r'\n\s*\n', desc)
+        bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
+        processed_desc, amount = re.subn(
+            bbcode_tags_pattern,
+            '',
+            processed_desc,
+            flags=re.IGNORECASE
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
 
-        html_parts = []
-        for p in paragraphs:
-            if not p.strip():
-                continue
-
-            p_with_br = p.replace('\n', '<br>')
-            html_parts.append(f'<p>{p_with_br}</p>')
-
-        final_html_desc = '\r\n'.join(html_parts)
+        final_html_desc = bbcode.render_html(processed_desc)
 
         meta['z_images'] = False
         rehost_images = self.config['TRACKERS'][self.tracker].get('img_rehost', True)
@@ -583,22 +636,22 @@ class AZTrackerBase():
                     try:
                         with open(image_data_file, 'r') as img_file:
                             image_data = json.load(img_file)
+                            image_list = image_data.get('image_list', [])
+                            if image_list and len(image_list) >= 3 and 'imgbox.com' in image_list[0].get('raw_url', ''):
+                                json_raw_links = [img.get('raw_url') for img in image_list if img.get('raw_url')]
+                                json_thumb_links = [img.get('img_url') for img in image_list if img.get('img_url')]
 
-                            if 'image_list' in image_data and image_data.get('image_list') and 'imgbox.com' in image_data.get('image_list', [{}])[0].get('raw_url', ''):
-                                if len(image_data.get('image_list', [])) >= 3:
-                                    json_raw_links = [img.get('raw_url') for img in image_data.get('image_list', []) if img.get('raw_url')]
-                                    json_thumb_links = [img.get('img_url') for img in image_data.get('image_list', []) if img.get('img_url')]
-
-                                    raw_links = json_raw_links[:limit]
-                                    thumb_links_limited = json_thumb_links[:limit]
-
+                                raw_links = json_raw_links[:limit]
+                                thumb_links_limited = json_thumb_links[:limit]
                     except Exception as e:
-                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
+                        console.print(f'[yellow]Could not load saved image data: {str(e)}[/yellow]')
 
             if len(raw_links) >= 3:
-                image_html = '<br><br>'
+                image_html = '<div>'
                 for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
-                    image_html += f'<a href="{raw_url}"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                    image_html += f'<a href="{raw_url}" target="_blank" rel="noopener noreferrer"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
+                image_html += '</div>'
+
                 final_html_desc += image_html
                 meta['z_images'] = True
 
@@ -643,8 +696,7 @@ class AZTrackerBase():
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
                             console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            meta['skipping'] = f'{self.tracker}'
-                            return
+                            console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
 
                         task_id = match.group(1)
 
@@ -829,7 +881,7 @@ class AZTrackerBase():
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def language_map(self):
-        self.all_lang_map = {
+        all_lang_map = {
             ('Abkhazian', 'abk', 'ab'): '1',
             ('Afar', 'aar', 'aa'): '2',
             ('Afrikaans', 'afr', 'af'): '3',
@@ -1019,22 +1071,22 @@ class AZTrackerBase():
         }
 
         if self.tracker == 'PHD':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Mooré', 'mos', 'mos'): '188',
             })
 
         if self.tracker == 'AZ':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '189',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '189',
                 ('Filipino', 'fil', 'fil'): '188',
                 ('Mooré', 'mos', 'mos'): '187',
             })
 
         if self.tracker == 'CZ':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Mooré', 'mos', 'mos'): '188',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Bissa', 'bib', 'bib'): '190',
@@ -1042,13 +1094,7 @@ class AZTrackerBase():
             })
 
         self.lang_map = {}
-        for key_tuple, lang_id in self.all_lang_map.items():
-            lang_name, code3, code2 = key_tuple
-
-            self.lang_map[lang_name.lower()] = lang_id
-
-            if code3:
-                self.lang_map[code3.lower()] = lang_id
-
-            if code2:
-                self.lang_map[code2.lower()] = lang_id
+        for key_tuple, lang_id in all_lang_map.items():
+            for alias in key_tuple:
+                if alias:
+                    self.lang_map[alias.lower()] = lang_id
