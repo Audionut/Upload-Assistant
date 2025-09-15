@@ -198,13 +198,19 @@ class AZTrackerBase():
         self.session.cookies = await self.common.parseCookieFile(cookie_file)
 
     async def search_existing(self, meta, disctype):
-        if not await self.rules(meta):
-            console.print(f"[red]{meta[f'{self.tracker.lower()}_rule']}[/red]")
-
-            choice = input('The upload appears to be not following the rules. Do you want to continue anyway? [y/N]: ').strip().lower()
-            if choice != 'y':
-                meta['skipping'] = f'{self.tracker}'
-                return
+        if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
+            warnings = await self.rules(meta)
+            if warnings:
+                console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red] \n")
+                console.print(f"{meta[f'{self.tracker.lower()}_rule']}\n")
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
+                    if choice != 'y':
+                        meta['skipping'] = f'{self.tracker}'
+                        return
+                else:
+                    meta['skipping'] = f'{self.tracker}'
+                    return
 
         if not await self.get_media_code(meta):
             console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
