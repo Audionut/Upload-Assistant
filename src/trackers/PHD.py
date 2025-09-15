@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import re
 from datetime import datetime
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
@@ -428,34 +427,6 @@ class PHD(AZTrackerBase):
                     return False
 
             return True
-
-    def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta["aka"], '').replace('Dubbed', '').replace('Dual-Audio', '')
-        forbidden_terms = [
-            r'\bLIMITED\b',
-            r'\bCriterion Collection\b',
-            r'\b\d{1,3}(?:st|nd|rd|th)\s+Anniversary Edition\b'
-        ]
-        for term in forbidden_terms:
-            upload_name = re.sub(term, '', upload_name, flags=re.IGNORECASE).strip()
-
-        upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\s{2,}', ' ', upload_name).strip()
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
-
-        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
-            upload_name = f'{upload_name}-NOGROUP'
-
-        if meta.get('has_encode_settings', False):
-            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
-
-        return upload_name
 
     def get_rip_type(self, meta):
         source_type = meta.get('type')

@@ -200,8 +200,11 @@ class AZTrackerBase():
     async def search_existing(self, meta, disctype):
         if not await self.rules(meta):
             console.print(f"[red]{meta[f'{self.tracker.lower()}_rule']}[/red]")
-            meta['skipping'] = f'{self.tracker}'
-            return
+
+            choice = input('The upload appears to be not following the rules. Do you want to continue anyway? [y/N]: ').strip().lower()
+            if choice != 'y':
+                meta['skipping'] = f'{self.tracker}'
+                return
 
         if not await self.get_media_code(meta):
             console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
@@ -727,6 +730,35 @@ class AZTrackerBase():
     def edit_name(self, meta):
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
+        if self.tracker == 'PHD':
+            forbidden_terms = [
+                r'\bLIMITED\b',
+                r'\bCriterion Collection\b',
+                r'\b\d{1,3}(?:st|nd|rd|th)\s+Anniversary Edition\b'
+            ]
+            for term in forbidden_terms:
+                upload_name = re.sub(term, '', upload_name, flags=re.IGNORECASE).strip()
+
+            upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\s{2,}', ' ', upload_name).strip()
+
+        if meta.get('has_encode_settings', False):
+            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
+
+        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
+
+            if self.tracker == 'CZ':
+                upload_name = f'{upload_name}-NoGroup'
+            if self.tracker == 'PHD':
+                upload_name = f'{upload_name}-NOGROUP'
+
         return upload_name
 
     def get_rip_type(self, meta):
@@ -988,7 +1020,7 @@ class AZTrackerBase():
             ('Malay', 'msa', 'ms'): '104',
             ('Malayalam', 'mal', 'ml'): '105',
             ('Maltese', 'mlt', 'mt'): '106',
-            ('Mandarin', 'cmn', 'zh'): '107',
+            ('Mandarin', 'cmn', 'cmn'): '107',
             ('Manx', 'glv', 'gv'): '108',
             ('Maori', 'mri', 'mi'): '109',
             ('Marathi', 'mar', 'mr'): '110',

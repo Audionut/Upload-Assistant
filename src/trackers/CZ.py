@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import re
 from datetime import datetime
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
@@ -131,19 +130,3 @@ class CZ(AZTrackerBase):
                 return False
 
             return True
-
-    def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
-
-        if meta.get('has_encode_settings', False):
-            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
-
-        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
-            upload_name = f'{upload_name}-NoGroup'
-
-        return upload_name
