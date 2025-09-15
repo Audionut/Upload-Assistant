@@ -190,10 +190,18 @@ class GPW():
         base_desc = ''
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                base_desc = f.read()
-                if base_desc:
-                    description.append(base_desc)
+            with open(base_desc_path, 'r', encoding='utf-8') as file:
+                base_desc = file.read()
+
+            console.print('\n[green]Found existing description:[/green]\n')
+            print(base_desc)
+            user_input = input('Do you want to use this description? (y/n): ')
+
+            if user_input.lower() == 'y':
+                description.append(base_desc)
+                console.print('Using existing description.')
+            else:
+                console.print('Ignoring existing description.')
 
         # Screenshots
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
@@ -206,9 +214,7 @@ class GPW():
         if images:
             screenshots_block = '[center]\n'
             for i, image in enumerate(images, start=1):
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f'[url={web_url}][img=350]{img_url}[/img][/url] '
+                screenshots_block += f"[img=350]{image['raw_url']}[/img] "
                 if i % 2 == 0:
                     screenshots_block += '\n'
             screenshots_block += '\n[/center]'
@@ -290,7 +296,7 @@ class GPW():
         if not cookies:
             search_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=torrent&imdbID={imdb}'
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     data = response.json()
@@ -321,7 +327,7 @@ class GPW():
             found_items = []
 
             try:
-                async with httpx.AsyncClient(cookies=cookies, timeout=10.0, headers={'User-Agent': 'your-custom-user-agent'}) as client:
+                async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': 'your-custom-user-agent'}) as client:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     soup = BeautifulSoup(response.text, 'html.parser')
@@ -490,7 +496,7 @@ class GPW():
         search_url = f"{self.base_url}/api.php?api_key={self.api_key}&action=torrent&req=group&imdbID={meta.get('imdb_info', {}).get('imdbID')}"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(search_url)
                 response.raise_for_status()
 
@@ -720,7 +726,7 @@ class GPW():
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
 
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.post(url=upload_url, files=files, data=data)
                     data = response.json()
 
