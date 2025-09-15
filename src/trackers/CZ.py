@@ -122,6 +122,6 @@ class CZ(AZTrackerBase):
 
         if warnings:
             all_warnings = '\n\n'.join(filter(None, warnings))
-            meta['az_rule'] = all_warnings
+            return all_warnings
 
-        return warnings
+        return

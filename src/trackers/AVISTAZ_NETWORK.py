@@ -256,8 +256,7 @@ class AZTrackerBase():
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
             warnings = await self.rules(meta)
             if warnings:
-                console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red] \n")
-                console.print(f"{meta[f'{self.tracker.lower()}_rule']}\n")
+                console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
                     if choice != 'y':
@@ -614,9 +613,18 @@ class AZTrackerBase():
         description_parts = []
 
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+            with open(base_desc_path, 'r', encoding='utf-8') as file:
+                manual_desc = file.read()
+
+            console.print('\n[green]Found existing description:[/green]\n')
+            print(manual_desc)
+            user_input = input('Do you want to use this description? (y/n): ')
+
+            if user_input.lower() == 'y':
+                description_parts.append(manual_desc)
+                console.print('Using existing description.')
+            else:
+                console.print('Ignoring existing description.')
 
         raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
 

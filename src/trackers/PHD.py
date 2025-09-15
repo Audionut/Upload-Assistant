@@ -101,7 +101,7 @@ class PHD(AZTrackerBase):
         origin_countries_codes = meta.get('origin_country', [])
 
         if any(code in phd_allowed_countries for code in origin_countries_codes):
-            return True
+            pass
 
         # CinemaZ
         elif any(code in cinemaz_countries for code in origin_countries_codes):
@@ -328,9 +328,9 @@ class PHD(AZTrackerBase):
 
         if warnings:
             all_warnings = '\n\n'.join(filter(None, warnings))
-            meta['az_rule'] = all_warnings
+            return all_warnings
 
-        return warnings
+        return
 
     def get_rip_type(self, meta):
         source_type = meta.get('type')
