@@ -380,9 +380,12 @@ class AZTrackerBase():
                             audio_ids.add(target_id)
                         elif track_type == 'Text':
                             subtitle_ids.add(target_id)
+                    else:
+                        if track_type == 'Audio':
+                            missing_audio_languages.append(track)
 
                 if missing_audio_languages:
-                    console.print('No audio language/s found for the following tracks:')
+                    console.print('No audio language/s found.')
                     console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
                     user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
 
