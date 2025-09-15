@@ -2,6 +2,7 @@ import asyncio
 import bbcode
 import bencodepy
 import hashlib
+import http.cookiejar
 import httpx
 import json
 import os
@@ -138,7 +139,7 @@ class AZTrackerBase():
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
+                console.print(f"\n{self.tracker}: The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
 
                 user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
 
@@ -191,11 +192,65 @@ class AZTrackerBase():
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
-            return False
+        self.cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
+        try:
+            self.cookie_jar.load(ignore_discard=True, ignore_expires=True)
+        except FileNotFoundError:
+            console.print(f'{self.tracker}: [bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
+
+        self.session.cookies = self.cookie_jar
+
+    async def save_cookies(self):
+        # They seem to change their cookies frequently, we need to update the .txt
+        if self.cookie_jar is None:
+            console.print(f'{self.tracker}: Cookie jar not initialized, cannot save cookies.')
+            return
+
+        try:
+            self.cookie_jar.save(ignore_discard=True, ignore_expires=True)
+        except Exception as e:
+            console.print(f'{self.tracker}: Failed to update the cookie file: {e}')
+
+    async def validate_credentials(self, meta):
+        await self.load_cookies(meta)
+        try:
+            upload_page_url = f'{self.base_url}/upload'
+            response = await self.session.get(upload_page_url)
+            response.raise_for_status()
+
+            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
+                console.print(f'{self.tracker}: Validation failed. The cookie appears to be expired or invalid.')
+                return False
+
+            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
+
+            if not auth_match:
+                console.print(f"{self.tracker}: Validation failed. Could not find 'auth' token on upload page.")
+                console.print('This can happen if the site HTML has changed or if the login failed silently..')
+
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                console.print(f'The server response was saved to {failure_path} for analysis.')
+                return False
+
+            self.auth_token = auth_match.group(1)
+
+            await self.save_cookies()
+
+            return True
+
+        except httpx.TimeoutException:
+            console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
+            return False
+        except httpx.HTTPStatusError as e:
+            console.print(f'{self.tracker}: HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
+            return False
+        except httpx.RequestError as e:
+            console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
+            return False
 
     async def search_existing(self, meta, disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
@@ -213,7 +268,7 @@ class AZTrackerBase():
                     return
 
         if not await self.get_media_code(meta):
-            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
             meta['skipping'] = f'{self.tracker}'
             return
 
@@ -264,42 +319,6 @@ class AZTrackerBase():
             'TV': '2',
         }.get(category_name, '0')
         return category_id
-
-    async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload'
-            response = await self.session.get(upload_page_url)
-            response.raise_for_status()
-
-            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
-                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
-                return False
-
-            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f"{self.tracker} Validation failed. Could not find 'auth' token on upload page.")
-                console.print('This can happen if the site HTML has changed or if the login failed silently..')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'The server response was saved to {failure_path} for analysis.')
-                return False
-
-            self.auth_token = auth_match.group(1)
-            return True
-
-        except httpx.TimeoutException:
-            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
-            return False
 
     async def get_file_info(self, meta):
         info_file_path = ''
@@ -536,7 +555,7 @@ class AZTrackerBase():
                 return results
 
             except Exception as e:
-                console.print(f'[{self.tracker}] An error occurred while fetching requests: {e}')
+                console.print(f'{self.tracker}: An error occurred while fetching requests: {e}')
                 return []
 
     async def fetch_tag_id(self, word):
