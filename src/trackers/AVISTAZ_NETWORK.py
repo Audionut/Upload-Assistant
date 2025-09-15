@@ -604,6 +604,14 @@ class AZTrackerBase():
             elif self.tracker == 'PHD':
                 tags.insert(0, '1448')
 
+        if self.config['TRACKERS'][self.tracker].get('internal', False):
+            if self.tracker == 'AZ':
+                tags.insert(0, '943')
+            elif self.tracker == 'CZ':
+                tags.insert(0, '938')
+            elif self.tracker == 'PHD':
+                tags.insert(0, '415')
+
         return tags
 
     async def edit_desc(self, meta):
@@ -616,15 +624,16 @@ class AZTrackerBase():
             with open(base_desc_path, 'r', encoding='utf-8') as file:
                 manual_desc = file.read()
 
-            console.print('\n[green]Found existing description:[/green]\n')
-            print(manual_desc)
-            user_input = input('Do you want to use this description? (y/n): ')
+            if manual_desc:
+                console.print('\n[green]Found existing description:[/green]\n')
+                print(manual_desc)
+                user_input = input('Do you want to use this description? (y/n): ')
 
-            if user_input.lower() == 'y':
-                description_parts.append(manual_desc)
-                console.print('Using existing description.')
-            else:
-                console.print('Ignoring existing description.')
+                if user_input.lower() == 'y':
+                    description_parts.append(manual_desc)
+                    console.print('Using existing description.')
+                else:
+                    console.print('Ignoring existing description.')
 
         raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
 
