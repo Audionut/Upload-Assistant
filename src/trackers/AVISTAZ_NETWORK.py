@@ -665,44 +665,6 @@ class AZTrackerBase():
 
         final_html_desc = bbcode.render_html(processed_desc)
 
-        meta['z_images'] = False
-        rehost_images = self.config['TRACKERS'][self.tracker].get('img_rehost', True)
-        if not rehost_images:
-            limit = 3 if meta.get('tv_pack', '') == 0 else 15
-            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-            thumb_links = [img.get('img_url') for img in meta.get('image_list', []) if img.get('img_url')]
-
-            raw_links = []
-            thumb_links_limited = []
-
-            if len(image_links) >= 3 and 'imgbox.com' in image_links[0]:
-                raw_links = image_links[:limit]
-                thumb_links_limited = thumb_links[:limit]
-            else:
-                image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/reuploaded_images.json"
-                if os.path.exists(image_data_file):
-                    try:
-                        with open(image_data_file, 'r') as img_file:
-                            image_data = json.load(img_file)
-                            image_list = image_data.get('image_list', [])
-                            if image_list and len(image_list) >= 3 and 'imgbox.com' in image_list[0].get('raw_url', ''):
-                                json_raw_links = [img.get('raw_url') for img in image_list if img.get('raw_url')]
-                                json_thumb_links = [img.get('img_url') for img in image_list if img.get('img_url')]
-
-                                raw_links = json_raw_links[:limit]
-                                thumb_links_limited = json_thumb_links[:limit]
-                    except Exception as e:
-                        console.print(f'[yellow]Could not load saved image data: {str(e)}[/yellow]')
-
-            if len(raw_links) >= 3:
-                image_html = '<div>'
-                for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
-                    image_html += f'<a href="{raw_url}" target="_blank" rel="noopener noreferrer"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
-                image_html += '</div>'
-
-                final_html_desc += image_html
-                meta['z_images'] = True
-
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(final_html_desc)
 
@@ -891,11 +853,8 @@ class AZTrackerBase():
                 data.update({
                     'info_hash': task_info.get('info_hash'),
                     'task_id': task_info.get('task_id'),
+                    'screenshots[]': await self.get_screenshots(meta)
                 })
-                if not meta['z_images']:
-                    data.update({
-                        'screenshots[]': await self.get_screenshots(meta)
-                    })
 
             except Exception as e:
                 console.print(f'{self.tracker}: An unexpected error occurred while uploading: {e}')
@@ -953,7 +912,7 @@ class AZTrackerBase():
 
         else:
             console.print(data)
-            status_message = f'{self.tracker}: Debug mode enabled, not uploading.'
+            status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
