@@ -107,7 +107,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'HMAX': 'HMAX', 'HBO Max': 'HMAX', 'HS': 'HTSR', 'HTSR': 'HTSR', 'HSTR': 'Hotstar', 'HULU': 'HULU', 'Hulu': 'HULU',
         'hoichoi': 'HoiChoi', 'ID': 'ID', 'Investigation Discovery': 'ID', 'IFC': 'IFC', 'iflix': 'IFX',
         'National Audiovisual Institute': 'INA', 'ITV': 'ITV', 'JOYN': 'JOYN', 'KAYO': 'KAYO', 'KNOW': 'KNOW', 'Knowledge Network': 'KNOW',
-        'KNPY': 'KNPY', 'Kanopy': 'KNPY', 'LIFE': 'LIFE', 'Lifetime': 'LIFE', 'LN': 'LN', 'MA': 'MA', 'Looke': 'LOOKE', 'LOOKE': 'LOOKE', 'Movies Anywhere': 'MA',
+        'KNPY': 'KNPY', 'Kanopy': 'KNPY', 'Kocowa+': 'KCW', 'Kocowa': 'KCW', 'KCW': 'KCW', 'LIFE': 'LIFE', 'Lifetime': 'LIFE', 'LN': 'LN', 'MA': 'MA', 'Looke': 'LOOKE', 'LOOKE': 'LOOKE', 'Movies Anywhere': 'MA',
         'MAX': 'MAX', 'MBC': 'MBC', 'MNBC': 'MNBC', 'MSNBC': 'MNBC', 'MTOD': 'MTOD', 'Motor Trend OnDemand': 'MTOD', 'MTV': 'MTV',
         'MUBI': 'MUBI', 'NATG': 'NATG', 'National Geographic': 'NATG', 'NBA': 'NBA', 'NBA TV': 'NBA', 'NBC': 'NBC', 'NF': 'NF',
         'Netflix': 'NF', 'National Film Board': 'NFB', 'NFL': 'NFL', 'NFLN': 'NFLN', 'NFL Now': 'NFLN', 'NICK': 'NICK',
