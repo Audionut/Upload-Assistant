@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import re
 from datetime import datetime
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
@@ -17,20 +16,17 @@ class CZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
 
     async def rules(self, meta):
-        meta['cz_rule'] = ''
-        warning = f'{self.tracker} RULE WARNING: '
+        warnings = []
 
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
-            meta['cz_rule'] = (
-                warning + 'The only allowed content to be uploaded are Movies and TV Shows.\n'
+            warnings.append(
+                'The only allowed content to be uploaded are Movies and TV Shows.\n'
                 'Anything else, like games, music, software and porn is not allowed!'
             )
-            return False
 
         if meta.get('anime', False):
-            meta['cz_rule'] = warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
-            return False
+            warnings.append("Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
         # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
@@ -52,7 +48,7 @@ class CZ(AZTrackerBase):
             'AD', 'AL', 'AT', 'AX', 'BA', 'BE', 'BG', 'BY', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI',
             'FO', 'FR', 'GB', 'GG', 'GI', 'GR', 'HR', 'HU', 'IE', 'IM', 'IS', 'IT', 'JE', 'LI', 'LT',
             'LU', 'LV', 'MC', 'MD', 'ME', 'MK', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'RU', 'SE',
-            'SI', 'SJ', 'SK', 'SM', 'UA', 'VA'
+            'SI', 'SJ', 'SK', 'SM', 'SU', 'UA', 'VA', 'XC'
         ]
 
         # Countries that belong on PrivateHD (unless they are old)
@@ -100,19 +96,17 @@ class CZ(AZTrackerBase):
                 pass
             else:
                 # It's new, so redirect to PrivateHD
-                meta['cz_rule'] = (
-                    warning + 'DO NOT upload recent mainstream English content. '
+                warnings.append(
+                    'DO NOT upload recent mainstream English content. '
                     'Upload this to our sister site PrivateHD.to instead.'
                 )
-                return False
 
         # Case 2: The content is Asian, redirect to AvistaZ
         elif any(code in az_countries for code in origin_countries_codes):
-            meta['cz_rule'] = (
-                warning + 'DO NOT upload Asian content. '
+            warnings.append(
+                'DO NOT upload Asian content. '
                 'Upload this to our sister site AvistaZ.to instead.'
             )
-            return False
 
         # Case 3: The content is from one of the normally allowed CZ regions
         elif any(code in cz_allowed_countries for code in origin_countries_codes):
@@ -121,28 +115,13 @@ class CZ(AZTrackerBase):
 
         # Case 4: Fallback for any other case (e.g., country not in any list)
         else:
-            meta['cz_rule'] = (
-                warning + 'This content is not allowed. CinemaZ accepts content from Europe (excluding UK/IE), '
+            warnings.append(
+                'This content is not allowed. CinemaZ accepts content from Europe (excluding UK/IE), '
                 'Africa, the Middle East, Russia, and the Americas (excluding recent mainstream English content).'
             )
-            return False
 
-        resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-        if resolution < 600:
-            meta['cz_rule'] = warning + 'Video: A minimum resolution of 600 pixel width.'
-            return False
+        if warnings:
+            all_warnings = '\n\n'.join(filter(None, warnings))
+            return all_warnings
 
-        return True
-
-    def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
-
-        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
-            upload_name = f'{upload_name}-NoGroup'
-
-        return upload_name
+        return

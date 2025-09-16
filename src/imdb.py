@@ -279,10 +279,11 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
     async def get_credits(title_data, category_keyword):
         people_list = []
+        people_id_list = []
         principal_credits = await safe_get(title_data, ['principalCredits'], [])
 
         if not isinstance(principal_credits, list):
-            return people_list
+            return people_list, people_id_list
 
         for pc in principal_credits:
             category_text = await safe_get(pc, ['category', 'text'], '')
@@ -296,14 +297,15 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
                     if person_id and person_name:
                         people_list.append(person_name)
+                        people_id_list.append(person_id)
                 break
 
-        return people_list
+        return people_list, people_id_list
 
-    imdb_info['directors'] = await get_credits(title_data, 'Direct')
-    imdb_info['creators'] = await get_credits(title_data, 'Creat')
-    imdb_info['writers'] = await get_credits(title_data, 'Writ')
-    imdb_info['stars'] = await get_credits(title_data, 'Star')
+    imdb_info['directors'], imdb_info['directors_id'] = await get_credits(title_data, 'Direct')
+    imdb_info['creators'], imdb_info['creators_id'] = await get_credits(title_data, 'Creat')
+    imdb_info['writers'], imdb_info['writers_id'] = await get_credits(title_data, 'Writ')
+    imdb_info['stars'], imdb_info['stars_id'] = await get_credits(title_data, 'Star')
 
     editions = await safe_get(title_data, ['runtimes', 'edges'], [])
     if editions:

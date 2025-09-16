@@ -1,6 +1,8 @@
 import asyncio
+import bbcode
 import bencodepy
 import hashlib
+import http.cookiejar
 import httpx
 import json
 import os
@@ -62,6 +64,11 @@ class AZTrackerBase():
 
     def get_video_quality(self, meta):
         resolution = meta.get('resolution')
+
+        if self.tracker != 'PHD':
+            resolution_int = int(resolution.lower().replace('p', '').replace('i', ''))
+            if resolution_int < 720 or meta.get('sd', False):
+                return '1'
 
         keyword_map = {
             '1080i': '7',
@@ -132,13 +139,13 @@ class AZTrackerBase():
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n[{self.tracker}] The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
+                console.print(f"\n{self.tracker}: The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
 
                 user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
                     console.print(f'{self.tracker}: Trying to add to database...')
-                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id, self.tracker)
+                    added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
                         break
@@ -185,20 +192,82 @@ class AZTrackerBase():
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[{self.tracker}] Cookie file for {self.tracker} not found: {cookie_file}')
-            return False
+        self.cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
+        try:
+            self.cookie_jar.load(ignore_discard=True, ignore_expires=True)
+        except FileNotFoundError:
+            console.print(f'{self.tracker}: [bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
 
-    async def search_existing(self, meta, disctype):
-        if not await self.rules(meta):
-            console.print(f"[red]{meta[f'{self.tracker.lower()}_rule']}[/red]")
-            meta['skipping'] = f'{self.tracker}'
+        self.session.cookies = self.cookie_jar
+
+    async def save_cookies(self):
+        # They seem to change their cookies frequently, we need to update the .txt
+        if self.cookie_jar is None:
+            console.print(f'{self.tracker}: Cookie jar not initialized, cannot save cookies.')
             return
 
+        try:
+            self.cookie_jar.save(ignore_discard=True, ignore_expires=True)
+        except Exception as e:
+            console.print(f'{self.tracker}: Failed to update the cookie file: {e}')
+
+    async def validate_credentials(self, meta):
+        await self.load_cookies(meta)
+        try:
+            upload_page_url = f'{self.base_url}/upload'
+            response = await self.session.get(upload_page_url)
+            response.raise_for_status()
+
+            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
+                console.print(f'{self.tracker}: Validation failed. The cookie appears to be expired or invalid.')
+                return False
+
+            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
+
+            if not auth_match:
+                console.print(f"{self.tracker}: Validation failed. Could not find 'auth' token on upload page.")
+                console.print('This can happen if the site HTML has changed or if the login failed silently..')
+
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                console.print(f'The server response was saved to {failure_path} for analysis.')
+                return False
+
+            self.auth_token = auth_match.group(1)
+
+            await self.save_cookies()
+
+            return True
+
+        except httpx.TimeoutException:
+            console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
+            return False
+        except httpx.HTTPStatusError as e:
+            console.print(f'{self.tracker}: HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
+            return False
+        except httpx.RequestError as e:
+            console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
+            return False
+
+    async def search_existing(self, meta, disctype):
+        if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
+            warnings = await self.rules(meta)
+            if warnings:
+                console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
+                    if choice != 'y':
+                        meta['skipping'] = f'{self.tracker}'
+                        return
+                else:
+                    meta['skipping'] = f'{self.tracker}'
+                    return
+
         if not await self.get_media_code(meta):
-            console.print((f"[{self.tracker}] This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
             meta['skipping'] = f'{self.tracker}'
             return
 
@@ -250,42 +319,6 @@ class AZTrackerBase():
         }.get(category_name, '0')
         return category_id
 
-    async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload'
-            response = await self.session.get(upload_page_url)
-            response.raise_for_status()
-
-            if 'login' in str(response.url):
-                console.print(f'[{self.tracker}] Validation failed. The cookie appears to be expired or invalid.')
-                return False
-
-            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f"{self.tracker} Validation failed. Could not find 'auth' token on upload page.")
-                console.print('This can happen if the site HTML has changed or if the login failed silently..')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'The server response was saved to {failure_path} for analysis.')
-                return False
-
-            self.auth_token = auth_match.group(1)
-            return True
-
-        except httpx.TimeoutException:
-            console.print(f'[{self.tracker}] Error in {self.tracker}: Timeout while trying to validate credentials.')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[{self.tracker}] HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[{self.tracker}] Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
-            return False
-
     async def get_file_info(self, meta):
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
@@ -299,23 +332,75 @@ class AZTrackerBase():
 
     async def get_lang(self, meta):
         self.language_map()
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        found_subs_strings = meta.get('subtitle_languages', [])
-        subtitle_ids = set()
-        for lang_str in found_subs_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                subtitle_ids.add(target_id)
-        final_subtitle_ids = sorted(list(subtitle_ids))
-
-        found_audio_strings = meta.get('audio_languages', [])
         audio_ids = set()
-        for lang_str in found_audio_strings:
-            target_id = self.lang_map.get(lang_str.lower())
-            if target_id:
-                audio_ids.add(target_id)
+        subtitle_ids = set()
+
+        if meta.get('is_disc', False):
+            if not meta.get('subtitle_languages') or not meta.get('audio_languages'):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+            found_subs_strings = meta.get('subtitle_languages', [])
+            for lang_str in found_subs_strings:
+                target_id = self.lang_map.get(lang_str.lower())
+                if target_id:
+                    subtitle_ids.add(target_id)
+
+            found_audio_strings = meta.get('audio_languages', [])
+            for lang_str in found_audio_strings:
+                target_id = self.lang_map.get(lang_str.lower())
+                if target_id:
+                    audio_ids.add(target_id)
+        else:
+            try:
+                media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
+                with open(media_info_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                tracks = data.get('media', {}).get('track', [])
+
+                missing_audio_languages = []
+
+                for track in tracks:
+                    track_type = track.get('@type')
+                    language_code = track.get('Language')
+
+                    if not language_code:
+                        if track_type == 'Audio':
+                            missing_audio_languages.append(track)
+                        continue
+
+                    target_id = self.lang_map.get(language_code.lower())
+
+                    if not target_id and '-' in language_code:
+                        primary_code = language_code.split('-')[0]
+                        target_id = self.lang_map.get(primary_code.lower())
+
+                    if target_id:
+                        if track_type == 'Audio':
+                            audio_ids.add(target_id)
+                        elif track_type == 'Text':
+                            subtitle_ids.add(target_id)
+                    else:
+                        if track_type == 'Audio':
+                            missing_audio_languages.append(track)
+
+                if missing_audio_languages:
+                    console.print('No audio language/s found.')
+                    console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
+                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+
+                    langs = [lang.strip() for lang in user_input.split(',')]
+                    for lang in langs:
+                        target_id = self.lang_map.get(lang.lower())
+                        if target_id:
+                            audio_ids.add(target_id)
+
+            except FileNotFoundError:
+                print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.')
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}')
+
+        final_subtitle_ids = sorted(list(subtitle_ids))
         final_audio_ids = sorted(list(audio_ids))
 
         return {
@@ -472,7 +557,7 @@ class AZTrackerBase():
                 return results
 
             except Exception as e:
-                console.print(f'[{self.tracker}] An error occurred while fetching requests: {e}')
+                console.print(f'{self.tracker}: An error occurred while fetching requests: {e}')
                 return []
 
     async def fetch_tag_id(self, word):
@@ -522,6 +607,14 @@ class AZTrackerBase():
             elif self.tracker == 'PHD':
                 tags.insert(0, '1448')
 
+        if self.config['TRACKERS'][self.tracker].get('internal', False):
+            if self.tracker == 'AZ':
+                tags.insert(0, '943')
+            elif self.tracker == 'CZ':
+                tags.insert(0, '938')
+            elif self.tracker == 'PHD':
+                tags.insert(0, '415')
+
         return tags
 
     async def edit_desc(self, meta):
@@ -531,76 +624,46 @@ class AZTrackerBase():
         description_parts = []
 
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+            with open(base_desc_path, 'r', encoding='utf-8') as file:
+                manual_desc = file.read()
 
-        final_description = '\n\n'.join(filter(None, description_parts))
-        desc = final_description
-        cleanup_patterns = [
-            (r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', re.DOTALL, 'NFO'),
-            (r'\[/?.*?\]', 0, 'BBCode tag(s)'),
-            (r'http[s]?://\S+|www\.\S+', 0, 'Link(s)'),
-            (r'\n{3,}', 0, 'Line break(s)')
-        ]
+            if manual_desc:
+                console.print('\n[green]Found existing description:[/green]\n')
+                print(manual_desc)
+                user_input = input('Do you want to use this description? (y/n): ')
 
-        for pattern, flag, removed_type in cleanup_patterns:
-            desc, amount = re.subn(pattern, '', desc, flags=flag)
-            if amount > 0:
-                console.print(f'{self.tracker}: Deleted {amount} {removed_type} from description.')
+                if user_input.lower() == 'y':
+                    description_parts.append(manual_desc)
+                    console.print('Using existing description.')
+                else:
+                    console.print('Ignoring existing description.')
 
-        desc = desc.strip()
-        desc = desc.replace('\r\n', '\n').replace('\r', '\n')
+        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
 
-        paragraphs = re.split(r'\n\s*\n', desc)
+        processed_desc, amount = re.subn(
+            r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
+            '',
+            raw_bbcode_desc,
+            flags=re.DOTALL
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
 
-        html_parts = []
-        for p in paragraphs:
-            if not p.strip():
-                continue
+        processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
 
-            p_with_br = p.replace('\n', '<br>')
-            html_parts.append(f'<p>{p_with_br}</p>')
+        bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
+        processed_desc, amount = re.subn(
+            bbcode_tags_pattern,
+            '',
+            processed_desc,
+            flags=re.IGNORECASE
+        )
+        if amount > 0:
+            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
 
-        final_html_desc = '\r\n'.join(html_parts)
-
-        meta['z_images'] = False
-        rehost_images = self.config['TRACKERS'][self.tracker].get('img_rehost', True)
-        if not rehost_images:
-            limit = 3 if meta.get('tv_pack', '') == 0 else 15
-            image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-            thumb_links = [img.get('img_url') for img in meta.get('image_list', []) if img.get('img_url')]
-
-            raw_links = []
-            thumb_links_limited = []
-
-            if len(image_links) >= 3 and 'imgbox.com' in image_links[0]:
-                raw_links = image_links[:limit]
-                thumb_links_limited = thumb_links[:limit]
-            else:
-                image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/reuploaded_images.json"
-                if os.path.exists(image_data_file):
-                    try:
-                        with open(image_data_file, 'r') as img_file:
-                            image_data = json.load(img_file)
-
-                            if 'image_list' in image_data and image_data.get('image_list') and 'imgbox.com' in image_data.get('image_list', [{}])[0].get('raw_url', ''):
-                                if len(image_data.get('image_list', [])) >= 3:
-                                    json_raw_links = [img.get('raw_url') for img in image_data.get('image_list', []) if img.get('raw_url')]
-                                    json_thumb_links = [img.get('img_url') for img in image_data.get('image_list', []) if img.get('img_url')]
-
-                                    raw_links = json_raw_links[:limit]
-                                    thumb_links_limited = json_thumb_links[:limit]
-
-                    except Exception as e:
-                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
-
-            if len(raw_links) >= 3:
-                image_html = '<br><br>'
-                for i, (raw_url, thumb_url) in enumerate(zip(raw_links, thumb_links_limited)):
-                    image_html += f'<a href="{raw_url}"><img src="{thumb_url}" alt="Screenshot {i+1}"></a> '
-                final_html_desc += image_html
-                meta['z_images'] = True
+        final_html_desc = bbcode.render_html(processed_desc)
 
         with open(final_desc_path, 'w', encoding='utf-8') as f:
             f.write(final_html_desc)
@@ -643,8 +706,7 @@ class AZTrackerBase():
                         match = re.search(r'/(\d+)$', redirect_url)
                         if not match:
                             console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            meta['skipping'] = f'{self.tracker}'
-                            return
+                            console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
 
                         task_id = match.group(1)
 
@@ -674,6 +736,35 @@ class AZTrackerBase():
 
     def edit_name(self, meta):
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+
+        if self.tracker == 'PHD':
+            forbidden_terms = [
+                r'\bLIMITED\b',
+                r'\bCriterion Collection\b',
+                r'\b\d{1,3}(?:st|nd|rd|th)\s+Anniversary Edition\b'
+            ]
+            for term in forbidden_terms:
+                upload_name = re.sub(term, '', upload_name, flags=re.IGNORECASE).strip()
+
+            upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
+            upload_name = re.sub(r'\s{2,}', ' ', upload_name).strip()
+
+        if meta.get('has_encode_settings', False):
+            upload_name = upload_name.replace('H.264', 'x264').replace('H.265', 'x265')
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
+
+        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
+
+            if self.tracker == 'CZ':
+                upload_name = f'{upload_name}-NoGroup'
+            if self.tracker == 'PHD':
+                upload_name = f'{upload_name}-NOGROUP'
 
         return upload_name
 
@@ -762,11 +853,8 @@ class AZTrackerBase():
                 data.update({
                     'info_hash': task_info.get('info_hash'),
                     'task_id': task_info.get('task_id'),
+                    'screenshots[]': await self.get_screenshots(meta)
                 })
-                if not meta['z_images']:
-                    data.update({
-                        'screenshots[]': await self.get_screenshots(meta)
-                    })
 
             except Exception as e:
                 console.print(f'{self.tracker}: An unexpected error occurred while uploading: {e}')
@@ -824,12 +912,12 @@ class AZTrackerBase():
 
         else:
             console.print(data)
-            status_message = f'{self.tracker}: Debug mode enabled, not uploading.'
+            status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def language_map(self):
-        self.all_lang_map = {
+        all_lang_map = {
             ('Abkhazian', 'abk', 'ab'): '1',
             ('Afar', 'aar', 'aa'): '2',
             ('Afrikaans', 'afr', 'af'): '3',
@@ -936,7 +1024,7 @@ class AZTrackerBase():
             ('Malay', 'msa', 'ms'): '104',
             ('Malayalam', 'mal', 'ml'): '105',
             ('Maltese', 'mlt', 'mt'): '106',
-            ('Mandarin', 'cmn', 'zh'): '107',
+            ('Mandarin', 'cmn', 'cmn'): '107',
             ('Manx', 'glv', 'gv'): '108',
             ('Maori', 'mri', 'mi'): '109',
             ('Marathi', 'mar', 'mr'): '110',
@@ -1019,22 +1107,22 @@ class AZTrackerBase():
         }
 
         if self.tracker == 'PHD':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Mooré', 'mos', 'mos'): '188',
             })
 
         if self.tracker == 'AZ':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '189',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '189',
                 ('Filipino', 'fil', 'fil'): '188',
                 ('Mooré', 'mos', 'mos'): '187',
             })
 
         if self.tracker == 'CZ':
-            self.all_lang_map.update({
-                ('Brazilian Portuguese', 'por', 'pt'): '187',
+            all_lang_map.update({
+                ('Portuguese (BR)', 'por', 'pt-br'): '187',
                 ('Mooré', 'mos', 'mos'): '188',
                 ('Filipino', 'fil', 'fil'): '189',
                 ('Bissa', 'bib', 'bib'): '190',
@@ -1042,13 +1130,7 @@ class AZTrackerBase():
             })
 
         self.lang_map = {}
-        for key_tuple, lang_id in self.all_lang_map.items():
-            lang_name, code3, code2 = key_tuple
-
-            self.lang_map[lang_name.lower()] = lang_id
-
-            if code3:
-                self.lang_map[code3.lower()] = lang_id
-
-            if code2:
-                self.lang_map[code2.lower()] = lang_id
+        for key_tuple, lang_id in all_lang_map.items():
+            for alias in key_tuple:
+                if alias:
+                    self.lang_map[alias.lower()] = lang_id

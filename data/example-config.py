@@ -270,7 +270,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, FF, FL, FNP, FRIKI, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TOCA, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -333,8 +333,9 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/AZ.txt
             "announce_url": "https://tracker.avistaz.to/<PASSKEY>/announce",
             "anon": False,
-            # Set false to use imgbox links if available
-            "img_rehost": True,
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
+            "check_for_rules": True,
         },
         "BHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -397,8 +398,9 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/CZ.txt
             "announce_url": "https://tracker.cinemaz.to/<PASSKEY>/announce",
             "anon": False,
-            # Set false to use imgbox links if available
-            "img_rehost": True,
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
+            "check_for_rules": True,
         },
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -445,6 +447,16 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
+        },
+        "GPW": {
+            "link_dir_name": "",
+            # You can find your API key in Profile Settings -> Access Settings -> API Key. If there is no API, click "Reset your api key" and Save Profile.
+            "api_key": "",
+            # Optionally, you can export cookies from GPW to improve duplicate searches.
+            # If you do this, you must export cookies from https://greatposterwall.com using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # Cookies must be in Netscape format and must be located in data/cookies/GPW.txt
+            # You can find your announce URL at https://greatposterwall.com/upload.php
+            "announce_url": "https://tracker.greatposterwall.com/<PASSKEY>/announce",
         },
         "HDB": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -572,8 +584,9 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/PHD.txt
             "announce_url": "https://tracker.privatehd.to/<PASSKEY>/announce",
             "anon": False,
-            # Set false to use imgbox links if available
-            "img_rehost": True,
+            # If True, the script performs a basic rules compliance check (e.g., codecs, region).
+            # This does not cover all tracker rules. Set to False to disable.
+            "check_for_rules": True,
         },
         "PT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

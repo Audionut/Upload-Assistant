@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import re
 from datetime import datetime
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
@@ -18,9 +17,7 @@ class PHD(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
 
     async def rules(self, meta):
-        meta['phd_rule'] = ''
-        warning = f'{self.tracker} RULE WARNING: '
-        rule = ''
+        warnings = []
 
         is_bd_disc = False
         if meta.get('is_disc', '') == 'BDMV':
@@ -44,22 +41,19 @@ class PHD(AZTrackerBase):
 
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
-            meta['phd_rule'] = (
-                warning + 'The only allowed content to be uploaded are Movies and TV Shows.\n'
+            warnings.append(
+                'The only allowed content to be uploaded are Movies and TV Shows.\n'
                 'Anything else, like games, music, software and porn is not allowed!'
             )
-            return False
 
         if meta.get('anime', False):
-            meta['phd_rule'] = warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
-            return False
+            warnings.append("Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
         year = meta.get('year')
         current_year = datetime.now().year
         is_older_than_50_years = (current_year - year) >= 50
         if is_older_than_50_years:
-            meta['phd_rule'] = warning + 'Upload movies/series 50+ years old to our sister site CinemaZ.to instead.'
-            return False
+            warnings.append('Upload movies/series 50+ years old to our sister site CinemaZ.to instead.')
 
         # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
@@ -88,7 +82,7 @@ class PHD(AZTrackerBase):
             'AD', 'AL', 'AT', 'AX', 'BA', 'BE', 'BG', 'BY', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI',
             'FO', 'FR', 'GB', 'GG', 'GI', 'GR', 'HR', 'HU', 'IE', 'IM', 'IS', 'IT', 'JE', 'LI', 'LT',
             'LU', 'LV', 'MC', 'MD', 'ME', 'MK', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'RU', 'SE',
-            'SI', 'SJ', 'SK', 'SM', 'UA', 'VA'
+            'SI', 'SJ', 'SK', 'SM', 'SU', 'UA', 'VA', 'XC'
         ]
 
         oceania = [
@@ -107,117 +101,85 @@ class PHD(AZTrackerBase):
         origin_countries_codes = meta.get('origin_country', [])
 
         if any(code in phd_allowed_countries for code in origin_countries_codes):
-            return True
+            pass
 
         # CinemaZ
         elif any(code in cinemaz_countries for code in origin_countries_codes):
-            meta['phd_rule'] = warning + 'Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.'
-            return False
+            warnings.append('Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.')
 
         # AvistaZ
         elif any(code in asia for code in origin_countries_codes):
             origin_country_str = ', '.join(origin_countries_codes)
-            meta['phd_rule'] = (
-                warning + 'DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n'
+            warnings.append(
+                'DO NOT upload content originating from countries shown in this map (https://imgur.com/nIB9PM1).\n'
                 'In case of doubt, message the staff first. Upload Asian content to our sister site Avistaz.to instead.\n'
                 f'Origin country for your upload: {origin_country_str}'
             )
-            return False
 
         elif not any(code in phd_allowed_countries for code in origin_countries_codes):
-            meta['phd_rule'] = (
-                warning + 'Only upload content to PrivateHD from all major English speaking countries.\n'
+            warnings.append(
+                'Only upload content to PrivateHD from all major English speaking countries.\n'
                 'Including United States, Canada, UK, Ireland, Australia, and New Zealand.'
             )
-            return False
 
         # Tags
         tag = meta.get('tag', '')
         if tag:
             tag = tag.strip().lower()
             if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
-                meta['phd_rule'] = warning + 'Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time.'
-                return False
+                warnings.append('Do not upload RARBG, FGT, Grym or TBS. Existing uploads by these groups can be trumped at any time.')
 
             if tag == 'evo' and source != 'web':
-                meta['phd_rule'] = warning + 'Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time.'
-                return False
+                warnings.append('Do not upload non-web EVO releases. Existing uploads by this group can be trumped at any time.')
 
         if meta.get('sd', '') == 1:
-            meta['phd_rule'] = warning + 'SD (Standard Definition) content is forbidden.'
-            return False
+            warnings.append('SD (Standard Definition) content is forbidden.')
 
         if not is_bd_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
             allowed_extensions = {'.mkv': 'MKV', '.mp4': 'MP4'}
             container = allowed_extensions.get(ext)
             if container is None:
-                meta['phd_rule'] = warning + 'Allowed containers: MKV, MP4.'
-                return False
+                warnings.append('Allowed containers: MKV, MP4.')
 
         # Video codec
-        '''
-        Video Codecs:
-            Allowed:
-                1 - BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265
-                2 - BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)
-                3 - WEB (Untouched): H.264, H.265, VP9
-                4 - WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)
-                5 - x265 encodes must be 10-bit
-                6 - H.264/x264 only allowed for 1080p and below.
-                7 - Not Allowed: Any codec not mentioned above is not allowed.
-        '''
         # 1
         if type == 'remux':
             if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
-                meta['phd_rule'] = warning + 'Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265'
-                return False
+                warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
 
         # 2
         if type == 'encode' and source == 'bluray':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                meta['phd_rule'] = warning + 'Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)'
-                return False
+                warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 3
         if type in ('webdl', 'web-dl') and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'vp9'):
-                meta['phd_rule'] = warning + 'Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9'
-                return False
+                warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
 
         # 4
         if type == 'encode' and source == 'web':
             if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                meta['phd_rule'] = warning + 'Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)'
-                return False
+                warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 5
         if type == 'encode':
             if video_encode == 'x265':
                 if meta.get('bit_depth', '') != '10':
-                    meta['phd_rule'] = warning + 'Allowed Video Codecs for x265 encodes must be 10-bit'
-                    return False
+                    warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
 
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
         if resolution > 1080:
             if video_encode in ('h.264', 'x264'):
-                meta['phd_rule'] = warning + 'H.264/x264 only allowed for 1080p and below.'
-                return False
+                warnings.append('H.264/x264 only allowed for 1080p and below.')
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
-            meta['phd_rule'] = warning + f'Video codec not allowed in your upload: {video_codec}.'
-            return False
+            warnings.append(f'Video codec not allowed in your upload: {video_codec}.')
 
         # Audio codec
-        '''
-        Audio Codecs:
-            1 - Allowed: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.
-            2 - Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc.
-            3 - TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players.
-            4 - Not Allowed: Any codec not mentioned above is not allowed.
-        '''
         if is_bd_disc:
             pass
         else:
@@ -261,12 +223,11 @@ class PHD(AZTrackerBase):
                     )
 
                     if has_truehd_atmos and not has_ac3_compat_track:
-                        meta['phd_rule'] = (
-                            warning + f'A TrueHD Atmos track was detected in the original language ({original_language}), '
+                        warnings.append(
+                            f'A TrueHD Atmos track was detected in the original language ({original_language}), '
                             f'but no AC-3 (Dolby Digital) compatibility track was found for that same language.\n'
                             'Rule: TrueHD/Atmos audio must have a compatibility track due to poor compatibility with most players.'
                         )
-                        return False
 
             # 4
             invalid_codecs = []
@@ -286,34 +247,13 @@ class PHD(AZTrackerBase):
 
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
-                meta['phd_rule'] = (
-                    warning + f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
+                warnings.append(
+                    f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n'
                     f'Dolby Exceptions: Any uncompressed audio codec that comes on a BluRay disc like; PCM, LPCM, etc.'
                 )
-                return False
-
-        def ask_yes_no(prompt_text):
-            while True:
-                answer = input(f'{prompt_text} (y/n): ').lower()
-                if answer in ['y', 'n']:
-                    return answer
-                else:
-                    print("Invalid input. Please enter 'y' or 'n'.")
 
         # Quality check
-        '''
-        Minimum quality:
-            Only upload proper encodes. Any encodes where the size and/or the bitrate imply a bad quality of the encode will be deleted. Indication of a proper encode:
-                Or a minimum x265 video bitrate  of:
-                    720p HDTV/WEB-DL/WEBRip/HDRip: 1500 Kbps
-                    720p BluRay encode: 2000 Kbps
-                    1080p HDTV/WEB-DL/WEBRip/HDRip: 2500 Kbps
-                    1080p BluRay encode: 3500 Kbps
-                Depending on the content, for example an animation movie or series, a lower bitrate (x264) can be allowed.
-            Video must at least be 720p
-            The above bitrates are subject to staff discretion and uploads may be nuked even if they fulfill the above criteria.
-        '''
         BITRATE_RULES = {
             ('x265', 'web', 720): 1500000,
             ('x265', 'web', 1080): 2500000,
@@ -356,100 +296,41 @@ class PHD(AZTrackerBase):
                             f'Your upload was rejected due to low quality.\n'
                             f'Minimum bitrate for {resolution}p {source.upper()} {video_encode.upper()} is {min_bitrate / 1000} Kbps.'
                         )
-                        meta['phd_rule'] = (warning + quality_rule_text + rule)
+                        warnings.append(quality_rule_text + rule)
 
         if resolution < 720:
             rule = 'Video must be at least 720p.'
-            meta['phd_rule'] = (warning + rule)
+            warnings.append(rule)
 
         # Hybrid
         if type in ('remux', 'encode'):
             if 'hybrid' in meta.get('name', '').lower():
-
-                is_hybrid_confirm = ask_yes_no(
-                    "This release appears to be a 'Hybrid'. Is this correct?"
+                warnings.append(
+                    'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
+                    'Hybrid user releases are permitted, but are treated similarly to regular '
+                    'user releases and must be approved by staff before you upload them '
+                    '(please see the torrent approvals forum for details).'
                 )
-
-                if is_hybrid_confirm == 'y':
-                    hybrid_rule_text = (
-                        'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
-                        'Hybrid user releases are permitted, but are treated similarly to regular '
-                        'user releases and must be approved by staff before you upload them '
-                        '(please see the torrent approvals forum for details).'
-                    )
-
-                    print('\n' + '-'*60)
-                    print('Important Rule for Hybrid Releases')
-                    print('-' * 60)
-                    print(warning + hybrid_rule_text)
-                    print('-' * 60 + '\n')
-
-                    continue_upload = ask_yes_no(
-                        'Have you already received staff approval for this upload?'
-                        'Do you wish to continue?'
-                    )
-
-                    if continue_upload == 'n':
-                        error_message = 'Upload aborted by user. Hybrid releases require prior staff approval.'
-                        print(f'{error_message}')
-                        meta['phd_rule'] = error_message
-
-                else:
-                    error_message = "Upload aborted. The term 'Hybrid' in the release name is reserved for approved hybrid releases. Please correct the name if it is not a hybrid."
-                    print(f'{error_message}')
-                    meta['phd_rule'] = error_message
 
         # Log
         if type == 'remux':
-            remux_log = ask_yes_no(
-                warning + 'Remuxes must have a demux/eac3to log under spoilers in description.\n'
+            warnings.append(
+                'Remuxes must have a demux/eac3to log under spoilers in description.\n'
                 'Do you have these logs and will you add them to the description after upload?'
             )
-            if remux_log == 'y':
-                pass
-            else:
-                meta['phd_rule'] = (warning + 'Remuxes must have a demux/eac3to log under spoilers in description.')
-                return False
 
         # Bloated
         if meta.get('bloated', False):
-            ask_bloated = ask_yes_no(
-                warning + 'Audio dubs are never preferred and can always be trumped by original audio only rip (Exception for BD50/BD25).\n'
+            warnings.append(
+                'Audio dubs are never preferred and can always be trumped by original audio only rip (Exception for BD50/BD25).\n'
                 'Do NOT upload a multi audio release when there is already a original audio only release on site.\n'
-                'Do you want to upload anyway?'
             )
-            if ask_bloated == 'y':
-                pass
-            else:
-                meta['phd_rule'] = 'Canceled by user. Reason: Bloated'
-                return False
 
-        return True
+        if warnings:
+            all_warnings = '\n\n'.join(filter(None, warnings))
+            return all_warnings
 
-    def edit_name(self, meta):
-        upload_name = meta.get('name').replace(meta["aka"], '').replace('Dubbed', '').replace('Dual-Audio', '')
-        forbidden_terms = [
-            r'\bLIMITED\b',
-            r'\bCriterion Collection\b',
-            r'\b\d{1,3}(?:st|nd|rd|th)\s+Anniversary Edition\b'
-        ]
-        for term in forbidden_terms:
-            upload_name = re.sub(term, '', upload_name, flags=re.IGNORECASE).strip()
-
-        upload_name = re.sub(r'\bDirector[’\'`]s\s+Cut\b', 'DC', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\bExtended\s+Cut\b', 'Extended', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\bTheatrical\s+Cut\b', 'Theatrical', upload_name, flags=re.IGNORECASE)
-        upload_name = re.sub(r'\s{2,}', ' ', upload_name).strip()
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ['nogrp', 'nogroup', 'unknown', '-unk-']
-
-        if meta['tag'] == '' or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                upload_name = re.sub(f'-{invalid_tag}', '', upload_name, flags=re.IGNORECASE)
-            upload_name = f'{upload_name}-NOGROUP'
-
-        return upload_name
+        return
 
     def get_rip_type(self, meta):
         source_type = meta.get('type')

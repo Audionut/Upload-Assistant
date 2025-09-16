@@ -44,26 +44,27 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 |DarkPeers|DP|DigitalCore|DC|
 |FearNoPeer|FNP|FileList|FL|
 |Friki|FRIKI|FunFile|FF|
-|hawke-uno|HUNO|HDBits|HDB|
-|HD-Space|HDS|HD-Torrents|HDT|
-|HomieHelpDesk|HHD|ItaTorrents|ITT|
-|LastDigitalUnderground|LDU|Lat-Team|LT|
-|Locadora|LCD|LST|LST|
-|MoreThanTV|MTV|Nebulance|NBL|
-|OldToonsWorld|OTW|OnlyEncodes+|OE|
-|PassThePopcorn|PTP|PolishTorrent|PTT|
-|Portugas|PT|PTerClub|PTER|
-|PrivateHD|PHD|PTSKIT|PTS|
-|Racing4Everyone|R4E|Rastastugan|RAS|
-|ReelFLiX|RF|RetroFlix|RTF|
-|Samaritano|SAM|seedpool|SP|
-|ShareIsland|SHRI|SkipTheCommericals|STC|
-|SpeedApp|SPD|Swarmazon|SN|
-|TocaShare|TOCA|TorrentHR|THR|
-|TorrentLeech|TL|ToTheGlory|TTG|
-|TVChaosUK|TVC|UHDShare|UHD|
-|ULCX|ULCX|UTOPIA|UTP|
-|YOiNKED|YOINK|YUSCENE|YUS|
+|GreatPosterWall|GPW|hawke-uno|HUNO|
+|HDBits|HDB|HD-Space|HDS|
+|HD-Torrents|HDT|HomieHelpDesk|HHD|
+|ItaTorrents|ITT|LastDigitalUnderground|LDU|
+|Lat-Team|LT|Locadora|LCD|
+|LST|LST|MoreThanTV|MTV|
+|Nebulance|NBL|OldToonsWorld|OTW|
+|OnlyEncodes+|OE|PassThePopcorn|PTP|
+|PolishTorrent|PTT|Portugas|PT|
+|PTerClub|PTER|PrivateHD|PHD|
+|PTSKIT|PTS|Racing4Everyone|R4E|
+|Rastastugan|RAS|ReelFLiX|RF|
+|RetroFlix|RTF|Samaritano|SAM|
+|seedpool|SP|ShareIsland|SHRI|
+|SkipTheCommericals|STC|SpeedApp|SPD|
+|Swarmazon|SN|TocaShare|TOCA|
+|TorrentHR|THR|TorrentLeech|TL|
+|ToTheGlory|TTG|TVChaosUK|TVC|
+|UHDShare|UHD|ULCX|ULCX|
+|UTOPIA|UTP|YOiNKED|YOINK|
+|YUSCENE|YUS|||
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**

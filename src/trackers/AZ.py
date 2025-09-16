@@ -16,8 +16,7 @@ class AZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
 
     async def rules(self, meta):
-        meta['az_rule'] = ''
-        warning = f'{self.tracker} RULE WARNING: '
+        warnings = []
 
         is_disc = False
         if meta.get('is_disc', ''):
@@ -41,15 +40,13 @@ class AZ(AZTrackerBase):
 
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
-            meta['az_rule'] = (
-                warning + 'The only allowed content to be uploaded are Movies and TV Shows.\n'
+            warnings.append(
+                'The only allowed content to be uploaded are Movies and TV Shows.\n'
                 'Anything else, like games, music, software and porn is not allowed!'
             )
-            return False
 
         if meta.get('anime', False):
-            meta['az_rule'] = warning + "Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime."
-            return False
+            warnings.append("Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
         # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
@@ -75,7 +72,7 @@ class AZ(AZTrackerBase):
             'AD', 'AL', 'AT', 'AX', 'BA', 'BE', 'BG', 'BY', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI',
             'FO', 'FR', 'GB', 'GG', 'GI', 'GR', 'HR', 'HU', 'IE', 'IM', 'IS', 'IT', 'JE', 'LI', 'LT',
             'LU', 'LV', 'MC', 'MD', 'ME', 'MK', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'RU', 'SE',
-            'SI', 'SJ', 'SK', 'SM', 'UA', 'VA'
+            'SI', 'SJ', 'SK', 'SM', 'SU', 'UA', 'VA', 'XC'
         ]
         oceania = [
             'AS', 'AU', 'CC', 'CK', 'CX', 'FJ', 'FM', 'GU', 'HM', 'KI', 'MH', 'MP', 'NC', 'NF', 'NR',
@@ -98,66 +95,40 @@ class AZ(AZTrackerBase):
         origin_countries_codes = meta.get('origin_country', [])
 
         if any(code in phd_countries for code in origin_countries_codes):
-            meta['az_rule'] = (
-                warning + 'DO NOT upload content from major English speaking countries '
+            warnings.append(
+                'DO NOT upload content from major English speaking countries '
                 '(USA, UK, Canada, etc). Upload this to our sister site PrivateHD.to instead.'
             )
-            return False
 
         elif any(code in cinemaz_countries for code in origin_countries_codes):
-            meta['az_rule'] = (
-                warning + 'DO NOT upload non-allowed Asian or Western content. '
+            warnings.append(
+                'DO NOT upload non-allowed Asian or Western content. '
                 'Upload this content to our sister site CinemaZ.to instead.'
             )
-            return False
 
         if not is_disc:
             ext = os.path.splitext(meta['filelist'][0])[1].lower()
             allowed_extensions = {'.mkv': 'MKV', '.mp4': 'MP4', '.avi': 'AVI'}
             container = allowed_extensions.get(ext)
             if container is None:
-                meta['az_rule'] = warning + 'Allowed containers: MKV, MP4, AVI.'
-                return False
+                warnings.append('Allowed containers: MKV, MP4, AVI.')
 
-        '''
-        Video Codecs:
-            Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid
-            Exceptions:
-                MPEG2 for Full DVD discs and HDTV recordings
-                VC-1/MPEG2 for Bluray only if that's what is on the disc
-            Not Allowed: Any codec not mentioned above is not allowed!
-        '''
         if not is_disc:
             if video_codec not in ('avc', 'h.264', 'h.265', 'x264', 'x265', 'hevc', 'divx', 'xvid'):
-                meta['az_rule'] = (
-                                warning +
-                                f'Video codec not allowed in your upload: {video_codec}.\n'
-                                'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
-                                'Exceptions:\n'
-                                '    MPEG2 for Full DVD discs and HDTV recordings\n'
-                                "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
-                                )
-                return False
+                warnings.append(
+                    f'Video codec not allowed in your upload: {video_codec}.\n'
+                    'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
+                    'Exceptions:\n'
+                    '    MPEG2 for Full DVD discs and HDTV recordings\n'
+                    "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
+                )
 
-        resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-        if resolution < 600:
-            meta['az_rule'] = warning + 'Video: A minimum resolution of 600 pixel width.'
-            return False
-
-        '''
-        Audio Codecs:
-            Allowed: MP3, AAC, HE-AAC, AC3 (Dolby Digital), E-AC3, Dolby TrueHD, DTS, DTS-HD (MA), FLAC
-            Not Allowed: Any codec not mentioned above is not allowed!
-            Exceptions: Source is OPUS and upload is untouched from the source
-                Note: AC3(DD) / E-AC3 (DDP) will not trump existing AAC uploads with same audio bitrate and channels.
-                (Considering all else is equal and only audio codecs are different)
-        '''
         if is_disc:
             pass
         else:
             allowed_keywords = [
                 'AC3', 'Audio Layer III', 'MP3', 'Dolby Digital', 'Dolby TrueHD',
-                'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby', 'PCM', 'LPCM'
+                'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby'
             ]
 
             is_untouched_opus = False
@@ -195,11 +166,14 @@ class AZ(AZTrackerBase):
 
             if invalid_codecs:
                 unique_invalid_codecs = sorted(list(set(invalid_codecs)))
-                meta['az_rule'] = (
-                    warning + f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
+                warnings.append(
+                    f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, MP3, etc.\n'
                     f'Exceptions: Untouched Opus from source; Uncompressed codecs from Blu-ray discs (PCM, LPCM).'
                 )
-                return False
 
-        return True
+        if warnings:
+            all_warnings = '\n\n'.join(filter(None, warnings))
+            return all_warnings
+
+        return
