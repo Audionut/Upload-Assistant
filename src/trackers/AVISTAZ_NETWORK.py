@@ -139,12 +139,10 @@ class AZTrackerBase():
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n{self.tracker}: The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
-
-                user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
+                console.print(f"\n{self.tracker}: The media appears to be missing from the site's database.")
+                user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
-                    console.print(f'{self.tracker}: Trying to add to database...')
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
