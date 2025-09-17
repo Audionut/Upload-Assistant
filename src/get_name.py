@@ -110,7 +110,7 @@ async def get_name(meta):
                 name = f"{title} {year} {alt_title} {season}{episode}{three_d} {edition} {repack} {source} {dvd_size} {audio}"
                 potential_missing = ['edition', 'distributor']
             elif meta['is_disc'] == 'HDDVD':
-                name = f"{title} {year} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"
+                name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"
                 potential_missing = ['edition', 'region', 'distributor']
         elif type == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay Remux
             name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {three_d} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"  # SOURCE
