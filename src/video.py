@@ -117,9 +117,9 @@ async def get_video_encode(mi, type, bdinfo):
             codec = 'AV1'
         elif format == 'MPEG-4 Visual':
             if encoded_library_name:
-                if 'XviD' in encoded_library_name:
+                if 'xvid' in encoded_library_name.lower():
                     codec = 'XviD'
-                elif 'DivX' in encoded_library_name:
+                elif 'divx' in encoded_library_name.lower():
                     codec = 'DivX'
     elif type in ('WEBDL', 'HDTV'):  # WEB-DL
         if format == 'AVC':
