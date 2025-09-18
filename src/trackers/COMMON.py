@@ -85,6 +85,8 @@ class COMMON():
         else:
             images = meta['image_list']
             multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
+            if meta.get('sorted_filelist'):
+                multi_screens = 0
 
         # Check for saved pack_image_links.json file
         pack_images_file = os.path.join(meta['base_dir'], "tmp", meta['uuid'], "pack_image_links.json")

@@ -139,7 +139,7 @@ async def get_video_encode(mi, type, bdinfo):
     return video_encode, video_codec, has_encode_settings, bit_depth
 
 
-async def get_video(videoloc, mode):
+async def get_video(videoloc, mode, sorted_filelist=False):
     filelist = []
     videoloc = os.path.abspath(videoloc)
     if os.path.isdir(videoloc):
@@ -158,7 +158,10 @@ async def get_video(videoloc, mode):
                             if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
                                 filelist.remove(f)
         try:
-            video = sorted(filelist)[0]
+            if sorted_filelist:
+                video = sorted(filelist, key=os.path.getsize, reverse=True)[0]
+            else:
+                video = sorted(filelist)[0]
         except IndexError:
             console.print("[bold red]No Video files found")
             if mode == 'cli':
@@ -166,7 +169,10 @@ async def get_video(videoloc, mode):
     else:
         video = videoloc
         filelist.append(videoloc)
-    filelist = sorted(filelist)
+    if sorted_filelist:
+        filelist = sorted(filelist, key=os.path.getsize, reverse=True)
+    else:
+        filelist = sorted(filelist)
     return video, filelist
 
 
