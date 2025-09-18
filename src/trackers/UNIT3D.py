@@ -3,6 +3,7 @@
 import asyncio
 import httpx
 import platform
+from data.version import __version__
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -23,8 +24,7 @@ class UNIT3D():
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        # self.requests_url = f'{self.base_url}/api/requests/filter'
-        self.ua_name = "Audionut's Upload Assistant v5"
+        self.ua_name = f"Audionut's Upload Assistant {__version__}"
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
@@ -33,9 +33,9 @@ class UNIT3D():
         params = {
             'api_token': self.api_key,
             'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_cat_id(meta['category']),
+            'categories[]': await self.get_category_id(meta['category']),
             'types[]': await self.get_type_id(meta['type']),
-            'resolutions[]': await self.get_res_id(meta['resolution']),
+            'resolutions[]': await self.get_resolution_id(meta['resolution']),
             'name': ''
         }
         if meta['category'] == 'TV':
@@ -62,7 +62,31 @@ class UNIT3D():
 
         return dupes
 
-    async def get_cat_id(self, category_name):
+    async def get_name(self, meta):
+        return meta['name']
+
+    async def get_description(self, meta):
+        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
+        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        return desc
+
+    async def get_mediainfo(self, meta):
+        if meta['bdinfo'] is not None:
+            mediainfo = None
+        else:
+            mediainfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+
+        return mediainfo
+
+    async def get_bdinfo(self, meta):
+        if meta['bdinfo'] is not None:
+            bdinfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+        else:
+            bdinfo = None
+
+        return bdinfo
+
+    async def get_category_id(self, category_name):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -80,7 +104,7 @@ class UNIT3D():
         }.get(type, '0')
         return type_id
 
-    async def get_res_id(self, resolution):
+    async def get_resolution_id(self, resolution):
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -96,6 +120,32 @@ class UNIT3D():
         }.get(resolution, '10')
         return resolution_id
 
+    async def get_anonymous(self, meta):
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 0
+        else:
+            anon = 1
+        return anon
+
+    async def get_additional_data(self, meta):
+        data = {}
+        # Used to add additional data if needed
+        '''
+        data = {
+            'modq': await self.get_flag(meta, 'modq'),
+            'draft': await self.get_flag(meta, 'draft'),
+        }
+        '''
+
+        return data
+
+    async def get_flag(self, meta, flag_name):
+        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
+        if config_flag is not None:
+            return 1 if config_flag else 0
+
+        return 1 if meta.get(flag_name, False) else 0
+
     async def get_distributor_ids(self, meta):
         distributor = await self.common.unit3d_distributor_ids(meta.get('distributor'))
         return distributor
@@ -103,37 +153,6 @@ class UNIT3D():
     async def get_region_id(self, meta):
         region = await self.common.unit3d_region_ids(meta.get('region'))
         return region
-
-    async def get_anon(self, meta):
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
-        return anon
-
-    async def get_bdinfo(self, meta):
-        if meta['bdinfo'] is not None:
-            bdinfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
-        else:
-            bdinfo = None
-
-        return bdinfo
-
-    async def get_mediainfo(self, meta):
-        if meta['bdinfo'] is not None:
-            mediainfo = None
-        else:
-            mediainfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-
-        return mediainfo
-
-    async def get_description(self, meta):
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        return desc
-
-    async def get_name(self, meta):
-        return meta['name']
 
     async def get_data(self, meta):
         region_id = await self.get_region_id(meta)
@@ -144,15 +163,15 @@ class UNIT3D():
             'description': await self.get_description(meta),
             'mediainfo': await self.get_mediainfo(meta),
             'bdinfo': await self.get_bdinfo(meta),
-            'category_id': await self.get_cat_id(meta['category']),
+            'category_id': await self.get_category_id(meta['category']),
             'type_id': await self.get_type_id(meta['type']),
-            'resolution_id': await self.get_res_id(meta['resolution']),
+            'resolution_id': await self.get_resolution_id(meta['resolution']),
             'tmdb': meta['tmdb'],
             'imdb': meta['imdb'],
             'tvdb': meta.get('tvdb_id', 0) if meta['category'] == 'TV' else 0,
             'mal': meta['mal_id'],
             'igdb': 0,
-            'anonymous': await self.get_anon(meta),
+            'anonymous': await self.get_anonymous(meta),
             'stream': meta['stream'],
             'sd': meta['sd'],
             'keywords': meta['keywords'],
@@ -177,7 +196,15 @@ class UNIT3D():
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
 
+        data.update(await self.get_additional_data(meta))
+
         return data
+
+    async def get_additional_files(self, meta):
+        # Used to add nfo or other files if needed
+        files = {}
+
+        return files
 
     async def upload(self, meta, disctype):
         data = await self.get_data(meta)
@@ -185,6 +212,7 @@ class UNIT3D():
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as torrent_file:
             files = {'torrent': torrent_file}
+            files.update(await self.get_additional_files(meta))
             headers = {'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'}
             params = {'api_token': self.api_key}
 
