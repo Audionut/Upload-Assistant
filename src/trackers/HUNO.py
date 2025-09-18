@@ -352,7 +352,6 @@ class HUNO():
 
                 if not isinstance(settings, str):
                     settings = ""
-
                 
                 track_codecs.append(get_codec(commercial, additional, format, settings, profile, channels))
 
