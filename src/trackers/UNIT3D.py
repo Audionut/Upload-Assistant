@@ -3,7 +3,8 @@
 import asyncio
 import httpx
 import platform
-from data.version import __version__
+import re
+from pathlib import Path
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -24,7 +25,8 @@ class UNIT3D():
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        self.ua_name = f"Audionut's Upload Assistant {__version__}"
+        version = get_local_version()
+        self.ua_name = f"Audionut's Upload Assistant{f' {version}' if version else ''}"
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
@@ -245,3 +247,21 @@ class UNIT3D():
                 console.print('[cyan]Request Data:')
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+
+
+def get_local_version():
+    project_root = Path(__file__).resolve().parent.parent.parent
+    version_file_path = project_root / 'data' / 'version.py'
+
+    if not version_file_path.is_file():
+        return None
+    try:
+        with open(version_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            match = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", content)
+            if match:
+                return match.group(1)
+    except OSError:
+        return None
+
+    return None
