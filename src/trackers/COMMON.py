@@ -1380,15 +1380,15 @@ class COMMON():
         project_root = os.path.dirname(os.path.dirname(current_dir))
         version_file_path = os.path.join(project_root, 'data', 'version.py')
         if not os.path.isfile(version_file_path):
-            return None
+            return ''
         try:
             with open(version_file_path, "r", encoding="utf-8") as f:
                 content = f.read()
             match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
             if match:
-                return match.group(1)
+                return f' {match.group(1)}'
         except OSError as e:
             print(f"Error reading version file: {e}")
-            return None
+            return ''
 
-        return None
+        return ''

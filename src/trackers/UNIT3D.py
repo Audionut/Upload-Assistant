@@ -15,8 +15,7 @@ class UNIT3D():
         tracker_config = self.config['TRACKERS'][self.tracker]
         self.announce_url = tracker_config.get('announce_url')
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        version = self.common.get_version()
-        self.ua_name = f"Audionut's Upload Assistant{f' {version}' if version else ''}"
+        self.ua_name = f"Audionut's Upload Assistant{self.common.get_version()}"
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
@@ -120,7 +119,6 @@ class UNIT3D():
         return anon
 
     async def get_additional_data(self, meta):
-        data = {}
         # Used to add additional data if needed
         '''
         data = {
@@ -128,6 +126,7 @@ class UNIT3D():
             'draft': await self.get_flag(meta, 'draft'),
         }
         '''
+        data = {}
 
         return data
 
@@ -194,6 +193,19 @@ class UNIT3D():
 
     async def get_additional_files(self, meta):
         # Used to add nfo or other files if needed
+        '''
+        files = {}
+        base_dir = meta['base_dir']
+        uuid = meta['uuid']
+        specified_dir_path = os.path.join(base_dir, 'tmp', uuid, '*.nfo')
+        nfo_files = glob.glob(specified_dir_path)
+
+        if nfo_files:
+            nfo_path = nfo_files[0]
+            with open(nfo_path, 'rb') as f:
+                content = f.read()
+            files['nfo'] = (os.path.basename(nfo_path), content, 'text/plain')
+        '''
         files = {}
 
         return files
