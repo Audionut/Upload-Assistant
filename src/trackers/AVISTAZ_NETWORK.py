@@ -139,7 +139,7 @@ class AZTrackerBase():
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n{self.tracker}: The media appears to be missing from the site's database.")
+                console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
                 user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
@@ -170,58 +170,24 @@ class AZTrackerBase():
             if tvdb_id:
                 data['tvdb_id'] = str(tvdb_id)
 
-        while True:
-            console.print('\n[bold yellow]Please review the data before sending:[/bold yellow]')
-
-            editable_fields = {k: v for k, v in data.items() if k != '_token'}
-            field_keys = list(editable_fields.keys())
-
-            for i, key in enumerate(field_keys, 1):
-                console.print(f'  [cyan]{i}[/cyan]. [bold]{key.replace("_id", "").replace("type", "type (1 = movie, 2 = tv)")}[/bold]: {editable_fields[key]}')
-
-            console.print('\n  [green]S[/green]. Save and Send')
-            console.print('  [red]C[/red]. Cancel')
-            choice = input('\nEnter a number to edit, (S) to send, or (C) to cancel: ').strip().lower()
-
-            if choice == 's':
-                console.print('[green]Data confirmed. Proceeding to send...[/green]')
-                break
-            elif choice == 'c':
-                console.print('[red]Operation cancelled by user.[/red]')
-                return False
-
-            try:
-                choice_index = int(choice) - 1
-                if 0 <= choice_index < len(field_keys):
-                    key_to_edit = field_keys[choice_index]
-                    current_value = data[key_to_edit]
-                    new_value = input(f'Enter new value for \'{key_to_edit}\' (current: {current_value}): ')
-                    data[key_to_edit] = new_value.strip()
-                else:
-                    console.print(f'[bold red]Invalid number. Please enter a number between 1 and {len(field_keys)}.[/bold red]')
-            except ValueError:
-                console.print('[bold red]Invalid input. Please enter a number, \'S\', or \'C\'.[/bold red]')
-
         url = f"{self.base_url}/add/{meta['category'].lower()}"
 
         headers = {
             'Referer': f'{self.base_url}/upload',
         }
 
-        if meta.get('debug', False):
-            console.print(data)
-        else:
-            try:
-                response = await self.session.post(url, data=data, headers=headers)
-                if response.status_code == 302:
-                    console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful.')
-                    return True
-                else:
-                    console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
-                    return False
-            except Exception as e:
-                console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
+        try:
+            console.print(f'{self.tracker}: Trying to add to database...')
+            response = await self.session.post(url, data=data, headers=headers)
+            if response.status_code == 302:
+                console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
+                return True
+            else:
+                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
                 return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
+            return False
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
