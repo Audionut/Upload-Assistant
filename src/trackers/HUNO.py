@@ -352,7 +352,7 @@ class HUNO():
 
                 if not isinstance(settings, str):
                     settings = ""
-                
+
                 track_codecs.append(get_codec(commercial, additional, format, settings, profile, channels))
 
             if all(any(codec in track for codec in lossy_audio_codecs) for track in track_codecs):
