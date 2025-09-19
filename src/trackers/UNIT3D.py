@@ -21,7 +21,16 @@ class UNIT3D():
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        return should_continue
+
     async def search_existing(self, meta, disctype):
+        should_continue = await self.get_additional_checks(meta)
+        if not should_continue:
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         dupes = []
         params = {
             'api_token': self.api_key,
