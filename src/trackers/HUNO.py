@@ -147,6 +147,9 @@ class HUNO(UNIT3D):
                 return {'internal': 1}
         return {}
 
+    async def get_additional_files(self, meta):
+        return {}
+
     async def get_audio(self, meta):
         channels = meta.get('channels', "")
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace(channels, "")
