@@ -59,12 +59,11 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 |RetroFlix|RTF|Samaritano|SAM|
 |seedpool|SP|ShareIsland|SHRI|
 |SkipTheCommericals|STC|SpeedApp|SPD|
-|Swarmazon|SN|TocaShare|TOCA|
-|TorrentHR|THR|TorrentLeech|TL|
-|ToTheGlory|TTG|TVChaosUK|TVC|
-|UHDShare|UHD|ULCX|ULCX|
-|UTOPIA|UTP|YOiNKED|YOINK|
-|YUSCENE|YUS|||
+|Swarmazon|SN|TorrentHR|THR|
+|TorrentLeech|TL|ToTheGlory|TTG|
+|TVChaosUK|TVC|UHDShare|UHD|
+|ULCX|ULCX|UTOPIA|UTP|
+|YOiNKED|YOINK|YUSCENE|YUS|
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**

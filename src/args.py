@@ -116,6 +116,7 @@ class Args():
         parser.add_argument('-mc', '--commentary', dest='manual_commentary', action='store_true', required=False, help="Manually indicate whether commentary tracks are included")
         parser.add_argument('-sfxs', '--sfx-subtitles', dest='sfx_subtitles', action='store_true', required=False, help="Manually indicate whether subtitles with visual enhancements like animations, effects, or backgrounds are included")
         parser.add_argument('-e', '--extras', dest='extras', action='store_true', required=False, help="Indicates that extras are included. Mainly used for Blu-rays discs")
+        parser.add_argument('-sort', '--sorted-filelist', dest='sorted_filelist', action='store_true', required=False, help="Use the largest video file for processing instead of the first video file found")
         parser.add_argument('-ptp', '--ptp', nargs=1, required=False, help="PTP torrent id/permalink", type=str)
         parser.add_argument('-blu', '--blu', nargs=1, required=False, help="BLU torrent id/link", type=str)
         parser.add_argument('-aither', '--aither', nargs=1, required=False, help="Aither torrent id/link", type=str)

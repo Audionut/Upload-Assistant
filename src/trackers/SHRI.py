@@ -168,7 +168,7 @@ class SHRI():
                 pass
 
         if meta.get('dual_audio'):
-            shareisland_name = shareisland_name.replace(f"{meta.get('dual_audio')} ", "", 1)
+            shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)
 
         if audio_lang_str:
             if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
