@@ -79,6 +79,7 @@ class NBL():
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
 
