@@ -100,7 +100,6 @@ class UNIT3D():
         return category_id
 
     async def get_type_id(self, meta):
-        meta_type = meta['type']
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -108,7 +107,7 @@ class UNIT3D():
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(meta_type, '0')
+        }.get(meta['type'], '0')
         return type_id
 
     async def get_resolution_id(self, resolution):
