@@ -5,6 +5,7 @@ import glob
 import httpx
 import os
 import platform
+import aiofiles
 from src.trackers.COMMON import COMMON
 from src.console import console
 
@@ -69,20 +70,23 @@ class UNIT3D():
 
     async def get_description(self, meta):
         await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+            desc = await f.read()
         return desc
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
             mediainfo = None
         else:
-            mediainfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mediainfo = await f.read()
 
         return mediainfo
 
     async def get_bdinfo(self, meta):
         if meta['bdinfo'] is not None:
-            bdinfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                bdinfo = await f.read()
         else:
             bdinfo = None
 
@@ -210,10 +214,9 @@ class UNIT3D():
         nfo_files = glob.glob(specified_dir_path)
 
         if nfo_files:
-            nfo_path = nfo_files[0]
-            with open(nfo_path, 'rb') as f:
-                content = f.read()
-            files['nfo'] = (os.path.basename(nfo_path), content, 'text/plain')
+            async with aiofiles.open(nfo_files[0], 'rb') as f:
+                nfo_bytes = await f.read()
+            files['nfo'] = ("nfo_file.nfo", nfo_bytes, "text/plain")
 
         return files
 
