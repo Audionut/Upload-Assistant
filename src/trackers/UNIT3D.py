@@ -224,38 +224,40 @@ class UNIT3D():
         data = await self.get_data(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as torrent_file:
-            files = {'torrent': torrent_file}
-            files.update(await self.get_additional_files(meta))
-            headers = {'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'}
-            params = {'api_token': self.api_key}
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+        files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
+        files.update(await self.get_additional_files(meta))
+        headers = {'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'}
+        params = {'api_token': self.api_key}
 
-            if meta['debug'] is False:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-                    try:
-                        meta['tracker_status'][self.tracker]['status_message'] = response.json()
-                        # adding torrent link to comment of torrent file
-                        t_id = response.json()['data'].split('.')[1].split('/')[3]
-                        meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                        await self.common.add_tracker_torrent(
-                            meta,
-                            self.tracker,
-                            self.source_flag,
-                            self.announce_url,
-                            self.torrent_url + t_id,
-                            headers=headers,
-                            params=params,
-                            downurl=response.json()['data']
-                        )
-                    except httpx.TimeoutException:
-                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
-                    except httpx.RequestError as e:
-                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: unable to upload to {self.tracker}: {e}'
-                    except Exception:
-                        meta['tracker_status'][self.tracker]['status_message'] = f'It may have uploaded, go check: {self.tracker}'
-                        return
-            else:
-                console.print('[cyan]Request Data:')
-                console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
+        if meta['debug'] is False:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                try:
+                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
+                    # adding torrent link to comment of torrent file
+                    t_id = response.json()['data'].split('.')[1].split('/')[3]
+                    meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+                    await self.common.add_tracker_torrent(
+                        meta,
+                        self.tracker,
+                        self.source_flag,
+                        self.announce_url,
+                        self.torrent_url + t_id,
+                        headers=headers,
+                        params=params,
+                        downurl=response.json()['data']
+                    )
+                except httpx.TimeoutException:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
+                except httpx.RequestError as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: unable to upload to {self.tracker}: {e}'
+                except Exception:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'It may have uploaded, go check: {self.tracker}'
+                    return
+        else:
+            console.print('[cyan]Request Data:')
+            console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
