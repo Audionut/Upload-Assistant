@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-# import discord
 import aiofiles
 import os
 import re
-import cli_ui
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -35,11 +33,8 @@ class HUNO(UNIT3D):
     async def get_additional_checks(self, meta):
         should_continue = True
 
-        region_id = await self.get_region_id(meta)
-        distributor_id = await self.get_distributor_ids(meta)
-        huno_name, region_id, distributor_id = await self.edit_name(meta, region_id=region_id, distributor_id=distributor_id)
-        if (huno_name or region_id) == "SKIPPED":
-            meta['tracker_status'][self.tracker]['status_message'] = "data error: huno_missing_data"
+        if await self.get_audio(meta) == "SKIPPED":
+            console.print(f'{self.tracker}: No audio languages were found, the upload cannot continue.')
             should_continue = False
 
         if meta['video_codec'] != "HEVC" and meta['type'] in {"ENCODE", "WEBRIP", "DVDRIP", "HDTV"}:
@@ -115,6 +110,17 @@ class HUNO(UNIT3D):
 
         return {'description': desc}
 
+    async def get_mediainfo(self, meta):
+        if meta['bdinfo'] is not None:
+            # mediainfo cannot be empty for HUNO
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                mediainfo = await f.read()
+        else:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mediainfo = await f.read()
+
+        return {'mediainfo': mediainfo}
+
     async def get_featured(self, meta):
         return {}
 
@@ -182,25 +188,9 @@ class HUNO(UNIT3D):
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
 
-    async def edit_name(self, meta, region_id=None, distributor_id=None):
-        # Copied from Prep.get_name() then modified to match HUNO's naming convention.
-        # It was much easier to build the name from scratch than to alter the existing name.
-
-        region_name = None
-        distributor_name = None
-
-        if meta.get('is_disc') == "BDMV":
-            common = COMMON(config=self.config)
-            if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    region_name = cli_ui.ask_string("HUNO: Region code not found for disc. Please enter it manually (UPPERCASE): ")
-                    region_id = await common.unit3d_region_ids(region_name)
-                else:
-                    region_id = "SKIPPED"
-            if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    distributor_name = cli_ui.ask_string("HUNO: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
-                    distributor_id = await common.unit3d_distributor_ids(distributor_name)
+    async def get_name(self, meta):
+        distributor_name = meta.get('distributor', "")
+        region = meta.get('region', '')
 
         basename = self.get_basename(meta)
         if meta.get('hardcoded-subs'):
@@ -212,8 +202,6 @@ class HUNO(UNIT3D):
         year = meta.get('year', "")
         resolution = meta.get('resolution', "")
         audio = await self.get_audio(meta)
-        if "SKIPPED" in audio:
-            return "SKIPPED", "SKIPPED", "SKIPPED"
         service = meta.get('service', "")
         season = meta.get('season', "")
         if meta.get('tvdb_season_number', ""):
@@ -245,10 +233,6 @@ class HUNO(UNIT3D):
                 distributor = meta.get('distributor').title()
             else:
                 distributor = ""
-        if region_name:
-            region = region_name
-        else:
-            region = meta.get('region', "")
         video_codec = meta.get('video_codec', "")
         video_encode = meta.get('video_encode', "").replace(".", "")
         if 'x265' in basename and not meta.get('type') == "WEBDL":
@@ -299,18 +283,9 @@ class HUNO(UNIT3D):
             elif type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
 
-        return ' '.join(name.split()).replace(": ", " - "), region_id, distributor_id
-
-    async def get_name(self, meta):
-        name, region_id, distributor_id = await self.edit_name(meta)
+        name = ' '.join(name.split()).replace(": ", " - ")
+        name = re.sub(r'\s{2,}', ' ', name)
         return {'name': name}
-
-    async def get_category_id(self, meta):
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-        }.get(meta['category'], '0')
-        return {'category_id': category_id}
 
     async def get_type_id(self, meta):
         type_value = (meta.get('type') or '').lower()
