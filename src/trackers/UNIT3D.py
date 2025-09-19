@@ -36,8 +36,8 @@ class UNIT3D():
         params = {
             'api_token': self.api_key,
             'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_category_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
+            'categories[]': await self.get_category_id(meta),
+            'types[]': await self.get_type_id(meta),
             'resolutions[]': await self.get_resolution_id(meta['resolution']),
             'name': ''
         }
@@ -92,14 +92,15 @@ class UNIT3D():
 
         return bdinfo
 
-    async def get_category_id(self, category_name):
+    async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(category_name, '0')
+        }.get(meta['category'], '0')
         return category_id
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
+        meta_type = meta['type']
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -107,7 +108,7 @@ class UNIT3D():
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
+        }.get(meta_type, '0')
         return type_id
 
     async def get_resolution_id(self, resolution):
@@ -169,8 +170,8 @@ class UNIT3D():
             'description': await self.get_description(meta),
             'mediainfo': await self.get_mediainfo(meta),
             'bdinfo': await self.get_bdinfo(meta),
-            'category_id': await self.get_category_id(meta['category']),
-            'type_id': await self.get_type_id(meta['type']),
+            'category_id': await self.get_category_id(meta),
+            'type_id': await self.get_type_id(meta),
             'resolution_id': await self.get_resolution_id(meta['resolution']),
             'tmdb': meta['tmdb'],
             'imdb': meta['imdb'],

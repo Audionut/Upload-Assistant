@@ -85,7 +85,9 @@ class BLU(UNIT3D):
 
         return data
 
-    async def get_category_id(self, category_name, edition):
+    async def get_category_id(self, meta):
+        edition = meta.get('edition', '')
+        category_name = meta['category']
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -95,7 +97,7 @@ class BLU(UNIT3D):
             category_id = '3'
         return category_id
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '3',
@@ -103,7 +105,7 @@ class BLU(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '12'
-        }.get(type, '0')
+        }.get(meta['type'], '0')
         return type_id
 
     async def get_resolution_id(self, resolution):

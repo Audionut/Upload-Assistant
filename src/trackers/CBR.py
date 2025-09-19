@@ -28,17 +28,17 @@ class CBR(UNIT3D):
         ]
         pass
 
-    async def get_category_id(self, category_name, meta):
+    async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
             'ANIMES': '4'
-        }.get(category_name, '0')
+        }.get(meta['category'], '0')
         if meta['anime'] is True and category_id == '2':
             category_id = '4'
         return category_id
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -47,7 +47,7 @@ class CBR(UNIT3D):
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6'
-        }.get(type, '0')
+        }.get(meta['type'], '0')
         return type_id
 
     async def get_resolution_id(self, resolution):

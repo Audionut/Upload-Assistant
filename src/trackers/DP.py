@@ -85,8 +85,8 @@ class DP(UNIT3D):
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_category_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
+            'categories[]': await self.get_category_id(meta),
+            'types[]': await self.get_type_id(meta),
             'resolutions[]': await self.get_resolution_id(meta['resolution']),
             'name': ""
         }

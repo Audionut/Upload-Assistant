@@ -18,7 +18,7 @@ class LST(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -27,7 +27,7 @@ class LST(UNIT3D):
             'HDTV': '6',
             'ENCODE': '3',
             'DVDRIP': '3'
-        }.get(type, '0')
+        }.get(meta['type'], '0')
         return type_id
 
     async def get_additional_data(self, meta):
