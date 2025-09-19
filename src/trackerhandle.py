@@ -171,7 +171,14 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(traceback.format_exc())
                     return
 
-    if not meta.get('tv_pack'):
+    discs = meta.get('discs', [])
+    one_disc = True
+    if discs and len(discs) == 1:
+        one_disc = True
+    elif discs and len(discs) > 1:
+        one_disc = False
+
+    if not meta.get('tv_pack') and one_disc:
         # Run all tracker tasks concurrently
         await asyncio.gather(*(process_single_tracker(tracker) for tracker in enabled_trackers))
     else:
