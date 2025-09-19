@@ -171,9 +171,13 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(traceback.format_exc())
                     return
 
-    # Process each tracker sequentially
-    for tracker in enabled_trackers:
-        await process_single_tracker(tracker)
+    if not meta.get('tv_pack'):
+        # Run all tracker tasks concurrently
+        await asyncio.gather(*(process_single_tracker(tracker) for tracker in enabled_trackers))
+    else:
+        # Process each tracker sequentially
+        for tracker in enabled_trackers:
+            await process_single_tracker(tracker)
 
     try:
         if meta.get('print_tracker_messages', False):
