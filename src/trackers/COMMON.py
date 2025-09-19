@@ -514,7 +514,7 @@ class COMMON():
                     raw_url = images[img_index]['raw_url']
                     await descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
-                        descfile.write("\n")
+                        await descfile.write("\n")
                 await descfile.write("[/center]")
 
             # Handle multiple files case

@@ -36,9 +36,9 @@ class UNIT3D():
         params = {
             'api_token': self.api_key,
             'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_category_id(meta),
-            'types[]': await self.get_type_id(meta),
-            'resolutions[]': await self.get_resolution_id(meta),
+            'categories[]': (await self.get_category_id(meta))['category_id'],
+            'types[]': (await self.get_type_id(meta))['type_id'],
+            'resolutions[]': (await self.get_resolution_id(meta))['resolution_id'],
             'name': ''
         }
         if meta['category'] == 'TV':
@@ -190,7 +190,7 @@ class UNIT3D():
         return {'keywords': meta['keywords']}
 
     async def get_personal_release(self, meta):
-        personal_release = int(meta.get('personalrelease', False)),
+        personal_release = int(meta.get('personalrelease', False))
         return {'personal_release': personal_release}
 
     async def get_internal(self, meta):
@@ -201,13 +201,17 @@ class UNIT3D():
 
         return {'internal': internal}
 
-    async def get_season_episode(self, meta):
+    async def get_season_number(self, meta):
         data = {}
         if meta.get('category') == 'TV':
-            data = {
-                'season_number': meta.get('season_int', '0'),
-                'episode_number': meta.get('episode_int', '0')
-            }
+            data = {'season_number': meta.get('season_int', '0')}
+
+        return data
+
+    async def get_episode_number(self, meta):
+        data = {}
+        if meta.get('category') == 'TV':
+            data = {'episode_number': meta.get('episode_int', '0')}
 
         return data
 
@@ -247,7 +251,8 @@ class UNIT3D():
             self.get_keywords(meta),
             self.get_personal_release(meta),
             self.get_internal(meta),
-            self.get_season_episode(meta),
+            self.get_season_number(meta),
+            self.get_episode_number(meta),
             self.get_featured(meta),
             self.get_free(meta),
             self.get_doubleup(meta),
