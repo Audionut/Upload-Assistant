@@ -36,7 +36,7 @@ class CBR(UNIT3D):
         }.get(meta['category'], '0')
         if meta['anime'] is True and category_id == '2':
             category_id = '4'
-        return category_id
+        return {'category_id': category_id}
 
     async def get_type_id(self, meta):
         type_id = {
@@ -48,9 +48,9 @@ class CBR(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6'
         }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}
 
-    async def get_resolution_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -62,8 +62,8 @@ class CBR(UNIT3D):
             '480p': '8',
             '480i': '9',
             'Other': '10',
-        }.get(resolution, '10')
-        return resolution_id
+        }.get(meta['resolution'], '10')
+        return {'resolution_id': resolution_id}
 
     async def get_name(self, meta):
         name = meta['name'].replace('DD+ ', 'DDP').replace('DD ', 'DD').replace('AAC ', 'AAC').replace('FLAC ', 'FLAC')
@@ -116,7 +116,7 @@ class CBR(UNIT3D):
                 cbr_name = re.sub(f"-{invalid_tag}", "", cbr_name, flags=re.IGNORECASE)
             cbr_name = f"{cbr_name}-NoGroup"
 
-        return cbr_name
+        return {'name': cbr_name}
 
     async def get_additional_data(self, meta):
         data = {

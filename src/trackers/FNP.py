@@ -33,7 +33,7 @@ class FNP(UNIT3D):
             '480p': '8',
             '480i': '9'
         }.get(resolution, '10')
-        return resolution_id
+        return {'resolution_id': resolution_id}
 
     async def get_additional_data(self, meta):
         data = {

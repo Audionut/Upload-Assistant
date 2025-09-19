@@ -35,7 +35,7 @@ class LT(UNIT3D):
         # if is  TURCAS o Asiáticas
         elif meta["original_language"] in ['ja', 'ko', 'tr'] and category_id == '2' and 'Drama' in meta['genres']:
             category_id = '20'
-        return category_id
+        return {'category_id': category_id}
 
     async def get_name(self, meta):
         lt_name = meta['name'].replace('Dual-Audio', '').replace('Dubbed', '').replace(meta['aka'], '').replace('  ', ' ').strip()
@@ -67,10 +67,10 @@ class LT(UNIT3D):
             else:
                 lt_name = lt_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
 
-        return lt_name
+        return {'name': lt_name}
 
     async def get_distributor_ids(self, meta):
-        return 'Other'
+        return {}
 
     async def get_region_id(self, meta):
-        return 'Other'
+        return {}

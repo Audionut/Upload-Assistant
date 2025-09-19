@@ -28,7 +28,7 @@ class LST(UNIT3D):
             'ENCODE': '3',
             'DVDRIP': '3'
         }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}
 
     async def get_additional_data(self, meta):
         data = {
@@ -52,4 +52,4 @@ class LST(UNIT3D):
                 lst_name = lst_name.replace(f"{meta['source']}", f"{resolution}", 1)
                 lst_name = lst_name.replace(f"{meta['video_codec']}", f"{meta['audio']} {meta['video_codec']}", 1)
 
-        return lst_name
+        return {'name': lst_name}

@@ -40,4 +40,4 @@ class HHD(UNIT3D):
             '480i': '9',
             'Other': '10'
         }.get(resolution, '10')
-        return resolution_id
+        return {'resolution_id': resolution_id}

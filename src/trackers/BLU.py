@@ -48,7 +48,7 @@ class BLU(UNIT3D):
                 else:
                     blu_name = blu_name.replace(meta['resolution'], f"Hybrid {meta['resolution']}")
 
-        return blu_name
+        return {'name': blu_name}
 
     async def get_description(self, meta):
         desc_header = ''
@@ -56,7 +56,7 @@ class BLU(UNIT3D):
             desc_header = await self.derived_dv_layer(meta)
         await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True, desc_header=desc_header)
         desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        return desc
+        return {'description': desc}
 
     async def derived_dv_layer(self, meta):
         desc_header = ''
@@ -95,7 +95,7 @@ class BLU(UNIT3D):
         }.get(category_name, '0')
         if category_name == 'MOVIE' and 'FANRES' in edition:
             category_id = '3'
-        return category_id
+        return {'category_id': category_id}
 
     async def get_type_id(self, meta):
         type_id = {
@@ -106,7 +106,7 @@ class BLU(UNIT3D):
             'HDTV': '6',
             'ENCODE': '12'
         }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}
 
     async def get_resolution_id(self, resolution):
         resolution_id = {
@@ -122,4 +122,4 @@ class BLU(UNIT3D):
             '480p': '8',
             '480i': '9'
         }.get(resolution, '10')
-        return resolution_id
+        return {'resolution_id': resolution_id}

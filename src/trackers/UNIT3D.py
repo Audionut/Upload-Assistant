@@ -38,7 +38,7 @@ class UNIT3D():
             'tmdbId': meta['tmdb'],
             'categories[]': await self.get_category_id(meta),
             'types[]': await self.get_type_id(meta),
-            'resolutions[]': await self.get_resolution_id(meta['resolution']),
+            'resolutions[]': await self.get_resolution_id(meta),
             'name': ''
         }
         if meta['category'] == 'TV':
@@ -66,13 +66,13 @@ class UNIT3D():
         return dupes
 
     async def get_name(self, meta):
-        return meta['name']
+        return {'name': meta['name']}
 
     async def get_description(self, meta):
         await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
-        return desc
+        return {'description': desc}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -80,8 +80,7 @@ class UNIT3D():
         else:
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
                 mediainfo = await f.read()
-
-        return mediainfo
+        return {'mediainfo': mediainfo}
 
     async def get_bdinfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -89,15 +88,14 @@ class UNIT3D():
                 bdinfo = await f.read()
         else:
             bdinfo = None
-
-        return bdinfo
+        return {'bdinfo': bdinfo}
 
     async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(meta['category'], '0')
-        return category_id
+        return {'category_id': category_id}
 
     async def get_type_id(self, meta):
         type_id = {
@@ -108,9 +106,9 @@ class UNIT3D():
             'HDTV': '6',
             'ENCODE': '3'
         }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}
 
-    async def get_resolution_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -123,15 +121,15 @@ class UNIT3D():
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(resolution, '10')
-        return resolution_id
+        }.get(meta['resolution'], '10')
+        return {'resolution_id': resolution_id}
 
     async def get_anonymous(self, meta):
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
+            anonymous = 0
         else:
-            anon = 1
-        return anon
+            anonymous = 1
+        return {'anonymous': anonymous}
 
     async def get_additional_data(self, meta):
         # Used to add additional data if needed
@@ -153,58 +151,117 @@ class UNIT3D():
         return 1 if meta.get(flag_name, False) else 0
 
     async def get_distributor_ids(self, meta):
-        distributor = await self.common.unit3d_distributor_ids(meta.get('distributor'))
-        return distributor
+        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
+        if distributor_id != 0:
+            return {'distributor_id': distributor_id}
+
+        return {}
 
     async def get_region_id(self, meta):
-        region = await self.common.unit3d_region_ids(meta.get('region'))
-        return region
+        region_id = await self.common.unit3d_region_ids(meta.get('region'))
+        if region_id != 0:
+            return {'region_id': region_id}
 
-    async def get_data(self, meta):
-        region_id = await self.get_region_id(meta)
-        distributor_id = await self.get_distributor_ids(meta)
+        return {}
 
-        data = {
-            'name': await self.get_name(meta),
-            'description': await self.get_description(meta),
-            'mediainfo': await self.get_mediainfo(meta),
-            'bdinfo': await self.get_bdinfo(meta),
-            'category_id': await self.get_category_id(meta),
-            'type_id': await self.get_type_id(meta),
-            'resolution_id': await self.get_resolution_id(meta['resolution']),
-            'tmdb': meta['tmdb'],
-            'imdb': meta['imdb'],
-            'tvdb': meta.get('tvdb_id', 0) if meta['category'] == 'TV' else 0,
-            'mal': meta['mal_id'],
-            'igdb': 0,
-            'anonymous': await self.get_anonymous(meta),
-            'stream': meta['stream'],
-            'sd': meta['sd'],
-            'keywords': meta['keywords'],
-            'personal_release': int(meta.get('personalrelease', False)),
-            'internal': 0,
-            'featured': 0,
-            'free': 0,
-            'doubleup': 0,
-            'sticky': 0,
-        }
-        # Internal
+    async def get_tmdb(self, meta):
+        return {'tmdb': meta['tmdb']}
+
+    async def get_imdb(self, meta):
+        return {'imdb': meta['imdb']}
+
+    async def get_tvdb(self, meta):
+        tvdb = meta.get('tvdb_id', 0) if meta['category'] == 'TV' else 0
+        return {'tvdb': tvdb}
+
+    async def get_mal(self, meta):
+        return {'mal': meta['mal_id']}
+
+    async def get_igdb(self, meta):
+        return {'igdb': 0}
+
+    async def get_stream(self, meta):
+        return {'stream': meta['stream']}
+
+    async def get_sd(self, meta):
+        return {'sd': meta['sd']}
+
+    async def get_keywords(self, meta):
+        return {'keywords': meta['keywords']}
+
+    async def get_personal_release(self, meta):
+        personal_release = int(meta.get('personalrelease', False)),
+        return {'personal_release': personal_release}
+
+    async def get_internal(self, meta):
+        internal = 0
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
-        if meta.get('freeleech', 0) != 0:
-            data['free'] = meta.get('freeleech', 0)
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
-        if meta.get('category') == 'TV':
-            data['season_number'] = meta.get('season_int', '0')
-            data['episode_number'] = meta.get('episode_int', '0')
+                internal = 1
 
-        data.update(await self.get_additional_data(meta))
+        return {'internal': internal}
+
+    async def get_season_episode(self, meta):
+        data = {}
+        if meta.get('category') == 'TV':
+            data = {
+                'season_number': meta.get('season_int', '0'),
+                'episode_number': meta.get('episode_int', '0')
+            }
 
         return data
+
+    async def get_featured(self, meta):
+        return {'featured': 0}
+
+    async def get_free(self, meta):
+        free = 0
+        if meta.get('freeleech', 0) != 0:
+            free = meta.get('freeleech', 0)
+
+        return {'free': free}
+
+    async def get_doubleup(self, meta):
+        return {'doubleup': 0}
+
+    async def get_sticky(self, meta):
+        return {'sticky': 0}
+
+    async def get_data(self, meta):
+        results = await asyncio.gather(
+            self.get_name(meta),
+            self.get_description(meta),
+            self.get_mediainfo(meta),
+            self.get_bdinfo(meta),
+            self.get_category_id(meta),
+            self.get_type_id(meta),
+            self.get_resolution_id(meta),
+            self.get_tmdb(meta),
+            self.get_imdb(meta),
+            self.get_tvdb(meta),
+            self.get_mal(meta),
+            self.get_igdb(meta),
+            self.get_anonymous(meta),
+            self.get_stream(meta),
+            self.get_sd(meta),
+            self.get_keywords(meta),
+            self.get_personal_release(meta),
+            self.get_internal(meta),
+            self.get_season_episode(meta),
+            self.get_featured(meta),
+            self.get_free(meta),
+            self.get_doubleup(meta),
+            self.get_sticky(meta),
+            self.get_additional_data(meta),
+        )
+
+        merged = {}
+        for r in results:
+            if not isinstance(r, dict):
+                raise TypeError(f'Expected dict, got {type(r)}: {r}')
+            merged.update(r)
+
+        return merged
 
     async def get_additional_files(self, meta):
         files = {}

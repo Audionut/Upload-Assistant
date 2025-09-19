@@ -34,4 +34,4 @@ class ITT(UNIT3D):
             'DVDRip': '24',
             'Cinema-MD': '14',
             }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}

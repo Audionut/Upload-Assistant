@@ -61,7 +61,7 @@ class DP(UNIT3D):
         await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
-        return desc
+        return {'description': desc}
 
     async def get_additional_data(self, meta):
         data = {
@@ -78,7 +78,7 @@ class DP(UNIT3D):
             for invalid_tag in invalid_tags:
                 dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
             dp_name = f"{dp_name}-NOGROUP"
-        return dp_name
+        return {'name': dp_name}
 
     async def search_existing(self, meta, disctype):
         dupes = []

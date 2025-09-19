@@ -60,13 +60,13 @@ class LCD(UNIT3D):
         for old, new in replacements.items():
             name = name.replace(old, new)
 
-        return name
+        return {'name': name}
 
     async def get_region_id(self, meta):
-        region = await self.common.unit3d_region_ids(meta.get('region'))
+        region_id = await self.common.unit3d_region_ids(meta.get('region'))
         if meta.get('region') == 'EUR':
-            region = 0
-        return region
+            region_id = 0
+        return {'region_id': region_id}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -77,7 +77,7 @@ class LCD(UNIT3D):
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
                 mediainfo = await f.read()
 
-        return mediainfo
+        return {'mediainfo': mediainfo}
 
     async def get_category_id(self, meta):
         category_id = {
@@ -87,7 +87,7 @@ class LCD(UNIT3D):
         }.get(meta['category'], '0')
         if meta['anime'] is True and category_id == '2':
             category_id = '6'
-        return category_id
+        return {'category_id': category_id}
 
     async def get_type_id(self, meta):
         type_id = {
@@ -98,7 +98,7 @@ class LCD(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6'
         }.get(meta['type'], '0')
-        return type_id
+        return {'type_id': type_id}
 
     async def get_res_id(self, resolution):
         resolution_id = {
@@ -115,4 +115,4 @@ class LCD(UNIT3D):
             '480i': '9',
             'Other': '10',
         }.get(resolution, '10')
-        return resolution_id
+        return {'resolution_id': resolution_id}
