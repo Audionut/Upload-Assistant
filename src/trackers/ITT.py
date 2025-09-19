@@ -1,5 +1,4 @@
-import os
-import glob
+# -*- coding: utf-8 -*-
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -36,18 +35,3 @@ class ITT(UNIT3D):
             'Cinema-MD': '14',
             }.get(type, '0')
         return type_id
-
-    async def get_additional_files(self, meta):
-        files = {}
-        base_dir = meta['base_dir']
-        uuid = meta['uuid']
-        specified_dir_path = os.path.join(base_dir, 'tmp', uuid, '*.nfo')
-        nfo_files = glob.glob(specified_dir_path)
-
-        if nfo_files:
-            nfo_path = nfo_files[0]
-            with open(nfo_path, 'rb') as f:
-                content = f.read()
-            files['nfo'] = (os.path.basename(nfo_path), content, 'text/plain')
-
-        return files

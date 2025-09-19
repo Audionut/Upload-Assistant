@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-# import discord
-import os
-import glob
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -44,18 +41,3 @@ class FNP(UNIT3D):
         }
 
         return data
-
-    async def get_additional_files(self, meta):
-        files = {}
-        base_dir = meta['base_dir']
-        uuid = meta['uuid']
-        specified_dir_path = os.path.join(base_dir, 'tmp', uuid, '*.nfo')
-        nfo_files = glob.glob(specified_dir_path)
-
-        if nfo_files:
-            nfo_path = nfo_files[0]
-            with open(nfo_path, 'rb') as f:
-                content = f.read()
-            files['nfo'] = (os.path.basename(nfo_path), content, 'text/plain')
-
-        return files

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
+import glob
 import httpx
+import os
 import platform
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -192,8 +194,6 @@ class UNIT3D():
         return data
 
     async def get_additional_files(self, meta):
-        # Used to add nfo or other files if needed
-        '''
         files = {}
         base_dir = meta['base_dir']
         uuid = meta['uuid']
@@ -205,8 +205,6 @@ class UNIT3D():
             with open(nfo_path, 'rb') as f:
                 content = f.read()
             files['nfo'] = (os.path.basename(nfo_path), content, 'text/plain')
-        '''
-        files = {}
 
         return files
 
