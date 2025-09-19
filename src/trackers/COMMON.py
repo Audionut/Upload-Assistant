@@ -29,6 +29,16 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.path.exists, path)
 
+    async def remove_file(self, path):
+        """Async wrapper for os.remove"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, os.remove, path)
+
+    async def makedirs(self, path, exist_ok=True):
+        """Async wrapper for os.makedirs"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
