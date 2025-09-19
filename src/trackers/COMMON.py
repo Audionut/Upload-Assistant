@@ -8,6 +8,7 @@ import sys
 import glob
 import httpx
 import asyncio
+import aiofiles
 from pymediainfo import MediaInfo
 import secrets
 from src.bbcode import BBCODE
@@ -87,23 +88,24 @@ class COMMON():
         else:
             images = meta['image_list']
             multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
-            if meta.get('sorted_filelist'):
-                multi_screens = 0
+        if meta.get('sorted_filelist'):
+            multi_screens = 0
 
         # Check for saved pack_image_links.json file
         pack_images_file = os.path.join(meta['base_dir'], "tmp", meta['uuid'], "pack_image_links.json")
         pack_images_data = {}
-        if os.path.exists(pack_images_file):
+        if await self.path_exists(pack_images_file):
             try:
-                with open(pack_images_file, 'r', encoding='utf-8') as f:
-                    pack_images_data = json.load(f)
+                async with aiofiles.open(pack_images_file, 'r', encoding='utf-8') as f:
+                    pack_images_data = json.loads(await f.read())
                     if meta['debug']:
                         console.print(f"[green]Loaded previously uploaded images from {pack_images_file}")
                         console.print(f"[blue]Found {pack_images_data.get('total_count', 0)} previously uploaded images")
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
 
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8').read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
+            base = await f.read()
         char_limit = int(self.config['DEFAULT'].get('charLimit', 14000))
         file_limit = int(self.config['DEFAULT'].get('fileLimit', 5))
         thumb_size = int(self.config['DEFAULT'].get('pack_thumb_size', '300'))
@@ -132,38 +134,41 @@ class COMMON():
                 signature = custom_signature
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting custom signature: {str(e)}[/yellow]")
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
             if desc_header:
                 if not desc_header.endswith('\n'):
-                    descfile.write(desc_header + '\n')
+                    await descfile.write(desc_header + '\n')
                 else:
-                    descfile.write(desc_header)
+                    await descfile.write(desc_header)
             await process_desc_language(meta, descfile, tracker)
             add_logo_enabled = self.config["DEFAULT"].get("add_logo", False)
             if add_logo_enabled and 'logo' in meta:
                 logo = meta['logo']
                 logo_size = self.config["DEFAULT"].get("logo_size", 420)
                 if logo != "":
-                    descfile.write(f"[center][img={logo_size}]{logo}[/img][/center]\n\n")
+                    await descfile.write(f"[center][img={logo_size}]{logo}[/img][/center]\n\n")
             bluray_link = self.config['DEFAULT'].get("add_bluray_link", False)
             if meta.get('is_disc') == "BDMV" and bluray_link and meta.get('release_url', ''):
-                descfile.write(f"[center]{meta['release_url']}[/center]\n")
+                await descfile.write(f"[center]{meta['release_url']}[/center]\n")
             covers = False
-            if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
+            if await self.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
                 covers = True
+
             if meta.get('is_disc') == "BDMV" and self.config['DEFAULT'].get('use_bluray_images', False) and covers:
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", 'r', encoding='utf-8') as f:
-                    cover_data = json.load(f)
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", 'r', encoding='utf-8') as f:
+                    cover_data = json.loads(await f.read())
+
                 if isinstance(cover_data, list):
-                    descfile.write("[center]")
+                    await descfile.write("[center]")
 
                     for img_data in cover_data:
                         if 'raw_url' in img_data and 'web_url' in img_data:
                             web_url = img_data['web_url']
                             raw_url = img_data['raw_url']
-                            descfile.write(f"[url={web_url}][img={cover_size}]{raw_url}[/img][/url]")
+                            await descfile.write(f"[url={web_url}][img={cover_size}]{raw_url}[/img][/url]")
 
-                    descfile.write("[/center]\n\n")
+                    await descfile.write("[/center]\n\n")
+
             season_name = meta.get('tvdb_season_name') if meta.get('tvdb_season_name') is not None and meta.get('tvdb_season_name') != "" else None
             season_number = meta.get('tvdb_season_number') if meta.get('tvdb_season_number') is not None and meta.get('tvdb_season_number') != "" else None
             episode_number = meta.get('tvdb_episode_number') if meta.get('tvdb_episode_number') is not None and meta.get('tvdb_episode_number') != "" else None
@@ -172,29 +177,29 @@ class COMMON():
                 episode_title = meta.get('tvmaze_episode_data', {}).get('episode_name') if meta.get('tvmaze_episode_data', {}).get('episode_name') else None
             if episode_overview and season_name and season_number and episode_number and episode_title:
                 if not tracker == "HUNO":
-                    descfile.write("[center][pre]")
+                    await descfile.write("[center][pre]")
                 else:
-                    descfile.write("[center]")
-                descfile.write(f"{season_name} - S{season_number}E{episode_number}: {episode_title}")
+                    await descfile.write("[center]")
+                await descfile.write(f"{season_name} - S{season_number}E{episode_number}: {episode_title}")
                 if not tracker == "HUNO":
-                    descfile.write("[/pre][/center]\n\n")
+                    await descfile.write("[/pre][/center]\n\n")
                 else:
-                    descfile.write("[/center]\n\n")
+                    await descfile.write("[/center]\n\n")
             if episode_overview and meta.get('overview_meta') is not None and meta.get('overview_meta') != "":
                 episode_data = meta.get('overview_meta')
                 if not tracker == "HUNO":
-                    descfile.write("[center][pre]")
+                    await descfile.write("[center][pre]")
                 else:
-                    descfile.write("[center]")
-                descfile.write(episode_data)
+                    await descfile.write("[center]")
+                await descfile.write(episode_data)
                 if not tracker == "HUNO":
-                    descfile.write("[/pre][/center]\n\n")
+                    await descfile.write("[/pre][/center]\n\n")
                 else:
-                    descfile.write("[/center]\n\n")
+                    await descfile.write("[/center]\n\n")
 
             try:
                 if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                    descfile.write(self.config['DEFAULT'].get('tonemapped_header'))
+                    await descfile.write(self.config['DEFAULT'].get('tonemapped_header'))
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
 
@@ -220,26 +225,24 @@ class COMMON():
             if comparison is False:
                 desc = bbcode.convert_comparison_to_collapse(desc, 1000)
             desc = desc.replace('[img]', '[img=300]')
-            descfile.write(desc)
+            await descfile.write(desc)
             # Handle single disc case
             if len(discs) == 1:
                 each = discs[0]
                 if each['type'] == "DVD":
-                    descfile.write("[center]")
-                    descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]\n\n")
-                    descfile.write("[/center]")
+                    await descfile.write("[center]")
+                    await descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]\n\n")
+                    await descfile.write("[/center]")
                 if screenheader is not None:
-                    descfile.write(screenheader + '\n')
-                descfile.write("[center]")
+                    await descfile.write(screenheader + '\n')
+                await descfile.write("[center]")
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
-
-                    # If screensPerRow is set and we have reached that number of screenshots, add a new line
+                    await descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
-                        descfile.write("\n")
-                descfile.write("[/center]")
+                        await descfile.write("\n")
+                await descfile.write("[/center]")
                 if each['type'] == "BDMV":
                     bdinfo_keys = [key for key in each if key.startswith("bdinfo")]
                     if len(bdinfo_keys) > 1:
@@ -271,23 +274,23 @@ class COMMON():
                                         })
 
                             if new_images_key in meta and meta[new_images_key]:
-                                descfile.write("[center]\n\n")
+                                await descfile.write("[center]\n\n")
                                 # Use the summary corresponding to the current bdinfo
-                                descfile.write(f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n")
+                                await descfile.write(f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n")
                                 if meta['debug']:
                                     console.print("[yellow]Using original uploaded images for first disc")
-                                descfile.write("[center]")
+                                await descfile.write("[center]")
                                 for img in meta[new_images_key]:
                                     web_url = img['web_url']
                                     raw_url = img['raw_url']
                                     image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                                    descfile.write(image_str)
-                                descfile.write("[/center]\n ")
+                                    await descfile.write(image_str)
+                                await descfile.write("[/center]\n\n")
                             else:
-                                descfile.write("[center]\n\n")
+                                await descfile.write("[center]\n\n")
                                 # Use the summary corresponding to the current bdinfo
-                                descfile.write(f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n")
-                                descfile.write("[/center]\n\n")
+                                await descfile.write(f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n")
+                                await descfile.write("[/center]\n\n")
                                 meta['retry_count'] += 1
                                 meta[new_images_key] = []
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
@@ -309,17 +312,17 @@ class COMMON():
                                             'web_url': img['web_url']
                                         })
 
-                                    descfile.write("[center]")
+                                    await descfile.write("[center]")
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
                                         image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                                        descfile.write(image_str)
-                                    descfile.write("[/center]\n")
+                                        await descfile.write(image_str)
+                                    await descfile.write("[/center]\n\n")
 
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                                with open(meta_filename, 'w') as f:
-                                    json.dump(meta, f, indent=4)
+                                async with aiofiles.open(meta_filename, 'w') as f:
+                                    await f.write(json.dumps(meta, indent=4))
 
             # Handle multiple discs case
             elif len(discs) > 1:
@@ -338,30 +341,28 @@ class COMMON():
                     new_images_key = f'new_images_disc_{i}'
 
                     if i == 0:
-                        descfile.write("[center]")
+                        await descfile.write("[center]")
                         if each['type'] == "BDMV":
-                            descfile.write(f"{each.get('name', 'BDINFO')}\n\n")
+                            await descfile.write(f"{each.get('name', 'BDINFO')}\n\n")
                         elif each['type'] == "DVD":
-                            descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]")
-                            descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
+                            await descfile.write(f"{each['name']}:\n")
+                            await descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]")
+                            await descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
                         # For the first disc, use images from `meta['image_list']` and add screenheader if applicable
                         if meta['debug']:
                             console.print("[yellow]Using original uploaded images for first disc")
                         if screenheader is not None:
-                            descfile.write("[/center]\n\n")
-                            descfile.write(screenheader + '\n')
-                            descfile.write("[center]")
+                            await descfile.write("[/center]\n\n")
+                            await descfile.write(screenheader + '\n')
+                            await descfile.write("[center]")
                         for img_index in range(len(images[:int(meta['screens'])])):
                             web_url = images[img_index]['web_url']
                             raw_url = images[img_index]['raw_url']
-                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                            descfile.write(image_str)
-
-                            # If screensPerRow is set and we have reached that number of screenshots, add a new line
+                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                            await descfile.write(image_str)
                             if screensPerRow and (img_index + 1) % screensPerRow == 0:
-                                descfile.write("\n")
-                        descfile.write("[/center]\n\n")
+                                await descfile.write("\n")
+                        await descfile.write("[/center]\n\n")
                     else:
                         if multi_screens != 0:
                             processed_count += 1
@@ -385,34 +386,34 @@ class COMMON():
                             if new_images_key in meta and meta[new_images_key]:
                                 if meta['debug']:
                                     console.print(f"[yellow]Found needed image URLs for {new_images_key}")
-                                descfile.write("[center]")
+                                await descfile.write("[center]")
                                 if each['type'] == "BDMV":
-                                    descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
+                                    await descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
                                 elif each['type'] == "DVD":
-                                    descfile.write(f"{each['name']}:\n")
-                                    descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] ")
-                                    descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
-                                descfile.write("[/center]\n\n")
+                                    await descfile.write(f"{each['name']}:\n")
+                                    await descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] ")
+                                    await descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
+                                await descfile.write("[/center]\n\n")
                                 # Use existing URLs from meta to write to descfile
-                                descfile.write("[center]")
+                                await descfile.write("[center]")
                                 for img in meta[new_images_key]:
                                     web_url = img['web_url']
                                     raw_url = img['raw_url']
                                     image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
-                                    descfile.write(image_str)
-                                descfile.write("[/center]\n\n")
+                                    await descfile.write(image_str)
+                                await descfile.write("[/center]\n\n")
                             else:
                                 # Increment retry_count for tracking but use unique disc keys for each disc
                                 meta['retry_count'] += 1
                                 meta[new_images_key] = []
-                                descfile.write("[center]")
+                                await descfile.write("[center]")
                                 if each['type'] == "BDMV":
-                                    descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
+                                    await descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
                                 elif each['type'] == "DVD":
-                                    descfile.write(f"{each['name']}:\n")
-                                    descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] ")
-                                    descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
-                                descfile.write("[/center]\n\n")
+                                    await descfile.write(f"{each['name']}:\n")
+                                    await descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] ")
+                                    await descfile.write(f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
+                                await descfile.write("[/center]\n\n")
                                 # Check if new screenshots already exist before running prep.screenshots
                                 if each['type'] == "BDMV":
                                     new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
@@ -449,24 +450,24 @@ class COMMON():
                                         })
 
                                     # Write new URLs to descfile
-                                    descfile.write("[center]")
+                                    await descfile.write("[center]")
                                     for img in uploaded_images:
                                         web_url = img['web_url']
                                         raw_url = img['raw_url']
-                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                                        descfile.write(image_str)
-                                    descfile.write("[/center]\n")
+                                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
+                                        await descfile.write(image_str)
+                                    await descfile.write("[/center]\n\n")
 
                                 # Save the updated meta to `meta.json` after upload
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                                with open(meta_filename, 'w') as f:
-                                    json.dump(meta, f, indent=4)
+                                async with aiofiles.open(meta_filename, 'w') as f:
+                                    await f.write(json.dumps(meta, indent=4))
                             console.print()
 
             # Handle single file case
             if len(filelist) == 1:
                 if meta.get('comparison') and meta.get('comparison_groups'):
-                    descfile.write("[center]")
+                    await descfile.write("[center]")
                     comparison_groups = meta.get('comparison_groups', {})
                     sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(x))
 
@@ -477,7 +478,7 @@ class COMMON():
                         comp_sources.append(group_name)
 
                     sources_string = ", ".join(comp_sources)
-                    descfile.write(f"[comparison={sources_string}]\n")
+                    await descfile.write(f"[comparison={sources_string}]\n")
 
                     images_per_group = min([
                         len(comparison_groups[idx].get('urls', []))
@@ -491,20 +492,20 @@ class COMMON():
                             if img_idx < len(urls):
                                 img_url = urls[img_idx].get('raw_url', '')
                                 if img_url:
-                                    descfile.write(f"{img_url}\n")
+                                    await descfile.write(f"{img_url}\n")
 
-                    descfile.write("[/comparison][/center]\n\n")
+                    await descfile.write("[/comparison][/center]\n\n")
 
                 if screenheader is not None:
-                    descfile.write(screenheader + '\n')
-                descfile.write("[center]")
+                    await descfile.write(screenheader + '\n')
+                await descfile.write("[center]")
                 for img_index in range(len(images[:int(meta['screens'])])):
                     web_url = images[img_index]['web_url']
                     raw_url = images[img_index]['raw_url']
-                    descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
+                    await descfile.write(f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] ")
                     if screensPerRow and (img_index + 1) % screensPerRow == 0:
                         descfile.write("\n")
-                descfile.write("[/center]")
+                await descfile.write("[/center]")
 
             # Handle multiple files case
             # Initialize character counter
@@ -573,8 +574,8 @@ class COMMON():
 
             # Save updated meta
             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-            with open(meta_filename, 'w') as f:
-                json.dump(meta, f, indent=4)
+            async with aiofiles.open(meta_filename, 'w') as f:
+                await f.write(json.dumps(meta, indent=4))
 
             # Second Pass: Process MediaInfo and Write Descriptions
             if len(filelist) > 1:
@@ -588,7 +589,7 @@ class COMMON():
                     if multi_screens != 0:
                         if i >= file_limit:
                             if not other_files_spoiler_open:
-                                descfile.write("[center][spoiler=Other files]\n")
+                                await descfile.write("[center][spoiler=Other files]\n")
                                 char_count += len("[center][spoiler=Other files]\n")
                                 other_files_spoiler_open = True
 
@@ -598,49 +599,49 @@ class COMMON():
                             mi_dump = MediaInfo.parse(file, output="STRING", full=False, mediainfo_options={'inform_version': '1'})
                             parsed_mediainfo = self.parser.parse_mediainfo(mi_dump)
                             formatted_bbcode = self.parser.format_bbcode(parsed_mediainfo)
-                            descfile.write(f"[center][spoiler={filename}]{formatted_bbcode}[/spoiler][/center]\n")
+                            await descfile.write(f"[center][spoiler={filename}]{formatted_bbcode}[/spoiler][/center]\n")
                             char_count += len(f"[center][spoiler={filename}]{formatted_bbcode}[/spoiler][/center]\n")
                         else:
-                            # If there are screen shots and screen shot header, write the header above the first filename
                             if i == 0 and images and screenheader is not None:
-                                descfile.write(screenheader + '\n')
+                                await descfile.write(screenheader + '\n')
                                 char_count += len(screenheader + '\n')
-                            descfile.write(f"[center]{filename}\n[/center]\n")
+                            await descfile.write(f"[center]{filename}\n[/center]\n")
                             char_count += len(f"[center]{filename}\n[/center]\n")
 
                     # Write images if they exist
                     new_images_key = f'new_images_file_{i}'
                     if i == 0:  # For the first file, use 'image_list' key and add screenheader if applicable
                         if images:
-                            descfile.write("[center]")
+                            if screenheader is not None:
+                                await descfile.write(screenheader + '\n')
+                                char_count += len(screenheader + '\n')
+                            await descfile.write("[center]")
                             char_count += len("[center]")
                             for img_index in range(len(images)):
                                 web_url = images[img_index]['web_url']
                                 raw_url = images[img_index]['raw_url']
                                 image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                                descfile.write(image_str)
+                                await descfile.write(image_str)
                                 char_count += len(image_str)
-
-                                # If screensPerRow is set and we have reached that number of screenshots, add a new line
                                 if screensPerRow and (img_index + 1) % screensPerRow == 0:
-                                    descfile.write("\n")
-                            descfile.write("[/center]\n\n")
+                                    await descfile.write("\n")
+                            await descfile.write("[/center]\n\n")
                             char_count += len("[/center]\n\n")
                     elif multi_screens != 0:
                         if new_images_key in meta and meta[new_images_key]:
-                            descfile.write("[center]")
+                            await descfile.write("[center]")
                             char_count += len("[center]")
                             for img in meta[new_images_key]:
                                 web_url = img['web_url']
                                 raw_url = img['raw_url']
                                 image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                                descfile.write(image_str)
+                                await descfile.write(image_str)
                                 char_count += len(image_str)
-                            descfile.write("[/center]\n")
+                            await descfile.write("[/center]\n\n")
                             char_count += len("[/center]\n\n")
 
                 if other_files_spoiler_open:
-                    descfile.write("[/spoiler][/center]\n")
+                    await descfile.write("[/spoiler][/center]\n")
                     char_count += len("[/spoiler][/center]\n")
 
             if char_count >= 1 and meta['debug']:
@@ -650,8 +651,8 @@ class COMMON():
 
             # Append signature if provided
             if signature:
-                descfile.write(signature)
-            descfile.close()
+                await descfile.write(signature)
+
         return
 
     async def save_image_links(self, meta, image_key, image_list=None):
