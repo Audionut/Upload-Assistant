@@ -214,7 +214,7 @@ class GPW():
         if images:
             screenshots_block = '[center]\n'
             for i, image in enumerate(images, start=1):
-                screenshots_block += f"[img=350]{image['raw_url']}[/img] "
+                screenshots_block += f"[img]{image['raw_url']}[/img] "
                 if i % 2 == 0:
                     screenshots_block += '\n'
             screenshots_block += '\n[/center]'
