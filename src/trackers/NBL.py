@@ -69,7 +69,11 @@ class NBL():
                 async with httpx.AsyncClient(timeout=10) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data)
                     if response.status_code in [200, 201]:
-                        response_data = response.json()
+                        try:
+                            response_data = response.json()
+                        except json.JSONDecodeError:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: NBL json decode error, the API is probably down"
+                            return
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",

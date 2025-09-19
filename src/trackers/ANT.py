@@ -125,7 +125,11 @@ class ANT():
                 async with httpx.AsyncClient(timeout=10) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
                     if response.status_code in [200, 201]:
-                        response_data = response.json()
+                        try:
+                            response_data = response.json()
+                        except json.JSONDecodeError:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
+                            return
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
                             meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
                         else:
