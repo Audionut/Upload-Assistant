@@ -103,7 +103,7 @@ class BLU(UNIT3D):
 
         return files
 
-    async def get_cat_id(self, category_name, edition):
+    async def get_category_id(self, category_name, edition):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -124,7 +124,7 @@ class BLU(UNIT3D):
         }.get(type, '0')
         return type_id
 
-    async def get_res_id(self, resolution):
+    async def get_resolution_id(self, resolution):
         resolution_id = {
             '8640p': '10',
             '4320p': '11',

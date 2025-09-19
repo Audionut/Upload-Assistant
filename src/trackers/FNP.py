@@ -24,7 +24,7 @@ class FNP(UNIT3D):
         ]
         pass
 
-    async def get_res_id(self, resolution):
+    async def get_resolution_id(self, resolution):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

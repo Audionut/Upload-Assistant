@@ -56,7 +56,7 @@ class LST(UNIT3D):
 
         return files
 
-    async def edit_name(self, meta):
+    async def get_name(self, meta):
         lst_name = meta['name']
         resolution = meta.get('resolution')
         video_encode = meta.get('video_encode')
