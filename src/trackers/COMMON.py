@@ -29,8 +29,10 @@ class COMMON():
         return await loop.run_in_executor(None, os.path.exists, path)
 
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
-        if os.path.exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"):
-            new_torrent = Torrent.read(f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent")
+        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
+        if await self.path_exists(path):
+            loop = asyncio.get_running_loop()
+            new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             for each in list(new_torrent.metainfo):
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)
@@ -40,14 +42,14 @@ class COMMON():
                 created_by = new_torrent.metainfo['created by']
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Audionut's Upload Assistant"
+            # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
+            new_torrent.metainfo['comment'] = ''
             if int(meta.get('entropy', None)) == 32:
                 new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)
             elif int(meta.get('entropy', None)) == 64:
                 new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)
-            # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
-            new_torrent.metainfo['comment'] = ''
-
-            Torrent.copy(new_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent", overwrite=True)
+            out_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+            await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
     # used to add tracker url, comment and source flag to torrent file
     async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None):
