@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
+import aiofiles
 import platform
 import httpx
 import glob
@@ -130,22 +130,27 @@ class LDU():
 
         if meta['bdinfo'] is not None:
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                bd_dump = await f.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
             bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'torrent': open_torrent}
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+            desc = await f.read()
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+        files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         base_dir = meta['base_dir']
         uuid = meta['uuid']
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
-        nfo_file = None
         if nfo_files:
-            nfo_file = open(nfo_files[0], 'rb')
-        if nfo_file:
-            files['nfo'] = ("nfo_file.nfo", nfo_file, "text/plain")
+            async with aiofiles.open(nfo_files[0], 'rb') as f:
+                nfo_bytes = await f.read()
+            files['nfo'] = ("nfo_file.nfo", nfo_bytes, "text/plain")
         data = {
             'name': name,
             'description': desc,
@@ -190,28 +195,28 @@ class LDU():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-            if response.status_code == 500:
-                meta['tracker_status'][self.tracker]['status_message'] = "500 Internal Server Error. It probably uploaded through"
-            else:
-                try:
-                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
-                    # adding torrent link to comment of torrent file
-                    try:
-                        t_id = response.json()['data'].split(".")[1].split("/")[3]
-                        meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id, headers=headers, params=params, downurl=response.json()['data'])
-                    except Exception as e:
-                        console.print(f"[bold red]Error extracting torrent ID: {e}[/bold red]")
-                except Exception:
-                    console.print("It may have uploaded, go check")
-                    open_torrent.close()
-                    return
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url=self.upload_url,
+                    files=files,
+                    data=data,
+                    headers=headers,
+                    params=params,
+                    timeout=10
+                )
+            try:
+                meta['tracker_status'][self.tracker]['status_message'] = response.json()
+                # adding torrent link to comment of torrent file
+                t_id = response.json()['data'].split(".")[1].split("/")[3]
+                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id)
+            except Exception:
+                meta['tracker_status'][self.tracker]['status_message'] = "It may have uploaded, go check"
+                return
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
 
     async def edit_name(self, meta, cat_id):
         ldu_name = meta['name']
