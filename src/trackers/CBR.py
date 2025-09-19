@@ -8,7 +8,7 @@ import re
 
 class CBR(UNIT3D):
     def __init__(self, config):
-        super().__init__(config, tracker_name='LST')
+        super().__init__(config, tracker_name='CBR')
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'CBR'
