@@ -78,9 +78,16 @@ config = {
         # Tonemap HDR - DV+HDR screenshots
         "tone_map": True,
 
+        # Set false to disable libtorrent ffmpeg tonemapping and use ffmpeg only
+        "use_libplacebo": True,
+
         # Set true to skip ffmpeg check, useful if you know your ffmpeg is compatible with libplacebo
         # Else, when tonemapping is enabled (and used), UA will run a quick check before to decide
         "ffmpeg_is_good": False,
+
+        # Set true to skip "warming up" libplacebo
+        # Some systems are slow to compile libtorrent shaders, which will cause the first screenshot to fail
+        "ffmpeg_warmup": False,
 
         # Tonemap screenshots with the following settings (doesn't apply when using libplacebo)
         # See https://ayosec.github.io/ffmpeg-filters-docs/7.1/Filters/Video/tonemap.html
@@ -98,7 +105,7 @@ config = {
         "process_limit": "4",
 
         # When optimizing images, limit to this many threads spawned by each process above.
-        # Recommended value is the number of logical processesors on your system.
+        # Recommended value is the number of logical processors on your system.
         # This is equivalent to the old shared_seedbox setting, however the existing process
         # only used a single process. You probably need to limit this to 1 or 2 to avoid hogging resources.
         "threads": "10",
@@ -108,12 +115,12 @@ config = {
 
         # Number of screenshots to use for each (ALL) disc/episode when uploading packs to supported sites.
         # 0 equals old behavior where only the original description and images are added.
-        # This setting also affects PTP, however PTP requries at least 2 images for each.
+        # This setting also affects PTP, however PTP requires at least 2 images for each.
         # PTP will always use a *minimum* of 2, regardless of what is set here.
         "multiScreens": "2",
 
         # The next options for packed content do not effect PTP. PTP has a set standard.
-        # When uploading packs, you can specifiy a different screenshot thumbnail size, default 300.
+        # When uploading packs, you can specify a different screenshot thumbnail size, default 300.
         "pack_thumb_size": "300",
 
         # Description character count (including bbcode) cutoff for UNIT3D sites when **season packs only**.
@@ -149,7 +156,7 @@ config = {
         # Play the bell sound effect when asking for confirmation
         "sfx_on_prompt": True,
 
-        # How many trackers need to pass successfull checking to continue with the upload process
+        # How many trackers need to pass successful checking to continue with the upload process
         # Default = 1. If 1 (or more) tracker/s pass banned_group, content and dupe checking, uploading will continue
         # If less than the number of trackers pass the checking, exit immediately.
         "tracker_pass_checks": "1",
@@ -689,7 +696,7 @@ config = {
             # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
             "passkey": "",
             # Select the upload channel, if you don't know what this is, leave it empty.
-            # You can also set this mannualy using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
+            # You can also set this manually using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
             "channel": "",
         },
         "STC": {

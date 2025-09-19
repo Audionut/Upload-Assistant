@@ -29,6 +29,7 @@ threads = str(config['DEFAULT'].get('threads', '1'))
 cutoff = int(config['DEFAULT'].get('cutoff_screens', 1))
 ffmpeg_limit = config['DEFAULT'].get('ffmpeg_limit', False)
 ffmpeg_is_good = config['DEFAULT'].get('ffmpeg_is_good', False)
+use_libplacebo = config['DEFAULT'].get('use_libplacebo', True)
 
 try:
     task_limit = int(task_limit)  # Convert to integer
@@ -962,29 +963,30 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
     meta['libplacebo'] = False
     if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
-        if not ffmpeg_is_good:
-            test_time = ss_times[0] if ss_times else 0
-            test_image = image_path if isinstance(image_path, str) else (
-                image_path[0] if isinstance(image_path, list) and image_path else None
-            )
-            libplacebo, compatible = await check_libplacebo_compatibility(
-                w_sar, h_sar, width, height, path, test_time, test_image, loglevel, meta
-            )
-            if compatible:
-                hdr_tonemap = True
-                meta['tonemapped'] = True
-            if libplacebo:
+        if use_libplacebo:
+            if not ffmpeg_is_good:
+                test_time = ss_times[0] if ss_times else 0
+                test_image = image_path if isinstance(image_path, str) else (
+                    image_path[0] if isinstance(image_path, list) and image_path else None
+                )
+                libplacebo, compatible = await check_libplacebo_compatibility(
+                    w_sar, h_sar, width, height, path, test_time, test_image, loglevel, meta
+                )
+                if compatible:
+                    hdr_tonemap = True
+                    meta['tonemapped'] = True
+                if libplacebo:
+                    hdr_tonemap = True
+                    meta['tonemapped'] = True
+                    meta['libplacebo'] = True
+                if not compatible and not libplacebo:
+                    hdr_tonemap = False
+                if not libplacebo and "HDR" not in meta.get('hdr'):
+                    hdr_tonemap = False
+            else:
                 hdr_tonemap = True
                 meta['tonemapped'] = True
                 meta['libplacebo'] = True
-            if not compatible and not libplacebo:
-                hdr_tonemap = False
-            if not libplacebo and "HDR" not in meta.get('hdr'):
-                hdr_tonemap = False
-        else:
-            hdr_tonemap = True
-            meta['tonemapped'] = True
-            meta['libplacebo'] = True
     else:
         hdr_tonemap = False
 
@@ -1264,85 +1266,143 @@ async def capture_screenshot(args):
             console.print(f"[cyan]Processing file: {path}[/cyan]")
 
         if not frame_overlay:
+            # Warm-up (only for first screenshot index or if not warmed)
+            if use_libplacebo:
+                warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
+                if warm_up:
+                    meta['_libplacebo_warmed'] = True
+                elif "_libplacebo_warmed" not in meta:
+                    meta['_libplacebo_warmed'] = False
+                if hdr_tonemap and meta.get('libplacebo') and not meta.get('_libplacebo_warmed'):
+                    await libplacebo_warmup(path, meta, loglevel)
+
             threads_value = set_ffmpeg_threads()
             threads_val = threads_value[1]
-
-            filter_parts = []
-            input_label = "[0:v]"
+            vf_filters = []
 
             if w_sar != 1 or h_sar != 1:
-                filter_parts.append(f"{input_label}scale={int(round(width * w_sar))}:{int(round(height * h_sar))}[scaled]")
-                input_label = "[scaled]"
+                scaled_w = int(round(width * w_sar))
+                scaled_h = int(round(height * h_sar))
+                vf_filters.append(f"scale={scaled_w}:{scaled_h}")
+                if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+                    console.print(f"[cyan]Applied PAR scale -> {scaled_w}x{scaled_h}[/cyan]")
 
             if hdr_tonemap:
                 if meta.get('libplacebo', False):
-                    # libplacebo
-                    filter_parts.append(f"{input_label}libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[out]")
+                    vf_filters.append(
+                        "libplacebo=tonemapping=hable:colorspace=bt709:"
+                        "color_primaries=bt709:color_trc=bt709:range=tv"
+                    )
+                    if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+                        console.print("[cyan]Using libplacebo tonemapping[/cyan]")
                 else:
-                    filter_parts.append(f"{input_label}zscale=linear:tonemap={algorithm}:desat={desat}[out]")
-                output_map = "[out]"
-            else:
-                if filter_parts:
-                    output_map = "[scaled]"
-                else:
-                    output_map = "v:0"
+                    vf_filters.extend([
+                        "zscale=transfer=linear",
+                        f"tonemap=tonemap={algorithm}:desat={desat}",
+                        "zscale=transfer=bt709"
+                    ])
+                    if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+                        console.print(f"[cyan]Using zscale tonemap chain (algo={algorithm}, desat={desat})[/cyan]")
 
-            cmd = [
-                "ffmpeg",
-                "-ss", str(ss_time),
-                "-i", path,
-            ]
-
-            if meta.get('libplacebo', False):
-                cmd.extend([
-                    "-init_hw_device", "vulkan",
-                    "-filter_complex", ",".join(filter_parts),
-                    "-map", output_map
-                ])
-            else:
-                cmd.extend(["-map", "v:0"])
-
-            cmd.extend([
-                "-vframes", "1",
-                "-pix_fmt", "rgb24",
-                "-y",
-                "-loglevel", loglevel,
-            ])
-
-            if ffmpeg_limit:
-                cmd.extend(["-threads", str(threads_val)])
-            cmd.append(image_path)
+            vf_filters.append("format=rgb24")
+            vf_chain = ",".join(vf_filters) if vf_filters else "format=rgb24"
 
             if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-                console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
+                console.print(f"[cyan]Final -vf chain: {vf_chain}[/cyan]")
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            threads_value = ['-threads', '1']
+            threads_val = threads_value[1]
 
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=120.0  # 20 second timeout
+            def build_cmd(use_libplacebo=True):
+                cmd_local = [
+                    "ffmpeg",
+                    "-ss", str(ss_time),
+                    "-i", path,
+                    "-map", "0:v:0",
+                    "-an",
+                    "-sn",
+                ]
+                if use_libplacebo and meta.get('libplacebo', False):
+                    cmd_local += ["-init_hw_device", "vulkan"]
+                cmd_local += [
+                    "-vf", vf_chain,
+                    "-vframes", "1",
+                    "-pix_fmt", "rgb24",
+                    "-y",
+                    "-loglevel", loglevel,
+                ]
+                if ffmpeg_limit:
+                    cmd_local += ["-threads", threads_val]
+                cmd_local.append(image_path)
+                return cmd_local
+
+            cmd = build_cmd(use_libplacebo=True)
+
+            if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+                # Disable emoji translation so 0:v:0 stays literal
+                console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
+
+            # --- Execute with retry/fallback if libplacebo fails ---
+            async def run_cmd(run_cmd_list, timeout_sec):
+                proc = await asyncio.create_subprocess_exec(
+                    *run_cmd_list,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
-            except asyncio.TimeoutError:
-                console.print("[red]FFmpeg process timed out after 120 seconds, killing process[/red]")
-                process.kill()
                 try:
-                    await process.wait()
-                except Exception:
-                    pass
-                return (index, None)
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    try:
+                        await proc.wait()
+                    except Exception:
+                        pass
+                    return -1, b"", b"Timeout"
+                return proc.returncode, stdout, stderr
 
-            if process.returncode == 0 and os.path.exists(image_path):
+            returncode, stdout, stderr = await run_cmd(cmd, 140)  # a bit longer for first pass
+            if returncode != 0 and hdr_tonemap and meta.get('libplacebo'):
+                # Retry once (shader compile might have delayed first invocation)
+                if loglevel == 'verbose' or meta.get('debug', False):
+                    console.print("[yellow]First libplacebo attempt failed; retrying once...[/yellow]")
+                await asyncio.sleep(1.0)
+                returncode, stdout, stderr = await run_cmd(cmd, 160)
+
+            if returncode != 0 and hdr_tonemap and meta.get('libplacebo'):
+                # Fallback: switch to zscale tonemap chain
+                if loglevel == 'verbose' or meta.get('debug', False):
+                    console.print("[red]libplacebo failed twice; falling back to zscale tonemap[/red]")
+                meta['libplacebo'] = False
+                # Rebuild chain with zscale
+                z_vf_filters = []
+                if w_sar != 1 or h_sar != 1:
+                    z_vf_filters.append(f"scale={scaled_w}:{scaled_h}")
+                z_vf_filters.extend([
+                    "zscale=transfer=linear",
+                    f"tonemap=tonemap={algorithm}:desat={desat}",
+                    "zscale=transfer=bt709",
+                    "format=rgb24"
+                ])
+                vf_chain = ",".join(z_vf_filters)
+                fallback_cmd = build_cmd(use_libplacebo=False)
+                # Replace the -vf argument with new chain
+                for i, tok in enumerate(fallback_cmd):
+                    if tok == "-vf":
+                        fallback_cmd[i+1] = vf_chain
+                        break
+                if loglevel == 'verbose' or meta.get('debug', False):
+                    console.print(f"[cyan]Fallback FFmpeg command: {' '.join(fallback_cmd)}[/cyan]", emoji=False)
+                returncode, stdout, stderr = await run_cmd(fallback_cmd, 140)
+                cmd = fallback_cmd  # for logging below
+
+            if returncode == 0 and os.path.exists(image_path):
                 if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                     console.print(f"[green]Screenshot captured successfully: {image_path}[/green]")
                 return (index, image_path)
             else:
                 if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-                    console.print(f"[red]FFmpeg process failed: {stderr.decode().strip()}[/red]")
+                    err_txt = (stderr or b"").decode(errors='replace').strip()
+                    console.print(f"[red]FFmpeg process failed (final): {err_txt}[/red]")
                 return (index, None)
 
         # Proceed with screenshot capture
@@ -1756,3 +1816,46 @@ async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_t
                     pass
                 return False, True
     return False, False
+
+
+async def libplacebo_warmup(path, meta, loglevel):
+    if not meta.get('libplacebo') or meta.get('_libplacebo_warmed'):
+        return
+    if not os.path.exists(path):
+        return
+    # Use a very small seek (0.1s) to avoid issues at pts 0
+    cmd = [
+        "ffmpeg",
+        "-ss", "0.1",
+        "-i", path,
+        "-map", "0:v:0",
+        "-an", "-sn",
+        "-init_hw_device", "vulkan",
+        "-vf", "libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv,format=rgb24",
+        "-vframes", "1",
+        "-f", "null",
+        "-",
+        "-loglevel", "error"
+    ]
+    if loglevel == 'verbose' or meta.get('debug', False):
+        console.print("[cyan]Running libplacebo warm-up...[/cyan]", emoji=False)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=40)
+        except asyncio.TimeoutError:
+            proc.kill()
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+            if loglevel == 'verbose' or meta.get('debug', False):
+                console.print("[yellow]libplacebo warm-up timed out (continuing anyway)[/yellow]")
+        meta['_libplacebo_warmed'] = True
+    except Exception as e:
+        if loglevel == 'verbose' or meta.get('debug', False):
+            console.print(f"[yellow]libplacebo warm-up failed: {e} (continuing)[/yellow]")

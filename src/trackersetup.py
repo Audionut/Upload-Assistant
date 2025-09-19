@@ -530,6 +530,62 @@ class TRACKER_SETUP:
 
         return requests
 
+    async def bhd_request_check(self, meta, tracker, url):
+        if 'BHD' not in self.config['TRACKERS'] or not self.config['TRACKERS']['BHD'].get('api_key'):
+            console.print("[red]BHD API key not configured. Skipping BHD request check.[/red]")
+            return False
+        if meta['debug']:
+            console.print(f"[bold green]Searching for existing requests on {tracker}[/bold green]")
+        requests = []
+        params = {
+            'action': 'search',
+            'tmdb_id': f"{meta['category'].lower()}/{meta['tmdb_id']}",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url=url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'data' in data and isinstance(data['data'], list):
+                        results_list = data['data']
+                    elif 'results' in data and isinstance(data['results'], list):
+                        results_list = data['results']
+                    else:
+                        console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
+                        console.print(f"[bold red]Full response: {data}[/bold red]")
+                        return requests
+
+                    try:
+                        for each in results_list:
+                            attributes = each
+                            result = {
+                                'id': attributes.get('id'),
+                                'name': attributes.get('name'),
+                                'type': attributes.get('source'),
+                                'resolution': attributes.get('type'),
+                                'dv': attributes.get('dv'),
+                                'hdr': attributes.get('hdr'),
+                                'bounty': attributes.get('bounty'),
+                                'status': attributes.get('status'),
+                                'internal': attributes.get('internal'),
+                                'url': attributes.get('url'),
+                            }
+                            requests.append(result)
+                    except Exception as e:
+                        console.print(f"[bold red]Error processing response data: {e}[/bold red]")
+                        console.print(f"[bold red]Response data: {data}[/bold red]")
+                        return requests
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 5 seconds")
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+        # console.print(f"Debug: BHD requests found: {requests}")
+        return requests
+
     async def tracker_request(self, meta, tracker):
         if isinstance(tracker, str):
             trackers = [tracker.strip().upper()]
@@ -551,36 +607,39 @@ class TRACKER_SETUP:
             except AttributeError:
                 # tracker without requests url not supported
                 return
-            requests = await self.get_tracker_requests(meta, tracker, url)
-            all_types = await tracker_instance.get_type_id()
-            if not isinstance(all_types, dict):
-                console.print(f"[red]Error: get_type_id() for {tracker} did not return a dict. Got: {type(all_types)}[/red]")
-                return False
-            type_names = meta.get('type', [])
-            if isinstance(type_names, str):
-                type_names = [type_names]
+            if tracker.upper() == "BHD":
+                requests = await self.bhd_request_check(meta, tracker, url)
+            else:
+                requests = await self.get_tracker_requests(meta, tracker, url)
+                all_types = await tracker_instance.get_type_id()
+                if not isinstance(all_types, dict):
+                    console.print(f"[red]Error: get_type_id() for {tracker} did not return a dict. Got: {type(all_types)}[/red]")
+                    return False
+                type_names = meta.get('type', [])
+                if isinstance(type_names, str):
+                    type_names = [type_names]
 
-            type_ids = [all_types.get(type_name) for type_name in type_names]
-            if None in type_ids:
-                console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
+                type_ids = [all_types.get(type_name) for type_name in type_names]
+                if None in type_ids:
+                    console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
 
-            all_resolutions = await tracker_instance.get_res_id()
-            resolution_names = meta.get('resolution', [])
-            if isinstance(resolution_names, str):
-                resolution_names = [resolution_names]
+                all_resolutions = await tracker_instance.get_res_id()
+                resolution_names = meta.get('resolution', [])
+                if isinstance(resolution_names, str):
+                    resolution_names = [resolution_names]
 
-            resolution_ids = [all_resolutions.get(res_name) for res_name in resolution_names]
-            if None in resolution_ids:
-                console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
+                resolution_ids = [all_resolutions.get(res_name) for res_name in resolution_names]
+                if None in resolution_ids:
+                    console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
 
-            all_categories = await tracker_instance.get_cat_id()
-            categories = meta.get('category', [])
-            if isinstance(categories, str):
-                categories = [categories]
+                all_categories = await tracker_instance.get_cat_id()
+                categories = meta.get('category', [])
+                if isinstance(categories, str):
+                    categories = [categories]
 
-            category_ids = [all_categories.get(cat_name) for cat_name in categories]
-            if None in category_ids:
-                console.print("[yellow]Warning: Some categories in meta not found in tracker category mapping.[/yellow]")
+                category_ids = [all_categories.get(cat_name) for cat_name in categories]
+                if None in category_ids:
+                    console.print("[yellow]Warning: Some categories in meta not found in tracker category mapping.[/yellow]")
 
             tmdb_id = meta.get('tmdb', [])
             if isinstance(tmdb_id, int):
@@ -602,56 +661,124 @@ class TRACKER_SETUP:
                 api_category = each.get('category')
                 api_name = each.get('name')
                 api_type = each.get('type')
-                if str(api_type) in [str(tid) for tid in type_ids]:
-                    type_name = True
-                elif api_type is None:
-                    type_name = True
-                    double_check = True
-                api_resolution = each.get('resolution')
-                if str(api_resolution) in [str(rid) for rid in resolution_ids]:
-                    resolution = True
-                elif api_resolution is None:
-                    resolution = True
-                    double_check = True
                 api_bounty = each.get('bounty')
                 api_status = each.get('status')
-                api_claimed = each.get('claimed')
-                api_description = each.get('description')
-                api_season = int(each.get('season'))
-                if api_season == meta.get('season_int'):
-                    season = True
-                api_episode = each.get('episode')
-                meta['episode_int'] = int(api_episode) if api_episode is not None else 0
-                if api_episode == meta.get('episode_int'):
-                    episode = True
-                if str(api_category) in [str(cid) for cid in category_ids]:
-                    new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
-                    if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:
-                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
-                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
-                        console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
-                        console.print()
-                        if double_check:
-                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
-                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                if "BHD" not in tracker:
+                    if str(api_type) in [str(tid) for tid in type_ids]:
+                        type_name = True
+                    elif api_type is None:
+                        type_name = True
+                        double_check = True
+                    api_resolution = each.get('resolution')
+                    if str(api_resolution) in [str(rid) for rid in resolution_ids]:
+                        resolution = True
+                    elif api_resolution is None:
+                        resolution = True
+                        double_check = True
+                    api_claimed = each.get('claimed')
+                    api_description = each.get('description')
+                    api_season = int(each.get('season'))
+                    if api_season == meta.get('season_int'):
+                        season = True
+                    api_episode = each.get('episode')
+                    meta['episode_int'] = int(api_episode) if api_episode is not None else 0
+                    if api_episode == meta.get('episode_int'):
+                        episode = True
+                    if str(api_category) in [str(cid) for cid in category_ids]:
+                        new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
+                        if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:
+                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                            console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
                             console.print()
-                    elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
-                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
-                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
-                        console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
-                        console.print()
-                        if double_check:
-                            console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
-                            console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
-                            console.print()
-                    else:
-                        console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
-                        console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
-                        if meta.get('category') == "MOVIE":
-                            console.print(f"[bold yellow]{api_name}:[/bold yellow] {new_url}")
-                        else:
+                            if double_check:
+                                console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                                console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                                console.print()
+                        elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
+                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
                             console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
-                        console.print(f"[bold green]Request desc: {api_description[:100]}[/bold green]")
+                            console.print()
+                            if double_check:
+                                console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
+                                console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
+                                console.print()
+                        else:
+                            console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
+                            if meta.get('category') == "MOVIE":
+                                console.print(f"[bold yellow]{api_name}:[/bold yellow] {new_url}")
+                            else:
+                                console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
+                            console.print(f"[bold green]Request desc: {api_description[:100]}[/bold green]")
+                            console.print()
+                else:
+                    unclaimed = each.get('status') == 1
+                    internal = each.get('internal') == 1
+                    claimed_status = ""
+                    if each.get('status') == 1:
+                        claimed_status = "Unfilled"
+                    elif each.get('status') == 2:
+                        claimed_status = "Claimed"
+                    elif each.get('status') == 3:
+                        claimed_status = "Pending"
+                    dv = False
+                    hdr = False
+                    season = False
+                    meta_hdr = meta.get('HDR', '')
+                    is_season = re.search(r'S\d{2}', api_name)
+                    if is_season and is_season == meta.get('season'):
+                        season = True
+                    if each.get('dv') and meta_hdr == "DV":
+                        dv = True
+                    if each.get('hdr') and meta_hdr in ("HDR10", "HDR10+", "HDR"):
+                        hdr = True
+                    if not each.get('dv') and "DV" not in meta_hdr:
+                        dv = True
+                    if not each.get('hdr') and meta_hdr not in ("HDR10", "HDR10+", "HDR"):
+                        hdr = True
+                    if 'remux' in each.get('resolution', '').lower():
+                        if 'uhd' in each.get('resolution', '').lower() and meta.get('resolution') == "2160p" and meta.get('type') == "REMUX":
+                            resolution = True
+                            type_name = True
+                        elif 'uhd' not in each.get('resolution', '').lower() and meta.get('resolution') == "1080p" and meta.get('type') == "REMUX":
+                            resolution = True
+                            type_name = True
+                    elif 'remux' not in each.get('resolution', '').lower() and meta.get('is_disc') == "BDMV":
+                        if 'uhd' in each.get('resolution', '').lower() and meta.get('resolution') == "2160p":
+                            resolution = True
+                            type_name = True
+                        elif 'uhd' not in each.get('resolution', '').lower() and meta.get('resolution') == "1080p":
+                            resolution = True
+                            type_name = True
+                    elif each.get('resolution') == meta.get('resolution'):
+                        resolution = True
+                    if 'Blu-ray' in each.get('type') and meta.get('type') == "ENCODE":
+                        type_name = True
+                    elif 'WEB' in each.get('type') and 'WEB' in meta.get('type'):
+                        type_name = True
+                    if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and dv and hdr:
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
+                        console.print()
+                    if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and not dv and not hdr and 'uhd' in each.get('resolution').lower():
+                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
+                        console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
+                        console.print()
+                    if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and dv and hdr:
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
+                        console.print()
+                    if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and not dv and not hdr:
+                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
+                        console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
+                        console.print()
+                    else:
+                        console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        if internal:
+                            console.print("[bold red]Request is internal only[/bold red]")
+                        console.print(f"[bold yellow]{api_name}[/bold yellow] - {each.get('url')}")
                         console.print()
 
             return requests
