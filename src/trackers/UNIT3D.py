@@ -249,13 +249,13 @@ class UNIT3D():
                             downurl=response.json()['data']
                         )
                     except httpx.TimeoutException:
-                        console.print('[bold red]Request timed out after 10 seconds')
+                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
                     except httpx.RequestError as e:
-                        console.print(f'[bold red]Unable to upload to tracker: {e}')
+                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: unable to upload to {self.tracker}: {e}'
                     except Exception:
-                        console.print('It may have uploaded, go check')
+                        meta['tracker_status'][self.tracker]['status_message'] = f'It may have uploaded, go check: {self.tracker}'
                         return
             else:
                 console.print('[cyan]Request Data:')
                 console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+                meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
