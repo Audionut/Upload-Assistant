@@ -2,10 +2,10 @@
 # import discord
 import os
 import asyncio
-import requests
 import platform
 import httpx
 import json
+import aiofiles
 from pymediainfo import MediaInfo
 from pathlib import Path
 from src.trackers.COMMON import COMMON
@@ -79,7 +79,8 @@ class ANT():
         flags = await self.get_flags(meta)
 
         if meta['bdinfo'] is not None:
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                bd_dump = await f.read()
             bd_dump = f'[spoiler=BDInfo][pre]{bd_dump}[/pre][/spoiler]'
             path = os.path.join(meta['bdinfo']['path'], 'STREAM')
             longest_file = max(
@@ -91,9 +92,13 @@ class ANT():
             media_info_output = str(MediaInfo.parse(m2ts, output="text", full=False))
             mi_dump = media_info_output.replace('\r\n', '\n')
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'file_input': open_torrent}
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
+
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+        files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data = {
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
@@ -117,31 +122,31 @@ class ANT():
 
         try:
             if not meta['debug']:
-                response = requests.post(url=self.upload_url, files=files, data=data, headers=headers)
-                if response.status_code in [200, 201]:
-                    response_data = response.json()
-                    if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
-                        meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
+                async with httpx.AsyncClient(timeout=10) as client:
+                    response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
+                    if response.status_code in [200, 201]:
+                        response_data = response.json()
+                        if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
+                            meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
+                        else:
+                            meta['tracker_status'][self.tracker]['status_message'] = response_data
+                    elif response.status_code == 502:
+                        response_data = {
+                            "error": "Bad Gateway",
+                            "site seems down": "https://ant.trackerstatus.info/"
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                     else:
-                        meta['tracker_status'][self.tracker]['status_message'] = response_data
-                elif response.status_code == 502:
-                    response_data = {
-                        "error": "Bad Gateway",
-                        "site seems down": "https://ant.trackerstatus.info/"
-                    }
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
-                else:
-                    response_data = {
-                        "error": f"Unexpected status code: {response.status_code}",
-                        "response_content": response.text
-                    }
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        response_data = {
+                            "error": f"Unexpected status code: {response.status_code}",
+                            "response_content": response.text
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
             else:
                 console.print("[cyan]Request Data:")
                 console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        finally:
-            open_torrent.close()
+        except Exception as e:
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
 
     async def edit_desc(self, meta):
         return
@@ -196,19 +201,19 @@ class ANT():
                                 console.print(f"[green]Found potential dupe: {result['name']} ({result['size']} bytes)")
 
                     except json.JSONDecodeError:
-                        console.print("[bold yellow]ANT Response content is not valid JSON. Skipping this API call.")
+                        console.print("[bold yellow]ANT response content is not valid JSON. Skipping this API call.")
                         meta['skipping'] = "ANT"
                 else:
-                    console.print(f"[bold red]ANT Failed to search torrents. HTTP Status: {response.status_code}")
+                    console.print(f"[bold red]ANT failed to search torrents. HTTP Status: {response.status_code}")
                     meta['skipping'] = "ANT"
         except httpx.TimeoutException:
             console.print("[bold red]ANT Request timed out after 5 seconds")
             meta['skipping'] = "ANT"
         except httpx.RequestError as e:
-            console.print(f"[bold red]ANT Unable to search for existing torrents: {e}")
+            console.print(f"[bold red]ANT unable to search for existing torrents: {e}")
             meta['skipping'] = "ANT"
         except Exception as e:
-            console.print(f"[bold red]ANT Unexpected error: {e}")
+            console.print(f"[bold red]ANT unexpected error: {e}")
             meta['skipping'] = "ANT"
             await asyncio.sleep(5)
 
