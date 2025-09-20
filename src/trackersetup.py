@@ -610,7 +610,7 @@ class TRACKER_SETUP:
                 requests = await self.bhd_request_check(meta, tracker, url)
             else:
                 requests = await self.get_tracker_requests(meta, tracker, url)
-                all_types = await tracker_instance.get_type_id()
+                all_types = await tracker_instance.get_type_id(meta)
                 if not isinstance(all_types, dict):
                     console.print(f"[red]Error: get_type_id() for {tracker} did not return a dict. Got: {type(all_types)}[/red]")
                     return False
@@ -622,7 +622,7 @@ class TRACKER_SETUP:
                 if None in type_ids:
                     console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
 
-                all_resolutions = await tracker_instance.get_res_id()
+                all_resolutions = await tracker_instance.get_resolution_id(meta)
                 resolution_names = meta.get('resolution', [])
                 if isinstance(resolution_names, str):
                     resolution_names = [resolution_names]
@@ -631,7 +631,7 @@ class TRACKER_SETUP:
                 if None in resolution_ids:
                     console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
 
-                all_categories = await tracker_instance.get_cat_id()
+                all_categories = await tracker_instance.get_category_id(meta)
                 categories = meta.get('category', [])
                 if isinstance(categories, str):
                     categories = [categories]
