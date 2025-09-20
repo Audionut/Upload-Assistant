@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
-import asyncio
 import cli_ui
-import httpx
 import re
 from data.config import config
 from src.console import console
@@ -56,6 +54,12 @@ class DP(UNIT3D):
                 console.print('[bold red]DP requires at least one Nordic/English audio or subtitle track.')
                 should_continue = False
 
+        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower():
+            if not meta['unattended']:
+                console.print("[bold red]DP does not allow FGT encodes, skipping upload.")
+            meta['skipping'] = {self.tracker}
+            return False
+
         return should_continue
 
     async def get_description(self, meta):
@@ -91,43 +95,3 @@ class DP(UNIT3D):
                 dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
             dp_name = f"{dp_name}-NOGROUP"
         return {'name': dp_name}
-
-    async def search_existing(self, meta, disctype):
-        dupes = []
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_category_id(meta),
-            'types[]': await self.get_type_id(meta),
-            'resolutions[]': await self.get_resolution_id(meta['resolution']),
-            'name': ""
-        }
-        if meta['category'] == 'TV':
-            params['name'] = params['name'] + f" {meta.get('season', '')}"
-        if meta.get('edition', "") != "":
-            params['name'] = params['name'] + f" {meta['edition']}"
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url=self.search_url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    for each in data['data']:
-                        result = [each][0]['attributes']['name']
-                        dupes.append(result)
-                else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
-        except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
-        except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
-        except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
-            await asyncio.sleep(5)
-
-        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower() and len(dupes) > 0:
-            if not meta['unattended']:
-                console.print("[bold red]DP does not allow FGT encodes, skipping upload.")
-            meta['skipping'] = "DP"
-            return []
-
-        return dupes

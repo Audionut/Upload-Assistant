@@ -11,7 +11,7 @@ from src.trackers.COMMON import COMMON
 async def get_name(meta):
     if "ULCX" in meta.get('trackers', []):
         region, distributor = await missing_disc_info(meta)
-        if "SKIPPED" in region or "SKIPPED" in distributor:
+        if region and "SKIPPED" in region or distributor and "SKIPPED" in distributor:
             meta['trackers'].remove("ULCX")
         if distributor and 'SKIPPED' not in distributor:
             meta['distributor'] = distributor
@@ -400,6 +400,8 @@ async def missing_disc_info(meta):
     common = COMMON(config=config)
     distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
     region_id = await common.unit3d_region_ids(meta.get('region'))
+    region_name = meta.get('region', "")
+    distributor_name = meta.get('distributor', "")
 
     if meta.get('is_disc') == "BDMV":
         if not region_id:
