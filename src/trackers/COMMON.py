@@ -1,21 +1,22 @@
-from torf import Torrent
-import os
-import requests
-import re
-import json
+import aiofiles
+import asyncio
 import click
-import sys
 import glob
 import httpx
-import asyncio
-import aiofiles
-from pymediainfo import MediaInfo
+import json
+import os
+import re
+import requests
 import secrets
+import sys
+from pymediainfo import MediaInfo
 from src.bbcode import BBCODE
 from src.console import console
-from src.uploadscreens import upload_screens
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.exportmi import exportInfo
 from src.languages import process_desc_language
+from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.uploadscreens import upload_screens
+from torf import Torrent
 
 
 class COMMON():
@@ -1407,3 +1408,37 @@ class COMMON():
             return ''
 
         return ''
+
+    async def get_bdmv_mediainfo(self, meta, remove=None):
+        mediainfo = ''
+        mi_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/MEDIAINFO_CLEANPATH.txt'
+
+        if meta.get('is_disc') == 'BDMV':
+            path = meta['discs'][0]['playlists'][0]['path']
+            await exportInfo(
+                path,
+                False,
+                meta['uuid'],
+                meta['base_dir'],
+                export_text=True,
+                is_dvd=False,
+                debug=meta.get('debug', False)
+            )
+
+            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                lines = await f.readlines()
+
+            if remove:
+                if not isinstance(remove, list):
+                    lines_to_remove = [remove]
+                else:
+                    lines_to_remove = remove
+
+                lines = [
+                    line for line in lines
+                    if not any(line.strip().startswith(prefix) for prefix in lines_to_remove)
+                ]
+
+            mediainfo = ''.join(lines) if remove else lines
+
+        return mediainfo
