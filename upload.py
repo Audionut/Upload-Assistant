@@ -179,8 +179,6 @@ async def process_meta(meta, base_dir, bot=None):
     helper = UploadHelper()
 
     if not meta.get('emby', False):
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
-
         if meta.get('trackers'):
             trackers = meta['trackers']
         else:
@@ -201,6 +199,8 @@ async def process_meta(meta, base_dir, bot=None):
             for tracker in remove_list:
                 if tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
+
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
 
         if meta['debug']:
             console.print(f"Trackers list before editing: {meta['trackers']}")

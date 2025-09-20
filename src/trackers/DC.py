@@ -2,15 +2,15 @@
 import httpx
 import os
 import re
-from .COMMON import COMMON
+from src.trackers.COMMON import COMMON
 from src.console import console
-from src.exportmi import exportInfo
 from src.rehostimages import check_hosts
 
 
-class DC(COMMON):
+class DC():
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'DC'
         self.source_flag = 'DigitalCore.club'
         self.base_url = 'https://digitalcore.club'
@@ -29,31 +29,10 @@ class DC(COMMON):
         self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
 
     async def mediainfo(self, meta):
-        mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-
         if meta.get('is_disc') == 'BDMV':
-            path = meta['discs'][0]['playlists'][0]['path']
-            await exportInfo(
-                path,
-                False,
-                meta['uuid'],
-                meta['base_dir'],
-                export_text=True,
-                is_dvd=False,
-                debug=meta.get('debug', False)
-            )
-
-            with open(mi_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-            lines = [
-                line for line in lines
-                if not line.strip().startswith('File size') and not line.strip().startswith('Overall bit rate')
-            ]
-
-            mediainfo = ''.join(lines)
-
+            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             with open(mi_path, 'r', encoding='utf-8') as f:
                 mediainfo = f.read()
 
@@ -281,7 +260,7 @@ class DC(COMMON):
         return data
 
     async def upload(self, meta, results):
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta)
         title = await self.get_title(meta, results)
         status_message = ''
@@ -312,6 +291,6 @@ class DC(COMMON):
             console.print(data)
             status_message = 'Debug mode enabled, not uploading'
 
-        await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id + '/')
+        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id + '/')
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message

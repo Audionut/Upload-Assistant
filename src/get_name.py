@@ -1,11 +1,22 @@
+import anitopy
+import cli_ui
 import os
 import re
-import anitopy
+from data.config import config
 from guessit import guessit
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 async def get_name(meta):
+    if "ULCX" in meta.get('trackers', []):
+        region, distributor = await missing_disc_info(meta)
+        if region and "SKIPPED" in region or distributor and "SKIPPED" in distributor:
+            meta['trackers'].remove("ULCX")
+        if distributor and 'SKIPPED' not in distributor:
+            meta['distributor'] = distributor
+        if region and 'SKIPPED' not in region:
+            meta['region'] = region
     type = meta.get('type', "").upper()
     title = meta.get('title', "")
     alt_title = meta.get('aka', "")
@@ -383,3 +394,37 @@ async def multi_replace(text, replacements):
     for old, new in replacements.items():
         text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
     return text
+
+
+async def missing_disc_info(meta):
+    common = COMMON(config=config)
+    distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
+    region_id = await common.unit3d_region_ids(meta.get('region'))
+    region_name = meta.get('region', "")
+    distributor_name = meta.get('distributor', "")
+
+    if meta.get('is_disc') == "BDMV":
+        if not region_id:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
+                region_id = await common.unit3d_region_ids(region_name)
+                if region_name:
+                    region_name = region_name.upper()
+                else:
+                    region_name = "SKIPPED"
+            else:
+                region_name = "SKIPPED"
+        if not distributor_id:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                distributor_name = cli_ui.ask_string("ULCX: Distributor name not found for disc. Please enter it manually (UPPERCASE): ")
+                console.print(f"Looking up distributor ID for: {distributor_name}")
+                distributor_id = await common.unit3d_distributor_ids(distributor_name)
+                console.print(f"Found distributor ID: {distributor_id}")
+                if distributor_name:
+                    distributor_name = distributor_name.upper()
+                else:
+                    distributor_name = "SKIPPED"
+            else:
+                distributor_name = "SKIPPED"
+
+    return region_name, distributor_name
