@@ -102,19 +102,14 @@ class TRACKER_SETUP:
     async def get_banned_groups(self, meta, tracker):
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_banned_groups.json')
 
+        tracker_class = tracker_class_map.get(tracker.upper())
+        tracker_instance = tracker_class(self.config)
+        if not tracker_instance.banned_url:
+            return None
+
         # Check if we need to update
         if not await self.should_update(file_path):
             return file_path
-
-        url = None
-        if tracker.upper() == "AITHER":
-            url = f'https://{tracker}.cc/api/blacklists/releasegroups'
-        elif tracker.upper() == "LST":
-            url = f"https://{tracker}.gg/api/bannedReleaseGroups"
-
-        if not url:
-            console.print(f"Error: Tracker '{tracker}' is not supported.")
-            return None
 
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
@@ -130,7 +125,7 @@ class TRACKER_SETUP:
                 try:
                     # Add query parameters for pagination
                     params = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url, headers=headers, params=params)
+                    response = await client.get(url=tracker_instance.banned_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
@@ -328,12 +323,15 @@ class TRACKER_SETUP:
 
     async def get_torrent_claims(self, meta, tracker):
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
+        tracker_class = tracker_class_map.get(tracker.upper())
+        tracker_instance = tracker_class(self.config)
+        if not tracker_instance.claims_url:
+            return None
 
         # Check if we need to update
         if not await self.should_update(file_path):
             return await self.check_tracker_claims(meta, tracker)
 
-        url = f'https://{tracker}.cc/api/internals/claim'
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
             'Content-Type': 'application/json',
@@ -348,7 +346,7 @@ class TRACKER_SETUP:
                 try:
                     # Add query parameters for pagination
                     params = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url, headers=headers, params=params)
+                    response = await client.get(url=tracker_instance.claims_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
