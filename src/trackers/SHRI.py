@@ -103,7 +103,7 @@ class SHRI():
             if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 data['internal'] = 1
         if meta.get('freeleech', 0) != 0:
-            data['free'] = meta.get('freeleech', 0)                
+            data['free'] = meta.get('freeleech', 0)
         if region_id != 0:
             data['region_id'] = region_id
         if distributor_id != 0:
