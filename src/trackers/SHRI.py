@@ -31,7 +31,7 @@ class SHRI():
         pass
 
     async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)     
+        common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
         cat_id = await self.get_cat_id(meta['category'])
