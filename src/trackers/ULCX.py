@@ -81,8 +81,7 @@ class ULCX(UNIT3D):
 
         return data
 
-    async def edit_name(self, meta, region_id, distributor_id):
-        common = COMMON(config=self.config)
+    async def edit_name(self, meta):
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
@@ -100,21 +99,5 @@ class ULCX(UNIT3D):
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
         if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":
             ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
-        if meta.get('is_disc') == "BDMV":
-            if not region_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
-                    region_id = await common.unit3d_region_ids(region_name)
-                    if not meta.get('edition', ""):
-                        ulcx_name = ulcx_name.replace(f"{meta['resolution']}", f"{meta['resolution']} {region_name}", 1)
-                    else:
-                        ulcx_name = ulcx_name.replace(f"{meta['resolution']} {meta['edition']}", f"{meta['resolution']} {meta['edition']} {region_name}", 1)
-                else:
-                    region_id = "SKIPPED"
-            if not distributor_id:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    distributor_name = cli_ui.ask_string("ULCX: Distributor code not found for disc. Please enter it manually (UPPERCASE): ")
-                    distributor_id = await common.unit3d_distributor_ids(distributor_name)
-                else:
-                    distributor_id = "SKIPPED"
-        return {'name': ulcx_name, 'region_id': region_id, 'distributor_id': distributor_id}
+
+        return {'name': ulcx_name}
