@@ -22,7 +22,7 @@ class LDU(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_cat_id(self, meta):
+    async def get_category_id(self, meta):
         genres = f"{meta.get('keywords', '')} {meta.get('genres', '')}"
         sound_mixes = meta.get('imdb_info', {}).get('sound_mixes', [])
 
@@ -80,9 +80,9 @@ class LDU(UNIT3D):
             else:
                 category_id = '41'
 
-        return category_id
+        return {'category_id': category_id}
 
-    async def get_type_id(self, type, meta):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -90,10 +90,10 @@ class LDU(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
+        }.get(meta.get('type'), '0')
         if any(x in meta.get('edition', '').lower() for x in ["fanedit", "fanres"]):
             type_id = '16'
-        return type_id
+        return {'type_id': type_id}
 
     async def edit_name(self, meta, cat_id):
         ldu_name = meta['name']

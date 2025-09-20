@@ -18,7 +18,7 @@ class STC(UNIT3D):
         self.banned_groups = [""]
         pass
 
-    async def get_type_id(self, type, tv_pack, sd, category):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -26,23 +26,23 @@ class STC(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
-        if tv_pack == 1:
-            if sd == 1:
+        }.get(meta.get('type'), '0')
+        if meta.get('tv_pack'):
+            if meta.get('sd'):
                 # Season SD
                 type_id = '14'
-                if type == "ENCODE":
+                if meta.get('type') == "ENCODE":
                     type_id = '18'
-            if sd == 0:
+            if meta.get('sd'):
                 # Season HD
                 type_id = '13'
-                if type == "ENCODE":
+                if meta.get('type') == "ENCODE":
                     type_id = '18'
-        if type == "DISC" and category == "TV":
-            if sd == 1:
+        if meta.get('type') == "DISC" and meta.get('category') == "TV":
+            if meta.get('sd') == 1:
                 # SD-RETAIL
                 type_id = '17'
-            if sd == 0:
+            if meta.get('sd') == 0:
                 # HD-RETAIL
                 type_id = '18'
-        return type_id
+        return {'type_id': type_id}

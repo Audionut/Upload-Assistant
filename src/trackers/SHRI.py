@@ -20,13 +20,6 @@ class SHRI(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_flag(self, meta, flag_name):
-        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
-        if config_flag is not None:
-            return 1 if config_flag else 0
-
-        return 1 if meta.get(flag_name, False) else 0
-
     async def edit_name(self, meta):
         shareisland_name = meta['name']
         resolution = meta.get('resolution')
@@ -83,22 +76,13 @@ class SHRI(UNIT3D):
 
         return shareisland_name
 
-    async def get_type_id(self, type=None, reverse=False):
-        type_mapping = {
+    async def get_type_id(self, meta):
+        type_id = {
             'DISC': '26',
             'REMUX': '7',
             'WEBDL': '27',
             'WEBRIP': '15',
             'HDTV': '6',
             'ENCODE': '15',
-        }
-
-        if reverse:
-            # Return a reverse mapping of type IDs to type names
-            return {v: k for k, v in type_mapping.items()}
-        elif type is not None:
-            # Return the specific type ID
-            return type_mapping.get(type, '0')
-        else:
-            # Return the full mapping
-            return type_mapping
+        }.get(meta['type'], '0')
+        return {'type_id': type_id}
