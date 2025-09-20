@@ -90,14 +90,23 @@ class UNIT3D():
             bdinfo = None
         return {'bdinfo': bdinfo}
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(meta['category'], '0')
-        return {'category_id': category_id}
+        }
+        if mapping_only:
+            return category_id
+        elif reverse:
+            return {v: k for k, v in category_id.items()}
+        elif category is not None:
+            return {'category_id': category_id.get(category, '0')}
+        else:
+            meta_category = meta.get('category', '')
+            resolved_id = category_id.get(meta_category, '0')
+            return {'category_id': resolved_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -105,10 +114,19 @@ class UNIT3D():
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(meta['type'], '0')
-        return {'type_id': type_id}
+        }
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        else:
+            meta_type = meta.get('type', '')
+            resolved_id = type_id.get(meta_type, '0')
+            return {'type_id': resolved_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -121,8 +139,17 @@ class UNIT3D():
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        }
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution is not None:
+            return {'resolution_id': resolution_id.get(resolution, '10')}
+        else:
+            meta_resolution = meta.get('resolution', '')
+            resolved_id = resolution_id.get(meta_resolution, '10')
+            return {'resolution_id': resolved_id}
 
     async def get_anonymous(self, meta):
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):

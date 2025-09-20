@@ -405,23 +405,18 @@ class TRACKER_SETUP:
                     return False
 
                 tracker_instance = tracker_class(self.config)
-                all_types = await tracker_instance.get_type_id()
-                type_names = meta.get('type', [])
-                if isinstance(type_names, str):
-                    type_names = [type_names]
-
-                type_ids = [all_types.get(type_name) for type_name in type_names]
+                # Get name-to-ID mappings directly
+                type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)
+                type_name = meta.get('type', '')
+                type_ids = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
-                    console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
+                    console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                all_resolutions = await tracker_instance.get_res_id()
-                resolution_names = meta.get('resolution', [])
-                if isinstance(resolution_names, str):
-                    resolution_names = [resolution_names]
-
-                resolution_ids = [all_resolutions.get(res_name) for res_name in resolution_names]
+                resolution_mapping = await tracker_instance.get_resolution_id(meta, mapping_only=True)
+                resolution_name = meta.get('resolution', '')
+                resolution_ids = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
-                    console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
+                    console.print("[yellow]Warning: Resolution in meta not found in tracker resolution mapping.[/yellow]")
 
                 tmdb_id = meta.get('tmdb', [])
                 if isinstance(tmdb_id, int):
@@ -610,33 +605,21 @@ class TRACKER_SETUP:
                 requests = await self.bhd_request_check(meta, tracker, url)
             else:
                 requests = await self.get_tracker_requests(meta, tracker, url)
-                all_types = await tracker_instance.get_type_id(meta)
-                if not isinstance(all_types, dict):
-                    console.print(f"[red]Error: get_type_id() for {tracker} did not return a dict. Got: {type(all_types)}[/red]")
-                    return False
-                type_names = meta.get('type', [])
-                if isinstance(type_names, str):
-                    type_names = [type_names]
-
-                type_ids = [all_types.get(type_name) for type_name in type_names]
+                type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)
+                type_name = meta.get('type', '')
+                type_ids = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
-                    console.print("[yellow]Warning: Some types in meta not found in tracker type mapping.[/yellow]")
+                    console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                all_resolutions = await tracker_instance.get_resolution_id(meta)
-                resolution_names = meta.get('resolution', [])
-                if isinstance(resolution_names, str):
-                    resolution_names = [resolution_names]
-
-                resolution_ids = [all_resolutions.get(res_name) for res_name in resolution_names]
+                resolution_mapping = await tracker_instance.get_resolution_id(meta, mapping_only=True)
+                resolution_name = meta.get('resolution', '')
+                resolution_ids = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
-                    console.print("[yellow]Warning: Some resolutions in meta not found in tracker resolution mapping.[/yellow]")
+                    console.print("[yellow]Warning: Resolution in meta not found in tracker resolution mapping.[/yellow]")
 
-                all_categories = await tracker_instance.get_category_id(meta)
-                categories = meta.get('category', [])
-                if isinstance(categories, str):
-                    categories = [categories]
-
-                category_ids = [all_categories.get(cat_name) for cat_name in categories]
+                category_mapping = await tracker_instance.get_category_id(meta, mapping_only=True)
+                category_name = meta.get('category', '')
+                category_ids = [category_mapping.get(category_name)] if category_name else []
                 if None in category_ids:
                     console.print("[yellow]Warning: Some categories in meta not found in tracker category mapping.[/yellow]")
 
