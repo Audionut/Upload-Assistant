@@ -33,34 +33,34 @@ class ULCX(UNIT3D):
         should_continue = True
         if 'concert' in meta['keywords']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print('[bold red]Concerts not allowed at ULCX.')
+                console.print(f'[bold red]Concerts not allowed at {self.tracker}.[/bold red]')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    meta['skipping'] = "ULCX"
+                    meta['skipping'] = {self.tracker}
                     return False
             else:
-                meta['skipping'] = "ULCX"
+                meta['skipping'] = {self.tracker}
                 return False
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print('[bold red]This content might not fit HEVC rules for ULCX.')
+                console.print(f'[bold red]This content might not fit HEVC rules for {self.tracker}.[/bold red]')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    meta['skipping'] = "ULCX"
+                    meta['skipping'] = {self.tracker}
                     return False
             else:
-                meta['skipping'] = "ULCX"
+                meta['skipping'] = {self.tracker}
                 return False
         if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
             if not meta['unattended']:
-                console.print('[bold red]Encodes must be at least 720p resolution for ULCX.')
-            meta['skipping'] = "ULCX"
+                console.print(f'[bold red]Encodes must be at least 720p resolution for {self.tracker}.[/bold red]')
+            meta['skipping'] = {self.tracker}
             return False
         if meta['bloated'] is True:
-            console.print("[bold red]Non-English dub not allowed at ULCX[/bold red]")
-            meta['skipping'] = "ULCX"
+            console.print(f"[bold red]Non-English dub not allowed at {self.tracker}[/bold red]")
+            meta['skipping'] = {self.tracker}
             return False
 
         if not meta['is_disc'] == "BDMV":
@@ -68,8 +68,8 @@ class ULCX(UNIT3D):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
             if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
                 if not meta['unattended']:
-                    console.print('[bold red]ULCX requires at least one English audio or subtitle track.')
-                meta['skipping'] = "ULCX"
+                    console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track.')
+                meta['skipping'] = {self.tracker}
                 return False
 
         return should_continue
