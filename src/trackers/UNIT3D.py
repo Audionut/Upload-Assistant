@@ -113,7 +113,8 @@ class UNIT3D():
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6',
-            'ENCODE': '3'
+            'ENCODE': '3',
+            'DVDRIP': '3',
         }
         if mapping_only:
             return type_id
