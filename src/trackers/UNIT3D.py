@@ -15,9 +15,9 @@ class UNIT3D():
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
-        tracker_config = self.config['TRACKERS'][self.tracker]
+        tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url')
-        self.api_key = self.config['TRACKERS'][self.tracker]['api_key'].strip()
+        self.api_key = tracker_config.get('api_key', '').strip()
         self.ua_name = f"Audionut's Upload Assistant{self.common.get_version()}"
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
@@ -315,9 +315,9 @@ class UNIT3D():
                 except httpx.TimeoutException:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
                 except httpx.RequestError as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: unable to upload to {self.tracker}: {e}'
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
                 except Exception:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'It may have uploaded, go check: {self.tracker}'
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
                     return
         else:
             console.print('[cyan]Request Data:')
