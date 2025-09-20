@@ -13,7 +13,7 @@ async def get_name(meta):
         region, distributor = await missing_disc_info(meta)
         if "SKIPPED" in region or "SKIPPED" in distributor:
             meta['trackers'].remove("ULCX")
-        if distributor:
+        if distributor and 'SKIPPED' not in distributor:
             meta['distributor'] = distributor
         if region and 'SKIPPED' not in region:
             meta['region'] = region
