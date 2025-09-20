@@ -104,7 +104,9 @@ class TRACKER_SETUP:
 
         tracker_class = tracker_class_map.get(tracker.upper())
         tracker_instance = tracker_class(self.config)
-        if not tracker_instance.banned_url:
+        try:
+            banned_url = tracker_instance.banned_url
+        except AttributeError:
             return None
 
         # Check if we need to update
@@ -125,7 +127,7 @@ class TRACKER_SETUP:
                 try:
                     # Add query parameters for pagination
                     params = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url=tracker_instance.banned_url, headers=headers, params=params)
+                    response = await client.get(url=banned_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
@@ -325,7 +327,9 @@ class TRACKER_SETUP:
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
         tracker_class = tracker_class_map.get(tracker.upper())
         tracker_instance = tracker_class(self.config)
-        if not tracker_instance.claims_url:
+        try:
+            claims_url = tracker_instance.claims_url
+        except AttributeError:
             return None
 
         # Check if we need to update
@@ -346,7 +350,7 @@ class TRACKER_SETUP:
                 try:
                     # Add query parameters for pagination
                     params = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url=tracker_instance.claims_url, headers=headers, params=params)
+                    response = await client.get(url=claims_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
