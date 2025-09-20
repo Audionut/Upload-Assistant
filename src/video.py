@@ -104,6 +104,7 @@ async def get_video_encode(mi, type, bdinfo):
         if mi['media']['track'][1].get('Encoded_Library_Settings', None):
             has_encode_settings = True
         bit_depth = mi['media']['track'][1].get('BitDepth', '0')
+        encoded_library_name = mi['media']['track'][1].get('Encoded_Library_Name', None)
     except Exception:
         format = bdinfo['video'][0]['codec']
         format_profile = bdinfo['video'][0]['profile']
@@ -114,6 +115,12 @@ async def get_video_encode(mi, type, bdinfo):
             codec = 'x265'
         elif format == 'AV1':
             codec = 'AV1'
+        elif format == 'MPEG-4 Visual':
+            if encoded_library_name:
+                if 'xvid' in encoded_library_name.lower():
+                    codec = 'XviD'
+                elif 'divx' in encoded_library_name.lower():
+                    codec = 'DivX'
     elif type in ('WEBDL', 'HDTV'):  # WEB-DL
         if format == 'AVC':
             codec = 'H.264'

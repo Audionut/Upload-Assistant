@@ -202,8 +202,8 @@ class PHD(AZTrackerBase):
 
             # 3
             original_language = meta.get('original_language', '')
-
-            if original_language:
+            language_track = track.get('language', '')
+            if original_language and language_track:
                 # Filter to only have audio tracks that are in the original language
                 original_language_tracks = [
                     track for track in audio_tracks if track.get('language', '').lower() == original_language.lower()

@@ -139,12 +139,10 @@ class AZTrackerBase():
                 break
 
             if attempt == 0 and not self.media_code:
-                console.print(f"\n{self.tracker}: The media ([yellow]IMDB:{imdb_id}[/yellow] [blue]TMDB:{tmdb_id}[/blue]) appears to be missing from the site's database.")
-
-                user_choice = input(f"{self.tracker}: Do you want to add '{title}' to the site database? (y/n): \n").lower()
+                console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
+                user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
-                    console.print(f'{self.tracker}: Trying to add to database...')
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
@@ -179,6 +177,7 @@ class AZTrackerBase():
         }
 
         try:
+            console.print(f'{self.tracker}: Trying to add to database...')
             response = await self.session.post(url, data=data, headers=headers)
             if response.status_code == 302:
                 console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
@@ -766,7 +765,15 @@ class AZTrackerBase():
             if self.tracker == 'PHD':
                 upload_name = f'{upload_name}-NOGROUP'
 
-        return upload_name
+        if meta['category'] == 'TV':
+            if not meta.get('no_year', False) and not meta.get('search_year', '') and meta.get('year', ''):
+                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {meta.get('year')}", 1)
+
+        if meta.get('type', '') == 'DVDRIP':
+            if meta.get('source', ''):
+                upload_name = upload_name.replace(meta['source'], '')
+
+        return re.sub(r'\s{2,}', ' ', upload_name)
 
     def get_rip_type(self, meta):
         source_type = str(meta.get('type', '') or '').strip().lower()

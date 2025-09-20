@@ -1,4 +1,57 @@
-__version__ = "v5.4.2"
+__version__ = "v5.4.3"
+
+"""
+Release Notes for version v5.4.3 (2025-09-19):
+
+# ## What's Changed
+# 
+# * category regex tweak by @Audionut in f7c02d1
+# * Fix HUNO UHD remux (#767) by @oxidize9779 in 1bb0ae8
+# * Update to banned groups ULCX.py (#770) by @Zips-sipZ in dd0fdd9
+# * fix(HDT): update base URL (#766) by @wastaken7 in bb16dc3
+# * fix(BJS): Remove Ultrawide tag detection from remaster tags (#768) by @wastaken7 in 99e1788
+# * Added support for AvistaZ (#769) by @wastaken7 in 5bdf3cd
+# * TL - api upload update by @Audionut in 341248a
+# * add tonemapping header to more sites by @Audionut in 307ba71
+# * fix existing tonemapped status by @Audionut in 4950b08
+# * HDB - fix additional space in name when atmos by @Audionut in 8733c65
+# * fix bad space by @Audionut in 9165411
+# * set df encoding by @Audionut in 323a365
+# * TL api tweaks by @Audionut in 9fbde8f
+# * TL - fix search existing option when api by @Audionut in 534ece7
+# * TL - add debugging by @Audionut in ab37785
+# * fix bad copy/paste by @Audionut in 6d25afd
+# * TL - login update by @Audionut in 677cee8
+# * git username mapping by @Audionut in 60ed690
+# * FNP - remove a group for banned release groups (#775) by @flowerey in ab4f79a
+# * Added support for CinemaZ, refactor Z sites to reuse common codebase (#777) by @wastaken7 in f14066f
+# * Update titles of remux for HDB (#778) by @GizmoBal in b9473cb
+# * Added support for GreatPosterWall (#779) by @wastaken7 in 4dc1b65
+# * SHRI - language handling in name by @Audionut in 5ee449f
+# * fix(GPW) - timeout, screenshots, check available slots (#789) by @wastaken7 in 5862df4
+# * fix(AvistaZ sites) - languages, resolution, naming, rules (#782) by @wastaken7 in 10bf73f
+# * add argument trackers remove by @Audionut in 1b0c549
+# * add(region.py) - Kocowa+ (#790) by @wastaken7 in da0b39a
+# * fix(CBR.py) - UnboundLocalError when uploading a full disc (#791) by @wastaken7 in dbe3964
+# * Fix HUNO bit rate detection (#792) by @oxidize9779 in da1b891
+# * SHRI - remove dual audio by @Audionut in 5f94385
+# * add argument -sort (#796) by @Audionut in 0d0f1a4
+# * add config options for ffmpeg (#798) by @Audionut in 0dc4275
+# * add venv to .gitignore (#797) by @Tiberio in 5edfbeb
+# * strip multiple spaces from bdinfo (#786) by @Audionut in 38a09aa
+# * fix SHRI dual audio brain fart by @Audionut in 8623b18
+# * BHD - request search support (#773) by @Audionut in f0f5685
+# * can't spell by @Audionut in 159fc0f
+# * update DP ban list (#800) by @emb3r in 42dd363
+# * fix(Avistaz) - add XviD/DivX to meta (#793) by @wastaken7 in a797844
+# * Remove TOCASHARE from supported sites (#802) by @wastaken7 in cf25142
+# * conform to GPW description image rules (#804) by @GuillaumedeVolpiano in 24c625e
+# * add(get_name.py) - year for DVD's, audio for DVDRip's (#799) by @wastaken7 in adfb263
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.2...v5.4.3
+"""
+
 
 """
 Release Notes for version v5.4.2 (2025-09-03):

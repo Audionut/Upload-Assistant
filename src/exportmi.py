@@ -185,6 +185,8 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                     "MaxFALL": track.get("MaxFALL", {}),
                     "MaxFALL_Source": track.get("MaxFALL_Source", {}),
                     "Encoded_Library_Settings": track.get("Encoded_Library_Settings", {}),
+                    "Encoded_Library": track.get("Encoded_Library", {}),
+                    "Encoded_Library_Name": track.get("Encoded_Library_Name", {}),
                 })
             elif track["@type"] == "Audio":
                 filtered["media"]["track"].append({
