@@ -2,6 +2,7 @@
 # import discord
 import aiofiles
 import asyncio
+import cli_ui
 import httpx
 import re
 from data.config import config
@@ -36,6 +37,17 @@ class DP(UNIT3D):
 
     async def get_additional_checks(self, meta):
         should_continue = True
+        if meta.get('keep_folder'):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]{self.tracker} does not allow single files in a folder.')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    meta['skipping'] = {self.tracker}
+                    return False
+            else:
+                meta['skipping'] = {self.tracker}
+                return False
         if not meta['is_disc'] == "BDMV":
             if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
