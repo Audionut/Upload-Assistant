@@ -152,7 +152,8 @@ class SHRI():
                 italian_title = aka.get("title")
                 break
 
-        if italian_title:
+        use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
+        if italian_title and use_italian_title:
             shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
             shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
 
