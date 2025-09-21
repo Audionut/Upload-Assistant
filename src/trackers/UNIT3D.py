@@ -215,7 +215,7 @@ class UNIT3D():
         return {'sd': meta['sd']}
 
     async def get_keywords(self, meta):
-        return {'keywords': meta['keywords']}
+        return {'keywords': meta.get('keywords', '')}
 
     async def get_personal_release(self, meta):
         personal_release = int(meta.get('personalrelease', False))

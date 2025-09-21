@@ -1,42 +1,32 @@
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import asyncio
-import requests
-import os
-import platform
-from src.trackers.COMMON import COMMON
-from src.console import console
 import bencodepy
 import httpx
+import os
+import requests
+from src.console import console
+from src.trackers.COMMON import COMMON
+from src.trackers.UNIT3D import UNIT3D
 
 
-class ACM():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class ACM(UNIT3D):
     def __init__(self, config):
+        super().__init__(config, tracker_name='ACM')
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'ACM'
         self.source_flag = 'AsianCinema'
-        self.upload_url = 'https://eiga.moi/api/torrents/upload'
-        self.search_url = 'https://eiga.moi/api/torrents/filter'
-        self.signature = None
-        self.banned_groups = [""]
+        self.base_url = 'https://eiga.moi'
+        self.id_url = f'{self.base_url}/api/torrents/'
+        self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.torrent_url = f'{self.base_url}/torrents/'
+        self.banned_groups = []
         pass
 
-    async def get_cat_id(self, category_name):
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-        }.get(category_name, '0')
-        return category_id
-
-    async def get_type(self, meta):
+    async def get_type_id(self, meta):
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -69,10 +59,8 @@ class ACM():
             #         type_id = meta['resolution']
             #     else:
             #         type_id = "Other"
-        return type_string
 
-    async def get_type_id(self, type):
-        type_id = {
+        type_id_map = {
             'UHD 100': '1',
             'UHD 66': '2',
             'UHD 50': '3',
@@ -84,11 +72,13 @@ class ACM():
             'WEBDL': '9',
             'SDTV': '13',
             'DVD 9': '16',
-            'HDTV': '17'
-        }.get(type, '0')
-        return type_id
+            'HDTV': '17',
+        }
+        type_id = type_id_map.get(type_string, '0')
 
-    async def get_res_id(self, resolution):
+        return {'type_id': type_id}
+
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '2160p': '1',
             '1080p': '2',
@@ -98,16 +88,20 @@ class ACM():
             '576i': '4',
             '480p': '5',
             '480i': '5'
-        }.get(resolution, '10')
-        return resolution_id
+        }.get(meta['resolution'], '10')
+        return {'resolution_id': resolution_id}
 
     # ACM rejects uploads with more that 10 keywords
-    async def get_keywords(self, keywords):
+    async def get_keywords(self, meta):
+        keywords = meta.get('keywords', '')
         if keywords != '':
             keywords_list = keywords.split(',')
             keywords_list = [keyword for keyword in keywords_list if " " not in keyword][:10]
             keywords = ', '.join(keywords_list)
-        return keywords
+        return {'keywords': keywords}
+
+    async def get_additional_files(self, meta):
+        return {}
 
     def get_subtitles(self, meta):
         sub_lang_map = {
@@ -188,94 +182,13 @@ class ACM():
             return ' [No Eng subs]'
         return f" [{subs[0]} subs only]"
 
-    async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta['category'])
-        type_id = await self.get_type_id(await self.get_type(meta))
-        resolution_id = await self.get_res_id(meta['resolution'])
-        await self.edit_desc(meta)
-        region_id = await common.unit3d_region_ids(meta.get('region'))
-        distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        acm_name = await self.edit_name(meta)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
-
-        if meta['bdinfo'] is not None:
-            # bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
-            mi_dump = None
-            bd_dump = ""
-            for each in meta['discs']:
-                bd_dump = bd_dump + each['summary'].strip() + "\n\n"
-        else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-            bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'torrent': open_torrent}
-        data = {
-            'name': acm_name,
-            'description': desc,
-            'mediainfo': mi_dump,
-            'bdinfo': bd_dump,
-            'category_id': cat_id,
-            'type_id': type_id,
-            'resolution_id': resolution_id,
-            'tmdb': meta['tmdb'],
-            'imdb': meta['imdb'],
-            'tvdb': meta['tvdb_id'],
-            'mal': meta['mal_id'],
-            'igdb': 0,
-            'anonymous': anon,
-            'stream': meta['stream'],
-            'sd': meta['sd'],
-            'keywords': await self.get_keywords(meta['keywords']),
-            'personal_release': int(meta.get('personalrelease', False)),
-            'internal': 0,
-            'featured': 0,
-            'free': 0,
-            'doubleup': 0,
-            'sticky': 0,
-        }
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
-        if meta.get('category') == "TV":
-            data['season_number'] = meta.get('season_int', '0')
-            data['episode_number'] = meta.get('episode_int', '0')
-        headers = {
-            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
-        }
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        }
-
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-            try:
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
-        else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
-
     async def search_existing(self, meta, disctype):
         dupes = []
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],
-            'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(await self.get_type(meta)),
+            'categories[]': (await self.get_category_id(meta))['category_id'],
+            'types[]': (await self.get_type_id(meta))['type_id'],
             # A majority of the ACM library doesn't contain resolution information
             # 'resolutions[]' : await self.get_res_id(meta['resolution']),
             # 'name' : ""
@@ -308,7 +221,7 @@ class ACM():
     #         return f' / {original_title} {chr(int("202A", 16))}'
     #     return original_title
 
-    async def edit_name(self, meta):
+    async def get_name(self, meta):
         name = meta.get('name')
         aka = meta.get('aka')
         original_title = meta.get('original_title')
@@ -339,49 +252,66 @@ class ACM():
                 name = name.replace(f'{audio}', f'MPEG {audio}')
 
         name = name + self.get_subs_tag(subs)
-        return name
+        return {'name': name}
 
-    async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
+    async def get_description(self, meta):
+        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
+            base = await f.read()
+
+        output_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt'
+
+        async with aiofiles.open(output_path, 'w', encoding='utf-8') as descfile:
             from src.bbcode import BBCODE
-            # Add This line for all web-dls
-            if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '':
-                descfile.write(f"[center][b][color=#ff00ff][size=18]This release is sourced from {meta['service_longname']} and is not transcoded, just remuxed from the direct {meta['service_longname']} stream[/size][/color][/b][/center]")
+
+            if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
+                await descfile.write(
+                    f'[center][b][color=#ff00ff][size=18]This release is sourced from {meta["service_longname"]} and is not transcoded,'
+                    f'just remuxed from the direct {meta["service_longname"]} stream[/size][/color][/b][/center]\n'
+                )
+
             bbcode = BBCODE()
-            if meta.get('discs', []) != []:
-                discs = meta['discs']
-                if discs[0]['type'] == "DVD":
-                    descfile.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n")
-                    descfile.write("\n")
+
+            discs = meta.get('discs', [])
+            if discs:
+                if discs[0].get('type') == 'DVD':
+                    await descfile.write(f'[spoiler=VOB MediaInfo][code]{discs[0]["vob_mi"]}[/code][/spoiler]\n\n')
+
                 if len(discs) >= 2:
                     for each in discs[1:]:
-                        if each['type'] == "BDMV":
+                        if each.get('type') == 'BDMV':
                             # descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n")
                             # descfile.write("\n")
                             pass
-                        if each['type'] == "DVD":
-                            descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/spoiler]\n")
-                            descfile.write("\n")
-            desc = base
-            desc = bbcode.convert_pre_to_code(desc)
+                        if each.get('type') == 'DVD':
+                            await descfile.write(f'{each.get("name")}:\n')
+                            vob_mi = each.get("vob_mi", '')
+                            ifo_mi = each.get("ifo_mi", '')
+                            await descfile.write(
+                                f'[spoiler={os.path.basename(each["vob"])}][code]{vob_mi}[/code][/spoiler] '
+                                f'[spoiler={os.path.basename(each["ifo"])}][code]{ifo_mi}[/code][/spoiler]\n\n'
+                            )
+
+            desc = bbcode.convert_pre_to_code(base)
             desc = bbcode.convert_hide_to_spoiler(desc)
             desc = bbcode.convert_comparison_to_collapse(desc, 1000)
             desc = desc.replace('[img]', '[img=300]')
-            descfile.write(desc)
-            images = meta['image_list']
-            if len(images) > 0:
-                descfile.write("[center]")
-                for each in range(len(images[:int(meta['screens'])])):
-                    web_url = images[each]['web_url']
-                    img_url = images[each]['img_url']
-                    descfile.write(f"[url={web_url}][img=350]{img_url}[/img][/url]")
-                descfile.write("[/center]")
-            if self.signature is not None:
-                descfile.write(self.signature)
-            descfile.close()
-        return
+
+            await descfile.write(desc)
+
+            images = meta.get('image_list', [])
+            if images:
+                await descfile.write('[center]\n')
+                for i in range(min(len(images), int(meta.get('screens', 0)))):
+                    image = images[i]
+                    web_url = image.get('web_url', '')
+                    img_url = image.get('img_url', '')
+                    await descfile.write(f'[url={web_url}][img=350]{img_url}[/img][/url]')
+                await descfile.write('\n[/center]')
+
+            if self.signature:
+                await descfile.write(self.signature)
+
+        return {'description': desc}
 
     async def search_torrent_page(self, meta, disctype):
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
