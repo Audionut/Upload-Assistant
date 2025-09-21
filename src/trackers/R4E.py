@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 # import discord
+import asyncio
+import httpx
+from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -71,3 +74,40 @@ class R4E(UNIT3D):
 
     async def get_sticky(self, meta):
         return {}
+
+    async def get_resolution_id(self, meta):
+        return {}
+
+    async def search_existing(self, meta, disctype):
+        dupes = []
+        url = "https://racing4everyone.eu/api/torrents/filter"
+        params = {
+            'api_token': self.config['TRACKERS']['R4E']['api_key'].strip(),
+            'tmdb': meta['tmdb'],
+            'categories[]': (await self.get_category_id(meta))['category_id'],
+            'types[]': await self.get_type_id(meta),
+            'name': ""
+        }
+        if meta['category'] == 'TV':
+            params['name'] = f"{meta.get('season', '')}"
+        if meta.get('edition', "") != "":
+            params['name'] = params['name'] + meta['edition']
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url=url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    for each in data['data']:
+                        result = [each][0]['attributes']['name']
+                        dupes.append(result)
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 5 seconds")
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            await asyncio.sleep(5)
+
+        return dupes
