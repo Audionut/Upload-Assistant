@@ -52,7 +52,8 @@ class DP(UNIT3D):
         nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
         if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
             console.print(f'[bold red]{self.tracker} requires at least one Nordic/English audio or subtitle track.')
-            should_continue = False
+            meta['skipping'] = {self.tracker}
+            return False
 
         if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower():
             if not meta['unattended']:

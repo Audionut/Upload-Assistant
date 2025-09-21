@@ -95,8 +95,9 @@ class LDU(UNIT3D):
             type_id = '16'
         return {'type_id': type_id}
 
-    async def edit_name(self, meta, cat_id):
+    async def get_name(self, meta):
         ldu_name = meta['name']
+        cat_id = (await self.get_category_id(meta))['category_id']
         non_eng = False
         non_eng_audio = False
         iso_audio = None
@@ -139,4 +140,4 @@ class LDU(UNIT3D):
             if language_parts:
                 ldu_name = f"{ldu_name} {' '.join(language_parts)}"
 
-        return ldu_name
+        return {'name': ldu_name}

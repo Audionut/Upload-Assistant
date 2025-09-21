@@ -20,7 +20,7 @@ class SHRI(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def edit_name(self, meta):
+    async def get_name(self, meta):
         shareisland_name = meta['name']
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
@@ -96,7 +96,7 @@ class SHRI(UNIT3D):
                 shareisland_name = re.sub(f"-{invalid_tag}", "", shareisland_name, flags=re.IGNORECASE)
             shareisland_name = f"{shareisland_name}-NoGroup"
 
-        return shareisland_name
+        return {'name': shareisland_name}
 
     async def get_type_id(self, meta):
         type_id = {

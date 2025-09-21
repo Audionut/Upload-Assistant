@@ -29,7 +29,7 @@ class AITHER(UNIT3D):
 
         return data
 
-    async def edit_name(self, meta):
+    async def get_name(self, meta):
         aither_name = meta['name']
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
@@ -57,4 +57,4 @@ class AITHER(UNIT3D):
             aither_name = aither_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
             aither_name = aither_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
 
-        return aither_name
+        return {'name': aither_name}

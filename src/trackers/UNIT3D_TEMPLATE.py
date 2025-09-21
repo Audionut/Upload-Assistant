@@ -26,16 +26,20 @@ class UNIT3D_TEMPLATE(UNIT3D):
         self.banned_groups = [""]
         pass
 
+    # The section below can be deleted if no changes are needed, as everything else is handled in UNIT3D.py
+    # If advanced changes are required, copy the necessary functions from UNIT3D.py here
+    # For example, if you need to modify the description, copy and paste the 'get_description' function and adjust it accordingly
+
     # If default UNIT3D categories, remove this function
-    async def get_cat_id(self, category_name):
+    async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(category_name, '0')
-        return category_id
+        }.get(meta['category'], '0')
+        return {'category_id': category_id}
 
     # If default UNIT3D types, remove this function
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -43,11 +47,11 @@ class UNIT3D_TEMPLATE(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
-        return type_id
+        }.get(meta['type'], '0')
+        return {'type_id': type_id}
 
     # If default UNIT3D resolutions, remove this function
-    async def get_res_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -60,16 +64,18 @@ class UNIT3D_TEMPLATE(UNIT3D):
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(resolution, '10')
-        return resolution_id
+        }.get(meta['resolution'], '10')
+        return {'resolution_id': resolution_id}
 
     # If there are tracker specific checks to be done before upload, add them here
     # Is it a movie only tracker? Are concerts banned? Etc.
+    # If no checks are necessary, remove this function
     async def get_additional_checks(self, meta):
         should_continue = True
         return should_continue
 
     # If the tracker has modq in the api, otherwise remove this function
+    # If no additional data is required, remove this function
     async def get_additional_data(self, meta):
         data = {
             'modq': await self.get_flag(meta, 'modq'),
@@ -77,7 +83,7 @@ class UNIT3D_TEMPLATE(UNIT3D):
 
         return data
 
-    # If the tracker has specific naming conventions, add them here
-    async def edit_name(self, meta):
+    # If the tracker has specific naming conventions, add them here; otherwise, remove this function
+    async def get_name(self, meta):
         UNIT3D_TEMPLATE_name = meta['name']
         return {'name': UNIT3D_TEMPLATE_name}

@@ -81,7 +81,7 @@ class ULCX(UNIT3D):
 
         return data
 
-    async def edit_name(self, meta):
+    async def get_name(self, meta):
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))

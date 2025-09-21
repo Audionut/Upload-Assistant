@@ -83,12 +83,8 @@ class HUNO(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta):
-        data = {
-            'stream': await self.is_plex_friendly(meta),
-        }
-
-        return data
+    async def get_stream(self, meta):
+        return {'stream': await self.is_plex_friendly(meta)}
 
     async def get_description(self, meta):
         url_host_mapping = {
