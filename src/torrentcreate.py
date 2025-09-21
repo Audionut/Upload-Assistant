@@ -167,56 +167,62 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
 
         if not completeness['complete']:
             just_go = False
-            missing_list = [f"S{s:02d}E{e:02d}" for s, e in completeness['missing_episodes']]
-            console.print("[red]Warning: Season pack appears incomplete!")
-            console.print(f"[yellow]Missing episodes: {', '.join(missing_list)}")
+            try:
+                missing_list = [f"S{s:02d}E{e:02d}" for s, e in completeness['missing_episodes']]
+            except ValueError:
+                console.print("[red]Error determining missing episodes, you should double check the pack manually.")
+                time.sleep(5)
+                missing_list = ["Unknown"]
+            if 'Unknown' not in missing_list:
+                console.print("[red]Warning: Season pack appears incomplete!")
+                console.print(f"[yellow]Missing episodes: {', '.join(missing_list)}")
 
-            # Show first 15 files from filelist
-            filelist = meta['filelist']
-            files_shown = 0
-            batch_size = 15
+                # Show first 15 files from filelist
+                filelist = meta['filelist']
+                files_shown = 0
+                batch_size = 15
 
-            console.print(f"[cyan]Filelist ({len(filelist)} files):")
-            for i, file in enumerate(filelist[:batch_size]):
-                console.print(f"[cyan]  {i+1:2d}. {os.path.basename(file)}")
+                console.print(f"[cyan]Filelist ({len(filelist)} files):")
+                for i, file in enumerate(filelist[:batch_size]):
+                    console.print(f"[cyan]  {i+1:2d}. {os.path.basename(file)}")
 
-            files_shown = min(batch_size, len(filelist))
+                files_shown = min(batch_size, len(filelist))
 
-            # Loop to handle showing more files in batches
-            while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                remaining_files = len(filelist) - files_shown
-                console.print(f"[yellow]... and {remaining_files} more files")
+                # Loop to handle showing more files in batches
+                while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    remaining_files = len(filelist) - files_shown
+                    console.print(f"[yellow]... and {remaining_files} more files")
 
-                if remaining_files > batch_size:
-                    response = input(f"Show (n)ext {batch_size} files, (a)ll remaining files, (c)ontinue with incomplete pack, or (q)uit? (n/a/c/Q): ")
-                else:
-                    response = input(f"Show (a)ll remaining {remaining_files} files, (c)ontinue with incomplete pack, or (q)uit? (a/c/Q): ")
+                    if remaining_files > batch_size:
+                        response = input(f"Show (n)ext {batch_size} files, (a)ll remaining files, (c)ontinue with incomplete pack, or (q)uit? (n/a/c/Q): ")
+                    else:
+                        response = input(f"Show (a)ll remaining {remaining_files} files, (c)ontinue with incomplete pack, or (q)uit? (a/c/Q): ")
 
-                if response.lower() == 'n' and remaining_files > batch_size:
-                    # Show next batch of files
-                    next_batch = filelist[files_shown:files_shown + batch_size]
-                    for i, file in enumerate(next_batch):
-                        console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
-                    files_shown += len(next_batch)
-                elif response.lower() == 'a':
-                    # Show all remaining files
-                    remaining_batch = filelist[files_shown:]
-                    for i, file in enumerate(remaining_batch):
-                        console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
-                    files_shown = len(filelist)
-                elif response.lower() == 'c':
-                    just_go = True
-                    break  # Continue with incomplete pack
-                else:  # 'q' or any other input
-                    console.print("[red]Aborting torrent creation due to incomplete season pack")
-                    sys.exit(1)
+                    if response.lower() == 'n' and remaining_files > batch_size:
+                        # Show next batch of files
+                        next_batch = filelist[files_shown:files_shown + batch_size]
+                        for i, file in enumerate(next_batch):
+                            console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
+                        files_shown += len(next_batch)
+                    elif response.lower() == 'a':
+                        # Show all remaining files
+                        remaining_batch = filelist[files_shown:]
+                        for i, file in enumerate(remaining_batch):
+                            console.print(f"[cyan]  {files_shown + i + 1:2d}. {os.path.basename(file)}")
+                        files_shown = len(filelist)
+                    elif response.lower() == 'c':
+                        just_go = True
+                        break  # Continue with incomplete pack
+                    else:  # 'q' or any other input
+                        console.print("[red]Aborting torrent creation due to incomplete season pack")
+                        sys.exit(1)
 
-            # Final confirmation if not in unattended mode
-            if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended_confirm', False) and not just_go):
-                response = input("Continue with incomplete season pack? (y/N): ")
-                if response.lower() != 'y':
-                    console.print("[red]Aborting torrent creation due to incomplete season pack")
-                    sys.exit(1)
+                # Final confirmation if not in unattended mode
+                if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended_confirm', False) and not just_go):
+                    response = input("Continue with incomplete season pack? (y/N): ")
+                    if response.lower() != 'y':
+                        console.print("[red]Aborting torrent creation due to incomplete season pack")
+                        sys.exit(1)
         else:
             if meta['debug']:
                 console.print("[green]Season pack completeness verified")
