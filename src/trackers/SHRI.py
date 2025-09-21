@@ -102,6 +102,8 @@ class SHRI():
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 data['internal'] = 1
+        if meta.get('freeleech', 0) != 0:
+            data['free'] = meta.get('freeleech', 0)
         if region_id != 0:
             data['region_id'] = region_id
         if distributor_id != 0:
@@ -140,8 +142,25 @@ class SHRI():
         video_encode = meta.get('video_encode')
         name_type = meta.get('type', "")
         source = meta.get('source', "")
+        imdb_info = meta.get('imdb_info') or {}
+
+        akas = imdb_info.get('akas', [])
+        italian_title = None
+
+        for aka in akas:
+            if isinstance(aka, dict) and aka.get("country") == "Italy":
+                italian_title = aka.get("title")
+                break
+
+        use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
+        if italian_title and use_italian_title:
+            shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
+            shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
 
         audio_lang_str = ""
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
         if meta.get('audio_languages'):
             audio_languages = []
@@ -167,6 +186,9 @@ class SHRI():
             except (FileNotFoundError, KeyError):
                 pass
 
+        if meta.get('dual_audio'):
+            shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)
+
         if audio_lang_str:
             if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
                 shareisland_name = shareisland_name.replace(str(meta['year']), f"{meta['year']} {audio_lang_str}", 1)
@@ -183,6 +205,11 @@ class SHRI():
         elif meta['is_disc'] == "DVD" or (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             shareisland_name = shareisland_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
             shareisland_name = shareisland_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
+
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                shareisland_name = re.sub(f"-{invalid_tag}", "", shareisland_name, flags=re.IGNORECASE)
+            shareisland_name = f"{shareisland_name}-NoGroup"
 
         return shareisland_name
 

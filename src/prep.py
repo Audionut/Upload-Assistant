@@ -258,7 +258,7 @@ class Prep():
             meta['sd'] = await is_sd(meta['resolution'])
 
         else:
-            videopath, meta['filelist'] = await get_video(videoloc, meta.get('mode', 'discord'))
+            videopath, meta['filelist'] = await get_video(videoloc, meta.get('mode', 'discord'), meta.get('sorted_filelist', False))
             search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
             search_file_folder = 'file'
 

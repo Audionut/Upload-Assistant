@@ -246,10 +246,14 @@ class DiscParse():
                                 summary_file = f"{save_dir}/BD_SUMMARY_{str(i).zfill(2)}_{idx}.txt"
                                 extended_summary_file = f"{save_dir}/BD_SUMMARY_EXT_{str(i).zfill(2)}_{idx}.txt"
 
+                            # Strip multiple spaces to single spaces before saving
+                            bd_summary_cleaned = re.sub(r' +', ' ', bd_summary.strip())
+                            ext_bd_summary_cleaned = re.sub(r' +', ' ', ext_bd_summary.strip())
+
                             with open(summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(bd_summary.strip())
+                                f.write(bd_summary_cleaned)
                             with open(extended_summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(ext_bd_summary.strip())
+                                f.write(ext_bd_summary_cleaned)
 
                             bdinfo = self.parse_bdinfo(bd_summary, files[1], path)
 

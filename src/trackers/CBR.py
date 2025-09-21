@@ -102,14 +102,15 @@ class CBR():
                     audio_tag = ' DUAL'
                 else:
                     audio_tag = ''
-            if audio_tag:
-                if meta.get('dual_audio', False):
-                    cbr_name = cbr_name.replace("Dual-Audio ", '')
-                if '-' in cbr_name:
-                    parts = cbr_name.rsplit('-', 1)
-                    cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
-                else:
-                    cbr_name += audio_tag
+
+                if audio_tag:
+                    if meta.get('dual_audio', False):
+                        cbr_name = cbr_name.replace("Dual-Audio ", '')
+                    if '-' in cbr_name:
+                        parts = cbr_name.rsplit('-', 1)
+                        cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
+                    else:
+                        cbr_name += audio_tag
 
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:

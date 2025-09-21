@@ -104,6 +104,7 @@ async def get_video_encode(mi, type, bdinfo):
         if mi['media']['track'][1].get('Encoded_Library_Settings', None):
             has_encode_settings = True
         bit_depth = mi['media']['track'][1].get('BitDepth', '0')
+        encoded_library_name = mi['media']['track'][1].get('Encoded_Library_Name', None)
     except Exception:
         format = bdinfo['video'][0]['codec']
         format_profile = bdinfo['video'][0]['profile']
@@ -114,6 +115,12 @@ async def get_video_encode(mi, type, bdinfo):
             codec = 'x265'
         elif format == 'AV1':
             codec = 'AV1'
+        elif format == 'MPEG-4 Visual':
+            if encoded_library_name:
+                if 'xvid' in encoded_library_name.lower():
+                    codec = 'XviD'
+                elif 'divx' in encoded_library_name.lower():
+                    codec = 'DivX'
     elif type in ('WEBDL', 'HDTV'):  # WEB-DL
         if format == 'AVC':
             codec = 'H.264'
@@ -139,7 +146,7 @@ async def get_video_encode(mi, type, bdinfo):
     return video_encode, video_codec, has_encode_settings, bit_depth
 
 
-async def get_video(videoloc, mode):
+async def get_video(videoloc, mode, sorted_filelist=False):
     filelist = []
     videoloc = os.path.abspath(videoloc)
     if os.path.isdir(videoloc):
@@ -158,7 +165,10 @@ async def get_video(videoloc, mode):
                             if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
                                 filelist.remove(f)
         try:
-            video = sorted(filelist)[0]
+            if sorted_filelist:
+                video = sorted(filelist, key=os.path.getsize, reverse=True)[0]
+            else:
+                video = sorted(filelist)[0]
         except IndexError:
             console.print("[bold red]No Video files found")
             if mode == 'cli':
@@ -166,7 +176,10 @@ async def get_video(videoloc, mode):
     else:
         video = videoloc
         filelist.append(videoloc)
-    filelist = sorted(filelist)
+    if sorted_filelist:
+        filelist = sorted(filelist, key=os.path.getsize, reverse=True)
+    else:
+        filelist = sorted(filelist)
     return video, filelist
 
 
