@@ -117,7 +117,7 @@ class ANT():
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
         headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
 
         try:

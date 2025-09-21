@@ -26,7 +26,7 @@ class DC():
         self.session = httpx.AsyncClient(headers={
             'X-API-KEY': self.api_key
         }, timeout=30.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
 
     async def mediainfo(self, meta):
         if meta.get('is_disc') == 'BDMV':

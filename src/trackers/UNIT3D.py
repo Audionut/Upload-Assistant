@@ -18,7 +18,7 @@ class UNIT3D():
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url')
         self.api_key = tracker_config.get('api_key', '').strip()
-        self.ua_name = f"Audionut's Upload Assistant{self.common.get_version()}"
+        self.ua_name = f"Upload Assistant{self.common.get_version()}"
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 

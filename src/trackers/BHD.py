@@ -28,7 +28,7 @@ class BHD():
         self.upload_url = 'https://beyond-hd.me/api/upload/'
         self.torrent_url = 'https://beyond-hd.me/details/'
         self.requests_url = f"https://beyond-hd.me/api/requests/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
         pass
 
@@ -114,7 +114,7 @@ class BHD():
         if len(tags) > 0:
             data['tags'] = ','.join(tags)
         headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
 
         url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()

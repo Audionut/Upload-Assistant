@@ -39,7 +39,7 @@ from cogs.redaction import redact_private_info
 from src.trackersetup import TRACKER_SETUP
 
 
-cli_ui.setup(color='always', title="Audionut's Upload Assistant")
+cli_ui.setup(color='always', title="Upload Assistant")
 running_subprocesses = set()
 base_dir = os.path.abspath(os.path.dirname(__file__))
 

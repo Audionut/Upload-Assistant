@@ -53,7 +53,7 @@ class COMMON():
             if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
                 created_by = new_torrent.metainfo['created by']
                 if "mkbrr" in created_by.lower():
-                    new_torrent.metainfo['created by'] = f"{created_by} using Audionut's Upload Assistant"
+                    new_torrent.metainfo['created by'] = f"{created_by} using Upload Assistant"
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
             if int(meta.get('entropy', None)) == 32:

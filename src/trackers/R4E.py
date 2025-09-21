@@ -80,7 +80,7 @@ class R4E():
             # 'sticky' : 0,
         }
         headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
         url = f"https://racing4everyone.eu/api/torrents/upload?api_token={self.config['TRACKERS']['R4E']['api_key'].strip()}"
         if meta.get('category') == "TV":

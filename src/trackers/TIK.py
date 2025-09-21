@@ -31,7 +31,7 @@ class TIK():
         self.search_url = 'https://cinematik.net/api/torrents/filter'
         self.upload_url = 'https://cinematik.net/api/torrents/upload'
         self.torrent_url = 'https://cinematik.net/torrents/'
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.banned_groups = [""]
         pass
 
@@ -117,7 +117,7 @@ class TIK():
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
         headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()

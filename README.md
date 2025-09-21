@@ -2,7 +2,7 @@
 
 Discord support https://discord.gg/QHHAZu7e2A
 
-# Audionut's Upload Assistant
+# Upload Assistant
 
 A simple tool to take the work out of uploading.
 
@@ -113,7 +113,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 ## **Docker Usage:**
   Visit our wonderful [docker usage wiki page](https://github.com/Audionut/Upload-Assistant/wiki/Docker)
 
-  Also see this excellent video put together by a community memeber https://videos.badkitty.zone/ua
+  Also see this excellent video put together by a community member https://videos.badkitty.zone/ua
 
 ## **Attributions:**
 

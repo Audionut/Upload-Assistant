@@ -348,8 +348,8 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
         exclude_globs=exclude or [],
         include_globs=include or [],
         creation_date=datetime.now(),
-        comment="Created by Audionut's Upload Assistant",
-        created_by="Audionut's Upload Assistant",
+        comment="Created by Upload Assistant",
+        created_by="Upload Assistant",
         piece_size=piece_size
     )
 
@@ -419,8 +419,8 @@ async def create_base_from_existing_torrent(torrentpath, base_dir, uuid):
     if os.path.exists(torrentpath):
         base_torrent = Torrent.read(torrentpath)
         base_torrent.trackers = ['https://fake.tracker']
-        base_torrent.comment = "Created by Audionut's Upload Assistant"
-        base_torrent.created_by = "Created by Audionut's Upload Assistant"
+        base_torrent.comment = "Created by Upload Assistant"
+        base_torrent.created_by = "Created by Upload Assistant"
         info_dict = base_torrent.metainfo['info']
         valid_keys = ['name', 'piece length', 'pieces', 'private', 'source']
 

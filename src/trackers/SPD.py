@@ -31,9 +31,9 @@ class SPD(COMMON):
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = ['']
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': "Audionut's Upload Assistant",
+            'User-Agent': "Upload Assistant",
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'],
         }, timeout=30.0)
