@@ -23,7 +23,7 @@ class BT():
         self.banned_groups = ['']
         self.source_flag = 'BT'
         self.base_url = 'https://brasiltracker.org'
-        self.torrent_url = 'https://brasiltracker.org/torrents.php?torrentid='
+        self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
@@ -236,17 +236,14 @@ class BT():
             if target_id:
                 subtitle_ids.add(target_id)
 
-        legenda_value = 'Sim' if '49' in subtitle_ids else 'Nao'
+        has_pt_subtitles = 'Sim' if '49' in subtitle_ids else 'Nao'
 
-        final_subtitle_ids = sorted(list(subtitle_ids))
+        subtitle_ids = sorted(list(subtitle_ids))
 
-        if not final_subtitle_ids:
-            final_subtitle_ids.append('44')
+        if not subtitle_ids:
+            subtitle_ids.append('44')
 
-        return {
-            'legenda': legenda_value,
-            'subtitles[]': final_subtitle_ids
-        }
+        return has_pt_subtitles, subtitle_ids
 
     async def get_resolution(self, meta):
         if meta.get('is_disc') == 'BDMV':
@@ -265,10 +262,7 @@ class BT():
             width = video_mi['Width']
             height = video_mi['Height']
 
-        return {
-            'width': width,
-            'height': height
-        }
+        return width, height
 
     async def get_video_codec(self, meta):
         video_encode = meta.get('video_encode', '').strip().lower()
@@ -350,7 +344,7 @@ class BT():
 
         return title if title and title != meta.get('title') else ''
 
-    async def build_description(self, meta):
+    async def get_description(self, meta):
         description = []
 
         base_desc = ''
@@ -483,7 +477,7 @@ class BT():
 
         return found_items
 
-    async def media_info(self, meta):
+    async def get_media_info(self, meta):
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
@@ -591,12 +585,12 @@ class BT():
         else:
             return 'N/A'
 
-    async def fetch_data(self, meta, disctype):
+    async def get_data(self, meta, disctype):
         self.load_localized_data(meta)
         await self.validate_credentials(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
-        subtitles_info = await self.get_subtitle(meta)
-        resolution = await self.get_resolution(meta)
+        has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
+        resolution_width, resolution_height = await self.get_resolution(meta)
 
         data = {
             'audio_c': await self.get_audio_codec(meta),
@@ -606,18 +600,18 @@ class BT():
             'desc': '',
             'diretor': await self.get_credits(meta),
             'duracao': f"{str(meta.get('runtime', ''))} min",
-            'especificas': await self.build_description(meta),
+            'especificas': await self.get_description(meta),
             'format': await self.get_container(meta),
             'idioma_ori': await self.get_languages(meta) or meta.get('original_language', ''),
             'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path') or meta.get('tmdb_poster', '')}",
-            'legenda': subtitles_info.get('legenda', 'Nao'),
-            'mediainfo': await self.media_info(meta),
-            'resolucao_1': resolution.get('width'),
-            'resolucao_2': resolution.get('height'),
+            'legenda': has_pt_subtitles,
+            'mediainfo': await self.get_media_info(meta),
+            'resolucao_1': resolution_width,
+            'resolucao_2': resolution_height,
             'screen[]': await self.get_screens(meta),
             'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'submit': 'true',
-            'subtitles[]': subtitles_info.get('subtitles[]'),
+            'subtitles[]': subtitle_ids,
             'tags': await self.get_tags(meta),
             'title': meta['title'],
             'type': await self.get_type(meta),
@@ -642,7 +636,7 @@ class BT():
         if meta['category'] == 'TV' or meta.get('anime'):
             data.update({
                 'episodio': meta.get('episode', ''),
-                'ntorrent': f"<{meta.get('season', '')}{meta.get('episode', '')}>",
+                'ntorrent': f"{meta.get('season', '')}{meta.get('episode', '')}",
                 'temporada_e': meta.get('season', '') if not tv_pack else '',
                 'temporada': meta.get('season', '') if tv_pack else '',
                 'tipo': 'ep_individual' if not tv_pack else 'completa',
@@ -671,7 +665,7 @@ class BT():
     async def upload(self, meta, disctype):
         await self.load_cookies(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-        data = await self.fetch_data(meta, disctype)
+        data = await self.get_data(meta, disctype)
         status_message = ''
 
         if not meta.get('debug', False):
@@ -684,16 +678,19 @@ class BT():
 
                 response = await self.session.post(upload_url, data=data, files=files, timeout=120)
 
-                if response.status_code in (302, 303):
+                if response.status_code in (200, 302, 303):
                     status_message = 'Enviado com sucesso.'
 
+                    match = re.search(r'id=(\d+)', response.headers['Location'])
+                    if match:
+                        torrent_id = match.group(1)
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
                 else:
-                    status_message = 'O upload pode ter falhado, verifique. '
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
-                    console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
-                    meta['skipping'] = f'{self.tracker}'
+                    status_message = f'data error - O upload pode ter falhado, a resposta HTML foi salva em: {response_save_path}'
                     return
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
