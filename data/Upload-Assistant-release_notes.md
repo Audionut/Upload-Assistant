@@ -1,14 +1,12 @@
-v5.4.0
+v6.0.0
 
 ## RELEASE NOTES
- - Blutopia has a peer scraping issue that resulted in UNIT3D codebase being updated, requiring torrent files to be created site side. See https://github.com/HDInnovations/UNIT3D/pull/4910
- - With the infohash being randomized site side, UA can no longer create valid torrent files for client injection, and instead the torrent file needs to be downloaded for client injection.
- - All UNIT3D based sites have been updated to prevent any issues moving forward as other sites update their UNIT3D codebase.
- - This will cause small slowdown in the upload process, as each torrent file is downloaded from corresponding sites.
- - Announce URLS for the supported sites are no longer needed in config, check example-config.py for the removed announce urls.
+ - Immense thanks to @wastaken7 for refactoring the unit3d based tracker code. A huge QOL improvement that removed thousands of lines of code.
 
-## WHAT'S NEW
- - UA can now search for related requests for the uploaded content, allowing you to quickly and easily see which requests can be filled by your upload.
- - Request checking via config option (see example-config) or new arg (see --help)
- - Only ASC, BJS and ULCX supported currently
- - Added a new arg to skip auto torrent searching
+## WHAT'S NEW - some from last release
+ - Some new config options in example-config.py.
+ - FFMPEG related options that may assist those having issues with screenshots.
+ - AvistaZ based sites have new options in their site sections.
+ - New arg -sort, used for sorting filelist, to ensure UA can run with some anime folders that have allowed smaller files.
+ - New arg -rtk, which can be used to process a run, removing specific trackers from your default trackers list.
+ - A significant chunk of the actual upload process has been correctly asynced. Some specific site files still need to be updated and will slow the process.
