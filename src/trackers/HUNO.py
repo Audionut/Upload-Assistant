@@ -157,23 +157,17 @@ class HUNO(UNIT3D):
     async def get_audio(self, meta):
         channels = meta.get('channels', "")
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace(channels, "")
-        dual = "Dual-Audio" in meta.get('audio', "")
         languages = ""
 
-        if dual:
-            languages = "Dual"
-        else:
-            if not meta.get('audio_languages'):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
-            if meta.get('audio_languages'):
-                languages = meta['audio_languages']
-                languages = set(languages)
-                if len(languages) > 2:
-                    languages = "Multi"
-                elif len(languages) > 1:
-                    languages = "Dual"
-                else:
-                    languages = next(iter(languages), "SKIPPED")
+        if not meta.get('audio_languages'):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        if meta.get('audio_languages'):
+            languages = meta['audio_languages']
+            languages = set(languages)
+            if len(languages) > 2:
+                languages = "Multi"
+            elif len(languages) > 1:
+                languages = "Dual"
 
         if "zxx" in languages:
             languages = "NONE"
