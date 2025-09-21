@@ -168,6 +168,8 @@ class HUNO(UNIT3D):
                 languages = "Multi"
             elif len(languages) > 1:
                 languages = "Dual"
+            else:
+                languages = list(languages)[0]
 
         if "zxx" in languages:
             languages = "NONE"
