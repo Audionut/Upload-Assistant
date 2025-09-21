@@ -159,7 +159,7 @@ class HUNO(UNIT3D):
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace(channels, "")
         languages = ""
 
-        if not meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         if meta.get('audio_languages'):
             languages = meta['audio_languages']
@@ -171,9 +171,11 @@ class HUNO(UNIT3D):
             else:
                 languages = list(languages)[0]
 
-        if "zxx" in languages:
-            languages = "NONE"
-        elif not languages:
+            if "zxx" in languages:
+                languages = "NONE"
+            elif not languages:
+                languages = "SKIPPED"
+        else:
             languages = "SKIPPED"
 
         return f'{codec} {channels} {languages}'

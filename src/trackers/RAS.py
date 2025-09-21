@@ -24,13 +24,12 @@ class RAS(UNIT3D):
 
     async def get_additional_checks(self, meta):
         should_continue = True
-        if not meta['is_disc'] == "BDMV":
-            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
-            nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
-            if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
-                console.print(f'[bold red]{self.tracker} requires at least one Nordic/English audio or subtitle track.')
-                should_continue = False
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
+        if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
+            console.print(f'[bold red]{self.tracker} requires at least one Nordic/English audio or subtitle track.')
+            should_continue = False
 
         return should_continue
 

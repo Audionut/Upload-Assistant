@@ -149,12 +149,10 @@ class PTS(COMMON):
         return desc
 
     async def search_existing(self, meta, disctype):
-        languages = (meta.get('subtitle_languages') or []) + (meta.get('audio_languages') or [])
-
-        if not languages:
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        langs = [lang.lower() for lang in languages]
+        langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
         mandarin = 'mandarin' in langs or 'chinese' in langs
 
         if not mandarin:

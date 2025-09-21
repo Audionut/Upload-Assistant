@@ -164,7 +164,8 @@ class BJS(COMMON):
             return 'Outro'
 
     async def get_audio(self, meta):
-        await process_desc_language(meta, desc=None, tracker=self.tracker)
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -194,7 +195,8 @@ class BJS(COMMON):
         if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
             raise UploadException('[bold red]ERRO: Esta ferramenta não suporta o upload de legendas em arquivos separados.[/bold red]')
 
-        await process_desc_language(meta, desc=None, tracker=self.tracker)
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
         subtitle_type = 'Nenhuma'

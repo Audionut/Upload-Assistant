@@ -451,7 +451,7 @@ class FF(COMMON):
         return name
 
     async def languages(self, meta):
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         lang_map = {

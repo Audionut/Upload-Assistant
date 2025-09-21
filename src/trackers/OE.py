@@ -49,7 +49,7 @@ class OE(UNIT3D):
             should_continue = False
 
         if not meta['is_disc'] == "BDMV":
-            if not meta.get('audio_languages') or not meta.get('subtitle_languages'):
+            if not meta.get('language_checked', False):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
             if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
                 if not meta['unattended']:

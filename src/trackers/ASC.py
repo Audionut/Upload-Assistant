@@ -764,7 +764,8 @@ class ASC(COMMON):
 
     async def fetch_data(self, meta):
         self.load_localized_data(meta)
-        await process_desc_language(meta, desc=None, tracker=self.tracker)
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
         main_tmdb = await self.main_tmdb_data(meta)
         resolution = await self.get_resolution(meta)
 

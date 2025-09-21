@@ -202,7 +202,7 @@ class BT():
             return lang_code
 
     async def get_audio(self, meta):
-        if not meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
@@ -225,7 +225,7 @@ class BT():
         return 'Legendado'
 
     async def get_subtitle(self, meta):
-        if not meta.get('subtitle_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_language_strings = meta.get('subtitle_languages', [])

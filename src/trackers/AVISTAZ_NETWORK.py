@@ -335,7 +335,7 @@ class AZTrackerBase():
         subtitle_ids = set()
 
         if meta.get('is_disc', False):
-            if not meta.get('subtitle_languages') or not meta.get('audio_languages'):
+            if not meta.get('language_checked', False):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
 
             found_subs_strings = meta.get('subtitle_languages', [])

@@ -151,7 +151,17 @@ class COMMON():
                     await descfile.write(desc_header + '\n')
                 else:
                     await descfile.write(desc_header)
-            await process_desc_language(meta, descfile, tracker)
+
+            if not meta.get('language_checked', False):
+                await process_desc_language(meta, descfile, tracker)
+            if meta['audio_languages'] and meta['write_audio_languages']:
+                await descfile.write(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]\n")
+
+            if meta['subtitle_languages'] and meta['write_subtitle_languages']:
+                await descfile.write(f"[code]Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]\n")
+            if meta['subtitle_languages'] and meta['write_hc_languages']:
+                await descfile.write(f"[code]Hardcoded Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]\n")
+
             add_logo_enabled = self.config["DEFAULT"].get("add_logo", False)
             if add_logo_enabled and 'logo' in meta:
                 logo = meta['logo']
