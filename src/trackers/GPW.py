@@ -189,19 +189,20 @@ class GPW():
 
         base_desc = ''
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(base_desc_path):
+        if os.path.exists(base_desc_path) and os.path.getsize(base_desc_path) > 0:
             with open(base_desc_path, 'r', encoding='utf-8') as file:
-                base_desc = file.read()
+                base_desc = file.read().strip()
 
-            console.print('\n[green]Found existing description:[/green]\n')
-            print(base_desc)
-            user_input = input('Do you want to use this description? (y/n): ')
+            if base_desc:
+                print('\nFound existing description:\n')
+                print(base_desc)
+                user_input = input('Do you want to use this description? (y/n): ')
 
-            if user_input.lower() == 'y':
-                description.append(base_desc)
-                console.print('Using existing description.')
-            else:
-                console.print('Ignoring existing description.')
+                if user_input.lower() == 'y':
+                    description.append(base_desc)
+                    print('Using existing description.')
+                else:
+                    print('Ignoring existing description.')
 
         # Screenshots
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
