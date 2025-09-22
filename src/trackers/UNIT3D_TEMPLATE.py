@@ -4,15 +4,9 @@ from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
-class UNIT3D_TEMPLATE(UNIT3D):
-    ###############################################################
-    ########                    EDIT ME                    ######## noqa E266
-    ###############################################################
-
-    # ALSO EDIT CLASS NAME ABOVE AS ABBREVIATED TRACKER NAME
-
+class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER NAME
     def __init__(self, config):
-        super().__init__(config, tracker_name='UNIT3D_TEMPLATE')  # EDIT ME AS ABBREVIATED TRACKER NAME
+        super().__init__(config, tracker_name='UNIT3D_TEMPLATE')  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER NAME
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'Abbreviated Tracker Name'
@@ -20,7 +14,7 @@ class UNIT3D_TEMPLATE(UNIT3D):
         self.base_url = 'https://domain.tld'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
-        self.requests_url = f'{self.base_url}/api/requests/filter'
+        self.requests_url = f'{self.base_url}/api/requests/filter'  # If the site supports requests via API, otherwise remove this line
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]

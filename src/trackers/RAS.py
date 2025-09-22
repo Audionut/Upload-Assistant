@@ -3,6 +3,7 @@ import aiofiles
 from data.config import config
 from src.console import console
 from src.languages import process_desc_language
+from src.tmdb import get_logo
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -35,7 +36,6 @@ class RAS(UNIT3D):
 
     async def get_description(self, meta):
         if meta.get('logo', "") == "":
-            from src.tmdb import get_logo
             TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
             tmdb_id = meta.get('tmdb')

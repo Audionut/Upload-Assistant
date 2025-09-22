@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import re
+from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -47,6 +48,9 @@ class SHRI(UNIT3D):
         tag_lower = meta['tag'].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
         if meta.get('audio_languages'):
             audio_languages = []
             for lang in meta['audio_languages']:
@@ -54,22 +58,6 @@ class SHRI(UNIT3D):
                 if lang_up not in audio_languages:
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
-
-        if not audio_lang_str:
-            try:
-                media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    media_info_text = f.read()
-
-                audio_section = re.findall(r'Audio[\s\S]+?Language\s+:\s+(\w+)', media_info_text)
-                audio_languages = []
-                for lang in audio_section:
-                    lang_up = lang.upper()
-                    if lang_up not in audio_languages:
-                        audio_languages.append(lang_up)
-                audio_lang_str = " - ".join(audio_languages) if audio_languages else ""
-            except (FileNotFoundError, KeyError):
-                pass
 
         if meta.get('dual_audio'):
             shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)

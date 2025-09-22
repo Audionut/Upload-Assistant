@@ -25,10 +25,12 @@ class RF(UNIT3D):
 
         disallowed_keywords = {'XXX', 'Erotic', 'softcore'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            console.print('[bold red]Erotic not allowed at RF.')
+            if not meta['unattended']:
+                console.print('[bold red]Erotic not allowed at RF.')
             should_continue = False
         if meta.get('category') == "TV":
-            console.print('[bold red]RF only ALLOWS Movies.')
+            if not meta['unattended']:
+                console.print('[bold red]RF only ALLOWS Movies.')
             should_continue = False
 
         return should_continue
