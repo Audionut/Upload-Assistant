@@ -48,10 +48,6 @@ class OTW(UNIT3D):
             if not meta['unattended']:
                 console.print('[bold red]Adult animation not allowed at OTW.')
             should_continue = False
-        if meta['sd'] and 'BluRay' in meta['source']:
-            if not meta['unattended']:
-                console.print("[bold red]SD content from HD source not allowed")
-            should_continue = False
 
         return should_continue
 
@@ -61,6 +57,8 @@ class OTW(UNIT3D):
             return {'type_id': '1'}
         elif meta.get('is_disc') and meta.get('is_disc') != 'BDMV':
             return {'type_id': '7'}
+        if type == "DVDRIP":
+            return {'type_id': '8'}
         type_id = {
             'DISC': '1',
             'REMUX': '2',
