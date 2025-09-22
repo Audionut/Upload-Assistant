@@ -10,15 +10,15 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 
 
-class UNIT3D():
+class UNIT3D:
     def __init__(self, config, tracker_name):
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-        self.announce_url = tracker_config.get('announce_url')
-        self.api_key = tracker_config.get('api_key', '').strip()
-        self.ua_name = f"Upload Assistant{self.common.get_version()}"
+        self.announce_url = tracker_config.get('announce_url', '')
+        self.api_key = tracker_config.get('api_key', '')
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
         self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
@@ -27,6 +27,11 @@ class UNIT3D():
         return should_continue
 
     async def search_existing(self, meta, disctype):
+        if not self.api_key:
+            console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]')
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         should_continue = await self.get_additional_checks(meta)
         if not should_continue:
             meta['skipping'] = f'{self.tracker}'

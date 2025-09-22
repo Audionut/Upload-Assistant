@@ -1412,7 +1412,7 @@ class COMMON():
                 content = f.read()
             match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
             if match:
-                return f' {match.group(1)}'
+                return match.group(1)
         except OSError as e:
             print(f"Error reading version file: {e}")
             return ''
