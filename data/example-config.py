@@ -736,9 +736,6 @@ config = {
             "passkey": "",
             # If you are not using the API upload and will be uploading anonymously, make sure to enable "Anonymous Gallery Uploads" in your profile settings, otherwise your username will be leaked
             "anon": False,
-            # Delay (in seconds). TL may take some time to register a torrent after upload, so this helps avoid 'unregistered torrent' errors in the client.
-            # You can increase this value if the issue persists.
-            "injection_delay": 5,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

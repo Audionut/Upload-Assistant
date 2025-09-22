@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # import discord
-import asyncio
 import httpx
 import os
 import re
@@ -348,23 +347,7 @@ class TL():
                     meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
-                    url = f'{self.base_url}/torrents/upload/apidownload'
-                    params = {
-                        'announcekey': self.passkey,
-                        'torrentID': response.text
-                    }
-                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id, params=params, downurl=url)
-
-                    delay = self.config['TRACKERS'][self.tracker].get('injection_delay', 1)
-                    try:
-                        delay = float(delay)
-                        if delay < 0:
-                            raise ValueError
-                    except (ValueError, TypeError):
-                        delay = 1
-                    if delay > 5:
-                        console.print(f'TL: Waiting {delay} second(s) before adding the torrent to the client...')
-                    await asyncio.sleep(delay)
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
 
             else:
                 console.print(data)
