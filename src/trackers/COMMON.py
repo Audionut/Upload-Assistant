@@ -10,6 +10,7 @@ import httpx
 import asyncio
 from pymediainfo import MediaInfo
 import secrets
+from jinja2 import Environment, FileSystemLoader
 from src.bbcode import BBCODE
 from src.console import console
 from src.uploadscreens import upload_screens
@@ -1376,3 +1377,16 @@ class COMMON():
 
             bbcode_output += "\n"
             return bbcode_output
+
+    async def load_description_template(self, tracker, meta):
+        try:
+            template = self.config['TRACKERS'][tracker].get('description_template', '')
+            template_dir = os.path.join(meta['base_dir'], 'data', 'templates', 'description')
+            env = Environment(
+                loader=FileSystemLoader(template_dir)
+            )
+            template = env.get_template(template)
+            return template.render(meta)
+        except Exception as e:
+            console.print(f"[bold red]{tracker}: Error loading description template: {e}[/bold red]")
+            return ''

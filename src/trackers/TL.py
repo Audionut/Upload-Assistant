@@ -9,7 +9,7 @@ from src.console import console
 from pymediainfo import MediaInfo
 
 
-class TL():
+class TL:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -100,47 +100,54 @@ class TL():
                     tech_info = f.read()
 
         if tech_info:
-            description_parts.append(tech_info.replace('\r', ''))
+            tech_info = tech_info.replace('\r', '')
+            meta['custom_mediainfo'] = tech_info
+            description_parts.append(tech_info)
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+        description_template = self.config['TRACKERS'][self.tracker].get('description_template', '')
+        if description_template:
+            description = await self.common.load_description_template(self.tracker, meta)
 
-        if self.api_upload:
-            images = meta.get('image_list', [])
+        else:
+            if os.path.exists(base_desc_path):
+                with open(base_desc_path, 'r', encoding='utf-8') as f:
+                    manual_desc = f.read()
+                description_parts.append(manual_desc)
 
-            screenshots_block = "<center>"
-            for i, image in enumerate(images, start=1):
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a> """
-                if i % 2 == 0:
-                    screenshots_block += "<br>"
-            screenshots_block += "</center>"
+            if self.api_upload:
+                images = meta.get('image_list', [])
 
-            description_parts.append(screenshots_block)
+                screenshots_block = "<center>"
+                for i, image in enumerate(images, start=1):
+                    img_url = image['img_url']
+                    web_url = image['web_url']
+                    screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a> """
+                    if i % 2 == 0:
+                        screenshots_block += "<br>"
+                screenshots_block += "</center>"
 
-        if self.signature:
-            description_parts.append(self.signature)
+                description_parts.append(screenshots_block)
 
-        final_description = "\n\n".join(filter(None, description_parts))
-        from src.bbcode import BBCODE
-        bbcode = BBCODE()
-        desc = final_description
-        desc = desc.replace("[center]", "<center>").replace("[/center]", "</center>")
-        desc = re.sub(r'\[spoiler=.*?\]', '[spoiler]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[\*\]', '\n[*]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[list=.*?\]', '[list]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', desc, flags=re.IGNORECASE | re.DOTALL)
-        desc = re.sub(r'\[hr\]', '---', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[img=[\d"x]+\]', '[img]', desc, flags=re.IGNORECASE)
-        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+            if self.signature:
+                description_parts.append(self.signature)
+
+            final_description = "\n\n".join(filter(None, description_parts))
+            from src.bbcode import BBCODE
+            bbcode = BBCODE()
+            description = final_description
+            description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
+            description = re.sub(r'\[spoiler=.*?\]', '[spoiler]', description, flags=re.IGNORECASE)
+            description = re.sub(r'\[\*\]', '\n[*]', description, flags=re.IGNORECASE)
+            description = re.sub(r'\[list=.*?\]', '[list]', description, flags=re.IGNORECASE)
+            description = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', description, flags=re.IGNORECASE | re.DOTALL)
+            description = re.sub(r'\[hr\]', '---', description, flags=re.IGNORECASE)
+            description = re.sub(r'\[img=[\d"x]+\]', '[img]', description, flags=re.IGNORECASE)
+            description = bbcode.convert_comparison_to_centered(description, 1000)
 
         with open(self.final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
+            f.write(description)
 
-        return desc
+        return description
 
     def get_cat_id(self, meta):
         categories = {
