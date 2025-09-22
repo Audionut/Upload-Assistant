@@ -101,7 +101,7 @@ class TL():
                     tech_info = f.read()
 
         if tech_info:
-            description_parts.append(tech_info)
+            description_parts.append(tech_info.replace('\r', ''))
 
         if os.path.exists(base_desc_path):
             with open(base_desc_path, 'r', encoding='utf-8') as f:
@@ -111,14 +111,14 @@ class TL():
         if self.api_upload:
             images = meta.get('image_list', [])
 
-            screenshots_block = "<center>\n"
+            screenshots_block = "<center>"
             for i, image in enumerate(images, start=1):
                 img_url = image['img_url']
                 web_url = image['web_url']
-                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}"></a> """
+                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a> """
                 if i % 2 == 0:
-                    screenshots_block += "<br>\n"
-            screenshots_block += "\n</center>"
+                    screenshots_block += "<br>"
+            screenshots_block += "</center>"
 
             description_parts.append(screenshots_block)
 
