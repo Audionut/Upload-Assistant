@@ -58,7 +58,7 @@ class LT(UNIT3D):
                                                       'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
                                                       'es-py', 'es-pe', 'es-pr', 'es-uy'}
                 and "commentary" not in str(audio.get('Title', '')).lower()
-                ]
+            ]
             if len(audios) > 0:  # If there is at least 1 audio spanish
                 lt_name = lt_name
             # if not audio Spanish exists, add "[SUBS]"

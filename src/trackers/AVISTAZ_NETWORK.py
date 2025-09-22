@@ -836,7 +836,7 @@ class AZTrackerBase():
             'media_info': await self.get_file_info(meta),
             'tags[]': await self.get_tags(meta),
             'screenshots[]': [''],
-            }
+        }
 
         # TV
         if meta.get('category') == 'TV':
@@ -844,7 +844,7 @@ class AZTrackerBase():
                 'tv_collection': '1' if meta.get('tv_pack') == 0 else '2',
                 'tv_season': meta.get('season_int', ''),
                 'tv_episode': meta.get('episode_int', ''),
-                })
+            })
 
         anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:

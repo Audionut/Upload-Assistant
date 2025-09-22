@@ -15,6 +15,7 @@ class NBL():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'NBL'

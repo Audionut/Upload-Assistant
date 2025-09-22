@@ -13,6 +13,7 @@ class ShortHelpFormatter(argparse.HelpFormatter):
     Custom formatter for short help (-h)
     Only displays essential options.
     """
+
     def __init__(self, prog):
         super().__init__(prog, max_help_position=40, width=80)
 
@@ -48,6 +49,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
     """
     Custom ArgumentParser to handle short (-h) and long (--help) help messages.
     """
+
     def print_help(self, file=None):
         """
         Show short help for `-h` and full help for `--help`
@@ -65,6 +67,7 @@ class Args():
     """
     Parse Args
     """
+
     def __init__(self, config):
         self.config = config
         pass

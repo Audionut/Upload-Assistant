@@ -1602,11 +1602,11 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
 
     if meta.get('debug', False):
         console.print(
-                    '[green]Requesting localized data from TMDB.\n'
-                    f"Type: '{data_type}'.\n"
-                    f"Language: '{language}'\n"
-                    f"Append to response: '{append_to_response}'\n"
-                    f"Endpoint: '{endpoint}'[/green]\n"
+            '[green]Requesting localized data from TMDB.\n'
+            f"Type: '{data_type}'.\n"
+            f"Language: '{language}'\n"
+            f"Append to response: '{append_to_response}'\n"
+            f"Endpoint: '{endpoint}'[/green]\n"
         )
 
     save_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}/"

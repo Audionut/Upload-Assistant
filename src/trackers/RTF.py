@@ -19,6 +19,7 @@ class RTF():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'RTF'

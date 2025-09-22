@@ -21,6 +21,7 @@ class BHD():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'BHD'

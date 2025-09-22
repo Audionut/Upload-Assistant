@@ -1092,7 +1092,7 @@ class BJS(COMMON):
             'traileryoutube': await self.get_trailer(meta),
             'type': self.get_type(meta),
             'year': f"{meta['year']}-{meta['imdb_info']['end_year']}" if meta.get('imdb_info').get('end_year') else meta['year'],
-            })
+        })
 
         # These fields are common in movies and TV shows, even if it's anime
         if category == 'MOVIE':
