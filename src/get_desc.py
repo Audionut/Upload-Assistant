@@ -29,7 +29,7 @@ async def gen_desc(meta):
                         if not content_written:
                             description.write
                         if len(template_desc) > 0:
-                            description.write(template_desc + "\n")
+                            description.write(cleaned_content + "\n")
                             meta['description_template_content'] = cleaned_content
                         content_written = True
             except FileNotFoundError:

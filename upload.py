@@ -655,6 +655,7 @@ async def do_the_thing(base_dir):
         else:
             break
 
+    meta['ua_name'] = 'Upload Assistant'
     meta['current_version'] = await update_notification(base_dir)
 
     cleanup_only = any(arg in ('--cleanup', '-cleanup') for arg in sys.argv) and len(sys.argv) <= 2

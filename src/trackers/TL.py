@@ -6,7 +6,6 @@ import re
 import platform
 from src.trackers.COMMON import COMMON
 from src.console import console
-from pymediainfo import MediaInfo
 
 
 class TL:
@@ -22,8 +21,9 @@ class TL:
         self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>"""
         self.banned_groups = [""]
         self.session = httpx.AsyncClient(timeout=60.0)
-        self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload', False)
-        self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
+        self.tracker_config = self.config['TRACKERS'][self.tracker]
+        self.api_upload = self.tracker_config.get('api_upload', False)
+        self.passkey = self.tracker_config.get('passkey')
         self.announce_list = [
             f'https://tracker.torrentleech.org/a/{self.passkey}/announce',
             f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
@@ -67,85 +67,42 @@ class TL:
             return False
 
     async def generate_description(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        self.final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-
         description_parts = []
 
-        # MediaInfo/BDInfo
-        tech_info = ""
-        if meta.get('is_disc') != 'BDMV':
-            video_file = meta['filelist'][0]
-            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
-            if os.path.exists(mi_template):
-                try:
-                    media_info = MediaInfo.parse(video_file, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
-                    tech_info = str(media_info)
-                except Exception:
-                    console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
-                    mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                    if os.path.exists(mi_file_path):
-                        with open(mi_file_path, 'r', encoding='utf-8') as f:
-                            tech_info = f.read()
-            else:
-                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
-                mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                if os.path.exists(mi_file_path):
-                    with open(mi_file_path, 'r', encoding='utf-8') as f:
-                        tech_info = f.read()
-        else:
-            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, 'r', encoding='utf-8') as f:
-                    tech_info = f.read()
+        file_info = ''
+        file_info = await self.common.mediainfo_template(self.tracker, meta)
 
-        if tech_info:
-            tech_info = tech_info.replace('\r', '')
-            meta['custom_mediainfo'] = tech_info
-            description_parts.append(tech_info)
+        if meta.get('is_disc') == 'BDMV':
+            discs = meta['discs']
+            if isinstance(discs, list):
+                file_info = discs[0].get('summary', '') if discs else ''
 
-        description_template = self.config['TRACKERS'][self.tracker].get('description_template', '')
-        if description_template:
-            description = await self.common.load_description_template(self.tracker, meta)
+        if file_info:
+            description_parts.append(file_info)
 
-        else:
-            if os.path.exists(base_desc_path):
-                with open(base_desc_path, 'r', encoding='utf-8') as f:
-                    manual_desc = f.read()
-                description_parts.append(manual_desc)
+        meta['mediainfo_or_bdinfo'] = file_info
+        meta['img_rehost'] = self.tracker_config.get('img_rehost', True)
 
-            if self.api_upload:
-                images = meta.get('image_list', [])
-
-                screenshots_block = "<center>"
-                for i, image in enumerate(images, start=1):
-                    img_url = image['img_url']
-                    web_url = image['web_url']
-                    screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a> """
-                    if i % 2 == 0:
-                        screenshots_block += "<br>"
-                screenshots_block += "</center>"
-
-                description_parts.append(screenshots_block)
-
-            if self.signature:
-                description_parts.append(self.signature)
-
-            final_description = "\n\n".join(filter(None, description_parts))
-            from src.bbcode import BBCODE
-            bbcode = BBCODE()
-            description = final_description
-            description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
-            description = re.sub(r'\[spoiler=.*?\]', '[spoiler]', description, flags=re.IGNORECASE)
-            description = re.sub(r'\[\*\]', '\n[*]', description, flags=re.IGNORECASE)
-            description = re.sub(r'\[list=.*?\]', '[list]', description, flags=re.IGNORECASE)
-            description = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', description, flags=re.IGNORECASE | re.DOTALL)
-            description = re.sub(r'\[hr\]', '---', description, flags=re.IGNORECASE)
-            description = re.sub(r'\[img=[\d"x]+\]', '[img]', description, flags=re.IGNORECASE)
-            description = bbcode.convert_comparison_to_centered(description, 1000)
-
-        with open(self.final_desc_path, 'w', encoding='utf-8') as f:
+        template_name = self.tracker_config.get('description_template', 'TL-default.txt')
+        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = await self.format_description(description)
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as f:
             f.write(description)
+
+        return description
+
+    async def format_description(self, description):
+        from src.bbcode import BBCODE
+        bbcode = BBCODE()
+        description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
+        description = re.sub(r'\[\*\]', '\n[*]', description, flags=re.IGNORECASE)
+        description = re.sub(r'\[list=.*?\]', '[list]', description, flags=re.IGNORECASE)
+        description = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', description, flags=re.IGNORECASE | re.DOTALL)
+        description = re.sub(r'\[hr\]', '---', description, flags=re.IGNORECASE)
+        description = re.sub(r'\[img=[\d"x]+\]', '[img]', description, flags=re.IGNORECASE)
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = bbcode.remove_spoiler(description)
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
         return description
 
@@ -335,7 +292,7 @@ class TL:
                         'tvmazetype': meta.get('tv_pack'),
                     })
 
-            anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+            anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
             if anon:
                 data.update({'is_anonymous_upload': 'on'})
 
@@ -402,7 +359,7 @@ class TL:
                 'screenshots[]': '' if meta.get('anon', False) else self.get_screens(meta),  # It is not possible to upload screenshots anonymously
             }
 
-            anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+            anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
             if anon:
                 data.update({'is_anonymous_upload': 'on'})
 

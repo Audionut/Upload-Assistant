@@ -14,6 +14,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        gap: 12px;
     }
 
     .background-overlay-ua {
@@ -27,7 +28,7 @@
 
     .info-block-ua {
         z-index: 2;
-        margin: 0 auto 20px auto;
+        margin: 0 auto;
         width: fit-content;
         text-align: left;
     }
@@ -87,7 +88,6 @@
         display: flex;
         justify-content: center;
         width: 100%;
-        margin-bottom: 20px;
         z-index: 2;
     }
 
@@ -98,24 +98,59 @@
 </style>
 <div class="info-container-ua">
     <div class="background-overlay-ua"></div>
+
+    {% if logo %}
     <div class="logo-container-ua">
-        <img src="{{ logo }}">
+        <img src="{{ logo }}" style="max-width: 600px;">
     </div>
+    {% endif %}
+
+    {% if mediainfo_or_bdinfo %}
     <div class="info-block-ua">
         <div class="code-info-ua">
             <pre class="code-content">
-{{ custom_mediainfo }}
-</pre>
+{{ mediainfo_or_bdinfo }}
+            </pre>
         </div>
     </div>
+    {% endif %}
 
+    {% if description_nfo_content %}
+    <div class="info-block-ua">
+        <div class="code-info-ua">
+            <pre class="code-content">
+{{ description_nfo_content }}
+            </pre>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if description_file_content or description_template_content or description_link_content %}
+    <div class="info-block-ua">
+        <div class="code-info-ua">
+            <pre class="code-content">
+{% if description_file_content %}
+{{ description_file_content }}
+{% elif description_template_content %}
+{{ description_template_content }}
+{% elif description_link_content %}
+{{ description_link_content }}
+{% endif %}
+            </pre>
+        </div>
+    </div>
+    {% endif %}
     <div class="gallery-ua">
-        {% for image in image_list %}<a href="{{ image.web_url }}"><img src="{{ image.img_url }}"
-                style="max-width: 350px;"></a>{% if loop.index % 2 == 0 %}{% endif %}{% endfor %}
+        {% for image in image_list %}
+        <a href="{{ image.web_url }}"><img src="{{ image.img_url }}" style="max-width: 350px;"></a>
+        {% if loop.index % 2 == 0 %}{% endif %}
+        {% endfor %}
     </div>
-
+    {% if ua_name or current_version %}
     <div class="footer-ua">
-        <a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant {{ current_version
-            }}</a>
+        <a href="https://github.com/Audionut/Upload-Assistant">
+            Created by {{ ua_name }} {{ current_version }}
+        </a>
     </div>
+    {% endif %}
 </div>

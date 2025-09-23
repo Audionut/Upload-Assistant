@@ -1,0 +1,28 @@
+{% if add_logo and logo and logo_size %}
+<center><img src="{{ logo }}" style="max-width: {{ logo_size }}px;"></center>
+
+{% endif %}
+{% if mediainfo_or_bdinfo %}
+
+{{ mediainfo_or_bdinfo }}
+{% endif %}
+{% if description_nfo_content %}
+
+<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{{ description_nfo_content }}</div></div>
+{% endif %}
+{% if description_file_content or description_template_content or description_link_content %}
+
+{% if description_file_content %}{{ description_file_content }}
+{% elif description_template_content %}{{ description_template_content }}
+{% elif description_link_content %}{{ description_link_content }}
+{% endif %}{% endif %}
+
+{% if not img_rehost %}
+
+<center>{% for image in image_list %}<a href='{{ image.web_url }}'><img src='{{ image.img_url }}' style='max-width: 350px;'></a>  {% if loop.index % 2 == 0 %}<br><br>{% endif %}{% endfor %}</center>
+{% endif %}
+
+{% if ua_name %}
+
+<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {{ ua_name }} {% if current_version %}{{ current_version }}{% endif %}</a></center>
+{% endif %}
