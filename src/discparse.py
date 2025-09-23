@@ -25,6 +25,7 @@ class DiscParse():
     """
     Get and parse bdinfo
     """
+
     async def get_bdinfo(self, meta, discs, folder_id, base_dir, meta_discs):
         use_largest = int(self.config['DEFAULT'].get('use_largest_playlist', False))
         save_dir = f"{base_dir}/tmp/{folder_id}"
@@ -457,6 +458,7 @@ class DiscParse():
     """
     Parse VIDEO_TS and get mediainfos
     """
+
     async def get_dvdinfo(self, discs, base_dir=None):
         for each in discs:
             path = each.get('path')

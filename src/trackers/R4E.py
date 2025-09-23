@@ -1,129 +1,47 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
-import platform
-import os
-import glob
 import httpx
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.trackers.COMMON import COMMON
+from src.trackers.UNIT3D import UNIT3D
 
 
-class R4E():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
+class R4E(UNIT3D):
     def __init__(self, config):
+        super().__init__(config, tracker_name='R4E')
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'R4E'
         self.source_flag = 'R4E'
-        # self.signature = f"\n[center][url=https://github.com/L4GSP1KE/Upload-Assistant]Created by L4G's Upload Assistant[/url][/center]"
-        self.signature = None
-        self.banned_groups = [""]
+        self.base_url = 'https://racing4everyone.eu'
+        self.id_url = f'{self.base_url}/api/torrents/'
+        self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.torrent_url = f'{self.base_url}/torrents/'
+        self.banned_groups = []
         pass
 
-    async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta['category'], meta['tmdb'], meta)
-        type_id = await self.get_type_id(meta['resolution'])
-        await common.unit3d_edit_desc(meta, self.tracker, self.signature)
-        name = await self.edit_name(meta)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
-        if meta['bdinfo'] is not None:
-            mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
-        else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-            bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[R4E]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[R4E].torrent", 'rb')
-        files = {'torrent': open_torrent}
-        base_dir = meta['base_dir']
-        uuid = meta['uuid']
-        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = glob.glob(specified_dir_path)
-        nfo_file = None
-        if nfo_files:
-            nfo_file = open(nfo_files[0], 'rb')
-        if nfo_file:
-            files['nfo'] = ("nfo_file.nfo", nfo_file, "text/plain")
-        data = {
-            'name': name,
-            'description': desc,
-            'mediainfo': mi_dump,
-            'bdinfo': bd_dump,
-            'category_id': cat_id,
-            'type_id': type_id,
-            'tmdb': meta['tmdb'],
-            'imdb': meta['imdb'],
-            'tvdb': meta['tvdb_id'],
-            'mal': meta['mal_id'],
-            'igdb': 0,
-            'anonymous': anon,
-            'stream': meta['stream'],
-            'sd': meta['sd'],
-            'keywords': meta['keywords'],
-            # 'personal_release' : int(meta.get('personalrelease', False)), NOT IMPLEMENTED on R4E
-            # 'internal' : 0,
-            # 'featured' : 0,
-            # 'free' : 0,
-            # 'double_up' : 0,
-            # 'sticky' : 0,
-        }
-        headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
-        }
-        url = f"https://racing4everyone.eu/api/torrents/upload?api_token={self.config['TRACKERS']['R4E']['api_key'].strip()}"
-        if meta.get('category') == "TV":
-            data['season_number'] = meta.get('season_int', '0')
-            data['episode_number'] = meta.get('episode_int', '0')
-        if meta['debug'] is False:
-            response = requests.post(url=url, files=files, data=data, headers=headers)
-            try:
-
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
-        else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
-
-    async def edit_name(self, meta):
-        name = meta['name']
-        return name
-
-    async def get_cat_id(self, category_name, tmdb_id, meta):
+    async def get_category_id(self, meta):
         # Use stored genre IDs if available
         if meta and meta.get('genre_ids'):
             genre_ids = meta['genre_ids'].split(',')
             is_docu = '99' in genre_ids
 
-            if category_name == 'MOVIE':
+            if meta['category'] == 'MOVIE':
                 category_id = '70'  # Motorsports Movie
                 if is_docu:
                     category_id = '66'  # Documentary
-            elif category_name == 'TV':
+            elif meta['category'] == 'TV':
                 category_id = '79'  # TV Series
                 if is_docu:
                     category_id = '2'  # TV Documentary
             else:
                 category_id = '24'
 
-        return category_id
+        return {'category_id': category_id}
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             '8640p': '2160p',
             '4320p': '2160p',
@@ -136,15 +54,29 @@ class R4E():
             '576i': 'SD',
             '480p': 'SD',
             '480i': 'SD'
-        }.get(type, '10')
-        return type_id
+        }.get(meta['type'], '10')
+        return {'type_id': type_id}
 
-    async def is_docu(self, genres):
-        is_docu = False
-        for each in genres:
-            if each['id'] == 99:
-                is_docu = True
-        return is_docu
+    async def get_personal_release(self, meta):
+        return {}
+
+    async def get_internal(self, meta):
+        return {}
+
+    async def get_featured(self, meta):
+        return {}
+
+    async def get_free(self, meta):
+        return {}
+
+    async def get_doubleup(self, meta):
+        return {}
+
+    async def get_sticky(self, meta):
+        return {}
+
+    async def get_resolution_id(self, meta):
+        return {}
 
     async def search_existing(self, meta, disctype):
         dupes = []
@@ -152,8 +84,8 @@ class R4E():
         params = {
             'api_token': self.config['TRACKERS']['R4E']['api_key'].strip(),
             'tmdb': meta['tmdb'],
-            'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
+            'categories[]': (await self.get_category_id(meta))['category_id'],
+            'types[]': await self.get_type_id(meta),
             'name': ""
         }
         if meta['category'] == 'TV':

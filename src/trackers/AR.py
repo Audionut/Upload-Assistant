@@ -28,7 +28,7 @@ class AR():
         self.login_url = f'{self.base_url}/login.php'
         self.upload_url = f'{self.base_url}/upload.php'
         self.search_url = f'{self.base_url}/torrents.php'
-        self.user_agent = f'UA ({platform.system()} {platform.release()})'
+        self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.signature = None
         self.banned_groups = []
 

@@ -19,7 +19,7 @@ class TL:
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Audionut's Upload Assistant</a></center>"""
+        self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>"""
         self.banned_groups = [""]
         self.session = httpx.AsyncClient(timeout=60.0)
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload', False)
@@ -29,7 +29,7 @@ class TL:
             f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
         ]
         self.session.headers.update({
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         })
 
     async def login(self, meta, force=False):

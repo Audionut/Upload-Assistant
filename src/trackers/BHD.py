@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
 from difflib import SequenceMatcher
 import os
 import platform
-import bencodepy
 import httpx
 import re
 import cli_ui
-import glob
+import aiofiles
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -23,6 +21,7 @@ class BHD():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'BHD'
@@ -30,7 +29,7 @@ class BHD():
         self.upload_url = 'https://beyond-hd.me/api/upload/'
         self.torrent_url = 'https://beyond-hd.me/details/'
         self.requests_url = f"https://beyond-hd.me/api/requests/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
         pass
 
@@ -61,29 +60,24 @@ class BHD():
         else:
             anon = 1
 
-        if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
+        mi_dump = None
+        if meta['is_disc'] == "BDMV":
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8')
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
 
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        torrent_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+            desc = await f.read()
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+
         files = {
             'mediainfo': mi_dump,
+            'file': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent'),
         }
-        open_torrent = None
-        if os.path.exists(torrent_file):
-            open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-            files['file'] = open_torrent.read()
-        base_dir = meta['base_dir']
-        uuid = meta['uuid']
-        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = glob.glob(specified_dir_path)
-        nfo_file = None
-        if nfo_files:
-            nfo_file = open(nfo_files[0], 'rb')
-        if nfo_file:
-            files['nfo_file'] = ("nfo_file.nfo", nfo_file, "text/plain")
 
         data = {
             'name': bhd_name,
@@ -121,38 +115,38 @@ class BHD():
         if len(tags) > 0:
             data['tags'] = ','.join(tags)
         headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
 
         url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()
         details_link = {}
         if meta['debug'] is False:
-            response = requests.post(url=url, files=files, data=data, headers=headers)
             try:
-                response = response.json()
-                if int(response['status_code']) == 0:
-                    console.print(f"[red]{response['status_message']}")
-                    if response['status_message'].startswith('Invalid imdb_id'):
-                        console.print('[yellow]RETRYING UPLOAD')
-                        data['imdb_id'] = 1
-                        response = requests.post(url=url, files=files, data=data, headers=headers)
-                        response = response.json()
-                    elif response['status_message'].startswith('Invalid name value'):
-                        console.print(f"[bold yellow]Submitted Name: {bhd_name}")
+                async with httpx.AsyncClient(timeout=60) as client:
+                    response = await client.post(url=url, files=files, data=data, headers=headers)
+                    response_json = response.json()
+                    if int(response_json['status_code']) == 0:
+                        console.print(f"[red]{response_json['status_message']}")
+                        if response_json['status_message'].startswith('Invalid imdb_id'):
+                            console.print('[yellow]RETRYING UPLOAD')
+                            data['imdb_id'] = 1
+                            response = await client.post(url=url, files=files, data=data, headers=headers)
+                            response_json = response.json()
+                        elif response_json['status_message'].startswith('Invalid name value'):
+                            console.print(f"[bold yellow]Submitted Name: {bhd_name}")
 
-                if 'status_message' in response:
-                    match = re.search(r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.", response['status_message'])
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                        details_link = f"https://beyond-hd.me/details/{torrent_id}"
-                    else:
-                        console.print("[yellow]No valid details link found in status_message.")
+                    if 'status_message' in response_json:
+                        match = re.search(r"https://beyond-hd\.me/torrent/download/.*\.(\d+)\.", response_json['status_message'])
+                        if match:
+                            torrent_id = match.group(1)
+                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                            details_link = f"https://beyond-hd.me/details/{torrent_id}"
+                        else:
+                            console.print("[yellow]No valid details link found in status_message.")
 
-                meta['tracker_status'][self.tracker]['status_message'] = response
+                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception as e:
-                console.print("It may have uploaded, go check")
-                console.print(f"Error: {e}")
+                meta['tracker_status'][self.tracker]['status_message'] = f"Error: {e}"
                 return
         else:
             console.print("[cyan]Request Data:")
@@ -161,19 +155,9 @@ class BHD():
 
         if details_link:
             try:
-                open_torrent.seek(0)
-                torrent_data = open_torrent.read()
-                torrent = bencodepy.decode(torrent_data)
-                torrent[b'comment'] = details_link.encode('utf-8')
-                with open(torrent_file, 'wb') as updated_torrent_file:
-                    updated_torrent_file.write(bencodepy.encode(torrent))
-
-                console.print(f"Torrent file updated with comment: {details_link}")
+                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), details_link)
             except Exception as e:
                 console.print(f"Error while editing the torrent file: {e}")
-
-        if open_torrent is not None:
-            open_torrent.close()
 
     async def get_cat_id(self, category_name):
         category_id = {
@@ -237,35 +221,37 @@ class BHD():
         return type_id
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        base = base.replace("[user]", "").replace("[/user]", "")
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
+        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+        async with aiofiles.open(base_path, 'r', encoding='utf-8') as f:
+            base = await f.read()
+        async with aiofiles.open(desc_path, 'w', encoding='utf-8') as desc:
             if meta.get('discs', []) != []:
                 discs = meta['discs']
                 if discs[0]['type'] == "DVD":
-                    desc.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]")
-                    desc.write("\n")
+                    await desc.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]")
+                    await desc.write("\n")
                 if len(discs) >= 2:
                     for each in discs[1:]:
                         if each['type'] == "BDMV":
-                            desc.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]")
-                            desc.write("\n")
+                            await desc.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]")
+                            await desc.write("\n")
                         elif each['type'] == "DVD":
-                            desc.write(f"{each['name']}:\n")
-                            desc.write(f"[spoiler={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/spoiler]")
-                            desc.write("\n")
+                            await desc.write(f"{each['name']}:\n")
+                            await desc.write(f"[spoiler={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/spoiler]")
+                            await desc.write("\n")
                         elif each['type'] == "HDDVD":
-                            desc.write(f"{each['name']}:\n")
-                            desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
-                            desc.write("\n")
-            desc.write(base.replace("[img]", "[img width=300]"))
+                            await desc.write(f"{each['name']}:\n")
+                            await desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
+                            await desc.write("\n")
+            await desc.write(base.replace("[img]", "[img width=300]"))
             try:
                 # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
                 screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
             except Exception:
                 screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
-                desc.write("[center]")
+                await desc.write("[center]")
                 comparison_groups = meta.get('comparison_groups', {})
                 sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(x))
 
@@ -276,7 +262,7 @@ class BHD():
                     comp_sources.append(group_name)
 
                 sources_string = ", ".join(comp_sources)
-                desc.write(f"[comparison={sources_string}]\n")
+                await desc.write(f"[comparison={sources_string}]\n")
 
                 images_per_group = min([
                     len(comparison_groups[idx].get('urls', []))
@@ -290,37 +276,38 @@ class BHD():
                         if img_idx < len(urls):
                             img_url = urls[img_idx].get('raw_url', '')
                             if img_url:
-                                desc.write(f"{img_url}\n")
+                                await desc.write(f"{img_url}\n")
 
-                desc.write("[/comparison][/center]\n\n")
-
+                await desc.write("[/comparison][/center]\n\n")
             try:
                 if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
                     tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                    desc.write(tonemapped_header)
-                    desc.write("\n\n")
+                    await desc.write(tonemapped_header)
+                    await desc.write("\n\n")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-
             if f'{self.tracker}_images_key' in meta:
                 images = meta[f'{self.tracker}_images_key']
             else:
                 images = meta['image_list']
             if len(images) > 0:
-                desc.write("[align=center]")
+                await desc.write("[align=center]")
                 for each in range(len(images[:int(meta['screens'])])):
                     web_url = images[each]['web_url']
                     img_url = images[each]['img_url']
                     if (each == len(images) - 1):
-                        desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
+                        await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
                     elif (each + 1) % screensPerRow == 0:
-                        desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
-                        desc.write("\n")
+                        await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
+                        await desc.write("\n")
+                    elif (each + 1) % 2 == 0:
+                        await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
+                        await desc.write("\n")
                     else:
-                        desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url] ")
-                desc.write("[/align]")
-            desc.write(self.signature)
-            desc.close()
+                        await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url] ")
+                await desc.write("[/align]")
+            await desc.write(self.signature)
+            await desc.close()
         return
 
     async def search_existing(self, meta, disctype):
@@ -361,12 +348,11 @@ class BHD():
             type = None
         else:
             type = await self.get_type(meta)
-
         data = {
             'action': 'search',
             'tmdb_id': f"{tmdbID}/{meta['tmdb']}",
-            'categories': category,
-            'types': type
+            'types': type,
+            'categories': category
         }
         if meta['sd'] == 1:
             data['categories'] = None

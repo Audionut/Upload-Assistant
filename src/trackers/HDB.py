@@ -258,8 +258,8 @@ class HDB():
                     exclude_globs=exclude,  # Ensure this is always a list
                     include_globs=include,  # Ensure this is always a list
                     creation_date=datetime.now(),
-                    comment="Created by Audionut's Upload Assistant",
-                    created_by="Audionut's Upload Assistant"
+                    comment="Created by Upload Assistant",
+                    created_by="Upload Assistant"
                 )
 
                 # Explicitly set the piece size and update metainfo

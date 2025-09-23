@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-import requests
 import base64
 import re
 import datetime
 import httpx
+import aiofiles
 
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -19,6 +19,7 @@ class RTF():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'RTF'
@@ -36,9 +37,11 @@ class RTF():
         await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                bd_dump = await f.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
             bd_dump = None
 
         screenshots = []
@@ -63,8 +66,8 @@ class RTF():
             'isAnonymous': self.config['TRACKERS'][self.tracker]["anon"],
         }
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as binary_file:
-            binary_file_data = binary_file.read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as binary_file:
+            binary_file_data = await binary_file.read()
             base64_encoded_data = base64.b64encode(binary_file_data)
             base64_message = base64_encoded_data.decode('utf-8')
             json_data['file'] = base64_message
@@ -76,18 +79,30 @@ class RTF():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, json=json_data, headers=headers)
             try:
-                response_json = response.json()
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.post(url=self.upload_url, json=json_data, headers=headers)
+                    try:
+                        response_json = response.json()
+                        meta['tracker_status'][self.tracker]['status_message'] = response.json()
 
-                t_id = response_json['torrent']['id']
-                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://retroflix.club/browse/t/" + str(t_id))
+                        t_id = response_json['torrent']['id']
+                        meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+                        await common.add_tracker_torrent(meta, self.tracker, self.source_flag,
+                                                         self.config['TRACKERS'][self.tracker].get('announce_url'),
+                                                         "https://retroflix.club/browse/t/" + str(t_id))
 
+                    except Exception:
+                        console.print("It may have uploaded, go check")
+                        return
+            except httpx.TimeoutException:
+                meta['tracker_status'][self.tracker]['status_message'] = "data error: RTF request timed out while uploading."
+            except httpx.RequestError as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error: An error occurred while making the request: {e}"
             except Exception:
                 meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
                 return
+
         else:
             console.print("[cyan]Request Data:")
             console.print(json_data)
@@ -115,7 +130,7 @@ class RTF():
         params = {'includingDead': '1'}
 
         if meta['imdb_id'] != 0:
-            params['imdbId'] = meta['imdb_id'] if str(meta['imdb_id']).startswith("tt") else "tt" + str(meta['imdb_id'])
+            params['imdbId'] = str(meta['imdb_id']) if str(meta['imdb_id']).startswith("tt") else "tt" + str(meta['imdb_id'])
         else:
             params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
 
@@ -148,13 +163,21 @@ class RTF():
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
 
-        response = requests.get('https://retroflix.club/api/test', headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get('https://retroflix.club/api/test', headers=headers)
 
-        if response.status_code != 200:
-            console.print('[bold red]Your API key is incorrect SO generating a new one')
+                if response.status_code != 200:
+                    console.print('[bold red]Your API key is incorrect SO generating a new one')
+                    await self.generate_new_api(meta)
+                else:
+                    return
+        except httpx.RequestError as e:
+            console.print(f'[bold red]Error testing API: {str(e)}')
             await self.generate_new_api(meta)
-        else:
-            return
+        except Exception as e:
+            console.print(f'[bold red]Unexpected error testing API: {str(e)}')
+            await self.generate_new_api(meta)
 
     async def generate_new_api(self, meta):
         headers = {

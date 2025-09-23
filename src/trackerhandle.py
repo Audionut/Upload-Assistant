@@ -171,9 +171,21 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(traceback.format_exc())
                     return
 
-    # Process each tracker sequentially
-    for tracker in enabled_trackers:
-        await process_single_tracker(tracker)
+    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    discs = meta.get('discs', [])
+    one_disc = True
+    if discs and len(discs) == 1:
+        one_disc = True
+    elif discs and len(discs) > 1:
+        one_disc = False
+
+    if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
+        # Run all tracker tasks concurrently
+        await asyncio.gather(*(process_single_tracker(tracker) for tracker in enabled_trackers))
+    else:
+        # Process each tracker sequentially
+        for tracker in enabled_trackers:
+            await process_single_tracker(tracker)
 
     try:
         if meta.get('print_tracker_messages', False):

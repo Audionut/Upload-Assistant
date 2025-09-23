@@ -1,47 +1,48 @@
 # -*- coding: utf-8 -*-
 # import discord
-import asyncio
 import requests
-import platform
-import httpx
-import json
-
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.trackers.COMMON import COMMON
+from src.trackers.UNIT3D import UNIT3D
 
 
-class AL():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class AL(UNIT3D):
     def __init__(self, config):
+        super().__init__(config, tracker_name='AL')
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'AL'
         self.source_flag = 'al'
-        self.upload_url = 'https://animelovers.club/api/torrents/upload'
-        self.search_url = 'https://animelovers.club/api/torrents/filter'
-        self.torrent_url = 'https://animelovers.club/torrents/'
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant][color=#9400FF]AnimeLovers[/color][/url][/center]"
-        self.banned_groups = [""]
+        self.base_url = 'https://animelovers.club'
+        self.id_url = f'{self.base_url}/api/torrents/'
+        self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.torrent_url = f'{self.base_url}/torrents/'
+        self.banned_groups = []
         pass
 
-    async def get_cat_id(self, category_name, meta):
+    async def get_additional_checks(self, meta):
+        should_continue = True
+
+        if not meta["mal"]:
+            console.print("[bold red]MAL ID is missing, cannot upload to AL.[/bold red]")
+            meta["skipping"] = f'{self.tracker}'
+            return False
+
+        return should_continue
+
+    async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(category_name, '0')
+        }.get(meta['category'], '0')
 
         if 'HENTAI' in meta.get('mal_rating', "") or 'HENTAI' in str(meta.get('keywords', '')).upper():
-            category_id = 7
+            category_id = '7'
 
-        return category_id
+        return {'category_id': category_id}
 
-    async def get_type_id(self, type):
+    async def get_type_id(self, meta):
         type_id = {
             'BDMV': '1',
             'DISC': '1',
@@ -56,10 +57,12 @@ class AL():
             'BDRIP': '10',
             'COLOR': '11',
             'MONO': '12'
-        }.get(type, '1')
-        return type_id
+        }.get(meta['type'], '1')
+        return {'type_id': type_id}
 
-    async def get_res_id(self, resolution, bit_depth):
+    async def get_resolution_id(self, meta):
+        resolution = meta['resolution']
+        bit_depth = meta.get('bit_depth', '')
         resolution_to_compare = resolution
         if bit_depth == "10":
             resolution_to_compare = f"{resolution} 10bit"
@@ -80,9 +83,10 @@ class AL():
             '480p': '8',
             '480i': '9'
         }.get(resolution_to_compare, '10')
-        return resolution_id
+        return {'resolution_id': resolution_id}
 
-    async def edit_name(self, meta, mal_title=None):
+    async def get_name(self, meta):
+        mal_title = await self.get_mal_data(meta)
         category = meta['category']
         title = ''
         try:
@@ -162,9 +166,10 @@ class AL():
             name += f" {video_codec}{tag.strip()}"
 
         console.print(f"[yellow]Corrected title : [green]{name}")
-        return name
+        return {'name': name}
 
-    async def get_mal_data(self, anime_id, meta):
+    async def get_mal_data(self, meta):
+        anime_id = meta['mal']
         response = requests.get(f"https://api.jikan.moe/v4/anime/{anime_id}")
         content = response.json()
         title = content['data']['title'] if content['data']['title'] else None
@@ -288,127 +293,3 @@ class AL():
             return 'DD'
         else:
             return audio_codec_str
-
-    async def upload(self, meta, disctype):
-        title = await self.get_mal_data(meta['mal'], meta)
-        common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta['category'], meta)
-        type_id = await self.get_type_id(meta['type'])
-        resolution_id = await self.get_res_id(meta['resolution'], meta.get('bit_depth', ''))
-        await common.unit3d_edit_desc(meta, self.tracker, self.signature)
-        region_id = await common.unit3d_region_ids(meta.get('region'))
-        distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        name = await self.edit_name(meta, mal_title=title)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
-
-        if meta['bdinfo'] is not None:
-            mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
-        else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
-            bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'torrent': open_torrent}
-        data = {
-            'name': name,
-            'description': desc,
-            'mediainfo': mi_dump,
-            'bdinfo': bd_dump,
-            'category_id': cat_id,
-            'type_id': type_id,
-            'resolution_id': resolution_id,
-            'tmdb': meta['tmdb'],
-            'imdb': meta['imdb'],
-            'tvdb': meta['tvdb_id'],
-            'mal': meta['mal_id'],
-            'igdb': 0,
-            'anonymous': anon,
-            'stream': meta['stream'],
-            'sd': meta['sd'],
-            'keywords': meta['keywords'],
-            'personal_release': int(meta.get('personalrelease', False)),
-            'internal': 0,
-            'featured': 0,
-            'free': 0,
-            'doubleup': 0,
-            'sticky': 0,
-        }
-        # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
-
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
-        if meta.get('category') == "TV":
-            data['season_number'] = meta.get('season_int', '0')
-            data['episode_number'] = meta.get('episode_int', '0')
-        headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
-        }
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        }
-
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-            try:
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-                # adding torrent link to comment of torrent file
-                t_id = response.json()['data'].split(".")[1].split("/")[3]
-                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), self.torrent_url + t_id, headers=headers, params=params, downurl=response.json()['data'])
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
-        else:
-            console.print("[cyan]Request Data:")
-            json_formatted_str = json.dumps(data, indent=4)
-            console.print(json_formatted_str)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
-
-    async def search_existing(self, meta, disctype):
-        if not meta["mal"]:
-            console.print("[bold red]MAL ID is missing, cannot upload to AL.[/bold red]")
-            meta["skipping"] = "AL"
-            return
-        dupes = []
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_cat_id(meta['category'], meta),
-            'types[]': await self.get_type_id(meta['type']),
-            'resolutions[]': await self.get_res_id(meta['resolution'], meta.get('bit_depth', '')),
-            'name': ""
-        }
-        if meta['category'] == 'TV':
-            params['name'] = params['name'] + f" {meta.get('season', '')}"
-        if meta.get('edition', "") != "":
-            params['name'] = params['name'] + f" {meta['edition']}"
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url=self.search_url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    for each in data['data']:
-                        result = [each][0]['attributes']['name']
-                        dupes.append(result)
-                else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
-        except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
-        except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
-        except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
-            await asyncio.sleep(5)
-
-        return dupes
