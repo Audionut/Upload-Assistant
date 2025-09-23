@@ -9,6 +9,7 @@ import re
 import requests
 import secrets
 import sys
+from jinja2 import Environment, FileSystemLoader
 from pymediainfo import MediaInfo
 from src.bbcode import BBCODE
 from src.console import console
@@ -1452,3 +1453,16 @@ class COMMON():
             mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo
+
+    async def load_description_template(self, tracker, meta):
+        try:
+            template = self.config['TRACKERS'][tracker].get('description_template', '')
+            template_dir = os.path.join(meta['base_dir'], 'data', 'templates', 'description')
+            env = Environment(
+                loader=FileSystemLoader(template_dir)
+            )
+            template = env.get_template(template)
+            return template.render(meta)
+        except Exception as e:
+            console.print(f"[bold red]{tracker}: Error loading description template: {e}[/bold red]")
+            return ''

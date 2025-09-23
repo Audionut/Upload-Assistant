@@ -90,7 +90,7 @@ async def tag_override(meta):
                     elif key == 'personalrelease':
                         meta[key] = _is_true(value.get(key, "False"))
                     elif key == 'template':
-                        meta['desc_template'] = value.get(key)
+                        meta['description_template'] = value.get(key)
                     else:
                         meta[key] = value.get(key)
     except Exception as e:

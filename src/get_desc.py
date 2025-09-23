@@ -7,10 +7,10 @@ from src.console import console
 
 async def gen_desc(meta):
     def clean_text(text):
-        return text.replace('\r\n', '').replace('\n', '').strip()
+        return text.replace('\r\n', '\n').strip()
 
-    desclink = meta.get('desclink')
-    descfile = meta.get('descfile')
+    description_link = meta.get('description_link')
+    description_file = meta.get('description_file')
     scene_nfo = False
     bhd_nfo = False
 
@@ -18,25 +18,29 @@ async def gen_desc(meta):
         description.seek(0)
         content_written = False
 
-        if meta.get('desc_template'):
+        if meta.get('description_template'):
             from jinja2 import Template
             try:
-                with open(f"{meta['base_dir']}/data/templates/{meta['desc_template']}.txt", 'r') as f:
+                with open(f"{meta['base_dir']}/data/templates/{meta['description_template']}.txt", 'r') as f:
                     template = Template(f.read())
                     template_desc = template.render(meta)
-                    if clean_text(template_desc):
+                    cleaned_content = clean_text(template_desc)
+                    if cleaned_content:
+                        if not content_written:
+                            description.write
                         if len(template_desc) > 0:
                             description.write(template_desc + "\n")
+                            meta['description_template_content'] = template_desc
                         content_written = True
             except FileNotFoundError:
-                console.print(f"[ERROR] Template '{meta['desc_template']}' not found.")
+                console.print(f"[ERROR] Template '{meta['description_template']}' not found.")
 
         base_dir = meta['base_dir']
         uuid = meta['uuid']
         path = meta['path']
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         source_dir_path = os.path.join(path, "*.nfo")
-        if meta.get('nfo') and not content_written:
+        if meta.get('nfo'):
             if meta['debug']:
                 console.print(f"specified_dir_path: {specified_dir_path}")
                 console.print(f"sourcedir_path: {source_dir_path}")
@@ -50,7 +54,8 @@ async def gen_desc(meta):
                 nfo_files = glob.glob(source_dir_path)
             if not nfo_files:
                 console.print("NFO was set but no nfo file was found")
-                description.write("\n")
+                if not content_written:
+                    description.write("\n")
                 return meta
 
             if nfo_files:
@@ -66,35 +71,45 @@ async def gen_desc(meta):
                     with open(nfo, 'r', encoding="latin1") as nfo_file:
                         nfo_content = nfo_file.read()
 
-                if scene_nfo is True:
-                    description.write(f"[center][spoiler=Scene NFO:][code]{nfo_content}[/code][/spoiler][/center]\n")
-                elif bhd_nfo is True:
-                    description.write(f"[center][spoiler=FraMeSToR NFO:][code]{nfo_content}[/code][/spoiler][/center]\n")
-                else:
-                    description.write(f"[code]{nfo_content}[/code]\n")
-                meta['description'] = "CUSTOM"
-                content_written = True
+                if not content_written:
+                    if scene_nfo is True:
+                        description.write(f"[center][spoiler=Scene NFO:][code]{nfo_content}[/code][/spoiler][/center]\n")
+                    elif bhd_nfo is True:
+                        description.write(f"[center][spoiler=FraMeSToR NFO:][code]{nfo_content}[/code][/spoiler][/center]\n")
+                    else:
+                        description.write(f"[code]{nfo_content}[/code]\n")
 
-        if desclink and not content_written:
+                    meta['description'] = "CUSTOM"
+                    content_written = True
+
+                nfo_content_utf8 = nfo_content.encode('utf-8', 'ignore').decode('utf-8')
+                meta['description_nfo_content'] = nfo_content_utf8
+
+        if description_link:
             try:
-                parsed = urllib.parse.urlparse(desclink.replace('/raw/', '/'))
+                parsed = urllib.parse.urlparse(description_link.replace('/raw/', '/'))
                 split = os.path.split(parsed.path)
                 raw = parsed._replace(path=f"{split[0]}/raw/{split[1]}" if split[0] != '/' else f"/raw{parsed.path}")
                 raw_url = urllib.parse.urlunparse(raw)
-                desclink_content = requests.get(raw_url).text
-                if clean_text(desclink_content):
-                    description.write(desclink_content + "\n")
-                    meta['desclink_content'] = desclink_content
-                    meta['description'] = "CUSTOM"
+                description_link_content = requests.get(raw_url).text
+                cleaned_content = clean_text(description_link_content)
+                if cleaned_content:
+                    if not content_written:
+                        description.write(cleaned_content + '\n')
+                    meta['description_link_content'] = cleaned_content
+                    meta['description'] = 'CUSTOM'
                     content_written = True
             except Exception as e:
                 console.print(f"[ERROR] Failed to fetch description from link: {e}")
 
-        if descfile and os.path.isfile(descfile) and not content_written:
-            with open(descfile, 'r', encoding='utf-8') as f:
+        if description_file and os.path.isfile(description_file):
+            with open(description_file, 'r', encoding='utf-8') as f:
                 file_content = f.read()
-            if clean_text(file_content):
-                description.write(file_content)
+                cleaned_content = clean_text(file_content)
+                if cleaned_content:
+                    if not content_written:
+                        description.write(file_content)
+                meta['description_file_content'] = file_content
                 meta['description'] = "CUSTOM"
                 content_written = True
 

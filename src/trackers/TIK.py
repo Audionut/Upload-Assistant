@@ -168,7 +168,7 @@ class TIK(UNIT3D):
 
     async def get_description(self, meta):
         await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
-        if meta.get('desclink') or meta.get('descfile'):
+        if meta.get('description_link') or meta.get('description_file'):
             async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'r', encoding='utf-8') as f:
                 desc = await f.read()
 
