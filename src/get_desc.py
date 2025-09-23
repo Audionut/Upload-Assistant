@@ -84,6 +84,7 @@ async def gen_desc(meta):
                 desclink_content = requests.get(raw_url).text
                 if clean_text(desclink_content):
                     description.write(desclink_content + "\n")
+                    meta['desclink_content'] = desclink_content
                     meta['description'] = "CUSTOM"
                     content_written = True
             except Exception as e:
