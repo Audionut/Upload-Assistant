@@ -228,7 +228,7 @@ class TIK(UNIT3D):
         if os.path.exists(poster_path):
             try:
                 console.print("Uploading standard poster to image host....")
-                new_poster_url, _ = upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
+                new_poster_url, _ = await upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
 
                 # Ensure that the new poster URL is assigned only once
                 if len(new_poster_url) > 0:
