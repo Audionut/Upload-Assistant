@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
-import cli_ui
 import click
 import os
 import re
@@ -91,15 +90,7 @@ class TIK(UNIT3D):
                 if meta['is_disc'] == 'DVD':
                     name = f"{title}{alt_title_part} ({search_year}) {season} {source} {dvd_size}"
 
-        # User confirmation
-        console.print(f"[yellow]Final generated name: [greee]{name}")
-        confirmation = cli_ui.ask_yes_no("Do you want to use this name?", default=False)  # Default is 'No'
-
-        if confirmation:
-            return {'name': name}
-        else:
-            console.print("[red]Sorry, this seems to be an edge case, please report at (insert_link)")
-            sys.exit(1)
+        return {'name': name}
 
     async def get_category_id(self, meta):
         category_name = meta['category']
