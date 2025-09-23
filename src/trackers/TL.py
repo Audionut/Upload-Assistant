@@ -420,10 +420,8 @@ class TL:
                         meta['tracker_status'][self.tracker]['status_message'] = torrent_url
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
-                        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
-
                     else:
-                        console.print("[bold red]Upload failed: No success redirect found.[/bold red]")
+                        meta['tracker_status'][self.tracker]['status_message'] = 'data error - Upload failed: No success redirect found.'
                         failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                         with open(failure_path, "w", encoding="utf-8") as f:
                             f.write(f"Status Code: {response.status_code}\n")
@@ -431,8 +429,9 @@ class TL:
                             f.write(response.text)
                         console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
 
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
+
                 except httpx.RequestError as e:
-                    console.print(f"[bold red]Error during upload to '{self.tracker}': {e}[/bold red]")
-                    meta['tracker_status'][self.tracker]['status_message'] = str(e)
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error - {str(e)}'
             else:
                 console.print(data)
