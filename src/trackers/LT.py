@@ -108,6 +108,13 @@ class LT():
 
         return lt_name
 
+    async def get_flag(self, meta, flag_name):
+        if flag_name in meta:
+            flag_value = meta[flag_name]
+        else:
+            flag_value = self.config["TRACKERS"][self.tracker].get(flag_name)
+        return int(bool(flag_value))
+    
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
