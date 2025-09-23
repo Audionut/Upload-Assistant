@@ -125,6 +125,7 @@ class LT():
         # region_id = await common.unit3d_region_ids(meta.get('region'))
         # distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
         lt_name = await self.edit_name(meta)
+        modq = await self.get_flag(meta, 'modq')
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
         else:
@@ -167,6 +168,7 @@ class LT():
             'personal_release': int(meta.get('personalrelease', False)),
             'internal': 0,
             'featured': 0,
+            'mod_queue_opt_in': modq,
             'free': 0,
             'doubleup': 0,
             'sticky': 0,
