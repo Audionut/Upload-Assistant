@@ -170,6 +170,33 @@ class SHRI():
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
 
+        audios = []
+        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
+            audios = [
+                audio for audio in meta['mediainfo']['media']['track'][2:]
+                if audio.get('@type') == 'Audio'
+                and isinstance(audio.get('Language'), str)
+                and audio.get('Language').lower() in {'it', 'it-it'}
+                and "commentary" not in str(audio.get('Title', '')).lower()
+            ]
+
+        subs = []
+        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
+            subs = [
+                sub for sub in meta['mediainfo']['media']['track']
+                if sub.get('@type') == 'Text'
+                and isinstance(sub.get('Language'), str)
+                and sub['Language'].lower() in {'it', 'it-it'}
+            ]
+
+        if len(audios) > 0:
+            shareisland_name = shareisland_name
+        elif len(subs) > 0:
+            if not meta.get('tag'):
+                shareisland_name = shareisland_name + " [SUBS]"
+            else:
+                shareisland_name = shareisland_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
+
         if not audio_lang_str:
             try:
                 media_info_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
