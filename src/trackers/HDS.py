@@ -12,7 +12,7 @@ from src.console import console
 from src.exceptions import UploadException
 
 
-class HDS():
+class HDS:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -90,7 +90,7 @@ class HDS():
                         tech_info = f.read()
 
         if tech_info:
-            description_parts.append(tech_info)
+            description_parts.append(f'[pre]{tech_info}[/pre]')
 
         if os.path.exists(base_desc_path):
             with open(base_desc_path, 'r', encoding='utf-8') as f:
@@ -357,15 +357,12 @@ class HDS():
                         status_message += ' Your upload may fulfill existing requests, check prior console logs.'
 
                 else:
-                    status_message = 'The upload appears to have failed. It may have uploaded, go check.'
+                    status_message = 'data error - The upload appears to have failed. It may have uploaded, go check.'
 
                     response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     with open(response_save_path, 'w', encoding='utf-8') as f:
                         f.write(response.text)
                     console.print(f'Upload failed, HTML response was saved to: {response_save_path}')
-
-                    meta['skipping'] = f"{self.tracker}"
-                    return
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
