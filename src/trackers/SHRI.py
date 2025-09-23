@@ -21,7 +21,7 @@ class SHRI(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_name(self, meta):
+    async def get_name(self, meta): 
         shareisland_name = meta['name']
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
@@ -32,6 +32,10 @@ class SHRI(UNIT3D):
 
         akas = imdb_info.get('akas', [])
         italian_title = None
+
+        remove_list = ['Dubbed']
+        for each in remove_list:
+            shareisland_name = shareisland_name.replace(each, '')
 
         for aka in akas:
             if isinstance(aka, dict) and aka.get("country") == "Italy":
@@ -59,8 +63,35 @@ class SHRI(UNIT3D):
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
 
+        audios = []
+        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
+            audios = [
+                audio for audio in meta['mediainfo']['media']['track'][2:]
+                if audio.get('@type') == 'Audio'
+                and isinstance(audio.get('Language'), str)
+                and audio.get('Language').lower() in {'it', 'it-it'}
+                and "commentary" not in str(audio.get('Title', '')).lower()
+            ]
+
+        subs = []
+        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
+            subs = [
+                sub for sub in meta['mediainfo']['media']['track']
+                if sub.get('@type') == 'Text'
+                and isinstance(sub.get('Language'), str)
+                and sub['Language'].lower() in {'it', 'it-it'}
+            ]
+
+        if len(audios) > 0:
+            shareisland_name = shareisland_name
+        elif len(subs) > 0:
+            if not meta.get('tag'):
+                shareisland_name = shareisland_name + " [SUBS]"
+            else:
+                shareisland_name = shareisland_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
+
         if meta.get('dual_audio'):
-            shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)
+            shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)      
 
         if audio_lang_str:
             if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
