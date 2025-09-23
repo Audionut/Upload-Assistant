@@ -108,7 +108,7 @@ class BLU(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '8640p': '10',
             '4320p': '11',
@@ -121,5 +121,5 @@ class BLU(UNIT3D):
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(resolution, '10')
+        }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}

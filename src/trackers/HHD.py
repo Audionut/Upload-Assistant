@@ -26,7 +26,7 @@ class HHD(UNIT3D):
         ]
         pass
 
-    async def get_resolution_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -39,5 +39,5 @@ class HHD(UNIT3D):
             '480p': '8',
             '480i': '9',
             'Other': '10'
-        }.get(resolution, '10')
+        }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}

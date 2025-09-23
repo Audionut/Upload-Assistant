@@ -151,7 +151,8 @@ class TIK(UNIT3D):
 
         if not disctype:
             console.print("[red]You must specify a --disctype")
-            return None
+            # exit since we can't proceed without disctype
+            sys.exit(1)
 
         disctype_value = disctype[0] if isinstance(disctype, list) else disctype
         type_id = type_id_map.get(disctype_value, '1')  # '1' is the default fallback
@@ -243,7 +244,7 @@ class TIK(UNIT3D):
         images = meta['image_list']
         discs = meta.get('discs', [])  # noqa #F841
 
-        if len(images) >= 4:
+        if len(images) >= 6:
             image_link_1 = images[0]['raw_url']
             image_link_2 = images[1]['raw_url']
             image_link_3 = images[2]['raw_url']
