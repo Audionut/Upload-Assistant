@@ -30,7 +30,7 @@ async def gen_desc(meta):
                             description.write
                         if len(template_desc) > 0:
                             description.write(template_desc + "\n")
-                            meta['description_template_content'] = template_desc
+                            meta['description_template_content'] = cleaned_content
                         content_written = True
             except FileNotFoundError:
                 console.print(f"[ERROR] Template '{meta['description_template']}' not found.")
@@ -109,7 +109,7 @@ async def gen_desc(meta):
                 if cleaned_content:
                     if not content_written:
                         description.write(file_content)
-                meta['description_file_content'] = file_content
+                meta['description_file_content'] = cleaned_content
                 meta['description'] = "CUSTOM"
                 content_written = True
 
