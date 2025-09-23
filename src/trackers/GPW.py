@@ -25,7 +25,7 @@ class GPW():
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.banned_groups = [
             'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
             'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
@@ -86,7 +86,7 @@ class GPW():
         return container
 
     async def get_subtitle(self, meta):
-        if not meta.get('subtitle_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_language_strings = meta.get('subtitle_languages', [])
@@ -97,7 +97,7 @@ class GPW():
             return []
 
     async def get_ch_dubs(self, meta):
-        if not meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_language_strings = meta.get('audio_languages', [])
@@ -328,7 +328,7 @@ class GPW():
             found_items = []
 
             try:
-                async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': "Audionut's Upload Assistant"}) as client:
+                async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': "Upload Assistant/2.3"}) as client:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     soup = BeautifulSoup(response.text, 'html.parser')

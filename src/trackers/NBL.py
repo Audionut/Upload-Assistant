@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
-import requests
+import aiofiles
 import httpx
 
 from src.trackers.COMMON import COMMON
@@ -15,6 +15,7 @@ class NBL():
         Set type/category IDs
         Upload
     """
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'NBL'
@@ -47,11 +48,15 @@ class NBL():
         await common.edit_torrent(meta, self.tracker, self.source_flag)
 
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read().strip()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'file_input': open_torrent}
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+        files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data = {
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
@@ -60,23 +65,28 @@ class NBL():
             'ignoredupes': 'on'
         }
 
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data)
-            try:
-                if response.ok:
-                    response = response.json()
-                    meta['tracker_status'][self.tracker]['status_message'] = response
-                else:
-                    meta['tracker_status'][self.tracker]['status_message'] = response.text
-            except Exception:
-                console.print_exception()
-                console.print("[bold yellow]It may have uploaded, go check")
-                return
-        else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
+        try:
+            if not meta['debug']:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    response = await client.post(url=self.upload_url, files=files, data=data)
+                    if response.status_code in [200, 201]:
+                        try:
+                            response_data = response.json()
+                        except json.JSONDecodeError:
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: NBL json decode error, the API is probably down"
+                            return
+                    else:
+                        response_data = {
+                            "error": f"Unexpected status code: {response.status_code}",
+                            "response_content": response.text
+                        }
+                    meta['tracker_status'][self.tracker]['status_message'] = response_data
+            else:
+                console.print("[cyan]Request Data:")
+                console.print(data)
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+        except Exception as e:
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':
@@ -119,17 +129,17 @@ class NBL():
                             if meta['resolution'] in each.get('tags', []):
                                 dupes.append(each['rls_name'])
                     except json.JSONDecodeError:
-                        console.print("[bold yellow]Response content is not valid JSON. Skipping this API call.")
+                        console.print("[bold yellow]NBL response content is not valid JSON. Skipping this API call.")
                         meta['skipping'] = "NBL"
                 else:
-                    console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
+                    console.print(f"[bold red]NBL HTTP request failed. Status: {response.status_code}")
                     meta['skipping'] = "NBL"
 
         except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
+            console.print("[bold red]NBL request timed out after 5 seconds")
             meta['skipping'] = "NBL"
         except httpx.RequestError as e:
-            console.print(f"[bold red]An error occurred while making the request: {e}")
+            console.print(f"[bold red]NBL an error occurred while making the request: {e}")
             meta['skipping'] = "NBL"
         except KeyError as e:
             console.print(f"[bold red]Unexpected KeyError: {e}")
@@ -138,7 +148,7 @@ class NBL():
                 dupes.append("ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY")
         except Exception as e:
             meta['skipping'] = "NBL"
-            console.print(f"[bold red]Unexpected error: {e}")
+            console.print(f"[bold red]NBL unexpected error: {e}")
             console.print_exception()
 
         return dupes

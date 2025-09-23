@@ -7,6 +7,7 @@ class Search():
     """
     Logic for searching
     """
+
     def __init__(self, config):
         self.config = config
         pass

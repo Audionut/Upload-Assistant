@@ -82,7 +82,7 @@ class TVC():
                 '540': 'SD',
                 '480p': 'SD',
                 '480i': 'SD'
-                }.get(resolution, 'SD')
+            }.get(resolution, 'SD')
         return resolution_id
 
     async def upload(self, meta, disctype):

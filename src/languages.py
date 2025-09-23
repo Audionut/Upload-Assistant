@@ -6,6 +6,104 @@ import langcodes
 from src.console import console
 
 
+async def parse_blu_ray(meta):
+    try:
+        bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+        if not os.path.exists(bd_summary_file):
+            console.print(f"[yellow]BD_SUMMARY_00.txt not found at {bd_summary_file}[/yellow]")
+            return {}
+
+        async with aiofiles.open(bd_summary_file, 'r', encoding='utf-8') as f:
+            content = await f.read()
+    except Exception as e:
+        console.print(f"[red]Error reading BD_SUMMARY file: {e}[/red]")
+        return {}
+
+    parsed_data = {
+        'disc_info': {},
+        'playlist_info': {},
+        'video': {},
+        'audio': [],
+        'subtitles': []
+    }
+
+    lines = content.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        if ':' in line:
+            key, value = line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+
+            if key in ['Disc Title', 'Disc Label', 'Disc Size', 'Protection']:
+                parsed_data['disc_info'][key.lower().replace(' ', '_')] = value
+
+            elif key in ['Playlist', 'Size', 'Length', 'Total Bitrate']:
+                parsed_data['playlist_info'][key.lower().replace(' ', '_')] = value
+
+            elif key == 'Video':
+                video_parts = [part.strip() for part in value.split('/')]
+                if len(video_parts) >= 6:
+                    parsed_data['video'] = {
+                        'format': video_parts[0],
+                        'bitrate': video_parts[1],
+                        'resolution': video_parts[2],
+                        'framerate': video_parts[3],
+                        'aspect_ratio': video_parts[4],
+                        'profile': video_parts[5]
+                    }
+                else:
+                    parsed_data['video']['format'] = value
+
+            elif key == 'Audio' or (key.startswith('*') and 'Audio' in key):
+                is_commentary = key.startswith('*')
+                audio_parts = [part.strip() for part in value.split('/')]
+
+                audio_track = {
+                    'is_commentary': is_commentary
+                }
+
+                if len(audio_parts) >= 1:
+                    audio_track['language'] = audio_parts[0]
+                if len(audio_parts) >= 2:
+                    audio_track['format'] = audio_parts[1]
+                if len(audio_parts) >= 3:
+                    audio_track['channels'] = audio_parts[2]
+                if len(audio_parts) >= 4:
+                    audio_track['sample_rate'] = audio_parts[3]
+                if len(audio_parts) >= 5:
+                    bitrate_str = audio_parts[4].strip()
+                    bitrate_match = re.search(r'(\d+)\s*kbps', bitrate_str)
+                    if bitrate_match:
+                        audio_track['bitrate_num'] = int(bitrate_match.group(1))
+                    audio_track['bitrate'] = bitrate_str
+                if len(audio_parts) >= 6:
+                    audio_track['bit_depth'] = audio_parts[5].split('(')[0].strip()
+
+                parsed_data['audio'].append(audio_track)
+
+            elif key == 'Subtitle' or (key.startswith('*') and 'Subtitle' in key):
+                is_commentary = key.startswith('*')
+                subtitle_parts = [part.strip() for part in value.split('/')]
+
+                subtitle_track = {
+                    'is_commentary': is_commentary
+                }
+
+                if len(subtitle_parts) >= 1:
+                    subtitle_track['language'] = subtitle_parts[0]
+                if len(subtitle_parts) >= 2:
+                    subtitle_track['bitrate'] = subtitle_parts[1]
+
+                parsed_data['subtitles'].append(subtitle_track)
+
+    return parsed_data
+
+
 async def parsed_mediainfo(meta):
     try:
         mediainfo_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
@@ -74,6 +172,8 @@ async def parsed_mediainfo(meta):
 
 
 async def process_desc_language(meta, desc=None, tracker=None):
+    if 'language_checked' not in meta:
+        meta['language_checked'] = False
     if 'tracker_status' not in meta:
         meta['tracker_status'] = {}
     if tracker not in meta['tracker_status']:
@@ -84,6 +184,12 @@ async def process_desc_language(meta, desc=None, tracker=None):
         meta['unattended_subtitle_skip'] = False
     if 'no_subs' not in meta:
         meta['no_subs'] = False
+    if 'write_hc_languages' not in meta:
+        meta['write_hc_languages'] = False
+    if 'write_audio_languages' not in meta:
+        meta['write_audio_languages'] = False
+    if 'write_subtitle_languages' not in meta:
+        meta['write_subtitle_languages'] = False
     if 'write_hc_languages' not in meta:
         meta['write_hc_languages'] = False
     if not meta['is_disc'] == "BDMV":
@@ -211,20 +317,15 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if 'text' not in parsed_info and not meta.get('hardcoded-subs', False):
                         meta['no_subs'] = True
 
-            if meta['audio_languages'] and meta['write_audio_languages'] and desc is not None:
-                await desc.write(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]\n")
-
-            if meta['subtitle_languages'] and meta['write_subtitle_languages'] and desc is not None:
-                await desc.write(f"[code]Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]\n")
-            if meta['subtitle_languages'] and meta['write_hc_languages'] and desc is not None:
-                await desc.write(f"[code]Hardcoded Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]\n")
-
         except Exception as e:
             console.print(f"[red]Error processing mediainfo languages: {e}[/red]")
 
+        meta['language_checked'] = True
         return desc if desc is not None else None
 
     elif meta['is_disc'] == "BDMV":
+        if "language_checked" not in meta:
+            meta['language_checked'] = False
         if 'bluray_audio_skip' not in meta:
             meta['bluray_audio_skip'] = False
         audio_languages = []
@@ -232,9 +333,19 @@ async def process_desc_language(meta, desc=None, tracker=None):
             audio_languages = meta['audio_languages']
         else:
             meta['audio_languages'] = []
+        if meta.get('subtitle_languages'):
+            subtitle_languages = meta['subtitle_languages']
+        else:
+            meta['subtitle_languages'] = []
         try:
-            bdinfo = meta.get('bdinfo', {})
-            audio_tracks = bdinfo.get("audio", [])
+            bluray = await parse_blu_ray(meta)
+            audio_tracks = bluray.get("audio", [])
+            commentary_tracks = [track for track in audio_tracks if track.get("is_commentary")]
+            if commentary_tracks:
+                for track in commentary_tracks:
+                    if meta['debug']:
+                        console.print(f"Skipping commentary track: {track}")
+                    audio_tracks.remove(track)
             audio_languages = {track.get("language", "") for track in audio_tracks if "language" in track}
             for track in audio_tracks:
                 bitrate_str = track.get("bitrate", "")
@@ -262,7 +373,13 @@ async def process_desc_language(meta, desc=None, tracker=None):
                             audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
                         meta['bluray_audio_skip'] = True
 
-            subtitle_tracks = bdinfo.get("subtitles", [])
+            subtitle_tracks = bluray.get("subtitles", [])
+            sub_commentary_tracks = [track for track in subtitle_tracks if track.get("is_commentary")]
+            if sub_commentary_tracks:
+                for track in sub_commentary_tracks:
+                    if meta['debug']:
+                        console.print(f"Skipping commentary subtitle track: {track}")
+                    subtitle_tracks.remove(track)
             if subtitle_tracks and isinstance(subtitle_tracks[0], dict):
                 subtitle_languages = {track.get("language", "") for track in subtitle_tracks if "language" in track}
             else:
@@ -274,9 +391,11 @@ async def process_desc_language(meta, desc=None, tracker=None):
         except Exception as e:
             console.print(f"[red]Error processing BDInfo languages: {e}[/red]")
 
+        meta['language_checked'] = True
         return desc if desc is not None else None
 
     else:
+        meta['language_checked'] = True
         return desc if desc is not None else None
 
 

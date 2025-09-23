@@ -53,6 +53,7 @@ class Prep():
         Database Identifiers (TMDB/IMDB/MAL/etc)
         Create Name
     """
+
     def __init__(self, screens, img_host, config):
         self.screens = screens
         self.config = config
@@ -636,7 +637,7 @@ class Prep():
                 mode=meta.get('mode', 'discord'),
                 category_preference=meta.get('category'),
                 imdb_info=meta.get('imdb_info', None)
-                )
+            )
 
             meta['category'] = category
             meta['tmdb_id'] = int(tmdb_id)

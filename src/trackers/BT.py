@@ -27,9 +27,9 @@ class BT():
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
+            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Upload Assistant[/url][/center]"
 
         target_site_ids = {
             'arabic': '22', 'bulgarian': '29', 'chinese': '14', 'croatian': '23',
@@ -202,7 +202,7 @@ class BT():
             return lang_code
 
     async def get_audio(self, meta):
-        if not meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
@@ -225,7 +225,7 @@ class BT():
         return 'Legendado'
 
     async def get_subtitle(self, meta):
-        if not meta.get('subtitle_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         found_language_strings = meta.get('subtitle_languages', [])

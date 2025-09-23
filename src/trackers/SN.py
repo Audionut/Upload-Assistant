@@ -8,13 +8,6 @@ from src.console import console
 
 
 class SN():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
     def __init__(self, config):
         self.config = config
         self.tracker = 'SN'
