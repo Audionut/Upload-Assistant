@@ -264,6 +264,12 @@ config = {
         # Set true to search for matching requests on supported trackers
         "search_requests": False,
 
+        # Default MediaInfo template used on sites without a MediaInfo section
+        # Jinja2 templates are located in: data\templates\mediainfo
+        # Options: file names from the folder or "FULL" to use the complete MediaInfo
+        # If no template is specified, the default will be used
+        # Can be overridden per tracker by specifying "mediainfo_template" under each tracker config
+        "mediainfo_template": "",
     },
 
     # these are used for DB links on AR
@@ -737,6 +743,8 @@ config = {
             "anon": False,
             # Rehost images to the TL image host. Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
             "img_rehost": True,
+            # Description template to be used. Jinja2 templates can be found at data/templates/description. If no template is specified the default will be used.
+            "description_template": "",
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

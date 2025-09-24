@@ -1474,75 +1474,79 @@ class COMMON():
     async def mediainfo_template(self, tracker, meta):
         if meta.get('is_disc') == 'BDMV':
             return False
-        try:
-            template_name = self.config['TRACKERS'][tracker].get('mediainfo_template', 'MediaInfo_Default.txt')
-            template_dir = os.path.join(meta.get('base_dir', ''), 'data', 'templates', 'mediainfo')
-            mediainfo_data = meta.get('mediainfo', {})
 
-            if 'media' in mediainfo_data and 'track' in mediainfo_data['media']:
-                for track in mediainfo_data['media']['track']:
-                    if 'Duration' in track:
-                        duration_str = track.get('Duration', '')
-                        if duration_str:
-                            try:
-                                duration_seconds = int(float(duration_str))
-                                minutes, seconds = divmod(duration_seconds, 60)
-                                hours, minutes = divmod(minutes, 60)
-                                formatted_duration = f"{hours:02}:{minutes:02}:{seconds:02}"
-                                track['Duration'] = formatted_duration
-                            except ValueError:
-                                track['Duration'] = duration_str
-                        else:
-                            track['Duration'] = '00:00:00'
+        template_name = self.config['DEFAULT'].get('mediainfo_template') or 'default.j2'
+        tracker_template_name = self.config['TRACKERS'][tracker].get('mediainfo_template', None)
+        if tracker_template_name:
+            template_name = tracker_template_name
 
-                    if 'BitRate' in track:
-                        bit_rate_str = track.get('BitRate', '')
-                        if bit_rate_str:
-                            try:
-                                bit_rate_int = float(bit_rate_str)
-                                track['BitRate'] = f"{bit_rate_int / 1000:.2f} kbps"
-                            except ValueError:
-                                track['BitRate'] = bit_rate_str
+        if template_name != 'FULL':
+            try:
+                template_dir = os.path.join(meta.get('base_dir', ''), 'data', 'templates', 'mediainfo')
+                mediainfo_data = meta.get('mediainfo', {})
 
-                    if 'FileSize' in track:
-                        file_size_str = track.get('FileSize', '')
-                        if file_size_str:
-                            try:
-                                file_size_int = int(file_size_str)
-                                file_size_mib = file_size_int / (1024 * 1024)
-                                if file_size_mib >= 1024:
-                                    file_size_gib = file_size_mib / 1024
-                                    track['FileSize'] = f"{file_size_gib:.2f} GiB"
-                                else:
-                                    track['FileSize'] = f"{file_size_mib:.2f} MiB"
-                            except ValueError:
-                                track['FileSize'] = file_size_str
+                if 'media' in mediainfo_data and 'track' in mediainfo_data['media']:
+                    for track in mediainfo_data['media']['track']:
+                        if 'Duration' in track:
+                            duration_str = track.get('Duration', '')
+                            if duration_str:
+                                try:
+                                    duration_seconds = int(float(duration_str))
+                                    minutes, seconds = divmod(duration_seconds, 60)
+                                    hours, minutes = divmod(minutes, 60)
+                                    formatted_duration = f"{hours:02}:{minutes:02}:{seconds:02}"
+                                    track['Duration'] = formatted_duration
+                                except ValueError:
+                                    track['Duration'] = duration_str
+                            else:
+                                track['Duration'] = '00:00:00'
 
-                    if 'Language' in track:
-                        lang_info = track.get('Language', {})
-                        if isinstance(lang_info, str) and len(lang_info) > 0:
-                            lang_code = lang_info
-                            try:
-                                lang = langcodes.get(lang_code)
-                                track['Language'] = lang.display_name('en')
-                            except langcodes.LanguageTagError:
-                                track['Language'] = 'Unknown'
+                        if 'BitRate' in track:
+                            bit_rate_str = track.get('BitRate', '')
+                            if bit_rate_str:
+                                try:
+                                    bit_rate_int = float(bit_rate_str)
+                                    track['BitRate'] = f"{bit_rate_int / 1000:.2f} kbps"
+                                except ValueError:
+                                    track['BitRate'] = bit_rate_str
 
-            rendered_template = await self.render_jinja_template(
-                template_dir=template_dir,
-                template_name=template_name,
-                data=mediainfo_data
-            )
+                        if 'FileSize' in track:
+                            file_size_str = track.get('FileSize', '')
+                            if file_size_str:
+                                try:
+                                    file_size_int = int(file_size_str)
+                                    file_size_mib = file_size_int / (1024 * 1024)
+                                    if file_size_mib >= 1024:
+                                        file_size_gib = file_size_mib / 1024
+                                        track['FileSize'] = f"{file_size_gib:.2f} GiB"
+                                    else:
+                                        track['FileSize'] = f"{file_size_mib:.2f} MiB"
+                                except ValueError:
+                                    track['FileSize'] = file_size_str
 
-            mediainfo = rendered_template
+                        if 'Language' in track:
+                            lang_info = track.get('Language', {})
+                            if isinstance(lang_info, str) and len(lang_info) > 0:
+                                lang_code = lang_info
+                                try:
+                                    lang = langcodes.get(lang_code)
+                                    track['Language'] = lang.display_name('en')
+                                except langcodes.LanguageTagError:
+                                    track['Language'] = 'Unknown'
 
-        except Exception as e:
-            console.print(f'[bold red]Error loading mediainfo template: {e}[/bold red]')
-            console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
-            mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            if os.path.exists(mi_file_path):
-                with open(mi_file_path, 'r', encoding='utf-8') as mi:
-                    mediainfo = mi.read()
-        if mediainfo:
-            return mediainfo.replace('\r\n', '\n').strip()
-        return False
+                rendered_template = await self.render_jinja_template(
+                    template_dir=template_dir,
+                    template_name=template_name,
+                    data=mediainfo_data
+                )
+
+                mediainfo = rendered_template
+                if mediainfo:
+                    return mediainfo.replace('\r\n', '\n').strip()
+
+            except Exception as e:
+                console.print(f'[bold red]Error loading mediainfo template: {e}[/bold red]')
+                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as mi:
+            return mi.read()

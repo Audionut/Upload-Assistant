@@ -2,32 +2,34 @@
 {% set subtitle_tracks = media.track | selectattr('@type', 'equalto', 'Text') | list %}
 
 {% if general_track -%}
-----GENERAL----
+---GENERAL------
 Size...........: {{ general_track.FileSize }}
 Container......: {{ general_track.Format }}
 Duration.......: {{ general_track.Duration }}
 {%- endif %}
-{##}
+
+---VIDEO--------
 {% for track in media.track if track['@type'] == 'Video' -%}
-----VIDEO----
 Codec..........: {{ track.Format }}{% if track.Encoded_Library %}, {{ track.Encoded_Library }}{% endif %}{% if track.HDR_Format_String %}, {{ track.HDR_Format_String }}{% endif %}{% if track.transfer_characteristics %}, {{ track.transfer_characteristics }}{% endif %}
 Resolution.....: {{ track.Width }}x{{ track.Height }}
 Bit rate.......: {{ track.BitRate }}
 Frame rate.....: {{ track.FrameRate }} fps
+
 {%- endfor %}
-{##}
+
+---AUDIO--------
 {% for track in media.track if track['@type'] == 'Audio' -%}
-----AUDIO----
 Format.........: {{ track.Format }}{% if track.Format_Commercial_IfAny %}, {{ track.Format_Commercial_IfAny }}{% endif %}
 Channels.......: {{ track.Channels }}
 Sample rate....: {{ track.SamplingRate }}
 Bit rate.......: {{ track.BitRate }}
-Language.......: {{ track.Language }}{% if track.Title %} ({{ track.Title }}){% endif %}
-{%- endfor %}
-{##}
+Language.......: {{ track.Language }}
+
+{% endfor %}
+
+---SUBTITLES----
 {% if subtitle_tracks -%}
-----SUBTITLES----
 {% for track in subtitle_tracks -%}
-Language.......: {% if track.Language %}{{ track.Language }}{% endif %}{% if track.Title %} ({{ track.Title }}){% endif %}, {{ track.Format }}
+Language.......: {{ track.Language }}, {{ track.Format }}{% if track.Forced == 'Yes' %}, Forced{% endif %}
 {% endfor %}
 {%- endif %}

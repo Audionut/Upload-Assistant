@@ -83,15 +83,9 @@ class TL:
         meta['mediainfo_or_bdinfo'] = file_info
         meta['img_rehost'] = self.tracker_config.get('img_rehost', True)
 
-        template_name = self.tracker_config.get('description_template', 'TL-default.txt')
+        template_name = self.tracker_config.get('description_template', 'TL_default.txt.j2') or 'TL_default.txt.j2'
         description = await self.common.description_template(self.tracker, meta, template_name)
-        description = await self.format_description(description)
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as f:
-            f.write(description)
 
-        return description
-
-    async def format_description(self, description):
         from src.bbcode import BBCODE
         bbcode = BBCODE()
         description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
@@ -103,6 +97,9 @@ class TL:
         description = bbcode.convert_comparison_to_centered(description, 1000)
         description = bbcode.remove_spoiler(description)
         description = re.sub(r'\n{3,}', '\n\n', description)
+
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as f:
+            f.write(description)
 
         return description
 
