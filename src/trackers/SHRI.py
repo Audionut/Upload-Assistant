@@ -21,7 +21,7 @@ class SHRI(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_name(self, meta): 
+    async def get_name(self, meta):
         shareisland_name = meta['name']
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
@@ -91,7 +91,7 @@ class SHRI(UNIT3D):
                 shareisland_name = shareisland_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
 
         if meta.get('dual_audio'):
-            shareisland_name = shareisland_name.replace("Dual-Audio ", "", 1)      
+            shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
         if audio_lang_str:
             if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
@@ -114,6 +114,8 @@ class SHRI(UNIT3D):
             for invalid_tag in invalid_tags:
                 shareisland_name = re.sub(f"-{invalid_tag}", "", shareisland_name, flags=re.IGNORECASE)
             shareisland_name = f"{shareisland_name}-NoGroup"
+
+        shareisland_name = re.sub(r'\s{2,}', ' ', shareisland_name)
 
         return {'name': shareisland_name}
 
