@@ -741,7 +741,8 @@ config = {
             # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
             "passkey": "",
             "anon": False,
-            # Rehost images to the TL image host. Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
+            # Rehost images to the TL image host. Does not work with the API upload method.
+            # Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
             "img_rehost": True,
             # Description template to be used. Jinja2 templates can be found at data/templates/description. If no template is specified the default will be used.
             "description_template": "",

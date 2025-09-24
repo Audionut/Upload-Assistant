@@ -81,9 +81,9 @@ class TL:
             description_parts.append(file_info)
 
         meta['mediainfo_or_bdinfo'] = file_info
-        meta['img_rehost'] = self.tracker_config.get('img_rehost', True)
+        meta['img_rehost'] = bool(self.tracker_config.get('img_rehost', True) and not self.tracker_config.get('api_upload', True))
 
-        template_name = self.tracker_config.get('description_template', 'TL_default.txt.j2') or 'TL_default.txt.j2'
+        template_name = self.tracker_config.get('description_template', '') or 'TL_default.txt.j2'
         description = await self.common.description_template(self.tracker, meta, template_name)
 
         from src.bbcode import BBCODE
@@ -353,7 +353,7 @@ class TL:
                 'torrentComment': '0',
                 'uploaderComments': '',
                 'is_anonymous_upload': 'off',
-                'screenshots[]': '' if meta.get('anon', False) else self.get_screens(meta),  # It is not possible to upload screenshots anonymously
+                'screenshots[]': self.get_screens(meta) if self.tracker_config.get('img_rehost', True) else '',
             }
 
             anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
