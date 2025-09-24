@@ -266,8 +266,8 @@ config = {
 
         # Default MediaInfo template used on sites without a MediaInfo section
         # Jinja2 templates are located in: data\templates\mediainfo
-        # Options: file names from the folder or "FULL" to use the complete MediaInfo
         # If no template is specified, the default will be used
+        # Options: file names from the folder or "FULL" to use the complete MediaInfo
         # Can be overridden per tracker by specifying "mediainfo_template" under each tracker config
         "mediainfo_template": "",
     },

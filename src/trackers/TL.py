@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import httpx
 import os
 import re
@@ -98,8 +99,8 @@ class TL:
         description = bbcode.remove_spoiler(description)
         description = re.sub(r'\n{3,}', '\n\n', description)
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as f:
-            f.write(description)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
         return description
 
@@ -377,10 +378,10 @@ class TL:
                     else:
                         meta['tracker_status'][self.tracker]['status_message'] = 'data error - Upload failed: No success redirect found.'
                         failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                        with open(failure_path, "w", encoding="utf-8") as f:
-                            f.write(f"Status Code: {response.status_code}\n")
-                            f.write(f"Headers: {response.headers}\n")
-                            f.write(response.text)
+                        async with aiofiles.open(failure_path, "w", encoding="utf-8") as failure_file:
+                            await failure_file.write(f"Status Code: {response.status_code}\n")
+                            await failure_file.write(f"Headers: {response.headers}\n")
+                            await failure_file.write(response.text)
                         console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
 
                     await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
