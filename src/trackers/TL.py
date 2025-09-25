@@ -5,8 +5,9 @@ import httpx
 import os
 import re
 import platform
-from src.trackers.COMMON import COMMON
+from src.bbcode import BBCODE
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 class TL:
@@ -19,8 +20,8 @@ class TL:
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>"""
-        self.banned_groups = [""]
+        self.signature = '<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>'
+        self.banned_groups = []
         self.session = httpx.AsyncClient(timeout=60.0)
         self.tracker_config = self.config['TRACKERS'][self.tracker]
         self.api_upload = self.tracker_config.get('api_upload', False)
@@ -37,14 +38,14 @@ class TL:
         if self.api_upload and not force:
             return True
 
-        self.cookies_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/TL.txt")
+        cookies_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/TL.txt")
 
-        cookie_path = os.path.abspath(self.cookies_file)
+        cookie_path = os.path.abspath(cookies_file)
         if not os.path.exists(cookie_path):
             console.print(f"[bold red]'{self.tracker}' Cookies not found at: {cookie_path}[/bold red]")
             return False
 
-        self.session.cookies.update(await self.common.parseCookieFile(self.cookies_file))
+        self.session.cookies.update(await self.common.parseCookieFile(cookies_file))
 
         try:
             if force:
@@ -68,26 +69,17 @@ class TL:
             return False
 
     async def generate_description(self, meta):
-        description_parts = []
-
-        file_info = ''
-        file_info = await self.common.mediainfo_template(self.tracker, meta)
+        file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
 
         if meta.get('is_disc') == 'BDMV':
-            discs = meta['discs']
-            if isinstance(discs, list):
-                file_info = discs[0].get('summary', '') if discs else ''
-
-        if file_info:
-            description_parts.append(file_info)
+            file_info = meta['discs'][0].get('summary', '') if meta.get('discs') else ''
 
         meta['mediainfo_or_bdinfo'] = file_info
-        meta['img_rehost'] = bool(self.tracker_config.get('img_rehost', True) and not self.tracker_config.get('api_upload', True))
+        meta['img_rehost'] = self.tracker_config.get('img_rehost', True) and not self.tracker_config.get('api_upload', True)
 
         template_name = self.tracker_config.get('description_template', '') or 'TL_default.txt.j2'
         description = await self.common.description_template(self.tracker, meta, template_name)
 
-        from src.bbcode import BBCODE
         bbcode = BBCODE()
         description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
         description = re.sub(r'\[\*\]', '\n[*]', description, flags=re.IGNORECASE)
@@ -104,7 +96,7 @@ class TL:
 
         return description
 
-    def get_cat_id(self, meta):
+    def get_category(self, meta):
         categories = {
             'Anime': 34,
             'Movie4K': 47,
@@ -183,7 +175,7 @@ class TL:
             if meta['debug']:
                 console.print(f"[bold red]Skipping upload to '{self.tracker}' as login failed.[/bold red]")
             return
-        cat_id = self.get_cat_id(meta)
+        cat_id = self.get_category(meta)
 
         dupes = []
 
@@ -257,7 +249,7 @@ class TL:
         if self.api_upload:
             await self.upload_api(meta)
         else:
-            await self.upload_http(meta)
+            await self.cookie_upload(meta)
 
     async def upload_api(self, meta):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -269,7 +261,7 @@ class TL:
 
             data = {
                 'announcekey': self.passkey,
-                'category': self.get_cat_id(meta),
+                'category': self.get_category(meta),
                 'description': await self.generate_description(meta),
                 'name': self.get_name(meta),
                 'nonscene': 'on' if not meta.get('scene') else 'off',
@@ -286,8 +278,8 @@ class TL:
 
                 if meta['category'] == 'TV':
                     data.update({
-                        'tvmazeid': meta.get('tvmaze_id'),
-                        'tvmazetype': meta.get('tv_pack'),
+                        'tvmazeid': meta.get('tvmaze_id', ''),
+                        'tvmazetype': meta.get('tv_pack', ''),
                     })
 
             anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
@@ -314,79 +306,71 @@ class TL:
             else:
                 console.print(data)
 
-    async def upload_http(self, meta):
+    async def get_cookie_upload_data(self, meta):
+        tvMazeURL = ''
+        if meta.get('category') == 'TV' and meta.get("tvmaze_id"):
+            tvMazeURL = f"https://www.tvmaze.com/shows/{meta.get('tvmaze_id')}"
+
+        data = {
+            'name': self.get_name(meta),
+            'category': self.get_category(meta),
+            'nonscene': 'on' if not meta.get("scene") else 'off',
+            'imdbURL': meta.get('imdb_info', {}).get('imdb_url', ''),
+            'tvMazeURL': tvMazeURL,
+            'igdbURL': '',
+            'torrentNFO': '1',
+            'torrentDesc': '1',
+            'nfotextbox': await self.generate_description(meta),
+            'torrentComment': '0',
+            'uploaderComments': '',
+            'is_anonymous_upload': 'off',
+            'screenshots[]': self.get_screens(meta) if self.tracker_config.get('img_rehost', True) else '',
+        }
+
+        anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
+        if anon:
+            data['is_anonymous_upload': 'on']
+
+        return data
+
+    async def cookie_upload(self, meta):
         login = await self.login(meta)
         if not login:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: Login with cookies failed."
             return
 
-        await self.generate_description(meta)
+        data = await self.get_cookie_upload_data(meta)
 
-        imdbURL = ''
-        if meta.get('category') == 'MOVIE' and meta.get('imdb_info', {}).get('imdbID', ''):
-            imdbURL = f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}"
+        if meta['debug']:
+            console.print(data)
+        else:
+            try:
+                status_message = ''
 
-        tvMazeURL = ''
-        if meta.get('category') == 'TV' and meta.get("tvmaze_id"):
-            tvMazeURL = f"https://www.tvmaze.com/shows/{meta.get('tvmaze_id')}"
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as f:
+                    torrent_bytes = await f.read()
+                files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
 
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        torrent_file = f"[{self.tracker}].torrent"
-        description_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+                response = await self.session.post(url=self.http_upload_url, files=files, data=data)
 
-        with open(torrent_path, 'rb') as torrent_fh, open(description_path, 'rb') as nfo:
+                if response.status_code == 302 and 'location' in response.headers:
+                    torrent_id = response.headers['location'].replace('/successfulupload?torrentID=', '')
+                    torrent_url = f"{self.base_url}/torrent/{torrent_id}"
+                    status_message = 'Torrent uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
-            files = {
-                'torrent': (torrent_file, torrent_fh, 'application/x-bittorrent'),
-                'nfo': (f"[{self.tracker}]DESCRIPTION.txt", nfo, 'text/plain')
-            }
+                else:
+                    status_message = 'data error - Upload failed: No success redirect found.'
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                    async with aiofiles.open(failure_path, "w", encoding="utf-8") as failure_file:
+                        await failure_file.write(f"Status Code: {response.status_code}\n")
+                        await failure_file.write(f"Headers: {response.headers}\n")
+                        await failure_file.write(response.text)
+                    console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
 
-            data = {
-                'name': self.get_name(meta),
-                'category': self.get_cat_id(meta),
-                'nonscene': 'on' if not meta.get("scene") else 'off',
-                'imdbURL': imdbURL,
-                'tvMazeURL': tvMazeURL,
-                'igdbURL': '',
-                'torrentNFO': '0',
-                'torrentDesc': '1',
-                'nfotextbox': '',
-                'torrentComment': '0',
-                'uploaderComments': '',
-                'is_anonymous_upload': 'off',
-                'screenshots[]': self.get_screens(meta) if self.tracker_config.get('img_rehost', True) else '',
-            }
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
 
-            anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
-            if anon:
-                data.update({'is_anonymous_upload': 'on'})
+            except httpx.RequestError as e:
+                status_message = f'data error - {str(e)}'
 
-            if meta['debug'] is False:
-                try:
-                    response = await self.session.post(
-                        url=self.http_upload_url,
-                        files=files,
-                        data=data
-                    )
-
-                    if response.status_code == 302 and 'location' in response.headers:
-                        torrent_id = response.headers['location'].replace('/successfulupload?torrentID=', '')
-                        torrent_url = f"{self.base_url}/torrent/{torrent_id}"
-                        meta['tracker_status'][self.tracker]['status_message'] = torrent_url
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                    else:
-                        meta['tracker_status'][self.tracker]['status_message'] = 'data error - Upload failed: No success redirect found.'
-                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                        async with aiofiles.open(failure_path, "w", encoding="utf-8") as failure_file:
-                            await failure_file.write(f"Status Code: {response.status_code}\n")
-                            await failure_file.write(f"Headers: {response.headers}\n")
-                            await failure_file.write(response.text)
-                        console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
-
-                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
-
-                except httpx.RequestError as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error - {str(e)}'
-            else:
-                console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = status_message
