@@ -76,7 +76,7 @@ async def filter_dupes(dupes, meta, tracker_name):
         Returns True if the entry should be excluded, otherwise allowed as dupe.
         """
         each = entry['name']
-        sized = entry['size']
+        sized = entry['size']  # This may come as a string, such as "1.5 GB"
         normalized = await normalize_filename(each)
         file_hdr = await refine_hdr_terms(normalized)
 
