@@ -11,6 +11,8 @@ import gc
 import json
 from concurrent.futures import ThreadPoolExecutor
 import traceback
+import httpx
+import aiofiles
 
 try:
     from data.config import config
@@ -21,7 +23,7 @@ except Exception:
     exit(1)
 
 
-def upload_image_task(args):
+async def upload_image_task(args):
     image, img_host, config, meta = args
     try:
         timeout = 60  # Default timeout
@@ -29,7 +31,7 @@ def upload_image_task(args):
 
         if img_host == "imgbox":
             try:
-                image_list = asyncio.run(imgbox_upload(os.getcwd(), [image], meta, return_dict={}))
+                image_list = await imgbox_upload(os.getcwd(), [image], meta, return_dict={})
                 if image_list and all(
                     'img_url' in img and 'raw_url' in img and 'web_url' in img for img in image_list
                 ):
@@ -53,15 +55,20 @@ def upload_image_task(args):
                 'api_key': config['DEFAULT']['ptpimg_api']
             }
 
-            with open(image, 'rb') as file:
-                files = [('file-upload[0]', file)]
-                headers = {'referer': 'https://ptpimg.me/index.php'}
+            async with httpx.AsyncClient() as client:
+                async with aiofiles.open(image, 'rb') as file:
+                    files = {'file-upload[0]': (os.path.basename(image), await file.read())}
+                    headers = {'referer': 'https://ptpimg.me/index.php'}
 
                 try:
-                    response = requests.post(
-                        "https://ptpimg.me/upload.php", headers=headers, data=payload, files=files, timeout=timeout
+                    response = await client.post(
+                        "https://ptpimg.me/upload.php",
+                        headers=headers,
+                        data=payload,
+                        files=files,
+                        timeout=timeout
                     )
-                    response.raise_for_status()  # Raise an exception for HTTP errors
+                    response.raise_for_status()
                     response_data = response.json()
 
                     if not response_data or not isinstance(response_data, list) or 'code' not in response_data[0]:
@@ -73,9 +80,9 @@ def upload_image_task(args):
                     raw_url = img_url
                     web_url = img_url
 
-                except requests.exceptions.Timeout:
+                except httpx.TimeoutException:
                     return {'status': 'failed', 'reason': 'Request timed out'}
-                except requests.exceptions.RequestException as e:
+                except ValueError as e:
                     return {'status': 'failed', 'reason': f"Request failed: {str(e)}"}
                 except json.JSONDecodeError:
                     return {'status': 'failed', 'reason': 'Invalid JSON response from ptpimg'}
@@ -83,30 +90,31 @@ def upload_image_task(args):
         elif img_host == "imgbb":
             url = "https://api.imgbb.com/1/upload"
             try:
-                with open(image, "rb") as img_file:
-                    encoded_image = base64.b64encode(img_file.read()).decode('utf8')
+                async with aiofiles.open(image, "rb") as img_file:
+                    encoded_image = base64.b64encode(await img_file.read()).decode('utf8')
 
                 data = {
                     'key': config['DEFAULT']['imgbb_api'],
                     'image': encoded_image,
                 }
 
-                response = requests.post(url, data=data, timeout=timeout)
-                response_data = response.json()
-                if response.status_code != 200 or not response_data.get('success'):
-                    console.print("[yellow]imgbb failed, trying next image host")
-                    return {'status': 'failed', 'reason': 'imgbb upload failed'}
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, data=data, timeout=timeout)
+                    response_data = response.json()
+                    if response.status_code != 200 or not response_data.get('success'):
+                        console.print("[yellow]imgbb failed, trying next image host")
+                        return {'status': 'failed', 'reason': 'imgbb upload failed'}
 
-                img_url = response_data['data'].get('medium', {}).get('url') or response_data['data']['thumb']['url']
-                raw_url = response_data['data']['image']['url']
-                web_url = response_data['data']['url_viewer']
+                    img_url = response_data['data'].get('medium', {}).get('url') or response_data['data']['thumb']['url']
+                    raw_url = response_data['data']['image']['url']
+                    web_url = response_data['data']['url_viewer']
 
-                if meta['debug']:
-                    console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+                    if meta['debug']:
+                        console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
 
-                return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
+                    return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
 
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
                 return {'status': 'failed', 'reason': 'Request timed out'}
 
@@ -114,7 +122,7 @@ def upload_image_task(args):
                 console.print(f"[red]Invalid JSON response: {e}")
                 return {'status': 'failed', 'reason': 'Invalid JSON response'}
 
-            except requests.exceptions.RequestException as e:
+            except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
 
@@ -410,15 +418,18 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         image_patterns = ["*.png", ".[!.]*.png"]
         image_glob = []
         for pattern in image_patterns:
-            image_glob.extend(glob.glob(pattern))
+            glob_results = await asyncio.to_thread(glob.glob, pattern)
+            image_glob.extend(glob_results)
 
         unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
         unwanted_files = set()
         for pattern in unwanted_patterns:
-            unwanted_files.update(glob.glob(pattern))
+            glob_results = await asyncio.to_thread(glob.glob, pattern)
+            unwanted_files.update(glob_results)
             if pattern.startswith("FILE") or pattern.startswith("PLAYLIST") or pattern.startswith("POSTER"):
                 hidden_pattern = "." + pattern
-                unwanted_files.update(glob.glob(hidden_pattern))
+                hidden_glob_results = await asyncio.to_thread(glob.glob, hidden_pattern)
+                unwanted_files.update(hidden_glob_results)
 
         image_glob = [file for file in image_glob if file not in unwanted_files]
         image_glob = list(set(image_glob))
@@ -467,7 +478,7 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
             while retry_count <= max_retries:
                 future = None
                 try:
-                    future = asyncio.create_task(asyncio.to_thread(upload_image_task, task_args))
+                    future = asyncio.create_task(upload_image_task(task_args))
                     running_tasks.add(future)
 
                     try:
@@ -557,6 +568,12 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
                 if local_file_path:
                     image_size = os.path.getsize(local_file_path)
                     meta['image_sizes'][raw_url] = image_size
+
+        if len(new_images) and len(new_images) > 0:
+            if not using_custom_img_list:
+                console.print(f"[green]Successfully obtained and uploaded {len(new_images)} images.")
+        else:
+            raise Exception("No images uploaded.")
 
         if not using_custom_img_list:
             console.print(f"[green]Successfully obtained and uploaded {len(new_images)} images.")
