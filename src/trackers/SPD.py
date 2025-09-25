@@ -31,20 +31,18 @@ class SPD(COMMON):
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = ['']
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': "Audionut's Upload Assistant",
+            'User-Agent': "Upload Assistant",
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'],
         }, timeout=30.0)
 
     async def get_cat_id(self, meta):
-        languages = (meta.get('subtitle_languages') or []) + (meta.get('audio_languages') or [])
-
-        if not languages:
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        langs = [lang.lower() for lang in languages]
+        langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
         romanian = 'romanian' in langs
 
         if 'RO' in meta.get('origin_country', []):

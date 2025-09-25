@@ -22,6 +22,7 @@ class Clients():
     """
     Add to torrent client
     """
+
     def __init__(self, config):
         self.config = config
         pass

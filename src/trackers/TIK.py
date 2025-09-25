@@ -1,152 +1,50 @@
 # -*- coding: utf-8 -*-
 # import discord
-import asyncio
-import requests
+import aiofiles
+import click
 import os
 import re
-import platform
-import sys
-import cli_ui
 import urllib.request
-import click
-import httpx
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.trackers.COMMON import COMMON
+from src.trackers.UNIT3D import UNIT3D
 from src.uploadscreens import upload_screens
 
 
-class TIK():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class TIK(UNIT3D):
     def __init__(self, config):
+        super().__init__(config, tracker_name='TIK')
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'TIK'
         self.source_flag = 'TIK'
-        self.search_url = 'https://cinematik.net/api/torrents/filter'
-        self.upload_url = 'https://cinematik.net/api/torrents/upload'
-        self.torrent_url = 'https://cinematik.net/torrents/'
-        self.signature = "\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
-        self.banned_groups = [""]
+        self.base_url = 'https://cinematik.net'
+        self.id_url = f'{self.base_url}/api/torrents/'
+        self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.torrent_url = f'{self.base_url}/torrents/'
+        self.banned_groups = []
         pass
 
-    async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag)
-        await common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
-        cat_id = await self.get_cat_id(meta['category'], meta.get('foreign'), meta.get('opera'), meta.get('asian'))
-        type_id = await self.get_type_id(disctype)
-        resolution_id = await self.get_res_id(meta['resolution'])
-        modq = await self.get_flag(meta, 'modq')
-        region_id = await common.unit3d_region_ids(meta.get('region'))
-        distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+    async def get_additional_checks(self, meta):
+        should_continue = True
 
         if not meta['is_disc']:
             console.print("[red]Only disc-based content allowed at TIK")
-            return
-        elif meta['bdinfo'] is not None:
-            mi_dump = None
-            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as bd_file:
-                bd_dump = bd_file.read()
-        else:
-            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as mi_file:
-                mi_dump = mi_file.read()
-            bd_dump = None
+            return False
 
-        if meta.get('desclink'):
-            desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", "r", encoding='utf-8').read()
-            print(f"Custom Description Link: {desc}")
+        return should_continue
 
-        elif meta.get('descfile'):
-            desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", "r", encoding='utf-8').read()
-            print(f"Custom Description File Path: {desc}")
-
-        else:
-            await self.edit_desc(meta)
-            desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", "r", encoding='utf-8').read()
-
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'torrent': open_torrent}
+    async def get_additional_data(self, meta):
         data = {
-            'name': await self.get_name(meta, disctype),
-            'description': desc,
-            'mediainfo': mi_dump,
-            'bdinfo': bd_dump,
-            'category_id': cat_id,
-            'type_id': type_id,
-            'resolution_id': resolution_id,
-            'tmdb': meta['tmdb'],
-            'imdb': meta['imdb'].replace('tt', ''),
-            'tvdb': meta['tvdb_id'],
-            'mal': meta['mal_id'],
-            'igdb': 0,
-            'anonymous': anon,
-            'stream': meta['stream'],
-            'sd': meta['sd'],
-            'keywords': meta['keywords'],
-            'personal_release': 0,
-            'internal': 0,
-            'featured': 0,
-            'free': 0,
-            'doubleup': 0,
-            'sticky': 0,
-            'mod_queue_opt_in': modq,
-        }
-        # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
-        if self.config['TRACKERS'][self.tracker].get('personal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('personal_group', [])):
-                data['personal_release'] = 1
-
-        if region_id != 0:
-            data['region_id'] = region_id
-        if distributor_id != 0:
-            data['distributor_id'] = distributor_id
-        if meta.get('category') == "TV":
-            data['season_number'] = meta.get('season_int', '0')
-            data['episode_number'] = meta.get('episode_int', '0')
-        headers = {
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
-        }
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
+            'modq': await self.get_flag(meta, 'modq'),
         }
 
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-            try:
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-                # adding torrent link to comment of torrent file
-                t_id = response.json()['data'].split(".")[1].split("/")[3]
-                meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), "https://cinematik.net/torrents/" + t_id, headers=headers, params=params, downurl=response.json()['data'])
-            except Exception:
-                console.print("It may have uploaded, go check")
-                return
-        else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
+        return data
 
-    def get_basename(self, meta):
-        path = next(iter(meta['filelist']), meta['path'])
-        return os.path.basename(path)
-
-    async def get_name(self, meta, disctype):
+    async def get_name(self, meta):
         disctype = meta.get('disctype', None)
-        basename = self.get_basename(meta)
+        basename = os.path.basename(next(iter(meta['filelist']), meta['path']))
         type = meta.get('type', "")
         title = meta.get('title', "").replace('AKA', '/').strip()
         alt_title = meta.get('aka', "").replace('AKA', '/').strip()
@@ -175,12 +73,7 @@ class TIK():
         search_year = meta.get('search_year', "")
         if not str(search_year).strip():
             search_year = year
-
-        category_name = meta.get('category', "")
-        foreign = meta.get('foreign')
-        opera = meta.get('opera')
-        asian = meta.get('asian')
-        meta['category_id'] = await self.get_cat_id(category_name, foreign, opera, asian)
+        meta['category_id'] = (await self.get_category_id(meta))['category_id']
 
         name = ""
         alt_title_part = f" {alt_title}" if alt_title else ""
@@ -196,17 +89,13 @@ class TIK():
                 if meta['is_disc'] == 'DVD':
                     name = f"{title}{alt_title_part} ({search_year}) {season} {source} {dvd_size}"
 
-        # User confirmation
-        console.print(f"[yellow]Final generated name: [greee]{name}")
-        confirmation = cli_ui.ask_yes_no("Do you want to use this name?", default=False)  # Default is 'No'
+        return {'name': name}
 
-        if confirmation:
-            return name
-        else:
-            console.print("[red]Sorry, this seems to be an edge case, please report at (insert_link)")
-            sys.exit(1)
-
-    async def get_cat_id(self, category_name, foreign, opera, asian):
+    async def get_category_id(self, meta):
+        category_name = meta['category']
+        foreign = meta.get('foreign', False)
+        opera = meta.get('opera', False)
+        asian = meta.get('asian', False)
         category_id = {
             'FILM': '1',
             'TV': '2',
@@ -233,9 +122,10 @@ class TIK():
             else:
                 category_id = '2'
 
-        return category_id
+        return {'category_id': category_id}
 
-    async def get_type_id(self, disctype):
+    async def get_type_id(self, meta):
+        disctype = meta.get('disctype', None)
         type_id_map = {
             'Custom': '1',
             'BD100': '3',
@@ -251,14 +141,15 @@ class TIK():
 
         if not disctype:
             console.print("[red]You must specify a --disctype")
-            return None
+            # Raise an exception since we can't proceed without disctype
+            raise ValueError("disctype is required for TIK tracker but was not provided")
 
         disctype_value = disctype[0] if isinstance(disctype, list) else disctype
         type_id = type_id_map.get(disctype_value, '1')  # '1' is the default fallback
 
-        return type_id
+        return {'type_id': type_id}
 
-    async def get_res_id(self, resolution):
+    async def get_resolution_id(self, meta):
         resolution_id = {
             'Other': '10',
             '4320p': '1',
@@ -271,17 +162,18 @@ class TIK():
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(resolution, '10')
-        return resolution_id
+        }.get(meta['resolution'], '10')
+        return {'resolution_id': resolution_id}
 
-    async def get_flag(self, meta, flag_name):
-        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
-        if config_flag is not None:
-            return 1 if config_flag else 0
+    async def get_description(self, meta):
+        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
+        if meta.get('desclink') or meta.get('descfile'):
+            async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'r', encoding='utf-8') as f:
+                desc = await f.read()
 
-        return 1 if meta.get(flag_name, False) else 0
+            print(f'Custom Description Link/File Path: {desc}')
+            return {'description': desc}
 
-    async def edit_desc(self, meta):
         if len(meta.get('discs', [])) > 0:
             summary = meta['discs'][0].get('summary', '')
         else:
@@ -326,7 +218,7 @@ class TIK():
         if os.path.exists(poster_path):
             try:
                 console.print("Uploading standard poster to image host....")
-                new_poster_url, _ = upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
+                new_poster_url, _ = await upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
 
                 # Ensure that the new poster URL is assigned only once
                 if len(new_poster_url) > 0:
@@ -342,7 +234,7 @@ class TIK():
         images = meta['image_list']
         discs = meta.get('discs', [])  # noqa #F841
 
-        if len(images) >= 4:
+        if len(images) >= 6:
             image_link_1 = images[0]['raw_url']
             image_link_2 = images[1]['raw_url']
             image_link_3 = images[2]['raw_url']
@@ -496,8 +388,10 @@ class TIK():
             console.print("[green]Keeping the original description.[/green]")
 
         # Write the final description to the file
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding="utf-8") as desc_file:
-            desc_file.write(description)
+        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'w', encoding='utf-8') as desc_file:
+            await desc_file.write(description)
+
+        return {'description': description}
 
     def parse_subtitles(self, disc_mi):
         unique_subtitles = set()  # Store unique subtitle strings
@@ -560,36 +454,3 @@ class TIK():
             'YEM': 'Yemen', 'ZMB': 'Zambia', 'ZWE': 'Zimbabwe'
         }
         return country_mapping.get(code.upper(), 'Unknown Country')
-
-    async def search_existing(self, meta, disctype):
-        dupes = []
-        disctype = meta.get('disctype', None)
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'tmdbId': meta['tmdb'],
-            'categories[]': await self.get_cat_id(meta['category'], meta.get('foreign'), meta.get('opera'), meta.get('asian')),
-            'types[]': await self.get_type_id(disctype),
-            'resolutions[]': await self.get_res_id(meta['resolution']),
-            'name': ""
-        }
-        if meta.get('edition', "") != "":
-            params['name'] = params['name'] + f" {meta['edition']}"
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url=self.search_url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    for each in data['data']:
-                        result = [each][0]['attributes']['name']
-                        dupes.append(result)
-                else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
-        except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
-        except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
-        except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
-            await asyncio.sleep(5)
-
-        return dupes

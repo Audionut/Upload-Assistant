@@ -2,7 +2,6 @@ import requests
 import asyncio
 import re
 import os
-import cli_ui
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 from pymediainfo import MediaInfo
@@ -108,19 +107,6 @@ class HDT():
         await self.edit_desc(meta)
         hdt_name = await self.edit_name(meta)
         cat_id = await self.get_category_id(meta)
-
-        # Confirm the correct naming order for HDT
-        cli_ui.info(f"HDT name: {hdt_name}")
-        if meta.get('unattended', False) is False:
-            hdt_confirm = cli_ui.ask_yes_no("Correct?", default=False)
-            if hdt_confirm is not True:
-                hdt_name_manually = cli_ui.ask_string("Please enter a proper name", default="")
-                if hdt_name_manually == "":
-                    console.print('No proper name given')
-                    console.print("Aborting...")
-                    return
-                else:
-                    hdt_name = hdt_name_manually
 
         # Upload
         hdt_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()

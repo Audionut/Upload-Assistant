@@ -33,7 +33,7 @@ class AZTrackerBase():
 
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
+            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
         self.signature = ''
         self.media_code = ''
@@ -335,7 +335,7 @@ class AZTrackerBase():
         subtitle_ids = set()
 
         if meta.get('is_disc', False):
-            if not meta.get('subtitle_languages') or not meta.get('audio_languages'):
+            if not meta.get('language_checked', False):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
 
             found_subs_strings = meta.get('subtitle_languages', [])
@@ -836,7 +836,7 @@ class AZTrackerBase():
             'media_info': await self.get_file_info(meta),
             'tags[]': await self.get_tags(meta),
             'screenshots[]': [''],
-            }
+        }
 
         # TV
         if meta.get('category') == 'TV':
@@ -844,7 +844,7 @@ class AZTrackerBase():
                 'tv_collection': '1' if meta.get('tv_pack') == 0 else '2',
                 'tv_season': meta.get('season_int', ''),
                 'tv_episode': meta.get('episode_int', ''),
-                })
+            })
 
         anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:

@@ -34,7 +34,7 @@ class PTP():
         self.username = config['TRACKERS']['PTP'].get('username', '').strip()
         self.password = config['TRACKERS']['PTP'].get('password', '').strip()
         self.web_source = self._is_true(config['TRACKERS']['PTP'].get('add_web_source_to_desc', True))
-        self.user_agent = f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+        self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = ['aXXo', 'BMDru', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'd3g', 'DNL', 'FaNGDiNG0', 'HD2DVD', 'HDTime', 'ION10', 'iPlanet',
                               'KiNGDOM', 'mHD', 'mSD', 'nHD', 'nikt0', 'nSD', 'NhaNc3', 'OFT', 'PRODJi', 'SANTi', 'SPiRiT', 'STUTTERSHIT', 'ViSION', 'VXT',
                               'WAF', 'x0r', 'YIFY', 'LAMA', 'WORLD']
@@ -1388,8 +1388,8 @@ class PTP():
                     exclude_globs=exclude,  # Ensure this is always a list
                     include_globs=include,  # Ensure this is always a list
                     creation_date=datetime.now(),
-                    comment="Created by Audionut's Upload Assistant",
-                    created_by="Audionut's Upload Assistant"
+                    comment="Created by Upload Assistant",
+                    created_by="Upload Assistant"
                 )
 
                 # Explicitly set the piece size and update metainfo

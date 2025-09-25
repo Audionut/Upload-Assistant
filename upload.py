@@ -39,7 +39,7 @@ from cogs.redaction import redact_private_info
 from src.trackersetup import TRACKER_SETUP
 
 
-cli_ui.setup(color='always', title="Audionut's Upload Assistant")
+cli_ui.setup(color='always', title="Upload Assistant")
 running_subprocesses = set()
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -179,8 +179,6 @@ async def process_meta(meta, base_dir, bot=None):
     helper = UploadHelper()
 
     if not meta.get('emby', False):
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
-
         if meta.get('trackers'):
             trackers = meta['trackers']
         else:
@@ -201,6 +199,8 @@ async def process_meta(meta, base_dir, bot=None):
             for tracker in remove_list:
                 if tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
+
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
 
         if meta['debug']:
             console.print(f"Trackers list before editing: {meta['trackers']}")
@@ -864,6 +864,7 @@ async def do_the_thing(base_dir):
 
             find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
             if find_requests:
+                console.print("[green]Searching for requests on supported trackers.....")
                 tracker_setup = TRACKER_SETUP(config=config)
                 await tracker_setup.tracker_request(meta, meta['trackers'])
 

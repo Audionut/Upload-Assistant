@@ -60,20 +60,39 @@ async def cleanup():
                     pass
 
     # 🔹 Step 4: Ensure subprocess transport cleanup
-    await asyncio.sleep(0.1)
+    try:
+        await asyncio.sleep(0.1)
+    except RuntimeError:
+        # Event loop is no longer running, skip sleep
+        pass
 
     # 🔹 Step 5: Cancel all running asyncio tasks **gracefully**
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    # console.print(f"[yellow]Cancelling {len(tasks)} remaining tasks...[/yellow]")
+    try:
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        # console.print(f"[yellow]Cancelling {len(tasks)} remaining tasks...[/yellow]")
 
-    for task in tasks:
-        task.cancel()
+        for task in tasks:
+            task.cancel()
 
-    # Stage 1: Give tasks a moment to cancel themselves
-    await asyncio.sleep(0.1)
+        # Stage 1: Give tasks a moment to cancel themselves
+        try:
+            await asyncio.sleep(0.1)
+        except RuntimeError:
+            # Event loop is no longer running, skip sleep
+            pass
 
-    # Stage 2: Gather tasks with exception handling
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Stage 2: Gather tasks with exception handling
+        if tasks:  # Only gather if there are tasks
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+            except RuntimeError:
+                # Event loop is no longer running, skip gather
+                results = []
+        else:
+            results = []
+    except RuntimeError:
+        # Event loop is no longer running, skip task cleanup
+        results = []
 
     for result in results:
         if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):

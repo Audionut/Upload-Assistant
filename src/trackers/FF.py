@@ -25,9 +25,9 @@ class FF(COMMON):
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
+            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
 
     async def validate_credentials(self, meta):
         self.cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -451,7 +451,7 @@ class FF(COMMON):
         return name
 
     async def languages(self, meta):
-        if not meta.get('subtitle_languages') or meta.get('audio_languages'):
+        if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         lang_map = {
@@ -574,7 +574,7 @@ class FF(COMMON):
                 'anime_s_format[]': ['0'] + languages.get('anime_s_format'),
                 'anime_s_type[]': ['0'] + languages.get('anime_s_type'),
                 'anime_s_lang[]': ['0'] + languages.get('anime_s_lang'),
-                })
+            })
 
         else:
             if meta['category'] == 'MOVIE':
@@ -583,7 +583,7 @@ class FF(COMMON):
                     'movie_source': self.movie_source(meta),
                     'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
                     'pack': 0,
-                    })
+                })
 
             if meta['category'] == 'TV':
                 data.update({
@@ -591,7 +591,7 @@ class FF(COMMON):
                     'tv_source': self.tv_source(meta),
                     'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
                     'pack': 1 if meta.get('tv_pack', 0) else 0,
-                    })
+                })
 
         return data
 

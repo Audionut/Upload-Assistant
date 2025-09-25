@@ -25,9 +25,9 @@ class ASC(COMMON):
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Audionut's Upload Assistant ({platform.system()} {platform.release()})"
+            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Audionut's Upload Assistant[/url][/center]"
+        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Upload Assistant[/url][/center]"
 
         self.language_map = {
             'bg': '15', 'da': '12',
@@ -764,7 +764,8 @@ class ASC(COMMON):
 
     async def fetch_data(self, meta):
         self.load_localized_data(meta)
-        await process_desc_language(meta, desc=None, tracker=self.tracker)
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
         main_tmdb = await self.main_tmdb_data(meta)
         resolution = await self.get_resolution(meta)
 
