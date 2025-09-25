@@ -56,8 +56,17 @@ class UNIT3D:
                 if response.status_code == 200:
                     data = response.json()
                     for each in data['data']:
-                        result = [each][0]['attributes']['name']
-                        dupes.append(result)
+                        attributes = each.get('attributes', {})
+                        name = attributes.get('name')
+                        torrent_id = each.get('id')
+                        size = attributes.get('size')
+                        torrent_link = f'{self.torrent_url}{torrent_id}' if torrent_id else None
+                        dupe_entry = {
+                            'name': name,
+                            'size': size,
+                            'link': torrent_link
+                        }
+                        dupes.append(dupe_entry)
                 else:
                     console.print(f'[bold red]Failed to search torrents. HTTP Status: {response.status_code}')
         except httpx.TimeoutException:

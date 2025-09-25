@@ -12,7 +12,11 @@ async def filter_dupes(dupes, meta, tracker_name):
         console.log(dupes)
 
     processed_dupes = [
-        {'name': d, 'size': None} if isinstance(d, str) else {'name': d['name'], 'size': d['size']}
+        {'name': d, 'size': None, 'link': None} if isinstance(d, str) else {
+            'name': d['name'],
+            'size': d.get('size'),
+            'link': d.get('link')
+        }
         for d in dupes
     ]
 
