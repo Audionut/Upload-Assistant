@@ -1,3 +1,4 @@
+import aiofiles
 import anitopy
 import asyncio
 import cli_ui
@@ -1620,15 +1621,17 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
                 data = response.json()
 
                 if os.path.exists(filename):
-                    with open(filename, 'r', encoding='utf-8') as f:
-                        localized_data = json.load(f)
+                    async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
+                        content = await f.read()
+                        localized_data = json.loads(content)
                 else:
                     localized_data = {}
 
                 localized_data.setdefault(language, {})[data_type] = data
 
-                with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(localized_data, f, ensure_ascii=False, indent=4)
+                async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
+                    data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
+                    await f.write(data_str)
 
                 return data
             else:

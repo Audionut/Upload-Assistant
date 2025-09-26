@@ -5,29 +5,31 @@ import httpx
 import os
 import platform
 import re
-from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
 from src.console import console
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
+from src.trackers.COMMON import COMMON
 
 
-class ASC(COMMON):
+class ASC:
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'ASC'
         self.source_flag = 'ASC'
-        self.banned_groups = ['']
+        self.banned_groups = []
         self.base_url = 'https://cliente.amigos-share.club'
         self.torrent_url = 'https://cliente.amigos-share.club/torrents-details.php?id='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
+        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
+            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         }, timeout=60.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Upload Assistant[/url][/center]"
 
         self.language_map = {
             'bg': '15', 'da': '12',
