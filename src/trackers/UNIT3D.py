@@ -57,16 +57,23 @@ class UNIT3D:
                     data = response.json()
                     for each in data['data']:
                         attributes = each.get('attributes', {})
-                        name = attributes.get('name')
-                        torrent_id = each.get('id')
-                        size = attributes.get('size')
-                        torrent_link = f'{self.torrent_url}{torrent_id}' if torrent_id else None
-                        dupe_entry = {
-                            'name': name,
-                            'size': size,
-                            'link': torrent_link
-                        }
-                        dupes.append(dupe_entry)
+                        if not meta['is_disc']:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size'],
+                                'files': [file['name'] for file in attributes.get('files', []) if isinstance(file, dict) and 'name' in file],
+                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
+                                'trumpable': attributes['trumpable'],
+                                'details_link': attributes['details_link']
+                            }
+                        else:
+                            result = {
+                                'name': attributes['name'],
+                                'size': attributes['size'],
+                                'trumpable': attributes['trumpable'],
+                                'details_link': attributes['details_link']
+                            }
+                        dupes.append(result)
                 else:
                     console.print(f'[bold red]Failed to search torrents. HTTP Status: {response.status_code}')
         except httpx.TimeoutException:
