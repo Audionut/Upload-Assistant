@@ -130,7 +130,7 @@ async def filter_dupes(dupes, meta, tracker_name):
 
         if not meta.get('is_disc'):
             for file in filenames:
-                if tracker_name == "MTV":
+                if tracker_name in ["MTV", "AR"]:
                     # MTV: check if any dupe file is a substring of our file (ignoring extension)
                     if any(f in file for f in files):
                         meta['filename_match'] = True

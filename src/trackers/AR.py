@@ -404,12 +404,20 @@ class AR():
                     await self.close_session()
                     return dupes
 
-                group_names = [result['groupName'] for result in results if 'groupName' in result]
+                dupes = []
+                for res in results:
+                    if 'groupName' in res:
+                        dupe = {
+                            'name': res['groupName'],
+                            'size': res['size'],
+                            'files': res['groupName'],
+                            'file_count': res['fileCount'],
+                            'link': f'{self.search_url}?id={res["groupId"]}&torrentid={res["torrentId"]}',
+                        }
+                        dupes.append(dupe)
 
-                if group_names:
-                    dupes = group_names
-                else:
-                    console.print("[yellow]No valid group names found.")
+                await self.close_session()
+                return dupes
 
         except Exception as e:
             console.print(f"[red]Error occurred: {e}")
