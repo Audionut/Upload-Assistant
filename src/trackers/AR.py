@@ -233,7 +233,6 @@ class AR():
 
             await self.close_session()
             await self.start_session()
-            await self.validate_credentials(meta)
             retry_count += 1
 
         console.print("[red]Failed to reuse session after retries. Either try again or delete the cookie.[/red]")
