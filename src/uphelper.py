@@ -41,7 +41,7 @@ class UploadHelper:
                         meta['we_asked'] = False
                 else:
                     if meta.get('filename_match', False):
-                        console.print('[bold red]Exact filename matches found![/bold red]')
+                        console.print(f'[bold red]Exact filename matches found! - {dupe_text}[/bold red]')
                         upload = False
                         meta['we_asked'] = True
                     else:
