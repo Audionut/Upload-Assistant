@@ -193,15 +193,19 @@ class ANT():
                             if 'files' in each and len(each['files']) > 0:
                                 largest = each['files'][0]
                                 for file in each['files']:
-                                    if int(file.get('size', 0)) > int(largest.get('size', 0)):
+                                    current_size = int(file.get('size', 0))
+                                    largest_size = int(largest.get('size', 0))
+                                    if current_size > largest_size:
                                         largest = file
                                 largest_file = largest.get('name', '')
 
                             result = {
                                 'name': largest_file or each.get('fileName', ''),
+                                'files': [file.get('name', '') for file in each.get('files', [])],
                                 'size': int(each.get('size', 0)),
                                 'link': each.get('guid', ''),
-                                'flags': each.get('flags', [])
+                                'flags': each.get('flags', []),
+                                'file_count': each.get('fileCount', 0)
                             }
                             dupes.append(result)
 
