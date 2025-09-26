@@ -174,6 +174,7 @@ class DC():
         search_url = f'{self.api_base_url}/torrents'
         search_params = {'searchText': imdb_id}
         search_results = []
+        dupes = []
         try:
             response = await self.session.get(search_url, params=search_params, headers=self.session.headers, timeout=15)
             response.raise_for_status()
@@ -187,7 +188,20 @@ class DC():
                         print('An UNRAR duplicate of this specific release already exists on site.')
                         meta['skipping'] = f'{self.tracker}'
                         return
-                    return search_results
+
+                    for each in search_results:
+                        name = each.get('name')
+                        torrent_id = each.get('id')
+                        size = each.get('size')
+                        torrent_link = f'{self.torrent_url}{torrent_id}/' if torrent_id else None
+                        dupe_entry = {
+                            'name': name,
+                            'size': size,
+                            'link': torrent_link
+                        }
+                        dupes.append(dupe_entry)
+
+                    return dupes
 
         except Exception as e:
             console.print(f'[bold red]Error searching for IMDb ID {imdb_id} on {self.tracker}: {e}[/bold red]')

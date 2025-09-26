@@ -13,11 +13,11 @@ from src.console import console
 from .COMMON import COMMON
 
 
-class SPD(COMMON):
-
+class SPD:
     def __init__(self, config):
         self.url = "https://speedapp.io"
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'SPD'
         self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
         self.upload_url = 'https://speedapp.io/api/upload'
@@ -30,8 +30,9 @@ class SPD(COMMON):
             f"https://ramjet.speedapp.to/{self.passkey}/announce",
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
-        self.banned_groups = ['']
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
+        self.banned_groups = []
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
+        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Upload Assistant",
             'accept': 'application/json',
@@ -99,33 +100,41 @@ class SPD(COMMON):
         return screenshots
 
     async def search_existing(self, meta, disctype):
-        dupes = []
-
+        results = []
         search_url = 'https://speedapp.io/api/torrent'
 
         params = {}
-
-        if meta['imdb_id'] != 0:
+        if meta.get('imdb_id', 0) != 0:
             params['imdbId'] = f"{meta.get('imdb_info', {}).get('imdbID', '')}"
         else:
-            params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
+            search_title = meta['title'].replace(':', '').replace("'", '').replace(',', '')
+            params['search'] = search_title
 
         try:
             response = await self.session.get(url=search_url, params=params, headers=self.session.headers)
+
             if response.status_code == 200:
                 data = response.json()
                 for each in data:
-                    result = each['name']
-                    dupes.append(result)
-                return dupes
+                    name = each.get('name')
+                    size = each.get('size')
+                    link = f'{self.torrent_url}{each.get("id")}/'
+
+                    if name:
+                        results.append({
+                            'name': name,
+                            'size': size,
+                            'link': link
+                        })
+                return results
             else:
-                console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
+                console.print(f'[bold red]HTTP request failed. Status: {response.status_code}')
 
         except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
+            console.print(f'[bold red]Unexpected error: {e}')
             console.print_exception()
 
-        return dupes
+        return results
 
     async def search_channel(self, meta):
         spd_channel = meta.get('spd_channel', '') or self.config['TRACKERS'][self.tracker].get('channel', '')
@@ -223,7 +232,7 @@ class SPD(COMMON):
             info = bencodepy.encode(torrent_data[b'info'])
             source_flag = hashlib.sha1(info).hexdigest()
             self.source_flag = f"speedapp.io-{source_flag}-"
-            await self.edit_torrent(meta, self.tracker, self.source_flag)
+            await self.common.edit_torrent(meta, self.tracker, self.source_flag)
 
         return
 
@@ -305,6 +314,6 @@ class SPD(COMMON):
             console.print(data)
             status_message = "Debug mode enabled, not uploading."
 
-        await self.add_tracker_torrent(meta, self.tracker, self.source_flag + channel, self.announce_list, self.torrent_url + torrent_id)
+        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag + channel, self.announce_list, self.torrent_url + torrent_id)
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message

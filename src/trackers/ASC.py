@@ -519,6 +519,31 @@ class ASC(COMMON):
 
         return tags
 
+    async def _fetch_file_info(self, torrent_id, torrent_link, size):
+        '''
+        Helper function to fetch file info for a single release in parallel.
+        '''
+        file_page_url = f'{self.base_url}/torrents-arquivos.php?id={torrent_id}'
+        filename = 'N/A'
+
+        try:
+            file_page_response = await self.session.get(file_page_url, timeout=15)
+            file_page_response.raise_for_status()
+            file_page_soup = BeautifulSoup(file_page_response.text, 'html.parser')
+            file_li_tag = file_page_soup.find('li', class_='list-group-item')
+
+            if file_li_tag and file_li_tag.contents:
+                filename = file_li_tag.contents[0].strip()
+
+        except Exception as e:
+            console.print(f'[bold red]Falha ao obter nome do arquivo para ID {torrent_id}: {e}[/bold red]')
+
+        return {
+            'name': filename,
+            'size': size,
+            'link': torrent_link
+        }
+
     async def search_existing(self, meta, disctype):
         found_items = []
         if meta.get('anime'):
@@ -526,11 +551,14 @@ class ASC(COMMON):
             search_query = search_name.replace(' ', '+')
             search_url = f'{self.base_url}/torrents-search.php?search={search_query}'
 
-        if meta['category'] == 'MOVIE':
+        elif meta['category'] == 'MOVIE':
             search_url = f"{self.base_url}/busca-filmes.php?search=&imdb={meta['imdb_info']['imdbID']}"
 
-        if meta['category'] == 'TV':
+        elif meta['category'] == 'TV':
             search_url = f"{self.base_url}/busca-series.php?search={meta.get('season', '')}{meta.get('episode', '')}&imdb={meta['imdb_info']['imdbID']}"
+
+        else:
+            return found_items
 
         try:
             response = await self.session.get(search_url, timeout=30)
@@ -544,7 +572,14 @@ class ASC(COMMON):
         if not releases:
             return found_items
 
+        name_search_tasks = []
+
         for release in releases:
+            details_link_tag = release.find('a', href=lambda href: href and 'torrents-details.php?id=' in href)
+            torrent_link = details_link_tag.get('href', '') if details_link_tag else ''
+            size_tag = release.find('span', text=lambda t: t and ('GB' in t.upper() or 'MB' in t.upper()), class_='badge-info')
+            size = size_tag.get_text(strip=True).strip() if size_tag else ''
+
             try:
                 badges = release.find_all('span', class_='badge')
                 disc_types = ['BD25', 'BD50', 'BD66', 'BD100', 'DVD5', 'DVD9']
@@ -570,27 +605,30 @@ class ASC(COMMON):
                         elif any(term in badge_text_upper for term in disc_types):
                             disk_type = badge_text
 
-                    dupe_string = f'{name} {year} {resolution} {disk_type} {video_codec} {audio_codec}'
-                    found_items.append(dupe_string)
+                    name = f'{name} {year} {resolution} {disk_type} {video_codec} {audio_codec}'
+                    dupe_entry = {
+                        'name': name,
+                        'size': size,
+                        'link': torrent_link
+                    }
+
+                    found_items.append(dupe_entry)
+
                 else:
-                    details_link_tag = release.find('a', href=lambda href: href and 'torrents-details.php?id=' in href)
                     if not details_link_tag:
                         continue
 
                     torrent_id = details_link_tag['href'].split('id=')[-1]
-                    file_page_url = f'{self.base_url}/torrents-arquivos.php?id={torrent_id}'
-                    file_page_response = await self.session.get(file_page_url, timeout=15)
-                    file_page_response.raise_for_status()
-                    file_page_soup = BeautifulSoup(file_page_response.text, 'html.parser')
-
-                    file_li_tag = file_page_soup.find('li', class_='list-group-item')
-                    if file_li_tag and file_li_tag.contents:
-                        filename = file_li_tag.contents[0].strip()
-                        found_items.append(filename)
+                    name_search_tasks.append(self._fetch_file_info(torrent_id, torrent_link, size))
 
             except Exception as e:
                 console.print(f'[bold red]Falha ao processar um release da lista: {e}[/bold red]')
                 continue
+
+        if name_search_tasks:
+            parallel_results = await asyncio.gather(*name_search_tasks)
+            found_items.extend(parallel_results)
+
         return found_items
 
     async def get_upload_url(self, meta):

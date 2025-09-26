@@ -131,7 +131,7 @@ def extract_bluray_links(html_content):
     results = []
 
     try:
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'lxml')
         movie_divs = soup.select('div.figure')
         if not movie_divs:
             console.print("[red]No movie divs found in the search results[/red]")
@@ -195,7 +195,7 @@ async def extract_bluray_release_info(html_content, meta):
         console.print(f"[dim]Could not save debug file: {str(e)}[/dim]")
 
     try:
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'lxml')
 
         bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
         if meta['debug']:
@@ -762,7 +762,7 @@ async def download_cover_images(meta):
 
 def extract_cover_images(html_content):
     cover_images = {}
-    soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(html_content, 'lxml')
     scripts = soup.find_all('script', string=lambda s: s and "$(document).ready" in s and "append('<img id=" in s)
 
     for script in scripts:

@@ -19,11 +19,6 @@ from src.console import console
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 
-img_host = [
-    config["DEFAULT"][key].lower()
-    for key in sorted(config["DEFAULT"].keys())
-    if key.startswith("img_host_1") and not key.endswith("0")
-]
 task_limit = int(config['DEFAULT'].get('process_limit', 1))
 threads = str(config['DEFAULT'].get('threads', '1'))
 cutoff = int(config['DEFAULT'].get('cutoff_screens', 1))
@@ -72,6 +67,7 @@ async def sanitize_filename(filename):
 
 
 async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, image_list, ffdebug, num_screens=None, force_screenshots=False):
+    img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:
         start_time = time.time()
@@ -269,21 +265,32 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
 
             retake = False
             image_size = os.path.getsize(image_path)
+            if meta['debug']:
+                console.print(f"[yellow]Checking image {image_path} (size: {image_size} bytes) for image host: {img_host}[/yellow]")
             if image_size <= 75000:
                 console.print(f"[yellow]Image {image_path} is incredibly small, retaking.")
                 retake = True
-            elif "imgbb" in img_host and image_size <= 31000000:
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
-            elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
-                console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
-                retake = True
+                if "imgbb" in img_host:
+                    if image_size <= 31000000:
+                        if meta['debug']:
+                            console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
+                    else:
+                        console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for imgbb, retaking.")
+                        retake = True
+                elif img_host in ["imgbox", "pixhost"]:
+                    if 75000 < image_size <= 10000000:
+                        if meta['debug']:
+                            console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
+                    else:
+                        console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
+                        retake = True
+                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                    if meta['debug']:
+                        console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
+                else:
+                    console.print(f"[red]Unknown image host or image doesn't meet requirements for host: {img_host}, retaking.")
+                    retake = True
 
             if retake:
                 retry_attempts = 3
@@ -303,15 +310,18 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         new_size = os.path.getsize(screenshot_response)
                         valid_image = False
 
-                        if "imgbb" in img_host and new_size > 75000 and new_size <= 31000000:
-                            console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                            valid_image = True
-                        elif new_size > 75000 and new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
-                            console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                            valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
-                            console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                            valid_image = True
+                        if "imgbb" in img_host:
+                            if new_size > 75000 and new_size <= 31000000:
+                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                valid_image = True
+                        elif img_host in ["imgbox", "pixhost"]:
+                            if new_size > 75000 and new_size <= 10000000:
+                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                valid_image = True
+                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                            if new_size > 75000:
+                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                valid_image = True
 
                         if valid_image:
                             valid_results.append(screenshot_response)
@@ -827,6 +837,7 @@ async def capture_dvd_screenshot(task):
 
 
 async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=None, force_screenshots=False, manual_frames=None):
+    img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:
         start_time = time.time()
@@ -1104,18 +1115,27 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
             if image_size <= 75000:
                 console.print(f"[yellow]Image {image_path} is incredibly small, retaking.")
                 retake = True
-            elif "imgbb" in img_host and image_size <= 31000000:
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
-            elif any(host in ["imgbox", "pixhost"] for host in img_host) and image_size <= 10000000:
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
-            elif any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
-                if meta['debug']:
-                    console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
             else:
-                console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
-                retake = True
+                if "imgbb" in img_host:
+                    if image_size <= 31000000:
+                        if meta['debug']:
+                            console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
+                    else:
+                        console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for imgbb, retaking.")
+                        retake = True
+                elif img_host in ["imgbox", "pixhost"]:
+                    if 75000 < image_size <= 10000000:
+                        if meta['debug']:
+                            console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
+                    else:
+                        console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
+                        retake = True
+                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                    if meta['debug']:
+                        console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
+                else:
+                    console.print(f"[red]Unknown image host or image doesn't meet requirements for host: {img_host}, retaking.")
+                    retake = True
 
         if retake:
             retry_attempts = 5
@@ -1150,15 +1170,18 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             new_size = os.path.getsize(screenshot_path)
                             valid_image = False
 
-                            if "imgbb" in img_host and 75000 < new_size <= 31000000:
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                                valid_image = True
-                            elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                                valid_image = True
-                            elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"] for host in img_host):
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                                valid_image = True
+                            if "imgbb" in img_host:
+                                if 75000 < new_size <= 31000000:
+                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                    valid_image = True
+                            elif img_host in ["imgbox", "pixhost"]:
+                                if 75000 < new_size <= 10000000:
+                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                    valid_image = True
+                            elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                                if new_size > 75000:
+                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                    valid_image = True
 
                             if valid_image:
                                 valid_results.append(screenshot_response)
@@ -1193,12 +1216,15 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                         new_size = os.path.getsize(screenshot_path)
                         valid_image = False
 
-                        if "imgbb" in img_host and 75000 < new_size <= 31000000:
-                            valid_image = True
-                        elif 75000 < new_size <= 10000000 and any(host in ["imgbox", "pixhost"] for host in img_host):
-                            valid_image = True
-                        elif new_size > 75000 and any(host in ["ptpimg", "lensdump", "ptscreens", "onlyimage"] for host in img_host):
-                            valid_image = True
+                        if "imgbb" in img_host:
+                            if 75000 < new_size <= 31000000:
+                                valid_image = True
+                        elif img_host in ["imgbox", "pixhost"]:
+                            if 75000 < new_size <= 10000000:
+                                valid_image = True
+                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                            if new_size > 75000:
+                                valid_image = True
 
                         if valid_image:
                             valid_results.append(screenshot_response)
@@ -1859,3 +1885,24 @@ async def libplacebo_warmup(path, meta, loglevel):
     except Exception as e:
         if loglevel == 'verbose' or meta.get('debug', False):
             console.print(f"[yellow]libplacebo warm-up failed: {e} (continuing)[/yellow]")
+
+
+async def get_image_host(meta):
+    if meta.get('imghost') is not None:
+        host = meta['imghost']
+
+        if isinstance(host, str):
+            return host.lower().strip()
+
+        elif isinstance(host, list):
+            for item in host:
+                if item and isinstance(item, str):
+                    return item.lower().strip()
+    else:
+        img_host_config = [
+            config["DEFAULT"][key].lower()
+            for key in sorted(config["DEFAULT"].keys())
+            if key.startswith("img_host_1") and not key.endswith("0")
+        ]
+        if img_host_config:
+            return str(img_host_config[0])

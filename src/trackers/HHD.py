@@ -15,6 +15,7 @@ class HHD(UNIT3D):
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             'aXXo', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'd3g',
@@ -26,7 +27,7 @@ class HHD(UNIT3D):
         ]
         pass
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, mapping_only=False, reverse=False, resolution=None):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -39,5 +40,14 @@ class HHD(UNIT3D):
             '480p': '8',
             '480i': '9',
             'Other': '10'
-        }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        }
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution is not None:
+            return {'resolution_id': resolution_id.get(resolution, '10')}
+        else:
+            meta_resolution = meta.get('resolution', '')
+            resolved_id = resolution_id.get(meta_resolution, '10')
+            return {'resolution_id': resolved_id}

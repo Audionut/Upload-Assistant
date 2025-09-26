@@ -16,6 +16,7 @@ class OTW(UNIT3D):
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL',
@@ -51,7 +52,7 @@ class OTW(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type = meta['type']
         if meta.get('is_disc') == 'BDMV':
             return {'type_id': '1'}
@@ -66,8 +67,17 @@ class OTW(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(type, '0')
-        return {'type_id': type_id}
+        }
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        else:
+            meta_type = meta.get('type', '')
+            resolved_id = type_id.get(meta_type, '0')
+            return {'type_id': resolved_id}
 
     async def get_name(self, meta):
         otw_name = meta['name']

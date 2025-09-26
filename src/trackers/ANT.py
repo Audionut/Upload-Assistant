@@ -130,7 +130,7 @@ class ANT():
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
                             return
-                        if "success" not in response_data.lower():
+                        if "Success" not in response_data:
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
                             meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
@@ -149,7 +149,7 @@ class ANT():
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
             else:
-                console.print("[cyan]Request Data:")
+                console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
@@ -193,14 +193,19 @@ class ANT():
                             if 'files' in each and len(each['files']) > 0:
                                 largest = each['files'][0]
                                 for file in each['files']:
-                                    if int(file.get('size', 0)) > int(largest.get('size', 0)):
+                                    current_size = int(file.get('size', 0))
+                                    largest_size = int(largest.get('size', 0))
+                                    if current_size > largest_size:
                                         largest = file
                                 largest_file = largest.get('name', '')
 
                             result = {
                                 'name': largest_file or each.get('fileName', ''),
+                                'files': [file.get('name', '') for file in each.get('files', [])],
                                 'size': int(each.get('size', 0)),
-                                'flags': each.get('flags', [])
+                                'link': each.get('guid', ''),
+                                'flags': each.get('flags', []),
+                                'file_count': each.get('fileCount', 0)
                             }
                             dupes.append(result)
 

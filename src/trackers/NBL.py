@@ -82,7 +82,7 @@ class NBL():
                         }
                     meta['tracker_status'][self.tracker]['status_message'] = response_data
             else:
-                console.print("[cyan]Request Data:")
+                console.print("[cyan]NBL Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
@@ -127,7 +127,15 @@ class NBL():
                         data = response.json()
                         for each in data.get('result', {}).get('items', []):
                             if meta['resolution'] in each.get('tags', []):
-                                dupes.append(each['rls_name'])
+                                file_list = each.get('file_list', [])
+                                result = {
+                                    'name': each.get('rls_name', ''),
+                                    'files': ', '.join(file_list) if isinstance(file_list, list) else str(file_list),
+                                    'size': int(each.get('size', 0)),
+                                    'link': f'https://nebulance.io/torrents.php?id={each.get("group_id", "")}',
+                                    'file_count': len(file_list) if isinstance(file_list, list) else 1,
+                                }
+                                dupes.append(result)
                     except json.JSONDecodeError:
                         console.print("[bold yellow]NBL response content is not valid JSON. Skipping this API call.")
                         meta['skipping'] = "NBL"

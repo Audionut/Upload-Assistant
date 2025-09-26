@@ -2,6 +2,7 @@ import os
 import re
 import urllib.parse
 import requests
+from bs4 import BeautifulSoup
 from src.console import console
 
 
@@ -120,4 +121,49 @@ async def is_scene(video, meta, imdb=None, lower=False):
             console.print(f"[yellow]SRRDB search failed: {e}")
             return None
 
+    if not scene:
+        if meta['debug']:
+            console.print("[yellow]SRRDB: No scene match found, checking predb")
+        #  scene = await predb_check(meta, video)
+
     return video, scene, imdb
+
+
+async def predb_check(meta, video):
+    url = f"https://predb.pw/search.php?search={urllib.parse.quote(os.path.basename(video))}"
+    if meta['debug']:
+        console.print("Using predb url", url)
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            found = False
+            video_base = os.path.basename(video).lower()
+            for row in soup.select('table.zebra-striped tbody tr'):
+                tds = row.find_all('td')
+                if len(tds) >= 3:
+                    # The 3rd <td> contains the release name link
+                    release_a = tds[2].find('a', title=True)
+                    if release_a:
+                        release_name = release_a['title'].strip().lower()
+                        if meta['debug']:
+                            console.print(f"[yellow]Predb: Checking {release_name} against {video_base}")
+                        if release_name == video_base:
+                            found = True
+                            meta['scene_name'] = release_a['title'].strip()
+                            console.print("[green]Predb: Match found")
+                            # The 4th <td> contains the group
+                            if len(tds) >= 4:
+                                group_a = tds[3].find('a')
+                                if group_a:
+                                    meta['tag'] = group_a.text.strip()
+                            return True
+            if not found:
+                console.print("[yellow]Predb: No match found")
+                return False
+        else:
+            console.print(f"[red]Predb: Error {response.status_code} while checking")
+            return False
+    except requests.RequestException as e:
+        console.print(f"[red]Predb: Request failed: {e}")
+        return False

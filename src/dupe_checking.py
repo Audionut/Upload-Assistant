@@ -1,5 +1,8 @@
+import os
 import re
+from data.config import config
 from src.console import console
+from src.trackers.HUNO import HUNO
 
 
 async def filter_dupes(dupes, meta, tracker_name):
@@ -10,11 +13,34 @@ async def filter_dupes(dupes, meta, tracker_name):
     if meta['debug']:
         console.log(f"[cyan]Pre-filtered dupes from {tracker_name}")
         console.log(dupes)
+    meta['trumpable'] = False
+    processed_dupes = []
+    for d in dupes:
+        if isinstance(d, str):
+            # Case 1: Simple string (just name)
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None})
+        elif isinstance(d, dict):
+            # Create a base entry with default values
+            entry = {
+                'name': d.get('name', ''),
+                'size': d.get('size'),
+                'files': [],
+                'file_count': 0,
+                'trumpable': d.get('trumpable', False),
+                'link': d.get('link', None)
+            }
 
-    processed_dupes = [
-        {'name': d, 'size': None} if isinstance(d, str) else {'name': d['name'], 'size': d['size']}
-        for d in dupes
-    ]
+            # Case 3: Dict with files and file_count
+            if 'files' in d:
+                if isinstance(d['files'], list):
+                    entry['files'] = d['files']
+                elif isinstance(d['files'], str) and d['files']:
+                    entry['files'] = [d['files']]
+                entry['file_count'] = len(entry['files'])
+            elif 'file_count' in d:
+                entry['file_count'] = d['file_count']
+
+            processed_dupes.append(entry)
 
     new_dupes = []
 
@@ -40,6 +66,13 @@ async def filter_dupes(dupes, meta, tracker_name):
     is_hdtv = meta.get('type') == "HDTV"
     target_source = meta.get("source")
     is_sd = meta.get('sd')
+    if not meta['is_disc']:
+        filenames = []
+        if meta.get('filelist'):
+            for file_path in meta.get('filelist', []):
+                # Extract just the filename without the path
+                filename = os.path.basename(file_path)
+                filenames.append(filename)
 
     attribute_checks = [
         {
@@ -71,8 +104,10 @@ async def filter_dupes(dupes, meta, tracker_name):
         Determine if an entry should be excluded.
         Returns True if the entry should be excluded, otherwise allowed as dupe.
         """
-        each = entry['name']
-        sized = entry['size']
+        each = entry.get('name', '')
+        sized = entry.get('size')  # This may come as a string, such as "1.5 GB"
+        files = entry.get('files', [])
+        file_count = entry.get('file_count', 0)
         normalized = await normalize_filename(each)
         file_hdr = await refine_hdr_terms(normalized)
 
@@ -91,6 +126,57 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(f"  'repack' in each.lower(): {'repack' in each.lower()}")
             console.log(f"[debug] meta['uuid']: {meta.get('uuid', '')}")
             console.log(f"[debug] normalized encoder: {normalized_encoder}")
+            console.log(f"[debug] link: {entry.get('link', None)}")
+            console.log(f"[debug] files: {files}")
+            console.log(f"[debug] file_count: {file_count}")
+
+        if not meta.get('is_disc'):
+            for file in filenames:
+                if tracker_name in ["MTV", "AR", "RTF"]:
+                    # MTV: check if any dupe file is a substring of our file (ignoring extension)
+                    if any(f in file for f in files):
+                        meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                        return False
+                else:
+                    if file in files:
+                        meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                        return False
+
+        if tracker_name == "MTV":
+            target_name = meta.get('name').replace(' ', '.').replace('DD+', 'DDP')
+            dupe_name = str(entry.get('name'))
+
+            def normalize_mtv_name(name):
+                # Handle audio format variations: DDP.5.1 <-> DDP5.1
+                name = re.sub(r'\.DDP\.(\d)', r'.DDP\1', name)
+                name = re.sub(r'\.DD\.(\d)', r'.DD\1', name)
+                name = re.sub(r'\.AC3\.(\d)', r'.AC3\1', name)
+                name = re.sub(r'\.DTS\.(\d)', r'.DTS\1', name)
+                return name
+            normalized_target = normalize_mtv_name(target_name)
+            if normalized_target == dupe_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
+
+        if tracker_name == "BHD":
+            target_name = meta.get('name').replace('DD+', 'DDP')
+            if str(entry.get('name')) == target_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
+
+        if tracker_name == "HUNO":
+            huno = HUNO(config=config)
+            huno_name_result = await huno.get_name(meta)
+            if isinstance(huno_name_result, dict) and 'name' in huno_name_result:
+                huno_name = huno_name_result['name']
+            else:
+                huno_name = str(huno_name_result)
+            if str(entry.get('name')) == huno_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
+
+        if tracker_name == "AITHER" and entry.get('trumpable', False):
+            meta['trumpable'] = entry.get('link', None)
 
         if has_is_disc and each.lower().endswith(".m2ts"):
             return False
@@ -100,7 +186,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             return True
 
         if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-            if len(each) > 1 and tag == "":
+            if len(each) >= 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:
                 return False
@@ -195,7 +281,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             new_dupes.append(each)
 
     if new_dupes and not meta.get('unattended', False) and meta['debug']:
-        console.print(f"[cyan]Final dupes on {tracker_name}: {new_dupes}")
+        console.log(f"[yellow]Filtered dupes on {tracker_name}: {new_dupes}")
 
     return new_dupes
 
@@ -270,7 +356,7 @@ async def has_matching_hdr(file_hdr, target_hdr, meta, tracker=None):
         simplified = set()
         if any(h in hdr_set for h in {"HDR", "HDR10", "HDR10+"}):
             simplified.add("HDR")
-        if "DV" in hdr_set or "DOVI" in hdr_set:
+        if ".DV." in hdr_set or " DV " in hdr_set or "DOVI" in hdr_set:
             simplified.add("DV")
             if 'web' not in meta['type'].lower():
                 simplified.add("HDR")

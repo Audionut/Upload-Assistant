@@ -15,6 +15,7 @@ class BLU(UNIT3D):
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AOC', 'AROMA',
@@ -85,19 +86,28 @@ class BLU(UNIT3D):
 
         return data
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, mapping_only=False, reverse=False, category=None):
         edition = meta.get('edition', '')
         category_name = meta['category']
         category_id = {
             'MOVIE': '1',
             'TV': '2',
             'FANRES': '3'
-        }.get(category_name, '0')
+        }
         if category_name == 'MOVIE' and 'FANRES' in edition:
             category_id = '3'
-        return {'category_id': category_id}
+        if mapping_only:
+            return category_id
+        elif reverse:
+            return {v: k for k, v in category_id.items()}
+        elif category is not None:
+            return {'category_id': category_id.get(category, '0')}
+        else:
+            meta_category = meta.get('category', '')
+            resolved_id = category_id.get(meta_category, '0')
+            return {'category_id': resolved_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '3',
@@ -105,10 +115,20 @@ class BLU(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '12'
-        }.get(meta['type'], '0')
-        return {'type_id': type_id}
+        }
 
-    async def get_resolution_id(self, meta):
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        else:
+            meta_type = meta.get('type', '')
+            resolved_id = type_id.get(meta_type, '0')
+            return {'type_id': resolved_id}
+
+    async def get_resolution_id(self, meta, mapping_only=False, reverse=False, resolution=None):
         resolution_id = {
             '8640p': '10',
             '4320p': '11',
@@ -121,5 +141,14 @@ class BLU(UNIT3D):
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        }
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution is not None:
+            return {'resolution_id': resolution_id.get(resolution, '10')}
+        else:
+            meta_resolution = meta.get('resolution', '')
+            resolved_id = resolution_id.get(meta_resolution, '10')
+            return {'resolution_id': resolved_id}
