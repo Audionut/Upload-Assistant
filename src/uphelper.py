@@ -16,22 +16,24 @@ class UploadHelper:
             return meta, False
         else:
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
-                dupe_text = '\n'.join([
-                    f"[bold cyan]{d['name']}[/bold cyan]\n"
-                    f"{d['link']}\n"
-                    if isinstance(d, dict) and d.get('link')
-                    else f"[bold cyan]{d['name']}[/bold cyan]" if isinstance(d, dict)
-                    else f"[bold cyan]{d}[/bold cyan]"
-                    for d in dupes
-                ])
-                console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]\n")
-                console.print(dupe_text)
-                if meta.get('dupe', False) is False:
-                    upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                dupe_text = "\n".join([d['name'] if isinstance(d, dict) else d for d in dupes])
+                if meta.get('filename_match', False):
+                    console.print('[bold red]Exact filename matches found![/bold red]')
+                    upload = False
                     meta['we_asked'] = True
                 else:
-                    upload = True
-                    meta['we_asked'] = False
+                    if meta.get('trumpable', False):
+                        console.print("[bold red]Trumpable found![/bold red]")
+                        console.print(f"[bold cyan]Details link:[/bold cyan] [yellow]{meta['trumpable']}[/yellow]")
+                    console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
+                    console.print()
+                    console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
+                    if meta.get('dupe', False) is False:
+                        upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                        meta['we_asked'] = True
+                    else:
+                        upload = True
+                        meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
