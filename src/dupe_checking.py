@@ -16,7 +16,7 @@ async def filter_dupes(dupes, meta, tracker_name):
     for d in dupes:
         if isinstance(d, str):
             # Case 1: Simple string (just name)
-            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'details_link': None})
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None})
         elif isinstance(d, dict):
             # Create a base entry with default values
             entry = {
@@ -25,7 +25,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                 'files': [],
                 'file_count': 0,
                 'trumpable': d.get('trumpable', False),
-                'details_link': d.get('details_link', None)
+                'link': d.get('link', None)
             }
 
             # Case 3: Dict with files and file_count
@@ -121,7 +121,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(f"  'repack' in each.lower(): {'repack' in each.lower()}")
             console.log(f"[debug] meta['uuid']: {meta.get('uuid', '')}")
             console.log(f"[debug] normalized encoder: {normalized_encoder}")
-            console.log(f"[debug] details_link: {entry.get('details_link', None)}")
+            console.log(f"[debug] link: {entry.get('link', None)}")
             console.log(f"[debug] files: {files}")
             console.log(f"[debug] file_count: {file_count}")
 
@@ -132,7 +132,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                     return False
 
         if tracker_name == "AITHER" and entry.get('trumpable', False):
-            meta['trumpable'] = entry.get('details_link', None)
+            meta['trumpable'] = entry.get('link', None)
 
         if has_is_disc and each.lower().endswith(".m2ts"):
             return False
