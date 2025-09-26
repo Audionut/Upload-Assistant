@@ -1,6 +1,8 @@
-import re
 import os
+import re
+from data.config import config
 from src.console import console
+from src.trackers.HUNO import HUNO
 
 
 async def filter_dupes(dupes, meta, tracker_name):
@@ -159,6 +161,17 @@ async def filter_dupes(dupes, meta, tracker_name):
         if tracker_name == "BHD":
             target_name = meta.get('name').replace('DD+', 'DDP')
             if str(entry.get('name')) == target_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
+
+        if tracker_name == "HUNO":
+            huno = HUNO(config=config)
+            huno_name_result = await huno.get_name(meta)
+            if isinstance(huno_name_result, dict) and 'name' in huno_name_result:
+                huno_name = huno_name_result['name']
+            else:
+                huno_name = str(huno_name_result)
+            if str(entry.get('name')) == huno_name:
                 meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                 return False
 
