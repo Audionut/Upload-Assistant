@@ -441,6 +441,16 @@ async def process_meta(meta, base_dir, bot=None):
 
                 if 'image_list' not in meta:
                     meta['image_list'] = []
+                manual_frames_str = meta.get('manual_frames', '')
+                if isinstance(manual_frames_str, str):
+                    manual_frames_list = [f.strip() for f in manual_frames_str.split(',') if f.strip()]
+                    manual_frames_count = len(manual_frames_list)
+                    if meta['debug']:
+                        console.print(f"Manual frames entered: {manual_frames_count}")
+                else:
+                    manual_frames_count = 0
+                if manual_frames_count > 0:
+                    meta['screens'] = manual_frames_count
                 if len(meta.get('image_list', [])) < meta.get('cutoff') and meta.get('skip_imghost_upload', False) is False:
                     return_dict = {}
                     try:

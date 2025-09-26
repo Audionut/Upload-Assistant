@@ -35,3 +35,4 @@ tqdm
 transmission_rpc
 unidecode
 urllib3
+lxml

@@ -50,42 +50,63 @@ async def upload_image_task(args):
                 }
 
         elif img_host == "ptpimg":
-            payload = {
-                'format': 'json',
-                'api_key': config['DEFAULT']['ptpimg_api']
-            }
+            try:
+                payload = {
+                    'format': 'json',
+                    'api_key': config['DEFAULT']['ptpimg_api'].strip()
+                }
+            except KeyError:
+                return {'status': 'failed', 'reason': 'Missing ptpimg API key in config'}
 
-            async with httpx.AsyncClient() as client:
-                async with aiofiles.open(image, 'rb') as file:
-                    files = {'file-upload[0]': (os.path.basename(image), await file.read())}
-                    headers = {'referer': 'https://ptpimg.me/index.php'}
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with aiofiles.open(image, 'rb') as file:
+                        files = {'file-upload[0]': (os.path.basename(image), await file.read())}
+                        headers = {'referer': 'https://ptpimg.me/index.php'}
+                        if meta.get('debug'):
+                            console.print(f"[cyan][ptpimg] Headers: {headers}[/cyan]")
+                            console.print(f"[cyan][ptpimg] Files: {list(files.keys())}[/cyan]")
 
-                try:
-                    response = await client.post(
-                        "https://ptpimg.me/upload.php",
-                        headers=headers,
-                        data=payload,
-                        files=files,
-                        timeout=timeout
-                    )
-                    response.raise_for_status()
-                    response_data = response.json()
+                    try:
+                        response = await client.post(
+                            "https://ptpimg.me/upload.php",
+                            headers=headers,
+                            data=payload,
+                            files=files,
+                            timeout=timeout
+                        )
+                        if meta.get('debug'):
+                            console.print(f"[cyan][ptpimg] Response status: {response.status_code}[/cyan]")
+                            console.print(f"[cyan][ptpimg] Response text: {response.text[:500]}[/cyan]")
 
-                    if not response_data or not isinstance(response_data, list) or 'code' not in response_data[0]:
-                        return {'status': 'failed', 'reason': "Invalid JSON response from ptpimg"}
+                        response.raise_for_status()
+                        response_data = response.json()
+                        if meta.get('debug'):
+                            console.print(f"[cyan][ptpimg] Response JSON: {response_data}[/cyan]")
 
-                    code = response_data[0]['code']
-                    ext = response_data[0]['ext']
-                    img_url = f"https://ptpimg.me/{code}.{ext}"
-                    raw_url = img_url
-                    web_url = img_url
+                        if not response_data or not isinstance(response_data, list) or 'code' not in response_data[0]:
+                            return {'status': 'failed', 'reason': "Invalid JSON response from ptpimg"}
 
-                except httpx.TimeoutException:
-                    return {'status': 'failed', 'reason': 'Request timed out'}
-                except ValueError as e:
-                    return {'status': 'failed', 'reason': f"Request failed: {str(e)}"}
-                except json.JSONDecodeError:
-                    return {'status': 'failed', 'reason': 'Invalid JSON response from ptpimg'}
+                        code = response_data[0]['code']
+                        ext = response_data[0]['ext']
+                        if meta.get('debug'):
+                            console.print(f"[cyan][ptpimg] Image code: {code}, extension: {ext}[/cyan]")
+                        img_url = f"https://ptpimg.me/{code}.{ext}"
+                        raw_url = img_url
+                        web_url = img_url
+
+                    except httpx.TimeoutException:
+                        console.print("[red][ptpimg] Request timed out.")
+                        return {'status': 'failed', 'reason': 'Request timed out'}
+                    except ValueError as e:
+                        console.print(f"[red][ptpimg] ValueError: {str(e)}")
+                        return {'status': 'failed', 'reason': f"Request failed: {str(e)}"}
+                    except json.JSONDecodeError as e:
+                        console.print(f"[red][ptpimg] JSONDecodeError: {str(e)}")
+                        return {'status': 'failed', 'reason': 'Invalid JSON response from ptpimg'}
+            except Exception as e:
+                console.print(f"[red][ptpimg] Exception: {str(e)}")
+                return {'status': 'failed', 'reason': f"Error during ptpimg upload: {str(e)}"}
 
         elif img_host == "imgbb":
             url = "https://api.imgbb.com/1/upload"
@@ -435,6 +456,8 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
     initial_img_host = config['DEFAULT'][f'img_host_{img_host_num}']
     img_host = meta['imghost']
+    if meta['debug']:
+        console.print(f"[blue]Using image host: {img_host} (configured: {initial_img_host})[/blue]")
     using_custom_img_list = isinstance(custom_img_list, list) and bool(custom_img_list)
 
     if 'image_sizes' not in meta:
@@ -480,6 +503,8 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
     # Determine images needed
     images_needed = total_screens - existing_count if not retry_mode else total_screens
+    if meta['debug']:
+        console.print(f"[blue]Existing images: {existing_count}, Images needed: {images_needed}, Total screens: {total_screens}[/blue]")
 
     if existing_count >= total_screens and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
         console.print(f"[yellow]Skipping upload: {existing_count} existing, {total_screens} required.")
@@ -568,13 +593,22 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
     try:
         max_retries = 3
-        upload_results = await asyncio.gather(*[async_upload(task, max_retries) for task in upload_tasks])
-        results = [res for res in upload_results if res is not None]
-        results.sort(key=lambda x: x[0])
+        try:
+            upload_results = await asyncio.gather(*[async_upload(task, max_retries) for task in upload_tasks])
+            results = [res for res in upload_results if res is not None]
+            results.sort(key=lambda x: x[0])
+        except Exception as e:
+            console.print(f"[red]Error during uploads: {str(e)}[/red]")
 
         successfully_uploaded = [(index, result) for index, result in results if result['status'] == 'success']
+        if meta['debug']:
+            console.print(f"[blue]Successfully uploaded {len(successfully_uploaded)} out of {len(upload_tasks)} attempted uploads.[/blue]")
 
         # Ensure we only switch hosts if necessary
+        if meta['debug']:
+            console.print(f"[blue]Double checking current image host: {img_host}, Initial image host: {initial_img_host}[/blue]")
+            console.print(f"[blue]retry_mode: {retry_mode}, using_custom_img_list: {using_custom_img_list}[/blue]")
+            console.print(f"[blue]successfully_uploaded={len(successfully_uploaded)}, meta['image_list']={len(meta['image_list'])}, cutoff={meta.get('cutoff', 1)}[/blue]")
         if (len(successfully_uploaded) + len(meta['image_list'])) < meta.get('cutoff', 1) and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
             img_host_num += 1
             if f'img_host_{img_host_num}' in config['DEFAULT']:

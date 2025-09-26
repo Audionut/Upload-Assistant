@@ -2,6 +2,7 @@ v6.0.0
 
 ## RELEASE NOTES
  - Immense thanks to @wastaken7 for refactoring the unit3d based tracker code. A huge QOL improvement that removed thousands of lines of code.
+ - New package added, run requirements.txt
 
 ## WHAT'S NEW - some from last release
  - Some new config options in example-config.py.
