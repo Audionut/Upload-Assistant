@@ -334,8 +334,6 @@ class AZTrackerBase():
 
         return duplicates
 
-        return duplicates
-
     async def get_cat_id(self, category_name):
         category_id = {
             'MOVIE': '1',
