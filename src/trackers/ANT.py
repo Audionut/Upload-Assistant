@@ -181,7 +181,6 @@ class ANT():
                 if response.status_code == 200:
                     try:
                         data = response.json()
-                        console.print(data)
                         target_resolution = meta.get('resolution', '').lower()
 
                         for each in data.get('item', []):

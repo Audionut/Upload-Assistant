@@ -328,7 +328,7 @@ class GPW():
             found_items = []
 
             try:
-                async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': "Upload Assistant/2.3"}) as client:
+                async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': 'Upload Assistant/2.3'}) as client:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     soup = BeautifulSoup(response.text, 'html.parser')
@@ -339,15 +339,30 @@ class GPW():
 
                     for torrent_row in torrent_table.find_all('tr', class_='TableTorrent-rowTitle'):
                         title_link = torrent_row.find('a', href=re.compile(r'torrentid=\d+'))
+                        if not title_link or not title_link.get('data-tooltip'):
+                            continue
 
-                        if title_link and title_link.get('data-tooltip'):
-                            file_name = title_link['data-tooltip']
-                            found_items.append(file_name)
+                        name = title_link['data-tooltip']
+
+                        size_cell = torrent_row.find('td', class_='TableTorrent-cellStatSize')
+                        size = size_cell.get_text(strip=True) if size_cell else None
+
+                        match = re.search(r'torrentid=(\d+)', title_link['href'])
+                        torrent_link = f'{self.torrent_url}{match.group(1)}' if match else None
+
+                        dupe_entry = {
+                            'name': name,
+                            'size': size,
+                            'link': torrent_link
+                        }
+
+                        found_items.append(dupe_entry)
 
                     if found_items:
                         await self.get_slots(meta, client, group_id)
 
-                return found_items
+                    return found_items
+
             except httpx.HTTPError as e:
                 print(f'An HTTP error occurred: {e}')
                 return []
