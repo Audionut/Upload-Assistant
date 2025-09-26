@@ -156,6 +156,12 @@ async def filter_dupes(dupes, meta, tracker_name):
                 meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                 return False
 
+        if tracker_name == "BHD":
+            target_name = meta.get('name').replace('DD+', 'DDP')
+            if str(entry.get('name')) == target_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
+
         if tracker_name == "AITHER" and entry.get('trumpable', False):
             meta['trumpable'] = entry.get('link', None)
 
