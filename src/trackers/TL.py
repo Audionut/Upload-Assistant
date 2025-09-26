@@ -20,7 +20,8 @@ class TL:
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.signature = '<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>'
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
+        self.signature = f'<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {self.ua_name}</a></center>'
         self.banned_groups = []
         self.session = httpx.AsyncClient(timeout=60.0)
         self.tracker_config = self.config['TRACKERS'][self.tracker]
@@ -31,7 +32,7 @@ class TL:
             f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
         ]
         self.session.headers.update({
-            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
+            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         })
 
     async def login(self, meta, force=False):
@@ -177,7 +178,7 @@ class TL:
             return
         cat_id = self.get_category(meta)
 
-        dupes = []
+        results = []
 
         search_name = meta["title"]
         resolution = meta["resolution"]
@@ -214,15 +215,20 @@ class TL:
                 torrents = data.get("torrentList", [])
 
                 for torrent in torrents:
-                    name = torrent.get("name")
-                    size = torrent.get("size")
-                    if name or size:
-                        dupes.append({'name': name, 'size': size})
+                    name = torrent.get('name')
+                    link = f"{self.torrent_url}{torrent.get('fid')}"
+                    size = torrent.get('size')
+                    if name:
+                        results.append({
+                            'name': name,
+                            'size': size,
+                            'link': link
+                        })
 
             except Exception as e:
                 console.print(f"[bold red]Error searching for duplicates on {self.tracker} ({url}): {e}[/bold red]")
 
-        return dupes
+        return results
 
     async def get_anilist_id(self, meta):
         url = 'https://graphql.anilist.co'
