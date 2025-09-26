@@ -104,7 +104,7 @@ class RTF():
                 return
 
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]RTF Request Data:")
             console.print(json_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 

@@ -149,7 +149,7 @@ class ANT():
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
             else:
-                console.print("[cyan]Request Data:")
+                console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:

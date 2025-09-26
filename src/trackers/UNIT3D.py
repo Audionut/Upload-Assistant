@@ -353,6 +353,6 @@ class UNIT3D:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
                     return
         else:
-            console.print('[cyan]Request Data:')
+            console.print(f'[cyan]{self.tracker} Request Data:')
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
