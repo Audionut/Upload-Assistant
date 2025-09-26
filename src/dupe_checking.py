@@ -1,4 +1,5 @@
 import re
+import os
 from src.console import console
 
 
@@ -10,15 +11,31 @@ async def filter_dupes(dupes, meta, tracker_name):
     if meta['debug']:
         console.log(f"[cyan]Pre-filtered dupes from {tracker_name}")
         console.log(dupes)
+    meta['trumpable'] = False
+    processed_dupes = []
+    for d in dupes:
+        if isinstance(d, str):
+            # Case 1: Simple string (just name)
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'details_link': None})
+        elif isinstance(d, dict):
+            # Create a base entry with default values
+            entry = {
+                'name': d.get('name', ''),
+                'size': d.get('size'),
+                'files': [],
+                'file_count': 0,
+                'trumpable': d.get('trumpable', False),
+                'details_link': d.get('details_link', None)
+            }
 
-    processed_dupes = [
-        {'name': d, 'size': None, 'link': None} if isinstance(d, str) else {
-            'name': d['name'],
-            'size': d.get('size'),
-            'link': d.get('link')
-        }
-        for d in dupes
-    ]
+            # Case 3: Dict with files and file_count
+            if 'files' in d and isinstance(d['files'], list):
+                entry['files'] = d['files']
+                entry['file_count'] = len(d['files'])
+            elif 'file_count' in d:
+                entry['file_count'] = d['file_count']
+
+            processed_dupes.append(entry)
 
     new_dupes = []
 
@@ -44,6 +61,13 @@ async def filter_dupes(dupes, meta, tracker_name):
     is_hdtv = meta.get('type') == "HDTV"
     target_source = meta.get("source")
     is_sd = meta.get('sd')
+    if not meta['is_disc']:
+        filenames = []
+        if meta.get('filelist'):
+            for file_path in meta.get('filelist', []):
+                # Extract just the filename without the path
+                filename = os.path.basename(file_path)
+                filenames.append(filename)
 
     attribute_checks = [
         {
@@ -75,8 +99,10 @@ async def filter_dupes(dupes, meta, tracker_name):
         Determine if an entry should be excluded.
         Returns True if the entry should be excluded, otherwise allowed as dupe.
         """
-        each = entry['name']
-        sized = entry['size']  # This may come as a string, such as "1.5 GB"
+        each = entry.get('name', '')
+        sized = entry.get('size')  # This may come as a string, such as "1.5 GB"
+        files = entry.get('files', [])
+        file_count = entry.get('file_count', 0)
         normalized = await normalize_filename(each)
         file_hdr = await refine_hdr_terms(normalized)
 
@@ -95,6 +121,18 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(f"  'repack' in each.lower(): {'repack' in each.lower()}")
             console.log(f"[debug] meta['uuid']: {meta.get('uuid', '')}")
             console.log(f"[debug] normalized encoder: {normalized_encoder}")
+            console.log(f"[debug] details_link: {entry.get('details_link', None)}")
+            console.log(f"[debug] files: {files}")
+            console.log(f"[debug] file_count: {file_count}")
+
+        if not meta.get('is_disc'):
+            for file in filenames:
+                if file in files:
+                    meta['filename_match'] = True
+                    return False
+
+        if tracker_name == "AITHER" and entry.get('trumpable', False):
+            meta['trumpable'] = entry.get('details_link', None)
 
         if has_is_disc and each.lower().endswith(".m2ts"):
             return False
@@ -199,7 +237,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             new_dupes.append(each)
 
     if new_dupes and not meta.get('unattended', False) and meta['debug']:
-        console.print(f"[cyan]Final dupes on {tracker_name}: {new_dupes}")
+        console.log(f"[yellow]Filtered dupes on {tracker_name}: {new_dupes}")
 
     return new_dupes
 
