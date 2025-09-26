@@ -9,7 +9,7 @@ from src.console import console
 from pymediainfo import MediaInfo
 
 
-class TL():
+class TL:
     CATEGORIES = {
         'Anime': 34,
         'Movie4K': 47,
@@ -31,21 +31,23 @@ class TL():
 
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'TL'
         self.source_flag = 'TorrentLeech.org'
         self.base_url = 'https://www.torrentleech.org'
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.signature = """<center><a href="https://github.com/Audionut/Upload-Assistant">Created by Upload Assistant</a></center>"""
-        self.banned_groups = [""]
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
+        self.signature = f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {self.ua_name}</a></center>"""
+        self.banned_groups = []
         self.session = httpx.AsyncClient(timeout=60.0)
         self.api_upload = self.config['TRACKERS'][self.tracker].get('api_upload', False)
         self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
         self.announce_url_1 = f'https://tracker.torrentleech.org/a/{self.passkey}/announce'
         self.announce_url_2 = f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
         self.session.headers.update({
-            'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
+            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         })
 
     async def login(self, meta, force=False):
@@ -220,7 +222,7 @@ class TL():
             return
         cat_id = await self.get_cat_id(self, meta)
 
-        dupes = []
+        results = []
 
         search_name = meta["title"]
         resolution = meta["resolution"]
@@ -257,19 +259,24 @@ class TL():
                 torrents = data.get("torrentList", [])
 
                 for torrent in torrents:
-                    name = torrent.get("name")
-                    size = torrent.get("size")
-                    if name or size:
-                        dupes.append({'name': name, 'size': size})
+                    name = torrent.get('name')
+                    link = f"{self.torrent_url}{torrent.get('fid')}"
+                    size = torrent.get('size')
+                    if name:
+                        results.append({
+                            'name': name,
+                            'size': size,
+                            'link': link
+                        })
 
             except Exception as e:
                 console.print(f"[bold red]Error searching for duplicates on {self.tracker} ({url}): {e}[/bold red]")
 
-        return dupes
+        return results
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        await common.edit_torrent(meta, self.tracker, self.source_flag, announce_url=self.announce_url_1)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag, announce_url=self.announce_url_1)
         cat_id = await self.get_cat_id(common, meta)
 
         if self.api_upload:
