@@ -15,28 +15,45 @@ class UploadHelper:
             meta['upload'] = True
             return meta, False
         else:
+            if meta.get('trumpable', False):
+                trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
+                if trumpable_dupes:
+                    trumpable_text = "\n".join([
+                        f"{d['name']} - {d['link']}" if 'link' in d else d['name']
+                        for d in trumpable_dupes
+                    ])
+                    console.print("[bold red]Trumpable found![/bold red]")
+                    console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+                # Remove trumpable dupes from the main list
+                dupes = [d for d in dupes if not (isinstance(d, dict) and d.get('trumpable'))]
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join([
                     f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d else (d['name'] if isinstance(d, dict) else d)
                     for d in dupes
                 ])
-                if meta.get('filename_match', False):
-                    console.print('[bold red]Exact filename matches found![/bold red]')
-                    upload = False
-                    meta['we_asked'] = True
-                else:
-                    if meta.get('trumpable', False):
-                        console.print("[bold red]Trumpable found![/bold red]")
-                        console.print(f"[bold cyan]Details link:[/bold cyan] [yellow]{meta['trumpable']}[/yellow]")
-                    console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
-                    console.print()
-                    console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
+                if not dupe_text and meta.get('trumpable', False):
+                    console.print("[yellow]Please check the trumpable entries above to see if you want to upload, and report the trumpable torrent if you upload.[/yellow]")
                     if meta.get('dupe', False) is False:
                         upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                         meta['we_asked'] = True
                     else:
                         upload = True
                         meta['we_asked'] = False
+                else:
+                    if meta.get('filename_match', False):
+                        console.print('[bold red]Exact filename matches found![/bold red]')
+                        upload = False
+                        meta['we_asked'] = True
+                    else:
+                        console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
+                        console.print()
+                        console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
+                        if meta.get('dupe', False) is False:
+                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                            meta['we_asked'] = True
+                        else:
+                            upload = True
+                            meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
