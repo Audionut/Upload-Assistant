@@ -133,12 +133,28 @@ async def filter_dupes(dupes, meta, tracker_name):
                 if tracker_name in ["MTV", "AR", "RTF"]:
                     # MTV: check if any dupe file is a substring of our file (ignoring extension)
                     if any(f in file for f in files):
-                        meta['filename_match'] = True
+                        meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                         return False
                 else:
                     if file in files:
-                        meta['filename_match'] = True
+                        meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                         return False
+
+        if tracker_name == "MTV":
+            target_name = meta.get('name').replace(' ', '.').replace('DD+', 'DDP')
+            dupe_name = str(entry.get('name'))
+
+            def normalize_mtv_name(name):
+                # Handle audio format variations: DDP.5.1 <-> DDP5.1
+                name = re.sub(r'\.DDP\.(\d)', r'.DDP\1', name)
+                name = re.sub(r'\.DD\.(\d)', r'.DD\1', name)
+                name = re.sub(r'\.AC3\.(\d)', r'.AC3\1', name)
+                name = re.sub(r'\.DTS\.(\d)', r'.DTS\1', name)
+                return name
+            normalized_target = normalize_mtv_name(target_name)
+            if normalized_target == dupe_name:
+                meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                return False
 
         if tracker_name == "AITHER" and entry.get('trumpable', False):
             meta['trumpable'] = entry.get('link', None)
