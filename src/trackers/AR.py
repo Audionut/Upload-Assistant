@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import aiofiles
+import aiohttp
 import json
 import os
 import pickle
@@ -93,7 +94,6 @@ class AR():
                 }.get(meta['resolution'], '7')
 
     async def start_session(self):
-        import aiohttp
         if self.session is not None:
             console.print("[dim red]Warning: Previous session was not closed properly. Closing it now.")
             await self.close_session()
@@ -183,14 +183,15 @@ class AR():
             for cookie in cookies:
                 cookie_dict[cookie.key] = cookie.value
 
-            with open(session_file, 'wb') as f:
-                pickle.dump(cookie_dict, f)
+            loop = asyncio.get_running_loop()
+            data = await loop.run_in_executor(None, pickle.dumps, cookie_dict)
+            async with aiofiles.open(session_file, 'wb') as f:
+                await f.write(data)
         except Exception as e:
             console.print(f"[red]Error saving session: {e}[/red]")
             return False
 
     async def load_session(self, meta):
-        import aiohttp
         session_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.pkl")
         retry_count = 0
         max_retries = 2
@@ -201,9 +202,11 @@ class AR():
                     console.print(f"[red]Session file not found: {session_file}[/red]")
                     return False  # No session file to load
 
-                with open(session_file, 'rb') as f:
+                loop = asyncio.get_running_loop()
+                async with aiofiles.open(session_file, 'rb') as f:
+                    data = await f.read()
                     try:
-                        cookie_dict = pickle.load(f)
+                        cookie_dict = await loop.run_in_executor(None, pickle.loads, data)
                     except (EOFError, pickle.UnpicklingError) as e:
                         console.print(f"[red]Error loading session cookies: {e}[/red]")
                         return False  # Corrupted session file
@@ -230,7 +233,6 @@ class AR():
 
             await self.close_session()
             await self.start_session()
-            await self.validate_credentials(meta)
             retry_count += 1
 
         console.print("[red]Failed to reuse session after retries. Either try again or delete the cookie.[/red]")
@@ -267,7 +269,8 @@ class AR():
         heading = "[COLOR=GREEN][size=6]"
         subheading = "[COLOR=RED][size=4]"
         heading_end = "[/size][/COLOR]"
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8').read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
+            base = await f.read()
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         base = re.sub(r'\[center\]\[spoiler=FraMeSToR NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
@@ -297,18 +300,19 @@ class AR():
                 # can not use full media info as sometimes its more than max chars per post.
                 mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/summary-mediainfo.csv")
                 if os.path.exists(mi_template):
-                    media_info = MediaInfo.parse(video, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
+                    media_info = await self.parse_mediainfo_async(video, mi_template)
                     description += (f"""[code]\n{media_info}\n[/code]\n""")
                     # adding full mediainfo as spoiler
-                    full_mediainfo = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
+                        full_mediainfo = await MI.read()
                     description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
                 else:
                     console.print("[bold red]Couldn't find the MediaInfo template")
                     console.print("[green]Using normal MediaInfo for the description.")
 
-                    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r',
-                              encoding='utf-8') as MI:
-                        description += (f"""[code]\n{MI.read()}\n[/code]\n\n""")
+                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
+                        cleaned_mediainfo = await MI.read()
+                        description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
 
             description += "\n\n" + subheading + "PLOT" + heading_end + "\n" + str(meta['overview'])
             if meta['genres']:
@@ -328,18 +332,19 @@ class AR():
             if len(base) > 2:
                 description += "\n\n" + subheading + "Notes" + heading_end + "\n" + str(base)
 
-            descfile.write(description)
-            descfile.close()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
+            await descfile.write(description)
         return
 
-    def get_language_tag(self, meta):
+    async def get_language_tag(self, meta):
         lang_tag = ""
         has_eng_audio = False
         audio_lang = ""
         if meta['is_disc'] != "BDMV":
             try:
-                with open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
-                    mi = json.load(f)
+                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                    mi_content = await f.read()
+                    mi = json.loads(mi_content)
                 for track in mi['media']['track']:
                     if track['@type'] == "Audio":
                         if track.get('Language', 'None').startswith('en'):
@@ -358,7 +363,7 @@ class AR():
             lang_tag = audio_lang
         return lang_tag
 
-    def get_basename(self, meta):
+    async def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
 
@@ -399,12 +404,20 @@ class AR():
                     await self.close_session()
                     return dupes
 
-                group_names = [result['groupName'] for result in results if 'groupName' in result]
+                dupes = []
+                for res in results:
+                    if 'groupName' in res:
+                        dupe = {
+                            'name': res['groupName'],
+                            'size': res['size'],
+                            'files': res['groupName'],
+                            'file_count': res['fileCount'],
+                            'link': f'{self.search_url}?id={res["groupId"]}&torrentid={res["torrentId"]}',
+                        }
+                        dupes.append(dupe)
 
-                if group_names:
-                    dupes = group_names
-                else:
-                    console.print("[yellow]No valid group names found.")
+                await self.close_session()
+                return dupes
 
         except Exception as e:
             console.print(f"[red]Error occurred: {e}")
@@ -508,48 +521,92 @@ class AR():
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
             if meta['debug'] is False:
-                import aiohttp
+                # Use existing session instead of creating a new one if possible
+                upload_session = self.session or None
                 try:
                     async with aiofiles.open(torrent_path, 'rb') as torrent_file:
-                        # Use a single session for all requests
-                        async with aiohttp.ClientSession() as session:
+                        torrent_data = await torrent_file.read()
+
+                        # Create a new session only if we don't have one
+                        if upload_session is None:
+                            async with aiohttp.ClientSession() as session:
+                                form = aiohttp.FormData()
+                                for key, value in data.items():
+                                    form.add_field(key, value)
+                                form.add_field('file_input', torrent_data, filename=f"{self.tracker}.torrent")
+
+                                # Perform the upload
+                                try:
+                                    async with session.post(self.upload_url, data=form, headers=headers) as response:
+                                        await asyncio.sleep(1)  # Give some time for the upload to process
+                                        await self._handle_upload_response(response, meta, data)
+                                except Exception:
+                                    await self.close_session()
+                                    meta['tracker_status'][self.tracker]['status_message'] = "data error - AR it may have uploaded, go check"
+                                    return
+                        else:
+                            # Use existing session
                             form = aiohttp.FormData()
                             for key, value in data.items():
                                 form.add_field(key, value)
-                            form.add_field('file_input', torrent_file, filename=f"{self.tracker}.torrent")
-
+                            form.add_field('file_input', torrent_data, filename=f"{self.tracker}.torrent")
                             # Perform the upload
                             try:
-                                async with session.post(self.upload_url, data=form, headers=headers) as response:
-                                    if response.status == 200:
-                                        # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
-                                        meta['tracker_status'][self.tracker]['status_message'] = str(response.url)
-                                        match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
-                                        if match is None:
-                                            await self.close_session()
-                                            meta['tracker_status'][self.tracker]['status_message'] = f"data error - failed: result URL {response.url} ({response.status}) is not the expected one."
-
-                                        # having UA add the torrent link as a comment.
-                                        if match:
-                                            await self.close_session()
-                                            common = COMMON(config=self.config)
-                                            await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
-
-                                    else:
-                                        meta['tracker_status'][self.tracker]['status_message'] = "data error - Response was not 200."
+                                async with upload_session.post(self.upload_url, data=form, headers=headers) as response:
+                                    await asyncio.sleep(1)
+                                    await self._handle_upload_response(response, meta, data)
                             except Exception:
                                 await self.close_session()
-                                meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
+                                meta['tracker_status'][self.tracker]['status_message'] = "data error - AR it may have uploaded, go check"
                                 return
                 except FileNotFoundError:
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - File not found: {torrent_path}"
-                return aiohttp
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - AR file not found: {torrent_path}"
+                    await self.close_session()
+                return
             else:
                 await self.close_session()
-                console.print("[cyan]Request Data:")
+                console.print("[cyan]AR Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
             await self.close_session()
-            meta['tracker_status'][self.tracker]['status_message'] = f"data error - Upload failed: {e}"
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error - AR Upload failed: {e}"
             return
+
+    async def _handle_upload_response(self, response, meta, data):
+        if response.status == 200:
+            # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
+            console.print(f"[green]{response.url}")
+            match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
+            try:
+                if match is None:
+                    await self.close_session()
+                    console.print(response.url)
+                    console.print(data)
+                    raise UploadException(  # noqa F405
+                        f"Upload to {self.tracker} failed: result URL {response.url} ({response.status}) is not the expected one.")  # noqa F405
+
+                # having UA add the torrent link as a comment.
+                if match:
+                    await self.close_session()
+                    common = COMMON(config=self.config)
+                    await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+            except Exception as e:
+                console.print(f"[red]Error: {e}")
+                await self.close_session()
+                return
+        else:
+            console.print("[red]Upload failed. Response was not 200.")
+
+    async def parse_mediainfo_async(self, video_path, template_path):
+        """Parse MediaInfo asynchronously using thread executor"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: MediaInfo.parse(
+                video_path,
+                output="STRING",
+                full=False,
+                mediainfo_options={"inform": f"file://{template_path}"}
+            )
+        )

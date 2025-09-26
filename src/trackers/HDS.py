@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import cli_ui
 import glob
 import httpx
 import os
@@ -147,7 +146,7 @@ class HDS:
         dupes = []
         imdb_id = meta.get('imdb', '')
         if imdb_id == '0':
-            cli_ui.info(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
+            console.print(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
             return dupes
 
         search_url = f'{self.base_url}/index.php?'
@@ -162,13 +161,35 @@ class HDS:
         try:
             response = await self.session.get(search_url, params=params)
             response.raise_for_status()
-
             soup = BeautifulSoup(response.text, 'html.parser')
-            torrent_links = soup.find_all('a', href=lambda href: href and 'page=torrent-details&id=' in href)
 
-            if torrent_links:
-                for link in torrent_links:
-                    dupes.append(link.get_text(strip=True))
+            all_tables = soup.find_all('table', class_='lista')
+
+            torrent_rows = []
+
+            for table in all_tables:
+                recommend_header = table.find('td', class_='block', string='Our Team Recommend')
+                if recommend_header:
+                    continue
+
+                rows_in_table = table.select('tr:has(td.lista)')
+                torrent_rows.extend(rows_in_table)
+
+            for row in torrent_rows:
+                name_tag = row.select_one('td:nth-child(2) > a[href*="page=torrent-details&id="]')
+                name = name_tag.get_text(strip=True) if name_tag else 'Unknown Name'
+
+                link_tag = name_tag
+                torrent_link = None
+                if link_tag and 'href' in link_tag.attrs:
+                    torrent_link = f'{self.base_url}/{link_tag["href"]}'
+
+                duplicate_entry = {
+                    'name': name,
+                    'size': None,
+                    'link': torrent_link
+                }
+                dupes.append(duplicate_entry)
 
         except Exception as e:
             console.print(f'[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]')

@@ -279,12 +279,10 @@ class AZTrackerBase():
 
         page_url = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
 
-        dupes = []
-
+        duplicates = []
         visited_urls = set()
 
         while page_url and page_url not in visited_urls:
-
             visited_urls.add(page_url)
 
             try:
@@ -292,24 +290,49 @@ class AZTrackerBase():
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.text, 'html.parser')
-                torrent_links = soup.find_all('a', class_='torrent-filename')
 
-                for link in torrent_links:
-                    dupes.append(link.get_text(strip=True))
+                torrent_table = soup.find('table', class_='table-bordered')
+                if not torrent_table:
+                    page_url = None
+                    continue
 
-                # Finds the next page
-                next_page_tag = soup.select_one('a[rel="next"]')
+                torrent_rows = torrent_table.find('tbody').find_all('tr', recursive=False)
+
+                for row in torrent_rows:
+                    name_tag = row.find('a', class_='torrent-filename')
+                    name = name_tag.get_text(strip=True) if name_tag else ''
+
+                    torrent_link = name_tag['href'] if name_tag and 'href' in name_tag.attrs else ''
+                    if torrent_link:
+                        match = re.search(r'/(\d+)', torrent_link)
+                        if match:
+                            torrent_link = f'{self.torrent_url}{match.group(1)}'
+
+                    cells = row.find_all('td')
+                    size = ''
+                    if len(cells) > 4:
+                        size_span = cells[4].find('span')
+                        size = size_span.get_text(strip=True) if size_span else cells[4].get_text(strip=True)
+
+                    dupe_entry = {
+                        'name': name,
+                        'size': size,
+                        'link': torrent_link
+                    }
+
+                    duplicates.append(dupe_entry)
+
+                next_page_tag = soup.select_one('a[rel=\'next\']')
                 if next_page_tag and 'href' in next_page_tag.attrs:
                     page_url = next_page_tag['href']
                 else:
-                    # if no rel="next", we are at the last page
                     page_url = None
 
             except httpx.RequestError as e:
-                console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
-                return dupes
+                self.console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
+                return duplicates
 
-        return dupes
+        return duplicates
 
     async def get_cat_id(self, category_name):
         category_id = {

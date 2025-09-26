@@ -211,7 +211,7 @@ class MTV():
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
                 return
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]MTV Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
@@ -537,9 +537,7 @@ class MTV():
                     try:
                         resp = await client.get(url=url)
                         if meta['debug']:
-                            console.log('[cyan]Validate Cookies:')
-                            console.log(cookies_dict)
-                            console.log(resp.url)
+                            console.print('[cyan]Validating Cookies:')
 
                         if "Logout" in resp.text:
                             return True
@@ -692,7 +690,13 @@ class MTV():
                         loop = asyncio.get_running_loop()
                         response_xml = await loop.run_in_executor(None, ET.fromstring, response.text)
                         for each in response_xml.find('channel').findall('item'):
-                            result = each.find('title').text
+                            result = {
+                                'name': each.find('title').text,
+                                'files': each.find('title').text,
+                                'file_count': each.find('files').text,
+                                'size': each.find('size').text,
+                                'link': each.find('guid').text
+                            }
                             dupes.append(result)
                     except ET.ParseError:
                         console.print("[red]Failed to parse XML response from MTV API")

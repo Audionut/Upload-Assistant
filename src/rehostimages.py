@@ -11,7 +11,7 @@ from src.uploadscreens import upload_screens
 from data.config import config
 
 
-def match_host(hostname, approved_hosts):
+async def match_host(hostname, approved_hosts):
     for approved_host in approved_hosts:
         if hostname == approved_host or hostname.endswith(f".{approved_host}"):
             return approved_host
@@ -49,7 +49,7 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
 
             parsed_url = urlparse(raw_url)
             hostname = parsed_url.netloc
-            mapped_host = match_host(hostname, url_host_mapping.keys())
+            mapped_host = await match_host(hostname, url_host_mapping.keys())
 
             if mapped_host:
                 mapped_host = url_host_mapping.get(mapped_host, mapped_host)
@@ -103,7 +103,7 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
 
         parsed_url = urlparse(raw_url)
         hostname = parsed_url.netloc
-        mapped_host = match_host(hostname, url_host_mapping.keys())
+        mapped_host = await match_host(hostname, url_host_mapping.keys())
 
         if mapped_host:
             mapped_host = url_host_mapping.get(mapped_host, mapped_host)
@@ -123,14 +123,15 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
     # Check if the tracker-specific key has valid images
     has_valid_images = False
     if meta.get(new_images_key):
-        all_images_valid = all(
-            url_host_mapping.get(
-                match_host(urlparse(image.get('raw_url', '')).netloc, url_host_mapping.keys()),
-                None
-            ) in approved_image_hosts for image in meta[new_images_key]
-        )
+        valid_hosts = []
+        for image in meta[new_images_key]:
+            netloc = urlparse(image.get('raw_url', '')).netloc
+            matched_host = await match_host(netloc, url_host_mapping.keys())
+            mapped_host = url_host_mapping.get(matched_host, None)
+            valid_hosts.append(mapped_host in approved_image_hosts)
 
-        if all_images_valid and meta[new_images_key]:
+        # Then check if all are valid
+        if all(valid_hosts) and meta[new_images_key]:
             has_valid_images = True
 
     if has_valid_images:
@@ -261,17 +262,20 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
         image_patterns = ["*.png", ".[!.]*.png"]
         image_glob = []
         for pattern in image_patterns:
-            image_glob.extend(glob.glob(pattern))
+            glob_results = await asyncio.to_thread(glob.glob, pattern)
+            image_glob.extend(glob_results)
             if meta['debug']:
                 console.print(f"[cyan]Found {len(image_glob)} files matching pattern: {pattern}")
 
         unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
         unwanted_files = set()
         for pattern in unwanted_patterns:
-            unwanted_files.update(glob.glob(pattern))
+            glob_results = await asyncio.to_thread(glob.glob, pattern)
+            unwanted_files.update(glob_results)
             if pattern.startswith("FILE") or pattern.startswith("PLAYLIST") or pattern.startswith("POSTER"):
                 hidden_pattern = "." + pattern
-                unwanted_files.update(glob.glob(hidden_pattern))
+                hidden_glob_results = await asyncio.to_thread(glob.glob, hidden_pattern)
+                unwanted_files.update(hidden_glob_results)
 
         # Remove unwanted files
         image_glob = [file for file in image_glob if file not in unwanted_files]
@@ -411,7 +415,8 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
                 continue
             else:
                 meta['imghost'] = current_img_host
-                console.print(f"[green]Uploading to approved host '{current_img_host}'.")
+                if meta['debug']:
+                    console.print(f"[green]Uploading to approved host '{current_img_host}'.")
                 break
 
         uploaded_images, _ = await upload_screens(
@@ -430,7 +435,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
             raw_url = image['raw_url']
             parsed_url = urlparse(raw_url)
             hostname = parsed_url.netloc
-            mapped_host = match_host(hostname, url_host_mapping.keys())
+            mapped_host = await match_host(hostname, url_host_mapping.keys())
             mapped_host = url_host_mapping.get(mapped_host, mapped_host)
 
             if mapped_host not in approved_image_hosts:
@@ -440,68 +445,67 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
                 return meta[new_images_key], True, images_reuploaded  # Trigger retry_mode if switching hosts
 
         # Ensure all uploaded images are valid
-        if all(
-            url_host_mapping.get(
-                match_host(urlparse(image['raw_url']).netloc, url_host_mapping.keys()),
-                match_host(urlparse(image['raw_url']).netloc, url_host_mapping.keys()),
-            ) in approved_image_hosts
-            for image in meta[new_images_key]
-        ):
-            if new_images_key in meta and isinstance(meta[new_images_key], list):
-                if tracker == "covers":
-                    output_file = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "covers.json")
-                else:
-                    output_file = os.path.join(screenshots_dir, "reuploaded_images.json")
-
-                try:
-                    async with aiofiles.open(output_file, 'r', encoding='utf-8') as f:
-                        existing_data = await f.read()
-                        existing_data = json.loads(existing_data) if existing_data else []
-                        if not isinstance(existing_data, list):
-                            console.print(f"[red]Existing data in {output_file} is not a list. Resetting to an empty list.")
-                            existing_data = []
-                except Exception:
-                    existing_data = []
-
-                updated_data = existing_data + meta[new_images_key]
-                updated_data = [dict(s) for s in {tuple(d.items()) for d in updated_data}]
-
-                if tracker == "covers" and "release_url" in meta:
-                    for image in updated_data:
-                        if "release_url" not in image:
-                            image["release_url"] = meta["release_url"]
-                    console.print(f"[green]Added release URL to {len(updated_data)} cover images: {meta['release_url']}")
-
-                try:
-                    async with aiofiles.open(output_file, 'w', encoding='utf-8') as f:
-                        await f.write(json.dumps(updated_data, indent=4))
-                    if meta['debug']:
-                        console.print(f"[green]Successfully updated reuploaded images in {output_file}.")
-
-                    if tracker == "covers":
-                        deleted_count = 0
-                        for screenshot in all_screenshots:
-                            try:
-                                if os.path.exists(screenshot):
-                                    os.remove(screenshot)
-                                    deleted_count += 1
-                                    if meta.get('debug'):
-                                        console.print(f"[dim]Deleted cover image file: {screenshot}[/dim]")
-                            except Exception as e:
-                                console.print(f"[yellow]Failed to delete cover image file {screenshot}: {str(e)}[/yellow]")
-
-                        if deleted_count > 0:
-                            if meta['debug']:
-                                console.print(f"[green]Cleaned up {deleted_count} cover image files after successful upload[/green]")
-
-                except Exception as e:
-                    console.print(f"[red]Failed to save reuploaded images: {e}")
+        valid_hosts = []
+        for image in meta[new_images_key]:
+            netloc = urlparse(image['raw_url']).netloc
+            matched_host = await match_host(netloc, url_host_mapping.keys())
+            mapped_host = url_host_mapping.get(matched_host, matched_host)
+            valid_hosts.append(mapped_host in approved_image_hosts)
+        if all(valid_hosts) and new_images_key in meta and isinstance(meta[new_images_key], list):
+            if tracker == "covers":
+                output_file = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "covers.json")
             else:
-                console.print("[red]new_images_key is not a valid key in meta or is not a list.")
+                output_file = os.path.join(screenshots_dir, "reuploaded_images.json")
 
-            if original_imghost:
-                meta['imghost'] = original_imghost
-            return meta[new_images_key], False, images_reuploaded
+            try:
+                async with aiofiles.open(output_file, 'r', encoding='utf-8') as f:
+                    existing_data = await f.read()
+                    existing_data = json.loads(existing_data) if existing_data else []
+                    if not isinstance(existing_data, list):
+                        console.print(f"[red]Existing data in {output_file} is not a list. Resetting to an empty list.")
+                        existing_data = []
+            except Exception:
+                existing_data = []
+
+            updated_data = existing_data + meta[new_images_key]
+            updated_data = [dict(s) for s in {tuple(d.items()) for d in updated_data}]
+
+            if tracker == "covers" and "release_url" in meta:
+                for image in updated_data:
+                    if "release_url" not in image:
+                        image["release_url"] = meta["release_url"]
+                console.print(f"[green]Added release URL to {len(updated_data)} cover images: {meta['release_url']}")
+
+            try:
+                async with aiofiles.open(output_file, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(updated_data, indent=4))
+                if meta['debug']:
+                    console.print(f"[green]Successfully updated reuploaded images in {output_file}.")
+
+                if tracker == "covers":
+                    deleted_count = 0
+                    for screenshot in all_screenshots:
+                        try:
+                            if os.path.exists(screenshot):
+                                os.remove(screenshot)
+                                deleted_count += 1
+                                if meta.get('debug'):
+                                    console.print(f"[dim]Deleted cover image file: {screenshot}[/dim]")
+                        except Exception as e:
+                            console.print(f"[yellow]Failed to delete cover image file {screenshot}: {str(e)}[/yellow]")
+
+                    if deleted_count > 0:
+                        if meta['debug']:
+                            console.print(f"[green]Cleaned up {deleted_count} cover image files after successful upload[/green]")
+
+            except Exception as e:
+                console.print(f"[red]Failed to save reuploaded images: {e}")
+        else:
+            console.print("[red]new_images_key is not a valid key in meta or is not a list.")
+
+        if original_imghost:
+            meta['imghost'] = original_imghost
+        return meta[new_images_key], False, images_reuploaded
     else:
         if original_imghost:
             meta['imghost'] = original_imghost

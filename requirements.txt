@@ -13,6 +13,7 @@ guessit
 httpx
 Jinja2
 langcodes
+lxml
 nest_asyncio
 packaging
 Pillow

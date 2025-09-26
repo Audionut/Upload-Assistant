@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
-from difflib import SequenceMatcher
 import os
 import platform
 import httpx
@@ -149,7 +148,7 @@ class BHD():
                 meta['tracker_status'][self.tracker]['status_message'] = f"Error: {e}"
                 return
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]BHD Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
@@ -370,25 +369,20 @@ class BHD():
                         for each in data['results']:
                             result = {
                                 'name': each['name'],
-                                'size': each['size']
+                                'link': each['url'],
+                                'size': each['size'],
                             }
-                            difference = SequenceMatcher(
-                                None,
-                                meta['clean_name'].replace('DD+', 'DDP'),
-                                result['name']
-                            ).ratio()
-                            if difference >= 0.05:
-                                dupes.append(result)
+                            dupes.append(result)
                     else:
-                        console.print(f"[bold red]Failed to search torrents. API Error: {data.get('message', 'Unknown Error')}")
+                        console.print(f"[bold red]BHD failed to search torrents. API Error: {data.get('message', 'Unknown Error')}")
                 else:
-                    console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
+                    console.print(f"[bold red]BHD HTTP request failed. Status: {response.status_code}")
         except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
+            console.print("[bold red]BHD request timed out after 5 seconds")
         except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+            console.print(f"[bold red]BHD unable to search for existing torrents: {e}")
         except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
+            console.print(f"[bold red]BHD unexpected error: {e}")
             await asyncio.sleep(5)
 
         return dupes

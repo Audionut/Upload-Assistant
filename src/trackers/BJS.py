@@ -502,12 +502,18 @@ class BJS(COMMON):
             torrent_id = id_match.group(1)
             group_id = id_match.group(2)
             description_text = ' '.join(id_link.get_text(strip=True).split())
+            torrent_link = f'{self.torrent_url}{torrent_id}'
+
+            size_tag = row.find('td', class_='number_column nobr')
+            torrent_size_str = size_tag.get_text(strip=True) if size_tag else None
 
             ajax_tasks.append({
                 'torrent_id': torrent_id,
                 'group_id': group_id,
                 'description_text': description_text,
-                'process_folder_name': process_folder_name
+                'process_folder_name': process_folder_name,
+                'size': torrent_size_str,
+                'link': torrent_link
             })
 
         return ajax_tasks
@@ -588,7 +594,11 @@ class BJS(COMMON):
             )
 
             if item_name:
-                found_items.append(item_name)
+                found_items.append({
+                    'name': item_name,
+                    'size': task_info.get('size', ''),
+                    'link': task_info.get('link', '')
+                })
 
         return found_items
 
