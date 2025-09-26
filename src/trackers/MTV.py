@@ -690,7 +690,13 @@ class MTV():
                         loop = asyncio.get_running_loop()
                         response_xml = await loop.run_in_executor(None, ET.fromstring, response.text)
                         for each in response_xml.find('channel').findall('item'):
-                            result = each.find('title').text
+                            result = {
+                                'name': each.find('title').text,
+                                'files': each.find('title').text,
+                                'file_count': each.find('files').text,
+                                'size': each.find('size').text,
+                                'link': each.find('guid').text
+                            }
                             dupes.append(result)
                     except ET.ParseError:
                         console.print("[red]Failed to parse XML response from MTV API")

@@ -29,9 +29,12 @@ async def filter_dupes(dupes, meta, tracker_name):
             }
 
             # Case 3: Dict with files and file_count
-            if 'files' in d and isinstance(d['files'], list):
-                entry['files'] = d['files']
-                entry['file_count'] = len(d['files'])
+            if 'files' in d:
+                if isinstance(d['files'], list):
+                    entry['files'] = d['files']
+                elif isinstance(d['files'], str) and d['files']:
+                    entry['files'] = [d['files']]
+                entry['file_count'] = len(entry['files'])
             elif 'file_count' in d:
                 entry['file_count'] = d['file_count']
 
@@ -127,9 +130,15 @@ async def filter_dupes(dupes, meta, tracker_name):
 
         if not meta.get('is_disc'):
             for file in filenames:
-                if file in files:
-                    meta['filename_match'] = True
-                    return False
+                if tracker_name == "MTV":
+                    # MTV: check if any dupe file is a substring of our file (ignoring extension)
+                    if any(f in file for f in files):
+                        meta['filename_match'] = True
+                        return False
+                else:
+                    if file in files:
+                        meta['filename_match'] = True
+                        return False
 
         if tracker_name == "AITHER" and entry.get('trumpable', False):
             meta['trumpable'] = entry.get('link', None)
