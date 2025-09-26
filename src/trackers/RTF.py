@@ -140,7 +140,12 @@ class RTF():
                 if response.status_code == 200:
                     data = response.json()
                     for each in data:
-                        result = each['name']
+                        result = {
+                            'name': each['name'],
+                            'size': each['size'],
+                            'files': each['name'],
+                            'link': each['url'],
+                        }
                         dupes.append(result)
                 else:
                     console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
