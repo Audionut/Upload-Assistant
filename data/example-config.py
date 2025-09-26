@@ -489,14 +489,19 @@ config = {
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # for HDT to work you need to export cookies from https://hd-torrent.net/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
-            # cookies need to be in netscape format and need to be in data/cookies/HDT.txt
-            "username": "",
-            "password": "",
-            "my_announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
+            # For HDT to work, you need to export cookies from the site using:
+            # https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/
+            # Cookies must be in Netscape format and saved in: data/cookies/HDT.txt
+            # You can change the URL if the main site is down or if you encounter upload issues.
+            # Keep in mind that changing the URL requires exporting the cookies again from the new domain.
+            # Alternative domains:
+            #   - https://hd-torrents.org/
+            #   - https://hd-torrents.net/
+            #   - https://hd-torrents.me/
+            #   - https://hdts.ru/
+            "url": "https://hd-torrents.me/",
             "anon": False,
-            # DO NOT EDIT THIS LINE
-            "announce_url": "https://hdts-announce.ru/announce.php",
+            "announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
         },
         "HHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

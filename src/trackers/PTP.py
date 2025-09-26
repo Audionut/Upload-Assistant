@@ -30,7 +30,9 @@ class PTP():
         self.source_flag = 'PTP'
         self.api_user = config['TRACKERS']['PTP'].get('ApiUser', '').strip()
         self.api_key = config['TRACKERS']['PTP'].get('ApiKey', '').strip()
-        self.announce_url = config['TRACKERS']['PTP'].get('announce_url', '').strip()
+        announce_url = config['TRACKERS']['PTP'].get('announce_url', '').strip()
+        if announce_url:
+            self.announce_url = announce_url.replace('http://', 'https://') if announce_url.startswith('http://') else announce_url
         self.username = config['TRACKERS']['PTP'].get('username', '').strip()
         self.password = config['TRACKERS']['PTP'].get('password', '').strip()
         self.web_source = self._is_true(config['TRACKERS']['PTP'].get('add_web_source_to_desc', True))

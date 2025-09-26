@@ -149,7 +149,7 @@ class BHD():
                 meta['tracker_status'][self.tracker]['status_message'] = f"Error: {e}"
                 return
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]BHD Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 

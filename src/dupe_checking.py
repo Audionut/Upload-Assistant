@@ -104,7 +104,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             return True
 
         if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-            if len(each) > 1 and tag == "":
+            if len(each) >= 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:
                 return False
@@ -274,7 +274,7 @@ async def has_matching_hdr(file_hdr, target_hdr, meta, tracker=None):
         simplified = set()
         if any(h in hdr_set for h in {"HDR", "HDR10", "HDR10+"}):
             simplified.add("HDR")
-        if "DV" in hdr_set or "DOVI" in hdr_set:
+        if ".DV." in hdr_set or " DV " in hdr_set or "DOVI" in hdr_set:
             simplified.add("DV")
             if 'web' not in meta['type'].lower():
                 simplified.add("HDR")

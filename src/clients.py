@@ -1,28 +1,27 @@
 # -*- coding: utf-8 -*-
-from torf import Torrent
-import xmlrpc.client
-import bencode
-import os
-import qbittorrentapi
-from deluge_client import DelugeRPCClient
-import transmission_rpc
-import base64
-import errno
 import asyncio
-import ssl
-import shutil
-import time
-from src.console import console
-import re
+import base64
+import bencode
+import errno
+import os
 import platform
+import qbittorrentapi
+import re
+import shutil
+import ssl
+import subprocess
+import time
+import traceback
+import transmission_rpc
+import xmlrpc.client
 from cogs.redaction import redact_private_info
+from deluge_client import DelugeRPCClient
+from src.console import console
+from src.torrentcreate import create_base_from_existing_torrent
+from torf import Torrent
 
 
 class Clients():
-    """
-    Add to torrent client
-    """
-
     def __init__(self, config):
         self.config = config
         pass
@@ -413,7 +412,6 @@ class Clients():
                 torrent_path = None
 
             if valid:
-                console.print("prefersmallpieces", prefer_small_pieces)
                 if prefer_small_pieces:
                     # **Track best match based on piece size**
                     try:
@@ -774,7 +772,6 @@ class Clients():
                                 mounted_volumes.append(mount_point)
                 else:
                     # Fall back to mount command if /proc/mounts doesn't exist
-                    import subprocess
                     output = subprocess.check_output(['mount'], text=True)
                     for line in output.splitlines():
                         parts = line.split()
@@ -854,107 +851,24 @@ class Clients():
 
         # Create tracker-specific directory inside linked folder
         if use_symlink or use_hardlink:
-            # allow overridden folder name with link_dir_name config var
-            tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
-            link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
-            tracker_dir = os.path.join(link_target, link_dir_name or tracker)
-            os.makedirs(tracker_dir, exist_ok=True)
+            tracker_dir = os.path.join(link_target, tracker)
+            await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
-            if meta['debug']:
-                console.print(f"[bold yellow]Linking to tracker directory: {tracker_dir}")
-                console.print(f"[cyan]Source path: {src}")
+            src_name = os.path.basename(src.rstrip(os.sep))
+            dst = os.path.join(tracker_dir, src_name)
 
-            # Extract only the folder or file name from `src`
-            src_name = os.path.basename(src.rstrip(os.sep))  # Ensure we get just the name
-            dst = os.path.join(tracker_dir, src_name)  # Destination inside linked folder
-
-            # path magic
-            if os.path.exists(dst) or os.path.islink(dst):
-                if meta['debug']:
-                    console.print(f"[yellow]Skipping linking, path already exists: {dst}")
-            else:
-                allow_fallback = self.config['TRACKERS'].get('allow_fallback', True)
-                fallback_to_original = False
-                if use_hardlink:
-                    try:
-                        # Check if we're linking a file or directory
-                        if os.path.isfile(src):
-                            # For a single file, create a hardlink directly
-                            try:
-                                os.link(src, dst)
-                                if meta['debug']:
-                                    console.print(f"[green]Hard link created: {dst} -> {src}")
-                            except OSError as e:
-                                console.print(f"[yellow]Hard link failed: {e}")
-                                if allow_fallback:
-                                    console.print(f"[yellow]Using original path without linking: {src}")
-                                    use_hardlink = False
-                                    fallback_to_original = True
-                        else:
-                            # For directories, we need to link each file inside
-                            console.print("[yellow]Cannot hardlink directories directly. Creating directory structure...")
-                            os.makedirs(dst, exist_ok=True)
-
-                            for root, _, files in os.walk(src):
-                                # Get the relative path from source
-                                rel_path = os.path.relpath(root, src)
-
-                                # Create corresponding directory in destination
-                                if rel_path != '.':
-                                    dst_dir = os.path.join(dst, rel_path)
-                                    os.makedirs(dst_dir, exist_ok=True)
-
-                                # Create hardlinks for each file
-                                for file in files:
-                                    src_file = os.path.join(root, file)
-                                    dst_file = os.path.join(dst if rel_path == '.' else dst_dir, file)
-                                    try:
-                                        os.link(src_file, dst_file)
-                                        if meta['debug'] and files.index(file) == 0:
-                                            console.print(f"[green]Hard link created for file: {dst_file} -> {src_file}")
-                                    except OSError as e:
-                                        console.print(f"[yellow]Hard link failed for file {file}: {e}")
-                                        if allow_fallback:
-                                            console.print(f"[yellow]Using original path without linking: {src}")
-                                            fallback_to_original = True
-                                        break
-
-                        if fallback_to_original:
-                            use_hardlink = False
-                            link_target = None
-                            # Clean up the partially created directory
-                            try:
-                                shutil.rmtree(dst)
-                            except Exception as cleanup_error:
-                                console.print(f"[red]Warning: Failed to clean up partial directory {dst}: {cleanup_error}")
-
-                    except OSError as e:
-                        # Global exception handler for any linking operation
-                        error_msg = f"Failed to create hard link: {e}"
-                        console.print(f"[bold red]{error_msg}")
-                        if allow_fallback:
-                            console.print(f"[yellow]Using original path without linking: {src}")
-                            use_hardlink = False
-                            if meta['debug']:
-                                console.print(f"[yellow]Source: {src} (exists: {os.path.exists(src)})")
-                                console.print(f"[yellow]Destination: {dst}")
-
-                elif use_symlink:
-                    try:
-                        if platform.system() == "Windows":
-                            os.symlink(src, dst, target_is_directory=os.path.isdir(src))
-                        else:
-                            os.symlink(src, dst)
-
-                        if meta['debug']:
-                            console.print(f"[green]Symbolic link created: {dst} -> {src}")
-
-                    except OSError as e:
-                        error_msg = f"Failed to create symlink: {e}"
-                        console.print(f"[bold red]{error_msg}")
-                        if allow_fallback:
-                            console.print(f"[yellow]Using original path without linking: {src}")
-                            use_symlink = False
+            linking_success = await async_link_directory(
+                src=src,
+                dst=dst,
+                use_hardlink=use_hardlink,
+                debug=meta.get('debug', False)
+            )
+            allow_fallback = self.config['TRACKERS'].get('allow_fallback', True)
+            if not linking_success and allow_fallback:
+                console.print(f"[yellow]Using original path without linking: {src}")
+                # Reset linking settings for fallback
+                use_hardlink = False
+                use_symlink = False
 
         # Initialize qBittorrent client
         qbt_client = qbittorrentapi.Client(
@@ -1332,7 +1246,6 @@ class Clients():
                                         console.print(f"[bold red]Validation failed for {torrent_file_path}")
                                     os.remove(torrent_file_path)  # Remove invalid file
                                 else:
-                                    from src.torrentcreate import create_base_from_existing_torrent
                                     await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
 
                             except qbittorrentapi.APIError as e:
@@ -1465,7 +1378,6 @@ class Clients():
                     base_torrent_path = os.path.join(extracted_torrent_dir, "BASE.torrent")
 
                     try:
-                        from src.torrentcreate import create_base_from_existing_torrent
                         await create_base_from_existing_torrent(resolved_path, meta['base_dir'], meta['uuid'])
                         if meta['debug']:
                             console.print("[green]Created BASE.torrent from existing torrent")
@@ -1479,7 +1391,6 @@ class Clients():
 
         except Exception as e:
             console.print(f"[bold red]Error reading torrent file: {e}")
-            import traceback
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
         return meta
@@ -1502,7 +1413,6 @@ class Clients():
 
         except Exception as e:
             console.print(f"[red]Error searching for torrents: {str(e)}[/red]")
-            import traceback
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
     async def find_qbit_torrents_by_path(self, content_path, meta):
@@ -1804,11 +1714,11 @@ class Clients():
                             valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
                             if valid:
                                 try:
-                                    from src.torrentcreate import create_base_from_existing_torrent
                                     await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
                                     if meta['debug']:
                                         console.print("[green]Created BASE.torrent from existing torrent")
                                     meta['base_torrent_created'] = True
+                                    meta['hash_used'] = torrent_hash
                                     found_valid_torrent = True
                                 except Exception as e:
                                     console.print(f"[bold red]Error creating BASE.torrent: {e}")
@@ -1860,12 +1770,12 @@ class Clients():
 
                                         if alt_valid:
                                             try:
-                                                from src.torrentcreate import create_base_from_existing_torrent
                                                 await create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
                                                 if meta['debug']:
                                                     console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
                                                 meta['infohash'] = alt_torrent_hash  # Update infohash to use the valid torrent
                                                 meta['base_torrent_created'] = True
+                                                meta['hash_used'] = torrent_hash
                                                 found_valid_torrent = True
                                                 break
                                             except Exception as e:
@@ -1894,9 +1804,99 @@ class Clients():
         except Exception as e:
             console.print(f"[bold red]Error finding torrents: {str(e)}")
             if meta['debug']:
-                import traceback
                 console.print(traceback.format_exc())
             return []
+
+
+async def async_link_directory(src, dst, use_hardlink=True, debug=False):
+    try:
+        # Create destination directory
+        await asyncio.to_thread(os.makedirs, os.path.dirname(dst), exist_ok=True)
+
+        # Check if destination already exists
+        if await asyncio.to_thread(os.path.exists, dst):
+            if debug:
+                console.print(f"[yellow]Skipping linking, path already exists: {dst}")
+            return True
+
+        # Handle file linking
+        if await asyncio.to_thread(os.path.isfile, src):
+            if use_hardlink:
+                try:
+                    await asyncio.to_thread(os.link, src, dst)
+                    if debug:
+                        console.print(f"[green]Hard link created: {dst} -> {src}")
+                    return True
+                except OSError as e:
+                    console.print(f"[yellow]Hard link failed: {e}")
+                    return False
+            else:  # Use symlink
+                try:
+                    if platform.system() == "Windows":
+                        await asyncio.to_thread(os.symlink, src, dst, target_is_directory=False)
+                    else:
+                        await asyncio.to_thread(os.symlink, src, dst)
+
+                    if debug:
+                        console.print(f"[green]Symbolic link created: {dst} -> {src}")
+                    return True
+                except OSError as e:
+                    console.print(f"[yellow]Symlink failed: {e}")
+                    return False
+
+        # Handle directory linking
+        else:
+            if use_hardlink:
+                # For hardlinks, we need to recreate the directory structure
+                await asyncio.to_thread(os.makedirs, dst, exist_ok=True)
+
+                # Get all files in the source directory
+                all_items = []
+                for root, dirs, files in await asyncio.to_thread(os.walk, src):
+                    for file in files:
+                        src_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(src_path, src)
+                        all_items.append((src_path, os.path.join(dst, rel_path), rel_path))
+
+                # Create subdirectories first (to avoid race conditions)
+                subdirs = set()
+                for _, dst_path, _ in all_items:
+                    subdir = os.path.dirname(dst_path)
+                    if subdir and subdir not in subdirs:
+                        subdirs.add(subdir)
+                        await asyncio.to_thread(os.makedirs, subdir, exist_ok=True)
+
+                # Create hardlinks for all files
+                success = True
+                for src_path, dst_path, rel_path in all_items:
+                    try:
+                        await asyncio.to_thread(os.link, src_path, dst_path)
+                        if debug and rel_path == os.path.relpath(all_items[0][0], src):
+                            console.print(f"[green]Hard link created for file: {dst_path} -> {src_path}")
+                    except OSError as e:
+                        console.print(f"[yellow]Hard link failed for file {rel_path}: {e}")
+                        success = False
+                        break
+
+                return success
+            else:
+                # For symlinks, just link the directory itself
+                try:
+                    if platform.system() == "Windows":
+                        await asyncio.to_thread(os.symlink, src, dst, target_is_directory=True)
+                    else:
+                        await asyncio.to_thread(os.symlink, src, dst)
+
+                    if debug:
+                        console.print(f"[green]Symbolic link created: {dst} -> {src}")
+                    return True
+                except OSError as e:
+                    console.print(f"[yellow]Symlink failed: {e}")
+                    return False
+
+    except Exception as e:
+        console.print(f"[bold red]Error during linking: {e}")
+        return False
 
 
 async def match_tracker_url(tracker_urls, meta):

@@ -211,7 +211,7 @@ class MTV():
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
                 return
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]MTV Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
@@ -537,9 +537,7 @@ class MTV():
                     try:
                         resp = await client.get(url=url)
                         if meta['debug']:
-                            console.log('[cyan]Validate Cookies:')
-                            console.log(cookies_dict)
-                            console.log(resp.url)
+                            console.print('[cyan]Validating Cookies:')
 
                         if "Logout" in resp.text:
                             return True
