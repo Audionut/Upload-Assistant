@@ -16,7 +16,10 @@ class UploadHelper:
             return meta, False
         else:
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
-                dupe_text = "\n".join([d['name'] if isinstance(d, dict) else d for d in dupes])
+                dupe_text = "\n".join([
+                    f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d else (d['name'] if isinstance(d, dict) else d)
+                    for d in dupes
+                ])
                 if meta.get('filename_match', False):
                     console.print('[bold red]Exact filename matches found![/bold red]')
                     upload = False
