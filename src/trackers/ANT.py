@@ -1,29 +1,22 @@
 # -*- coding: utf-8 -*-
 # import discord
-import os
+import aiofiles
 import asyncio
-import platform
 import httpx
 import json
-import aiofiles
-from pymediainfo import MediaInfo
+import os
+import platform
+import re
 from pathlib import Path
-from src.trackers.COMMON import COMMON
 from src.console import console
 from src.torrentcreate import create_torrent
+from src.trackers.COMMON import COMMON
 
 
-class ANT():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class ANT:
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'ANT'
         self.source_flag = 'ANT'
         self.search_url = 'https://anthelion.me/api.php'
@@ -78,23 +71,6 @@ class ANT():
         await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
         flags = await self.get_flags(meta)
 
-        if meta['bdinfo'] is not None:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
-                bd_dump = await f.read()
-            bd_dump = f'[spoiler=BDInfo][pre]{bd_dump}[/pre][/spoiler]'
-            path = os.path.join(meta['bdinfo']['path'], 'STREAM')
-            longest_file = max(
-                meta['bdinfo']['files'],
-                key=lambda x: x.get('length', 0)
-            )
-            file_name = longest_file['file'].lower()
-            m2ts = os.path.join(path, file_name)
-            media_info_output = str(MediaInfo.parse(m2ts, output="text", full=False))
-            mi_dump = media_info_output.replace('\r\n', '\n')
-        else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
-                mi_dump = await f.read()
-
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
@@ -103,16 +79,17 @@ class ANT():
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
-            'mediainfo': mi_dump,
+            'mediainfo': await self.mediainfo(meta),
             'flags[]': flags,
             'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4]),
+            'release_desc': await self.edit_desc(meta),
         }
         if meta['bdinfo'] is not None:
             data.update({
                 'media': 'Blu-ray',
                 'releasegroup': str(meta['tag'])[1:],
-                'release_desc': bd_dump,
-                'flagchangereason': "BDMV Uploaded with Upload Assistant"})
+                'flagchangereason': "BDMV Uploaded with Upload Assistant"
+            })
         if meta['scene']:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
@@ -155,8 +132,46 @@ class ANT():
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
 
+    async def mediainfo(self, meta):
+        if meta.get('is_disc') == 'BDMV':
+            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
+        else:
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                mediainfo = await f.read()
+
+        return mediainfo
+
     async def edit_desc(self, meta):
-        return
+        file_info = ''
+        if meta.get('is_disc') == 'BDMV':
+            content = meta['discs'][0].get('summary', '') if meta.get('discs') else ''
+            file_info = f'[spoiler=BDInfo][pre]{content}[/pre][/spoiler]'
+
+        meta['mediainfo_or_bdinfo'] = file_info
+
+        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'ANT_default.txt.j2'
+        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = description.strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
+        description = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", description)
+        description = re.sub(r'\[/(right|center|left)\]', "[/align]", description)
+        description = description.replace('[sup]', '').replace('[/sup]', '').replace('[sub]', '').replace('[/sub]', '').replace('•', '').replace('’', '').replace('–', '')
+
+        if meta.get('description_file_content', '') and description:
+            print('\nFound existing description:\n')
+            print(description)
+            user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
+
+            if user_input.lower() == 'y':
+                pass
+            else:
+                description = ''
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
+
+        return description
 
     async def search_existing(self, meta, disctype):
         if meta.get('category') == "TV":

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import asyncio
 import httpx
 import json
@@ -15,21 +16,22 @@ from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
 
 
-class BT():
+class BT:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'BT'
-        self.banned_groups = ['']
+        self.banned_groups = []
         self.source_flag = 'BT'
         self.base_url = 'https://brasiltracker.org'
         self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
+        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
+        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
+            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         }, timeout=60.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Upload Assistant[/url][/center]"
 
         target_site_ids = {
             'arabic': '22', 'bulgarian': '29', 'chinese': '14', 'croatian': '23',
@@ -143,24 +145,36 @@ class BT():
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
 
-    def load_localized_data(self, meta):
-        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+    async def load_localized_data(self, meta):
+        localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
+        ptbr_data = {}
+        data = {}
 
         if os.path.isfile(localized_data_file):
-            with open(localized_data_file, "r", encoding="utf-8") as f:
-                self.tmdb_data = json.load(f)
-        else:
-            self.tmdb_data = {}
+            try:
+                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    data = json.loads(content)
+            except json.JSONDecodeError:
+                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                data = {}
+            except Exception as e:
+                print(f'Error reading file {localized_data_file}: {e}')
+                data = {}
 
-    async def ptbr_tmdb_data(self, meta):
-        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
-        if brazil_data_in_meta:
-            return brazil_data_in_meta
+        ptbr_data = data.get('pt-BR', {}).get('main')
 
-        data = await get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings')
-        self.load_localized_data(meta)
+        if not ptbr_data:
+            ptbr_data = await get_tmdb_localized_data(
+                meta,
+                data_type='main',
+                language='pt-BR',
+                append_to_response='credits,videos,content_ratings'
+            )
 
-        return data
+        self.tmdb_data = ptbr_data
+
+        return
 
     async def get_container(self, meta):
         container = None
@@ -189,8 +203,7 @@ class BT():
         return category_map.get(meta['category'])
 
     async def get_languages(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        lang_code = tmdb_data.get('original_language')
+        lang_code = self.tmdb_data.get('original_language')
 
         if not lang_code:
             return None
@@ -338,40 +351,22 @@ class BT():
         return 'Outro'
 
     async def get_title(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-
-        title = tmdb_data.get('name') or tmdb_data.get('title') or ''
+        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta):
-        description = []
+        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'BT_default.txt.j2'
+        description = await self.common.description_template(self.tracker, meta, template_name=template_name)
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
-        base_desc = ''
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                base_desc = f.read()
-                if base_desc:
-                    description.append(base_desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description.append(custom_description_header + '\n')
-
-        if self.signature:
-            description.append(self.signature)
-
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            final_description = '\n'.join(filter(None, description))
-            descfile.write(final_description)
-
-        return final_description
+        return description
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        video_results = tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
 
@@ -386,12 +381,11 @@ class BT():
         return youtube
 
     async def get_tags(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
         tags = ''
 
-        if tmdb_data and isinstance(tmdb_data.get('genres'), list):
+        if self.tmdb_data and isinstance(self.tmdb_data.get('genres'), list):
             genre_names = [
-                g.get('name', '') for g in tmdb_data['genres']
+                g.get('name', '') for g in self.tmdb_data['genres']
                 if isinstance(g.get('name'), str) and g.get('name').strip()
             ]
 
@@ -586,9 +580,8 @@ class BT():
             return 'N/A'
 
     async def get_data(self, meta, disctype):
-        self.load_localized_data(meta)
         await self.validate_credentials(meta)
-        tmdb_data = await self.ptbr_tmdb_data(meta)
+        await self.load_localized_data(meta)
         has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
         resolution_width, resolution_height = await self.get_resolution(meta)
 
@@ -603,13 +596,13 @@ class BT():
             'especificas': await self.get_description(meta),
             'format': await self.get_container(meta),
             'idioma_ori': await self.get_languages(meta) or meta.get('original_language', ''),
-            'image': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path') or meta.get('tmdb_poster', '')}",
+            'image': f"https://image.tmdb.org/t/p/w500{self.tmdb_data.get('poster_path', '') or meta.get('tmdb_poster', '')}",
             'legenda': has_pt_subtitles,
             'mediainfo': await self.get_media_info(meta),
             'resolucao_1': resolution_width,
             'resolucao_2': resolution_height,
             'screen[]': await self.get_screens(meta),
-            'sinopse': tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
+            'sinopse': self.tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'submit': 'true',
             'subtitles[]': subtitle_ids,
             'tags': await self.get_tags(meta),
