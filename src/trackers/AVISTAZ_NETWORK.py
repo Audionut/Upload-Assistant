@@ -1,3 +1,4 @@
+import aiofiles
 import asyncio
 import bbcode
 import bencodepy
@@ -20,7 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 
-class AZTrackerBase():
+class AZTrackerBase:
     def __init__(self, config, tracker_name):
         self.config = config
         self.tracker = tracker_name
@@ -640,40 +641,36 @@ class AZTrackerBase():
         return tags
 
     async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'simple_description.j2'
+        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = description.strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
-        description_parts = []
+        if meta.get('description_file_content', '') and description:
+            print('\nFound existing description:\n')
+            print(description)
+            user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as file:
-                manual_desc = file.read()
+            if user_input.lower() == 'y':
+                pass
+            else:
+                description = ''
 
-            if manual_desc:
-                console.print('\n[green]Found existing description:[/green]\n')
-                print(manual_desc)
-                user_input = input('Do you want to use this description? (y/n): ')
-
-                if user_input.lower() == 'y':
-                    description_parts.append(manual_desc)
-                    console.print('Using existing description.')
-                else:
-                    console.print('Ignoring existing description.')
-
-        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
+        if not description:
+            return ''
 
         processed_desc, amount = re.subn(
             r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
             '',
-            raw_bbcode_desc,
+            description,
             flags=re.DOTALL
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} NFO section.')
 
         processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} link(s).')
 
         bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
         processed_desc, amount = re.subn(
@@ -683,12 +680,12 @@ class AZTrackerBase():
             flags=re.IGNORECASE
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} BBCode tag(s).')
 
         final_html_desc = bbcode.render_html(processed_desc)
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(final_html_desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(final_html_desc)
 
         return final_html_desc
 

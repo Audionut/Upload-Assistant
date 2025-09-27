@@ -1550,3 +1550,10 @@ class COMMON():
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as mi:
             return mi.read()
+
+    async def async_input(self, prompt):
+        '''
+        Gets user input without blocking the asyncio event loop.
+        '''
+        user_input = await asyncio.to_thread(input, prompt)
+        return user_input
