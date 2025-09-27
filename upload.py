@@ -230,7 +230,7 @@ async def process_meta(meta, base_dir, bot=None):
     confirm = await helper.get_confirmation(meta)
     while confirm is False:
         editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
-        editargs = tuple(editargs.split())
+        editargs = tuple(editargs.split()) if editargs else ()
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
