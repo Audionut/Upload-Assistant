@@ -40,20 +40,20 @@ class UploadHelper:
                         upload = True
                         meta['we_asked'] = False
                 else:
-                    if meta.get('filename_match', False):
-                        console.print(f'[bold red]Exact filename matches found! - {meta["filename_match"]}[/bold red]')
-                        upload = False
+                    #if meta.get('filename_match', False):
+                    #    console.print(f'[bold red]Exact filename matches found! - {meta["filename_match"]}[/bold red]')
+                    #    upload = False
+                    #    meta['we_asked'] = True
+                    #else:
+                    console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
+                    console.print()
+                    console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
+                    if meta.get('dupe', False) is False:
+                        upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                         meta['we_asked'] = True
                     else:
-                        console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
-                        console.print()
-                        console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
-                        if meta.get('dupe', False) is False:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
-                        else:
-                            upload = True
-                            meta['we_asked'] = False
+                        upload = True
+                        meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
