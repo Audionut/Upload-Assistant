@@ -42,16 +42,18 @@ async def is_scene(video, meta, imdb=None, lower=False):
                     if first_result.get("hasNFO") == "yes":
                         try:
                             release = first_result['release']
+                            release_lower = release.lower()
                             
                             release_details_url = f"https://api.srrdb.com/v1/details/{release}"
                             release_details_response = requests.get(release_details_url, timeout=30)
                             if release_details_response.status_code == 200:
-                                release_details_dict = release_details_response.json()
-                                for file in release_details_dict['files']:
-                                    if file['name'].endswith('.nfo'):
-                                        release_lower = os.path.splitext(file['name'])[0]
-                            else:
-                                release_lower = release.lower()
+                                try:
+                                    release_details_dict = release_details_response.json()
+                                    for file in release_details_dict['files']:
+                                        if file['name'].endswith('.nfo'):
+                                            release_lower = os.path.splitext(file['name'])[0]
+                                except (KeyError, ValueError):
+                                    pass
 
                             nfo_url = f"https://www.srrdb.com/download/file/{release}/{release_lower}.nfo"
 
