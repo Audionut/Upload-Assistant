@@ -1,8 +1,9 @@
-from src.console import console
-from pymediainfo import MediaInfo
+import aiofiles
 import json
 import os
 import platform
+from pymediainfo import MediaInfo
+from src.console import console
 
 
 async def mi_resolution(res, guess, width, scan, height, actual_height):
@@ -296,10 +297,10 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
                 if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
             )
 
-        with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
-            export.write(filtered_media_info.replace(video, os.path.basename(video)))
-        with open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
-            export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
+        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
+            await export.write(filtered_media_info.replace(video, os.path.basename(video)))
+        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
+            await export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
         if debug:
             console.print("[bold green]MediaInfo Exported.")
 
@@ -324,11 +325,11 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             media_info_dict = json.loads(media_info_json)
 
         filtered_info = filter_mediainfo(media_info_dict)
-        with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
-            json.dump(filtered_info, export, indent=4)
+        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
+            await export.write(json.dumps(filtered_info, indent=4))
 
-    with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'r', encoding='utf-8') as f:
-        mi = json.load(f)
+    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'r', encoding='utf-8') as f:
+        mi = json.loads(await f.read())
 
     return mi
 
