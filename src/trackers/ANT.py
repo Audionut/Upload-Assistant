@@ -152,7 +152,10 @@ class ANT:
 
         meta['mediainfo_or_bdinfo'] = file_info
 
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'ANT_default.txt.j2'
+        if meta.get('is_disc') == 'BDMV':
+            template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or "ANT_default.txt.j2"
+        else:
+            template_name = self.config['TRACKERS'][self.tracker].get('description_template', '')
         description = await self.common.description_template(self.tracker, meta, template_name)
         description = description.strip()
         description = re.sub(r'\n{3,}', '\n\n', description)
