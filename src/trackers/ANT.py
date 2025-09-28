@@ -143,7 +143,9 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        file_info = ''
+        if not meta.get('is_disc') == 'BDMV':
+            file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
+
         if meta.get('is_disc') == 'BDMV':
             content = meta['discs'][0].get('summary', '') if meta.get('discs') else ''
             file_info = f'[spoiler=BDInfo][pre]{content}[/pre][/spoiler]'
