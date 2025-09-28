@@ -43,7 +43,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
                         try:
                             release = first_result['release']
                             release_lower = release.lower()
-                            
+
                             release_details_url = f"https://api.srrdb.com/v1/details/{release}"
                             release_details_response = requests.get(release_details_url, timeout=30)
                             if release_details_response.status_code == 200:
