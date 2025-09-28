@@ -270,6 +270,11 @@ config = {
         # Options: file names from the folder or "FULL" to use the complete MediaInfo
         # Can be overridden per tracker by specifying "mediainfo_template" under each tracker config
         "mediainfo_template": "",
+
+        # Set true to also try searching predb for scene release
+        # predb is not consistent, can timeout, but can find some releases not found on SRRDB
+        "check_predb": False,
+
     },
 
     # these are used for DB links on AR

@@ -136,11 +136,15 @@ async def filter_dupes(dupes, meta, tracker_name):
                     # MTV: check if any dupe file is a substring of our file (ignoring extension)
                     if any(f in file for f in files):
                         meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
-                        return False
+                        if file_count and file_count > 0 and file_count == len(meta.get('filelist', [])):
+                            meta['file_count_match'] = file_count
+                            return False
                 else:
                     if file in files:
                         meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
-                        return False
+                        if file_count and file_count > 0 and file_count == len(meta.get('filelist', [])):
+                            meta['file_count_match'] = file_count
+                            return False
 
         if tracker_name == "MTV":
             target_name = meta.get('name').replace(' ', '.').replace('DD+', 'DDP')

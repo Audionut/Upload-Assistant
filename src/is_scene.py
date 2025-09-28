@@ -1,8 +1,9 @@
 import os
 import re
-import urllib.parse
 import requests
+import urllib.parse
 from bs4 import BeautifulSoup
+from data.config import config
 from src.console import console
 
 
@@ -43,6 +44,18 @@ async def is_scene(video, meta, imdb=None, lower=False):
                         try:
                             release = first_result['release']
                             release_lower = release.lower()
+
+                            release_details_url = f"https://api.srrdb.com/v1/details/{release}"
+                            release_details_response = requests.get(release_details_url, timeout=30)
+                            if release_details_response.status_code == 200:
+                                try:
+                                    release_details_dict = release_details_response.json()
+                                    for file in release_details_dict['files']:
+                                        if file['name'].endswith('.nfo'):
+                                            release_lower = os.path.splitext(file['name'])[0]
+                                except (KeyError, ValueError):
+                                    pass
+
                             nfo_url = f"https://www.srrdb.com/download/file/{release}/{release_lower}.nfo"
 
                             # Define path and create directory
@@ -121,10 +134,11 @@ async def is_scene(video, meta, imdb=None, lower=False):
             console.print(f"[yellow]SRRDB search failed: {e}")
             return None
 
-    if not scene:
+    check_predb = config['DEFAULT'].get('check_predb', False)
+    if not scene and check_predb and not meta.get('emby_debug', False):
         if meta['debug']:
             console.print("[yellow]SRRDB: No scene match found, checking predb")
-        #  scene = await predb_check(meta, video)
+        scene = await predb_check(meta, video)
 
     return video, scene, imdb
 

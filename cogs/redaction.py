@@ -2,7 +2,7 @@ import re
 import json
 
 SENSITIVE_KEYS = {
-    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "downloadUrl"
+    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken"
 }
 
 
