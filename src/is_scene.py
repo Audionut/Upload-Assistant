@@ -150,7 +150,7 @@ async def predb_check(meta, video):
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(response.text, "lxml")
             found = False
             video_base = os.path.basename(video).lower()
             for row in soup.select('table.zebra-striped tbody tr'):
