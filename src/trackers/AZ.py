@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 
