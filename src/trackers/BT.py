@@ -10,6 +10,7 @@ import re
 import unicodedata
 from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
+from src.bbcode import BBCODE
 from src.console import console
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
@@ -28,7 +29,6 @@ class BT:
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         }, timeout=60.0)
@@ -216,7 +216,7 @@ class BT:
         return category_map.get(meta['category'])
 
     async def get_languages(self, meta):
-        lang_code = self.tmdb_data.get('original_language')
+        lang_code = self.main_tmdb_data.get('original_language')
 
         if not lang_code:
             return None
@@ -364,13 +364,15 @@ class BT:
         return 'Outro'
 
     async def get_title(self, meta):
-        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
+        title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta):
-        description = await self.common.description_template(self.tracker, meta)
-        description = re.sub(r'\n{3,}', '\n\n', description)
+        description = await self.common.description_template(self.tracker, meta, self.episode_tmdb_data)
+        bbcode = BBCODE()
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.remove_extra_lines(description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)
@@ -378,7 +380,7 @@ class BT:
         return description
 
     async def get_trailer(self, meta):
-        video_results = self.tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
 
@@ -395,9 +397,9 @@ class BT:
     async def get_tags(self, meta):
         tags = ''
 
-        if self.tmdb_data and isinstance(self.tmdb_data.get('genres'), list):
+        if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
             genre_names = [
-                g.get('name', '') for g in self.tmdb_data['genres']
+                g.get('name', '') for g in self.main_tmdb_data['genres']
                 if isinstance(g.get('name'), str) and g.get('name').strip()
             ]
 
@@ -608,13 +610,13 @@ class BT:
             'especificas': await self.get_description(meta),
             'format': await self.get_container(meta),
             'idioma_ori': await self.get_languages(meta) or meta.get('original_language', ''),
-            'image': f"https://image.tmdb.org/t/p/w500{self.tmdb_data.get('poster_path', '') or meta.get('tmdb_poster', '')}",
+            'image': f"https://image.tmdb.org/t/p/w500{self.main_tmdb_data.get('poster_path', '') or meta.get('tmdb_poster', '')}",
             'legenda': has_pt_subtitles,
             'mediainfo': await self.get_media_info(meta),
             'resolucao_1': resolution_width,
             'resolucao_2': resolution_height,
             'screen[]': await self.get_screens(meta),
-            'sinopse': self.tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
+            'sinopse': self.main_tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'submit': 'true',
             'subtitles[]': subtitle_ids,
             'tags': await self.get_tags(meta),

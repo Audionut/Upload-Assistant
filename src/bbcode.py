@@ -543,8 +543,24 @@ class BBCODE:
         desc = desc.replace('[/spoiler]', '[/hide]')
         return desc
 
+    def remove_hide(self, desc):
+        desc = desc.replace('[hide]', '').replace('[/hide]', '')
+        return desc
+
+    def convert_named_spoiler_to_named_hide(self, desc):
+        '''
+        Converts [spoiler=Name] to [hide=Name]
+        '''
+        desc = re.sub(r"\[spoiler=([^]]+)]", r"[hide=\1]", desc, flags=re.IGNORECASE)
+        desc = desc.replace('[/spoiler]', '[/hide]')
+        return desc
+
     def remove_spoiler(self, desc):
         desc = re.sub(r"\[\/?spoiler[\s\S]*?\]", "", desc, flags=re.IGNORECASE)
+        return desc
+
+    def convert_named_spoiler_to_normal_spoiler(self, desc):
+        desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
         return desc
 
     def convert_spoiler_to_code(self, desc):
@@ -555,6 +571,42 @@ class BBCODE:
     def convert_code_to_quote(self, desc):
         desc = desc.replace('[code', '[quote')
         desc = desc.replace('[/code]', '[/quote]')
+        return desc
+
+    def remove_img_resize(self, desc):
+        '''
+        Converts [img=number] or any other parameters to just [img]
+        '''
+        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
+        return desc
+
+    def remove_extra_lines(self, desc):
+        '''
+        Removes more than 2 consecutive newlines
+        '''
+        desc = re.sub(r'\n{3,}', '\n\n', desc)
+        return desc
+
+    def convert_to_align(self, desc):
+        '''
+        Converts [right], [left], [center] to [align=right], [align=left], [align=center]
+        '''
+        desc = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", desc)
+        desc = re.sub(r'\[/(right|center|left)\]', "[/align]", desc)
+        return desc
+
+    def remove_sup(self, desc):
+        '''
+        Removes [sup] tags
+        '''
+        desc = desc.replace('[sup]', '').replace('[/sup]', '')
+        return desc
+
+    def remove_sub(self, desc):
+        '''
+        Removes [sub] tags
+        '''
+        desc = desc.replace('[sub]', '').replace('[/sub]', '')
         return desc
 
     def convert_comparison_to_collapse(self, desc, max_width):

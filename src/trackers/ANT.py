@@ -6,8 +6,8 @@ import httpx
 import json
 import os
 import platform
-import re
 from pathlib import Path
+from src.bbcode import BBCODE
 from src.console import console
 from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
@@ -154,11 +154,14 @@ class ANT:
                 meta['description_file_content'] = ''
 
         description = await self.common.description_template(self.tracker, meta)
-        description = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", description)
-        description = re.sub(r'\[/(right|center|left)\]', "[/align]", description)
-        description = description.replace('[sup]', '').replace('[/sup]', '').replace('[sub]', '').replace('[/sub]', '').replace('•', '-').replace('’', "'").replace('–', '-')
+        bbcode = BBCODE()
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
+        description = description.replace('•', '-').replace('’', "'").replace('–', '-')
+        description = bbcode.remove_extra_lines(description)
         description = description.strip()
-        description = re.sub(r'\n{3,}', '\n\n', description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)

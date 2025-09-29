@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
+from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import UploadException
 from src.languages import process_desc_language
@@ -35,7 +36,6 @@ class BJS:
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         }, timeout=60.0)
@@ -336,30 +336,13 @@ class BJS:
         return title if title and title != meta.get('title') else ''
 
     async def build_description(self, meta):
-        disc_map = {
-            'BDMV': ('BD_SUMMARY_00.txt', 'BDInfo'),
-            'DVD': ('MEDIAINFO_CLEANPATH.txt', 'MediaInfo'),
-        }
-
-        file_info = ''
-        disc_type = meta.get('is_disc')
-        if disc_type in disc_map:
-            filename, title = disc_map[disc_type]
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{filename}"
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    if content.strip():
-                        file_info = f'[hide={title}][pre]{content}[/pre][/hide]'
-
-        meta['mediainfo_or_bdinfo'] = file_info
-
         description = await self.common.description_template(self.tracker, meta, self.episode_tmdb_data)
-        description = re.sub(r"\[spoiler=([^]]+)]", r"[hide=\1]", description, flags=re.IGNORECASE)
-        description = re.sub(r"\[spoiler\]", "[hide]", description, flags=re.IGNORECASE)
-        description = re.sub(r"\[/spoiler\]", "[/hide]", description, flags=re.IGNORECASE)
-        description = re.sub(r'\[img(?:[^\]]*)\]', '[img]', description, flags=re.IGNORECASE)
-        description = re.sub(r'\n{3,}', '\n\n', description)
+        bbcode = BBCODE()
+        description = bbcode.convert_named_spoiler_to_named_hide(description)
+        description = bbcode.convert_spoiler_to_hide(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_extra_lines(description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)

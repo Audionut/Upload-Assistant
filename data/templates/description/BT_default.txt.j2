@@ -16,11 +16,11 @@
 {% endif %}
 
 {% if user_config.episode_overview and additional_data.name and additional_data.overview %}
-[align=center][b]{{ additional_data.name }}[/b]
+[center][b]{{ additional_data.name }}[/b]
 
 {% if additional_data.still_path %}[img]https://image.tmdb.org/t/p/w300{{ additional_data.still_path }}[/img]{% endif %}
 
-{{ additional_data.overview }}[/align]
+{{ additional_data.overview }}[center]
 {% endif %}
 
 {% if ua_name %}

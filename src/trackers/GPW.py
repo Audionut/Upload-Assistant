@@ -233,16 +233,13 @@ class GPW():
             from src.bbcode import BBCODE
             bbcode = BBCODE()
             desc = '\n\n'.join(filter(None, description))
-            desc = desc.replace('[sup]', '').replace('[/sup]', '')
-            desc = desc.replace('[sub]', '').replace('[/sub]', '')
-            desc = bbcode.remove_spoiler(desc)
-            desc = bbcode.convert_code_to_quote(desc)
-            desc = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", desc)
-            desc = re.sub(r'\[/(right|center|left)\]', "[/align]", desc)
-            final_description = re.sub(r'\n{3,}', '\n\n', desc)
-            descfile.write(final_description)
+            desc = bbcode.remove_sup(desc)
+            desc = bbcode.remove_sub(desc)
+            desc = bbcode.convert_to_align(desc)
+            desc = bbcode.remove_extra_lines(desc)
+            descfile.write(desc)
 
-        return final_description
+        return desc
 
     async def get_trailer(self, meta):
         tmdb_data = await self.ch_tmdb_data(meta)

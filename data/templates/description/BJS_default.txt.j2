@@ -8,9 +8,16 @@
 
 {% endif %}
 
-{% if mediainfo_or_bdinfo %}
-
-{{ mediainfo_or_bdinfo }}
+{% if is_disc %}
+{% if is_disc == 'HDDVD' %}
+[hide=EVO MediaInfo][pre]{{ discs[0].evo_mi }}[/pre][/hide]
+{% endif %}
+{% if is_disc == 'DVD' %}
+[hide=IFO MediaInfo][pre]{{ discs[0].ifo_mi_full }}[/pre][/hide]
+{% endif %}
+{% if is_disc == 'BDMV' %}
+[hide=BDInfo][pre]{{ discs[0].summary }}[/pre][/hide]
+{% endif %}
 {% endif %}
 
 {% if description_file_content or description_template_content or description_link_content %}

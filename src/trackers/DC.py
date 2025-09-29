@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import aiofiles
 import httpx
-import re
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -57,8 +56,8 @@ class DC():
         description = description.replace('[align=left]', '').replace('[/align]', '')
         description = description.replace('[right]', '').replace('[/right]', '')
         description = description.replace('[align=right]', '').replace('[/align]', '')
-        description = description.replace('[sup]', '').replace('[/sup]', '')
-        description = description.replace('[sub]', '').replace('[/sub]', '')
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
         description = description.replace('[alert]', '').replace('[/alert]', '')
         description = description.replace('[note]', '').replace('[/note]', '')
         description = description.replace('[hr]', '').replace('[/hr]', '')
@@ -67,11 +66,10 @@ class DC():
         description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
         description = description.replace('[ul]', '').replace('[/ul]', '')
         description = description.replace('[ol]', '').replace('[/ol]', '')
-        description = re.sub(r'\[img(?!=\d+)[^\]]*\]', '[img]', description, flags=re.IGNORECASE)
-        description = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', description, flags=re.IGNORECASE)
+        description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
         description = description.strip()
-        description = re.sub(r'\n{3,}', '\n\n', description)
+        description = bbcode.remove_extra_lines(description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)
