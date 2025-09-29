@@ -107,10 +107,7 @@ class AZ(AZTrackerBase):
             )
 
         if not is_disc:
-            ext = os.path.splitext(meta['filelist'][0])[1].lower()
-            allowed_extensions = {'.mkv': 'MKV', '.mp4': 'MP4', '.avi': 'AVI'}
-            container = allowed_extensions.get(ext)
-            if container is None:
+            if meta.get('container') not in ['mkv', 'mp4', 'avi']:
                 warnings.append('Allowed containers: MKV, MP4, AVI.')
 
         if not is_disc:
