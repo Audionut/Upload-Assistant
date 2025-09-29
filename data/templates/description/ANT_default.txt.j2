@@ -1,6 +1,5 @@
-{% if mediainfo_or_bdinfo %}
-
-{{ mediainfo_or_bdinfo }}
+{% if discs and discs[0].summary %}
+[spoiler=BDInfo][pre]{{ discs[0].summary }}[/pre][/spoiler]
 {% endif %}
 
 {% if description_file_content or description_template_content or description_link_content %}

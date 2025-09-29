@@ -1,0 +1,39 @@
+{% if custom_description_header %}
+{{ custom_description_header }}
+
+{% endif %}
+{% if add_logo and logo and logo_size %}
+[center][img={{ logo_size }}]{{ logo }}[/img][/center]
+
+{% endif %}
+{% if discs and discs[0].summary %}
+{{ discs[0].summary }}
+{% endif %}
+
+{% if description_nfo_content %}
+
+[nfo]{{ description_nfo_content }}[/nfo]
+{% endif %}
+{% if description_file_content or description_template_content or description_link_content %}
+
+{% if description_file_content %}{{ description_file_content }}
+{% elif description_template_content %}{{ description_template_content }}
+{% elif description_link_content %}{{ description_link_content }}
+{% endif %}{% endif %}
+
+{% if screenshot_header %}
+{{ screenshot_header }}
+
+{% endif %}
+{% set images = DC_images_key if DC_images_key else image_list %}
+
+{% if images %}
+[center]
+{% for image in images %}[url={{ image.web_url }}][img=350]{{ image.img_url }}[/img][/url] {% if loop.index % 2 == 0 %}
+{% endif %}{% endfor %}
+[/center]
+{% endif %}
+
+{% if ua_name %}
+[center][url=https://github.com/Audionut/Upload-Assistant]Created by {{ ua_name }}{% if current_version %} {{ current_version }}{% endif %}[/url][/center]
+{% endif %}

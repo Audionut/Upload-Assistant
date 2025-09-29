@@ -143,35 +143,24 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        if not meta.get('is_disc') == 'BDMV':
-            file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
+        template_name = self.config['TRACKERS'][self.tracker].get('description_template') or "ANT_default.txt.j2"
 
-        if meta.get('is_disc') == 'BDMV':
-            content = meta['discs'][0].get('summary', '') if meta.get('discs') else ''
-            file_info = f'[spoiler=BDInfo][pre]{content}[/pre][/spoiler]'
-
-        meta['mediainfo_or_bdinfo'] = file_info
-
-        if meta.get('is_disc') == 'BDMV':
-            template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or "ANT_default.txt.j2"
-        else:
-            template_name = self.config['TRACKERS'][self.tracker].get('description_template', '')
-        description = await self.common.description_template(self.tracker, meta, template_name)
-        description = description.strip()
-        description = re.sub(r'\n{3,}', '\n\n', description)
-        description = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", description)
-        description = re.sub(r'\[/(right|center|left)\]', "[/align]", description)
-        description = description.replace('[sup]', '').replace('[/sup]', '').replace('[sub]', '').replace('[/sub]', '').replace('•', '').replace('’', '').replace('–', '')
-
-        if meta.get('description_file_content', '') and description:
+        if meta.get('description_file_content', ''):
             print('\nFound existing description:\n')
-            print(description)
+            print(meta.get('description_file_content'))
             user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
 
             if user_input.lower() == 'y':
                 pass
             else:
-                description = ''
+                meta['description_file_content'] = ''
+
+        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", description)
+        description = re.sub(r'\[/(right|center|left)\]', "[/align]", description)
+        description = description.replace('[sup]', '').replace('[/sup]', '').replace('[sub]', '').replace('[/sub]', '').replace('•', '-').replace('’', "'").replace('–', '-')
+        description = description.strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import httpx
-import os
 import re
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -39,79 +39,45 @@ class DC():
         return mediainfo
 
     async def generate_description(self, meta):
-        base_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        dc_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        if meta.get('description_file_content', ''):
+            print('\nFound existing description:\n')
+            print(meta.get('description_file_content'))
+            user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
 
-        description_parts = []
+            if user_input.lower() == 'y':
+                pass
+            else:
+                meta['description_file_content'] = ''
 
-        # BDInfo
-        tech_info = ''
-        if meta.get('is_disc') == 'BDMV':
-            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, 'r', encoding='utf-8') as f:
-                    tech_info = f.read()
+        template_name = self.config['TRACKERS'][self.tracker].get('description_template') or "DC_default.txt.j2"
+        description = await self.common.description_template(self.tracker, meta, template_name)
 
-        if tech_info:
-            description_parts.append(f'{tech_info}')
-
-        if os.path.exists(base_desc):
-            with open(base_desc, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
-
-        # Screenshots
-        if f'{self.tracker}_images_key' in meta:
-            images = meta[f'{self.tracker}_images_key']
-        else:
-            images = meta['image_list']
-        if images:
-            screenshots_block = '[center]\n'
-            for i, image in enumerate(images, start=1):
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f'[url={web_url}][img=350]{img_url}[/img][/url] '
-                # limits to 2 screens per line, as the description box is small
-                if i % 2 == 0:
-                    screenshots_block += '\n'
-            screenshots_block += '\n[/center]'
-            description_parts.append(screenshots_block)
-
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header)
-
-        if self.signature:
-            description_parts.append(self.signature)
-
-        final_description = '\n\n'.join(filter(None, description_parts))
         from src.bbcode import BBCODE
         bbcode = BBCODE()
-        desc = final_description
-        desc = desc.replace('[user]', '').replace('[/user]', '')
-        desc = desc.replace('[align=left]', '').replace('[/align]', '')
-        desc = desc.replace('[right]', '').replace('[/right]', '')
-        desc = desc.replace('[align=right]', '').replace('[/align]', '')
-        desc = desc.replace('[sup]', '').replace('[/sup]', '')
-        desc = desc.replace('[sub]', '').replace('[/sub]', '')
-        desc = desc.replace('[alert]', '').replace('[/alert]', '')
-        desc = desc.replace('[note]', '').replace('[/note]', '')
-        desc = desc.replace('[hr]', '').replace('[/hr]', '')
-        desc = desc.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
-        desc = desc.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
-        desc = desc.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
-        desc = desc.replace('[ul]', '').replace('[/ul]', '')
-        desc = desc.replace('[ol]', '').replace('[/ol]', '')
-        desc = re.sub(r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', r'[nfo]\1[/nfo]', desc, flags=re.DOTALL)
-        desc = re.sub(r'\[img(?!=\d+)[^\]]*\]', '[img]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
-        desc = bbcode.convert_comparison_to_centered(desc, 1000)
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
+        description = description.replace('[user]', '').replace('[/user]', '')
+        description = description.replace('[align=left]', '').replace('[/align]', '')
+        description = description.replace('[right]', '').replace('[/right]', '')
+        description = description.replace('[align=right]', '').replace('[/align]', '')
+        description = description.replace('[sup]', '').replace('[/sup]', '')
+        description = description.replace('[sub]', '').replace('[/sub]', '')
+        description = description.replace('[alert]', '').replace('[/alert]', '')
+        description = description.replace('[note]', '').replace('[/note]', '')
+        description = description.replace('[hr]', '').replace('[/hr]', '')
+        description = description.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
+        description = description.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
+        description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
+        description = description.replace('[ul]', '').replace('[/ul]', '')
+        description = description.replace('[ol]', '').replace('[/ol]', '')
+        description = re.sub(r'\[img(?!=\d+)[^\]]*\]', '[img]', description, flags=re.IGNORECASE)
+        description = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', description, flags=re.IGNORECASE)
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = description.strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
-        with open(dc_desc, 'w', encoding='utf-8') as f:
-            f.write(desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        return desc
+        return description
 
     async def get_category_id(self, meta):
         resolution = meta.get('resolution', '')

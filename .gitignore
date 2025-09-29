@@ -16,8 +16,6 @@ data/cookies/*.pkl
 data/cookies/*.txt
 data/nfos/*
 data/tags.json
-data/templates/description/
-data/templates/mediainfo/
 tmp/*
 user-args.json
 venv/*
