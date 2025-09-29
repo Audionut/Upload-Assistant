@@ -210,7 +210,6 @@ async def extract_bluray_release_info(html_content, meta):
         if meta['debug']:
             release_type_debug = "DVD" if is_dvd else "Blu-ray"
             console.print(f"[blue]Found {len(selected_sections)} {release_type_debug} section(s)[/blue]")
-        
         filtered_sections = []
         for section in selected_sections:
             section_title = section.text
