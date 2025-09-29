@@ -723,6 +723,7 @@ class GPW():
         self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
+        container = await self.get_container(meta)
         groupid = await self.get_groupid(meta)
 
         data = {}
@@ -734,7 +735,8 @@ class GPW():
         data.update({
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
-            'container': await self.get_container(meta),
+            'container_other': meta.get('container', '') if container == 'Other' else '',
+            'container': container,
             'groupid': groupid if groupid else '',
             'mediainfo[]': await self.get_media_info(meta),
             'movie_edition_information': 'on' if remaster_title else '',
