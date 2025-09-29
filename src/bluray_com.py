@@ -198,6 +198,7 @@ async def extract_bluray_release_info(html_content, meta):
         console.print(f"[dim]Could not save debug file: {str(e)}[/dim]")
 
     try:
+        dvd_sections = None
         soup = BeautifulSoup(html_content, 'lxml')
         if is_dvd:
             dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
