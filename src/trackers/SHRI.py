@@ -22,6 +22,13 @@ class SHRI(UNIT3D):
         self.banned_groups = []
         pass
 
+    async def get_additional_data(self, meta):
+        data = {
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+        }
+
+        return data
+
     def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
