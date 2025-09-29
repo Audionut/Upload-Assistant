@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import asyncio
 import httpx
 import json
@@ -6,6 +7,7 @@ import os
 import re
 import unicodedata
 from bs4 import BeautifulSoup
+from src.bbcode import BBCODE
 from src.console import console
 from src.languages import process_desc_language
 from src.rehostimages import check_hosts
@@ -174,72 +176,20 @@ class GPW():
         return title if title and title != meta.get('title') else ''
 
     async def get_release_desc(self, meta):
-        description = []
-
-        # Disc
-        region = meta.get('region', '')
-        distributor = meta.get('distributor', '')
-        if region or distributor:
-            disc_info = ''
-            if region:
-                disc_info += f'[b]Disc Region:[/b] {region}\n'
-            if distributor:
-                disc_info += f'[b]Disc Distributor:[/b] {distributor.title()}'
-            description.append(disc_info)
-
-        base_desc = ''
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(base_desc_path) and os.path.getsize(base_desc_path) > 0:
-            with open(base_desc_path, 'r', encoding='utf-8') as file:
-                base_desc = file.read().strip()
-
-            if base_desc:
-                print('\nFound existing description:\n')
-                print(base_desc)
-                user_input = input('Do you want to use this description? (y/n): ')
-
-                if user_input.lower() == 'y':
-                    description.append(base_desc)
-                    print('Using existing description.')
-                else:
-                    print('Ignoring existing description.')
-
-        # Screenshots
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
         await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
-        if f'{self.tracker}_images_key' in meta:
-            images = meta[f'{self.tracker}_images_key']
-        else:
-            images = meta['image_list']
-        if images:
-            screenshots_block = '[center]\n'
-            for i, image in enumerate(images, start=1):
-                screenshots_block += f"[img]{image['raw_url']}[/img] "
-                if i % 2 == 0:
-                    screenshots_block += '\n'
-            screenshots_block += '\n[/center]'
-            description.append(screenshots_block)
+        description = await self.common.description_template(self.tracker, meta)
+        bbcode = BBCODE()
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_extra_lines(description)
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description.append(custom_description_header + '\n')
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        if self.signature:
-            description.append(self.signature)
-
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            from src.bbcode import BBCODE
-            bbcode = BBCODE()
-            desc = '\n\n'.join(filter(None, description))
-            desc = bbcode.remove_sup(desc)
-            desc = bbcode.remove_sub(desc)
-            desc = bbcode.convert_to_align(desc)
-            desc = bbcode.remove_extra_lines(desc)
-            descfile.write(desc)
-
-        return desc
+        return description
 
     async def get_trailer(self, meta):
         tmdb_data = await self.ch_tmdb_data(meta)
