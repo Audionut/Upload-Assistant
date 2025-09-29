@@ -177,12 +177,15 @@ async def extract_bluray_release_info(html_content, meta):
     is_3d = meta.get('3D', '') == 'yes'
     resolution = meta.get('resolution', '').lower()
     is_4k = '2160p' in resolution or '4k' in resolution
-    release_type = "4K" if is_4k else "3D" if is_3d else "BD"
+    is_dvd = meta['is_disc'] == "DVD"
+    release_type = "4K" if is_4k else "3D" if is_3d else "DVD" if is_dvd else "BD"
 
     if is_3d:
         console.print("[blue]Looking for 3D Blu-ray releases[/blue]")
     elif is_4k:
         console.print("[blue]Looking for 4K/UHD Blu-ray releases[/blue]")
+    elif is_dvd:
+        console.print("[blue]Looking for DVD releases[/blue]")
     else:
         console.print("[blue]Looking for standard Blu-ray releases[/blue]")
 
@@ -196,13 +199,21 @@ async def extract_bluray_release_info(html_content, meta):
 
     try:
         soup = BeautifulSoup(html_content, 'lxml')
-
-        bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
+        if is_dvd:
+            dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
+        else:
+            bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
+            
+        if dvd_sections:
+            selected_sections = dvd_sections
+        else:
+            selected_sections = bluray_sections
         if meta['debug']:
-            console.print(f"[blue]Found {len(bluray_sections)} Blu-ray section(s)[/blue]")
-
+            release_type_debug = "DVD" if is_dvd else "Blu-ray"
+            console.print(f"[blue]Found {len(selected_sections)} {release_type_debug} section(s)[/blue]")
+        
         filtered_sections = []
-        for section in bluray_sections:
+        for section in selected_sections:
             section_title = section.text
 
             # Check if this section matches what we're looking for
@@ -214,6 +225,10 @@ async def extract_bluray_release_info(html_content, meta):
                 filtered_sections.append(section)
                 if meta['debug']:
                     console.print(f"[green]Including 4K section: {section_title}[/green]")
+            elif is_dvd and 'DVD Editions' in section_title:
+                filtered_sections.append(section)
+                if meta['debug']:
+                    console.print(f"[green]Including DVD section: {section_title}[/green]")
             elif not is_3d and not is_4k and 'Blu-ray Editions' in section_title and '3D Blu-ray Editions' not in section_title and '4K Blu-ray Editions' not in section_title:
                 filtered_sections.append(section)
                 if meta['debug']:
@@ -222,18 +237,18 @@ async def extract_bluray_release_info(html_content, meta):
         # If no sections match our filter criteria, use all sections
         if not filtered_sections:
             console.print("[yellow]No sections match exact media type, using all available sections[/yellow]")
-            filtered_sections = bluray_sections
+            filtered_sections = selected_sections
 
         for section_idx, section in enumerate(filtered_sections, 1):
             parent_tr = section.find_parent('tr')
             if not parent_tr:
-                console.print("[red]Could not find parent tr for Blu-ray section[/red]")
+                console.print(f"[red]Could not find parent tr for {release_type_debug} section[/red]")
                 continue
 
             release_links = []
             current = section.find_next()
             while current and (not current.name == 'h3'):
-                if current.name == 'a' and current.has_attr('href') and 'blu-ray.com/movies/' in current['href']:
+                if current.name == 'a' and current.has_attr('href') and ('blu-ray.com/movies/' in current['href'] or 'blu-ray.com/dvd/' in current['href']):
                     release_links.append(current)
                 current = current.find_next()
 
@@ -248,7 +263,7 @@ async def extract_bluray_release_info(html_content, meta):
                     publisher_tag = link.find_next('small', style=lambda s: s and 'color: #999999' in s)
                     publisher = publisher_tag.text.strip() if publisher_tag else "Unknown"
 
-                    release_id_match = re.search(r'blu-ray\.com/movies/.*?/(\d+)/', release_url)
+                    release_id_match = re.search(r'blu-ray\.com/(movies|dvd)/.*?/(\d+)/', release_url)
                     if release_id_match:
                         release_id = release_id_match.group(1)
                         if meta['debug']:
@@ -435,9 +450,9 @@ async def get_bluray_releases(meta):
 
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print()
-                console.print("[green]Blu-ray Release Selection")
+                console.print("[green]Release Selection")
                 console.print("[green]=======================================")
-                console.print("[dim]Please select a Blu-ray release to use for region and distributor information:")
+                console.print("[dim]Please select a release to use for region and distributor information:")
                 console.print("[dim]Enter release number, 'a' for all releases, or 'n' to skip")
                 console.print("[dim]Selecting all releases will search every release for more information...")
                 console.print("[dim]More releases will require more time to process")
