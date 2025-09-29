@@ -33,11 +33,38 @@ class LST(UNIT3D):
 
     async def get_additional_data(self, meta):
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
-            'draft': await self.get_flag(meta, 'draft'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'draft_queue_opt_in': await self.get_flag(meta, 'draft'),
         }
 
+        # Only add edition_id if we have a valid edition
+        edition_id = await self.get_edition(meta)
+        if edition_id is not None:
+            data['edition_id'] = edition_id
+
         return data
+
+    async def get_edition(self, meta):
+        edition_mapping = {
+            'Alternative Cut': 12,
+            'Collector\'s Edition': 1,
+            'Director\'s Cut': 2,
+            'Extended Cut': 3,
+            'Extended Uncut': 4,
+            'Extended Unrated': 5,
+            'Limited Edition': 6,
+            'Special Edition': 7,
+            'Theatrical Cut': 8,
+            'Uncut': 9,
+            'Unrated': 10,
+            'X Cut': 11,
+            'Other': 0  # Default value for "Other"
+        }
+        edition = meta.get('edition', '')
+        if edition in edition_mapping:
+            return edition_mapping[edition]
+        else:
+            return None
 
     async def get_name(self, meta):
         lst_name = meta['name']

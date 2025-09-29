@@ -576,6 +576,7 @@ class COMMON():
                                     console.print(f"[yellow]No existing screenshots for {new_images_key}; generating new ones.")
                             try:
                                 await screenshots(file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, None)
+                                await asyncio.sleep(0.1)
                             except Exception as e:
                                 print(f"Error during generic screenshot capture: {e}")
 
@@ -593,10 +594,15 @@ class COMMON():
                                         'web_url': img['web_url']
                                     })
 
+                                await asyncio.sleep(0.1)
+
+                    await asyncio.sleep(0.05)
+
             # Save updated meta
             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
             async with aiofiles.open(meta_filename, 'w') as f:
                 await f.write(json.dumps(meta, indent=4))
+            await asyncio.sleep(0.1)
 
             # Second Pass: Process MediaInfo and Write Descriptions
             if len(filelist) > 1:

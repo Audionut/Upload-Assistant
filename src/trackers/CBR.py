@@ -120,7 +120,7 @@ class CBR(UNIT3D):
 
     async def get_additional_data(self, meta):
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data

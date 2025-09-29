@@ -264,6 +264,10 @@ config = {
         # Set true to search for matching requests on supported trackers
         "search_requests": False,
 
+        # Set true to also try searching predb for scene release
+        # predb is not consistent, can timeout, but can find some releases not found on SRRDB
+        "check_predb": False,
+
     },
 
     # these are used for DB links on AR
