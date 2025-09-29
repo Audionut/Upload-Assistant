@@ -71,19 +71,15 @@ class GPW():
         return data
 
     async def get_container(self, meta):
-        container = None
-        if meta['is_disc'] == 'BDMV':
-            container = 'm2ts'
-        elif meta['is_disc'] == 'DVD':
-            container = 'VOB IFO'
-        else:
-            ext = os.path.splitext(meta['filelist'][0])[1]
-            containermap = {
-                '.mkv': 'MKV',
-                '.mp4': 'MP4'
-            }
-            container = containermap.get(ext, 'Outro')
-        return container
+        container = meta.get('container', '')
+        if container == 'm2ts':
+            return container
+        elif container == 'vob':
+            return 'VOB IFO'
+        elif container in ['avi', 'mpg', 'mp4', 'mkv']:
+            return container.upper()
+
+        return 'Other'
 
     async def get_subtitle(self, meta):
         if not meta.get('language_checked', False):
