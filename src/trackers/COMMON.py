@@ -1466,11 +1466,22 @@ class COMMON():
         template = env.get_template(template_name)
         return template.render(data)
 
-    async def description_template(self, tracker, meta, template_name):
+    async def description_template(self, tracker, meta, additional_data=None):
+        template_name = self.config['TRACKERS'][tracker].get('description_template') or f'{tracker}_default.txt.j2'
+        template_dir = os.path.join(meta['base_dir'], 'data', 'templates', 'description')
+
+        template_path = os.path.join(template_dir, template_name)
+
+        if not os.path.exists(template_path):
+            console.print(f'[bold yellow]{tracker}: Description template not found at {template_path}[/bold yellow]')
+            return ''
+
         try:
-            template_dir = os.path.join(meta['base_dir'], 'data', 'templates', 'description')
-            data = meta | self.config['DEFAULT']
-            output = await self.render_jinja_template(template_dir=template_dir, template_name=template_name, data=data)
+            meta['user_config'] = self.config['DEFAULT']
+            meta['additional_data'] = additional_data or {}
+            output = await self.render_jinja_template(template_dir, template_name, meta)
+            del meta['user_config']
+            del meta['additional_data']
             return output.strip()
 
         except Exception as e:

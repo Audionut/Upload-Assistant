@@ -1,0 +1,12 @@
+{% if description_file_content or description_template_content or description_link_content %}
+{% if description_file_content %}{{ description_file_content }}
+{% elif description_template_content %}{{ description_template_content }}
+{% elif description_link_content %}{{ description_link_content }}
+{% endif %}
+{% endif %}
+
+{% if user_config.episode_overview %}
+{% if overview_meta %}
+{{ overview_meta }}
+{% endif %}
+{% endif %}

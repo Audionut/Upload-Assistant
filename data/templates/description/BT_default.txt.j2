@@ -1,10 +1,10 @@
-{% if custom_description_header %}
-{{ custom_description_header }}
+{% if user_config.custom_description_header %}
+{{ user_config.custom_description_header }}
 
 {% endif %}
 
-{% if add_logo and logo and logo_size %}
-[center][img]{{ logo }}[/img][/center]
+{% if user_config.add_logo and tmdb_logo %}
+[center][img]https://image.tmdb.org/t/p/w300{{ tmdb_logo }}[/img][/center]
 
 {% endif %}
 
@@ -13,7 +13,14 @@
 {% elif description_template_content %}{{ description_template_content }}
 {% elif description_link_content %}{{ description_link_content }}
 {% endif %}
+{% endif %}
 
+{% if user_config.episode_overview and additional_data.name and additional_data.overview %}
+[align=center][b]{{ additional_data.name }}[/b]
+
+{% if additional_data.still_path %}[img]https://image.tmdb.org/t/p/w300{{ additional_data.still_path }}[/img]{% endif %}
+
+{{ additional_data.overview }}[/align]
 {% endif %}
 
 {% if ua_name %}

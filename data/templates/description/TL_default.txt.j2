@@ -1,9 +1,9 @@
-{% if custom_description_header %}
-{{ custom_description_header }}
+{% if user_config.custom_description_header %}
+{{ user_config.custom_description_header }}
 
 {% endif %}
-{% if add_logo and logo and logo_size %}
-<center><img src="{{ logo }}" style="max-width: {{ logo_size }}px;"></center>
+{% if user_config.add_logo and logo and user_config.logo_size %}
+<center><img src="{{ logo }}" style="max-width: {{ user_config.logo_size }}px;"></center>
 
 {% endif %}
 {% if mediainfo_or_bdinfo %}
@@ -21,12 +21,18 @@
 {% elif description_link_content %}{{ description_link_content }}
 {% endif %}{% endif %}
 
+{% if user_config.episode_overview %}
+{% if overview_meta %}
+{{ overview_meta }}
+{% endif %}
+{% endif %}
+
 {% if not img_rehost %}
 {% if screenshot_header %}
 {{ screenshot_header }}
 
 {% endif %}
-<center>{% for image in image_list %}<a href='{{ image.web_url }}'><img src='{{ image.img_url }}' style='max-width: {{ thumbnail_size or 350 }}px;'></a>  {% if loop.index % 2 == 0 %}<br><br>{% endif %}{% endfor %}</center>
+<center>{% for image in image_list %}<a href='{{ image.web_url }}'><img src='{{ image.img_url }}' style='max-width: {{ user_config.thumbnail_size or 350 }}px;'></a>  {% if loop.index % 2 == 0 %}<br><br>{% endif %}{% endfor %}</center>
 {% endif %}
 
 {% if ua_name %}

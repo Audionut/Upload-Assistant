@@ -1,9 +1,9 @@
-{% if custom_description_header %}
-{{ custom_description_header }}
+{% if user_config.custom_description_header %}
+{{ user_config.custom_description_header }}
 
 {% endif %}
-{% if add_logo and logo and logo_size %}
-[center][img={{ logo_size }}]{{ logo }}[/img][/center]
+{% if user_config.add_logo and logo and user_config.logo_size %}
+[center][img={{ user_config.logo_size }}]{{ logo }}[/img][/center]
 
 {% endif %}
 {% if discs and discs[0].summary %}
@@ -21,8 +21,8 @@
 {% elif description_link_content %}{{ description_link_content }}
 {% endif %}{% endif %}
 
-{% if screenshot_header %}
-{{ screenshot_header }}
+{% if user_config.screenshot_header %}
+{{ user_config.screenshot_header }}
 
 {% endif %}
 {% set images = DC_images_key if DC_images_key else image_list %}

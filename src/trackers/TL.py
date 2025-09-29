@@ -78,8 +78,7 @@ class TL:
         meta['mediainfo_or_bdinfo'] = file_info
         meta['img_rehost'] = self.tracker_config.get('img_rehost', True) and not self.tracker_config.get('api_upload', True)
 
-        template_name = self.tracker_config.get('description_template', '') or 'TL_default.txt.j2'
-        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = await self.common.description_template(self.tracker, meta)
 
         bbcode = BBCODE()
         description = description.replace("[center]", "<center>").replace("[/center]", "</center>")

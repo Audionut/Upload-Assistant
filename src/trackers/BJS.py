@@ -87,7 +87,8 @@ class BJS:
 
     async def load_localized_data(self, meta):
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
-        ptbr_data = {}
+        main_ptbr_data = {}
+        episode_ptbr_data = {}
         data = {}
 
         if os.path.isfile(localized_data_file):
@@ -102,17 +103,29 @@ class BJS:
                 print(f'Error reading file {localized_data_file}: {e}')
                 data = {}
 
-        ptbr_data = data.get('pt-BR', {}).get('main')
+        main_ptbr_data = data.get('pt-BR', {}).get('main')
 
-        if not ptbr_data:
-            ptbr_data = await get_tmdb_localized_data(
+        if not main_ptbr_data:
+            main_ptbr_data = await get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
                 append_to_response='credits,videos,content_ratings'
             )
 
-        self.tmdb_data = ptbr_data
+        if self.config['DEFAULT']['episode_overview']:
+            if meta['category'] == 'TV' and not meta.get('tv_pack'):
+                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+                if not episode_ptbr_data:
+                    episode_ptbr_data = await get_tmdb_localized_data(
+                        meta,
+                        data_type='episode',
+                        language='pt-BR',
+                        append_to_response=''
+                    )
+
+        self.main_tmdb_data = main_ptbr_data
+        self.episode_tmdb_data = episode_ptbr_data
 
         return
 
@@ -153,8 +166,8 @@ class BJS:
             'Russo', 'Sueco', 'Tailandês', 'Tamil', 'Tcheco', 'Telugo', 'Turco',
             'Ucraniano', 'Urdu', 'Vietnamita', 'Zulu', 'Outro'
         }
-        lang_code = self.tmdb_data.get('original_language')
-        origin_countries = self.tmdb_data.get('origin_country', [])
+        lang_code = self.main_tmdb_data.get('original_language')
+        origin_countries = self.main_tmdb_data.get('origin_country', [])
 
         if not lang_code:
             return 'Outro'
@@ -318,7 +331,7 @@ class BJS:
         return 'Outro'
 
     async def get_title(self, meta):
-        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
+        title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
@@ -341,9 +354,7 @@ class BJS:
 
         meta['mediainfo_or_bdinfo'] = file_info
 
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'BJS_default.txt.j2'
-        description = await self.common.description_template(self.tracker, meta, template_name)
-
+        description = await self.common.description_template(self.tracker, meta, self.episode_tmdb_data)
         description = re.sub(r"\[spoiler=([^]]+)]", r"[hide=\1]", description, flags=re.IGNORECASE)
         description = re.sub(r"\[spoiler\]", "[hide]", description, flags=re.IGNORECASE)
         description = re.sub(r"\[/spoiler\]", "[/hide]", description, flags=re.IGNORECASE)
@@ -356,7 +367,7 @@ class BJS:
         return description
 
     async def get_trailer(self, meta):
-        video_results = self.tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
             youtube = f'http://www.youtube.com/watch?v={youtube_code}'
@@ -366,7 +377,7 @@ class BJS:
         return youtube
 
     async def get_rating(self, meta):
-        ratings = self.tmdb_data.get('content_ratings', {}).get('results', [])
+        ratings = self.main_tmdb_data.get('content_ratings', {}).get('results', [])
 
         if not ratings:
             return ''
@@ -394,9 +405,9 @@ class BJS:
     async def get_tags(self, meta):
         tags = ''
 
-        if self.tmdb_data and isinstance(self.tmdb_data.get('genres'), list):
+        if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
             genre_names = [
-                g.get('name', '') for g in self.tmdb_data['genres']
+                g.get('name', '') for g in self.main_tmdb_data['genres']
                 if isinstance(g.get('name'), str) and g.get('name').strip()
             ]
 
@@ -778,7 +789,7 @@ class BJS:
             return None
 
     async def get_cover(self, meta, disctype):
-        cover_path = self.tmdb_data.get('poster_path') or meta.get('tmdb_poster')
+        cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
             print('Nenhum poster_path encontrado nos dados do TMDB.')
             return None
@@ -1089,7 +1100,7 @@ class BJS:
             'remaster_title': self.build_remaster_title(meta),
             'resolucaoh': self.get_resolution(meta).get('height'),
             'resolucaow': self.get_resolution(meta).get('width'),
-            'sinopse': self.tmdb_data.get('overview') or await asyncio.to_thread(input, 'Digite a sinopse: '),
+            'sinopse': self.main_tmdb_data.get('overview') or await asyncio.to_thread(input, 'Digite a sinopse: '),
             'submit': 'true',
             'tags': await self.get_tags(meta),
             'tipolegenda': await self.get_subtitle(meta),
@@ -1124,20 +1135,20 @@ class BJS:
             })
             if category == 'MOVIE':
                 data.update({
-                    'datalancamento': self.get_release_date(self.tmdb_data),
+                    'datalancamento': self.get_release_date(self.main_tmdb_data),
                 })
 
             if category == 'TV':
                 # Convert country code to name
                 country_list = [
                     country.name
-                    for code in self.tmdb_data.get('origin_country', [])
+                    for code in self.main_tmdb_data.get('origin_country', [])
                     if (country := pycountry.countries.get(alpha_2=code))
                 ]
                 data.update({
-                    'network': ', '.join([p.get('name', '') for p in self.tmdb_data.get('networks', [])]) or '',  # Optional
-                    'numtemporadas': self.tmdb_data.get('number_of_seasons', ''),  # Optional
-                    'datalancamento': self.get_release_date(self.tmdb_data),
+                    'network': ', '.join([p.get('name', '') for p in self.main_tmdb_data.get('networks', [])]) or '',  # Optional
+                    'numtemporadas': self.main_tmdb_data.get('number_of_seasons', ''),  # Optional
+                    'datalancamento': self.get_release_date(self.main_tmdb_data),
                     'pais': ', '.join(country_list),  # Optional
                     'diretorserie': ', '.join(set(meta.get('tmdb_directors', []) or meta.get('imdb_info', {}).get('directors', [])[:5])),  # Optional
                     'avaliacao': await self.get_rating(meta),  # Optional

@@ -718,6 +718,7 @@ async def tmdb_other_meta(
     imdb_mismatch = False
     keywords = ""
     logo_path = ""
+    tmdb_logo = ""
     mal_id = 0
     mismatched_imdb_id = 0
     origin_country = []
@@ -969,9 +970,11 @@ async def tmdb_other_meta(
             try:
                 logo_json = logo_data.json()
                 logo_path = await get_logo(tmdb_id, category, debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
+                tmdb_logo = '/' + logo_path.split('/')[-1]
             except Exception:
                 console.print("[yellow]Failed to process logo[/yellow]")
                 logo_path = ""
+                tmdb_logo = ""
 
     # Use retrieved original language or fallback to TMDB's value
     if manual_language:
@@ -1023,6 +1026,7 @@ async def tmdb_other_meta(
         'poster': poster,
         'tmdb_poster': poster_path,
         'logo': logo_path,
+        'tmdb_logo': tmdb_logo,
         'backdrop': backdrop,
         'overview': overview,
         'tmdb_type': tmdb_type,

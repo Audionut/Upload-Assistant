@@ -641,8 +641,7 @@ class AZTrackerBase:
         return tags
 
     async def edit_desc(self, meta):
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'simple_description.j2'
-        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = await self.common.description_template(self.tracker, meta)
         description = description.strip()
         description = re.sub(r'\n{3,}', '\n\n', description)
 

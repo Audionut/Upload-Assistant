@@ -147,7 +147,8 @@ class BT:
 
     async def load_localized_data(self, meta):
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
-        ptbr_data = {}
+        main_ptbr_data = {}
+        episode_ptbr_data = {}
         data = {}
 
         if os.path.isfile(localized_data_file):
@@ -162,17 +163,29 @@ class BT:
                 print(f'Error reading file {localized_data_file}: {e}')
                 data = {}
 
-        ptbr_data = data.get('pt-BR', {}).get('main')
+        main_ptbr_data = data.get('pt-BR', {}).get('main')
 
-        if not ptbr_data:
-            ptbr_data = await get_tmdb_localized_data(
+        if not main_ptbr_data:
+            main_ptbr_data = await get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
                 append_to_response='credits,videos,content_ratings'
             )
 
-        self.tmdb_data = ptbr_data
+        if self.config['DEFAULT']['episode_overview']:
+            if meta['category'] == 'TV' and not meta.get('tv_pack'):
+                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+                if not episode_ptbr_data:
+                    episode_ptbr_data = await get_tmdb_localized_data(
+                        meta,
+                        data_type='episode',
+                        language='pt-BR',
+                        append_to_response=''
+                    )
+
+        self.main_tmdb_data = main_ptbr_data
+        self.episode_tmdb_data = episode_ptbr_data
 
         return
 
@@ -356,8 +369,7 @@ class BT:
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta):
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template', '') or 'BT_default.txt.j2'
-        description = await self.common.description_template(self.tracker, meta, template_name=template_name)
+        description = await self.common.description_template(self.tracker, meta)
         description = re.sub(r'\n{3,}', '\n\n', description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:

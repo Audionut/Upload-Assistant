@@ -49,8 +49,7 @@ class DC():
             else:
                 meta['description_file_content'] = ''
 
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template') or "DC_default.txt.j2"
-        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = await self.common.description_template(self.tracker, meta)
 
         from src.bbcode import BBCODE
         bbcode = BBCODE()

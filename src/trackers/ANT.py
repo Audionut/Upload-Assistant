@@ -143,8 +143,6 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        template_name = self.config['TRACKERS'][self.tracker].get('description_template') or "ANT_default.txt.j2"
-
         if meta.get('description_file_content', ''):
             print('\nFound existing description:\n')
             print(meta.get('description_file_content'))
@@ -155,7 +153,7 @@ class ANT:
             else:
                 meta['description_file_content'] = ''
 
-        description = await self.common.description_template(self.tracker, meta, template_name)
+        description = await self.common.description_template(self.tracker, meta)
         description = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", description)
         description = re.sub(r'\[/(right|center|left)\]', "[/align]", description)
         description = description.replace('[sup]', '').replace('[/sup]', '').replace('[sub]', '').replace('[/sub]', '').replace('•', '-').replace('’', "'").replace('–', '-')
