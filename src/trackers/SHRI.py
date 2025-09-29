@@ -42,68 +42,9 @@ class SHRI(UNIT3D):
         name_type = meta.get('type', "")
         source = meta.get('source', "")
         imdb_info = meta.get('imdb_info') or {}
-
-        if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
-            meta['type'] = 'REMUX'
-            name_type = 'REMUX'
-            
-            # Gestione del titolo italiano
-            title = meta['title']
-            akas = imdb_info.get('akas', [])
-            italian_title = None
-            
-            for aka in akas:
-                if isinstance(aka, dict) and aka.get("country") == "Italy":
-                    italian_title = aka.get("title")
-                    break
-                    
-            use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
-            if italian_title and use_italian_title:
-                title = italian_title
-            
-            year = meta['year']
-
-            # Gestione delle lingue audio
-            audio_lang_str = ""
-            if not meta.get('language_checked', False):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-            if meta.get('audio_languages'):
-                audio_languages = []
-                for lang in meta['audio_languages']:
-                    lang_up = lang.upper()
-                    if lang_up not in audio_languages:
-                        audio_languages.append(lang_up)
-                audio_lang_str = " - ".join(audio_languages)
-
-            # Costruisci il nuovo nome da zero
-            audio = meta['audio'].replace('Dual-Audio', '').strip()
-            # Assicuriamoci che audio_lang_str contenga sempre la lingua, anche se è una sola
-            if not audio_lang_str and meta.get('audio_languages') and len(meta['audio_languages']) > 0:
-                audio_lang_str = meta['audio_languages'][0].upper()
-            
-            # Aggiungi UHD dopo 2160p
-            resolution_str = resolution
-            if resolution == "2160p":
-                resolution_str = "2160p UHD"
-            
-            shareisland_name = f"{title} {year} {audio_lang_str} {resolution_str} {meta['source']} REMUX {video_codec} {audio}"
-            
-            # Rimuovi eventuali spazi doppi e trattini doppi
-            shareisland_name = ' '.join(shareisland_name.split())
-            
-            if meta.get('tag'):
-                # Rimuovi eventuali trattini dal tag e aggiungine uno solo
-                tag = meta['tag'].strip('-')
-                # Rimuovi i codici lingua dal tag
-                language_codes = ['ITA', 'ENG', 'FRA', 'FRE','SPA', 'GER', 'JAP']
-                for lang in language_codes:
-                    tag = re.sub(f'{lang}(?=\\s|$|-|\\b)', '', tag, flags=re.IGNORECASE).strip()
-                # Rimuovi eventuali trattini multipli o spazi risultanti
-                tag = re.sub(r'-+', '-', tag).strip('-')
-                shareisland_name = f"{shareisland_name}-{tag}"
-            # Termina qui e non proseguire con le altre modifiche al nome
-            return {'name': shareisland_name}
+        type = meta.get('type', "")
+        year = meta['year']
+        title = meta['title']
 
         akas = imdb_info.get('akas', [])
         italian_title = None
@@ -118,15 +59,8 @@ class SHRI(UNIT3D):
                 break
 
         use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
-        if italian_title and use_italian_title:
-            shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
-            shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
 
         audio_lang_str = ""
-
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
@@ -137,6 +71,51 @@ class SHRI(UNIT3D):
                 if lang_up not in audio_languages:
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
+
+        audio = meta['audio'].replace('Dual-Audio', '').strip()
+        if meta.get('dual_audio'):
+            shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
+
+        if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
+            type = "REMUX"
+            shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
+
+            if italian_title and use_italian_title:
+                title = italian_title
+
+            # Assicuriamoci che audio_lang_str contenga sempre la lingua, anche se è una sola
+            if not audio_lang_str and meta.get('audio_languages') and len(meta['audio_languages']) > 0:
+                audio_lang_str = meta['audio_languages'][0].upper()
+
+            # Aggiungi UHD dopo 2160p
+            resolution_str = resolution
+            if resolution == "2160p":
+                resolution_str = "2160p UHD"
+
+            shareisland_name = f"{title} {year} {audio_lang_str} {resolution_str} {meta['source']} REMUX {video_codec} {audio}"
+
+            # Rimuovi eventuali spazi doppi e trattini doppi
+            shareisland_name = ' '.join(shareisland_name.split())
+
+            if meta.get('tag'):
+                # Rimuovi eventuali trattini dal tag e aggiungine uno solo
+                tag = meta['tag'].strip('-')
+                # Rimuovi i codici lingua dal tag
+                language_codes = ['ITA', 'ENG', 'FRA', 'FRE', 'SPA', 'GER', 'JAP']
+                for lang in language_codes:
+                    tag = re.sub(f'{lang}(?=\\s|$|-|\\b)', '', tag, flags=re.IGNORECASE).strip()
+                # Rimuovi eventuali trattini multipli o spazi risultanti
+                tag = re.sub(r'-+', '-', tag).strip('-')
+                shareisland_name = f"{shareisland_name}-{tag}"
+            # Termina qui e non proseguire con le altre modifiche al nome
+            return {'name': shareisland_name}
+
+        if italian_title and use_italian_title:
+            shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
+            shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
         audios = []
         if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
@@ -164,9 +143,6 @@ class SHRI(UNIT3D):
                 shareisland_name = shareisland_name + " [SUBS]"
             else:
                 shareisland_name = shareisland_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
-
-        if meta.get('dual_audio'):
-            shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
         if audio_lang_str:
             if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
