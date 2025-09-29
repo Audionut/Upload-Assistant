@@ -1,4 +1,3 @@
-import asyncio
 import cli_ui
 import glob
 import json
@@ -316,25 +315,17 @@ async def get_video_duration(meta):
 
 
 async def get_container(meta):
-    def find_largest_file():
-        largest_size = 0
-        largest_file_path = ''
+    if meta.get('is_disc', ''):
+        file_list = meta.get('discs', [])[0].get('path', '')
 
-        for root, dirs, files in os.walk(meta.get('path')):
-            for file_name in files:
-                file_path = os.path.join(root, file_name)
+    file_list = meta.get('filelist', [])
+    if not file_list:
+        return ''
 
-                try:
-                    current_size = os.path.getsize(file_path)
-                    if current_size > largest_size:
-                        largest_size = current_size
-                        largest_file_path = file_path
-                except OSError:
-                    continue
-
-        return largest_file_path
-
-    largest_file_path = await asyncio.to_thread(find_largest_file)
+    try:
+        largest_file_path = max(file_list, key=os.path.getsize)
+    except (OSError, ValueError):
+        return ''
 
     if largest_file_path:
         extension_with_dot = os.path.splitext(largest_file_path)[1]
