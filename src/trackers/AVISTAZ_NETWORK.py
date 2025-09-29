@@ -645,16 +645,6 @@ class AZTrackerBase:
         description = description.strip()
         description = re.sub(r'\n{3,}', '\n\n', description)
 
-        if meta.get('description_file_content', '') and description:
-            print('\nFound existing description:\n')
-            print(description)
-            user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
-
-            if user_input.lower() == 'y':
-                pass
-            else:
-                description = ''
-
         if not description:
             return ''
 

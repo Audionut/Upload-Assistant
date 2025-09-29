@@ -143,16 +143,6 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        if meta.get('description_file_content', ''):
-            print('\nFound existing description:\n')
-            print(meta.get('description_file_content'))
-            user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
-
-            if user_input.lower() == 'y':
-                pass
-            else:
-                meta['description_file_content'] = ''
-
         description = await self.common.description_template(self.tracker, meta)
         bbcode = BBCODE()
         description = bbcode.convert_to_align(description)

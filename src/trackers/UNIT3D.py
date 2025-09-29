@@ -99,7 +99,7 @@ class UNIT3D:
         if meta['bdinfo'] is not None:
             mediainfo = None
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
                 mediainfo = await f.read()
         return {'mediainfo': mediainfo}
 

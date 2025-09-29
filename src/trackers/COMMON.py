@@ -1477,6 +1477,17 @@ class COMMON():
             return ''
 
         try:
+            if meta.get('description_file_content', ''):
+                # check the description that may come from other trackers via the API
+                print('\nFound existing description:\n')
+                print(meta.get('description_file_content'))
+                user_input = await self.async_input(prompt='Do you want to use this description? (y/n): ')
+
+                if user_input.lower() == 'y':
+                    pass
+                else:
+                    meta['description_file_content'] = ''
+
             meta['user_config'] = self.config['DEFAULT']
             meta['additional_data'] = additional_data or {}
             output = await self.render_jinja_template(template_dir, template_name, meta)
@@ -1565,8 +1576,15 @@ class COMMON():
                 console.print(f'[bold red]Error loading mediainfo template: {e}[/bold red]')
                 console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as mi:
-            return mi.read()
+        return await self.get_mediainfo_text(meta)
+
+    async def get_mediainfo_text(self, meta):
+        mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+        if await self.path_exists(mi_path):
+            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as mi:
+                return mi.read()
+        else:
+            return ''
 
     async def async_input(self, prompt):
         '''

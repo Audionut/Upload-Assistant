@@ -5,7 +5,7 @@ import httpx
 import os
 import re
 from bs4 import BeautifulSoup
-from pymediainfo import MediaInfo
+from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
 from urllib.parse import urlparse
@@ -172,97 +172,35 @@ class HDT:
         hdt_name = hdt_name.replace(':', '').replace('..', ' ').replace('  ', ' ')
         return hdt_name
 
-    def get_links(self, movie, subheading, heading_end):
-        description = ""
-        description += "\n" + subheading + "Links" + heading_end + "\n"
-        if 'IMAGES' in self.config:
-            if movie['tmdb'] != 0:
-                description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
-            if movie['tvdb_id'] != 0:
-                description += f" [URL=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]"
-            if movie['tvmaze_id'] != 0:
-                description += f" [URL=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]"
-            if movie['mal_id'] != 0:
-                description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
-        else:
-            if movie['tmdb'] != 0:
-                description += f"\nhttps://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}"
-            if movie['tvdb_id'] != 0:
-                description += f"\nhttps://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series"
-            if movie['tvmaze_id'] != 0:
-                description += f"\nhttps://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}"
-            if movie['mal_id'] != 0:
-                description += f"\nhttps://myanimelist.net/anime/{str(movie['mal_id'])}"
-
-        description += "\n\n"
-        return description
-
     async def edit_desc(self, meta):
-        subheading = '[COLOR=RED][size=4]'
-        heading_end = '[/size][/COLOR]'
-        description_parts = []
+        file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
+        meta['mediainfo_text'] = file_info
+        description = await self.common.description_template(self.tracker, meta)
 
-        desc_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'DESCRIPTION.txt')
-        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
-            description_parts.append(await f.read())
+        bbcode = BBCODE()
+        description = description.replace('[user]', '').replace('[/user]', '')
+        description = description.replace('[align=left]', '').replace('[/align]', '')
+        description = description.replace('[align=right]', '').replace('[/align]', '')
+        description = bbcode.remove_sub(description)
+        description = bbcode.remove_sup(description)
+        description = description.replace('[alert]', '').replace('[/alert]', '')
+        description = description.replace('[note]', '').replace('[/note]', '')
+        description = description.replace('[hr]', '').replace('[/hr]', '')
+        description = description.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
+        description = description.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
+        description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
+        description = description.replace('[ul]', '').replace('[/ul]', '')
+        description = description.replace('[ol]', '').replace('[/ol]', '')
+        description = bbcode.convert_spoiler_to_hide(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = bbcode.remove_spoiler(description)
+        description = bbcode.remove_extra_lines(description)
 
-        media_info_block = None
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        if meta.get('is_disc') == 'BDMV':
-            bd_info = meta.get('discs', [{}])[0].get('summary', '')
-            if bd_info:
-                media_info_block = f'[left][font=consolas]{bd_info}[/font][/left]'
-        else:
-            if meta.get('filelist'):
-                video = meta['filelist'][0]
-                mi_template_path = os.path.abspath(os.path.join(meta['base_dir'], 'data', 'templates', 'MEDIAINFO.txt'))
-
-                if os.path.exists(mi_template_path):
-                    media_info = MediaInfo.parse(
-                        video,
-                        output='STRING',
-                        full=False,
-                        mediainfo_options={'inform': f'file://{mi_template_path}'}
-                    )
-                    media_info = media_info.replace('\r\n', '\n')
-                    media_info_block = f'[left][font=consolas]{media_info}[/font][/left]'
-                else:
-                    console.print('[bold red]Couldn\'t find the MediaInfo template')
-                    console.print('[green]Using normal MediaInfo for the description.')
-
-                    cleanpath_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'MEDIAINFO_CLEANPATH.txt')
-                    async with aiofiles.open(cleanpath_path, 'r', encoding='utf-8') as MI:
-                        media_info_block = f'[left][font=consolas]{await MI.read()}[/font][/left]'
-
-        if media_info_block:
-            description_parts.append(media_info_block)
-
-        description_parts.append(self.get_links(meta, subheading, heading_end))
-
-        images = meta.get('image_list', [])
-        if images:
-            screenshots_block = ''
-            for i, image in enumerate(images, start=1):
-                img_url = image.get('img_url', '')
-                raw_url = image.get('raw_url', '')
-
-                screenshots_block += (
-                    f"<a href='{raw_url}'><img src='{img_url}' height=137></a> "
-                )
-
-                if i % 3 == 0:
-                    screenshots_block += '\n'
-            description_parts.append(f'[center]{screenshots_block}[/center]')
-
-        description_parts.append(self.signature)
-
-        final_description = '\n'.join(description_parts)
-
-        output_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f'[{self.tracker}]DESCRIPTION.txt')
-        async with aiofiles.open(output_path, 'w', encoding='utf-8') as description_file:
-            await description_file.write(final_description)
-
-        return final_description
+        return description
 
     async def search_existing(self, meta, disctype):
         if meta['resolution'] not in ['2160p', '1080p', '1080i', '720p']:
