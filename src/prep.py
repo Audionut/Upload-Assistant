@@ -15,7 +15,7 @@ from src.apply_overrides import get_source_override
 from src.is_scene import is_scene
 from src.audio import get_audio_v2
 from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
+from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 from src.tags import get_tag, tag_override
 from src.get_disc import get_disc, get_dvd_size
 from src.get_source import get_source
@@ -860,6 +860,8 @@ class Prep():
         meta['video'] = video
 
         if not meta.get('emby', False):
+            meta['container'] = await get_container(meta)
+
             meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
 
             meta['3D'] = await is_3d(mi, bdinfo)
