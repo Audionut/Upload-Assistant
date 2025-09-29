@@ -203,7 +203,6 @@ async def extract_bluray_release_info(html_content, meta):
             dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
         else:
             bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
-            
         if dvd_sections:
             selected_sections = dvd_sections
         else:
