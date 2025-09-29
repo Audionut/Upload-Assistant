@@ -1477,8 +1477,9 @@ class COMMON():
             return ''
 
         try:
-            if meta.get('description_file_content', ''):
-                # check the description that may come from other trackers via the API
+            # check the description that may come from other trackers via the API
+            description_file_content = meta.get('description_file_content', '').strip()
+            if description_file_content:
                 print('\nFound existing description:\n')
                 print(meta.get('description_file_content'))
                 user_input = await self.async_input(prompt='Do you want to use this description? (y/n): ')
