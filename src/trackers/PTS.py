@@ -195,7 +195,7 @@ class PTS(COMMON):
     async def gather_data(self, meta, disctype):
         data = {
             'name': meta['name'],
-            'url': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+            'url': meta.get('imdb_info', {}).get('imdb_url', ''),
             'descr': await self.generate_description(meta),
             'type': await self.get_type(meta),
         }

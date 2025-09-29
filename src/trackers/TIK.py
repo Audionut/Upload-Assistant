@@ -273,7 +273,7 @@ class TIK(UNIT3D):
         desc_text.append("[code]\n")
         if meta['is_disc'] == 'BDMV':
             desc_text.append(f"  Disc Label.........:{meta.get('bdinfo', {}).get('label', '')}\n")
-        desc_text.append(f"  IMDb...............: [url]https://www.imdb.com/title/tt{meta.get('imdb_id')}{meta.get('imdb_rating', '')}[/url]\n")
+        desc_text.append(f"  IMDb...............: [url]{meta.get('imdb_info', {}).get('imdb_url', '')}{meta.get('imdb_rating', '')}[/url]\n")
         desc_text.append(f"  Year...............: {meta.get('year', '')}\n")
         desc_text.append(f"  Country............: {country_name}\n")
         if meta['is_disc'] == 'BDMV':

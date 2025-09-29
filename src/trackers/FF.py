@@ -523,7 +523,7 @@ class FF:
                 data.update({
                     'movie_type': self.movie_type(meta),
                     'movie_source': self.movie_source(meta),
-                    'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'movie_imdb': meta.get('imdb_info', {}).get('imdb_url', ''),
                     'pack': 0,
                 })
 
@@ -531,7 +531,7 @@ class FF:
                 data.update({
                     'tv_type': self.tv_type(meta),
                     'tv_source': self.tv_source(meta),
-                    'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'tv_imdb': meta.get('imdb_info', {}).get('imdb_url', ''),
                     'pack': 1 if meta.get('tv_pack', 0) else 0,
                 })
 

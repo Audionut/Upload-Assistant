@@ -243,7 +243,7 @@ class AR():
         description += "\n" + subheading + "Links" + heading_end + "\n"
         if 'IMAGES' in self.config:
             if movie['imdb_id'] != 0:
-                description += f"[URL=https://www.imdb.com/title/tt{movie['imdb']}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
+                description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
             if movie['tmdb'] != 0:
                 description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
             if movie['tvdb_id'] != 0:
@@ -254,7 +254,7 @@ class AR():
                 description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
         else:
             if movie['imdb_id'] != 0:
-                description += f"https://www.imdb.com/title/tt{movie['imdb']}"
+                description += f"{movie.get('imdb_info', {}).get('imdb_url', '')}"
             if movie['tmdb'] != 0:
                 description += f"\nhttps://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}"
             if movie['tvdb_id'] != 0:

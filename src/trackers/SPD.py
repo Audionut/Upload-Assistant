@@ -268,7 +268,7 @@ class SPD:
             'technicalDetails': await self.edit_desc(meta),
             'screenshots': await self.get_screenshots(meta),
             'type': await self.get_cat_id(meta),
-            'url': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+            'url': meta.get('imdb_info', {}).get('imdb_url', ''),
         }
 
         if not meta.get('debug', False):
