@@ -1502,7 +1502,7 @@ class COMMON():
 
     async def mediainfo_template(self, tracker, meta):
         if meta.get('is_disc') == 'BDMV':
-            return False
+            return ''
 
         template_name = self.config['DEFAULT'].get('mediainfo_template') or 'default.j2'
         tracker_template_name = self.config['TRACKERS'][tracker].get('mediainfo_template', None)
@@ -1512,7 +1512,9 @@ class COMMON():
         if template_name != 'FULL':
             try:
                 template_dir = os.path.join(meta.get('base_dir', ''), 'data', 'templates', 'mediainfo')
-                mediainfo_data = meta.get('mediainfo', {})
+                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                    mi_content = await f.read()
+                    mediainfo_data = json.loads(mi_content)
 
                 if 'media' in mediainfo_data and 'track' in mediainfo_data['media']:
                     for track in mediainfo_data['media']['track']:
@@ -1560,7 +1562,8 @@ class COMMON():
                                 try:
                                     lang = langcodes.get(lang_code)
                                     track['Language'] = lang.display_name('en')
-                                except langcodes.LanguageTagError:
+                                except langcodes.LanguageTagError as e:
+                                    console.print(f'[bold red]Error processing language code {lang_code}: {e}[/bold red]')
                                     track['Language'] = 'Unknown'
 
                 rendered_template = await self.render_jinja_template(

@@ -6,6 +6,15 @@
 <center><img src="{{ logo }}" style="max-width: {{ user_config.logo_size }}px;"></center>
 
 {% endif %}
+{% if user_config.episode_overview and tvmaze_episode_data %}
+{% if tvmaze_episode_data.episode_name %}
+[center]{{ tvmaze_episode_data.episode_name }}[/center]{% endif %}
+{% if tvmaze_episode_data.image %}
+[center]<img src='{{ tvmaze_episode_data.image }}' style='max-width: 350px;'></a>[/center]{% endif %}
+{% if overview_meta %}
+[center]{{ overview_meta }}[/center]
+{% endif %}
+{% endif %}
 {% if mediainfo_or_bdinfo %}
 
 {{ mediainfo_or_bdinfo }}
@@ -20,12 +29,6 @@
 {% elif description_template_content %}{{ description_template_content }}
 {% elif description_link_content %}{{ description_link_content }}
 {% endif %}{% endif %}
-
-{% if user_config.episode_overview %}
-{% if overview_meta %}
-{{ overview_meta }}
-{% endif %}
-{% endif %}
 
 {% if not img_rehost %}
 {% if screenshot_header %}

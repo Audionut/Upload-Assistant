@@ -5,8 +5,10 @@
 {% endif %}
 {% endif %}
 
-{% if user_config.episode_overview %}
+{% if user_config.episode_overview and tvmaze_episode_data %}
+{% if tvmaze_episode_data.episode_name %}
+[b]Episode:[/b] {{ tvmaze_episode_data.episode_name }}{% endif %}
 {% if overview_meta %}
-{{ overview_meta }}
+[b]Overview:[/b] {{ overview_meta }}
 {% endif %}
 {% endif %}

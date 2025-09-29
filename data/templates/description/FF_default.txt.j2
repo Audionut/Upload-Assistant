@@ -6,6 +6,16 @@
 [center][img]https://image.tmdb.org/t/p/w300{{ tmdb_logo }}[/img][/center]
 
 {% endif %}
+{% if user_config.episode_overview and tvmaze_episode_data %}
+{% if tvmaze_episode_data.episode_name %}
+[center]{{ tvmaze_episode_data.episode_name }}[/center]{% endif %}
+{% if tvmaze_episode_data.image %}
+[center]<img src="{{ tvmaze_episode_data.image }}" width="220"></a>[/center]{% endif %}
+{% if overview_meta %}
+[center]{{ overview_meta }}[/center]
+{% endif %}
+{% endif %}
+
 {% if discs and discs[0].summary %}
 [pre]{{ discs[0].summary }}[/pre]
 {% endif %}

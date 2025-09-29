@@ -6,6 +6,13 @@
 [center][img={{ user_config.logo_size }}]{{ logo }}[/img][/center]
 
 {% endif %}
+{% if user_config.episode_overview and tvmaze_episode_data %}
+{% if tvmaze_episode_data.episode_name %}
+[center]{{ tvmaze_episode_data.episode_name }}[/center]{% endif %}
+{% if overview_meta %}
+[center]{{ overview_meta }}[/center]
+{% endif %}
+{% endif %}
 {% if discs and discs[0].summary %}
 {{ discs[0].summary }}
 {% endif %}
