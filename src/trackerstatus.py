@@ -50,6 +50,8 @@ async def process_all_trackers(meta):
                 login = await tracker_class.validate_credentials(meta)
                 if not login:
                     local_tracker_status['skipped'] = True
+                if isinstance(login, str) and login:
+                    meta[f'{tracker_name}_secret_token'] = login
             if tracker_name in {"THR", "PTP"}:
                 if local_meta.get('imdb_id', 0) == 0:
                     while True:

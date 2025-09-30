@@ -77,11 +77,8 @@ class HDT:
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
-            self.auth_token = auth_match.group(1)
-
             await self.save_cookies()
-
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
@@ -325,12 +322,12 @@ class HDT:
         return results
 
     async def get_data(self, meta):
-        await self.validate_credentials(meta)
+        await self.load_cookies(meta)
         data = {
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': self.auth_token,
+            'csrfToken': meta[f'{self.tracker}_secret_token'],
         }
 
         # 3D

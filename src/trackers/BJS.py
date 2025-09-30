@@ -69,8 +69,7 @@ class BJS(COMMON):
                 console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
                 return False
 
-            self.auth_token = auth_match.group(1)
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
@@ -1060,8 +1059,8 @@ class BJS(COMMON):
                 return []
 
     async def fetch_data(self, meta, disctype):
+        await self.load_cookies(meta)
         self.load_localized_data(meta)
-        await self.validate_credentials(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
         category = meta['category']
 
@@ -1070,7 +1069,7 @@ class BJS(COMMON):
         # These fields are common across all upload types
         data.update({
             'audio': await self.get_audio(meta),
-            'auth': self.auth_token,
+            'auth': meta[f'{self.tracker}_secret_token'],
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
             'duracaoHR': self.get_runtime(meta).get('hours'),

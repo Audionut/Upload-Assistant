@@ -183,7 +183,7 @@ class AZTrackerBase():
                 console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
                 return True
             else:
-                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
+                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
                 return False
         except Exception as e:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
@@ -235,11 +235,8 @@ class AZTrackerBase():
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
-            self.auth_token = auth_match.group(1)
-
             await self.save_cookies()
-
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
@@ -302,7 +299,7 @@ class AZTrackerBase():
                     name_tag = row.find('a', class_='torrent-filename')
                     name = name_tag.get_text(strip=True) if name_tag else ''
 
-                    torrent_link = name_tag['href'] if name_tag and 'href' in name_tag.attrs else ''
+                    torrent_link = name_tag.get('href') if name_tag and 'href' in name_tag.attrs else ''
                     if torrent_link:
                         match = re.search(r'/(\d+)', torrent_link)
                         if match:
@@ -329,7 +326,7 @@ class AZTrackerBase():
                     page_url = None
 
             except httpx.RequestError as e:
-                self.console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
+                console.print(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
                 return duplicates
 
         return duplicates
@@ -851,12 +848,12 @@ class AZTrackerBase():
         return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
-        await self.validate_credentials(meta)
+        await self.load_cookies(meta)
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
 
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
