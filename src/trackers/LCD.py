@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
+import re
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -23,8 +24,12 @@ class LCD(UNIT3D):
     async def get_name(self, meta):
         if meta.get('is_disc', '') == 'BDMV':
             name = meta.get('name')
-            if not meta.get('tag', ''):
-                name = name + '-NoGroup'
+            tag_lower = meta['tag'].lower()
+            invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+            if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+                for invalid_tag in invalid_tags:
+                    name = re.sub(f"-{invalid_tag}", "", name, flags=re.IGNORECASE)
+                name = '-NoGroup'
         else:
             name = meta['uuid']
 

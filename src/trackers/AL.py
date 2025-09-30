@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+import re
 import requests
 from src.console import console
 from src.trackers.COMMON import COMMON
@@ -158,8 +159,13 @@ class AL(UNIT3D):
         if len(video_encode.strip()) > 0:
             name += f" {video_encode.strip()}"
 
-        if tag == '':
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                tag = re.sub(f"-{invalid_tag}", "", tag, flags=re.IGNORECASE)
             tag = '-NoGroup'
+
         if 'AVC' in video_codec and '264' in video_encode:
             name += f"{tag.strip()}"
         else:

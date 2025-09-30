@@ -496,9 +496,12 @@ class AR():
                 ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
                 ar_name = re.sub(r'\.{2,}', '.', ar_name)
 
-            if meta['tag'] == "":
-                # replacing spaces with . as per rules
-                ar_name += "-NoGRP"
+            tag_lower = meta['tag'].lower()
+            invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+            if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+                for invalid_tag in invalid_tags:
+                    ar_name = re.sub(f"-{invalid_tag}", "", ar_name, flags=re.IGNORECASE)
+                ar_name = f"{ar_name}-NoGRP"
 
             data = {
                 "submit": "true",

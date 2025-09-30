@@ -208,7 +208,11 @@ class HUNO(UNIT3D):
             repack = f"[{repack}]"
         three_d = meta.get('3D', "")
         tag = meta.get('tag', "").replace("-", "- ")
-        if tag == "":
+        tag_lower = tag.lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                tag = re.sub(f"- {invalid_tag}", "", tag, flags=re.IGNORECASE)
             tag = "- NOGRP"
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
         if source == "BluRay" and "2160" in resolution:
