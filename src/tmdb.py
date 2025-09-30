@@ -7,11 +7,14 @@ import os
 import re
 import requests
 import sys
-from data.config import config
+
 from datetime import datetime
 from difflib import SequenceMatcher
 from guessit import guessit
+
+from data.config import config
 from src.args import Args
+from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.imdb import get_imdb_info_api
 
@@ -488,7 +491,13 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         selection = None
                         while True:
                             console.print("Enter the number of the correct entry, or manual TMDb ID (tv/12345 or movie/12345):")
-                            selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                            try:
+                                selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                             try:
                                 # Check if it's a manual TMDb ID entry
                                 if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
@@ -674,8 +683,13 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
     # No match found, prompt user if in CLI mode
     console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
-
-    tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+    try:
+        tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+    except EOFError:
+        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+        await cleanup()
+        reset_terminal()
+        sys.exit(1)
     category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
     return tmdb_id, category

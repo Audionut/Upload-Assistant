@@ -2,8 +2,12 @@ import anitopy
 import cli_ui
 import os
 import re
-from data.config import config
+import sys
+
 from guessit import guessit
+
+from data.config import config
+from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -406,7 +410,13 @@ async def missing_disc_info(meta):
     if meta.get('is_disc') == "BDMV":
         if not region_id:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
+                try:
+                    region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
                 region_id = await common.unit3d_region_ids(region_name)
                 if region_name:
                     region_name = region_name.upper()
@@ -416,7 +426,13 @@ async def missing_disc_info(meta):
                 region_name = "SKIPPED"
         if not distributor_id:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                distributor_name = cli_ui.ask_string("ULCX: Distributor name not found for disc. Please enter it manually (UPPERCASE): ")
+                try:
+                    distributor_name = cli_ui.ask_string("ULCX: Distributor name not found for disc. Please enter it manually (UPPERCASE): ")
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
                 console.print(f"Looking up distributor ID for: {distributor_name}")
                 distributor_id = await common.unit3d_distributor_ids(distributor_name)
                 console.print(f"Found distributor ID: {distributor_id}")
