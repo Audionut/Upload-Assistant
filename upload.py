@@ -227,10 +227,35 @@ async def process_meta(meta, base_dir, bot=None):
 
     editargs_tracking = ()
     previous_trackers = meta.get('trackers', [])
-    confirm = await helper.get_confirmation(meta)
+    try:
+        confirm = await helper.get_confirmation(meta)
+    except EOFError:
+        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+        await cleanup()
+        reset_terminal()
+        sys.exit(1)
     while confirm is False:
-        editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
-        editargs = tuple(editargs.split()) if editargs else ()
+        try:
+            editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup()
+            reset_terminal()
+            sys.exit(1)
+
+        if editargs == "continue":
+            break
+
+        if not editargs or not editargs.strip():
+            console.print("[yellow]No input provided. Please enter arguments, type `continue` to continue or press Ctrl+C to exit.[/yellow]")
+            continue
+
+        try:
+            editargs = tuple(editargs.split())
+        except AttributeError:
+            console.print("[red]Bad input detected[/red]")
+            confirm = False
+            continue
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
@@ -249,7 +274,13 @@ async def process_meta(meta, base_dir, bot=None):
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
-        confirm = await helper.get_confirmation(meta)
+        try:
+            confirm = await helper.get_confirmation(meta)
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup()
+            reset_terminal()
+            sys.exit(1)
 
     if meta.get('emby', False):
         if not meta['debug']:
