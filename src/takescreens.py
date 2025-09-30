@@ -34,7 +34,6 @@ tone_map = config['DEFAULT'].get('tone_map', False)
 optimize_images = config['DEFAULT'].get('optimize_images', True)
 algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
 desat = float(config['DEFAULT'].get('desat', 10.0))
-frame_overlay = config['DEFAULT'].get('frame_overlay', False)
 
 
 async def run_ffmpeg(command):
@@ -134,7 +133,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
 
     ss_times = await valid_ss_time([], num_screens, length, frame_rate, meta, retake=force_screenshots)
 
-    if frame_overlay:
+    if meta.get('frame_overlay', False):
         console.print("[yellow]Getting frame information for overlays...")
         frame_info_tasks = [
             get_frame_info(file, ss_times[i], meta)
@@ -370,7 +369,7 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
                 .filter('format', 'rgb24')
             )
 
-        if frame_overlay:
+        if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
             frame_info = meta.get('frame_info_map', {}).get(ss_time, {})
 
@@ -570,7 +569,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             image_paths.append(image)
             input_files.append(input_file)
 
-        if frame_overlay:
+        if meta.get('frame_overlay', False):
             if meta['debug']:
                 console.print("[yellow]Getting frame information for overlays...")
             frame_info_tasks = [
@@ -784,7 +783,7 @@ async def capture_dvd_screenshot(task):
         if w_sar != 1 or h_sar != 1:
             ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
 
-        if frame_overlay:
+        if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
             frame_info = meta.get('frame_info_map', {}).get(seek_time, {})
 
@@ -970,7 +969,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if not ss_times:
         ss_times = await valid_ss_time([], num_capture, length, frame_rate, meta, retake=force_screenshots)
 
-    if frame_overlay:
+    if meta.get('frame_overlay', False):
         if meta['debug']:
             console.print("[yellow]Getting frame information for overlays...")
         frame_info_tasks = [
@@ -1321,7 +1320,7 @@ async def capture_screenshot(args):
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
             console.print(f"[cyan]Processing file: {path}[/cyan]")
 
-        if not frame_overlay:
+        if meta.get('frame_overlay', False):
             # Warm-up (only for first screenshot index or if not warmed)
             if use_libplacebo:
                 warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
@@ -1484,7 +1483,7 @@ async def capture_screenshot(args):
                 .filter('format', 'rgb24')
             )
 
-        if frame_overlay:
+        if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
             frame_info = meta.get('frame_info_map', {}).get(ss_time, {})
 

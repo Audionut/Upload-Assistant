@@ -116,11 +116,10 @@ class RTF():
             return []
 
         if meta.get('category') == "TV" and meta.get('tv_year') is not None:
-            meta['year'] = meta['tv_year']
-        if datetime.date.today().year - meta['year'] <= 9:
-            console.print("[red]Content must be older than 10 Years to upload at RTF")
-            meta['skipping'] = "RTF"
-            return []
+            if datetime.date.today().year - meta['tv_year'] <= 9:
+                console.print("[red]Content must be older than 10 Years to upload at RTF")
+                meta['skipping'] = "RTF"
+                return []
 
         dupes = []
         headers = {

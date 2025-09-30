@@ -775,8 +775,21 @@ class AZTrackerBase:
                 upload_name = f'{upload_name}-NOGROUP'
 
         if meta['category'] == 'TV':
-            if not meta.get('no_year', False) and not meta.get('search_year', '') and meta.get('year', ''):
-                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {meta.get('year')}", 1)
+            if not meta.get('no_year', False) and not meta.get('search_year', ''):
+                season_int = meta.get('season_int', 0)
+                season_info = meta.get('imdb_info', {}).get('seasons_summary', [])
+
+                # Find the correct year for this specific season
+                season_year = None
+                if season_int and season_info:
+                    for season_data in season_info:
+                        if season_data.get('season') == season_int:
+                            season_year = season_data.get('year')
+                            break
+
+                # Use the season-specific year if found, otherwise fall back to meta year
+                year_to_use = season_year if season_year else meta.get('year')
+                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {year_to_use}", 1)
 
         if meta.get('type', '') == 'DVDRIP':
             if meta.get('source', ''):

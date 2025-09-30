@@ -331,6 +331,11 @@ async def process_meta(meta, base_dir, bot=None):
         else:
             meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
 
+        meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
+        if ['AZ', 'CZ', 'PHD'] in meta['trackers']:
+            meta['frame_overlay'] = False
+            console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
+
     if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
         console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). EXITING........[/red]")
 
