@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import aiofiles
-import asyncio
 import httpx
 import json
 import os
@@ -52,24 +51,36 @@ class GPW():
 
         return await self.common.parseCookieFile(cookie_file)
 
-    def load_localized_data(self, meta):
-        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+    async def load_localized_data(self, meta):
+        localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
+        main_ch_data = {}
+        data = {}
 
         if os.path.isfile(localized_data_file):
-            with open(localized_data_file, "r", encoding="utf-8") as f:
-                self.tmdb_data = json.load(f)
-        else:
-            self.tmdb_data = {}
+            try:
+                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    data = json.loads(content)
+            except json.JSONDecodeError:
+                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                data = {}
+            except Exception as e:
+                print(f'Error reading file {localized_data_file}: {e}')
+                data = {}
 
-    async def ch_tmdb_data(self, meta):
-        brazil_data_in_meta = self.tmdb_data.get('zh-cn', {}).get('main')
-        if brazil_data_in_meta:
-            return brazil_data_in_meta
+        main_ch_data = data.get('zh-cn', {}).get('main')
 
-        data = await get_tmdb_localized_data(meta, data_type='main', language='zh-cn', append_to_response='credits')
-        self.load_localized_data(meta)
+        if not main_ch_data:
+            main_ch_data = await get_tmdb_localized_data(
+                meta,
+                data_type='main',
+                language='zh-cn',
+                append_to_response='credits'
+            )
 
-        return data
+        self.tmdb_data = main_ch_data
+
+        return
 
     async def get_container(self, meta):
         container = None
@@ -168,9 +179,7 @@ class GPW():
         return 'Outro'
 
     async def get_title(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
-
-        title = tmdb_data.get('name') or tmdb_data.get('title') or ''
+        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
@@ -191,8 +200,7 @@ class GPW():
         return description
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
-        video_results = tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
 
@@ -223,7 +231,7 @@ class GPW():
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Enter the genres (in {self.tracker} format): ')
+            tags = await self.common.async_input(prompt=f'Enter the genres (in {self.tracker} format): ')
 
         return tags
 
@@ -533,17 +541,16 @@ class GPW():
         return None
 
     async def get_additional_data(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
         poster_url = ''
         while True:
-            poster_url = input(f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n").strip()
+            poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n").strip()
             if any(host in poster_url for host in self.approved_image_hosts):
                 break
             else:
                 console.print('[red]Invalid host. Please use a URL from the allowed hosts.[/red]')
 
         data = {
-            'desc': tmdb_data.get('overview', ''),
+            'desc': self.tmdb_data.get('overview', ''),
             'image': poster_url,
             'imdb': meta.get('imdb_info', {}).get('imdbID'),
             'maindesc': meta.get('overview', ''),
@@ -553,11 +560,11 @@ class GPW():
             'tags': await self.get_tags(meta),
             'year': meta.get('year'),
         }
-        data.update(self._get_artist_data(meta))
+        data.update(await self._get_artist_data(meta))
 
         return data
 
-    def _get_artist_data(self, meta) -> Dict[str, str]:
+    async def _get_artist_data(self, meta) -> Dict[str, str]:
         directors = meta.get('imdb_info', {}).get('directors', [])
         directors_id = meta.get('imdb_info', {}).get('directors_id', [])
 
@@ -567,9 +574,9 @@ class GPW():
             chinese_name = ''
         else:
             console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
-            imdb_id = input('Enter Director IMDb ID (e.g., nm0000138): ')
-            english_name = input('Enter Director English name: ')
-            chinese_name = input('Enter Director Chinese name (optional, press Enter to skip): ')
+            imdb_id = await self.common.async_input(prompt='Enter Director IMDb ID (e.g., nm0000138): ')
+            english_name = await self.common.async_input(prompt='Enter Director English name: ')
+            chinese_name = await self.common.async_input(prompt='Enter Director Chinese name (optional, press Enter to skip): ')
 
         post_data = {
             'artist_ids[]': imdb_id,
@@ -670,7 +677,7 @@ class GPW():
         return flags
 
     async def fetch_data(self, meta, disctype):
-        self.load_localized_data(meta)
+        await self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
         groupid = await self.get_groupid(meta)
