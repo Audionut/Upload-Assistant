@@ -286,7 +286,6 @@ class HDT:
             }
 
         response = await self.session.get(search_url, params=params)
-        console.print(response.text)
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
 
