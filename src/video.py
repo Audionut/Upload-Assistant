@@ -321,3 +321,28 @@ async def get_video_duration(meta):
             return None
     else:
         return None
+
+
+async def get_container(meta):
+    file_list = []
+    if meta.get('is_disc', ''):
+        file_list = meta.get('discs', [])[0].get('path', '')
+
+    else:
+        file_list = meta.get('filelist', [])
+
+    if not file_list:
+        console.print("[red]No files found to determine container[/red]")
+        return ''
+
+    try:
+        largest_file_path = max(file_list, key=os.path.getsize)
+    except (OSError, ValueError) as e:
+        console.print(f"[red]Error getting container for file: {e}[/red]")
+        return ''
+
+    if largest_file_path:
+        extension_with_dot = os.path.splitext(largest_file_path)[1]
+        return extension_with_dot.lstrip('.').lower()
+
+    return ''

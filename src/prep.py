@@ -37,7 +37,7 @@ try:
     from src.tags import get_tag, tag_override
     from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
     from src.tvmaze import search_tvmaze
-    from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
+    from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
@@ -869,6 +869,8 @@ class Prep():
         meta['video'] = video
 
         if not meta.get('emby', False):
+            meta['container'] = await get_container(meta)
+
             meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
 
             meta['3D'] = await is_3d(mi, bdinfo)

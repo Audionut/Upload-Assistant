@@ -83,19 +83,15 @@ class GPW():
         return
 
     async def get_container(self, meta):
-        container = None
-        if meta['is_disc'] == 'BDMV':
-            container = 'm2ts'
-        elif meta['is_disc'] == 'DVD':
-            container = 'VOB IFO'
-        else:
-            ext = os.path.splitext(meta['filelist'][0])[1]
-            containermap = {
-                '.mkv': 'MKV',
-                '.mp4': 'MP4'
-            }
-            container = containermap.get(ext, 'Outro')
-        return container
+        container = meta.get('container', '')
+        if container == 'm2ts':
+            return container
+        elif container == 'vob':
+            return 'VOB IFO'
+        elif container in ['avi', 'mpg', 'mp4', 'mkv']:
+            return container.upper()
+
+        return 'Other'
 
     async def get_subtitle(self, meta):
         if not meta.get('language_checked', False):
@@ -680,6 +676,7 @@ class GPW():
         await self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
+        container = await self.get_container(meta)
         groupid = await self.get_groupid(meta)
 
         data = {}
@@ -691,7 +688,8 @@ class GPW():
         data.update({
             'codec_other': meta.get('video_codec', '') if codec == 'Other' else '',
             'codec': codec,
-            'container': await self.get_container(meta),
+            'container_other': meta.get('container', '') if container == 'Other' else '',
+            'container': container,
             'groupid': groupid if groupid else '',
             'mediainfo[]': await self.get_media_info(meta),
             'movie_edition_information': 'on' if remaster_title else '',

@@ -193,7 +193,8 @@ class DC():
         else:
             title = f'{base_name}.torrent'
 
-        title = title.replace('.mkv', '').replace('.mp4', '')
+        container = '.' + meta.get('container', 'mkv')
+        title = title.replace(container, '').replace(container.upper(), '')
 
         return title
 
