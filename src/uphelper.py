@@ -1,10 +1,11 @@
 import cli_ui
 import os
 import json
-from rich.console import Console
-from data.config import config
+import sys
 
-console = Console()
+from data.config import config
+from src.cleanup import cleanup, reset_terminal
+from src.console import console
 
 
 class UploadHelper:
@@ -34,23 +35,41 @@ class UploadHelper:
                 if not dupe_text and meta.get('trumpable', False):
                     console.print("[yellow]Please check the trumpable entries above to see if you want to upload, and report the trumpable torrent if you upload.[/yellow]")
                     if meta.get('dupe', False) is False:
-                        upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                        meta['we_asked'] = True
+                        try:
+                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                            meta['we_asked'] = True
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup()
+                            reset_terminal()
+                            sys.exit(1)
                     else:
                         upload = True
                         meta['we_asked'] = False
                 else:
-                    if meta.get('filename_match', False):
+                    if meta.get('filename_match', False) and meta.get('file_count_match', False):
                         console.print(f'[bold red]Exact filename matches found! - {meta["filename_match"]}[/bold red]')
-                        upload = False
-                        meta['we_asked'] = True
+                        try:
+                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                            meta['we_asked'] = True
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup()
+                            reset_terminal()
+                            sys.exit(1)
                     else:
                         console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
                         console.print()
                         console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
                         if meta.get('dupe', False) is False:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            try:
+                                upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                                meta['we_asked'] = True
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                         else:
                             upload = True
                             meta['we_asked'] = False

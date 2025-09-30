@@ -512,7 +512,7 @@ async def get_bluray_releases(meta):
 
 async def parse_release_details(response_text, release, meta):
     try:
-        soup = BeautifulSoup(response_text, 'html.parser')
+        soup = BeautifulSoup(response_text, 'lxml')
         specs_td = soup.find('td', width="228px", style=lambda s: s and 'font-size: 12px' in s)
 
         if not specs_td:
@@ -553,7 +553,7 @@ async def parse_release_details(response_text, release, meta):
             if audio_div:
                 audio_html = str(audio_div)
                 audio_html = re.sub(r'<br\s*/?>', '\n', audio_html)
-                audio_soup = BeautifulSoup(audio_html, 'html.parser')
+                audio_soup = BeautifulSoup(audio_html, 'lxml')
                 raw_text = audio_soup.get_text()
                 raw_lines = [line.strip() for line in raw_text.split('\n') if line.strip() and 'less' not in line]
 

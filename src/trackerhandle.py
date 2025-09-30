@@ -1,12 +1,15 @@
 import asyncio
-import traceback
 import cli_ui
-from src.trackers.THR import THR
-from src.trackers.PTP import PTP
-from src.trackersetup import TRACKER_SETUP
-from src.trackers.COMMON import COMMON
-from src.manualpackage import package
+import sys
+import traceback
+
 from cogs.redaction import redact_private_info
+from src.cleanup import cleanup, reset_terminal
+from src.manualpackage import package
+from src.trackers.COMMON import COMMON
+from src.trackers.PTP import PTP
+from src.trackers.THR import THR
+from src.trackersetup import TRACKER_SETUP
 
 
 async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
@@ -121,7 +124,13 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             if meta['unattended']:
                 do_manual = True
             else:
-                do_manual = cli_ui.ask_yes_no("Get files for manual upload?", default=True)
+                try:
+                    do_manual = cli_ui.ask_yes_no("Get files for manual upload?", default=True)
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
             if do_manual:
                 for manual_tracker in enabled_trackers:
                     if manual_tracker != 'MANUAL':

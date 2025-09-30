@@ -16,6 +16,7 @@ from src.bbcode import BBCODE
 from src.exceptions import *  # noqa F403
 from src.console import console
 from torf import Torrent
+from cogs.redaction import redact_private_info
 from datetime import datetime
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.uploadscreens import upload_screens
@@ -1419,7 +1420,7 @@ class PTP():
                 if 'AntiCsrfToken' in debug_data:
                     debug_data['AntiCsrfToken'] = '[REDACTED]'
                 console.log(url)
-                console.log(debug_data)
+                console.log(redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
@@ -1443,7 +1444,7 @@ class PTP():
                 match = re.match(r".*?passthepopcorn\.me/torrents\.php\?id=(\d+)&torrentid=(\d+)", response.url)
                 if match is None:
                     console.print(url)
-                    console.print(data)
+                    console.print(redact_private_info(data))
                     raise UploadException(f"Upload to PTP failed: result URL {response.url} ({response.status_code}) is not the expected one.")  # noqa F405
 
                 # having UA add the torrent link as a comment.
