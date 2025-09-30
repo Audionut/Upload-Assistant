@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import aiofiles
-import asyncio
 import httpx
 import json
 import langcodes
@@ -406,7 +405,7 @@ class BT:
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
 

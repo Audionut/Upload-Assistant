@@ -141,7 +141,7 @@ class AZTrackerBase:
 
             if attempt == 0 and not self.media_code:
                 console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
-                user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
+                user_choice = await self.common.async_input(prompt=f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
 
                 if user_choice in ['y', 'yes']:
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
@@ -258,7 +258,7 @@ class AZTrackerBase:
             if warnings:
                 console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
+                    choice = await self.common.async_input(prompt='Do you want to continue anyway? [y/N]: ').strip().lower()
                     if choice != 'y':
                         meta['skipping'] = f'{self.tracker}'
                         return
@@ -410,7 +410,7 @@ class AZTrackerBase:
                 if missing_audio_languages:
                     console.print('No audio language/s found.')
                     console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+                    user_input = await self.common.async_input(prompt='[bold yellow]Enter languages: [/bold yellow]')
 
                     langs = [lang.strip() for lang in user_input.split(',')]
                     for lang in langs:

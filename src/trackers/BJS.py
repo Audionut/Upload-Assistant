@@ -397,7 +397,7 @@ class BJS:
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
 
@@ -944,7 +944,7 @@ class BJS:
 
         return ' / '.join(ordered_tags)
 
-    def get_credits(self, meta, role):
+    async def get_credits(self, meta, role):
         role_map = {
             'director': ('directors', 'tmdb_directors'),
             'creator': ('creators', 'tmdb_creators'),
@@ -970,7 +970,7 @@ class BJS:
                 if not self.cover:  # Only ask for input if there's no info in the site already
                     role_display_name = prompt_name_map.get(role, role.capitalize())
                     prompt_message = (f'{role_display_name} não encontrado(s).\nPor favor, insira manualmente (separados por vírgula): ')
-                    user_input = input(prompt_message)
+                    user_input = await self.common.async_input(prompt=prompt_message)
 
                     if user_input.strip():
                         return user_input.strip()
@@ -1075,7 +1075,7 @@ class BJS:
             'remaster_title': self.build_remaster_title(meta),
             'resolucaoh': self.get_resolution(meta).get('height'),
             'resolucaow': self.get_resolution(meta).get('width'),
-            'sinopse': self.main_tmdb_data.get('overview') or await asyncio.to_thread(input, 'Digite a sinopse: '),
+            'sinopse': self.main_tmdb_data.get('overview') or await self.common.async_input(prompt='Digite a sinopse: '),
             'submit': 'true',
             'tags': await self.get_tags(meta),
             'tipolegenda': await self.get_subtitle(meta),
@@ -1090,12 +1090,12 @@ class BJS:
         if category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': self.get_credits(meta, 'director'),
+                'diretor': await self.get_credits(meta, 'director'),
             })
 
         if category == 'TV':
             data.update({
-                'diretor': self.get_credits(meta, 'creator'),
+                'diretor': await self.get_credits(meta, 'creator'),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': meta.get('season_int', ''),
                 'episode': meta.get('episode_int', ''),
@@ -1106,7 +1106,7 @@ class BJS:
             data.update({
                 'validimdb': 'yes',
                 'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                'elenco': self.get_credits(meta, 'cast'),
+                'elenco': await self.get_credits(meta, 'cast'),
             })
             if category == 'MOVIE':
                 data.update({

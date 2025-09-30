@@ -523,9 +523,7 @@ class ASC:
         )
 
         if not tags:
-            tags = meta.get('genre') or await asyncio.to_thread(
-                input, f'Digite os gêneros (no formato do {self.tracker}): '
-            )
+            tags = meta.get('genre') or await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
 

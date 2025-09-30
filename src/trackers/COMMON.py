@@ -42,6 +42,11 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
+    async def async_input(self, prompt):
+        """Gets user input in a non-blocking way using asyncio.to_thread"""
+        user_input = await asyncio.to_thread(input, prompt)
+        return user_input
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
@@ -1589,10 +1594,3 @@ class COMMON():
                 return mi.read()
         else:
             return ''
-
-    async def async_input(self, prompt):
-        '''
-        Gets user input without blocking the asyncio event loop.
-        '''
-        user_input = await asyncio.to_thread(input, prompt)
-        return user_input
