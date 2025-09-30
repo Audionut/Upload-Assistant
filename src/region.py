@@ -94,7 +94,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'CSPN': 'CSPN', 'CSpan': 'CSPN', 'CTV': 'CTV', 'CUR': 'CUR', 'CuriosityStream': 'CUR', 'CW': 'CW', 'The CW': 'CW',
         'CWS': 'CWS', 'CWSeed': 'CWS', 'DAZN': 'DAZN', 'DCU': 'DCU', 'DC Universe': 'DCU', 'DDY': 'DDY',
         'Digiturk Diledigin Yerde': 'DDY', 'DEST': 'DEST', 'DramaFever': 'DF', 'DHF': 'DHF', 'Deadhouse Films': 'DHF',
-        'DISC': 'DISC', 'Discovery': 'DISC', 'DIY': 'DIY', 'DIY Network': 'DIY', 'DOCC': 'DOCC', 'Doc Club': 'DOCC',
+        'DISC': 'DISC', 'Discovery': 'DISC', 'DIY': 'DIY', 'DIY Network': 'DIY', 'DOCC': 'DOCC', 'Doc Club': 'DOCC', 'DOCPLAY': 'DOCPLAY',
         'DPLY': 'DPLY', 'DPlay': 'DPLY', 'DRPO': 'DRPO', 'Discovery Plus': 'DSCP', 'DSKI': 'DSKI', 'Daisuki': 'DSKI',
         'DSNP': 'DSNP', 'Disney+': 'DSNP', 'DSNY': 'DSNY', 'Disney': 'DSNY', 'DTV': 'DTV', 'EPIX': 'EPIX', 'ePix': 'EPIX',
         'ESPN': 'ESPN', 'ESQ': 'ESQ', 'Esquire': 'ESQ', 'ETTV': 'ETTV', 'El Trece': 'ETTV', 'ETV': 'ETV', 'E!': 'ETV',

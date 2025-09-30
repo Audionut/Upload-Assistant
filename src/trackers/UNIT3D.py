@@ -194,10 +194,13 @@ class UNIT3D:
 
     async def get_flag(self, meta, flag_name):
         config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
-        if config_flag is not None:
-            return 1 if config_flag else 0
-
-        return 1 if meta.get(flag_name, False) else 0
+        if meta.get(flag_name, False):
+            return 1
+        else:
+            if config_flag is not None:
+                return 1 if config_flag else 0
+            else:
+                return 0
 
     async def get_distributor_ids(self, meta):
         distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
