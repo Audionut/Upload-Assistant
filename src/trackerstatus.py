@@ -51,6 +51,7 @@ async def process_all_trackers(meta):
                 if not login:
                     local_tracker_status['skipped'] = True
                 if isinstance(login, str) and login:
+                    local_meta[f'{tracker_name}_secret_token'] = login
                     meta[f'{tracker_name}_secret_token'] = login
             if tracker_name in {"THR", "PTP"}:
                 if local_meta.get('imdb_id', 0) == 0:
