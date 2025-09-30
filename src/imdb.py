@@ -1,12 +1,16 @@
-from src.console import console
-import json
-import httpx
-from datetime import datetime
 import asyncio
-from difflib import SequenceMatcher
 import cli_ui
+import httpx
+import json
+import sys
+
 from anitopy import parse as anitopy_parse
+from datetime import datetime
+from difflib import SequenceMatcher
 from guessit import guessit
+
+from src.cleanup import cleanup, reset_terminal
+from src.console import console
 
 
 async def safe_get(data, path, default=None):
@@ -714,7 +718,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             if sorted_results:
                 selection = None
                 while True:
-                    selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                    try:
+                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                    except EOFError:
+                        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                        await cleanup()
+                        reset_terminal()
+                        sys.exit(1)
                     try:
                         # Check if it's a manual IMDb ID entry
                         if selection.lower().startswith('tt') and len(selection) >= 3:
@@ -747,7 +757,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                         console.print("[bold red]Invalid input. Please enter a number or IMDb ID (tt1234567).[/bold red]")
 
         else:
-            selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+            try:
+                selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+            except EOFError:
+                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                await cleanup()
+                reset_terminal()
+                sys.exit(1)
             if selection.lower().startswith('tt') and len(selection) >= 3:
                 try:
                     manual_imdb_id = selection.lower().replace('tt', '').strip()

@@ -1,8 +1,11 @@
-import os
-import json
-import re
-import glob
 import cli_ui
+import glob
+import json
+import os
+import re
+import sys
+
+from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.exportmi import mi_resolution
 
@@ -162,8 +165,14 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                             for tf in filelist:
                                 console.print(f"[cyan]{tf}")
                             console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
-                            if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
-                                filelist.remove(f)
+                            try:
+                                if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
+                                    filelist.remove(f)
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
         try:
             if sorted_filelist:
                 video = sorted(filelist, key=os.path.getsize, reverse=True)[0]

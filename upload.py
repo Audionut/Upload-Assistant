@@ -1,43 +1,42 @@
 #!/usr/bin/env python3
-from src.args import Args
-from src.clients import Clients
-from src.uploadscreens import upload_screens
-import json
-from pathlib import Path
 import asyncio
-import os
-import sys
-import platform
-import shutil
 import cli_ui
-import traceback
-import time
+import discord
 import gc
+import json
+import os
+import platform
 import re
 import requests
-import discord
+import shutil
+import sys
+import time
+import traceback
+
 from packaging import version
-from src.trackersetup import tracker_class_map, api_trackers, other_api_trackers, http_trackers
-from src.trackerhandle import process_trackers
-from src.queuemanage import handle_queue
-from src.console import console
-from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent
-from src.uphelper import UploadHelper
-from src.trackerstatus import process_all_trackers
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
-from src.cleanup import cleanup, reset_terminal
+from pathlib import Path
+
+from bin.get_mkbrr import ensure_mkbrr_binary
+from cogs.redaction import clean_meta_for_export, redact_private_info
+from discordbot import send_discord_notification, send_upload_status_notification
 from src.add_comparison import add_comparison
+from src.args import Args
+from src.cleanup import cleanup, reset_terminal
+from src.clients import Clients
+from src.console import console
 from src.get_name import get_name
 from src.get_desc import gen_desc
-from discordbot import send_discord_notification, send_upload_status_notification
-from cogs.redaction import clean_meta_for_export
+from src.get_tracker_data import get_tracker_data
 from src.languages import process_desc_language
 from src.nfo_link import nfo_link
-from bin.get_mkbrr import ensure_mkbrr_binary
-from src.get_tracker_data import get_tracker_data
-from cogs.redaction import redact_private_info
-from src.trackersetup import TRACKER_SETUP
-
+from src.queuemanage import handle_queue
+from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent
+from src.trackerhandle import process_trackers
+from src.trackerstatus import process_all_trackers
+from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
+from src.uphelper import UploadHelper
+from src.uploadscreens import upload_screens
 
 cli_ui.setup(color='always', title="Upload Assistant")
 running_subprocesses = set()
@@ -227,10 +226,35 @@ async def process_meta(meta, base_dir, bot=None):
 
     editargs_tracking = ()
     previous_trackers = meta.get('trackers', [])
-    confirm = await helper.get_confirmation(meta)
+    try:
+        confirm = await helper.get_confirmation(meta)
+    except EOFError:
+        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+        await cleanup()
+        reset_terminal()
+        sys.exit(1)
     while confirm is False:
-        editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
-        editargs = tuple(editargs.split())
+        try:
+            editargs = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup()
+            reset_terminal()
+            sys.exit(1)
+
+        if editargs == "continue":
+            break
+
+        if not editargs or not editargs.strip():
+            console.print("[yellow]No input provided. Please enter arguments, type `continue` to continue or press Ctrl+C to exit.[/yellow]")
+            continue
+
+        try:
+            editargs = tuple(editargs.split())
+        except AttributeError:
+            console.print("[red]Bad input detected[/red]")
+            confirm = False
+            continue
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
@@ -249,7 +273,13 @@ async def process_meta(meta, base_dir, bot=None):
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
         meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
-        confirm = await helper.get_confirmation(meta)
+        try:
+            confirm = await helper.get_confirmation(meta)
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup()
+            reset_terminal()
+            sys.exit(1)
 
     if meta.get('emby', False):
         if not meta['debug']:

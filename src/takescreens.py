@@ -345,7 +345,17 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     if meta['debug']:
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
-    await cleanup()
+
+    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    discs = meta.get('discs', [])
+    one_disc = True
+    if discs and len(discs) == 1:
+        one_disc = True
+    elif discs and len(discs) > 1:
+        one_disc = False
+
+    if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
+        await cleanup()
 
 
 async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel, hdr_tonemap, meta):
@@ -745,7 +755,17 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
     if not retry_cap and meta['debug']:
         console.print(f"[green]Successfully captured {len(valid_results)} screenshots.")
-    await cleanup()
+
+    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    discs = meta.get('discs', [])
+    one_disc = True
+    if discs and len(discs) == 1:
+        one_disc = True
+    elif discs and len(discs) > 1:
+        one_disc = False
+
+    if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
+        await cleanup()
 
 
 async def capture_dvd_screenshot(task):
@@ -1248,7 +1268,17 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if meta['debug']:
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
-    await cleanup()
+
+    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    discs = meta.get('discs', [])
+    one_disc = True
+    if discs and len(discs) == 1:
+        one_disc = True
+    elif discs and len(discs) > 1:
+        one_disc = False
+
+    if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
+        await cleanup()
 
 
 async def capture_screenshot(args):

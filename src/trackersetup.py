@@ -1,3 +1,15 @@
+import asyncio
+import cli_ui
+import httpx
+import json
+import os
+import re
+import sys
+
+from datetime import datetime, timedelta
+from src.cleanup import cleanup, reset_terminal
+from src.console import console
+
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
 from src.trackers.AL import AL
@@ -59,14 +71,6 @@ from src.trackers.ULCX import ULCX
 from src.trackers.UTP import UTP
 from src.trackers.YOINK import YOINK
 from src.trackers.YUS import YUS
-from src.console import console
-import httpx
-import os
-import json
-import cli_ui
-from datetime import datetime, timedelta
-import asyncio
-import re
 
 
 class TRACKER_SETUP:
@@ -272,8 +276,14 @@ class TRACKER_SETUP:
 
         if result:
             if not meta['unattended'] or meta.get('unattended_confirm', False):
-                if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
-                    return False
+                try:
+                    if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
+                        return False
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
                 return True
 
             return True
@@ -661,13 +671,13 @@ class TRACKER_SETUP:
                         double_check = True
                     api_claimed = each.get('claimed')
                     api_description = each.get('description')
-                    api_season = int(each.get('season'))
-                    if api_season == meta.get('season_int'):
-                        season = True
-                    api_episode = each.get('episode')
-                    meta['episode_int'] = int(api_episode) if api_episode is not None else 0
-                    if api_episode == meta.get('episode_int'):
-                        episode = True
+                    if meta['category'] == "TV":
+                        api_season = int(each.get('season')) if each.get('season') is not None else 0
+                        if api_season and meta.get('season_int') and api_season == meta.get('season_int'):
+                            season = True
+                        api_episode = int(each.get('episode')) if each.get('episode') is not None else 0
+                        if api_episode and meta.get('episode_int') and api_episode == meta.get('episode_int'):
+                            episode = True
                     if str(api_category) in [str(cid) for cid in category_ids]:
                         new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
                         if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:

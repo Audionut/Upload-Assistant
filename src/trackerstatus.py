@@ -1,17 +1,21 @@
 import asyncio
-import os
-from torf import Torrent
-from src.trackers.PTP import PTP
-from src.trackersetup import TRACKER_SETUP, tracker_class_map, http_trackers
-from src.console import console
-from data.config import config
-from src.clients import Clients
-from src.uphelper import UploadHelper
-from src.torrentcreate import create_base_from_existing_torrent
-from src.dupe_checking import filter_dupes
-from src.imdb import get_imdb_info_api
 import cli_ui
 import copy
+import os
+import sys
+
+from torf import Torrent
+
+from data.config import config
+from src.cleanup import cleanup, reset_terminal
+from src.clients import Clients
+from src.console import console
+from src.dupe_checking import filter_dupes
+from src.imdb import get_imdb_info_api
+from src.torrentcreate import create_base_from_existing_torrent
+from src.trackers.PTP import PTP
+from src.trackersetup import TRACKER_SETUP, tracker_class_map, http_trackers
+from src.uphelper import UploadHelper
 
 
 async def process_all_trackers(meta):
@@ -53,10 +57,15 @@ async def process_all_trackers(meta):
                             local_meta['imdb_id'] = 0
                             local_tracker_status['skipped'] = True
                             break
-
-                        imdb_id = cli_ui.ask_string(
-                            f"Unable to find IMDB id, please enter e.g.(tt1234567) or press Enter to skip uploading to {tracker_name}:"
-                        )
+                        try:
+                            imdb_id = cli_ui.ask_string(
+                                f"Unable to find IMDB id, please enter e.g.(tt1234567) or press Enter to skip uploading to {tracker_name}:"
+                            )
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup()
+                            reset_terminal()
+                            sys.exit(1)
 
                         if imdb_id is None or imdb_id.strip() == "":
                             local_meta['imdb_id'] = 0

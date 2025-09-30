@@ -1,41 +1,44 @@
 # -*- coding: utf-8 -*-
-from src.console import console
-from src.clients import Clients
-from data.config import config
-from src.tvmaze import search_tvmaze
-from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
-from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
-from src.region import get_region, get_distributor, get_service
-from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
-from src.getseasonep import get_season_episode
-from src.get_tracker_data import get_tracker_data, ping_unit3d
-from src.bluray_com import get_bluray_releases
-from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
-from src.apply_overrides import get_source_override
-from src.is_scene import is_scene
-from src.audio import get_audio_v2
-from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
-from src.tags import get_tag, tag_override
-from src.get_disc import get_disc, get_dvd_size
-from src.get_source import get_source
-from src.sonarr import get_sonarr_data
-from src.radarr import get_radarr_data
-from src.languages import parsed_mediainfo
-from src.get_name import extract_title_and_year
-
 try:
-    import traceback
-    import os
-    import re
     import asyncio
     import cli_ui
-    from guessit import guessit
     import ntpath
-    from pathlib import Path
-    import time
+    import os
+    import re
     import sys
+    import traceback
+    import time
+
     from difflib import SequenceMatcher
+    from guessit import guessit
+    from pathlib import Path
+
+    from data.config import config
+    from src.apply_overrides import get_source_override
+    from src.audio import get_audio_v2
+    from src.bluray_com import get_bluray_releases
+    from src.cleanup import cleanup, reset_terminal
+    from src.clients import Clients
+    from src.console import console
+    from src.edition import get_edition
+    from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
+    from src.get_disc import get_disc, get_dvd_size
+    from src.get_name import extract_title_and_year
+    from src.getseasonep import get_season_episode
+    from src.get_source import get_source
+    from src.get_tracker_data import get_tracker_data, ping_unit3d
+    from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
+    from src.is_scene import is_scene
+    from src.languages import parsed_mediainfo
+    from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
+    from src.radarr import get_radarr_data
+    from src.region import get_region, get_distributor, get_service
+    from src.sonarr import get_sonarr_data
+    from src.tags import get_tag, tag_override
+    from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
+    from src.tvmaze import search_tvmaze
+    from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
+
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
@@ -325,7 +328,13 @@ class Prep():
         if conform_issues:
             upload = False
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+                try:
+                    upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
             if upload is False:
                 console.print("[red]Not uploading. Check if the file has finished downloading and can be played back properly (uncorrupted).")
                 tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
