@@ -811,6 +811,9 @@ config = {
         # See https://github.com/Audionut/Upload-Assistant/wiki
         "qbittorrent": {
             "torrent_client": "qbit",
+            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
+            # If using the qui reverse proxy, no other auth type needs to be set
+            "qui_proxy_url": "",
             # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
             "enable_search": True,
             "qbit_url": "http://127.0.0.1",

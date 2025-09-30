@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import aiohttp
 import asyncio
 import base64
 import bencode
@@ -117,29 +118,44 @@ class Clients():
                     console.print(f"[yellow]Fetching .torrent file from qBittorrent for hash: {hash_value}")
 
                     try:
-                        qbt_client = qbittorrentapi.Client(
-                            host=client['qbit_url'],
-                            port=client['qbit_port'],
-                            username=client['qbit_user'],
-                            password=client['qbit_pass'],
-                            VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-                        )
-                        try:
-                            await self.retry_qbt_operation(
-                                lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                                "qBittorrent login"
+                        proxy_url = client.get('qui_proxy_url')
+                        if proxy_url:
+                            qbt_proxy_url = proxy_url.rstrip('/')
+                            async with aiohttp.ClientSession() as session:
+                                try:
+                                    async with session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                            data={'hash': hash_value}) as response:
+                                        if response.status == 200:
+                                            torrent_file_content = await response.read()
+                                        else:
+                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                            continue
+                                except Exception as e:
+                                    console.print(f"[red]Error exporting torrent via proxy: {e}")
+                                    continue
+                        else:
+                            qbt_client = qbittorrentapi.Client(
+                                host=client['qbit_url'],
+                                port=client['qbit_port'],
+                                username=client['qbit_user'],
+                                password=client['qbit_pass'],
+                                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
                             )
-                        except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
-                            continue
+                            try:
+                                await self.retry_qbt_operation(
+                                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                                    "qBittorrent login"
+                                )
+                            except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
+                                continue
 
-                        # Retrieve the .torrent file
-                        try:
-                            torrent_file_content = await self.retry_qbt_operation(
-                                lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=hash_value),
-                                f"Export torrent {hash_value}"
-                            )
-                        except (asyncio.TimeoutError, qbittorrentapi.APIError):
-                            continue
+                            try:
+                                torrent_file_content = await self.retry_qbt_operation(
+                                    lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=hash_value),
+                                    f"Export torrent {hash_value}"
+                                )
+                            except (asyncio.TimeoutError, qbittorrentapi.APIError):
+                                continue
                         if not torrent_file_content:
                             console.print(f"[bold red]qBittorrent returned an empty response for hash {hash_value}")
                             continue  # Skip to the next hash
@@ -167,15 +183,49 @@ class Clients():
         # Search the client if no pre-specified hash matches
         if torrent_client == 'qbit' and client.get('enable_search'):
             try:
-                found_hash = await self.search_qbit_for_torrent(meta, client)
+                qbt_client, qbt_session, proxy_url = None, None, None
+
+                proxy_url = client.get('qui_proxy_url')
+
+                if proxy_url:
+                    qbt_session = aiohttp.ClientSession()
+                else:
+                    qbt_client = qbittorrentapi.Client(
+                        host=client['qbit_url'],
+                        port=client['qbit_port'],
+                        username=client['qbit_user'],
+                        password=client['qbit_pass'],
+                        VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
+                    )
+                    try:
+                        await self.retry_qbt_operation(
+                            lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                            "qBittorrent login"
+                        )
+                    except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError) as e:
+                        console.print(f"[bold red]Failed to connect to qBittorrent: {e}")
+                        qbt_client = None
+
+                found_hash = await self.search_qbit_for_torrent(meta, client, qbt_client, qbt_session, proxy_url)
+
+                # Clean up session if we created one
+                if qbt_session:
+                    await qbt_session.close()
+
             except KeyboardInterrupt:
                 console.print("[bold red]Search cancelled by user")
                 found_hash = None
+                if qbt_session:
+                    await qbt_session.close()
             except asyncio.TimeoutError:
+                if qbt_session:
+                    await qbt_session.close()
                 raise
             except Exception as e:
                 console.print(f"[bold red]Error searching qBittorrent: {e}")
                 found_hash = None
+                if qbt_session:
+                    await qbt_session.close()
             if found_hash:
                 extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
                 found_torrent_path = os.path.join(torrent_storage_dir, f"{found_hash}.torrent") if torrent_storage_dir else os.path.join(extracted_torrent_dir, f"{found_hash}.torrent")
@@ -328,7 +378,7 @@ class Clients():
 
         return valid, torrent_path
 
-    async def search_qbit_for_torrent(self, meta, client):
+    async def search_qbit_for_torrent(self, meta, client, qbt_client=None, qbt_session=None, proxy_url=None):
         mtv_config = self.config['TRACKERS'].get('MTV')
         if isinstance(mtv_config, dict):
             prefer_small_pieces = mtv_config.get('prefer_mtv_torrent', False)
@@ -344,27 +394,30 @@ class Clients():
             return None
 
         try:
-            qbt_client = qbittorrentapi.Client(
-                host=client['qbit_url'],
-                port=client['qbit_port'],
-                username=client['qbit_user'],
-                password=client['qbit_pass'],
-                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-            )
-            try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                    "qBittorrent login"
+            if qbt_client is None and proxy_url is None:
+                qbt_client = qbittorrentapi.Client(
+                    host=client['qbit_url'],
+                    port=client['qbit_port'],
+                    username=client['qbit_user'],
+                    password=client['qbit_pass'],
+                    VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
                 )
-            except qbittorrentapi.LoginFailed:
-                console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
-                return None
-            except qbittorrentapi.APIConnectionError:
-                console.print("[bold red]APIConnectionError: INCORRECT HOST/PORT")
-                return None
-            except asyncio.TimeoutError:
-                console.print("[bold red]Login to qBittorrent timed out after retries")
-                return None
+                try:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                        "qBittorrent login"
+                    )
+                except qbittorrentapi.LoginFailed:
+                    console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
+                    return None
+                except qbittorrentapi.APIConnectionError:
+                    console.print("[bold red]APIConnectionError: INCORRECT HOST/PORT")
+                    return None
+                except asyncio.TimeoutError:
+                    console.print("[bold red]Login to qBittorrent timed out after retries")
+                    return None
+            elif proxy_url and qbt_session is None:
+                qbt_session = aiohttp.ClientSession()
 
         except qbittorrentapi.LoginFailed:
             console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
@@ -381,13 +434,37 @@ class Clients():
         matching_torrents = []
 
         try:
-            torrents = await self.retry_qbt_operation(
-                lambda: asyncio.to_thread(qbt_client.torrents_info),
-                "Get torrents list",
-                initial_timeout=14.0
-            )
+            if proxy_url:
+                qbt_proxy_url = proxy_url.rstrip('/')
+                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    if response.status == 200:
+                        torrents_data = await response.json()
+
+                        class MockTorrent:
+                            def __init__(self, data):
+                                for key, value in data.items():
+                                    setattr(self, key, value)
+                                if not hasattr(self, 'files'):
+                                    self.files = []
+                                if not hasattr(self, 'tracker'):
+                                    self.tracker = ''
+                                if not hasattr(self, 'comment'):
+                                    self.comment = ''
+                        torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                    else:
+                        console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                        return None
+            else:
+                torrents = await self.retry_qbt_operation(
+                    lambda: asyncio.to_thread(qbt_client.torrents_info),
+                    "Get torrents list",
+                    initial_timeout=14.0
+                )
         except asyncio.TimeoutError:
             console.print("[bold red]Getting torrents list timed out after retries")
+            return None
+        except Exception as e:
+            console.print(f"[bold red]Error getting torrents list: {e}")
             return None
 
         for torrent in torrents:
@@ -443,10 +520,24 @@ class Clients():
                 if meta['debug']:
                     console.print(f"[cyan]Exporting .torrent file for {torrent_hash}")
 
-                torrent_file_content = await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
-                    f"Export torrent {torrent_hash}"
-                )
+                torrent_file_content = None
+                if proxy_url:
+                    qbt_proxy_url = proxy_url.rstrip('/')
+                    try:
+                        async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                    data={'hash': torrent_hash}) as response:
+                            if response.status == 200:
+                                torrent_file_content = await response.read()
+                            else:
+                                console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                    except Exception as e:
+                        console.print(f"[red]Error exporting torrent via proxy: {e}")
+                else:
+                    torrent_file_content = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                        f"Export torrent {torrent_hash}"
+                    )
+
                 if torrent_file_content is not None:
                     torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
@@ -494,10 +585,15 @@ class Clients():
         # **Return the best match if `prefer_small_pieces` is enabled**
         if best_match:
             console.print(f"[green]Using best match torrent with hash: {best_match['hash']}")
-            return best_match['hash']
+            result = best_match['hash']
+        else:
+            console.print("[yellow]No valid torrents found.")
+            result = None
 
-        console.print("[yellow]No valid torrents found.")
-        return None
+        if qbt_session and proxy_url:
+            await qbt_session.close()
+
+        return result
 
     def rtorrent(self, path, torrent_path, torrent, meta, local_path, remote_path, client, tracker):
         # Get the appropriate source path (same as in qbittorrent method)
@@ -925,29 +1021,37 @@ class Clients():
                 use_hardlink = False
                 use_symlink = False
 
-        # Initialize qBittorrent client
-        qbt_client = qbittorrentapi.Client(
-            host=client['qbit_url'],
-            port=client['qbit_port'],
-            username=client['qbit_user'],
-            password=client['qbit_pass'],
-            VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-        )
+        proxy_url = client.get('qui_proxy_url')
+        qbt_client = None
+        qbt_session = None
+
+        if proxy_url:
+            qbt_session = aiohttp.ClientSession()
+            qbt_proxy_url = proxy_url.rstrip('/')
+        else:
+            qbt_client = qbittorrentapi.Client(
+                host=client['qbit_url'],
+                port=client['qbit_port'],
+                username=client['qbit_user'],
+                password=client['qbit_pass'],
+                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
+            )
 
         if meta['debug']:
             console.print("[bold yellow]Adding and rechecking torrent")
 
-        try:
-            await self.retry_qbt_operation(
-                lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                "qBittorrent login"
-            )
-        except (asyncio.TimeoutError, qbittorrentapi.LoginFailed):
-            console.print("[bold red]Failed to login to qBittorrent")
-            return
-        except qbittorrentapi.APIConnectionError:
-            console.print("[bold red]Failed to connect to qBittorrent")
-            return
+        if qbt_client:
+            try:
+                await self.retry_qbt_operation(
+                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                    "qBittorrent login"
+                )
+            except (asyncio.TimeoutError, qbittorrentapi.LoginFailed):
+                console.print("[bold red]Failed to login to qBittorrent")
+                return
+            except qbittorrentapi.APIConnectionError:
+                console.print("[bold red]Failed to connect to qBittorrent")
+                return
 
         # Apply remote pathing to `tracker_dir` before assigning `save_path`
         if use_symlink or use_hardlink:
@@ -1005,92 +1109,173 @@ class Clients():
             console.print(f"[bold yellow]qBittorrent save path: {save_path}")
 
         try:
-            await self.retry_qbt_operation(
-                lambda: asyncio.to_thread(qbt_client.torrents_add,
-                                          torrent_files=torrent.dump(),
-                                          save_path=save_path,
-                                          use_auto_torrent_management=auto_management,
-                                          is_skip_checking=True,
-                                          content_layout=content_layout,
-                                          category=qbt_category),
-                "Add torrent to qBittorrent",
-                initial_timeout=14.0
-            )
+            if proxy_url:
+                data = {
+                    'savepath': save_path,
+                    'autoTMM': str(auto_management).lower(),
+                    'skip_checking': 'true',
+                    'contentLayout': content_layout,
+                }
+                if qbt_category:
+                    data['category'] = qbt_category
+
+                files = {'torrents': ('torrent.torrent', torrent.dump(), 'application/x-bittorrent')}
+
+                async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add",
+                                            data=data, files=files) as response:
+                    if response.status != 200:
+                        console.print(f"[bold red]Failed to add torrent via proxy: {response.status}")
+                        return
+            else:
+                await self.retry_qbt_operation(
+                    lambda: asyncio.to_thread(qbt_client.torrents_add,
+                                              torrent_files=torrent.dump(),
+                                              save_path=save_path,
+                                              use_auto_torrent_management=auto_management,
+                                              is_skip_checking=True,
+                                              content_layout=content_layout,
+                                              category=qbt_category),
+                    "Add torrent to qBittorrent",
+                    initial_timeout=14.0
+                )
         except (asyncio.TimeoutError, qbittorrentapi.APIConnectionError):
             console.print("[bold red]Failed to add torrent to qBittorrent")
+            if qbt_session:
+                await qbt_session.close()
+            return
+        except Exception as e:
+            console.print(f"[bold red]Error adding torrent: {e}")
+            if qbt_session:
+                await qbt_session.close()
             return
 
         # Wait for torrent to be added
         timeout = 30
         for _ in range(timeout):
             try:
-                torrents_info = await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
-                    "Check torrent addition",
-                    max_retries=1,
-                    initial_timeout=10.0
-                )
-                if len(torrents_info) > 0:
-                    break
+                if proxy_url:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
+                                               params={'hashes': torrent.infohash}) as response:
+                        if response.status == 200:
+                            torrents_info = await response.json()
+                            if len(torrents_info) > 0:
+                                break
+                        else:
+                            pass  # Continue waiting
+                else:
+                    torrents_info = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
+                        "Check torrent addition",
+                        max_retries=1,
+                        initial_timeout=10.0
+                    )
+                    if len(torrents_info) > 0:
+                        break
             except asyncio.TimeoutError:
+                pass  # Continue waiting
+            except Exception:
                 pass  # Continue waiting
             await asyncio.sleep(1)
         else:
             console.print("[red]Torrent addition timed out.")
+            if qbt_session:
+                await qbt_session.close()
             return
 
-        # Resume and tag torrent
         try:
-            await self.retry_qbt_operation(
-                lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
-                "Resume torrent"
-            )
+            if proxy_url:
+                async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
+                                            data={'hashes': torrent.infohash}) as response:
+                    if response.status != 200:
+                        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
+            else:
+                await self.retry_qbt_operation(
+                    lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
+                    "Resume torrent"
+                )
         except asyncio.TimeoutError:
             console.print("[yellow]Failed to resume torrent after retries")
+        except Exception as e:
+            console.print(f"[yellow]Error resuming torrent: {e}")
 
         if client.get("use_tracker_as_tag", False) and tracker:
             try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=tracker, torrent_hashes=torrent.infohash),
-                    "Add tracker tag",
-                    initial_timeout=10.0
-                )
+                if proxy_url:
+                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
+                                                data={'hashes': torrent.infohash, 'tags': tracker}) as response:
+                        if response.status != 200:
+                            console.print(f"[yellow]Failed to add tracker tag via proxy: {response.status}")
+                else:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=tracker, torrent_hashes=torrent.infohash),
+                        "Add tracker tag",
+                        initial_timeout=10.0
+                    )
             except asyncio.TimeoutError:
                 console.print("[yellow]Failed to add tracker tag after retries")
+            except Exception as e:
+                console.print(f"[yellow]Error adding tracker tag: {e}")
 
         if client.get('qbit_tag'):
             try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=client['qbit_tag'], torrent_hashes=torrent.infohash),
-                    "Add client tag",
-                    initial_timeout=10.0
-                )
+                if proxy_url:
+                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
+                                                data={'hashes': torrent.infohash, 'tags': client['qbit_tag']}) as response:
+                        if response.status != 200:
+                            console.print(f"[yellow]Failed to add client tag via proxy: {response.status}")
+                else:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=client['qbit_tag'], torrent_hashes=torrent.infohash),
+                        "Add client tag",
+                        initial_timeout=10.0
+                    )
             except asyncio.TimeoutError:
                 console.print("[yellow]Failed to add client tag after retries")
+            except Exception as e:
+                console.print(f"[yellow]Error adding client tag: {e}")
 
         if meta and meta.get('qbit_tag'):
             try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=meta['qbit_tag'], torrent_hashes=torrent.infohash),
-                    "Add meta tag",
-                    initial_timeout=10.0
-                )
+                if proxy_url:
+                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
+                                                data={'hashes': torrent.infohash, 'tags': meta['qbit_tag']}) as response:
+                        if response.status != 200:
+                            console.print(f"[yellow]Failed to add meta tag via proxy: {response.status}")
+                else:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=meta['qbit_tag'], torrent_hashes=torrent.infohash),
+                        "Add meta tag",
+                        initial_timeout=10.0
+                    )
             except asyncio.TimeoutError:
                 console.print("[yellow]Failed to add meta tag after retries")
+            except Exception as e:
+                console.print(f"[yellow]Error adding meta tag: {e}")
 
         if meta['debug']:
             try:
-                info = await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
-                    "Get torrent info for debug",
-                    initial_timeout=10.0
-                )
+                if proxy_url:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
+                                               params={'hashes': torrent.infohash}) as response:
+                        if response.status == 200:
+                            info = await response.json()
+                        else:
+                            info = []
+                else:
+                    info = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
+                        "Get torrent info for debug",
+                        initial_timeout=10.0
+                    )
                 console.print(f"[cyan]Actual qBittorrent save path: {info[0].save_path}")
             except asyncio.TimeoutError:
                 console.print("[yellow]Failed to get torrent info for debug after retries")
 
         if meta['debug']:
             console.print(f"Added to: {save_path}")
+
+        if qbt_session:
+            await qbt_session.close()
 
     def deluge(self, path, torrent_path, torrent, local_path, remote_path, client, meta):
         client = DelugeRPCClient(client['deluge_url'], int(client['deluge_port']), client['deluge_user'], client['deluge_pass'])
@@ -1233,35 +1418,72 @@ class Clients():
             await self.get_ptp_from_hash_rtorrent(meta, pathed)
             return meta
         elif torrent_client == 'qbit':
-            qbt_client = qbittorrentapi.Client(
-                host=client['qbit_url'],
-                port=client['qbit_port'],
-                username=client['qbit_user'],
-                password=client['qbit_pass'],
-                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True),
-                REQUESTS_ARGS={'timeout': 10}
-            )
+            proxy_url = client.get('qui_proxy_url')
+            qbt_client = None
+            qbt_session = None
 
-            try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                    "qBittorrent login"
+            if proxy_url:
+                qbt_session = aiohttp.ClientSession()
+                qbt_proxy_url = proxy_url.rstrip('/')
+            else:
+                qbt_client = qbittorrentapi.Client(
+                    host=client['qbit_url'],
+                    port=client['qbit_port'],
+                    username=client['qbit_user'],
+                    password=client['qbit_pass'],
+                    VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True),
+                    REQUESTS_ARGS={'timeout': 10}
                 )
-            except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
-                console.print("[bold red]Failed to login to qBittorrent")
-                return meta
+
+                try:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                        "qBittorrent login"
+                    )
+                except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
+                    console.print("[bold red]Failed to login to qBittorrent")
+                    return meta
 
             info_hash_v1 = meta.get('infohash')
             if meta['debug']:
                 console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
             try:
-                torrents = await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_info),
-                    "Get torrents list",
-                    initial_timeout=14.0
-                )
+                if proxy_url:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                        if response.status == 200:
+                            torrents_data = await response.json()
+
+                            class MockTorrent:
+                                def __init__(self, data):
+                                    for key, value in data.items():
+                                        setattr(self, key, value)
+                                    if not hasattr(self, 'files'):
+                                        self.files = []
+                                    if not hasattr(self, 'tracker'):
+                                        self.tracker = ''
+                                    if not hasattr(self, 'comment'):
+                                        self.comment = ''
+                            torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                        else:
+                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            if qbt_session:
+                                await qbt_session.close()
+                            return meta
+                else:
+                    torrents = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_info),
+                        "Get torrents list",
+                        initial_timeout=14.0
+                    )
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
+                if qbt_session:
+                    await qbt_session.close()
+                return meta
+            except Exception as e:
+                console.print(f"[bold red]Error getting torrents list: {e}")
+                if qbt_session:
+                    await qbt_session.close()
                 return meta
             found = False
 
@@ -1348,10 +1570,19 @@ class Clients():
                                 console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
 
                             try:
-                                torrent_file_content = await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
-                                    f"Export torrent {torrent_hash}"
-                                )
+                                if proxy_url:
+                                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                data={'hash': torrent_hash}) as response:
+                                        if response.status == 200:
+                                            torrent_file_content = await response.read()
+                                        else:
+                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                            continue
+                                else:
+                                    torrent_file_content = await self.retry_qbt_operation(
+                                        lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                        f"Export torrent {torrent_hash}"
+                                    )
                                 torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
                                 with open(torrent_file_path, "wb") as f:
@@ -1373,6 +1604,9 @@ class Clients():
 
             if not found:
                 console.print("[bold red]Matching site torrent with the specified infohash_v1 not found.")
+
+            if qbt_session:
+                await qbt_session.close()
 
             return meta
         else:
@@ -1572,41 +1806,86 @@ class Clients():
 
             tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
 
-            try:
-                qbt_client = qbittorrentapi.Client(
-                    host=client_config['qbit_url'],
-                    port=int(client_config['qbit_port']),
-                    username=client_config['qbit_user'],
-                    password=client_config['qbit_pass'],
-                    VERIFY_WEBUI_CERTIFICATE=client_config.get('VERIFY_WEBUI_CERTIFICATE', True),
-                    REQUESTS_ARGS={'timeout': 10}
-                )
+            proxy_url = client_config.get('qui_proxy_url', '').strip()
+            if proxy_url:
+                if meta['debug']:
+                    console.print(f"[cyan]Using proxy URL for qBittorrent: {proxy_url[:25]}")
 
                 try:
-                    await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                        "qBittorrent login"
+                    session = aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        connector=aiohttp.TCPConnector(verify_ssl=client_config.get('VERIFY_WEBUI_CERTIFICATE', True))
                     )
-                except asyncio.TimeoutError:
-                    console.print("[bold red]Connection to qBittorrent timed out after retries")
+
+                    # Store session and URL for later API calls
+                    qbt_session = session
+                    qbt_proxy_url = proxy_url
+
+                except Exception as e:
+                    console.print(f"[bold red]Failed to connect to qBittorrent proxy: {e}")
+                    if 'session' in locals():
+                        await session.close()
+                    return []
+            else:
+                try:
+                    qbt_client = qbittorrentapi.Client(
+                        host=client_config['qbit_url'],
+                        port=int(client_config['qbit_port']),
+                        username=client_config['qbit_user'],
+                        password=client_config['qbit_pass'],
+                        VERIFY_WEBUI_CERTIFICATE=client_config.get('VERIFY_WEBUI_CERTIFICATE', True),
+                        REQUESTS_ARGS={'timeout': 10}
+                    )
+
+                    try:
+                        await self.retry_qbt_operation(
+                            lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                            "qBittorrent login"
+                        )
+                    except asyncio.TimeoutError:
+                        console.print("[bold red]Connection to qBittorrent timed out after retries")
+                        return []
+
+                except qbittorrentapi.LoginFailed:
+                    console.print("[bold red]Failed to login to qBittorrent - incorrect credentials")
                     return []
 
-            except qbittorrentapi.LoginFailed:
-                console.print("[bold red]Failed to login to qBittorrent - incorrect credentials")
-                return []
-
-            except qbittorrentapi.APIConnectionError:
-                console.print("[bold red]Failed to connect to qBittorrent - check host/port")
-                return []
+                except qbittorrentapi.APIConnectionError:
+                    console.print("[bold red]Failed to connect to qBittorrent - check host/port")
+                    return []
 
             try:
-                torrents = await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_info),
-                    "Get torrents list",
-                    initial_timeout=14.0
-                )
+                if proxy_url:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                        if response.status == 200:
+                            torrents_data = await response.json()
+                            # Convert to objects that match qbittorrentapi structure
+
+                            class MockTorrent:
+                                def __init__(self, data):
+                                    for key, value in data.items():
+                                        setattr(self, key, value)
+                                    if not hasattr(self, 'files'):
+                                        self.files = []
+                                    if not hasattr(self, 'tracker'):
+                                        self.tracker = ''
+                                    if not hasattr(self, 'comment'):
+                                        self.comment = ''
+                            torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                        else:
+                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            return []
+                else:
+                    torrents = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_info),
+                        "Get torrents list",
+                        initial_timeout=14.0
+                    )
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
+                return []
+            except Exception as e:
+                console.print(f"[bold red]Error getting torrents list: {e}")
                 return []
 
             if meta['debug']:
@@ -1646,13 +1925,27 @@ class Clients():
 
                     if is_match:
                         try:
-                            torrent_trackers = await self.retry_qbt_operation(
-                                lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
-                                f"Get trackers for torrent {torrent.name}"
-                            )
+                            if proxy_url:
+                                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/trackers",
+                                                           params={'hash': torrent.hash}) as response:
+                                    if response.status == 200:
+                                        torrent_trackers = await response.json()
+                                    else:
+                                        if meta['debug']:
+                                            console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} via proxy: {response.status}")
+                                        continue
+                            else:
+                                torrent_trackers = await self.retry_qbt_operation(
+                                    lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
+                                    f"Get trackers for torrent {torrent.name}"
+                                )
                         except (asyncio.TimeoutError, qbittorrentapi.APIError):
                             if meta['debug']:
                                 console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} after retries")
+                            continue
+                        except Exception as e:
+                            if meta['debug']:
+                                console.print(f"[yellow]Error getting trackers for torrent {torrent.name}: {e}")
                             continue
 
                         try:
@@ -1716,7 +2009,7 @@ class Clients():
                             if not tracker_info:
                                 continue
 
-                            if tracker_info["url"] in torrent.comment:
+                            if tracker_info["url"] in torrent.comment and has_working_tracker:
                                 match = re.search(tracker_info["pattern"], torrent.comment)
                                 if match:
                                     tracker_id_value = match.group(1)
@@ -1729,7 +2022,7 @@ class Clients():
 
                         if torrent.tracker and 'hawke.uno' in torrent.tracker:
                             # Try to extract torrent ID from the comment first
-                            if not has_working_tracker:
+                            if has_working_tracker:
                                 huno_id = None
                                 if "/torrents/" in torrent.comment:
                                     match = re.search(r'/torrents/(\d+)', torrent.comment)
@@ -1834,10 +2127,23 @@ class Clients():
                             if meta.get('debug', False):
                                 console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
 
-                            torrent_file_content = await self.retry_qbt_operation(
-                                lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
-                                f"Export torrent {torrent_hash}"
-                            )
+                            torrent_file_content = None
+                            if proxy_url:
+                                qbt_proxy_url = proxy_url.rstrip('/')
+                                try:
+                                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                data={'hash': torrent_hash}) as response:
+                                        if response.status == 200:
+                                            torrent_file_content = await response.read()
+                                        else:
+                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                except Exception as e:
+                                    console.print(f"[red]Error exporting torrent via proxy: {e}")
+                            else:
+                                torrent_file_content = await self.retry_qbt_operation(
+                                    lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                    f"Export torrent {torrent_hash}"
+                                )
                             if torrent_file_content is not None:
                                 torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
@@ -1887,10 +2193,23 @@ class Clients():
 
                                     # If not found in storage directory, export from qBittorrent
                                     if not alt_torrent_file_path:
-                                        alt_torrent_file_content = await self.retry_qbt_operation(
-                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
-                                            f"Export alternative torrent {alt_torrent_hash}"
-                                        )
+                                        alt_torrent_file_content = None
+                                        if proxy_url:
+                                            qbt_proxy_url = proxy_url.rstrip('/')
+                                            try:
+                                                async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                            data={'hash': alt_torrent_hash}) as response:
+                                                    if response.status == 200:
+                                                        alt_torrent_file_content = await response.read()
+                                                    else:
+                                                        console.print(f"[red]Failed to export alternative torrent via proxy: {response.status}")
+                                            except Exception as e:
+                                                console.print(f"[red]Error exporting alternative torrent via proxy: {e}")
+                                        else:
+                                            alt_torrent_file_content = await self.retry_qbt_operation(
+                                                lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
+                                                f"Export alternative torrent {alt_torrent_hash}"
+                                            )
                                         if alt_torrent_file_content is not None:
                                             alt_torrent_file_path = os.path.join(extracted_torrent_dir, f"{alt_torrent_hash}.torrent")
 
@@ -1940,14 +2259,21 @@ class Clients():
                 else:
                     console.print(f"[yellow]No matching torrents found for {torrent_name}")
 
+            if proxy_url and 'qbt_session' in locals():
+                await qbt_session.close()
+
             return matching_torrents
 
         except asyncio.TimeoutError:
+            if proxy_url and 'qbt_session' in locals():
+                await qbt_session.close()
             raise
         except Exception as e:
             console.print(f"[bold red]Error finding torrents: {str(e)}")
             if meta['debug']:
                 console.print(traceback.format_exc())
+            if proxy_url and 'qbt_session' in locals():
+                await qbt_session.close()
             return []
 
 
