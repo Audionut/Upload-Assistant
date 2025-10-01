@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import base64
 import bencodepy
 import glob
@@ -8,6 +9,7 @@ import httpx
 import os
 import re
 import unicodedata
+from src.bbcode import BBCODE
 from src.languages import process_desc_language
 from src.console import console
 from .COMMON import COMMON
@@ -185,34 +187,17 @@ class SPD:
             console.print_exception()
 
     async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        description = await self.common.description_template(self.tracker, meta)
 
-        description_parts = []
+        bbcode = BBCODE()
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
+        description = bbcode.remove_extra_lines(description)
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header)
-
-        if self.signature:
-            description_parts.append(self.signature)
-
-        final_description = "\n\n".join(filter(None, description_parts))
-        desc = final_description
-        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
-        desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
-
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
-
-        return desc
+        return description
 
     async def edit_name(self, meta):
         torrent_name = meta['name']
