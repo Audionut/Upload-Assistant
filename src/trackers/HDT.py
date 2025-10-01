@@ -285,35 +285,49 @@ class HDT:
                 'options': '3'
             }
 
-        response = await self.session.get(search_url, params=params)
-        soup = BeautifulSoup(response.text, 'html.parser')
         results = []
 
-        rows = soup.find_all('tr')
+        try:
+            response = await self.session.get(search_url, params=params)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            rows = soup.find_all('tr')
 
-        for row in rows:
-            if row.find('td', class_='mainblockcontent', string='Filename') is not None:
-                continue
+            for row in rows:
+                if row.find('td', class_='mainblockcontent', string='Filename') is not None:
+                    continue
 
-            name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
+                name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
 
-            name = name_tag.text.strip() if name_tag else None
-            link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
-            size = None
+                name = name_tag.text.strip() if name_tag else None
+                link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
+                size = None
 
-            cells = row.find_all('td', class_='mainblockcontent')
-            for cell in cells:
-                cell_text = cell.text.strip()
-                if 'GiB' in cell_text or 'MiB' in cell_text:
-                    size = cell_text
-                    break
+                cells = row.find_all('td', class_='mainblockcontent')
+                for cell in cells:
+                    cell_text = cell.text.strip()
+                    if 'GiB' in cell_text or 'MiB' in cell_text:
+                        size = cell_text
+                        break
 
-            if name:
-                results.append({
-                    'name': name,
-                    'size': size,
-                    'link': link
-                })
+                if name:
+                    results.append({
+                        'name': name,
+                        'size': size,
+                        'link': link
+                    })
+
+        except httpx.TimeoutException:
+            console.print(f'{self.tracker}: Timeout while searching for existing torrents.')
+            return []
+        except httpx.HTTPStatusError as e:
+            console.print(f'{self.tracker}: HTTP error while searching: Status {e.response.status_code}.')
+            return []
+        except httpx.RequestError as e:
+            console.print(f'{self.tracker}: Network error while searching: {e.__class__.__name__}.')
+            return []
+        except Exception as e:
+            console.print(f'{self.tracker}: Unexpected error while searching: {e}')
+            return []
 
         return results
 
