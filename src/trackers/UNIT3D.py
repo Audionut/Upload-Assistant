@@ -292,6 +292,8 @@ class UNIT3D:
             self.get_category_id(meta),
             self.get_type_id(meta),
             self.get_resolution_id(meta),
+            self.get_distributor_ids(meta),
+            self.get_region_id(meta),
             self.get_tmdb(meta),
             self.get_imdb(meta),
             self.get_tvdb(meta),
