@@ -1017,6 +1017,12 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                 hdr_tonemap = True
                 meta['tonemapped'] = True
                 meta['libplacebo'] = True
+        else:
+            if "HDR" not in meta.get('hdr'):
+                hdr_tonemap = False
+            else:
+                hdr_tonemap = True
+                meta['tonemapped'] = True
     else:
         hdr_tonemap = False
 
