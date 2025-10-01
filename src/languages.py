@@ -271,6 +271,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                         else:
                             meta['unattended_audio_skip'] = True
                             meta['tracker_status'][tracker]['skip_upload'] = True
+                            if meta['debug']:
+                                meta['audio_languages'] = ['English, Portuguese']
 
                     if meta['audio_languages']:
                         meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
@@ -312,6 +314,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                             else:
                                 meta['unattended_subtitle_skip'] = True
                                 meta['tracker_status'][tracker]['skip_upload'] = True
+                                if meta['debug']:
+                                    meta['subtitle_languages'] = ['English, Portuguese']
 
                         if meta['subtitle_languages']:
                             meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]

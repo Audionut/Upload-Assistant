@@ -291,8 +291,11 @@ async def process_meta(meta, base_dir, bot=None):
         removed = []
         for tracker in meta['remove_trackers']:
             if tracker in meta['trackers']:
-                meta['trackers'].remove(tracker)
-                removed.append(tracker)
+                if meta['debug']:
+                    console.print(f"[DEBUG] Would have removed {tracker} found in client")
+                else:
+                    meta['trackers'].remove(tracker)
+                    removed.append(tracker)
         if removed:
             console.print(f"[yellow]Removing trackers already in your client: {', '.join(removed)}[/yellow]")
     if not meta['trackers']:
