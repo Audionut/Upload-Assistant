@@ -1110,19 +1110,18 @@ class Clients():
 
         try:
             if proxy_url:
-                data = {
-                    'savepath': save_path,
-                    'autoTMM': str(auto_management).lower(),
-                    'skip_checking': 'true',
-                    'contentLayout': content_layout,
-                }
+                # Create FormData for multipart/form-data request
+                data = aiohttp.FormData()
+                data.add_field('savepath', save_path)
+                data.add_field('autoTMM', str(auto_management).lower())
+                data.add_field('skip_checking', 'true')
+                data.add_field('contentLayout', content_layout)
                 if qbt_category:
-                    data['category'] = qbt_category
-
-                files = {'torrents': ('torrent.torrent', torrent.dump(), 'application/x-bittorrent')}
+                    data.add_field('category', qbt_category)
+                data.add_field('torrents', torrent.dump(), filename='torrent.torrent', content_type='application/x-bittorrent')
 
                 async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add",
-                                            data=data, files=files) as response:
+                                            data=data) as response:
                     if response.status != 200:
                         console.print(f"[bold red]Failed to add torrent via proxy: {response.status}")
                         return
@@ -1184,10 +1183,11 @@ class Clients():
 
         try:
             if proxy_url:
-                async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
-                                            data={'hashes': torrent.infohash}) as response:
-                    if response.status != 200:
-                        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
+                console.print("[yellow]No qui proxy resume support....")
+                # async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
+                #                            data={'hashes': torrent.infohash}) as response:
+                #    if response.status != 200:
+                #        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
             else:
                 await self.retry_qbt_operation(
                     lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
@@ -1259,17 +1259,26 @@ class Clients():
                                                params={'hashes': torrent.infohash}) as response:
                         if response.status == 200:
                             info = await response.json()
+                            if info:
+                                console.print(f"[cyan]Actual qBittorrent save path: {info[0].get('save_path', 'Unknown')}")
+                            else:
+                                console.print("[yellow]No torrent info returned from proxy")
                         else:
-                            info = []
+                            console.print(f"[yellow]Failed to get torrent info via proxy: {response.status}")
                 else:
                     info = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
                         "Get torrent info for debug",
                         initial_timeout=10.0
                     )
-                console.print(f"[cyan]Actual qBittorrent save path: {info[0].save_path}")
+                    if info:
+                        console.print(f"[cyan]Actual qBittorrent save path: {info[0].save_path}")
+                    else:
+                        console.print("[yellow]No torrent info returned from qBittorrent")
             except asyncio.TimeoutError:
                 console.print("[yellow]Failed to get torrent info for debug after retries")
+            except Exception as e:
+                console.print(f"[yellow]Error getting torrent info for debug: {e}")
 
         if meta['debug']:
             console.print(f"Added to: {save_path}")

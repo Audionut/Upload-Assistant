@@ -397,9 +397,16 @@ class Prep():
             if meta.get('imdb_id', 0) != 0:
                 meta['skip_trackers'] = True
 
+        if meta['debug']:
+            pathed_time_start = time.time()
+
         # auto torrent searching with qbittorrent that grabs torrent ids for metadata searching
         if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False) and not meta.get('edit', False):
             await client.get_pathed_torrents(meta['path'], meta)
+
+        if meta['debug']:
+            pathed_time_end = time.time()
+            console.print(f"Pathed torrent data processed in {pathed_time_end - pathed_time_start:.2f} seconds")
 
         # Ensure all manual IDs have proper default values
         meta['tmdb_manual'] = meta.get('tmdb_manual') or 0
