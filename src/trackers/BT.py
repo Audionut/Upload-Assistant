@@ -163,19 +163,11 @@ class BT():
         return data
 
     async def get_container(self, meta):
-        container = None
-        if meta['is_disc'] == 'BDMV':
-            container = 'M2TS'
-        elif meta['is_disc'] == 'DVD':
-            container = 'VOB'
-        else:
-            ext = os.path.splitext(meta['filelist'][0])[1]
-            containermap = {
-                '.mkv': 'MKV',
-                '.mp4': 'MP4'
-            }
-            container = containermap.get(ext, 'Outro')
-        return container
+        container = meta.get('container', '')
+        if container in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
+            return container.upper()
+
+        return 'Outro'
 
     async def get_type(self, meta):
         if meta.get('anime'):
