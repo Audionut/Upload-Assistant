@@ -1011,12 +1011,20 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     meta['libplacebo'] = True
                 if not compatible and not libplacebo:
                     hdr_tonemap = False
+                    console.print("[yellow]FFMPEG failed tonemap checking.[/yellow]")
+                    await asyncio.sleep(2)
                 if not libplacebo and "HDR" not in meta.get('hdr'):
                     hdr_tonemap = False
             else:
                 hdr_tonemap = True
                 meta['tonemapped'] = True
                 meta['libplacebo'] = True
+        else:
+            if "HDR" not in meta.get('hdr'):
+                hdr_tonemap = False
+            else:
+                hdr_tonemap = True
+                meta['tonemapped'] = True
     else:
         hdr_tonemap = False
 

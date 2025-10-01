@@ -267,6 +267,13 @@ class HDT:
             meta['skipping'] = f'{self.tracker}'
             return []
 
+        # Ensure we have valid credentials and auth_token before searching
+        if not hasattr(self, 'auth_token') or not self.auth_token:
+            credentials_valid = await self.validate_credentials(meta)
+            if not credentials_valid:
+                console.print(f'[bold red]{self.tracker}: Failed to validate credentials for search.')
+                return []
+
         search_url = f'{self.base_url}/torrents.php?'
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
