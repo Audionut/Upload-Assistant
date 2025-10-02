@@ -781,7 +781,7 @@ async def capture_dvd_screenshot(task):
         # Construct ffmpeg command
         ff = ffmpeg.input(input_file, ss=seek_time)
         if w_sar != 1 or h_sar != 1:
-            ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
+            ff = ff.filter('scale', int(round(width * w_sar)), (int(round(height * h_sar)) // 2) * 2)
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
@@ -1345,7 +1345,7 @@ async def capture_screenshot(args):
 
             if w_sar != 1 or h_sar != 1:
                 scaled_w = int(round(width * w_sar))
-                scaled_h = int(round(height * h_sar))
+                scaled_h = (int(round(height * h_sar)) // 2) * 2
                 vf_filters.append(f"scale={scaled_w}:{scaled_h}")
                 if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                     console.print(f"[cyan]Applied PAR scale -> {scaled_w}x{scaled_h}[/cyan]")
@@ -1480,7 +1480,7 @@ async def capture_screenshot(args):
             ff = ffmpeg.input(path, ss=ss_time)
         ff = ff['v:0']
         if w_sar != 1 or h_sar != 1:
-            ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
+            ff = ff.filter('scale', int(round(width * w_sar)), (int(round(height * h_sar)) // 2) * 2)
 
         if hdr_tonemap:
             ff = (
@@ -1794,7 +1794,7 @@ async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_t
         output_map = "0:v"  # Default output mapping
 
         if w_sar != 1 or h_sar != 1:
-            filter_parts.append(f"{input_label}scale={int(round(width * w_sar))}:{int(round(height * h_sar))}[scaled]")
+            filter_parts.append(f"{input_label}scale={int(round(width * w_sar))}:{(int(round(height * h_sar)) // 2) * 2}[scaled]")
             input_label = "[scaled]"
             output_map = "[scaled]"
 
