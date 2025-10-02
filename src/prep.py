@@ -604,8 +604,8 @@ class Prep():
 
         # Run a check against mediainfo to see if it has tmdb/imdb
         if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
-            meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
-                mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
+            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await get_tmdb_imdb_from_mediainfo(
+                mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id']
             )
 
         # Flag for emby if no IDs were found
@@ -847,11 +847,11 @@ class Prep():
         meta['bluray_score'] = int(float(self.config['DEFAULT'].get('bluray_score', 100)))
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
-        if meta.get('is_disc') == "BDMV" and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
+        if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
             await get_bluray_releases(meta)
 
-            # and if we getting bluray images, we'll rehost them
-            if meta.get('is_disc') == "BDMV" and meta.get('use_bluray_images', False):
+            # and if we getting bluray/dvd images, we'll rehost them
+            if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
                 from src.rehostimages import check_hosts
                 url_host_mapping = {
                     "ibb.co": "imgbb",

@@ -169,13 +169,13 @@ class COMMON():
                 if logo != "":
                     await descfile.write(f"[center][img={logo_size}]{logo}[/img][/center]\n\n")
             bluray_link = self.config['DEFAULT'].get("add_bluray_link", False)
-            if meta.get('is_disc') == "BDMV" and bluray_link and meta.get('release_url', ''):
+            if meta.get('is_disc') in ["BDMV", "DVD"] and bluray_link and meta.get('release_url', ''):
                 await descfile.write(f"[center]{meta['release_url']}[/center]\n")
             covers = False
             if await self.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
                 covers = True
 
-            if meta.get('is_disc') == "BDMV" and self.config['DEFAULT'].get('use_bluray_images', False) and covers:
+            if meta.get('is_disc') in ["BDMV", "DVD"] and self.config['DEFAULT'].get('use_bluray_images', False) and covers:
                 async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", 'r', encoding='utf-8') as f:
                     cover_data = json.loads(await f.read())
 
