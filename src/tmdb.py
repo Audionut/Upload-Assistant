@@ -1269,25 +1269,32 @@ async def get_romaji(tmdb_name, mal, meta):
     return romaji, mal_id, eng_title, season_year, episodes, demographic
 
 
-async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imdbid):
+async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imdbid, tvdbid):
     if not is_disc:
         if mediainfo['media']['track'][0].get('extra'):
             extra = mediainfo['media']['track'][0]['extra']
             for each in extra:
                 try:
-                    if each.lower().startswith('tmdb'):
+                    if each.lower().startswith('tmdb') and not tmdbid:
                         category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
-                    if each.lower().startswith('imdb'):
+                    if each.lower().startswith('imdb') and not imdbid:
                         try:
                             imdb_id = extract_imdb_id(extra[each])
                             if imdb_id:
                                 imdbid = imdb_id
                         except Exception:
                             pass
+                    if each.lower().startswith('tvdb') and not tvdbid:
+                        try:
+                            tvdb_id = int(extra[each])
+                            if tvdb_id:
+                                tvdbid = tvdb_id
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
-    return category, tmdbid, imdbid
+    return category, tmdbid, imdbid, tvdbid
 
 
 def extract_imdb_id(value):
