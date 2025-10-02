@@ -72,44 +72,19 @@ class SHRI(UNIT3D):
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
 
-        audio = meta['audio'].replace('Dual-Audio', '').strip()
+        # Clean audio string locally without modifying meta
+        audio = meta.get('audio', '').replace('Dual-Audio', '').strip()
+        
+        # Remove Dual-Audio from shareisland_name if present
         if meta.get('dual_audio'):
             shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
+        # Handle REMUX type detection for untouched/vu files
         if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
             type = "REMUX"
             shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
 
-            if italian_title and use_italian_title:
-                title = italian_title
-
-            # Assicuriamoci che audio_lang_str contenga sempre la lingua, anche se è una sola
-            if not audio_lang_str and meta.get('audio_languages') and len(meta['audio_languages']) > 0:
-                audio_lang_str = meta['audio_languages'][0].upper()
-
-            # Aggiungi UHD dopo 2160p
-            resolution_str = resolution
-            if resolution == "2160p":
-                resolution_str = "2160p UHD"
-
-            shareisland_name = f"{title} {year} {audio_lang_str} {resolution_str} {meta['source']} REMUX {video_codec} {audio}"
-
-            # Rimuovi eventuali spazi doppi e trattini doppi
-            shareisland_name = ' '.join(shareisland_name.split())
-
-            if meta.get('tag'):
-                # Rimuovi eventuali trattini dal tag e aggiungine uno solo
-                tag = meta['tag'].strip('-')
-                # Rimuovi i codici lingua dal tag
-                language_codes = ['ITA', 'ENG', 'FRA', 'FRE', 'SPA', 'GER', 'JAP']
-                for lang in language_codes:
-                    tag = re.sub(f'{lang}(?=\\s|$|-|\\b)', '', tag, flags=re.IGNORECASE).strip()
-                # Rimuovi eventuali trattini multipli o spazi risultanti
-                tag = re.sub(r'-+', '-', tag).strip('-')
-                shareisland_name = f"{shareisland_name}-{tag}"
-            # Termina qui e non proseguire con le altre modifiche al nome
-            return {'name': shareisland_name}
-
+        # Apply Italian title if configured
         if italian_title and use_italian_title:
             shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
             shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
