@@ -82,6 +82,7 @@ class SHRI(UNIT3D):
         # Handle REMUX type detection for untouched/vu files
         if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
             type = "REMUX"
+            name_type = "REMUX"
             shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
 
         # Apply Italian title if configured
