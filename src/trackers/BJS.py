@@ -1050,7 +1050,7 @@ class BJS:
                 return []
 
     async def fetch_data(self, meta, disctype):
-        await self.load_cookies(meta)      
+        await self.load_cookies(meta)
         await self.load_localized_data(meta)
         category = meta['category']
 
@@ -1217,7 +1217,7 @@ class BJS:
                             f.write(response.text)
                         console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
 
-            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
             else:
                 console.print(data)
