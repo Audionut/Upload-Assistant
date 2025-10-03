@@ -56,7 +56,6 @@ class ANT:
         return flags
 
     async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
@@ -68,7 +67,7 @@ class ANT:
             create_torrent(meta, Path(meta['path']), "ANT")
             torrent_filename = "ANT"
 
-        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
         flags = await self.get_flags(meta)
 
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -76,6 +75,8 @@ class ANT:
             torrent_bytes = await f.read()
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data = {
+            'type': 0,
+            'audioformat': await self.get_audio(meta),
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
@@ -131,6 +132,29 @@ class ANT:
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
+
+    async def get_audio(self, meta):
+        '''
+        Possible values:
+        MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus
+        '''
+        audio = meta.get('audio', '').upper()
+        audio_map = {
+            'MP2': 'MP2',
+            'MP3': 'MP3',
+            'AAC': 'AAC',
+            'DD': 'AC3',
+            'DTS': 'DTS',
+            'FLAC': 'FLAC',
+            'PCM': 'PCM',
+            'TRUEHD': 'True-HD',
+            'OPUS': 'Opus'
+        }
+        for key, value in audio_map.items():
+            if key in audio:
+                return value
+        console.print(f'{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus')
+        return None
 
     async def mediainfo(self, meta):
         if meta.get('is_disc') == 'BDMV':

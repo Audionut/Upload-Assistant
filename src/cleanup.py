@@ -6,10 +6,16 @@ import sys
 import os
 import subprocess
 import re
+import platform
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
 if os.name == "posix":
     import termios
+
+# Detect Android environment
+IS_ANDROID = ('android' in platform.platform().lower() or
+              os.path.exists('/system/build.prop') or
+              'ANDROID_ROOT' in os.environ)
 
 running_subprocesses = set()
 thread_executor: ThreadPoolExecutor = None
@@ -44,12 +50,22 @@ async def cleanup():
         proc = running_subprocesses.pop()
         if proc.returncode is None:  # If still running
             # console.print(f"[yellow]Terminating subprocess {proc.pid}...[/yellow]")
-            proc.terminate()  # Send SIGTERM first
             try:
-                await asyncio.wait_for(proc.wait(), timeout=3)  # Wait for process to exit
-            except asyncio.TimeoutError:
-                # console.print(f"[red]Subprocess {proc.pid} did not exit in time, force killing.[/red]")
-                proc.kill()  # Force kill if it doesn't exit
+                proc.terminate()  # Send SIGTERM first
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=3)  # Wait for process to exit
+                except asyncio.TimeoutError:
+                    if not IS_ANDROID:  # Only try force kill on non-Android
+                        # console.print(f"[red]Subprocess {proc.pid} did not exit in time, force killing.[/red]")
+                        try:
+                            proc.kill()  # Force kill if it doesn't exit
+                        except (PermissionError, OSError):
+                            # Can't force kill on Android, just continue
+                            pass
+            except (PermissionError, OSError):
+                # Android doesn't allow process termination in many cases
+                if not IS_ANDROID:
+                    console.print(f"[yellow]Cannot terminate process {proc.pid}: Permission denied[/yellow]")
 
         # 🔹 Close process streams safely
         for stream in (proc.stdout, proc.stderr, proc.stdin):
@@ -117,29 +133,51 @@ def kill_all_threads():
     # console.print("[yellow]Checking for remaining background threads...[/yellow]")
 
     # 🔹 Kill any lingering subprocesses
-    try:
-        current_process = psutil.Process()
-        children = current_process.children(recursive=True)
-
-        for child in children:
-            # console.print(f"[yellow]Terminating process {child.pid}...[/yellow]")
-            try:
-                child.terminate()
-            except psutil.NoSuchProcess:
-                pass
-
-        # Wait for a short time for processes to terminate
-        if not IS_MACOS:
-            _, still_alive = psutil.wait_procs(children, timeout=3)
-            for child in still_alive:
-                # console.print(f"[red]Force killing stubborn process: {child.pid}[/red]")
+    if IS_ANDROID:
+        # On Android, we have limited process access - just clean up what we can
+        try:
+            # Only try to clean up processes we directly spawned
+            for proc in list(running_subprocesses):
                 try:
-                    child.kill()
-                except psutil.NoSuchProcess:
+                    if proc.returncode is None:
+                        proc.terminate()
+                except (PermissionError, psutil.AccessDenied, OSError):
+                    # Android doesn't allow process termination in many cases
                     pass
-    except Exception as e:
-        console.print(f"[red]Error killing processes: {e}[/red]")
-        pass
+        except Exception:
+            # Silently handle Android permission issues
+            pass
+    else:
+        # Standard process cleanup for non-Android systems
+        try:
+            current_process = psutil.Process()
+            children = current_process.children(recursive=True)
+
+            for child in children:
+                # console.print(f"[yellow]Terminating process {child.pid}...[/yellow]")
+                try:
+                    child.terminate()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
+                    pass
+
+            # Wait for a short time for processes to terminate
+            if not IS_MACOS:
+                try:
+                    _, still_alive = psutil.wait_procs(children, timeout=3)
+                    for child in still_alive:
+                        # console.print(f"[red]Force killing stubborn process: {child.pid}[/red]")
+                        try:
+                            child.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
+                            pass
+                except (psutil.AccessDenied, PermissionError):
+                    # Handle systems where we can't wait for processes
+                    pass
+        except (PermissionError, psutil.AccessDenied, OSError) as e:
+            if not IS_ANDROID:
+                console.print(f"[yellow]Limited process access: {e}[/yellow]")
+        except Exception as e:
+            console.print(f"[red]Error during process cleanup: {e}[/red]")
 
     # 🔹 For macOS, specifically check and terminate any multiprocessing processes
     if IS_MACOS and hasattr(multiprocessing, 'active_children'):
@@ -183,8 +221,8 @@ if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
 
 def reset_terminal():
     """Reset the terminal while allowing the script to continue running (Linux/macOS only)."""
-    if os.name != "posix":
-        return
+    if os.name != "posix" or IS_ANDROID:
+        return  # Skip terminal reset on Windows and Android
 
     try:
         if not sys.stderr.closed:

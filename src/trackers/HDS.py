@@ -86,6 +86,12 @@ class HDS:
         return description
 
     async def search_existing(self, meta, disctype):
+        images = meta.get('image_list', [])
+        if not images or len(images) < 3:
+            console.print(f'{self.tracker}: At least 3 screenshots are required to upload.')
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         dupes = []
         imdb_id = meta.get('imdb', '')
         if imdb_id == '0':

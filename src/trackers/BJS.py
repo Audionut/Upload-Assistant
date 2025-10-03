@@ -15,7 +15,6 @@ from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
-from src.exceptions import UploadException
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -40,6 +39,20 @@ class BJS:
             'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
         }, timeout=60.0)
         self.cover = ''
+
+    async def get_additional_checks(self, meta):
+        should_continue = True
+
+        # Stops uploading when an external subtitle is detected
+        video_path = meta.get('path')
+        directory = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
+        subtitle_extensions = ('.srt', '.sub', '.ass', '.ssa', '.idx', '.smi', '.psb')
+
+        if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
+            console.print(f'{self.tracker}: [bold red]ERRO: Esta ferramenta não suporta o upload de legendas em arquivos separados.[/bold red]')
+            return False
+
+        return should_continue
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -72,8 +85,7 @@ class BJS:
                 console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
                 return False
 
-            self.auth_token = auth_match.group(1)
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
@@ -206,14 +218,6 @@ class BJS:
         return 'Legendado'
 
     async def get_subtitle(self, meta):
-        # Stops uploading when an external subtitle is detected
-        video_path = meta.get('path')
-        directory = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
-        subtitle_extensions = ('.srt', '.sub', '.ass', '.ssa', '.idx', '.smi', '.psb')
-
-        if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
-            raise UploadException('[bold red]ERRO: Esta ferramenta não suporta o upload de legendas em arquivos separados.[/bold red]')
-
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
@@ -598,6 +602,11 @@ class BJS:
         return BeautifulSoup(response.text, 'html.parser')
 
     async def search_existing(self, meta, disctype):
+        should_continue = await self.get_additional_checks(meta)
+        if not should_continue:
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         try:
             params = self._extract_upload_params(meta)
 
@@ -811,11 +820,6 @@ class BJS:
                 if img.get('raw_url')
             ][:6]
 
-            if len(image_links) < 2:
-                raise UploadException(
-                    f'[bold red]FALHA NO UPLOAD:[/bold red] É necessário pelo menos 2 screenshots para fazer upload para o {self.tracker}.'
-                )
-
             async def upload_remote_file(url):
                 try:
                     response = await self.session.get(url, timeout=120)
@@ -835,11 +839,6 @@ class BJS:
                 result = await coro
                 if result:
                     results.append(result)
-
-        if len(results) < 2:
-            raise UploadException(
-                f'[bold red]FALHA NO UPLOAD:[/bold red] O host de imagem do {self.tracker} não retornou o número mínimo de screenshots.'
-            )
 
         return results
 
@@ -975,7 +974,7 @@ class BJS:
                     if user_input.strip():
                         return user_input.strip()
                     else:
-                        raise UploadException(f'Dados obrigatórios não fornecidos: {role_display_name}')
+                        return 'skipped'
                 else:
                     return 'N/A'
 
@@ -1051,8 +1050,8 @@ class BJS:
                 return []
 
     async def fetch_data(self, meta, disctype):
+        await self.load_cookies(meta)      
         await self.load_localized_data(meta)
-        await self.validate_credentials(meta)
         category = meta['category']
 
         data = {}
@@ -1060,7 +1059,7 @@ class BJS:
         # These fields are common across all upload types
         data.update({
             'audio': await self.get_audio(meta),
-            'auth': self.auth_token,
+            'auth': meta[f'{self.tracker}_secret_token'],
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
             'duracaoHR': self.get_runtime(meta).get('hours'),
@@ -1166,47 +1165,62 @@ class BJS:
 
         return data
 
+    async def check_data(self, meta, data):
+        if not meta.get('debug', False):
+            if len(data['screenshots[]']) < 2:
+                return 'The number of successful screenshots uploaded is less than 2.'
+        if any(value == 'skipped' for value in (
+            data.get('diretor'),
+            data.get('elenco'),
+            data.get('creators')
+        )):
+            return 'Missing required credits information (director/cast/creator).'
+        return False
+
     async def upload(self, meta, disctype):
+        status_message = ''
         data = await self.fetch_data(meta, disctype)
         requests = await self.get_requests(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         status_message = ''
 
-        if not meta.get('debug', False):
-            torrent_id = ''
-            upload_url = f"{self.base_url}/upload.php"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        issue = await self.check_data(meta, data)
+        if issue:
+            status_message = f'data error - {issue}'
+        else:
+            if not meta.get('debug', False):
+                torrent_id = ''
+                upload_url = f"{self.base_url}/upload.php"
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, 'application/x-bittorrent')}
+                with open(torrent_path, 'rb') as torrent_file:
+                    files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, 'application/x-bittorrent')}
 
-                response = await self.session.post(upload_url, data=data, files=files, timeout=120)
+                    response = await self.session.post(upload_url, data=data, files=files, timeout=120)
 
-                if 'action=download&id=' in response.text:
-                    status_message = 'Enviado com sucesso.'
+                    if 'action=download&id=' in response.text:
+                        status_message = 'Enviado com sucesso.'
 
-                    # Find the torrent id
-                    match = re.search(r'torrentid=(\d+)', response.text)
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        # Find the torrent id
+                        match = re.search(r'torrentid=(\d+)', response.text)
+                        if match:
+                            torrent_id = match.group(1)
+                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
-                    if requests:
-                        status_message += ' Seu upload pode atender a pedidos existentes, verifique os logs anteriores do console.'
+                        if requests:
+                            status_message += ' Seu upload pode atender a pedidos existentes, verifique os logs anteriores do console.'
 
-                else:
-                    status_message = 'O upload pode ter falhado, verifique. '
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-                    console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
-                    meta['skipping'] = f'{self.tracker}'
-                    return
+                    else:
+                        status_message = 'data error - O upload pode ter falhado, verifique. '
+                        response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
+                        with open(response_save_path, 'w', encoding='utf-8') as f:
+                            f.write(response.text)
+                        console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
-        else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+            else:
+                console.print(data)
+                status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message

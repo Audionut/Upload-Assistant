@@ -13,7 +13,6 @@ import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
-from src.exceptions import UploadException
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
@@ -184,7 +183,7 @@ class AZTrackerBase:
                 console.print(f'{self.tracker}: The attempt to add the media to the database appears to have been successful..')
                 return True
             else:
-                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status}')
+                console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
                 return False
         except Exception as e:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
@@ -236,11 +235,8 @@ class AZTrackerBase:
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
-            self.auth_token = auth_match.group(1)
-
             await self.save_cookies()
-
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
@@ -303,7 +299,7 @@ class AZTrackerBase:
                     name_tag = row.find('a', class_='torrent-filename')
                     name = name_tag.get_text(strip=True) if name_tag else ''
 
-                    torrent_link = name_tag['href'] if name_tag and 'href' in name_tag.attrs else ''
+                    torrent_link = name_tag.get('href') if name_tag and 'href' in name_tag.attrs else ''
                     if torrent_link:
                         match = re.search(r'/(\d+)', torrent_link)
                         if match:
@@ -330,7 +326,7 @@ class AZTrackerBase:
                     page_url = None
 
             except httpx.RequestError as e:
-                self.console.log(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
+                console.print(f'{self.tracker}: Failed to search for duplicates. {e.request.url}: {e}')
                 return duplicates
 
         return duplicates
@@ -496,8 +492,6 @@ class AZTrackerBase:
 
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-            if len(image_links) < 3:
-                raise UploadException(f'UPLOAD FAILED: At least 3 screenshots are required for {self.tracker}.')
 
             async def upload_remote_file(url):
                 try:
@@ -520,9 +514,6 @@ class AZTrackerBase:
                 result = await upload_remote_file(url)
                 if result:
                     results.append(result)
-
-        if len(results) < 3:
-            raise UploadException('UPLOAD FAILED: The image host did not return the minimum number of screenshots.')
 
         return results
 
@@ -837,12 +828,12 @@ class AZTrackerBase:
         return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
-        await self.validate_credentials(meta)
+        await self.load_cookies(meta)
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
 
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
@@ -890,58 +881,68 @@ class AZTrackerBase:
 
         return data
 
+    async def check_data(self, meta, data):
+        if not meta.get('debug', False):
+            if len(data['screenshots[]']) < 3:
+                return f'UPLOAD FAILED: The {self.tracker} image host did not return the minimum number of screenshots.'
+        return False
+
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
         requests = await self.get_requests(meta)
         status_message = ''
 
-        if not meta.get('debug', False):
-            response = await self.session.post(self.upload_url_step2, data=data)
-            if response.status_code == 302:
-                torrent_url = response.headers['Location']
+        issue = await self.check_data(meta, data)
+        if issue:
+            status_message = f'data error - {issue}'
+        else:
+            if not meta.get('debug', False):
+                response = await self.session.post(self.upload_url_step2, data=data)
+                if response.status_code == 302:
+                    torrent_url = response.headers['Location']
 
-                # Even if you are uploading, you still need to download the .torrent from the website
-                # because it needs to be registered as a download before you can start seeding
-                download_url = torrent_url.replace('/torrent/', '/download/torrent/')
-                register_download = await self.session.get(download_url)
-                if register_download.status_code != 200:
+                    # Even if you are uploading, you still need to download the .torrent from the website
+                    # because it needs to be registered as a download before you can start seeding
+                    download_url = torrent_url.replace('/torrent/', '/download/torrent/')
+                    register_download = await self.session.get(download_url)
+                    if register_download.status_code != 200:
+                        status_message = (
+                            f'data error - Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}\n'
+                            f'Error: {register_download.status_code}'
+                        )
+                        meta['tracker_status'][self.tracker]['status_message'] = status_message
+                        return
+
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
+
+                    status_message = 'Torrent uploaded successfully.'
+
+                    match = re.search(r'/torrent/(\d+)', torrent_url)
+                    if match:
+                        torrent_id = match.group(1)
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
+                    if requests:
+                        status_message += ' Your upload may fulfill existing requests, check prior console logs.'
+
+                else:
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
+                    with open(failure_path, 'w', encoding='utf-8') as f:
+                        f.write(response.text)
+
                     status_message = (
-                        f'data error - Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}\n'
-                        f'Error: {register_download.status_code}'
+                        f"data error - It may have uploaded, go check\n"
+                        f'Step 2 of upload to {self.tracker} failed.\n'
+                        f'Status code: {response.status_code}\n'
+                        f'URL: {response.url}\n'
+                        f"The HTML response has been saved to '{failure_path}' for analysis."
                     )
                     meta['tracker_status'][self.tracker]['status_message'] = status_message
                     return
 
-                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
-
-                status_message = 'Torrent uploaded successfully.'
-
-                match = re.search(r'/torrent/(\d+)', torrent_url)
-                if match:
-                    torrent_id = match.group(1)
-                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                if requests:
-                    status_message += ' Your upload may fulfill existing requests, check prior console logs.'
-
             else:
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-
-                status_message = (
-                    f"data error - It may have uploaded, go check\n"
-                    f'Step 2 of upload to {self.tracker} failed.\n'
-                    f'Status code: {response.status_code}\n'
-                    f'URL: {response.url}\n'
-                    f"The HTML response has been saved to '{failure_path}' for analysis."
-                )
-                meta['tracker_status'][self.tracker]['status_message'] = status_message
-                return
-
-        else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
+                console.print(data)
+                status_message = 'Debug mode enabled, not uploading.'
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 

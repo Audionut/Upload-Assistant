@@ -1,4 +1,96 @@
-__version__ = "v5.4.3"
+__version__ = "6.0.0"
+
+"""
+Changelog for version v6.0.0 (2025-10-03):
+
+# ## RELEASE NOTES
+# - Immense thanks to @wastaken7 for refactoring the unit3d based tracker code. A huge QOL improvement that removed thousands of lines of code.
+# - To signify the continued contributions by @wastaken7, this project is now know simply as "Upload Assistant".
+# - New package added, run requirements.txt
+# - This release contains lengthy refactoring of many code aspects. Many users, with thanks, have been testing the changes and giving feedback.
+# - The version bump to v6.0.0 signifies the large code changes, and you should follow an update process suitable for yourself with a major version bump.
+
+## New config options - see example.py
+# - FFMPEG related options that may assist those having issues with screenshots.
+# - AvistaZ based sites have new options in their site sections.
+# - "use_italian_title" inside SHRI config, for using Italian titles where available
+# - Some HDT related config options were updated/changed
+# - "check_predb" for also checking predb for scene status
+# - "get_bluray_info" updated to also include getting DVD data
+# - "qui_proxy_url" inside qbittorrent client config, for supporting qui reverse proxy url
+
+# ## WHAT'S NEW - some from last release
+# - New arg -sort, used for sorting filelist, to ensure UA can run with some anime folders that have allowed smaller files.
+# - New arg -rtk, which can be used to process a run, removing specific trackers from your default trackers list, and processing with the remaining trackers in your default list.
+# - A significant chunk of the actual upload process has been correctly asynced. Some specific site files still need to be updated and will slow the process.
+# - More UNIT3D based trackers have been updated with request searching support.
+# - Added support for sending applicable edition to LST api edition endpoint.
+# - NoGrp type tags are not removed by default. Use "--no-tag" if desired, and/or report trackers as needed.
+
+# ## What's Changed
+# 
+# * fix(GPW) - do not print empty descriptions (#805) by @wastaken7 in 07e8334
+# * SHRI - Check group tag and Italian title handling (#803) by @Tiberio in 054ce4f
+# * fix(HDS) - use [pre] for mediainfo to correctly use monospaced fonts (#810) by @wastaken7 in aa62941
+# * fix(BT) - status code, post data, torrent id (#808) by @wastaken7 in 5ff6249
+# * feat(UNIT3D) - refactor UNIT3D websites to reuse common code base (#801) by @wastaken7 in 03c8ffd
+# * ANT - fix trying to call lower on dict by @Audionut in 9772b0a
+# * SHRI - Remove 'Dubbed', add [SUBS] tag (#815) by @Tiberio in 788be1c
+# * graceful exit by @Audionut in ddbd135
+# * updated unit3d trackers - request support by @Audionut in a680692
+# * release notes by @Audionut in 49efdca
+# * Update FNP resolution id (#818) by @oxidize9779 in 48fa975
+# * refactor(HDT) (#821) by @wastaken7 in 2365937
+# * more async (#819) by @Audionut in b7aea98
+# * print in debug by @Audionut in 9b68819
+# * set screens from manual frames by @Audionut in b9ef753
+# * more debugging by @Audionut in 5ad4fce
+# * more debugging by @Audionut in 7902066
+# * Refine dual-audio detection for zxx (#822) by @GizmoBal in ab27990
+# * fix extended bluray parsing by @Audionut in cae1c38
+# * feat: Improve duplicate search functionality (#820) by @wastaken7 in 3b59c03
+# * remove dupe requirement by @Audionut in 5ebdc86
+# * disable filename match by @Audionut in 63adf3c
+# * fix unit3d flags by @Audionut in 3555d12
+# * exact filename fix by @Audionut in 69aa3fa
+# * Improve NFO downloading robustness (#827) by @noobiangodd in 09bc878
+# * PTP redact token by @Audionut in eec5d60
+# * enable predb by @Audionut in a073247
+# * qbit retries and async calls by @Audionut in 9146011
+# * add sleeps to pack processing by @Audionut in ed7eda9
+# * add DOCPLAY by @Audionut in aa97763
+# * fix unit3d flags api by @Audionut in 506ea47
+# * LST edition ids by @Audionut in df7769a
+# * more parsers to lxml by @Audionut in e62e819
+# * fix pack image creation by @Audionut in 220c5f2
+# * fix request type checking by @Audionut in a06c1dd
+# * Fix crash when no edit args provided (handle no/empty input safely) (#826) by @ca1m985 in 4cbebc4
+# * catch keyboard interruptions in cli_ui by @Audionut in ca76801
+# * don't remove nogrp type tags by default by @Audionut in 25b5f09
+# * AZ network fixes by @Audionut in 50595c2
+# * fix: only print overlay info if relevant by @Audionut in 4e6a5ce
+# * add(meta): video container (#831) by @wastaken7 in c55094a
+# * fix: frame overlay check tracker list check by @Audionut in 6d7fa3c
+# * fix use_libplacebo false by @Audionut in d1044c9
+# * fix: improve container detection for different disc types (#835) by @wastaken7 in 073126c
+# * set safe debugging languages by @Audionut in bfe964a
+# * print automated ffmpeg tonemap checking failure by @Audionut in bebe17c
+# * fix: don't overwrite ids from mediainfo by @Audionut in f3fa16c
+# * HDT - auth token availability (#839) by @Audionut in 57af870
+# * Add support for bluray.com scraping for DVDs (#828) by @9Oc in 6274db1
+# * Update config-generator.py (#846) by @AzureBelmont in 070062c
+# * fix(ANT): add type and audioformat to post data (#845) by @wastaken7 in 3424794
+# * refactor: replace UploadException with tracker_status handling, where applicable (#840) by @wastaken7 in 502e40d
+# * cleanup handling for android by @Audionut in 1702d3d
+# * add support for qui reverse proxy (#833) by @Audionut in 9a9b3c4
+# * improvement: avoid re-executing validate_credentials by temporarily saving tokens in meta (#834) by @wastaken7 in ff99d08
+# * release notes by @Audionut in a924df4
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.3...v6.0.0
+"""
+
+__version__ = "5.4.3"
 
 """
 Release Notes for version v5.4.3 (2025-09-19):

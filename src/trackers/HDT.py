@@ -77,11 +77,8 @@ class HDT:
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
-            self.auth_token = auth_match.group(1)
-
             await self.save_cookies()
-
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
@@ -219,7 +216,7 @@ class HDT:
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
             params = {
-                'csrfToken': self.auth_token,
+                'csrfToken': meta[f'{self.tracker}_secret_token'],
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -227,49 +224,42 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': self.auth_token,
+                'csrfToken': meta[f'{self.tracker}_secret_token'],
                 'search': meta['title'],
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
             }
 
+        results = []
+
         try:
             response = await self.session.get(search_url, params=params)
-            response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
+            rows = soup.find_all('tr')
 
-            results = []
+            for row in rows:
+                if row.find('td', class_='mainblockcontent', string='Filename') is not None:
+                    continue
 
-            main_table = soup.find('table', class_='mainblockcontenttt')
+                name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
 
-            if main_table:
-                rows = main_table.find_all('tr', recursive=False)
+                name = name_tag.text.strip() if name_tag else None
+                link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
+                size = None
 
-                for row in rows:
-                    if row.find('td', class_='mainblockcontent', string='Filename') is not None:
-                        continue
+                cells = row.find_all('td', class_='mainblockcontent')
+                for cell in cells:
+                    cell_text = cell.text.strip()
+                    if 'GiB' in cell_text or 'MiB' in cell_text:
+                        size = cell_text
+                        break
 
-                    name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
-
-                    name = name_tag.text.strip() if name_tag else None
-                    link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
-                    size = None
-
-                    cells = row.find_all('td', class_='mainblockcontent')
-                    for cell in cells:
-                        cell_text = cell.text.strip()
-                        if 'GiB' in cell_text or 'MiB' in cell_text:
-                            size = cell_text
-                            break
-
-                    if name:
-                        results.append({
-                            'name': name,
-                            'size': size,
-                            'link': link
-                        })
-
-            return results
+                if name:
+                    results.append({
+                        'name': name,
+                        'size': size,
+                        'link': link
+                    })
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Timeout while searching for existing torrents.')
@@ -284,13 +274,15 @@ class HDT:
             console.print(f'{self.tracker}: Unexpected error while searching: {e}')
             return []
 
+        return results
+
     async def get_data(self, meta):
-        await self.validate_credentials(meta)
+        await self.load_cookies(meta)
         data = {
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': self.auth_token,
+            'csrfToken': meta[f'{self.tracker}_secret_token'],
         }
 
         # 3D

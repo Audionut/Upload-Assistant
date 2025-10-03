@@ -113,6 +113,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
                         return
+
                 except Exception:
                     console.print(traceback.format_exc())
                     return
