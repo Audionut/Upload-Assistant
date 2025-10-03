@@ -20,10 +20,10 @@ class OTW(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL',
-            'AROMA', 'aXXo', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE',
+            'AROMA', 'aXXo', 'CM8', 'CrEwSaDe', 'DeadFish', 'DNL', 'ELiTE',
             'eSc', 'FaNGDiNG0', 'FGT', 'Flights', 'FRDS', 'FUM', 'GalaxyRG', 'HAiKU',
-            'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM',
-            'Lama', 'Leffe', 'LOAD', 'mHD', 'NhaNc3', 'nHD', 'NOIVTC', 'nSD', 'PiRaTeS',
+            'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'INFINITY', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM',
+            'LAMA', 'Leffe', 'LOAD', 'mHD', 'NhaNc3', 'nHD', 'NOIVTC', 'nSD', 'PiRaTeS',
             'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'SANTi',
             'SicFoI', 'SPASM', 'STUTTERSHIT', 'Telly', 'TM', 'UPiNSMOKE', 'WAF', 'xRed',
             'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN', '4f8c4100292', 'Azkars', 'Sync0rdi',
