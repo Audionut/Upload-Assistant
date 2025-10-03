@@ -147,43 +147,59 @@ class DescriptionBuilder:
         self.common = COMMON(config)
 
     async def get_custom_header(self, meta):
-        """Retorna o cabeçalho customizado se configurado"""
+        """Returns a custom header if configured."""
         if self.config['DEFAULT'].get('custom_description_header', False):
             return self.config['DEFAULT']['custom_description_header']
         return ''
 
-    async def get_logo_section(self, meta):
-        """Retorna a seção do logo se configurado"""
-        logo = meta.get('logo')
-        logo_size = self.config['DEFAULT'].get('logo_size')
+    async def get_logo_section(self, meta, url_resize=False):
+        """Returns the logo URL and size if applicable."""
+        logo = meta.get('logo', '')
+        logo_size = self.config['DEFAULT'].get('logo_size', '300')
+        logo_resize_url = meta.get('tmdb_logo', '')
 
-        if self.config['DEFAULT'].get('add_logo') and logo and logo_size:
+        if self.config['DEFAULT'].get('add_logo') and logo:
+            if url_resize and logo_resize_url:
+                return logo_resize_url, None
             return logo, logo_size
         return None, None
 
     async def _get_episode_name(self, meta):
-        """Retorna o nome do episódio se configurado"""
         tvmaze_episode_data = meta.get('tvmaze_episode_data')
         if tvmaze_episode_data and tvmaze_episode_data.get('episode_name'):
             return tvmaze_episode_data['episode_name']
         return ''
 
     async def _get_episode_image(self, meta):
-        """Retorna a imagem do episódio se configurada"""
         tvmaze_episode_data = meta.get('tvmaze_episode_data')
         if tvmaze_episode_data and tvmaze_episode_data.get('image'):
             return tvmaze_episode_data['image']
         return ''
 
-    async def _get_overview_meta(self, meta):
-        """Retorna o overview meta se configurado"""
-        overview_meta = meta.get('overview_meta')
-        if overview_meta:
-            return overview_meta
-        return ''
+    async def get_tv_info(self, meta):
+        if not self.config['DEFAULT'].get('episode_overview', False):
+            return '', '', ''
+
+        tvmaze_episode_data = meta.get('tvmaze_episode_data', {})
+
+        name = tvmaze_episode_data.get('season_name', '').strip() or meta.get('title')
+        season_number = meta.get('season', '')
+        episode_number = meta.get('episode', '')
+        episode_title = tvmaze_episode_data.get('episode_name', '').strip()
+        episode_overview = tvmaze_episode_data.get('overview', '').strip() or meta.get('overview_meta', '').strip()
+        episode_image = tvmaze_episode_data.get('image', '').strip()
+
+        title = f'{name}'
+        if season_number:
+            title += f' {season_number}{episode_number}'
+
+        if episode_title:
+            title += f':\n{episode_title}'
+
+        return title, episode_image, episode_overview
 
     async def get_episode_overview(self, meta):
-        """Retorna a seção de overview do episódio se configurado"""
+        """Returns True if episode overview should be included."""
         tvmaze_episode_data = meta.get('tvmaze_episode_data')
 
         if self.config['DEFAULT'].get('episode_overview', False) and tvmaze_episode_data:
@@ -276,6 +292,7 @@ class DescriptionBuilder:
         return ''
 
     async def get_bdinfo_section(self, meta):
+        """Returns the bdinfo section if applicable."""
         if meta.get('is_disc') == 'BDMV':
             bdinfo_sections = []
             if meta.get('discs'):
@@ -286,28 +303,25 @@ class DescriptionBuilder:
             return '\n\n'.join(bdinfo_sections)
         return ''
 
-    async def get_description_content(meta):
-        """Retorna o conteúdo da descrição (file, template ou link)"""
-        description_file_content = meta.get('description_file_content')
-        description_template_content = meta.get('description_template_content')
-        description_link_content = meta.get('description_link_content')
+    async def get_user_description(self, meta):
+        """Returns the user-provided description (file or link)"""
+        description_file_content = meta.get('description_file_content', '').strip()
+        description_link_content = meta.get('description_link_content', '').strip()
 
-        if description_file_content or description_template_content or description_link_content:
+        # check the description that may come from other trackers via the API
+        if description_file_content:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                print('\nFound existing description:\n')
+                print(meta.get('description_file_content'))
+                user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
+                if user_input.lower() == 'y':
+                    pass
+                else:
+                    description_file_content = False
+
+        if description_file_content or description_link_content:
             if description_file_content:
                 return description_file_content
-            elif description_template_content:
-                return description_template_content
             elif description_link_content:
                 return description_link_content
         return ''
-
-    async def get_signature(meta):
-        ua_name = meta.get('ua_name')
-
-        if not ua_name:
-            return ''
-
-        current_version = meta.get('current_version')
-        version_text = f" {current_version}" if current_version else ""
-
-        return f"<center><a href=\"https://github.com/Audionut/Upload-Assistant\">Created by {ua_name}{version_text}</a></center>"

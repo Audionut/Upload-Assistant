@@ -7,8 +7,8 @@ import re
 import platform
 from src.bbcode import BBCODE
 from src.console import console
-from src.trackers.COMMON import COMMON
 from src.get_desc import DescriptionBuilder
+from src.trackers.COMMON import COMMON
 
 
 class TL:
@@ -74,6 +74,7 @@ class TL:
         builder = DescriptionBuilder(self.config)
         desc_parts = []
 
+        # Custom Header
         desc_parts.append(await builder.get_custom_header(meta))
 
         # Logo
@@ -81,19 +82,15 @@ class TL:
         if logo and logo_size:
             desc_parts.append(f"""<center><img src="{logo}" style="max-width: {logo_size}px;"></center>""")
 
-        # TV stuff
-        if await builder.get_episode_overview(meta):
-            episode_name = await builder._get_episode_name(meta)
-            if episode_name:
-                desc_parts.append(f"[center]{episode_name}[/center]")
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
 
-            episode_image = await builder._get_episode_image(meta)
             if episode_image:
                 desc_parts.append(f"[center]<img src='{episode_image}' style='max-width: 350px;'></a>[/center]")
 
-            overview_meta = await builder._get_overview_meta(meta)
-            if overview_meta:
-                desc_parts.append(f"[center]{overview_meta}[/center]")
+            desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
         desc_parts.append(await builder.get_mediainfo_section(meta, self.tracker))
@@ -102,6 +99,9 @@ class TL:
         # NFO
         if meta.get('description_nfo_content', ''):
             desc_parts.append(f"<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{meta.get('description_nfo_content')}</div></div>")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
 
         # Screenshots
         if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
@@ -112,7 +112,7 @@ class TL:
                 web_url = image['web_url']
                 screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
                 if (i + 1) % 2 == 0:
-                    screenshots_block += '<br>'
+                    screenshots_block += '<br><br>'
             desc_parts.append('<center>' + screenshots_block + '</center>')
 
         # Signature

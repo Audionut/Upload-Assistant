@@ -13,6 +13,7 @@ import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
@@ -632,9 +633,19 @@ class AZTrackerBase:
         return tags
 
     async def edit_desc(self, meta):
-        description = await self.common.description_template(self.tracker, meta)
-        description = description.strip()
-        description = re.sub(r'\n{3,}', '\n\n', description)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # TV stuff
+        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        if episode_overview:
+            desc_parts.append(f'[b]Episode:[/b] {title}')
+            desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         if not description:
             return ''

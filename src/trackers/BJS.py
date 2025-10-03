@@ -15,6 +15,7 @@ from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -332,7 +333,46 @@ class BJS:
         return title if title and title != meta.get('title') else ''
 
     async def build_description(self, meta):
-        description = await self.common.description_template(self.tracker, meta, self.episode_tmdb_data)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(meta))
+
+        # Logo
+        logo_resize_url, logo_size = await builder.get_logo_section(meta, url_resize=True)
+        if logo_resize_url:
+            desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
+
+        # TV
+        title = self.episode_tmdb_data.get('name', '')
+        episode_image = self.episode_tmdb_data.get('still_path', '')
+        episode_overview = self.episode_tmdb_data.get('overview', '')
+
+        if episode_overview:
+            desc_parts.append(f'[align=center]{title}[/align]')
+
+            if episode_image:
+                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{episode_image}[/img][/align]")
+
+            desc_parts.append(f'[align=center]{episode_overview}[/align]')
+
+        # File information
+        desc_parts.append(await builder.get_mediainfo_section(meta, self.tracker))
+        desc_parts.append(await builder.get_bdinfo_section(meta))
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{meta.get('description_nfo_content')}</div></div>")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Signature
+        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta.get('ua_name')} {meta.get('current_version', '')}</a></center>""")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         bbcode = BBCODE()
         description = bbcode.convert_named_spoiler_to_named_hide(description)
         description = bbcode.convert_spoiler_to_hide(description)

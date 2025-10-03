@@ -9,6 +9,7 @@ import platform
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
 
@@ -167,7 +168,34 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        description = await self.common.description_template(self.tracker, meta)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Avoid unnecessary descriptions, adding only the logo and signature if there is a user description
+        user_desc = await builder.get_user_description(meta)
+        if user_desc:
+            # Custom Header
+            desc_parts.append(await builder.get_custom_header(meta))
+
+            # Logo
+            logo_resize_url, logo_size = await builder.get_logo_section(meta, url_resize=True)
+            if logo_resize_url:
+                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
+
+        # BDinfo
+        bdinfo = await builder.get_bdinfo_section(meta)
+        if bdinfo:
+            desc_parts.append(f"[spoiler=BDInfo][pre]{bdinfo}[/pre][/spoiler]")
+
+        if user_desc:
+            # User description
+            desc_parts.append(user_desc)
+
+            # Signature
+            desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/align]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         bbcode = BBCODE()
         description = bbcode.convert_to_align(description)
         description = bbcode.remove_img_resize(description)
