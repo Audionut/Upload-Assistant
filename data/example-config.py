@@ -265,13 +265,6 @@ config = {
         # Set true to search for matching requests on supported trackers
         "search_requests": False,
 
-        # Default MediaInfo template used on sites without a MediaInfo section
-        # Jinja2 templates are located in: data\templates\mediainfo
-        # If no template is specified, the default will be used
-        # Options: file names from the folder or "FULL" to use the complete MediaInfo
-        # Can be overridden per tracker by specifying "mediainfo_template" under each tracker config
-        "mediainfo_template": "",
-
         # Set true to also try searching predb for scene release
         # predb is not consistent, can timeout, but can find some releases not found on SRRDB
         "check_predb": False,
@@ -447,6 +440,8 @@ config = {
             "announce_url": "https://tracker.funfile.org:2711/<PASSKEY>/announce",
             # Set to True if you want to check whether your upload fulfills corresponding requests. This may slightly slow down the upload process.
             "check_requests": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -497,6 +492,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
             "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
             "anon": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -514,6 +511,8 @@ config = {
             "url": "https://hd-torrents.me/",
             "anon": False,
             "announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -755,8 +754,8 @@ config = {
             # Rehost images to the TL image host. Does not work with the API upload method.
             # Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
             "img_rehost": True,
-            # Description template to be used. Jinja2 templates can be found at data/templates/description. If no template is specified the default will be used.
-            "description_template": "",
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

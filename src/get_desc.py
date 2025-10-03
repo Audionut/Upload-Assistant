@@ -1,8 +1,12 @@
 import os
+import asyncio
+import aiofiles
 import urllib.parse
 import requests
 import glob
 from src.console import console
+from src.trackers.COMMON import COMMON
+from pymediainfo import MediaInfo
 
 
 async def gen_desc(meta):
@@ -135,3 +139,175 @@ async def gen_desc(meta):
         meta['description'] = None
 
     return meta
+
+
+class DescriptionBuilder:
+    def __init__(self, config):
+        self.config = config
+        self.common = COMMON(config)
+
+    async def get_custom_header(self, meta):
+        """Retorna o cabeçalho customizado se configurado"""
+        if self.config['DEFAULT'].get('custom_description_header', False):
+            return self.config['DEFAULT']['custom_description_header']
+        return ''
+
+    async def get_logo_section(self, meta):
+        """Retorna a seção do logo se configurado"""
+        logo = meta.get('logo')
+        logo_size = self.config['DEFAULT'].get('logo_size')
+
+        if self.config['DEFAULT'].get('add_logo') and logo and logo_size:
+            return logo, logo_size
+        return None, None
+
+    async def _get_episode_name(self, meta):
+        """Retorna o nome do episódio se configurado"""
+        tvmaze_episode_data = meta.get('tvmaze_episode_data')
+        if tvmaze_episode_data and tvmaze_episode_data.get('episode_name'):
+            return tvmaze_episode_data['episode_name']
+        return ''
+
+    async def _get_episode_image(self, meta):
+        """Retorna a imagem do episódio se configurada"""
+        tvmaze_episode_data = meta.get('tvmaze_episode_data')
+        if tvmaze_episode_data and tvmaze_episode_data.get('image'):
+            return tvmaze_episode_data['image']
+        return ''
+
+    async def _get_overview_meta(self, meta):
+        """Retorna o overview meta se configurado"""
+        overview_meta = meta.get('overview_meta')
+        if overview_meta:
+            return overview_meta
+        return ''
+
+    async def get_episode_overview(self, meta):
+        """Retorna a seção de overview do episódio se configurado"""
+        tvmaze_episode_data = meta.get('tvmaze_episode_data')
+
+        if self.config['DEFAULT'].get('episode_overview', False) and tvmaze_episode_data:
+            return True
+        return False
+
+    async def get_mediainfo_section(self, meta, tracker):
+        """Returns the mediainfo/bdinfo section, using a cache file if available."""
+        if meta.get('is_disc') == 'BDMV':
+            return ''
+
+        full = self.config['DEFAULT'].get('full_mediainfo', False)
+        full = self.config['TRACKERS'][tracker].get('full_mediainfo', full)
+
+        if full:
+            return await self.common.get_mediainfo_text(meta)
+
+        cache_file_dir = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+        cache_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_SHORT.txt')
+
+        loop = asyncio.get_running_loop()
+
+        def check_file_status(path):
+            exists = os.path.exists(path)
+            size = os.path.getsize(path) if exists else 0
+            return exists, size
+
+        def run_mediainfo_parse(video_file, mi_template):
+            return MediaInfo.parse(video_file, output='STRING', full=False, mediainfo_options={'inform': f'file://{mi_template}'})
+
+        def create_dirs(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        def sync_path_exists(path):
+            return os.path.exists(path)
+
+        file_exists, file_size = await loop.run_in_executor(None, check_file_status, cache_file_path)
+
+        if file_exists and file_size > 0:
+            try:
+                async with aiofiles.open(cache_file_path, mode='r', encoding='utf-8') as f:
+                    media_info_content = await f.read()
+
+                return media_info_content
+
+            except Exception:
+                pass
+
+        video_file = meta['filelist'][0]
+        mi_template = os.path.join(meta['base_dir'], 'data', 'templates', 'MEDIAINFO.txt')
+        mi_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_CLEANPATH.txt')
+
+        template_exists = await loop.run_in_executor(None, sync_path_exists, mi_template)
+
+        if template_exists:
+            try:
+                media_info_result = await loop.run_in_executor(
+                    None,
+                    run_mediainfo_parse,
+                    video_file,
+                    mi_template
+                )
+                media_info_content = str(media_info_result)
+
+                if media_info_content:
+                    media_info_content = media_info_content.replace('\r\n', '\n')
+                    try:
+                        await loop.run_in_executor(None, create_dirs, cache_file_path)
+
+                        async with aiofiles.open(cache_file_path, mode='w', encoding='utf-8') as f:
+                            await f.write(media_info_content)
+                    except Exception:
+                        pass
+
+                    return media_info_content
+
+            except Exception:
+                cleanpath_exists = await loop.run_in_executor(None, sync_path_exists, mi_file_path)
+                if cleanpath_exists:
+                    async with aiofiles.open(mi_file_path, 'r', encoding='utf-8') as f:
+                        return await f.read()
+
+        else:
+            cleanpath_exists = await loop.run_in_executor(None, sync_path_exists, mi_file_path)
+            if cleanpath_exists:
+                async with aiofiles.open(mi_file_path, 'r', encoding='utf-8') as f:
+                    tech_info = await f.read()
+                    return tech_info
+
+        return ''
+
+    async def get_bdinfo_section(self, meta):
+        if meta.get('is_disc') == 'BDMV':
+            bdinfo_sections = []
+            if meta.get('discs'):
+                for disc in meta['discs']:
+                    file_info = disc.get('summary', '')
+                    if file_info:
+                        bdinfo_sections.append(file_info)
+            return '\n\n'.join(bdinfo_sections)
+        return ''
+
+    async def get_description_content(meta):
+        """Retorna o conteúdo da descrição (file, template ou link)"""
+        description_file_content = meta.get('description_file_content')
+        description_template_content = meta.get('description_template_content')
+        description_link_content = meta.get('description_link_content')
+
+        if description_file_content or description_template_content or description_link_content:
+            if description_file_content:
+                return description_file_content
+            elif description_template_content:
+                return description_template_content
+            elif description_link_content:
+                return description_link_content
+        return ''
+
+    async def get_signature(meta):
+        ua_name = meta.get('ua_name')
+
+        if not ua_name:
+            return ''
+
+        current_version = meta.get('current_version')
+        version_text = f" {current_version}" if current_version else ""
+
+        return f"<center><a href=\"https://github.com/Audionut/Upload-Assistant\">Created by {ua_name}{version_text}</a></center>"

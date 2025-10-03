@@ -4,13 +4,11 @@ import click
 import glob
 import httpx
 import json
-import langcodes
 import os
 import re
 import requests
 import secrets
 import sys
-from jinja2 import Environment, FileSystemLoader
 from pymediainfo import MediaInfo
 from src.bbcode import BBCODE
 from src.console import console
@@ -1465,127 +1463,6 @@ class COMMON():
             mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo
-
-    async def render_jinja_template(self, template_dir, template_name, data):
-        env = Environment(loader=FileSystemLoader(template_dir))
-        template = env.get_template(template_name)
-        return template.render(data)
-
-    async def description_template(self, tracker, meta, additional_data=None):
-        template_name = self.config['TRACKERS'][tracker].get('description_template') or f'{tracker}_default.txt.j2'
-        template_dir = os.path.join(meta['base_dir'], 'data', 'templates', 'description')
-
-        template_path = os.path.join(template_dir, template_name)
-
-        if not os.path.exists(template_path):
-            console.print(f'[bold yellow]{tracker}: Description template not found at {template_path}[/bold yellow]')
-            return ''
-
-        try:
-            # check the description that may come from other trackers via the API
-            description_file_content = meta.get('description_file_content', '').strip()
-            if description_file_content:
-                print('\nFound existing description:\n')
-                print(meta.get('description_file_content'))
-                user_input = await self.async_input(prompt='Do you want to use this description? (y/n): ')
-
-                if user_input.lower() == 'y':
-                    pass
-                else:
-                    meta['description_file_content'] = ''
-
-            meta['user_config'] = self.config['DEFAULT']
-            meta['additional_data'] = additional_data or {}
-            output = await self.render_jinja_template(template_dir, template_name, meta)
-            del meta['user_config']
-            del meta['additional_data']
-            return output.strip()
-
-        except Exception as e:
-            console.print(f'[bold red]{tracker}: Error loading description template: {e}[/bold red]')
-            return ''
-
-    async def mediainfo_template(self, tracker, meta):
-        if meta.get('is_disc') == 'BDMV':
-            return ''
-
-        template_name = self.config['DEFAULT'].get('mediainfo_template') or 'default.j2'
-        tracker_template_name = self.config['TRACKERS'][tracker].get('mediainfo_template', None)
-        if tracker_template_name:
-            template_name = tracker_template_name
-
-        if template_name != 'FULL':
-            try:
-                template_dir = os.path.join(meta.get('base_dir', ''), 'data', 'templates', 'mediainfo')
-                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
-                    mi_content = await f.read()
-                    mediainfo_data = json.loads(mi_content)
-
-                if 'media' in mediainfo_data and 'track' in mediainfo_data['media']:
-                    for track in mediainfo_data['media']['track']:
-                        if 'Duration' in track:
-                            duration_str = track.get('Duration', '')
-                            if duration_str:
-                                try:
-                                    duration_seconds = int(float(duration_str))
-                                    minutes, seconds = divmod(duration_seconds, 60)
-                                    hours, minutes = divmod(minutes, 60)
-                                    formatted_duration = f"{hours:02}:{minutes:02}:{seconds:02}"
-                                    track['Duration'] = formatted_duration
-                                except ValueError:
-                                    track['Duration'] = duration_str
-                            else:
-                                track['Duration'] = '00:00:00'
-
-                        if 'BitRate' in track:
-                            bit_rate_str = track.get('BitRate', '')
-                            if bit_rate_str:
-                                try:
-                                    bit_rate_int = float(bit_rate_str)
-                                    track['BitRate'] = f"{bit_rate_int / 1000:.2f} kbps"
-                                except ValueError:
-                                    track['BitRate'] = bit_rate_str
-
-                        if 'FileSize' in track:
-                            file_size_str = track.get('FileSize', '')
-                            if file_size_str:
-                                try:
-                                    file_size_int = int(file_size_str)
-                                    file_size_mib = file_size_int / (1024 * 1024)
-                                    if file_size_mib >= 1024:
-                                        file_size_gib = file_size_mib / 1024
-                                        track['FileSize'] = f"{file_size_gib:.2f} GiB"
-                                    else:
-                                        track['FileSize'] = f"{file_size_mib:.2f} MiB"
-                                except ValueError:
-                                    track['FileSize'] = file_size_str
-
-                        if 'Language' in track:
-                            lang_info = track.get('Language', {})
-                            if isinstance(lang_info, str) and len(lang_info) > 0:
-                                lang_code = lang_info
-                                try:
-                                    lang = langcodes.get(lang_code)
-                                    track['Language'] = lang.display_name('en')
-                                except langcodes.LanguageTagError as e:
-                                    console.print(f'[bold red]Error processing language code {lang_code}: {e}[/bold red]')
-                                    track['Language'] = 'Unknown'
-
-                rendered_template = await self.render_jinja_template(
-                    template_dir=template_dir,
-                    template_name=template_name,
-                    data=mediainfo_data
-                )
-
-                mediainfo = rendered_template
-                if mediainfo:
-                    return mediainfo.replace('\r\n', '\n').strip()
-
-            except Exception as e:
-                console.print(f'[bold red]Error loading mediainfo template: {e}[/bold red]')
-                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
-
-        return await self.get_mediainfo_text(meta)
 
     async def get_mediainfo_text(self, meta):
         mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"

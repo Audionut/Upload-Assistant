@@ -8,6 +8,7 @@ import platform
 from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
+from src.get_desc import DescriptionBuilder
 
 
 class TL:
@@ -70,15 +71,54 @@ class TL:
             return False
 
     async def generate_description(self, meta):
-        file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        if meta.get('is_disc') == 'BDMV':
-            file_info = meta['discs'][0].get('summary', '') if meta.get('discs') else ''
+        desc_parts.append(await builder.get_custom_header(meta))
 
-        meta['mediainfo_or_bdinfo'] = file_info
-        meta['img_rehost'] = self.tracker_config.get('img_rehost', True) and not self.tracker_config.get('api_upload', True)
+        # Logo
+        logo, logo_size = await builder.get_logo_section(meta)
+        if logo and logo_size:
+            desc_parts.append(f"""<center><img src="{logo}" style="max-width: {logo_size}px;"></center>""")
 
-        description = await self.common.description_template(self.tracker, meta)
+        # TV stuff
+        if await builder.get_episode_overview(meta):
+            episode_name = await builder._get_episode_name(meta)
+            if episode_name:
+                desc_parts.append(f"[center]{episode_name}[/center]")
+
+            episode_image = await builder._get_episode_image(meta)
+            if episode_image:
+                desc_parts.append(f"[center]<img src='{episode_image}' style='max-width: 350px;'></a>[/center]")
+
+            overview_meta = await builder._get_overview_meta(meta)
+            if overview_meta:
+                desc_parts.append(f"[center]{overview_meta}[/center]")
+
+        # File information
+        desc_parts.append(await builder.get_mediainfo_section(meta, self.tracker))
+        desc_parts.append(await builder.get_bdinfo_section(meta))
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{meta.get('description_nfo_content')}</div></div>")
+
+        # Screenshots
+        if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
+            images = meta.get('image_list', [])
+            screenshots_block = ''
+            for i, image in enumerate(images):
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                if (i + 1) % 2 == 0:
+                    screenshots_block += '<br>'
+            desc_parts.append('<center>' + screenshots_block + '</center>')
+
+        # Signature
+        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta.get('ua_name')} {meta.get('current_version', '')}</a></center>""")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         bbcode = BBCODE()
         description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
