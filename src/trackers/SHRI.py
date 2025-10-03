@@ -86,6 +86,7 @@ class SHRI(UNIT3D):
         if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
             type = "REMUX"
             name_type = "REMUX"
+            meta['type'] = "REMUX"
             
             if meta['type'] in shareisland_name:
                 shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
