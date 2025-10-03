@@ -912,7 +912,7 @@ if __name__ == "__main__":
                     print()
 
                 # TRACKERS section
-                update_trackers = input("Do you want to update something in thee TRACKERS section? (y/n): ").lower() == "y"
+                update_trackers = input("Do you want to update something in the TRACKERS section? (y/n): ").lower() == "y"
                 if update_trackers:
                     existing_trackers = existing_config.get("TRACKERS", {})
                     example_trackers = example_config.get("TRACKERS", {})

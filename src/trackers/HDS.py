@@ -8,7 +8,6 @@ from src.trackers.COMMON import COMMON
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
 from src.console import console
-from src.exceptions import UploadException
 
 
 class HDS:
@@ -98,9 +97,6 @@ class HDS:
 
         # Screenshots
         images = meta.get('image_list', [])
-        if not images or len(images) < 3:
-            raise UploadException('[red]HDS requires at least 3 screenshots.[/red]')
-
         screenshots_block = '[center]\n'
         for image in images:
             img_url = image['img_url']
@@ -143,6 +139,12 @@ class HDS:
         return desc
 
     async def search_existing(self, meta, disctype):
+        images = meta.get('image_list', [])
+        if not images or len(images) < 3:
+            console.print(f'{self.tracker}: At least 3 screenshots are required to upload.')
+            meta['skipping'] = f'{self.tracker}'
+            return
+
         dupes = []
         imdb_id = meta.get('imdb', '')
         if imdb_id == '0':
