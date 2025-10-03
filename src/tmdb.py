@@ -7,11 +7,14 @@ import os
 import re
 import requests
 import sys
-from data.config import config
+
 from datetime import datetime
 from difflib import SequenceMatcher
 from guessit import guessit
+
+from data.config import config
 from src.args import Args
+from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.imdb import get_imdb_info_api
 
@@ -488,7 +491,13 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                         selection = None
                         while True:
                             console.print("Enter the number of the correct entry, or manual TMDb ID (tv/12345 or movie/12345):")
-                            selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                            try:
+                                selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                             try:
                                 # Check if it's a manual TMDb ID entry
                                 if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
@@ -674,8 +683,13 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
 
     # No match found, prompt user if in CLI mode
     console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
-
-    tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+    try:
+        tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+    except EOFError:
+        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+        await cleanup()
+        reset_terminal()
+        sys.exit(1)
     category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
 
     return tmdb_id, category
@@ -1250,25 +1264,32 @@ async def get_romaji(tmdb_name, mal, meta):
     return romaji, mal_id, eng_title, season_year, episodes, demographic
 
 
-async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imdbid):
+async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imdbid, tvdbid):
     if not is_disc:
         if mediainfo['media']['track'][0].get('extra'):
             extra = mediainfo['media']['track'][0]['extra']
             for each in extra:
                 try:
-                    if each.lower().startswith('tmdb'):
+                    if each.lower().startswith('tmdb') and not tmdbid:
                         category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
-                    if each.lower().startswith('imdb'):
+                    if each.lower().startswith('imdb') and not imdbid:
                         try:
                             imdb_id = extract_imdb_id(extra[each])
                             if imdb_id:
                                 imdbid = imdb_id
                         except Exception:
                             pass
+                    if each.lower().startswith('tvdb') and not tvdbid:
+                        try:
+                            tvdb_id = int(extra[each])
+                            if tvdb_id:
+                                tvdbid = tvdb_id
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
-    return category, tmdbid, imdbid
+    return category, tmdbid, imdbid, tvdbid
 
 
 def extract_imdb_id(value):

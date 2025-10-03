@@ -77,11 +77,8 @@ class HDT:
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
-            self.auth_token = auth_match.group(1)
-
             await self.save_cookies()
-
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
@@ -270,11 +267,18 @@ class HDT:
             meta['skipping'] = f'{self.tracker}'
             return []
 
+        # Ensure we have valid credentials and auth_token before searching
+        if not hasattr(self, 'auth_token') or not self.auth_token:
+            credentials_valid = await self.validate_credentials(meta)
+            if not credentials_valid:
+                console.print(f'[bold red]{self.tracker}: Failed to validate credentials for search.')
+                return []
+
         search_url = f'{self.base_url}/torrents.php?'
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
             params = {
-                'csrfToken': self.auth_token,
+                'csrfToken': meta[f'{self.tracker}_secret_token'],
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -282,21 +286,18 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': self.auth_token,
+                'csrfToken': meta[f'{self.tracker}_secret_token'],
                 'search': meta['title'],
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
             }
 
-        response = await self.session.get(search_url, params=params)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
         results = []
 
-        main_table = soup.find('table', class_='mainblockcontenttt')
-
-        if main_table:
-            rows = main_table.find_all('tr', recursive=False)
+        try:
+            response = await self.session.get(search_url, params=params)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            rows = soup.find_all('tr')
 
             for row in rows:
                 if row.find('td', class_='mainblockcontent', string='Filename') is not None:
@@ -322,15 +323,28 @@ class HDT:
                         'link': link
                     })
 
+        except httpx.TimeoutException:
+            console.print(f'{self.tracker}: Timeout while searching for existing torrents.')
+            return []
+        except httpx.HTTPStatusError as e:
+            console.print(f'{self.tracker}: HTTP error while searching: Status {e.response.status_code}.')
+            return []
+        except httpx.RequestError as e:
+            console.print(f'{self.tracker}: Network error while searching: {e.__class__.__name__}.')
+            return []
+        except Exception as e:
+            console.print(f'{self.tracker}: Unexpected error while searching: {e}')
+            return []
+
         return results
 
     async def get_data(self, meta):
-        await self.validate_credentials(meta)
+        await self.load_cookies(meta)
         data = {
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': self.auth_token,
+            'csrfToken': meta[f'{self.tracker}_secret_token'],
         }
 
         # 3D

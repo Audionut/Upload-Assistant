@@ -202,7 +202,7 @@ class UNIT3D:
             else:
                 return 0
 
-    async def get_distributor_ids(self, meta):
+    async def get_distributor_id(self, meta):
         distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
         if distributor_id != 0:
             return {'distributor_id': distributor_id}
@@ -310,6 +310,8 @@ class UNIT3D:
             self.get_doubleup(meta),
             self.get_sticky(meta),
             self.get_additional_data(meta),
+            self.get_region_id(meta),
+            self.get_distributor_id(meta),
         )
 
         merged = {}

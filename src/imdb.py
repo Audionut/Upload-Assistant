@@ -1,12 +1,16 @@
-from src.console import console
-import json
-import httpx
-from datetime import datetime
 import asyncio
-from difflib import SequenceMatcher
 import cli_ui
+import httpx
+import json
+import sys
+
 from anitopy import parse as anitopy_parse
+from datetime import datetime
+from difflib import SequenceMatcher
 from guessit import guessit
+
+from src.cleanup import cleanup, reset_terminal
+from src.console import console
 
 
 async def safe_get(data, path, default=None):
@@ -97,27 +101,37 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             }}
             episodes {{
                 episodes(first: 500) {{
-                edges {{
-                    node {{
-                    id
-                    titleText {{
-                        text
+                    edges {{
+                        node {{
+                            id
+                            series {{
+                                displayableEpisodeNumber {{
+                                    displayableSeason {{
+                                        season
+                                    }}
+                                    episodeNumber {{
+                                        text
+                                    }}
+                                }}
+                            }}
+                            titleText {{
+                                text
+                            }}
+                            releaseYear {{
+                                year
+                            }}
+                            releaseDate {{
+                                year
+                                month
+                                day
+                            }}
+                        }}
                     }}
-                    releaseYear {{
-                        year
+                    pageInfo {{
+                        hasNextPage
+                        hasPreviousPage
                     }}
-                    releaseDate {{
-                        year
-                        month
-                        day
-                    }}
-                    }}
-                }}
-                pageInfo {{
-                    hasNextPage
-                    hasPreviousPage
-                }}
-                total
+                    total
                 }}
             }}
             runtimes(first: 10) {{
@@ -356,6 +370,11 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
         edges = await safe_get(episodes_data, ['edges'], [])
         for edge in edges:
             node = await safe_get(edge, ['node'], {})
+
+            series_info = await safe_get(node, ['series', 'displayableEpisodeNumber'], {})
+            season_info = await safe_get(series_info, ['displayableSeason'], {})
+            episode_number_info = await safe_get(series_info, ['episodeNumber'], {})
+
             episode_info = {
                 'id': await safe_get(node, ['id'], ''),
                 'title': await safe_get(node, ['titleText', 'text'], 'Unknown Title'),
@@ -364,9 +383,42 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                     'year': await safe_get(node, ['releaseDate', 'year'], None),
                     'month': await safe_get(node, ['releaseDate', 'month'], None),
                     'day': await safe_get(node, ['releaseDate', 'day'], None),
-                }
+                },
+                'season': await safe_get(season_info, ['season'], 'unknown'),
+                'episode_number': await safe_get(episode_number_info, ['text'], '')
             }
             imdb_info['episodes'].append(episode_info)
+
+    if imdb_info['episodes']:
+        seasons_data = {}
+
+        for episode in imdb_info['episodes']:
+            season_str = episode.get('season', 'unknown')
+            release_year = episode.get('release_year')
+
+            try:
+                season_int = int(season_str) if season_str != 'unknown' and season_str else None
+            except (ValueError, TypeError):
+                season_int = None
+
+            if season_int is not None and release_year and isinstance(release_year, int):
+                if season_int not in seasons_data:
+                    seasons_data[season_int] = set()
+                seasons_data[season_int].add(release_year)
+
+        seasons_summary = []
+        for season_num in sorted(seasons_data.keys()):
+            years = sorted(list(seasons_data[season_num]))
+            season_entry = {
+                'season': season_num,
+                'year': years[0],
+                'year_range': f"{years[0]}" if len(years) == 1 else f"{years[0]}-{years[-1]}"
+            }
+            seasons_summary.append(season_entry)
+
+        imdb_info['seasons_summary'] = seasons_summary
+    else:
+        imdb_info['seasons_summary'] = []
 
     sound_mixes = await safe_get(title_data, ['technicalSpecifications', 'soundMixes', 'items'], [])
     imdb_info['sound_mixes'] = [sm.get('text', '') for sm in sound_mixes if isinstance(sm, dict) and 'text' in sm]
@@ -374,7 +426,9 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     episodes = imdb_info.get('episodes', [])
     current_year = datetime.now().year
     release_years = [episode['release_year'] for episode in episodes if 'release_year' in episode and isinstance(episode['release_year'], int)]
-    if release_years:
+    if imdb_info['end_year']:
+        imdb_info['tv_year'] = imdb_info['end_year']
+    elif release_years:
         closest_year = min(release_years, key=lambda year: abs(year - current_year))
         imdb_info['tv_year'] = closest_year
     else:
@@ -713,7 +767,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             if sorted_results:
                 selection = None
                 while True:
-                    selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                    try:
+                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                    except EOFError:
+                        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                        await cleanup()
+                        reset_terminal()
+                        sys.exit(1)
                     try:
                         # Check if it's a manual IMDb ID entry
                         if selection.lower().startswith('tt') and len(selection) >= 3:
@@ -746,7 +806,13 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                         console.print("[bold red]Invalid input. Please enter a number or IMDb ID (tt1234567).[/bold red]")
 
         else:
-            selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+            try:
+                selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+            except EOFError:
+                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                await cleanup()
+                reset_terminal()
+                sys.exit(1)
             if selection.lower().startswith('tt') and len(selection) >= 3:
                 try:
                     manual_imdb_id = selection.lower().replace('tt', '').strip()

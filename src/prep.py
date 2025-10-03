@@ -1,41 +1,44 @@
 # -*- coding: utf-8 -*-
-from src.console import console
-from src.clients import Clients
-from data.config import config
-from src.tvmaze import search_tvmaze
-from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
-from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
-from src.region import get_region, get_distributor, get_service
-from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
-from src.getseasonep import get_season_episode
-from src.get_tracker_data import get_tracker_data, ping_unit3d
-from src.bluray_com import get_bluray_releases
-from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
-from src.apply_overrides import get_source_override
-from src.is_scene import is_scene
-from src.audio import get_audio_v2
-from src.edition import get_edition
-from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration
-from src.tags import get_tag, tag_override
-from src.get_disc import get_disc, get_dvd_size
-from src.get_source import get_source
-from src.sonarr import get_sonarr_data
-from src.radarr import get_radarr_data
-from src.languages import parsed_mediainfo
-from src.get_name import extract_title_and_year
-
 try:
-    import traceback
-    import os
-    import re
     import asyncio
     import cli_ui
-    from guessit import guessit
     import ntpath
-    from pathlib import Path
-    import time
+    import os
+    import re
     import sys
+    import traceback
+    import time
+
     from difflib import SequenceMatcher
+    from guessit import guessit
+    from pathlib import Path
+
+    from data.config import config
+    from src.apply_overrides import get_source_override
+    from src.audio import get_audio_v2
+    from src.bluray_com import get_bluray_releases
+    from src.cleanup import cleanup, reset_terminal
+    from src.clients import Clients
+    from src.console import console
+    from src.edition import get_edition
+    from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
+    from src.get_disc import get_disc, get_dvd_size
+    from src.get_name import extract_title_and_year
+    from src.getseasonep import get_season_episode
+    from src.get_source import get_source
+    from src.get_tracker_data import get_tracker_data, ping_unit3d
+    from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
+    from src.is_scene import is_scene
+    from src.languages import parsed_mediainfo
+    from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
+    from src.radarr import get_radarr_data
+    from src.region import get_region, get_distributor, get_service
+    from src.sonarr import get_sonarr_data
+    from src.tags import get_tag, tag_override
+    from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
+    from src.tvmaze import search_tvmaze
+    from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
+
 except ModuleNotFoundError:
     console.print(traceback.print_exc())
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
@@ -325,7 +328,13 @@ class Prep():
         if conform_issues:
             upload = False
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+                try:
+                    upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
             if upload is False:
                 console.print("[red]Not uploading. Check if the file has finished downloading and can be played back properly (uncorrupted).")
                 tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
@@ -388,9 +397,16 @@ class Prep():
             if meta.get('imdb_id', 0) != 0:
                 meta['skip_trackers'] = True
 
+        if meta['debug']:
+            pathed_time_start = time.time()
+
         # auto torrent searching with qbittorrent that grabs torrent ids for metadata searching
         if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False) and not meta.get('edit', False):
             await client.get_pathed_torrents(meta['path'], meta)
+
+        if meta['debug']:
+            pathed_time_end = time.time()
+            console.print(f"Pathed torrent data processed in {pathed_time_end - pathed_time_start:.2f} seconds")
 
         # Ensure all manual IDs have proper default values
         meta['tmdb_manual'] = meta.get('tmdb_manual') or 0
@@ -595,8 +611,8 @@ class Prep():
 
         # Run a check against mediainfo to see if it has tmdb/imdb
         if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
-            meta['category'], meta['tmdb_id'], meta['imdb_id'] = await get_tmdb_imdb_from_mediainfo(
-                mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id']
+            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await get_tmdb_imdb_from_mediainfo(
+                mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id']
             )
 
         # Flag for emby if no IDs were found
@@ -838,11 +854,11 @@ class Prep():
         meta['bluray_score'] = int(float(self.config['DEFAULT'].get('bluray_score', 100)))
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
-        if meta.get('is_disc') == "BDMV" and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
+        if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
             await get_bluray_releases(meta)
 
-            # and if we getting bluray images, we'll rehost them
-            if meta.get('is_disc') == "BDMV" and meta.get('use_bluray_images', False):
+            # and if we getting bluray/dvd images, we'll rehost them
+            if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
                 from src.rehostimages import check_hosts
                 url_host_mapping = {
                     "ibb.co": "imgbb",
@@ -860,6 +876,8 @@ class Prep():
         meta['video'] = video
 
         if not meta.get('emby', False):
+            meta['container'] = await get_container(meta)
+
             meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
 
             meta['3D'] = await is_3d(mi, bdinfo)

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 
@@ -37,6 +36,10 @@ class AZ(AZTrackerBase):
         source = meta.get('source', '')
         if source:
             source = source.strip().lower()
+
+        image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
+        if len(image_links) < 3:
+            warnings.append(f'{self.tracker}: At least 3 screenshots are required to upload.')
 
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
@@ -107,10 +110,7 @@ class AZ(AZTrackerBase):
             )
 
         if not is_disc:
-            ext = os.path.splitext(meta['filelist'][0])[1].lower()
-            allowed_extensions = {'.mkv': 'MKV', '.mp4': 'MP4', '.avi': 'AVI'}
-            container = allowed_extensions.get(ext)
-            if container is None:
+            if meta.get('container') not in ['mkv', 'mp4', 'avi']:
                 warnings.append('Allowed containers: MKV, MP4, AVI.')
 
         if not is_disc:

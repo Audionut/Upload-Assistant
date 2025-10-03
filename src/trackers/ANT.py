@@ -1,29 +1,21 @@
 # -*- coding: utf-8 -*-
 # import discord
-import os
+import aiofiles
 import asyncio
-import platform
 import httpx
 import json
-import aiofiles
-from pymediainfo import MediaInfo
+import os
+import platform
 from pathlib import Path
-from src.trackers.COMMON import COMMON
 from src.console import console
 from src.torrentcreate import create_torrent
+from src.trackers.COMMON import COMMON
 
 
-class ANT():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class ANT:
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'ANT'
         self.source_flag = 'ANT'
         self.search_url = 'https://anthelion.me/api.php'
@@ -63,7 +55,6 @@ class ANT():
         return flags
 
     async def upload(self, meta, disctype):
-        common = COMMON(config=self.config)
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
@@ -75,44 +66,30 @@ class ANT():
             create_torrent(meta, Path(meta['path']), "ANT")
             torrent_filename = "ANT"
 
-        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
         flags = await self.get_flags(meta)
-
-        if meta['bdinfo'] is not None:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
-                bd_dump = await f.read()
-            bd_dump = f'[spoiler=BDInfo][pre]{bd_dump}[/pre][/spoiler]'
-            path = os.path.join(meta['bdinfo']['path'], 'STREAM')
-            longest_file = max(
-                meta['bdinfo']['files'],
-                key=lambda x: x.get('length', 0)
-            )
-            file_name = longest_file['file'].lower()
-            m2ts = os.path.join(path, file_name)
-            media_info_output = str(MediaInfo.parse(m2ts, output="text", full=False))
-            mi_dump = media_info_output.replace('\r\n', '\n')
-        else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
-                mi_dump = await f.read()
 
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data = {
+            'type': 0,
+            'audioformat': await self.get_audio(meta),
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
-            'mediainfo': mi_dump,
+            'mediainfo': await self.mediainfo(meta),
             'flags[]': flags,
             'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4]),
+            'release_desc': await self.edit_desc(meta),
         }
         if meta['bdinfo'] is not None:
             data.update({
                 'media': 'Blu-ray',
                 'releasegroup': str(meta['tag'])[1:],
-                'release_desc': bd_dump,
-                'flagchangereason': "BDMV Uploaded with Upload Assistant"})
+                'flagchangereason': "BDMV Uploaded with Upload Assistant"
+            })
         if meta['scene']:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
@@ -155,7 +132,44 @@ class ANT():
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
 
+    async def get_audio(self, meta):
+        '''
+        Possible values:
+        MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus
+        '''
+        audio = meta.get('audio', '').upper()
+        audio_map = {
+            'MP2': 'MP2',
+            'MP3': 'MP3',
+            'AAC': 'AAC',
+            'DD': 'AC3',
+            'DTS': 'DTS',
+            'FLAC': 'FLAC',
+            'PCM': 'PCM',
+            'TRUEHD': 'True-HD',
+            'OPUS': 'Opus'
+        }
+        for key, value in audio_map.items():
+            if key in audio:
+                return value
+        console.print(f'{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus')
+        return None
+
+    async def mediainfo(self, meta):
+        if meta.get('is_disc') == 'BDMV':
+            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
+        else:
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                mediainfo = await f.read()
+
+        return mediainfo
+
     async def edit_desc(self, meta):
+        if meta.get('is_disc') == 'BDMV':
+            bd_info = meta.get('discs', [{}])[0].get('summary', '')
+            if bd_info:
+                return f'[spoiler=BDInfo][pre]{bd_info}[/pre][/spoiler]'
         return
 
     async def search_existing(self, meta, disctype):

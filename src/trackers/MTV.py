@@ -325,9 +325,14 @@ class MTV():
                 # Check if there is a valid file extension, otherwise, skip the split
                 if '.' in mtv_name and mtv_name.split('.')[-1].isalpha() and len(mtv_name.split('.')[-1]) <= 4:
                     mtv_name = os.path.splitext(mtv_name)[0]
-        # Add -NoGrp if missing tag
-        if meta['tag'] == "":
-            mtv_name = f"{mtv_name}-NoGrp"
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                mtv_name = re.sub(f"-{invalid_tag}", "", mtv_name, flags=re.IGNORECASE)
+            mtv_name = f"{mtv_name}-NoGRP"
+
         mtv_name = ' '.join(mtv_name.split())
         mtv_name = re.sub(r"[^0-9a-zA-ZÀ-ÿ. &+'\-\[\]]+", "", mtv_name)
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')

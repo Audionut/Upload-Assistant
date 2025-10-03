@@ -212,7 +212,7 @@ config = {
         # Requires "skip_auto_torrent" to be set to False
         "ping_unit3d": False,
 
-        # If processing a bluray disc, get bluray information from bluray.com
+        # If processing a dvd/bluray disc, get related information from bluray.com
         # This will set region and distribution info
         # Must have imdb id to work
         "get_bluray_info": False,
@@ -237,6 +237,7 @@ config = {
         # Video codec/resolution and disc size mismatches have huge penalities
         # Only useful in unattended mode. If not unattended you will be prompted to confirm release
         # Final score must be greater than this value to be considered a match
+        # Only works with blu-ray discs, not dvd
         "bluray_score": 94.5,
 
         # If there is only a single release on bluray.com, you may wish to relax the score a little
@@ -811,6 +812,9 @@ config = {
         # See https://github.com/Audionut/Upload-Assistant/wiki
         "qbittorrent": {
             "torrent_client": "qbit",
+            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
+            # If using the qui reverse proxy, no other auth type needs to be set
+            "qui_proxy_url": "",
             # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
             "enable_search": True,
             "qbit_url": "http://127.0.0.1",

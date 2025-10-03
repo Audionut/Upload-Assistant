@@ -114,12 +114,6 @@ class BT():
 
             auth_match = re.search(r'name="auth" value="([^"]+)"', response.text)
 
-            user_link = re.search(r'user\.php\?id=(\d+)', response.text)
-            if user_link:
-                self.user_id = user_link.group(1)
-            else:
-                self.user_id = ''
-
             if not auth_match:
                 console.print(f'[bold red]Falha na validação do {self.tracker}. Token auth não encontrado.[/bold red]')
                 console.print('[yellow]A estrutura do site pode ter mudado ou o login falhou silenciosamente.[/yellow]')
@@ -130,8 +124,7 @@ class BT():
                 console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
                 return False
 
-            self.auth_token = auth_match.group(1)
-            return True
+            return str(auth_match.group(1))
 
         except httpx.TimeoutException:
             console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
@@ -163,19 +156,11 @@ class BT():
         return data
 
     async def get_container(self, meta):
-        container = None
-        if meta['is_disc'] == 'BDMV':
-            container = 'M2TS'
-        elif meta['is_disc'] == 'DVD':
-            container = 'VOB'
-        else:
-            ext = os.path.splitext(meta['filelist'][0])[1]
-            containermap = {
-                '.mkv': 'MKV',
-                '.mp4': 'MP4'
-            }
-            container = containermap.get(ext, 'Outro')
-        return container
+        container = meta.get('container', '')
+        if container in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
+            return container.upper()
+
+        return 'Outro'
 
     async def get_type(self, meta):
         if meta.get('anime'):
@@ -586,8 +571,8 @@ class BT():
             return 'N/A'
 
     async def get_data(self, meta, disctype):
+        await self.load_cookies(meta)
         self.load_localized_data(meta)
-        await self.validate_credentials(meta)
         tmdb_data = await self.ptbr_tmdb_data(meta)
         has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
         resolution_width, resolution_height = await self.get_resolution(meta)
@@ -595,7 +580,7 @@ class BT():
         data = {
             'audio_c': await self.get_audio_codec(meta),
             'audio': await self.get_audio(meta),
-            'auth': self.auth_token,
+            'auth': meta[f'{self.tracker}_secret_token'],
             'bitrate': await self.get_bitrate(meta),
             'desc': '',
             'diretor': await self.get_credits(meta),
@@ -663,7 +648,6 @@ class BT():
         return data
 
     async def upload(self, meta, disctype):
-        await self.load_cookies(meta)
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.get_data(meta, disctype)
         status_message = ''

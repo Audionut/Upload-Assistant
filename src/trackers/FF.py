@@ -10,7 +10,6 @@ from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
 from src.console import console
-from src.exceptions import UploadException
 from src.languages import process_desc_language
 
 
@@ -288,9 +287,6 @@ class FF(COMMON):
 
         elif category == 'TV':
             return '7'
-
-        else:
-            raise UploadException("Unrecognized category.")
 
     def file_information(self, meta):
         vc = meta.get('video_codec', '')

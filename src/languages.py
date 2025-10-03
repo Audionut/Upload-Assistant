@@ -1,8 +1,11 @@
 import aiofiles
-import os
 import cli_ui
-import re
 import langcodes
+import os
+import re
+import sys
+
+from src.cleanup import cleanup, reset_terminal
 from src.console import console
 
 
@@ -250,7 +253,13 @@ async def process_desc_language(meta, desc=None, tracker=None):
                             for track_info in tracks_without_language:
                                 console.print(f"  - {track_info}")
                             console.print("You must enter (comma-separated) languages")
-                            audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
+                            try:
+                                audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                             if audio_lang:
                                 audio_languages.extend([lang.strip() for lang in audio_lang.split(',')])
                                 meta['audio_languages'] = audio_languages
@@ -262,6 +271,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                         else:
                             meta['unattended_audio_skip'] = True
                             meta['tracker_status'][tracker]['skip_upload'] = True
+                            if meta['debug']:
+                                meta['audio_languages'] = ['English, Portuguese']
 
                     if meta['audio_languages']:
                         meta['audio_languages'] = [lang.split()[0] for lang in meta['audio_languages']]
@@ -285,7 +296,13 @@ async def process_desc_language(meta, desc=None, tracker=None):
                                 for track_info in tracks_without_language:
                                     console.print(f"  - {track_info}")
                                 console.print("You must enter (comma-separated) languages")
-                                subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
+                                try:
+                                    subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
+                                except EOFError:
+                                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                    await cleanup()
+                                    reset_terminal()
+                                    sys.exit(1)
                                 if subtitle_lang:
                                     subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
                                     meta['subtitle_languages'] = subtitle_languages
@@ -297,13 +314,21 @@ async def process_desc_language(meta, desc=None, tracker=None):
                             else:
                                 meta['unattended_subtitle_skip'] = True
                                 meta['tracker_status'][tracker]['skip_upload'] = True
+                                if meta['debug']:
+                                    meta['subtitle_languages'] = ['English, Portuguese']
 
                         if meta['subtitle_languages']:
                             meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
 
                     if meta.get('hardcoded-subs', False):
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                            hc_lang = cli_ui.ask_string("What language/s are the hardcoded subtitles?")
+                            try:
+                                hc_lang = cli_ui.ask_string("What language/s are the hardcoded subtitles?")
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                             if hc_lang:
                                 meta['subtitle_languages'] = [hc_lang]
                                 meta['write_hc_languages'] = True
@@ -367,8 +392,14 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if lang and lang in audio_languages and len(lang) > 1 and not meta['bluray_audio_skip']:
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             console.print(f"Audio track '{lang}' has a bitrate of {bitrate_num} kbps. Probably commentary and should be removed.")
-                            if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
-                                audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
+                            try:
+                                if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
+                                    audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                         else:
                             audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
                         meta['bluray_audio_skip'] = True

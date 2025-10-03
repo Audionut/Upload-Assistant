@@ -30,7 +30,7 @@ class YUS(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '17',
             'REMUX': '2',
@@ -38,5 +38,14 @@ class YUS(UNIT3D):
             'WEBRIP': '5',
             'HDTV': '6',
             'ENCODE': '3'
-        }.get(meta['type'], '0')
-        return {'type_id': type_id}
+        }
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        else:
+            meta_type = meta.get('type', '')
+            resolved_id = type_id.get(meta_type, '0')
+            return {'type_id': resolved_id}
