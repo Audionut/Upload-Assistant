@@ -82,11 +82,26 @@ class SHRI(UNIT3D):
         if meta.get('dual_audio'):
             shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
-        # Handle REMUX type detection for untouched/vu files
+        # Detect UNTOUCHED/VU files and classify as REMUX
         if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
             type = "REMUX"
             name_type = "REMUX"
-            shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
+            
+            if meta['type'] in shareisland_name:
+                shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
+            else:
+                shareisland_name = shareisland_name.replace(source, f"{source} REMUX", 1)
+            
+            shareisland_name = re.sub(r'\bUNTOUCHED\b', '', shareisland_name, flags=re.IGNORECASE)
+            shareisland_name = re.sub(r'\bVU\b', '', shareisland_name, flags=re.IGNORECASE)
+
+        # Normalize REMUX naming per tracker rules
+        if name_type == "REMUX":
+            shareisland_name = shareisland_name.replace('x264', video_codec).replace('x265', video_codec)
+            
+            if video_codec in shareisland_name:
+                shareisland_name = re.sub(rf'[\s\-]{re.escape(video_codec)}', '', shareisland_name, count=1)
+                shareisland_name = shareisland_name.replace('REMUX', f'REMUX {video_codec}', 1)
 
         # Apply Italian title if configured
         if italian_title and use_italian_title:
