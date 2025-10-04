@@ -31,13 +31,47 @@ class SHRI(UNIT3D):
     def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
+    
+    def _is_remux(self, meta):
+        """Detect REMUX by checking mediainfo for absence of encoding"""
+        basename = self.get_basename(meta).lower()
+        
+        # Explicit REMUX markers
+        if 'remux' in basename:
+            return True
+        
+        # VU/UNTOUCHED markers (legacy detection)
+        if any(marker in basename for marker in ['vu', 'untouched', 'vu1080', 'vu720']):
+            return True
+            
+        # Check mediainfo: no encoding settings = likely REMUX
+        try:
+            mi = meta.get('mediainfo', {})
+            video_track = mi.get('media', {}).get('track', [{}])[1]
+            
+            # If no encoding settings and BluRay/HDDVD source, it's REMUX
+            if not video_track.get('Encoded_Library_Settings') and \
+            meta.get('source') in ('BluRay', 'HDDVD') and \
+            meta.get('type') not in ('DISC', 'WEBDL', 'WEBRIP'):
+                return True
+        except (IndexError, KeyError):
+            pass
+        
+        return False
+    
+    def _get_effective_type(self, meta):
+        """Determine effective type for SHRI, detecting REMUX from VU/UNTOUCHED"""
+        basename = self.get_basename(meta)
+        
+        if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
+            return "REMUX"
+        return meta.get('type', 'ENCODE')
 
     async def get_name(self, meta):
         """
         Generate ShareIsland release name with REMUX detection for UNTOUCHED/VU files,
         audio language tags, Italian title support, and [SUBS] tagging.
         """
-        basename = self.get_basename(meta)
         shareisland_name = meta['name']
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
@@ -45,7 +79,8 @@ class SHRI(UNIT3D):
         name_type = meta.get('type', "")
         source = meta.get('source', "")
         imdb_info = meta.get('imdb_info') or {}
-        type = meta.get('type', "")
+        type = self._get_effective_type(meta)
+        name_type = type
         akas = imdb_info.get('akas', [])
         italian_title = None
 
@@ -82,19 +117,13 @@ class SHRI(UNIT3D):
         if meta.get('dual_audio'):
             shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
-        # Detect UNTOUCHED/VU files and classify as REMUX
-        if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
-            type = "REMUX"
-            name_type = "REMUX"
-            meta['type'] = "REMUX"
+        # Only modify name if detected as REMUX
+        if self._is_remux(meta):
+            if 'ENCODE' in shareisland_name:  # Only replace ENCODE
+                shareisland_name = shareisland_name.replace('ENCODE', 'REMUX', 1)
             
-            if meta['type'] in shareisland_name:
-                shareisland_name = shareisland_name.replace(f"{meta['type']}", type, 1)
-            else:
-                shareisland_name = shareisland_name.replace(source, f"{source} REMUX", 1)
-            
-            shareisland_name = re.sub(r'\bUNTOUCHED\b', '', shareisland_name, flags=re.IGNORECASE)
-            shareisland_name = re.sub(r'\bVU\b', '', shareisland_name, flags=re.IGNORECASE)
+            # Clean up markers
+            shareisland_name = re.sub(r'\b(UNTOUCHED|VU)\b', '', shareisland_name, flags=re.IGNORECASE)
 
         # Normalize REMUX naming per tracker rules
         if name_type == "REMUX":
@@ -174,6 +203,7 @@ class SHRI(UNIT3D):
 
     async def get_type_id(self, meta):
         """Map release type to ShareIsland type IDs"""
+        effective_type = self._get_effective_type(meta)
         type_id = {
             'DISC': '26',
             'REMUX': '7',
@@ -181,5 +211,5 @@ class SHRI(UNIT3D):
             'WEBRIP': '15',
             'HDTV': '6',
             'ENCODE': '15',
-        }.get(meta['type'], '0')
+        }.get(effective_type, '0')
         return {'type_id': type_id}
