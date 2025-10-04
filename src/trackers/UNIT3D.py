@@ -352,6 +352,8 @@ class UNIT3D:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
                 try:
+                    console.print(f'[cyan]{self.tracker} Response Data:')
+                    console.print(response.json())
                     meta['tracker_status'][self.tracker]['status_message'] = response.json()
                     # adding torrent link to comment of torrent file
                     t_id = response.json()['data'].split('.')[1].split('/')[3]
@@ -370,8 +372,8 @@ class UNIT3D:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
                 except httpx.RequestError as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
-                except Exception:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
+                except Exception as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {e}'
                     return
         else:
             console.print(f'[cyan]{self.tracker} Request Data:')

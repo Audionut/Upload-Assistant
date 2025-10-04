@@ -24,12 +24,7 @@ class LCD(UNIT3D):
     async def get_name(self, meta):
         if meta.get('is_disc', '') == 'BDMV':
             name = meta.get('name')
-            tag_lower = meta['tag'].lower()
-            invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-            if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-                for invalid_tag in invalid_tags:
-                    name = re.sub(f"-{invalid_tag}", "", name, flags=re.IGNORECASE)
-                name = '-NoGroup'
+
         else:
             name = meta['uuid']
 
@@ -65,13 +60,24 @@ class LCD(UNIT3D):
         for old, new in replacements.items():
             name = name.replace(old, new)
 
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                name = re.sub(f"-{invalid_tag}", "", name, flags=re.IGNORECASE)
+            name = f'{name}-NoGroup'
+
         return {'name': name}
 
     async def get_region_id(self, meta):
-        region_id = await self.common.unit3d_region_ids(meta.get('region'))
         if meta.get('region') == 'EUR':
-            region_id = 0
-        return {'region_id': region_id}
+            return {}
+
+        region_id = await self.common.unit3d_region_ids(meta.get('region'))
+        if region_id != 0:
+            return {'region_id': region_id}
+
+        return {}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
