@@ -66,19 +66,44 @@ class SHRI(UNIT3D):
         audio = meta.get("audio", "").replace("Dual-Audio", "").strip()
         audio = re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio).strip()
 
-        # Build audio language string
+        # Build audio language string with priority: original → ITALIAN → Multi
         audio_lang_str = ""
         if meta.get("audio_languages"):
             audio_langs = [lang.upper() for lang in meta["audio_languages"]]
-            audio_lang_str = " - ".join(dict.fromkeys(audio_langs))
+            audio_langs = list(dict.fromkeys(audio_langs))  # Remove duplicates
+
+            if len(audio_langs) == 1:
+                audio_lang_str = audio_langs[0]
+            elif len(audio_langs) == 2:
+                audio_lang_str = " - ".join(audio_langs)
+            else:  # 3+ languages
+                # Priority: original language first, then ITALIAN, then Multi
+                orig_lang = meta.get("original_language", "").upper()
+
+                result = []
+
+                # Add original language if present in audio tracks
+                if orig_lang in audio_langs:
+                    result.append(orig_lang)
+
+                # Add ITALIAN if present and not already added as original
+                italian_variants = ["ITALIAN", "ITA", "IT"]
+                has_italian = any(lang in italian_variants for lang in audio_langs)
+                if has_italian and orig_lang not in italian_variants:
+                    result.append("ITALIAN")
+
+                # Add Multi indicator
+                result.append("Multi")
+
+                audio_lang_str = " - ".join(result)
 
         effective_type = self._get_effective_type(meta)
 
         hybrid = ""
-        if all([x in meta.get('hdr', '') for x in ['HDR', 'DV']]):
+        if all([x in meta.get("hdr", "") for x in ["HDR", "DV"]]):
             hybrid = "Hybrid"
 
-        repack = meta.get('repack', '').strip()
+        repack = meta.get("repack", "").strip()
 
         # Build name per ShareIsland type-specific format
         if effective_type == "REMUX":
