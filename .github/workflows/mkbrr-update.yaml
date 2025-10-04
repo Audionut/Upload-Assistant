@@ -1,28 +1,28 @@
 name: Update mkbrr Binaries
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   update-mkbrr:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - name: Get Latest Release Tag
+      - name: Get latest release tag
         id: get_release
         run: |
           LATEST_TAG=$(curl -s https://api.github.com/repos/autobrr/mkbrr/releases/latest | jq -r .tag_name)
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
-      - name: Clean Existing Binaries
+      - name: Clean existing binaries
         run: |
           # Remove existing binary directories to avoid conflicts
           rm -rf bin/mkbrr/*
 
-      - name: Download Release Assets
+      - name: Download release assets
         run: |
           mkdir -p bin/mkbrr
           cd bin/mkbrr
@@ -36,7 +36,7 @@ jobs:
             curl -L -O "$url"
           done
 
-      - name: Extract & Organize Binaries
+      - name: Extract and organize binaries
         run: |
           cd bin/mkbrr
           mkdir -p windows/x86_64 macos/arm64 macos/x86_64 linux/amd64 linux/arm linux/arm64 linux/armv6 freebsd/x86_64
@@ -70,7 +70,7 @@ jobs:
                 tar -xzf "$file" -C linux/arm ;;
               *.apk|*.deb|*.rpm|*.pkg.tar.zst) 
                 echo "Moving $file to linux/amd64..."
-                mv "$file" linux/amd64 ;;  # Move package files
+                mv "$file" linux/amd64 ;; # Move package files
             esac
           done
           
@@ -78,7 +78,7 @@ jobs:
           find linux macos freebsd -type f -name "mkbrr" -exec chmod +x {} \;
           echo "All done with binary extraction"
 
-      - name: Cleanup Unneeded Files
+      - name: Clean up unneeded files
         run: |
           cd bin/mkbrr
           echo "Deleting unneeded archives and checksum files..."
@@ -90,10 +90,10 @@ jobs:
           echo "Remaining files in bin/mkbrr:"
           ls -R
 
-      - name: Commit & Push Changes
+      - name: Commit
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bin/mkbrr
           git commit -m "Updated mkbrr binaries to $LATEST_TAG" || echo "No changes to commit"
           git push
