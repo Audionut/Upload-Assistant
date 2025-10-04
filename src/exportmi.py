@@ -1,8 +1,77 @@
-from src.console import console
-from pymediainfo import MediaInfo
+import aiofiles
 import json
 import os
 import platform
+
+from pymediainfo import MediaInfo
+
+from src.console import console
+
+
+def safe_float(value, default=0.0, field_name=""):
+    if isinstance(value, (int, float)):
+        return float(value)
+    elif isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            console.print(f"[yellow]Warning: Could not convert string '{value}' to float for {field_name}, using default {default}[/yellow]")
+            return default
+    elif isinstance(value, dict):
+        for key in ['#value', 'value', 'duration', 'Duration']:
+            if key in value:
+                return safe_float(value[key], default, field_name)
+        console.print(f"[yellow]Warning: {field_name} is a dict but no usable value found: {value}, using default {default}[/yellow]")
+        return default
+    else:
+        console.print(f"[yellow]Warning: Unable to convert to float: {type(value)} {value} for {field_name}, using default {default}[/yellow]")
+        return default
+
+
+async def calculate_scaled_dimensions(base_dir, uuid):
+    try:
+        mediainfo_path = f"{base_dir}/tmp/{uuid}/mediainfo.json"
+        if not os.path.exists(mediainfo_path):
+            console.print(f"[red]Error: mediainfo.json not found at {mediainfo_path}[/red]")
+            return None, None
+        async with aiofiles.open(mediainfo_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+            mediainfo_json = json.loads(content)
+        video_track = None
+        for track in mediainfo_json.get('media', {}).get('track', []):
+            if track.get('@type') == 'Video':
+                video_track = track
+                break
+
+        if not video_track:
+            console.print("[yellow]Warning: No video track found in mediainfo[/yellow]")
+            return None, None
+
+        width = safe_float(video_track.get('Width'), 1920.0, "Width")
+        height = safe_float(video_track.get('Height'), 1080.0, "Height")
+        par = safe_float(video_track.get('PixelAspectRatio'), 1.0, "PixelAspectRatio")
+        dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
+
+        if par == 1.0:
+            return None, None
+
+        if par < 1:
+            new_height = dar * height
+            sar = width / new_height
+            w_sar = 1
+            h_sar = sar
+        else:
+            sar = w_sar = par
+            h_sar = 1
+
+        scaled_w = int(round(width * w_sar))
+        scaled_h = int(round(height * h_sar))
+
+        return scaled_w, scaled_h
+
+    except Exception as e:
+        console.print(f"[red]Error calculating scaled dimensions: {e}[/red]")
+        return None, None
 
 
 async def mi_resolution(res, guess, width, scan, height, actual_height):
