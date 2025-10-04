@@ -172,6 +172,151 @@ async def check_images_concurrently(imagelist, meta):
     return valid_images
 
 
+async def download_comparison_images(comparison_images, meta):
+    if not comparison_images:
+        return {}
+
+    save_directory = f"{meta['base_dir']}/tmp/{meta['uuid']}/comparisons"
+    os.makedirs(save_directory, exist_ok=True)
+
+    timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_connect=10, sock_read=10)
+    downloaded_comparisons = {}
+
+    semaphore = asyncio.Semaphore(2)
+
+    async def download_image_with_semaphore(url, filepath, skip_existing=True):
+        # Check if file already exists and is valid
+        if skip_existing and os.path.exists(filepath):
+            try:
+                if os.path.getsize(filepath) > 1024:  # At least 1KB
+                    from PIL import Image
+                    with Image.open(filepath) as img:
+                        img.verify()
+                    print(f"\r{' ' * 80}\rSkipping existing image: {os.path.basename(filepath)}", end="", flush=True)
+                    return filepath
+            except Exception:
+                # If file is corrupted, delete it and re-download
+                print(f"\r{' ' * 80}\rExisting file corrupted, re-downloading: {os.path.basename(filepath)}", end="", flush=True)
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+
+        async with semaphore:
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            image_content = await response.read()
+                            with open(filepath, "wb") as f:
+                                f.write(image_content)
+                            print(f"\r{' ' * 80}\rDownloaded comparison image: {os.path.basename(filepath)}", end="", flush=True)
+                            # Add 500ms delay after successful download
+                            await asyncio.sleep(0.5)
+                            return filepath
+                        else:
+                            console.print(f"[red]Failed to download comparison image {url}. Status: {response.status}")
+                            return None
+            except Exception as e:
+                console.print(f"[red]Error downloading comparison image {url}: {e}")
+                return None
+
+    failed_downloads = []
+
+    for comp_label, image_groups in comparison_images.items():
+        console.print(f"\n[cyan]Downloading comparison images for: {comp_label}")
+
+        safe_label = "".join(c for c in comp_label if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_label = safe_label.replace(' ', '_')
+        comp_dir = os.path.join(save_directory, safe_label)
+        os.makedirs(comp_dir, exist_ok=True)
+
+        downloaded_groups = []
+        download_tasks = []
+        task_info = []  # Track which task belongs to which group/image
+
+        for group_idx, image_group in enumerate(image_groups):
+            for img_idx, img_url in enumerate(image_group):
+                img_extension = os.path.splitext(img_url)[1] or '.jpg'
+                filename = f"group_{group_idx:03d}_img_{img_idx:02d}{img_extension}"
+                filepath = os.path.join(comp_dir, filename)
+
+                task = download_image_with_semaphore(img_url, filepath)
+                download_tasks.append(task)
+                task_info.append((group_idx, img_idx, img_url, filepath))
+
+        # Execute all download tasks concurrently (but limited by semaphore)
+        if download_tasks:
+            results = await asyncio.gather(*download_tasks, return_exceptions=True)
+            group_results = {}
+            for i, result in enumerate(results):
+                group_idx, img_idx, img_url, filepath = task_info[i]
+
+                if isinstance(result, Exception):
+                    console.print(f"[red]Download task failed with exception: {result}")
+                    failed_downloads.append((img_url, filepath))
+                    continue
+
+                if result:
+                    if group_idx not in group_results:
+                        group_results[group_idx] = {}
+                    group_results[group_idx][img_idx] = result
+                else:
+                    failed_downloads.append((img_url, filepath))
+
+            for group_idx in sorted(group_results.keys()):
+                downloaded_group = []
+                for img_idx in sorted(group_results[group_idx].keys()):
+                    downloaded_group.append(group_results[group_idx][img_idx])
+                if downloaded_group:
+                    downloaded_groups.append(downloaded_group)
+
+        if downloaded_groups:
+            downloaded_comparisons[comp_label] = downloaded_groups
+
+    print(f"\r{' ' * 80}\r", end="", flush=True)
+
+    # Retry failed downloads once
+    if failed_downloads:
+        console.print(f"[yellow]Retrying {len(failed_downloads)} failed downloads...")
+        retry_tasks = []
+        retry_info = []
+
+        for img_url, filepath in failed_downloads:
+            task = download_image_with_semaphore(img_url, filepath, skip_existing=False)
+            retry_tasks.append(task)
+            retry_info.append((img_url, filepath))
+
+        if retry_tasks:
+            retry_results = await asyncio.gather(*retry_tasks, return_exceptions=True)
+
+            successful_retries = 0
+            for i, result in enumerate(retry_results):
+                img_url, filepath = retry_info[i]
+
+                if not isinstance(result, Exception) and result:
+                    successful_retries += 1
+                    print(f"\r{' ' * 80}\rRetry successful: {os.path.basename(filepath)}", end="", flush=True)
+
+                    for comp_label, groups in downloaded_comparisons.items():
+                        comp_dir = os.path.dirname(filepath)
+                        if comp_label.replace(' ', '_').replace(' vs ', '_vs_') in comp_dir:
+                            if not groups:
+                                groups.append([result])
+                            else:
+                                groups[-1].append(result)
+                            break
+                else:
+                    console.print(f"[red]Retry failed for: {os.path.basename(filepath)}")
+
+            if successful_retries > 0:
+                print(f"\r{' ' * 80}\rSuccessfully retried {successful_retries} out of {len(failed_downloads)} failed downloads")
+
+    print("")
+
+    return downloaded_comparisons
+
+
 async def check_image_link(url, timeout=None):
     # Handle when pixhost url points to web_url and convert to raw_url
     if url.startswith("https://pixhost.to/show/"):
