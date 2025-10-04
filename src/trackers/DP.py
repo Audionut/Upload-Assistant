@@ -29,7 +29,7 @@ class DP(UNIT3D):
             'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
             'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
             'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT',
-            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS', ['EVO', 'web-dl Only']
+            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS', ['EVO', 'WEB-DL only']
         ]
         pass
 

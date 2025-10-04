@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -42,42 +41,7 @@ class BLU(UNIT3D):
         if not meta.get('category') == "TV":
             blu_name = blu_name.replace(f"{year}", imdb_year, 1)
 
-        if all([x in meta['hdr'] for x in ['HDR', 'DV']]):
-            if "hybrid" not in blu_name.lower():
-                if "REPACK" in blu_name:
-                    blu_name = blu_name.replace('REPACK', 'Hybrid REPACK')
-                else:
-                    blu_name = blu_name.replace(meta['resolution'], f"Hybrid {meta['resolution']}")
-
         return {'name': blu_name}
-
-    async def get_description(self, meta):
-        desc_header = ''
-        if meta.get('webdv', False):
-            desc_header = await self.derived_dv_layer(meta)
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True, desc_header=desc_header)
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        return {'description': desc}
-
-    async def derived_dv_layer(self, meta):
-        desc_header = ''
-        # Exit if not DV + HDR
-        if not all([x in meta['hdr'] for x in ['HDR', 'DV']]):
-            return desc_header
-        import cli_ui
-        console.print("[bold yellow]Generating the required description addition for Derived DV Layers. Please respond appropriately.")
-        ask_comp = True
-        if meta['type'] == 'WEBDL':
-            if cli_ui.ask_yes_no("Is the DV Layer sourced from the same service as the video?"):
-                ask_comp = False
-                desc_header = "[code]This release contains a derived Dolby Vision profile 8 layer. Comparisons not required as DV and HDR are from same provider.[/code]"
-
-        if ask_comp:
-            while desc_header == "":
-                desc_input = cli_ui.ask_string("Please provide comparisons between HDR masters. (link or bbcode)", default="")
-                desc_header = f"[code]This release contains a derived Dolby Vision profile 8 layer. Comparisons between HDR masters: {desc_input}[/code]"
-
-        return desc_header
 
     async def get_additional_data(self, meta):
         data = {

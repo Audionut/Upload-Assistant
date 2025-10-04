@@ -6,6 +6,7 @@ import glob
 import httpx
 import os
 import platform
+import re
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -349,31 +350,57 @@ class UNIT3D:
         params = {'api_token': self.api_key}
 
         if meta['debug'] is False:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
-                try:
-                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
-                    # adding torrent link to comment of torrent file
-                    t_id = response.json()['data'].split('.')[1].split('/')[3]
-                    meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+            response_data = {}
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                    response_data = response.json()
+                    meta['tracker_status'][self.tracker]['status_message'] = await self.process_response_data(response_data)
+                    torrent_id = await self.get_torrent_id(response_data)
+
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                     await self.common.add_tracker_torrent(
                         meta,
                         self.tracker,
                         self.source_flag,
                         self.announce_url,
-                        self.torrent_url + t_id,
+                        self.torrent_url + torrent_id,
                         headers=headers,
                         params=params,
-                        downurl=response.json()['data']
+                        downurl=response_data['data']
                     )
-                except httpx.TimeoutException:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
-                except httpx.RequestError as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
-                except Exception:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
-                    return
+            except httpx.TimeoutException:
+                meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
+            except httpx.RequestError as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+            except Exception as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
+                return
         else:
             console.print(f'[cyan]{self.tracker} Request Data:')
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
+
+    async def get_torrent_id(self, response_data):
+        """Matches /12345.abcde and returns 12345"""
+        torrent_id = ''
+        try:
+            match = re.search(r'/(\d+)\.', response_data['data'])
+            if match:
+                torrent_id = match.group(1)
+        except (IndexError, KeyError):
+            print('Could not parse torrent_id from response data.')
+        return torrent_id
+
+    async def process_response_data(self, response_data):
+        """Returns only the success message from the response data if the upload is successful; otherwise, returns the complete response data."""
+        status_message = ''
+        try:
+            if response_data['success'] is True:
+                status_message = response_data['message']
+            else:
+                status_message = response_data
+        except Exception:
+            pass
+
+        return status_message
