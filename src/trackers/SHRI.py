@@ -100,7 +100,10 @@ class SHRI(UNIT3D):
         effective_type = self._get_effective_type(meta)
 
         hybrid = ""
-        if all([x in meta.get("hdr", "") for x in ["HDR", "DV"]]):
+        if (
+            all([x in meta.get("hdr", "") for x in ["HDR", "DV"]])
+            or "HYBRID" in self.get_basename(meta).upper()
+        ):
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
