@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# import discord
 import re
 import os
 from src.languages import process_desc_language
@@ -35,137 +34,86 @@ class SHRI(UNIT3D):
 
     async def get_name(self, meta):
         """
-        Generate ShareIsland release name with REMUX detection for UNTOUCHED/VU files,
-        audio language tags, Italian title support, and [SUBS] tagging.
-        """
-        shareisland_name = meta["name"]
-        resolution = meta.get("resolution")
-        video_codec = meta.get("video_codec")
-        video_encode = meta.get("video_encode")
-        name_type = self._get_effective_type(meta)
-        source = meta.get("source", "")
-        imdb_info = meta.get("imdb_info") or {}
+        Rebuild release name from meta components following ShareIsland naming rules.
 
-        # Extract Italian title from IMDb AKAs
-        italian_title = self._get_italian_title(imdb_info)
+        Handles:
+        - REMUX detection for VU/UNTOUCHED releases
+        - Italian title substitution from IMDb AKAs
+        - Multi-language audio tags (ITALIAN - ENGLISH format)
+        - Italian subtitle [SUBS] tag when no Italian audio present
+        - Release group tag cleaning and validation
+        """
+        if not meta.get("language_checked", False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        # Extract components
+        title = meta.get("title", "")
+        italian_title = self._get_italian_title(meta.get("imdb_info", {}))
         use_italian_title = self.config["TRACKERS"][self.tracker].get(
             "use_italian_title", False
         )
 
-        # Remove unwanted tags
-        remove_list = ["Dubbed"]
-        for each in remove_list:
-            shareisland_name = shareisland_name.replace(each, "")
-
-        # Process audio languages if not already done
-        audio_lang_str = ""
-        if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        # Build audio language string (e.g., "ITALIAN - ENGLISH")
-        if meta.get("audio_languages"):
-            audio_languages = []
-            for lang in meta["audio_languages"]:
-                lang_up = lang.upper()
-                if lang_up not in audio_languages:
-                    audio_languages.append(lang_up)
-            audio_lang_str = " - ".join(audio_languages)
-
-        # Remove Dual-Audio from shareisland_name if present
-        if meta.get("dual_audio"):
-            shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
-
-        # Handle REMUX detection and naming
-        if self._is_remux(meta):
-            if "ENCODE" in shareisland_name:
-                shareisland_name = shareisland_name.replace("ENCODE", "REMUX", 1)
-            elif "REMUX" not in shareisland_name and source:
-                # Insert REMUX after source when ENCODE not present
-                shareisland_name = shareisland_name.replace(
-                    source, f"{source} REMUX", 1
-                )
-
-            # Remove VU/UNTOUCHED markers
-            shareisland_name = self.MARKER_PATTERN.sub("", shareisland_name)
-
-        # Normalize REMUX naming per tracker rules
-        if name_type == "REMUX":
-            shareisland_name = shareisland_name.replace("x264", video_codec).replace(
-                "x265", video_codec
-            )
-
-            if video_codec in shareisland_name:
-                shareisland_name = re.sub(
-                    rf"[\s\-]{re.escape(video_codec)}", "", shareisland_name, count=1
-                )
-                shareisland_name = shareisland_name.replace(
-                    "REMUX", f"REMUX {video_codec}", 1
-                )
-
-        # Apply Italian title if configured
         if italian_title and use_italian_title:
-            shareisland_name = shareisland_name.replace(meta.get("aka", ""), "")
-            shareisland_name = shareisland_name.replace(
-                meta.get("title", ""), italian_title
-            )
+            title = italian_title
 
-        # Add [SUBS] tag for Italian subs without Italian audio
+        year = str(meta.get("year", ""))
+        resolution = meta.get("resolution", "")
+        source = meta.get("source", "")
+        video_codec = meta.get("video_codec", "")
+        video_encode = meta.get("video_encode", "")
+
+        # Clean audio: remove Dual-Audio and trailing language codes
+        audio = meta.get("audio", "").replace("Dual-Audio", "").strip()
+        audio = re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio).strip()
+
+        # Build audio language string
+        audio_lang_str = ""
+        if meta.get("audio_languages"):
+            audio_langs = [lang.upper() for lang in meta["audio_languages"]]
+            audio_lang_str = " - ".join(dict.fromkeys(audio_langs))
+
+        effective_type = self._get_effective_type(meta)
+
+        # Build name per ShareIsland type-specific format
+        if effective_type == "REMUX":
+            # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
+            name = f"{title} {year} {audio_lang_str} {resolution} {source} REMUX {video_codec} {audio}"
+
+        elif effective_type == "DVDRIP":
+            # DVDRip: Title Year LANG Resolution DVDRip Audio Encode
+            name = f"{title} {year} {audio_lang_str} {resolution} DVDRip {audio} {video_encode}"
+
+        elif effective_type in ("ENCODE", "HDTV"):
+            # Encode/HDTV: Title Year LANG Resolution Source Audio Encode
+            name = f"{title} {year} {audio_lang_str} {resolution} {source} {audio} {video_encode}"
+
+        elif effective_type in ("WEBDL", "WEBRIP"):
+            # WEB: Title Year LANG Resolution Service Type Audio Encode
+            service = meta.get("service", "")
+            type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
+            name = f"{title} {year} {audio_lang_str} {resolution} {service} {type_str} {audio} {video_encode}"
+
+        else:
+            # Fallback: use original name with cleaned audio
+            name = meta["name"].replace("Dual-Audio", "").strip()
+
+        # Add [SUBS] tag for Italian subtitles without Italian audio
         if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
-            if not meta.get("tag"):
-                shareisland_name = shareisland_name + " [SUBS]"
-            else:
-                shareisland_name = shareisland_name.replace(
-                    meta["tag"], f" [SUBS]{meta['tag']}"
-                )
+            name = f"{name} [SUBS]"
 
-        # Insert audio language string per tracker rules
-        if audio_lang_str:
-            if name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
-                shareisland_name = shareisland_name.replace(
-                    str(meta["year"]), f"{meta['year']} {audio_lang_str}", 1
-                )
-            elif not meta.get("is_disc") == "BDMV":
-                shareisland_name = shareisland_name.replace(
-                    meta["resolution"], f"{audio_lang_str} {meta['resolution']}", 1
-                )
+        # Clean and validate release group tag
+        tag = meta.get("tag", "").strip()
+        tag = tag.lstrip("-")
+        tag = re.sub(r"^[A-Z]{2,3}\s+", "", tag).strip()
 
-        # DVD rip formatting
-        if name_type == "DVDRIP":
-            source = "DVDRip"
-            shareisland_name = shareisland_name.replace(f"{meta['source']} ", "", 1)
-            shareisland_name = shareisland_name.replace(
-                f"{meta['video_encode']}", "", 1
-            )
-            shareisland_name = shareisland_name.replace(
-                f"{source}", f"{resolution} {source}", 1
-            )
-            shareisland_name = shareisland_name.replace(
-                (meta["audio"]), f"{meta['audio']}{video_encode}", 1
-            )
-
-        # DVD disc and DVD REMUX formatting
-        elif meta["is_disc"] == "DVD" or (
-            name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")
-        ):
-            shareisland_name = shareisland_name.replace(
-                (meta["source"]), f"{resolution} {meta['source']}", 1
-            )
-            shareisland_name = shareisland_name.replace(
-                (meta["audio"]), f"{video_codec} {meta['audio']}", 1
-            )
-
-        # Replace invalid tags with NoGroup
-        tag_lower = meta["tag"].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if meta["tag"] == "" or any(
-            invalid_tag in tag_lower for invalid_tag in invalid_tags
-        ):
-            shareisland_name = self.INVALID_TAG_PATTERN.sub("", shareisland_name)
-            shareisland_name = f"{shareisland_name}-NoGroup"
+        if not tag or any(inv in tag.lower() for inv in invalid_tags):
+            tag = "NoGroup"
 
-        shareisland_name = self.WHITESPACE_PATTERN.sub(" ", shareisland_name)
+        name = f"{name}-{tag}"
+        name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
-        return {"name": shareisland_name}
+        return {"name": name}
 
     async def get_type_id(self, meta):
         """Map release type to ShareIsland type IDs"""
@@ -180,24 +128,24 @@ class SHRI(UNIT3D):
         }.get(effective_type, "0")
         return {"type_id": type_id}
 
-    # Private helper methods
-
     def get_basename(self, meta):
         """Extract basename from first file in filelist or path"""
         path = next(iter(meta["filelist"]), meta["path"])
         return os.path.basename(path)
 
     def _is_remux(self, meta):
-        """Detect REMUX by checking basename markers and mediainfo"""
+        """
+        Detect REMUX releases via:
+        - Filename markers (remux, vu, untouched)
+        - Mediainfo analysis (no encoding settings + BluRay/HDDVD source)
+        """
         basename = self.get_basename(meta).lower()
 
-        # Explicit markers
         if "remux" in basename:
             return True
         if any(marker in basename for marker in ["vu", "untouched", "vu1080", "vu720"]):
             return True
 
-        # Mediainfo check: no encoding settings = likely REMUX
         try:
             mi = meta.get("mediainfo", {})
             video_track = mi.get("media", {}).get("track", [{}])[1]
@@ -214,7 +162,7 @@ class SHRI(UNIT3D):
         return False
 
     def _get_effective_type(self, meta):
-        """Determine effective type for SHRI, detecting REMUX from various indicators"""
+        """Determine effective type, overriding ENCODE with REMUX when detected"""
         return "REMUX" if self._is_remux(meta) else meta.get("type", "ENCODE")
 
     def _get_italian_title(self, imdb_info):
@@ -226,7 +174,7 @@ class SHRI(UNIT3D):
         return None
 
     def _has_italian_audio(self, meta):
-        """Check for Italian audio tracks (excluding commentary)"""
+        """Check for Italian audio tracks, excluding commentary"""
         if "mediainfo" not in meta:
             return False
 
