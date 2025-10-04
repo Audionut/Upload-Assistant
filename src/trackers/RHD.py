@@ -40,15 +40,14 @@ class RHD(UNIT3D):
 
     async def get_resolution_id(self, meta):
         resolution_id = {
-            '4320p': '1',
-            '2160p': '2',
-            '1440p': '3',
-            '1080p': '3',
+            '4320p': '0',
+            '2160p': '1',
+            '1080p': '2',
             '1080i': '4',
             '720p': '5',
             '576p': '6',
             '480p': '8'
-        }.get(meta['resolution'], '8')
+        }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
 
     # If the tracker has modq in the api, otherwise remove this function
