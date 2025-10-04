@@ -42,13 +42,13 @@ jobs:
         if: env.NEW_RELEASE == 'true' && env.ISSUE_EXISTS == 'false'
         run: |
           ISSUE_BODY="A new mkbrr release ($LATEST_TAG) has been detected. \
-          Consider running the update workflow to incorporate the latest mkbrr binaries into Upload-Assistant."
+          Consider running the update workflow to incorporate the latest mkbrr binaries into Upload Assistant."
 
           curl -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
-              \"title\": \"New mkbrr Release Available!\",
+              \"title\": \"New mkbrr release available!\",
               \"body\": \"$ISSUE_BODY\",
               \"labels\": [\"mkbrr\", \"update\"]
             }" \
