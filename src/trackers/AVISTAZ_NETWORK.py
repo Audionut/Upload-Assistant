@@ -637,7 +637,7 @@ class AZTrackerBase:
         desc_parts = []
 
         # TV stuff
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
         if episode_overview:
             desc_parts.append(f'[b]Episode:[/b] {title}')
             desc_parts.append(f'[b]Overview:[/b] {episode_overview}')

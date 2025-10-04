@@ -75,15 +75,15 @@ class TL:
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(meta))
+        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
 
         # Logo
-        logo, logo_size = await builder.get_logo_section(meta)
+        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
         if logo and logo_size:
             desc_parts.append(f"""<center><img src="{logo}" style="max-width: {logo_size}px;"></center>""")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -102,6 +102,9 @@ class TL:
 
         # User description
         desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
 
         # Screenshots
         if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):

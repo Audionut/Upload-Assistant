@@ -8,9 +8,10 @@ import platform
 import re
 import unicodedata
 from .COMMON import COMMON
-from src.bbcode import BBCODE
 from bs4 import BeautifulSoup
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 
 
@@ -164,9 +165,53 @@ class FF:
                 return []
 
     async def generate_description(self, meta):
-        file_info = await self.common.mediainfo_template(self.tracker, meta) or ''
-        meta['mediainfo_text'] = file_info
-        description = await self.common.description_template(self.tracker, meta)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
+
+        # Logo
+        logo_resize_url = meta.get('tmdb_logo', '')
+        if logo_resize_url:
+            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/center]")
+
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
+
+            if episode_image:
+                desc_parts.append(f'<a href="{episode_image}" target="_blank"><img src="{episode_image}" width="220"></a>')
+
+            desc_parts.append(f'[center]{episode_overview}[/center]')
+
+        # File information
+        desc_parts.append(f'[pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre]')
+        desc_parts.append(f'[pre]{await builder.get_bdinfo_section(meta)}[/pre]')
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
+
+        # Screenshots
+        images = meta.get('image_list', [])
+        if images:
+            screenshots_block = "[center]"
+            for image in images:
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+            screenshots_block += "[/center]"
+
+            desc_parts.append(screenshots_block)
+
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         bbcode = BBCODE()
         description = description.replace("[user]", "").replace("[/user]", "")

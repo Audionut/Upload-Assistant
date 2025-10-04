@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
 from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -353,7 +354,38 @@ class BT:
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta):
-        description = await self.common.description_template(self.tracker, meta, self.episode_tmdb_data)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
+
+        # Logo
+        logo_resize_url = meta.get('tmdb_logo', '')
+        if logo_resize_url:
+            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/center]")
+
+        # TV
+        title = self.episode_tmdb_data.get('name', '')
+        episode_image = self.episode_tmdb_data.get('still_path', '')
+        episode_overview = self.episode_tmdb_data.get('overview', '')
+
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
+
+            if episode_image:
+                desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300{episode_image}[/img][/center]")
+
+            desc_parts.append(f'[center]{episode_overview}[/center]')
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         bbcode = BBCODE()
         description = bbcode.remove_img_resize(description)
         description = bbcode.remove_extra_lines(description)

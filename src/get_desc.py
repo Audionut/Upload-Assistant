@@ -146,21 +146,22 @@ class DescriptionBuilder:
         self.config = config
         self.common = COMMON(config)
 
-    async def get_custom_header(self, meta):
+    async def get_custom_header(self, meta, tracker):
         """Returns a custom header if configured."""
-        if self.config['DEFAULT'].get('custom_description_header', False):
-            return self.config['DEFAULT']['custom_description_header']
+        custom_description_header = self.config['TRACKERS'][tracker].get('custom_description_header', self.config['DEFAULT'].get('custom_description_header', False))
+        if custom_description_header:
+            return custom_description_header
         return ''
 
-    async def get_logo_section(self, meta, url_resize=False):
+    async def get_logo_section(self, meta, tracker):
         """Returns the logo URL and size if applicable."""
+        if not self.config['TRACKERS'][tracker].get('add_logo', self.config['DEFAULT'].get('add_logo', False)):
+            return None, None
+
         logo = meta.get('logo', '')
         logo_size = self.config['DEFAULT'].get('logo_size', '300')
-        logo_resize_url = meta.get('tmdb_logo', '')
 
-        if self.config['DEFAULT'].get('add_logo') and logo:
-            if url_resize and logo_resize_url:
-                return logo_resize_url, None
+        if logo:
             return logo, logo_size
         return None, None
 
@@ -176,8 +177,8 @@ class DescriptionBuilder:
             return tvmaze_episode_data['image']
         return ''
 
-    async def get_tv_info(self, meta):
-        if not self.config['DEFAULT'].get('episode_overview', False):
+    async def get_tv_info(self, meta, tracker):
+        if not self.config['TRACKERS'][tracker].get('episode_overview', self.config['DEFAULT'].get('episode_overview', False)):
             return '', '', ''
 
         tvmaze_episode_data = meta.get('tvmaze_episode_data', {})
@@ -211,10 +212,8 @@ class DescriptionBuilder:
         if meta.get('is_disc') == 'BDMV':
             return ''
 
-        full = self.config['DEFAULT'].get('full_mediainfo', False)
-        full = self.config['TRACKERS'][tracker].get('full_mediainfo', full)
-
-        if full:
+        # Check if full mediainfo should be used
+        if self.config['TRACKERS'][tracker].get('full_mediainfo', self.config['DEFAULT'].get('full_mediainfo', False)):
             return await self.common.get_mediainfo_text(meta)
 
         cache_file_dir = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
@@ -303,21 +302,17 @@ class DescriptionBuilder:
             return '\n\n'.join(bdinfo_sections)
         return ''
 
+    async def screenshot_header(self, tracker):
+        """Returns the screenshot header if applicable."""
+        screenheader = self.config['TRACKERS'][tracker].get('custom_screenshot_header', self.config['DEFAULT'].get('screenshot_header', None))
+        if screenheader:
+            return screenheader
+        return ''
+
     async def get_user_description(self, meta):
         """Returns the user-provided description (file or link)"""
         description_file_content = meta.get('description_file_content', '').strip()
         description_link_content = meta.get('description_link_content', '').strip()
-
-        # check the description that may come from other trackers via the API
-        if description_file_content:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                print('\nFound existing description:\n')
-                print(meta.get('description_file_content'))
-                user_input = await self.common.async_input(prompt='Do you want to use this description? (y/n): ')
-                if user_input.lower() == 'y':
-                    pass
-                else:
-                    description_file_content = False
 
         if description_file_content or description_link_content:
             if description_file_content:

@@ -175,10 +175,10 @@ class ANT:
         user_desc = await builder.get_user_description(meta)
         if user_desc:
             # Custom Header
-            desc_parts.append(await builder.get_custom_header(meta))
+            desc_parts.append(await builder.get_custom_header(meta, self.tracker))
 
             # Logo
-            logo_resize_url, logo_size = await builder.get_logo_section(meta, url_resize=True)
+            logo_resize_url = meta.get('tmdb_logo', '')
             if logo_resize_url:
                 desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
 

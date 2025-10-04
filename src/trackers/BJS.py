@@ -337,10 +337,10 @@ class BJS:
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(meta))
+        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
 
         # Logo
-        logo_resize_url, logo_size = await builder.get_logo_section(meta, url_resize=True)
+        logo_resize_url = meta.get('tmdb_logo', '')
         if logo_resize_url:
             desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
 
@@ -358,18 +358,18 @@ class BJS:
             desc_parts.append(f'[align=center]{episode_overview}[/align]')
 
         # File information
-        desc_parts.append(await builder.get_mediainfo_section(meta, self.tracker))
-        desc_parts.append(await builder.get_bdinfo_section(meta))
+        if 'DVD' in meta.get('is_disc', ''):
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
 
-        # NFO
-        if meta.get('description_nfo_content', ''):
-            desc_parts.append(f"<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{meta.get('description_nfo_content')}</div></div>")
+        bd_info = await builder.get_bdinfo_section(meta)
+        if bd_info:
+            desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
 
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
         # Signature
-        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta.get('ua_name')} {meta.get('current_version', '')}</a></center>""")
+        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/align]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import aiofiles
 import httpx
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
+from src.trackers.COMMON import COMMON
 
 
 class DC():
@@ -38,7 +39,61 @@ class DC():
         return mediainfo
 
     async def generate_description(self, meta):
-        description = await self.common.description_template(self.tracker, meta)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
+
+        # Logo
+        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        if logo and logo_size:
+            desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
+
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
+
+            if episode_image:
+                desc_parts.append(f"[center][img=300]{episode_image}[/img][/center]")
+
+            desc_parts.append(f'[center]{episode_overview}[/center]')
+
+        # File information
+        desc_parts.append(await builder.get_bdinfo_section(meta))
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"[nfo]{meta.get('description_nfo_content')}[/nfo]")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
+
+        # Screenshots
+        if f'{self.tracker}_images_key' in meta:
+            images = meta[f'{self.tracker}_images_key']
+        else:
+            images = meta['image_list']
+        if images:
+            screenshots_block = '[center]\n'
+            for i, image in enumerate(images, start=1):
+                img_url = image['img_url']
+                web_url = image['web_url']
+                screenshots_block += f'[url={web_url}][img=350]{img_url}[/img][/url] '
+                # limits to 2 screens per line, as the description box is small
+                if i % 2 == 0:
+                    screenshots_block += '\n'
+            screenshots_block += '\n[/center]'
+            desc_parts.append(screenshots_block)
+
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         from src.bbcode import BBCODE
         bbcode = BBCODE()
