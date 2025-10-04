@@ -8,6 +8,11 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class SHRI(UNIT3D):
+    # Pre-compile regex patterns for performance
+    INVALID_TAG_PATTERN = re.compile(r'-(nogrp|nogroup|unknown|unk)', re.IGNORECASE)
+    WHITESPACE_PATTERN = re.compile(r'\s{2,}')
+    MARKER_PATTERN = re.compile(r'\b(UNTOUCHED|VU)\b', re.IGNORECASE)
+    
     def __init__(self, config):
         super().__init__(config, tracker_name='SHRI')
         self.config = config
@@ -20,52 +25,13 @@ class SHRI(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
     async def get_additional_data(self, meta):
+        """Get additional tracker-specific upload data"""
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
         return data
-
-    def get_basename(self, meta):
-        path = next(iter(meta['filelist']), meta['path'])
-        return os.path.basename(path)
-    
-    def _is_remux(self, meta):
-        """Detect REMUX by checking mediainfo for absence of encoding"""
-        basename = self.get_basename(meta).lower()
-        
-        # Explicit REMUX markers
-        if 'remux' in basename:
-            return True
-        
-        # VU/UNTOUCHED markers (legacy detection)
-        if any(marker in basename for marker in ['vu', 'untouched', 'vu1080', 'vu720']):
-            return True
-            
-        # Check mediainfo: no encoding settings = likely REMUX
-        try:
-            mi = meta.get('mediainfo', {})
-            video_track = mi.get('media', {}).get('track', [{}])[1]
-            
-            # If no encoding settings and BluRay/HDDVD source, it's REMUX
-            if not video_track.get('Encoded_Library_Settings') and \
-            meta.get('source') in ('BluRay', 'HDDVD') and \
-            meta.get('type') not in ('DISC', 'WEBDL', 'WEBRIP'):
-                return True
-        except (IndexError, KeyError):
-            pass
-        
-        return False
-    
-    def _get_effective_type(self, meta):
-        """Determine effective type for SHRI, detecting REMUX from VU/UNTOUCHED"""
-        basename = self.get_basename(meta)
-        
-        if not meta.get('is_disc') and ('untouched' in basename.lower() or 'vu' in basename.lower()):
-            return "REMUX"
-        return meta.get('type', 'ENCODE')
 
     async def get_name(self, meta):
         """
@@ -76,25 +42,18 @@ class SHRI(UNIT3D):
         resolution = meta.get('resolution')
         video_codec = meta.get('video_codec')
         video_encode = meta.get('video_encode')
-        name_type = meta.get('type', "")
+        name_type = self._get_effective_type(meta)
         source = meta.get('source', "")
         imdb_info = meta.get('imdb_info') or {}
-        type = self._get_effective_type(meta)
-        name_type = type
-        akas = imdb_info.get('akas', [])
-        italian_title = None
+        
+        # Extract Italian title from IMDb AKAs
+        italian_title = self._get_italian_title(imdb_info)
+        use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
 
+        # Remove unwanted tags
         remove_list = ['Dubbed']
         for each in remove_list:
             shareisland_name = shareisland_name.replace(each, '')
-
-        # Extract Italian title from IMDb AKAs
-        for aka in akas:
-            if isinstance(aka, dict) and aka.get("country") == "Italy":
-                italian_title = aka.get("title")
-                break
-
-        use_italian_title = self.config['TRACKERS'][self.tracker].get('use_italian_title', False)
 
         # Process audio languages if not already done
         audio_lang_str = ""
@@ -110,20 +69,20 @@ class SHRI(UNIT3D):
                     audio_languages.append(lang_up)
             audio_lang_str = " - ".join(audio_languages)
 
-        # Clean audio string locally without modifying meta
-        meta.get('audio', '').replace('Dual-Audio', '').strip()
-
         # Remove Dual-Audio from shareisland_name if present
         if meta.get('dual_audio'):
             shareisland_name = shareisland_name.replace("Dual-Audio", "", 1)
 
-        # Only modify name if detected as REMUX
+        # Handle REMUX detection and naming
         if self._is_remux(meta):
-            if 'ENCODE' in shareisland_name:  # Only replace ENCODE
+            if 'ENCODE' in shareisland_name:
                 shareisland_name = shareisland_name.replace('ENCODE', 'REMUX', 1)
+            elif 'REMUX' not in shareisland_name and source:
+                # Insert REMUX after source when ENCODE not present
+                shareisland_name = shareisland_name.replace(source, f"{source} REMUX", 1)
             
-            # Clean up markers
-            shareisland_name = re.sub(r'\b(UNTOUCHED|VU)\b', '', shareisland_name, flags=re.IGNORECASE)
+            # Remove VU/UNTOUCHED markers
+            shareisland_name = self.MARKER_PATTERN.sub('', shareisland_name)
 
         # Normalize REMUX naming per tracker rules
         if name_type == "REMUX":
@@ -138,34 +97,8 @@ class SHRI(UNIT3D):
             shareisland_name = shareisland_name.replace(meta.get('aka', ''), '')
             shareisland_name = shareisland_name.replace(meta.get('title', ''), italian_title)
 
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-
-        # Check for Italian audio (excluding commentary)
-        audios = []
-        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
-            audios = [
-                audio for audio in meta['mediainfo']['media']['track'][2:]
-                if audio.get('@type') == 'Audio'
-                and isinstance(audio.get('Language'), str)
-                and audio.get('Language').lower() in {'it', 'it-it'}
-                and "commentary" not in str(audio.get('Title', '')).lower()
-            ]
-
-        # Check for Italian subtitles
-        subs = []
-        if 'mediainfo' in meta and 'media' in meta['mediainfo'] and 'track' in meta['mediainfo']['media']:
-            subs = [
-                sub for sub in meta['mediainfo']['media']['track']
-                if sub.get('@type') == 'Text'
-                and isinstance(sub.get('Language'), str)
-                and sub['Language'].lower() in {'it', 'it-it'}
-            ]
-
         # Add [SUBS] tag for Italian subs without Italian audio
-        if len(audios) > 0:
-            shareisland_name = shareisland_name
-        elif len(subs) > 0:
+        if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
             if not meta.get('tag'):
                 shareisland_name = shareisland_name + " [SUBS]"
             else:
@@ -192,12 +125,13 @@ class SHRI(UNIT3D):
             shareisland_name = shareisland_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
 
         # Replace invalid tags with NoGroup
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                shareisland_name = re.sub(f"-{invalid_tag}", "", shareisland_name, flags=re.IGNORECASE)
+            shareisland_name = self.INVALID_TAG_PATTERN.sub('', shareisland_name)
             shareisland_name = f"{shareisland_name}-NoGroup"
 
-        shareisland_name = re.sub(r'\s{2,}', ' ', shareisland_name)
+        shareisland_name = self.WHITESPACE_PATTERN.sub(' ', shareisland_name)
 
         return {'name': shareisland_name}
 
@@ -213,3 +147,73 @@ class SHRI(UNIT3D):
             'ENCODE': '15',
         }.get(effective_type, '0')
         return {'type_id': type_id}
+
+    # Private helper methods
+    
+    def get_basename(self, meta):
+        """Extract basename from first file in filelist or path"""
+        path = next(iter(meta['filelist']), meta['path'])
+        return os.path.basename(path)
+    
+    def _is_remux(self, meta):
+        """Detect REMUX by checking basename markers and mediainfo"""
+        basename = self.get_basename(meta).lower()
+        
+        # Explicit markers
+        if 'remux' in basename:
+            return True
+        if any(marker in basename for marker in ['vu', 'untouched', 'vu1080', 'vu720']):
+            return True
+            
+        # Mediainfo check: no encoding settings = likely REMUX
+        try:
+            mi = meta.get('mediainfo', {})
+            video_track = mi.get('media', {}).get('track', [{}])[1]
+            
+            if not video_track.get('Encoded_Library_Settings') and \
+               meta.get('source') in ('BluRay', 'HDDVD') and \
+               meta.get('type') not in ('DISC', 'WEBDL', 'WEBRIP'):
+                return True
+        except (IndexError, KeyError):
+            pass
+        
+        return False
+    
+    def _get_effective_type(self, meta):
+        """Determine effective type for SHRI, detecting REMUX from various indicators"""
+        return "REMUX" if self._is_remux(meta) else meta.get('type', 'ENCODE')
+    
+    def _get_italian_title(self, imdb_info):
+        """Extract Italian title from IMDb AKAs"""
+        akas = imdb_info.get('akas', [])
+        for aka in akas:
+            if isinstance(aka, dict) and aka.get("country") == "Italy":
+                return aka.get("title")
+        return None
+    
+    def _has_italian_audio(self, meta):
+        """Check for Italian audio tracks (excluding commentary)"""
+        if 'mediainfo' not in meta:
+            return False
+        
+        tracks = meta['mediainfo'].get('media', {}).get('track', [])
+        return any(
+            track.get('@type') == 'Audio' and
+            isinstance(track.get('Language'), str) and
+            track.get('Language').lower() in {'it', 'it-it'} and
+            'commentary' not in str(track.get('Title', '')).lower()
+            for track in tracks[2:]
+        )
+
+    def _has_italian_subtitles(self, meta):
+        """Check for Italian subtitle tracks"""
+        if 'mediainfo' not in meta:
+            return False
+        
+        tracks = meta['mediainfo'].get('media', {}).get('track', [])
+        return any(
+            track.get('@type') == 'Text' and
+            isinstance(track.get('Language'), str) and
+            track.get('Language').lower() in {'it', 'it-it'}
+            for track in tracks
+        )
