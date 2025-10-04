@@ -1,4 +1,4 @@
-name: Create and publish Docker images
+name: Create and publish Docker image
 
 on:
   release:
@@ -19,11 +19,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -36,7 +36,7 @@ jobs:
 
       - name: Get lowercase repo name
         run: |
-          REPO_NAME=${{ env.IMAGE_NAME }} 
+          REPO_NAME=${{ env.IMAGE_NAME }}
           echo "LOWER_CASE_REPO_NAME=${REPO_NAME,,}" >> $GITHUB_ENV
 
       - name: Get version for tagging
@@ -60,7 +60,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
@@ -76,6 +76,7 @@ jobs:
           echo "🐋 Images:"
           echo "  - ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:${{ env.VERSION }}"
           echo "  - ${{ env.REGISTRY }}/${{ env.LOWER_CASE_REPO_NAME }}:latest"
+
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "📝 Triggered by release: ${{ github.event.release.tag_name }}"
           else
