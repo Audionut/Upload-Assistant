@@ -146,7 +146,7 @@ class DescriptionBuilder:
         self.config = config
         self.common = COMMON(config)
 
-    async def get_custom_header(self, meta, tracker):
+    async def get_custom_header(self, tracker):
         """Returns a custom header if configured."""
         custom_description_header = self.config['TRACKERS'][tracker].get('custom_description_header', self.config['DEFAULT'].get('custom_description_header', False))
         if custom_description_header:
@@ -177,8 +177,8 @@ class DescriptionBuilder:
             return tvmaze_episode_data['image']
         return ''
 
-    async def get_tv_info(self, meta, tracker):
-        if not self.config['TRACKERS'][tracker].get('episode_overview', self.config['DEFAULT'].get('episode_overview', False)):
+    async def get_tv_info(self, meta, tracker, resize=False):
+        if not self.config['TRACKERS'][tracker].get('episode_overview', self.config['DEFAULT'].get('episode_overview', False)) or meta['category'] != 'TV':
             return '', '', ''
 
         tvmaze_episode_data = meta.get('tvmaze_episode_data', {})
@@ -187,8 +187,17 @@ class DescriptionBuilder:
         season_number = meta.get('season', '')
         episode_number = meta.get('episode', '')
         episode_title = tvmaze_episode_data.get('episode_name', '').strip()
-        episode_overview = tvmaze_episode_data.get('overview', '').strip() or meta.get('overview_meta', '').strip()
-        episode_image = tvmaze_episode_data.get('image', '').strip()
+        overview = tvmaze_episode_data.get('overview', '').strip() or meta.get('overview_meta', '').strip()
+
+        image = ''
+        if meta.get('tv_pack', False):
+            image = tvmaze_episode_data.get('series_image', '')
+            if resize:
+                image = tvmaze_episode_data.get('series_image_medium', '')
+        else:
+            image = tvmaze_episode_data.get('image', '')
+            if resize:
+                image = tvmaze_episode_data.get('image_medium', '')
 
         title = f'{name}'
         if season_number:
@@ -197,7 +206,7 @@ class DescriptionBuilder:
         if episode_title:
             title += f':\n{episode_title}'
 
-        return title, episode_image, episode_overview
+        return title, image, overview
 
     async def get_episode_overview(self, meta):
         """Returns True if episode overview should be included."""

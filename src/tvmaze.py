@@ -185,7 +185,9 @@ async def get_tvmaze_episode_data(tvmaze_id, season, episode):
                     "series_name": show_data.get("name", data.get("_links", {}).get("show", {}).get("name", "")),
                     "series_overview": show_data.get("summary", "").replace("<p>", "").replace("</p>", "").strip(),
                     "image": data.get("image", {}).get("original", None) if data.get("image") else None,
+                    "image_medium": data.get("image", {}).get("medium", None) if data.get("image") else None,
                     "series_image": show_data.get("image", {}).get("original", None) if show_data.get("image") else None,
+                    "series_image_medium": show_data.get("image", {}).get("medium", None) if show_data.get("image") else None,
                 }
 
                 return result

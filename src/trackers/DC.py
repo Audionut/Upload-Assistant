@@ -43,7 +43,7 @@ class DC():
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(meta, self.tracker))
+        desc_parts.append(await builder.get_custom_header(self.tracker))
 
         # Logo
         logo, logo_size = await builder.get_logo_section(meta, self.tracker)

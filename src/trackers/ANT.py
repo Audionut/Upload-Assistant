@@ -175,7 +175,7 @@ class ANT:
         user_desc = await builder.get_user_description(meta)
         if user_desc:
             # Custom Header
-            desc_parts.append(await builder.get_custom_header(meta, self.tracker))
+            desc_parts.append(await builder.get_custom_header(self.tracker))
 
             # Logo
             logo_resize_url = meta.get('tmdb_logo', '')

@@ -8,6 +8,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.rehostimages import check_hosts
 from src.tmdb import get_tmdb_localized_data
@@ -183,7 +184,43 @@ class GPW():
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
         await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
-        description = await self.common.description_template(self.tracker, meta)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
+
+        # Logo
+        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        if logo and logo_size:
+            desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"[pre]{meta.get('description_nfo_content')}[/pre]")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
+
+        # Screenshots
+        if f'{self.tracker}_images_key' in meta:
+            images = meta[f'{self.tracker}_images_key']
+        else:
+            images = meta['image_list']
+        if images:
+            screenshots_block = ''
+            for image in images:
+                screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            desc_parts.append('[center]\n' + screenshots_block + '[/center]')
+
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         bbcode = BBCODE()
         description = bbcode.remove_sup(description)
         description = bbcode.remove_sub(description)
