@@ -50,7 +50,7 @@ class SHRI(UNIT3D):
         Rebuild release name from meta components following ShareIsland naming rules.
 
         Handles:
-        - REMUX detection for VU/UNTOUCHED releases
+        - REMUX detection from filename markers (VU/UNTOUCHED)
         - Italian title substitution from IMDb AKAs
         - Multi-language audio tags (ITALIAN - ENGLISH format)
         - Italian subtitle [SUBS] tag when no Italian audio present
@@ -59,13 +59,12 @@ class SHRI(UNIT3D):
         if not meta.get("language_checked", False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        # Extract components
+        # Title and basic info
         title = meta.get("title", "")
         italian_title = self._get_italian_title(meta.get("imdb_info", {}))
         use_italian_title = self.config["TRACKERS"][self.tracker].get(
             "use_italian_title", False
         )
-
         if italian_title and use_italian_title:
             title = italian_title
 
@@ -75,17 +74,23 @@ class SHRI(UNIT3D):
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
+        # Optional fields
+        edition = meta.get("edition") or ""
+        hdr = meta.get("hdr") or ""
+        uhd = meta.get("uhd") or ""
+        three_d = meta.get("3D") or ""
+        region = meta.get("region") or ""
+
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = meta.get("audio", "").replace("Dual-Audio", "").strip()
         audio = re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio).strip()
 
-        # Build audio language string with priority: original → ITALIAN → Multi
+        # Build audio language tag: original → ITALIAN → others (Multi for 4+)
         audio_lang_str = ""
         if meta.get("audio_languages"):
             audio_langs = [lang.upper() for lang in meta["audio_languages"]]
             audio_langs = list(dict.fromkeys(audio_langs))
 
-            # Convert original language from ISO code to full name
             orig_lang_iso = meta.get("original_language", "").upper()
             orig_lang_full = self.LANG_MAP.get(orig_lang_iso, "")
 
@@ -117,6 +122,7 @@ class SHRI(UNIT3D):
 
         effective_type = self._get_effective_type(meta)
 
+        # Detect Hybrid from filename if not in title
         hybrid = ""
         basename_upper = self.get_basename(meta).upper()
         title_upper = title.upper()
@@ -129,43 +135,65 @@ class SHRI(UNIT3D):
         if effective_type == "DISC":
             if meta.get("is_disc") == "BDMV":
                 disc_size = meta.get("disc_size", "")
-                name = f"{title} {year} {audio_lang_str} {repack} {resolution} {source} DISC {disc_size} {video_codec} {audio}"
+                # BDMV: Title Year Edition 3D LANG Hybrid REPACK Resolution Region UHD Source DISC Size HDR VideoCodec Audio
+                name = f"{title} {year} {edition} {three_d} {hybrid} {repack} {resolution} {region} {uhd} {source} DISC {disc_size} {hdr} {video_codec} {audio}"
             elif meta.get("is_disc") == "DVD":
                 dvd_size = meta.get("dvd_size", "")
-                name = f"{title} {year} {audio_lang_str} {repack} DVD DISC {dvd_size} {audio}"
+                # DVD: Title Year Edition LANG Hybrid REPACK DVD DISC Size Region Audio
+                name = f"{title} {year} {edition} {hybrid} {repack} DVD DISC {dvd_size} {region} {audio}"
 
         elif effective_type == "REMUX":
-            # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
-            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} REMUX {video_codec} {audio}"
+            # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
+            name = f"{title} {year} {edition} {three_d} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
-            # DVDRip/BRRIP: Title Year LANG Resolution DVDRip Audio Encode
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
-            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {type_str} {audio} {video_encode}"
+            # DVDRip/BRRip: Title Year Edition LANG Hybrid REPACK Resolution Type Audio HDR VideoCodec
+            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
-            # Encode/HDTV: Title Year LANG Resolution Source Audio Encode
-            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} {audio} {video_encode}"
+            # Encode/HDTV: Title Year Edition LANG Hybrid REPACK Resolution UHD Source Audio HDR VideoCodec
+            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
-            # WEB: Title Year LANG Resolution Service Type Audio Encode
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {service} {type_str} {audio} {video_encode}"
+            # WEB: Title Year Edition LANG Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
+            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio
             name = meta["name"].replace("Dual-Audio", "").strip()
 
-        # Add [SUBS] tag for Italian subtitles without Italian audio
+        # Add [SUBS] for Italian subtitles without Italian audio
         if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
             name = f"{name} [SUBS]"
 
-        # Clean and validate release group tag
+        # Extract tag from filename if not in meta
         tag = meta.get("tag", "").strip()
-        tag = tag.lstrip("-")
-        tag = re.sub(r"^[A-Z]{2,3}\s+", "", tag).strip()
 
+        if not tag:
+            basename = self.get_basename(meta)
+            
+            # Get extension from mediainfo and remove it
+            ext = meta.get("mediainfo", {}).get("media", {}).get("track", [{}])[0].get("FileExtension", "")
+            name_no_ext = basename[:-len(ext)-1] if ext and basename.endswith(f".{ext}") else basename
+            
+            # Extract tag after last hyphen
+            if "-" in name_no_ext:
+                potential_tag = name_no_ext.split("-")[-1]
+                if potential_tag and len(potential_tag) <= 30 and potential_tag.replace("_", "").replace(".", "").isalnum():
+                    tag = potential_tag
+
+        # Clean and validate tag
+        tag = tag.lstrip("-").strip()
+        tag = re.sub(r"^[A-Z]{2,3}\s+", "", tag)
+
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if not tag or any(inv in tag.lower() for inv in invalid_tags):
+            tag = "NoGroup"
+
+        # Validate tag
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         if not tag or any(inv in tag.lower() for inv in invalid_tags):
             tag = "NoGroup"
@@ -197,9 +225,11 @@ class SHRI(UNIT3D):
 
     def _is_remux(self, meta):
         """
-        Detect REMUX releases via:
-        - Filename markers (remux, vu, untouched) - excludes group tags at end
-        - Mediainfo analysis (no encoding + BluRay/HDDVD source)
+        Detect REMUX releases.
+
+        Methods:
+        - Filename markers: remux, vu, untouched (excludes group tags at end)
+        - Mediainfo: no encoding settings + BluRay/HDDVD source
         """
         basename = self.get_basename(meta)
         # Remove extension to check markers properly
