@@ -480,8 +480,6 @@ class Prep():
                         meta['tvmaze_id'] = ids['tvmaze_id']
                     if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
                         meta['tmdb_id'] = ids['tmdb_id']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
                 else:
@@ -502,8 +500,6 @@ class Prep():
                         meta['tmdb_id'] = ids['tmdb_id']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                 else:
                     ids = None
 
@@ -540,8 +536,6 @@ class Prep():
                         meta['tvmaze_id'] = ids['tvmaze_id']
                     if meta.get('tmdb_id', 0) == 0 and ids['tmdb_id'] is not None:
                         meta['tmdb_id'] = ids['tmdb_id']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
                 else:
@@ -562,8 +556,6 @@ class Prep():
                         meta['tmdb_id'] = ids['tmdb_id']
                     if meta.get('manual_year', 0) == 0 and ids['year'] is not None:
                         meta['manual_year'] = ids['year']
-                    if meta.get('tag', None) is None:
-                        meta['tag'] = ids['release_group']
                 else:
                     ids = None
 
