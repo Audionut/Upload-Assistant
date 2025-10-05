@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pycountry
 import re
 import os
 from src.languages import process_desc_language
@@ -7,19 +8,6 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class SHRI(UNIT3D):
-    # fmt: off
-    LANG_MAP = {
-        "AR": "ARABIC", "PT-BR": "BRAZILIAN PORTUGUESE", "BG": "BULGARIAN", 
-        "ZH": "CHINESE", "HR": "CROATIAN", "CS": "CZECH", "DA": "DANISH", 
-        "NL": "DUTCH", "EN": "ENGLISH", "ET": "ESTONIAN", "FI": "FINNISH", 
-        "FR": "FRENCH", "DE": "GERMAN", "EL": "GREEK", "HE": "HEBREW", 
-        "HI": "HINDI", "HU": "HUNGARIAN", "IS": "ICELANDIC", "ID": "INDONESIAN",
-        "IT": "ITALIAN", "JA": "JAPANESE", "KO": "KOREAN", "LV": "LATVIAN", 
-        "LT": "LITHUANIAN", "NO": "NORWEGIAN", "FA": "PERSIAN", "PL": "POLISH", 
-        "PT": "PORTUGUESE", "RO": "ROMANIAN", "RU": "RUSSIAN", "SR": "SERBIAN", 
-        "SK": "SLOVAK", "SL": "SLOVENIAN", "ES": "SPANISH", "SV": "SWEDISH", 
-        "TH": "THAI", "TR": "TURKISH", "UK": "UKRAINIAN", "VI": "VIETNAMESE"
-    }  # fmt: on
     # Pre-compile regex patterns for performance
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
@@ -75,10 +63,10 @@ class SHRI(UNIT3D):
         video_encode = meta.get("video_encode", "")
 
         # TV SPECIFIC
-        season = meta.get('season') or ''
-        episode = meta.get('episode') or ''
-        episode_title = meta.get('episode_title') or ''
-        part = meta.get('part') or ''
+        season = meta.get("season") or ""
+        episode = meta.get("episode") or ""
+        episode_title = meta.get("episode_title") or ""
+        part = meta.get("part") or ""
 
         # Optional fields
         edition = meta.get("edition") or ""
@@ -97,7 +85,7 @@ class SHRI(UNIT3D):
             audio_langs = list(dict.fromkeys(audio_langs))
 
             orig_lang_iso = meta.get("original_language", "").upper()
-            orig_lang_full = self.LANG_MAP.get(orig_lang_iso, "")
+            orig_lang_full = self._get_language_name(orig_lang_iso)
 
             result = []
             remaining = audio_langs.copy()
@@ -138,8 +126,16 @@ class SHRI(UNIT3D):
 
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
-            # Remove tag, will be re-added by common logic
-            name = meta["name"].replace(meta.get("tag", ""), "")
+            name = meta["name"]
+
+            # Apply Italian title if enabled
+            if italian_title and use_italian_title:
+                name = name.replace(title, italian_title, 1)
+
+            # Remove tag
+            tag = meta.get("tag", "").strip()
+            if tag:
+                name = name.replace(tag, "")
 
             # Remove AKA
             aka = meta.get("aka", "")
@@ -154,7 +150,7 @@ class SHRI(UNIT3D):
                     name = name.replace(audio, f"{video_codec} {audio}", 1)
 
             # BDMV: inject resolution after year
-            elif meta.get('is_disc') == 'BDMV':
+            elif meta.get("is_disc") == "BDMV":
                 if resolution and resolution not in name:
                     parts = name.split()
                     if year in parts:
@@ -329,3 +325,20 @@ class SHRI(UNIT3D):
             and track.get("Language").lower() in {"it", "it-it"}
             for track in tracks
         )
+
+    def _get_language_name(self, iso_code):
+        """Get full language name from ISO code"""
+        if not iso_code:
+            return ""
+
+        # Try alpha_2 (IT, EN, etc)
+        lang = pycountry.languages.get(alpha_2=iso_code.lower())
+        if lang:
+            return lang.name.upper()
+        
+        # Try alpha_3 (ITA, ENG, etc)
+        lang = pycountry.languages.get(alpha_3=iso_code.lower())
+        if lang:
+            return lang.name.upper()
+        
+        return iso_code # Fallback to original code
