@@ -111,21 +111,21 @@ class SHRI(UNIT3D):
         # Build name per ShareIsland type-specific format
         if effective_type == "REMUX":
             # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
-            name = f"{title} {year} {hybrid} {audio_lang_str} {repack} {resolution} {source} REMUX {video_codec} {audio}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} REMUX {video_codec} {audio}"
 
         elif effective_type == "DVDRIP":
             # DVDRip: Title Year LANG Resolution DVDRip Audio Encode
-            name = f"{title} {year} {hybrid} {audio_lang_str} {repack} {resolution} DVDRip {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} DVDRip {audio} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
             # Encode/HDTV: Title Year LANG Resolution Source Audio Encode
-            name = f"{title} {year} {hybrid} {audio_lang_str} {repack} {resolution} {source} {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} {audio} {video_encode}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             # WEB: Title Year LANG Resolution Service Type Audio Encode
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            name = f"{title} {year} {hybrid} {audio_lang_str} {repack} {resolution} {service} {type_str} {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {service} {type_str} {audio} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio
