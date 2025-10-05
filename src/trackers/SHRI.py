@@ -7,6 +7,18 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class SHRI(UNIT3D):
+    LANG_MAP = {
+        "AR": "ARABIC", "PT-BR": "BRAZILIAN PORTUGUESE", "BG": "BULGARIAN", 
+        "ZH": "CHINESE", "HR": "CROATIAN", "CS": "CZECH", "DA": "DANISH", 
+        "NL": "DUTCH", "EN": "ENGLISH", "ET": "ESTONIAN", "FI": "FINNISH", 
+        "FR": "FRENCH", "DE": "GERMAN", "EL": "GREEK", "HE": "HEBREW", 
+        "HI": "HINDI", "HU": "HUNGARIAN", "IS": "ICELANDIC", "ID": "INDONESIAN",
+        "IT": "ITALIAN", "JA": "JAPANESE", "KO": "KOREAN", "LV": "LATVIAN", 
+        "LT": "LITHUANIAN", "NO": "NORWEGIAN", "FA": "PERSIAN", "PL": "POLISH", 
+        "PT": "PORTUGUESE", "RO": "ROMANIAN", "RU": "RUSSIAN", "SR": "SERBIAN", 
+        "SK": "SLOVAK", "SL": "SLOVENIAN", "ES": "SPANISH", "SV": "SWEDISH", 
+        "TH": "THAI", "TR": "TURKISH", "UK": "UKRAINIAN", "VI": "VIETNAMESE"
+    }
     # Pre-compile regex patterns for performance
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
@@ -70,52 +82,65 @@ class SHRI(UNIT3D):
         audio_lang_str = ""
         if meta.get("audio_languages"):
             audio_langs = [lang.upper() for lang in meta["audio_languages"]]
-            audio_langs = list(dict.fromkeys(audio_langs))  # Remove duplicates
+            audio_langs = list(dict.fromkeys(audio_langs))
 
-            if len(audio_langs) == 1:
-                audio_lang_str = audio_langs[0]
-            elif len(audio_langs) == 2:
-                audio_lang_str = " - ".join(audio_langs)
-            else:  # 3+ languages
-                # Priority: original language first, then ITALIAN, then Multi
-                orig_lang = meta.get("original_language", "").upper()
+            # Convert original language from ISO code to full name
+            orig_lang_iso = meta.get("original_language", "").upper()
+            orig_lang_full = self.LANG_MAP.get(orig_lang_iso, "")
 
-                result = []
+            result = []
+            remaining = audio_langs.copy()
 
-                # Add original language if present in audio tracks
-                if orig_lang in audio_langs:
-                    result.append(orig_lang)
+            # Priority 1: Original language always first
+            if orig_lang_full and orig_lang_full in remaining:
+                result.append(orig_lang_full)
+                remaining.remove(orig_lang_full)
 
-                # Add ITALIAN if present and not already added as original
-                italian_variants = ["ITALIAN", "ITA", "IT"]
-                has_italian = any(lang in italian_variants for lang in audio_langs)
-                if has_italian and orig_lang not in italian_variants:
-                    result.append("ITALIAN")
+            # Priority 2: Italian always second (if present and not already added)
+            italian_variants = ["ITALIAN", "ITA", "IT"]
+            italian_lang = next(
+                (lang for lang in remaining if lang in italian_variants), None
+            )
+            if italian_lang:
+                result.append("ITALIAN")
+                remaining.remove(italian_lang)
 
-                # Add Multi indicator
+            # 4+ languages: add Multi after first two
+            if len(audio_langs) >= 4:
                 result.append("Multi")
+            else:
+                # 3 or fewer: show all languages
+                result.extend(remaining)
 
-                audio_lang_str = " - ".join(result)
+            audio_lang_str = " - ".join(result)
 
         effective_type = self._get_effective_type(meta)
 
         hybrid = ""
-        if (
-            all([x in meta.get("hdr", "") for x in ["HDR", "DV"]])
-            or "HYBRID" in self.get_basename(meta).upper()
+        basename_upper = self.get_basename(meta).upper()
+        title_upper = title.upper()
+        if all([x in meta.get("hdr", "") for x in ["HDR", "DV"]]) or (
+            "HYBRID" in basename_upper and "HYBRID" not in title_upper
         ):
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
 
         # Build name per ShareIsland type-specific format
-        if effective_type == "REMUX":
+        if effective_type == "DISC":
+            if meta.get("is_disc") == "DVD":
+                name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {source} {audio}"
+            else:  # BDMV or other disc types
+                name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {source} {video_codec} {audio}"
+
+        elif effective_type == "REMUX":
             # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
             name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {source} REMUX {video_codec} {audio}"
 
-        elif effective_type == "DVDRIP":
-            # DVDRip: Title Year LANG Resolution DVDRip Audio Encode
-            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} DVDRip {audio} {video_encode}"
+        elif effective_type in ("DVDRIP", "BRRIP"):
+            # DVDRip/BRRIP: Title Year LANG Resolution DVDRip Audio Encode
+            type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
+            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
             # Encode/HDTV: Title Year LANG Resolution Source Audio Encode
@@ -159,6 +184,8 @@ class SHRI(UNIT3D):
             "WEBRIP": "15",
             "HDTV": "6",
             "ENCODE": "15",
+            "DVDRIP": "15",
+            "BRRIP": "15",
         }.get(effective_type, "0")
         return {"type_id": type_id}
 
