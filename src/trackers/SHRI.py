@@ -198,15 +198,20 @@ class SHRI(UNIT3D):
     def _is_remux(self, meta):
         """
         Detect REMUX releases via:
-        - Filename markers (remux, vu, untouched)
-        - Mediainfo analysis (no encoding settings + BluRay/HDDVD source)
+        - Filename markers (remux, vu, untouched) - excludes group tags at end
+        - Mediainfo analysis (no encoding + BluRay/HDDVD source)
         """
-        basename = self.get_basename(meta).lower()
+        basename = self.get_basename(meta)
+        # Remove extension to check markers properly
+        name_no_ext = os.path.splitext(basename)[0].lower()
 
-        if "remux" in basename:
+        if "remux" in name_no_ext:
             return True
-        if any(marker in basename for marker in ["vu", "untouched", "vu1080", "vu720"]):
-            return True
+
+        # Check for VU/UNTOUCHED markers, but not at end as group tag
+        for marker in ["vu", "untouched", "vu1080", "vu720"]:
+            if marker in name_no_ext and not name_no_ext.endswith(f"-{marker}"):
+                return True
 
         try:
             mi = meta.get("mediainfo", {})
