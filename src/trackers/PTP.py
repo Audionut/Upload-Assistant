@@ -263,7 +263,51 @@ class PTP():
         await asyncio.sleep(1)
         try:
             response = response.json()
-            if response.get("Page") == "Browse":  # No Releases on Site with ID
+            if response.get('TotalResults'):  # Search results page
+                total_results = int(response.get('TotalResults', 0))
+                if total_results == 0:
+                    console.print(f"[yellow]No results found for IMDb: tt{imdb}[/yellow]")
+                    return None
+                elif total_results == 1:
+                    # Single result - use it
+                    movie = response.get('Movies', [{}])[0]
+                    groupID = movie.get('GroupId')
+                    title = movie.get('Title', 'Unknown')
+                    year = movie.get('Year', 'Unknown')
+                    console.print(f"[green]Found single match for IMDb: [yellow]tt{imdb}[/yellow] -> Group ID: [yellow]{groupID}[/yellow][/green]")
+                    console.print(f"[green]Title: [yellow]{title}[/yellow] ([yellow]{year}[/yellow])")
+                    return groupID
+                else:
+                    # Multiple results - let user choose
+                    console.print(f"[yellow]Found {total_results} matches for IMDb: tt{imdb}[/yellow]")
+                    movies = response.get('Movies', [])
+                    choices = []
+                    for i, movie in enumerate(movies):
+                        title = movie.get('Title', 'Unknown')
+                        year = movie.get('Year', 'Unknown')
+                        group_id = movie.get('GroupId', 'Unknown')
+                        choice_text = f"{title} ({year}) - Group ID: {group_id}"
+                        choices.append(choice_text)
+
+                    choices.append("Skip - Don't use any of these matches")
+
+                    try:
+                        selected = cli_ui.ask_choice("Select the correct movie:", choices=choices)
+                        if selected == "Skip - Don't use any of these matches":
+                            console.print("[yellow]User chose to skip all matches[/yellow]")
+                            return None
+
+                        selected_index = choices.index(selected)
+                        selected_movie = movies[selected_index]
+                        groupID = selected_movie.get('GroupId')
+
+                        console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
+                        return groupID
+
+                    except (KeyboardInterrupt, cli_ui.Interrupted):
+                        console.print("[yellow]Selection cancelled by user[/yellow]")
+                        return None
+            elif response.get("Page") == "Browse":  # No Releases on Site with ID
                 return None
             elif response.get('Page') == "Details":  # Group Found
                 groupID = response.get('GroupId')
@@ -271,7 +315,7 @@ class PTP():
                 console.print(f"[green]Title: [yellow]{response.get('Name')}[/yellow] ([yellow]{response.get('Year')}[/yellow])")
                 return groupID
         except Exception:
-            console.print("[red]An error has occured trying to find a group ID")
+            console.print("[red]An error has occurred trying to find a group ID")
             console.print("[red]Please check that the site is online and your ApiUser/ApiKey values are correct")
             return None
 
@@ -1311,7 +1355,6 @@ class PTP():
             data["imdb"] = "0"
         else:
             data["imdb"] = str(meta["imdb_id"]).zfill(7)
-
         if groupID is None:  # If need to make new group
             url = "https://passthepopcorn.me/upload.php"
             if data["imdb"] == '0':
@@ -1344,7 +1387,7 @@ class PTP():
                 if meta.get('mode', 'discord') == 'cli':
                     console.print('[yellow]Unable to match any tags')
                     console.print("Valid tags can be found on the PTP upload form")
-                    new_data["tags"] = console.input("Please enter at least one tag. Comma seperated (action, animation, short):")
+                    new_data["tags"] = console.input("Please enter at least one tag. Comma separated (action, animation, short):")
             data.update(new_data)
             if meta["imdb_info"].get("directors", None) is not None:
                 data["artist[]"] = tuple(meta['imdb_info'].get('directors'))

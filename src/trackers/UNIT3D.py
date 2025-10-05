@@ -29,9 +29,10 @@ class UNIT3D:
 
     async def search_existing(self, meta, disctype):
         if not self.api_key:
-            console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]')
-            meta['skipping'] = f'{self.tracker}'
-            return
+            if not meta['debug']:
+                console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]')
+                meta['skipping'] = f'{self.tracker}'
+                return
 
         should_continue = await self.get_additional_checks(meta)
         if not should_continue:
