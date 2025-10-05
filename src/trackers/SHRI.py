@@ -7,6 +7,7 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class SHRI(UNIT3D):
+    # fmt: off
     LANG_MAP = {
         "AR": "ARABIC", "PT-BR": "BRAZILIAN PORTUGUESE", "BG": "BULGARIAN", 
         "ZH": "CHINESE", "HR": "CROATIAN", "CS": "CZECH", "DA": "DANISH", 
@@ -18,7 +19,7 @@ class SHRI(UNIT3D):
         "PT": "PORTUGUESE", "RO": "ROMANIAN", "RU": "RUSSIAN", "SR": "SERBIAN", 
         "SK": "SLOVAK", "SL": "SLOVENIAN", "ES": "SPANISH", "SV": "SWEDISH", 
         "TH": "THAI", "TR": "TURKISH", "UK": "UKRAINIAN", "VI": "VIETNAMESE"
-    }
+    }  # fmt: on
     # Pre-compile regex patterns for performance
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
@@ -119,19 +120,19 @@ class SHRI(UNIT3D):
         hybrid = ""
         basename_upper = self.get_basename(meta).upper()
         title_upper = title.upper()
-        if all([x in meta.get("hdr", "") for x in ["HDR", "DV"]]) or (
-            "HYBRID" in basename_upper and "HYBRID" not in title_upper
-        ):
+        if "HYBRID" in basename_upper and "HYBRID" not in title_upper:
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
 
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
-            if meta.get("is_disc") == "DVD":
-                name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {source} {audio}"
-            else:  # BDMV or other disc types
-                name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {source} {video_codec} {audio}"
+            if meta.get("is_disc") == "BDMV":
+                disc_size = meta.get("disc_size", "")
+                name = f"{title} {year} {audio_lang_str} {repack} {resolution} {source} DISC {disc_size} {video_codec} {audio}"
+            elif meta.get("is_disc") == "DVD":
+                dvd_size = meta.get("dvd_size", "")
+                name = f"{title} {year} {audio_lang_str} {repack} DVD DISC {dvd_size} {audio}"
 
         elif effective_type == "REMUX":
             # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
