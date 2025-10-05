@@ -74,6 +74,12 @@ class SHRI(UNIT3D):
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
+        # TV SPECIFIC
+        season = meta.get('season') or ''
+        episode = meta.get('episode') or ''
+        episode_title = meta.get('episode_title') or ''
+        part = meta.get('part') or ''
+
         # Optional fields
         edition = meta.get("edition") or ""
         hdr = meta.get("hdr") or ""
@@ -158,22 +164,22 @@ class SHRI(UNIT3D):
 
         elif effective_type == "REMUX":
             # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
-            name = f"{title} {year} {edition} {three_d} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {three_d} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
             # DVDRip/BRRip: Title Year Edition LANG Hybrid REPACK Resolution Type Audio HDR VideoCodec
-            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
+            name = f"{title} {year} {season} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
             # Encode/HDTV: Title Year Edition LANG Hybrid REPACK Resolution UHD Source Audio HDR VideoCodec
-            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
             # WEB: Title Year Edition LANG Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
-            name = f"{title} {year} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio
