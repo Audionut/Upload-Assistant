@@ -79,7 +79,6 @@ class SHRI(UNIT3D):
         hdr = meta.get("hdr") or ""
         uhd = meta.get("uhd") or ""
         three_d = meta.get("3D") or ""
-        region = meta.get("region") or ""
 
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = meta.get("audio", "").replace("Dual-Audio", "").strip()
@@ -133,14 +132,29 @@ class SHRI(UNIT3D):
 
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
-            if meta.get("is_disc") == "BDMV":
-                disc_size = meta.get("disc_size", "")
-                # BDMV: Title Year Edition 3D LANG Hybrid REPACK Resolution Region UHD Source DISC Size HDR VideoCodec Audio
-                name = f"{title} {year} {edition} {three_d} {hybrid} {repack} {resolution} {region} {uhd} {source} DISC {disc_size} {hdr} {video_codec} {audio}"
-            elif meta.get("is_disc") == "DVD":
-                dvd_size = meta.get("dvd_size", "")
-                # DVD: Title Year Edition LANG Hybrid REPACK DVD DISC Size Region Audio
-                name = f"{title} {year} {edition} {hybrid} {repack} DVD DISC {dvd_size} {region} {audio}"
+            # Remove tag, will be re-added by common logic
+            name = meta["name"].replace(meta.get("tag", ""), "")
+
+            # Remove AKA
+            aka = meta.get("aka", "")
+            if aka:
+                name = name.replace(f" {aka}", "").replace(f"{aka} ", "")
+
+            # DVD: add resolution before source, codec before audio
+            if meta.get("is_disc") == "DVD":
+                if resolution and source:
+                    name = name.replace(source, f"{resolution} {source}", 1)
+                if video_codec and audio:
+                    name = name.replace(audio, f"{video_codec} {audio}", 1)
+
+            # BDMV: inject resolution after year
+            elif meta.get('is_disc') == 'BDMV':
+                if resolution and resolution not in name:
+                    parts = name.split()
+                    if year in parts:
+                        idx = parts.index(year) + 1
+                        parts.insert(idx, resolution)
+                        name = " ".join(parts)
 
         elif effective_type == "REMUX":
             # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
@@ -174,15 +188,28 @@ class SHRI(UNIT3D):
 
         if not tag:
             basename = self.get_basename(meta)
-            
+
             # Get extension from mediainfo and remove it
-            ext = meta.get("mediainfo", {}).get("media", {}).get("track", [{}])[0].get("FileExtension", "")
-            name_no_ext = basename[:-len(ext)-1] if ext and basename.endswith(f".{ext}") else basename
-            
+            ext = (
+                meta.get("mediainfo", {})
+                .get("media", {})
+                .get("track", [{}])[0]
+                .get("FileExtension", "")
+            )
+            name_no_ext = (
+                basename[: -len(ext) - 1]
+                if ext and basename.endswith(f".{ext}")
+                else basename
+            )
+
             # Extract tag after last hyphen
             if "-" in name_no_ext:
                 potential_tag = name_no_ext.split("-")[-1]
-                if potential_tag and len(potential_tag) <= 30 and potential_tag.replace("_", "").replace(".", "").isalnum():
+                if (
+                    potential_tag
+                    and len(potential_tag) <= 30
+                    and potential_tag.replace("_", "").replace(".", "").isalnum()
+                ):
                     tag = potential_tag
 
         # Clean and validate tag
