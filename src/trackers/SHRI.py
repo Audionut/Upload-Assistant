@@ -135,22 +135,22 @@ class SHRI(UNIT3D):
 
         elif effective_type == "REMUX":
             # REMUX: Title Year LANG Resolution Source REMUX Codec Audio
-            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {source} REMUX {video_codec} {audio}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} REMUX {video_codec} {audio}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             # DVDRip/BRRIP: Title Year LANG Resolution DVDRip Audio Encode
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
-            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {type_str} {audio} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
             # Encode/HDTV: Title Year LANG Resolution Source Audio Encode
-            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {source} {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {source} {audio} {video_encode}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             # WEB: Title Year LANG Resolution Service Type Audio Encode
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            name = f"{title} {year} {audio_lang_str} {hybrid} {repack} {resolution} {service} {type_str} {audio} {video_encode}"
+            name = f"{title} {year} {hybrid} {repack} {audio_lang_str} {resolution} {service} {type_str} {audio} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio

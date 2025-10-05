@@ -16,5 +16,5 @@ class YOINK(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
-        self.banned_groups = ["YTS,YiFY,LAMA,MeGUSTA,NAHOM,GalaxyRG,RARBG"]
+        self.banned_groups = ['YTS', 'YiFY', 'LAMA', 'MeGUSTA', 'NAHOM', 'GalaxyRG', 'RARBG', 'INFINITY']
         pass

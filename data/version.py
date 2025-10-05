@@ -1,4 +1,20 @@
-__version__ = "6.0.0"
+__version__ = "v6.0.1"
+
+"""
+Release Notes for version v6.0.1 (2025-10-04):
+
+# ## What's Changed
+# 
+# * fix version file by @Audionut in c8ccf5a
+# * erroneous v in version file by @Audionut in 5428927
+# * Fix YUS get_type_id (#850) by @oxidize9779 in 25591e0
+# * fix: LCD and UNIT3D upload (#852) by @wastaken7 in f5d11b8
+# * Update banned release groups of various trackers (#848) by @flowerey in 9311996
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.0.0...v6.0.1
+"""
+
 
 """
 Changelog for version v6.0.0 (2025-10-03):

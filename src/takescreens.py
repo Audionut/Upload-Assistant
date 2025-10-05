@@ -993,7 +993,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
     meta['libplacebo'] = False
     if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
-        if use_libplacebo:
+        if use_libplacebo and not meta.get('frame_overlay', False):
             if not ffmpeg_is_good:
                 test_time = ss_times[0] if ss_times else 0
                 test_image = image_path if isinstance(image_path, str) else (
@@ -1328,7 +1328,7 @@ async def capture_screenshot(args):
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
             console.print(f"[cyan]Processing file: {path}[/cyan]")
 
-        if meta.get('frame_overlay', False):
+        if not meta.get('frame_overlay', False):
             # Warm-up (only for first screenshot index or if not warmed)
             if use_libplacebo:
                 warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
@@ -1731,9 +1731,10 @@ async def get_frame_info(path, ss_time, meta):
     """Get frame information (type, exact timestamp) for a specific frame"""
     try:
         info_ff = ffmpeg.input(path, ss=ss_time)
+        # Use video stream selector and apply showinfo filter
+        filtered = info_ff['v:0'].filter('showinfo')
         info_command = (
-            info_ff
-            .filter('showinfo')
+            filtered
             .output('-', format='null', vframes=1)
             .global_args('-loglevel', 'info')
         )

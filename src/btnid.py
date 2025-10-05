@@ -1,5 +1,6 @@
 import httpx
 import uuid
+
 from src.bbcode import BBCODE
 from src.console import console
 
@@ -9,6 +10,8 @@ async def generate_guid():
 
 
 async def get_btn_torrents(btn_api, btn_id, meta):
+    imdb_id = 0
+    tvdb_id = 0
     if meta['debug']:
         print("Fetching BTN data...")
     post_query_url = "https://api.broadcasthe.net/"
@@ -33,14 +36,14 @@ async def get_btn_torrents(btn_api, btn_id, meta):
             except ValueError as e:
                 print(f"[ERROR] Failed to parse BTN response as JSON: {e}")
                 print(f"Response content: {response.text[:200]}...")
-                return meta
+                return 0, 0
     except Exception as e:
         print(f"[ERROR] Failed to fetch BTN data: {e}")
-        return meta
+        return 0, 0
 
     if not data or not isinstance(data, dict):
         print("[ERROR] BTN API response is empty or invalid.")
-        return meta
+        return 0, 0
 
     if "result" in data and "torrents" in data["result"]:
         torrents = data["result"]["torrents"]
@@ -49,22 +52,16 @@ async def get_btn_torrents(btn_api, btn_id, meta):
             imdb_id = first_torrent.get("ImdbID")
             tvdb_id = first_torrent.get("TvdbID")
 
-            if imdb_id and imdb_id != "0":
-                meta["imdb_id"] = int(imdb_id)
-
-            if tvdb_id and tvdb_id != "0":
-                meta["tvdb_id"] = int(tvdb_id)
-
-            if meta.get("imdb_id") or meta.get("tvdb_id"):
-                console.print(f"[green]Found BTN IDs: IMDb={meta.get('imdb_id')}, TVDb={meta.get('tvdb_id')}")
-
-            return meta
+            if imdb_id or tvdb_id:
+                return imdb_id, tvdb_id
     if meta['debug']:
         console.print("[red]No IMDb or TVDb ID found.")
-    return meta
+    return 0, 0
 
 
 async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=None, filename=None, foldername=None, torrent_id=None):
+    imdb = 0
+    tmdb = 0
     if meta['debug']:
         print("Fetching BHD data...")
     post_query_url = f"https://beyond-hd.me/api/torrents/{bhd_api}"
@@ -160,15 +157,15 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
         description = str(description_value) if description_value is not None else ""
 
     imdb_id = first_result.get("imdb_id", "").replace("tt", "") if first_result.get("imdb_id") else 0
-    meta["imdb_id"] = int(imdb_id or 0)
+    imdb = int(imdb_id or 0)
 
     raw_tmdb_id = first_result.get("tmdb_id", "")
     if raw_tmdb_id and raw_tmdb_id != "0":
         meta["category"], parsed_tmdb_id = await parse_tmdb_id(raw_tmdb_id, meta.get("category"))
-        meta["tmdb_id"] = int(parsed_tmdb_id or 0)
+        tmdb = int(parsed_tmdb_id or 0)
 
     if only_id and not meta.get('keep_images'):
-        return meta["imdb_id"] or meta["tmdb_id"] or 0
+        return imdb, tmdb
 
     bbcode = BBCODE()
     imagelist = []
@@ -184,9 +181,9 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
         meta["description"] = ""
         meta["image_list"] = imagelist
 
-    console.print(f"[green]Found BHD IDs: IMDb={meta.get('imdb_id')}, TMDb={meta.get('tmdb_id')}")
+    console.print(f"[green]Found BHD IDs: IMDb={imdb}, TMDb={tmdb}")
 
-    return meta["imdb_id"] and meta["tmdb_id"]
+    return imdb, tmdb
 
 
 async def parse_tmdb_id(tmdb_id, category):

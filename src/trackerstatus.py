@@ -34,7 +34,7 @@ async def process_all_trackers(meta):
     async def process_single_tracker(tracker_name, shared_meta):
         nonlocal successful_trackers
         local_meta = copy.deepcopy(shared_meta)  # Ensure each task gets its own copy of meta
-        local_tracker_status = {'banned': False, 'skipped': False, 'dupe': False, 'upload': False}
+        local_tracker_status = {'banned': False, 'skipped': False, 'dupe': False, 'upload': False, 'other': False}
         disctype = local_meta.get('disctype', None)
 
         if local_meta['name'].endswith('DUPE?'):
@@ -103,6 +103,8 @@ async def process_all_trackers(meta):
 
                 if tracker_name not in {"PTP"} and not local_tracker_status['skipped']:
                     dupes = await tracker_class.search_existing(local_meta, disctype)
+                    if local_meta['tracker_status'][tracker_name].get('other', False):
+                        local_tracker_status['other'] = True
                 elif tracker_name == "PTP":
                     ptp = PTP(config=config)
                     groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
