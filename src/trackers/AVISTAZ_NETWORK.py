@@ -248,6 +248,9 @@ class AZTrackerBase:
         except httpx.RequestError as e:
             console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
             return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Unexpected error validating credentials: {e}')
+            return False
 
     async def search_existing(self, meta, disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):

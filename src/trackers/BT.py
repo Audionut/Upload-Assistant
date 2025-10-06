@@ -136,6 +136,9 @@ class BT:
         except httpx.RequestError as e:
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Erro desconhecido ao validar credenciais do {self.tracker}: {e}[/bold red]')
+            return False
 
     async def load_localized_data(self, meta):
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
