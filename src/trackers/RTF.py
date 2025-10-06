@@ -57,7 +57,7 @@ class RTF():
             # editing mediainfo so that instead of 1 080p its 1,080p as site mediainfo parser wont work other wise.
             'mediaInfo': re.sub(r"(\d+)\s+(\d+)", r"\1,\2", mi_dump) if bd_dump is None else f"{bd_dump}",
             "nfo": "",
-            "url": meta.get('imdb_info', {}).get('imdb_url', ''),
+            "url": meta.get('imdb_info', {}).get('imdb_url', '') + '/',
             # auto pulled from IMDB
             "descr": "This is short description",
             "poster": meta["poster"] if meta["poster"] is not None else "",

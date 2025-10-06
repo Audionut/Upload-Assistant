@@ -74,7 +74,7 @@ class THR():
             'name': thr_name,
             'descr': desc,
             'type': cat_id,
-            'url': meta.get('imdb_info', {}).get('imdb_url', ''),
+            'url': meta.get('imdb_info', {}).get('imdb_url', '') + '/',
             'tube': meta.get('youtube', '')
         }
         headers = {
