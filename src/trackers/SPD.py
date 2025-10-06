@@ -9,10 +9,11 @@ import httpx
 import os
 import re
 import unicodedata
-from src.bbcode import BBCODE
-from src.languages import process_desc_language
-from src.console import console
 from .COMMON import COMMON
+from src.bbcode import BBCODE
+from src.console import console
+from src.get_desc import DescriptionBuilder
+from src.languages import process_desc_language
 
 
 class SPD:
@@ -33,8 +34,6 @@ class SPD:
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = []
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Upload Assistant",
             'accept': 'application/json',
@@ -187,7 +186,36 @@ class SPD:
             console.print_exception()
 
     async def edit_desc(self, meta):
-        description = await self.common.description_template(self.tracker, meta)
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        user_description = await builder.get_user_description(meta)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        if user_description or episode_overview:  # Avoid unnecessary descriptions
+            # Custom Header
+            desc_parts.append(await builder.get_custom_header(self.tracker))
+
+            # Logo
+            logo_resize_url = meta.get('tmdb_logo', '')
+            if logo_resize_url:
+                desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/center]")
+
+            # TV
+            if episode_overview:
+                desc_parts.append(f'[center]{title}[/center]')
+
+                if episode_image:
+                    desc_parts.append(f"[center][img]{episode_image}[/img][/center]")
+
+                desc_parts.append(f'[center]{episode_overview}[/center]')
+
+            # User description
+            desc_parts.append(user_description)
+
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         bbcode = BBCODE()
         description = bbcode.remove_img_resize(description)

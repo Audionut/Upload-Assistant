@@ -183,11 +183,11 @@ class DescriptionBuilder:
 
         tvmaze_episode_data = meta.get('tvmaze_episode_data', {})
 
-        name = tvmaze_episode_data.get('season_name', '').strip() or meta.get('title')
+        name = tvmaze_episode_data.get('season_name', '') or meta.get('title')
         season_number = meta.get('season', '')
         episode_number = meta.get('episode', '')
-        episode_title = tvmaze_episode_data.get('episode_name', '').strip()
-        overview = tvmaze_episode_data.get('overview', '').strip() or meta.get('overview_meta', '').strip()
+        episode_title = tvmaze_episode_data.get('episode_name', '')
+        overview = tvmaze_episode_data.get('overview', '') or meta.get('overview_meta', '')
 
         image = ''
         if meta.get('tv_pack', False):
