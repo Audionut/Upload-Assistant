@@ -1002,7 +1002,10 @@ class Clients():
 
         # Create tracker-specific directory inside linked folder
         if use_symlink or use_hardlink:
-            tracker_dir = os.path.join(link_target, tracker)
+            # allow overridden folder name with link_dir_name config var
+            tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
+            link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
+            tracker_dir = os.path.join(link_target, link_dir_name or tracker)
             await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
             src_name = os.path.basename(src.rstrip(os.sep))

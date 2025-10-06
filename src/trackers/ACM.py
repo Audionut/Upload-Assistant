@@ -5,7 +5,10 @@ import asyncio
 import bencodepy
 import httpx
 import os
+import re
 import requests
+
+from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -261,8 +264,6 @@ class ACM(UNIT3D):
         output_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt'
 
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as descfile:
-            from src.bbcode import BBCODE
-
             if meta.get('type') == 'WEBDL' and meta.get('service_longname', ''):
                 await descfile.write(
                     f'[center][b][color=#ff00ff][size=18]This release is sourced from {meta["service_longname"]} and is not transcoded,'
@@ -291,7 +292,8 @@ class ACM(UNIT3D):
                                 f'[spoiler={os.path.basename(each["ifo"])}][code]{ifo_mi}[/code][/spoiler]\n\n'
                             )
 
-            desc = bbcode.convert_pre_to_code(base)
+            desc = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
+            desc = bbcode.convert_pre_to_code(desc)
             desc = bbcode.convert_hide_to_spoiler(desc)
             desc = bbcode.convert_comparison_to_collapse(desc, 1000)
             desc = desc.replace('[img]', '[img=300]')
@@ -299,6 +301,7 @@ class ACM(UNIT3D):
             await descfile.write(desc)
 
             images = meta.get('image_list', [])
+
             if images:
                 await descfile.write('[center]\n')
                 for i in range(min(len(images), int(meta.get('screens', 0)))):
@@ -311,7 +314,10 @@ class ACM(UNIT3D):
             if self.signature:
                 await descfile.write(self.signature)
 
-        return {'description': desc}
+        async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
+            final_desc = await f.read()
+
+        return {'description': final_desc}
 
     async def search_torrent_page(self, meta, disctype):
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"

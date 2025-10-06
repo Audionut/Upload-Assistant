@@ -221,11 +221,12 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
     # Unpack the expected 9 elements, ignoring any additional ones
     tmdb, imdb, tvdb, mal, desc, category, infohash, imagelist, filename, *rest = tracker_data
     if tmdb or imdb or tvdb or mal:
-        console.print(f"[green]{tracker_name} found IDs: TMDB={tmdb}, IMDb={imdb}, TVDb={tvdb}, MAL={mal}[/green]")
-        if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
-            pass
-        else:
-            return
+        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+            console.print(f"[green]{tracker_name} found IDs: TMDB={tmdb}, IMDb={imdb}, TVDb={tvdb}, MAL={mal}[/green]")
+            if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
+                pass
+            else:
+                return False
 
     if tmdb:
         meta['tmdb_id'] = tmdb
@@ -271,6 +272,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
 
     if meta['debug']:
         console.print(f"[green]{tracker_name} data successfully updated in meta[/green]")
+    return True
 
 
 async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, search_term, search_file_folder, only_id=False):
