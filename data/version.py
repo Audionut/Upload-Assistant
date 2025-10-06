@@ -1,4 +1,19 @@
-__version__ = "v6.0.1"
+__version__ = "v6.0.4"
+
+"""
+Release Notes for version v6.0.4 (2025-10-06):
+
+# ## What's Changed
+# 
+# * Little formatting by @flowerey in 32a6ba8
+# * Format and update by @flowerey in 70913c6
+# * Merge branch 'Audionut:master' by @flowerey
+# * Merge branch 'Audionut:master' by @flowerey
+# * Other minor updates and improvements
+# 
+# **Full Changelog**: https://github.com/flowerey/Upload-Assistant/compare/v6.0.3...v6.0.4
+"""
+
 
 """
 Release Notes for version v6.0.1 (2025-10-04):
