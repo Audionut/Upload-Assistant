@@ -104,17 +104,20 @@ class AZTrackerBase:
                     console.print(f'{self.tracker}: Trying to search again by ID after adding to media to database...\n')
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
-                response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={imdb_id}', headers=headers)
-                response.raise_for_status()
-                data = response.json()
+                data = {}
 
-                if not data.get('data'):
+                if imdb_id:
+                    response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={imdb_id}', headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+
+                if not data.get('data', ''):
                     response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={title}', headers=headers)
                     response.raise_for_status()
+                    data = response.json()
 
-                data = response.json()
                 match = None
-                for item in data['data']:
+                for item in data.get('data', []):
                     if imdb_id and item.get('imdb') == imdb_id:
                         match = item
                         break
