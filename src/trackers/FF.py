@@ -187,8 +187,13 @@ class FF:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        desc_parts.append(f'[pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre]')
-        desc_parts.append(f'[pre]{await builder.get_bdinfo_section(meta)}[/pre]')
+        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        if mediainfo:
+            desc_parts.append(f'[pre]{mediainfo}[/pre]')
+
+        bdinfo = await builder.get_bdinfo_section(meta)
+        if bdinfo:
+            desc_parts.append(f'[pre]{bdinfo}[/pre]')
 
         # User description
         desc_parts.append(await builder.get_user_description(meta))

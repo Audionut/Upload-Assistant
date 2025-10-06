@@ -7,7 +7,7 @@ from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
 
 
-class DC():
+class DC:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
