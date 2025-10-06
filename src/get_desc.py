@@ -223,7 +223,10 @@ class DescriptionBuilder:
 
         # Check if full mediainfo should be used
         if self.config['TRACKERS'][tracker].get('full_mediainfo', self.config['DEFAULT'].get('full_mediainfo', False)):
-            return await self.common.get_mediainfo_text(meta)
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            if await self.common.path_exists(mi_path):
+                async with aiofiles.open(mi_path, 'r', encoding='utf-8') as mi:
+                    return mi.read()
 
         cache_file_dir = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
         cache_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_SHORT.txt')

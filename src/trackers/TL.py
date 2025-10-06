@@ -21,8 +21,6 @@ class TL:
         self.http_upload_url = f'{self.base_url}/torrents/upload/'
         self.api_upload_url = f'{self.base_url}/torrents/upload/apiupload'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {self.ua_name}</a></center>'
         self.banned_groups = []
         self.session = httpx.AsyncClient(timeout=60.0)
         self.tracker_config = self.config['TRACKERS'][self.tracker]
@@ -33,7 +31,7 @@ class TL:
             f'https://tracker.tleechreload.org/a/{self.passkey}/announce'
         ]
         self.session.headers.update({
-            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         })
 
     async def login(self, meta, force=False):
@@ -119,7 +117,7 @@ class TL:
             desc_parts.append('<center>' + screenshots_block + '</center>')
 
         # Signature
-        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta.get('ua_name')} {meta.get('current_version', '')}</a></center>""")
+        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta['ua_signature']}</a></center>""")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

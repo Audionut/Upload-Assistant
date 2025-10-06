@@ -28,9 +28,8 @@ class BT:
         self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
         target_site_ids = {
@@ -382,7 +381,7 @@ class BT:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Signature
-        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_signature']}[/url][/center]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

@@ -19,8 +19,6 @@ class UNIT3D:
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url', '')
         self.api_key = tracker_config.get('api_key', '')
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
     async def get_additional_checks(self, meta):
@@ -92,7 +90,8 @@ class UNIT3D:
         return {'name': meta['name']}
 
     async def get_description(self, meta):
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
+        signature = f"\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta['ua_signature']}[/url][/center]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
         return {'description': desc}

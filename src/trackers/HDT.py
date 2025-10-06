@@ -3,6 +3,7 @@ import aiofiles
 import http.cookiejar
 import httpx
 import os
+import platform
 import re
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
@@ -27,10 +28,8 @@ class HDT:
         self.torrent_url = f'{self.base_url}/details.php?id='
         self.announce_url = self.config['TRACKERS'][self.tracker]['announce_url']
         self.banned_groups = []
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': self.ua_name
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
     async def load_cookies(self, meta):
@@ -219,7 +218,7 @@ class HDT:
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
         # Signature
-        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta.get('ua_name')} {meta.get('current_version', '')}[/url][/center]")
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta['ua_signature']}[/url][/center]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

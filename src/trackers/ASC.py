@@ -26,10 +26,8 @@ class ASC:
         self.torrent_url = 'https://cliente.amigos-share.club/torrents-details.php?id='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
         self.language_map = {
@@ -495,8 +493,7 @@ class ASC:
         if custom_description_header:
             description_parts.append(custom_description_header + '\n')
 
-        if self.signature:
-            description_parts.append(self.signature)
+        description_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_signature']}[/url][/center]")
 
         final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         with open(final_desc_path, 'w', encoding='utf-8') as descfile:

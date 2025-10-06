@@ -1412,24 +1412,6 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    def get_version(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        version_file_path = os.path.join(project_root, 'data', 'version.py')
-        if not os.path.isfile(version_file_path):
-            return ''
-        try:
-            with open(version_file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
-            if match:
-                return match.group(1)
-        except OSError as e:
-            print(f"Error reading version file: {e}")
-            return ''
-
-        return ''
-
     async def get_bdmv_mediainfo(self, meta, remove=None):
         mediainfo = ''
         mi_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/MEDIAINFO_CLEANPATH.txt'
@@ -1463,11 +1445,3 @@ class COMMON():
             mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo
-
-    async def get_mediainfo_text(self, meta):
-        mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-        if await self.path_exists(mi_path):
-            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as mi:
-                return mi.read()
-        else:
-            return ''
