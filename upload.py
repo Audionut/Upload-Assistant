@@ -35,6 +35,7 @@ from src.torrentcreate import create_torrent, create_random_torrents, create_bas
 from src.trackerhandle import process_trackers
 from src.trackerstatus import process_all_trackers
 from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
+from src.trackers.COMMON import COMMON
 from src.uphelper import UploadHelper
 from src.uploadscreens import upload_screens
 
@@ -306,6 +307,9 @@ async def process_meta(meta, base_dir, bot=None):
     else:
         console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 
+        # reset trackers after any removals
+        trackers = meta['trackers']
+
         audio_prompted = False
         for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "LDU", "OE", "PTS", "SHRI", "SPD", "ULCX"]:
             if tracker in trackers:
@@ -334,11 +338,6 @@ async def process_meta(meta, base_dir, bot=None):
         else:
             meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
 
-        meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
-        if any(tracker in meta['trackers'] for tracker in ['AZ', 'CZ', 'PHD']) and meta['frame_overlay']:
-            meta['frame_overlay'] = False
-            console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
-
     if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
         console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). EXITING........[/red]")
 
@@ -350,6 +349,23 @@ async def process_meta(meta, base_dir, bot=None):
         videopath = meta.get('filelist', [None])
         videopath = videopath[0] if videopath else None
         console.print(f"Processing {filename} for upload.....")
+
+        meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
+        for tracker in ['AZ', 'CZ', 'PHD']:
+            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+            if tracker in meta['trackers'] and meta['frame_overlay'] and upload_status is True:
+                meta['frame_overlay'] = False
+                console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
+
+        bdmv_mi_created = False
+        for tracker in ["ANT", "DC", "HUNO", "LCD"]:
+            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+            if tracker in trackers and upload_status is True:
+                if not bdmv_mi_created:
+                    common = COMMON(config)
+                    await common.get_bdmv_mediainfo(meta)
+                    bdmv_mi_created = True
+
         progress_task = asyncio.create_task(print_progress("[yellow]Still processing, please wait...", interval=10))
         try:
             if 'manual_frames' not in meta:

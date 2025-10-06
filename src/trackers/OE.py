@@ -154,9 +154,10 @@ class OE(UNIT3D):
         if not meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         elif meta.get('audio_languages'):
-            audio_languages = meta['audio_languages'][0].upper()
+            audio_languages = meta['audio_languages']
             if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
-                oe_name = oe_name.replace(meta['resolution'], f"{audio_languages} {meta['resolution']}", 1)
+                foreign_lang = meta['audio_languages'][0].upper()
+                oe_name = oe_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
 
         if name_type in ["ENCODE", "WEBDL", "WEBRIP"] and scale != "":
             oe_name = oe_name.replace(f"{resolution}", f"{scale}", 1)
