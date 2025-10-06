@@ -748,6 +748,9 @@ class AZTrackerBase():
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def edit_name(self, meta):
+        # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://privatehd.to/rules/upload-rules
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
         if self.tracker == 'PHD':
@@ -780,6 +783,7 @@ class AZTrackerBase():
                 upload_name = f'{upload_name}-NOGROUP'
 
         if meta['category'] == 'TV':
+            year_to_use = meta.get('year')
             if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 season_int = meta.get('season_int', 0)
                 season_info = meta.get('imdb_info', {}).get('seasons_summary', [])
@@ -793,8 +797,26 @@ class AZTrackerBase():
                             break
 
                 # Use the season-specific year if found, otherwise fall back to meta year
-                year_to_use = season_year if season_year else meta.get('year')
-                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {year_to_use}", 1)
+                if season_year:
+                    year_to_use = season_year
+                upload_name = upload_name.replace(
+                    meta['title'],
+                    f"{meta['title']} {year_to_use}",
+                    1
+                )
+
+            if self.tracker == 'PHD':
+                upload_name = upload_name.replace(
+                    year_to_use,
+                    ''
+                )
+
+            if self.tracker == 'AZ':
+                if meta.get('tv_pack', False):
+                    upload_name = upload_name.replace(
+                        f"{meta['title']} {year_to_use} {meta.get('season')}",
+                        f"{meta['title']} {meta.get('season')} {year_to_use}"
+                    )
 
         if meta.get('type', '') == 'DVDRIP':
             if meta.get('source', ''):
