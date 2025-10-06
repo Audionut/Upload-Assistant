@@ -130,7 +130,7 @@ class SHRI(UNIT3D):
 
             # Apply Italian title if enabled
             if italian_title and use_italian_title:
-                name = name.replace(title, italian_title, 1)
+                name = name.replace(meta.get("title", ""), italian_title, 1)
 
             # Remove tag
             tag = meta.get("tag", "").strip()
