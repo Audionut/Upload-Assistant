@@ -358,7 +358,7 @@ async def process_meta(meta, base_dir, bot=None):
                 console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
 
         bdmv_mi_created = False
-        for tracker in ["ANT", "ASC", "AZ", "BJS", "BT", "CZ", "DC", "FF", "GPW", "HDS", "HDT", "HUNO", "PHD", "SPD", "TL"]:
+        for tracker in ["ANT", "DC", "HUNO", "LCD"]:
             upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
             if tracker in trackers and upload_status is True:
                 if not bdmv_mi_created:
