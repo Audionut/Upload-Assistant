@@ -32,7 +32,6 @@ class AZTrackerBase:
         self.announce_url = tracker_config.get('announce_url')
         self.source_flag = tracker_config.get('source_flag')
 
-        self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
@@ -91,18 +90,10 @@ class AZTrackerBase:
         else:
             return False
 
-        search_term = ''
         imdb_info = meta.get('imdb_info', {})
         imdb_id = imdb_info.get('imdbID') if isinstance(imdb_info, dict) else None
         tmdb_id = meta.get('tmdb')
         title = meta['title']
-
-        if imdb_id:
-            search_term = imdb_id
-        else:
-            search_term = title
-
-        ajax_url = f'{self.base_url}/ajax/movies/{category}?term={search_term}'
 
         headers = {
             'Referer': f"{self.base_url}/upload/{meta['category'].lower()}",
@@ -115,25 +106,32 @@ class AZTrackerBase:
                     console.print(f'{self.tracker}: Trying to search again by ID after adding to media to database...\n')
                     await asyncio.sleep(5)  # Small delay to ensure the DB has been updated
 
-                response = await self.session.get(ajax_url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
+                data = {}
 
-                if data.get('data'):
-                    match = None
-                    for item in data['data']:
-                        if imdb_id and item.get('imdb') == imdb_id:
-                            match = item
-                            break
-                        elif not imdb_id and item.get('tmdb') == str(tmdb_id):
-                            match = item
-                            break
+                if imdb_id:
+                    response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={imdb_id}', headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
 
-                    if match:
-                        self.media_code = str(match['id'])
-                        if attempt == 1:
-                            console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
-                        return True
+                if not data.get('data', ''):
+                    response = await self.session.get(f'{self.base_url}/ajax/movies/{category}?term={title}', headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+
+                match = None
+                for item in data.get('data', []):
+                    if imdb_id and item.get('imdb') == imdb_id:
+                        match = item
+                        break
+                    elif item.get('tmdb') == str(tmdb_id):
+                        match = item
+                        break
+
+                if match:
+                    self.media_code = str(match['id'])
+                    if attempt == 1:
+                        console.print(f"{self.tracker}: [green]Found new ID at:[/green] {self.base_url}/{meta['category'].lower()}/{self.media_code}")
+                    return True
 
             except Exception as e:
                 console.print(f'{self.tracker}: Error while trying to fetch media code in attempt {attempt + 1}: {e}')
@@ -159,7 +157,7 @@ class AZTrackerBase:
 
     async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'type_id': category,
             'title': title,
             'imdb_id': imdb_id if imdb_id else '',
@@ -185,7 +183,13 @@ class AZTrackerBase:
                 return True
             else:
                 console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Failed_DB_attempt.html"
+                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
+                with open(failure_path, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
+
         except Exception as e:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
@@ -443,7 +447,7 @@ class AZTrackerBase:
         }
 
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'qquuid': str(uuid.uuid4()),
             'qqfilename': filename,
             'qqtotalfilesize': str(len(image_bytes))
@@ -686,7 +690,7 @@ class AZTrackerBase:
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
         data = {
-            '_token': self.auth_token,
+            '_token': meta[f'{self.tracker}_secret_token'],
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -748,6 +752,9 @@ class AZTrackerBase:
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
     def edit_name(self, meta):
+        # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
+        # https://privatehd.to/rules/upload-rules
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
         if self.tracker == 'PHD':
@@ -780,6 +787,7 @@ class AZTrackerBase:
                 upload_name = f'{upload_name}-NOGROUP'
 
         if meta['category'] == 'TV':
+            year_to_use = meta.get('year')
             if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 season_int = meta.get('season_int', 0)
                 season_info = meta.get('imdb_info', {}).get('seasons_summary', [])
@@ -793,8 +801,26 @@ class AZTrackerBase:
                             break
 
                 # Use the season-specific year if found, otherwise fall back to meta year
-                year_to_use = season_year if season_year else meta.get('year')
-                upload_name = upload_name.replace(meta['title'], f"{meta['title']} {year_to_use}", 1)
+                if season_year:
+                    year_to_use = season_year
+                upload_name = upload_name.replace(
+                    meta['title'],
+                    f"{meta['title']} {year_to_use}",
+                    1
+                )
+
+            if self.tracker == 'PHD':
+                upload_name = upload_name.replace(
+                    year_to_use,
+                    ''
+                )
+
+            if self.tracker == 'AZ':
+                if meta.get('tv_pack', False):
+                    upload_name = upload_name.replace(
+                        f"{meta['title']} {year_to_use} {meta.get('season')}",
+                        f"{meta['title']} {meta.get('season')} {year_to_use}"
+                    )
 
         if meta.get('type', '') == 'DVDRIP':
             if meta.get('source', ''):

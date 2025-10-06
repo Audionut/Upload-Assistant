@@ -47,7 +47,6 @@ class DP(UNIT3D):
                 meta['skipping'] = {self.tracker}
                 return False
         if not meta.get('language_checked', False):
-            console.print(f"[yellow]Language not checked yet, processing description for {self.tracker}.[/yellow]")
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
         if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
