@@ -40,7 +40,7 @@ async def get_tag(video, meta):
                     console.print(f"Non-anime regex match: {release_group}")
 
     # If regex patterns didn't work, fall back to guessit
-    if not release_group:
+    if not release_group and meta.get('is_disc'):
         try:
             parsed = guessit(video)
             release_group = parsed.get('release_group')
