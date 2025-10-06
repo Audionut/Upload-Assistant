@@ -180,7 +180,7 @@ class ANT:
             # Logo
             logo_resize_url = meta.get('tmdb_logo', '')
             if logo_resize_url:
-                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
+                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
 
         # BDinfo
         bdinfo = await builder.get_bdinfo_section(meta)

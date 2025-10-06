@@ -182,7 +182,7 @@ class HDT:
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
         if logo_resize_url:
-            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/center]")
+            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
         title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)

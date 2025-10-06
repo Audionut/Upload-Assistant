@@ -984,7 +984,7 @@ async def tmdb_other_meta(
             try:
                 logo_json = logo_data.json()
                 logo_path = await get_logo(tmdb_id, category, debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
-                tmdb_logo = '/' + logo_path.split('/')[-1]
+                tmdb_logo = logo_path.split('/')[-1]
             except Exception:
                 console.print("[yellow]Failed to process logo[/yellow]")
                 logo_path = ""

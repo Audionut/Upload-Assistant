@@ -344,7 +344,7 @@ class BJS:
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
         if logo_resize_url:
-            desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{logo_resize_url}[/img][/align]")
+            desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
 
         # TV
         title = self.episode_tmdb_data.get('name', '')
@@ -371,7 +371,7 @@ class BJS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Signature
-        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/align]")
+        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
