@@ -576,7 +576,7 @@ class GPW():
     async def get_additional_data(self, meta):
         poster_url = ''
         while True:
-            poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n").strip()
+            poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
             if any(host in poster_url for host in self.approved_image_hosts):
                 break
             else:
@@ -625,7 +625,7 @@ class GPW():
         imdb_info = meta.get('imdb_info', {})
         if imdb_info:
             imdbType = imdb_info.get('type', 'movie').lower()
-            if imdbType in ("movie", "tv movie", 'tvmovie'):
+            if imdbType in ("movie", "tv movie", 'tvmovie', 'video'):
                 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
                     movie_type = '1'  # Feature Film
                 else:
@@ -776,6 +776,7 @@ class GPW():
         status_message = ''
 
         if not meta.get('debug', False):
+            response_data = ''
             torrent_id = ''
             upload_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=upload'
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -783,16 +784,21 @@ class GPW():
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
 
-                async with httpx.AsyncClient(timeout=30) as client:
-                    response = await client.post(url=upload_url, files=files, data=data)
-                    data = response.json()
+                try:
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        response = await client.post(url=upload_url, files=files, data=data)
+                        response_data = response.json()
 
-                if data.get('status') == 200 and 'torrent_id' in data.get('response', {}):
-                    torrent_id = str(data['response']['torrent_id'])
-                    status_message = f'Uploaded successfully. {data}'
-                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                else:
-                    status_message = f'data error - It may have uploaded, go check. {data}'
+                        torrent_id = str(response_data['response']['torrent_id'])
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        status_message = 'Torrent uploaded successfully.'
+
+                except httpx.TimeoutException:
+                    meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
+                except httpx.RequestError as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                except Exception as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
                     return
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)

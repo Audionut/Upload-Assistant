@@ -43,7 +43,7 @@ class COMMON():
     async def async_input(self, prompt):
         """Gets user input in a non-blocking way using asyncio.to_thread"""
         user_input = await asyncio.to_thread(input, prompt)
-        return user_input
+        return user_input.strip()
 
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
