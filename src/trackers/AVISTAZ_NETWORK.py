@@ -814,7 +814,7 @@ class AZTrackerBase:
 
             if self.tracker == 'PHD':
                 upload_name = upload_name.replace(
-                    year_to_use,
+                    str(year_to_use),
                     ''
                 )
 
