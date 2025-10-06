@@ -371,7 +371,7 @@ class BJS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Signature
-        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_signature']}[/url][/align]")
+        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/align]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

@@ -117,7 +117,7 @@ class TL:
             desc_parts.append('<center>' + screenshots_block + '</center>')
 
         # Signature
-        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">Created by {meta['ua_signature']}</a></center>""")
+        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">{meta['ua_signature']}</a></center>""")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

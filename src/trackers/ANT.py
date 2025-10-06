@@ -192,7 +192,7 @@ class ANT:
             desc_parts.append(user_desc)
 
             # Signature
-            desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Created by {meta['ua_signature']}[/url][/align]")
+            desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/align]")
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
