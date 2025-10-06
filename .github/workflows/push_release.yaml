@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Get full history for changelog generation
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate version format
@@ -84,7 +84,9 @@ jobs:
                 {
                   echo "GIST_CHANGELOG<<EOF"
                   echo "$PROCESSED_CONTENT"
+                  echo ""
                   echo "---"
+                  echo ""
                   echo "EOF"
                 } >> $GITHUB_ENV
               else
@@ -121,7 +123,7 @@ jobs:
             if [ -z "$COMMIT_RANGE" ]; then
               COMMITS=$(git log --pretty=format:"%H|%an|%s" --reverse)
             else
-              COMMITS=$(git log "$COMMIT_RANGE" --pretty=format:"%H|%an|%s" --reverse)
+              COMMITS=$(git log $COMMIT_RANGE --pretty=format:"%H|%an|%s" --reverse)
             fi
             
             FOUND_CHANGES=false
@@ -219,9 +221,9 @@ jobs:
           echo "\"\"\"" >> "$TEMP_FILE"
           echo "Release Notes for version ${{ env.VERSION }} ($TIMESTAMP):" >> "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
-          {
-            echo "${{ env.CHANGELOG }}"
-          } | sed 's/^/# /' >> "$TEMP_FILE"
+          cat <<EOF | sed 's/^/# /' >> "$TEMP_FILE"
+          ${{ env.CHANGELOG }}
+          EOF
           echo "\"\"\"" >> "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
           
