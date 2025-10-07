@@ -138,6 +138,14 @@ class UploadHelper:
             if int(meta.get('mal_id') or 0) != 0:
                 console.print(f"[bold]MAL:[/bold] https://myanimelist.net/anime/{meta['mal_id']}")
         console.print()
+        region = meta.get('region', '')
+        distributor = meta.get('distributor', '')
+        if region:
+            console.print(f'[bold]Region:[/bold] {region}')
+        if distributor:
+            console.print(f'[bold]Distributor:[/bold] {distributor}')
+        if region or distributor:
+            console.print()
         if not meta.get('emby', False):
             if int(meta.get('freeleech', 0)) != 0:
                 console.print(f"[bold]Freeleech:[/bold] {meta['freeleech']}")
