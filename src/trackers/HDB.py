@@ -14,6 +14,7 @@ from src.console import console
 from datetime import datetime
 from torf import Torrent
 from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
+from src.trackermeta import download_comparison_images
 
 
 class HDB():
@@ -538,7 +539,18 @@ class HDB():
             desc = desc.replace("[ol]", "").replace("[/ol]", "")
             desc = desc.replace("[*]", "* ")
             desc = bbcode.convert_spoiler_to_hide(desc)
-            desc = bbcode.convert_comparison_to_centered(desc, 1000)
+
+            comparison_images = bbcode.extract_comparison_images(desc)
+            if comparison_images:
+                console.print(f"[cyan]Found {len(comparison_images)} comparison sections to rehost")
+
+                downloaded_comparisons = await download_comparison_images(comparison_images, meta)
+                if downloaded_comparisons:
+                    # Rehost the downloaded comparison images
+                    rehosted_comparisons = await self.rehost_comparison_images(downloaded_comparisons, meta)
+                    desc = await self.replace_comparison_images_in_desc(desc, comparison_images, rehosted_comparisons)
+
+            desc = bbcode.convert_comparison_to_hide(desc)
             desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
             desc = re.sub(r"\[/size\]|\[size=\d+\]", "", desc, flags=re.IGNORECASE)
             descfile.write(desc)
@@ -846,3 +858,147 @@ class HDB():
 
         console.print('[yellow]Could not find a matching release on HDB[/yellow]')
         return hdb_imdb, hdb_tvdb, hdb_name, hdb_torrenthash, hdb_description, hdb_id
+
+    async def rehost_comparison_images(self, downloaded_comparisons, meta):
+        rehosted_comparisons = {}
+
+        for comp_label, image_groups in downloaded_comparisons.items():
+            console.print(f"[green]Rehosting comparison images for: {comp_label}")
+            all_image_paths = []
+            group_structure = []  # Track which images belong to which group
+
+            for group_idx, image_group in enumerate(image_groups):
+                group_start = len(all_image_paths)
+                all_image_paths.extend(image_group)
+                group_structure.append((group_start, len(image_group)))
+
+            if all_image_paths:
+                bbcode_result = await self.upload_comparison_batch_to_hdb(all_image_paths, meta, comp_label)
+                if bbcode_result:
+                    bbcode_matches = re.findall(r'\[url=.*?\]\[img\].*?\[/img\]\[/url\]', bbcode_result)
+                    if bbcode_matches:
+                        num_sources = len(image_groups[0]) if image_groups else 4
+                        formatted_bbcode = ""
+                        for i in range(0, len(bbcode_matches), num_sources):
+                            line = " ".join(bbcode_matches[i:i+num_sources])
+                            if i + num_sources < len(bbcode_matches):
+                                formatted_bbcode += line + "\n"
+                            else:
+                                formatted_bbcode += line
+
+                        rehosted_comparisons[comp_label] = formatted_bbcode
+                        console.print(f"[green]Successfully rehosted {len(all_image_paths)} images for: {comp_label}")
+                    else:
+                        console.print(f"[red]No BBCode matches found in upload result for: {comp_label}")
+                else:
+                    console.print(f"[red]Failed to rehost images for: {comp_label}")
+
+        return rehosted_comparisons
+
+    async def upload_comparison_batch_to_hdb(self, image_paths, meta, comp_label):
+        # Split into smaller batches to avoid 413 Payload Too Large error
+        max_batch_size = 10
+        all_bbcode_results = []
+
+        for batch_start in range(0, len(image_paths), max_batch_size):
+            batch_end = min(batch_start + max_batch_size, len(image_paths))
+            batch_paths = image_paths[batch_start:batch_end]
+            batch_num = (batch_start // max_batch_size) + 1
+            total_batches = (len(image_paths) + max_batch_size - 1) // max_batch_size
+
+            if meta.get('debug'):
+                console.print(f"[cyan]Uploading batch {batch_num}/{total_batches} ({len(batch_paths)} images) for: {comp_label}")
+
+            bbcode_result = await self.upload_single_batch_to_hdb(batch_paths, meta, comp_label, batch_num)
+            if bbcode_result:
+                all_bbcode_results.append(bbcode_result)
+            else:
+                console.print(f"[red]Failed to upload batch {batch_num} for: {comp_label}")
+
+        if all_bbcode_results:
+            combined_bbcode = "\n".join(all_bbcode_results)
+            console.print(f"[green]Successfully uploaded all batches for: {comp_label}")
+            return combined_bbcode
+        else:
+            console.print(f"[red]All upload batches failed for: {comp_label}")
+            return None
+
+    async def upload_single_batch_to_hdb(self, image_paths, meta, comp_label, batch_num, retry_attempt=0):
+        max_retries = 2
+        timeout_codes = [504, 524, 408, 502, 503]  # timeout/server error codes
+
+        try:
+            url = "https://img.hdbits.org/upload_api.php"
+            data = {
+                'username': self.username,
+                'passkey': self.passkey,
+                'galleryoption': '1',
+                'galleryname': f"{meta['name']} - {comp_label} - Batch {batch_num}",
+                'thumbsize': 'w100'
+            }
+
+            files = {}
+            for i, image_path in enumerate(image_paths):
+                try:
+                    filename = os.path.basename(image_path)
+                    files[f'images_files[{i}]'] = (filename, open(image_path, 'rb'), 'image/png')
+                except Exception as e:
+                    console.print(f"[red]Failed to open {image_path}: {e}")
+                    continue
+
+            if not files:
+                console.print(f"[red]No files to upload in batch {batch_num}")
+                return None
+
+            response = requests.post(url, data=data, files=files, timeout=120)
+
+            if response.status_code == 200:
+                if meta.get('debug'):
+                    console.print(f"[green]Batch {batch_num} upload successful ({len(files)} images)")
+                return response.text
+            elif response.status_code in timeout_codes and retry_attempt < max_retries:
+                console.print(f"[yellow]Batch {batch_num} failed with {response.status_code}, retrying ({retry_attempt + 1}/{max_retries})...")
+                # Close current files before retry
+                for f in files.values():
+                    if hasattr(f, '__len__') and len(f) > 1:
+                        f[1].close()
+                # Wait a bit before retry
+                await asyncio.sleep(5)
+                return await self.upload_single_batch_to_hdb(image_paths, meta, comp_label, batch_num, retry_attempt + 1)
+            else:
+                console.print(f"[red]Batch {batch_num} upload failed with status code {response.status_code}")
+                return None
+
+        except requests.exceptions.Timeout:
+            if retry_attempt < max_retries:
+                console.print(f"[yellow]Batch {batch_num} timed out, retrying ({retry_attempt + 1}/{max_retries})...")
+                await asyncio.sleep(5)
+                return await self.upload_single_batch_to_hdb(image_paths, meta, comp_label, batch_num, retry_attempt + 1)
+            else:
+                console.print(f"[red]Batch {batch_num} failed after {max_retries} timeout retries")
+                return None
+        except requests.RequestException as e:
+            console.print(f"[red]HTTP Request failed for batch {batch_num}: {e}")
+            return None
+        finally:
+            # Close files to prevent resource leaks
+            for f in files.values():
+                if hasattr(f, '__len__') and len(f) > 1:
+                    f[1].close()
+
+    async def replace_comparison_images_in_desc(self, desc, original_comparisons, rehosted_comparisons):
+        comparisons = re.findall(r"\[comparison=[\s\S]*?\[\/comparison\]", desc)
+
+        for comp in comparisons:
+            comp_sources = comp.split(']', 1)[0].replace('[comparison=', '').strip()
+            comp_sources = re.split(r"\s*,\s*", comp_sources)
+            sources_label = ' vs '.join(comp_sources)
+
+            if sources_label in rehosted_comparisons:
+                rehosted_bbcode = rehosted_comparisons[sources_label]
+                if rehosted_bbcode:
+                    new_comp = f"[comparison={', '.join(comp_sources)}]{rehosted_bbcode}[/comparison]"
+                    desc = desc.replace(comp, new_comp)
+                    console.print(f"[green]Replaced comparison block for: {sources_label}")
+
+        return desc
