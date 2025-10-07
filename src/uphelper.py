@@ -138,20 +138,21 @@ class UploadHelper:
             if int(meta.get('mal_id') or 0) != 0:
                 console.print(f"[bold]MAL:[/bold] https://myanimelist.net/anime/{meta['mal_id']}")
         console.print()
-        region = meta.get('region', '')
-        distributor = meta.get('distributor', '')
-        if region:
-            console.print(f'[bold]Region:[/bold] {region}')
-        if distributor:
-            console.print(f'[bold]Distributor:[/bold] {distributor}')
-        if region or distributor:
-            console.print()
         if not meta.get('emby', False):
             if int(meta.get('freeleech', 0)) != 0:
                 console.print(f"[bold]Freeleech:[/bold] {meta['freeleech']}")
-            tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
-            res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
-            console.print(f"{res} / {meta['type']}{tag}")
+
+            info_parts = []
+            info_parts.append(meta['source'] if meta['is_disc'] == 'DVD' else meta['resolution'])
+            info_parts.append(meta['type'])
+            if meta.get('tag', ''):
+                info_parts.append(meta['tag'][1:])
+            if meta.get('region', ''):
+                info_parts.append(meta['region'])
+            if meta.get('distributor', ''):
+                info_parts.append(meta['distributor'])
+            console.print(' / '.join(info_parts))
+
             if meta.get('personalrelease', False) is True:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
