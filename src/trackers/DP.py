@@ -23,7 +23,7 @@ class DP(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            'aXXo', 'BANDOLEROS', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL',
+            'ARCADE', 'aXXo', 'BANDOLEROS', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL',
             'FaNGDiNG0', 'FiSTER', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime', 'iHYTECH', 'ION10',
             'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD',
             'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
