@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import cli_ui
-from difflib import SequenceMatcher
+
 from src.console import console
 from src.languages import process_desc_language, has_english_language
 from src.trackers.COMMON import COMMON
@@ -85,19 +85,22 @@ class ULCX(UNIT3D):
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        imdb_aka = meta.get('imdb_info', {}).get('aka', "")
         year = str(meta.get('year', ""))
         aka = meta.get('aka', "")
         if imdb_name and imdb_name != "":
-            difference = SequenceMatcher(None, imdb_name, aka).ratio()
-            if difference >= 0.7 or not aka or aka in imdb_name:
-                if meta['aka'] != "":
-                    ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
+            if aka:
+                ulcx_name = ulcx_name.replace(f"{aka} ", "", 1)
             ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
+            if meta.get('mal_id', 0) != 0:
+                ulcx_name = ulcx_name
+            elif imdb_aka and imdb_aka != "":
+                ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
+        elif meta.get('mal_id', 0) != 0 and aka:
+            ulcx_name = ulcx_name.replace(f"{aka} ", "", 1)
         if "Hybrid" in ulcx_name:
             ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
         if not meta.get('category') == "TV" and imdb_year and imdb_year != "" and year and year != "" and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
-        if meta.get('mal_id', 0) != 0 and meta.get('aka', "") != "":
-            ulcx_name = ulcx_name.replace(f"{meta['aka']} ", "", 1)
 
         return {'name': ulcx_name}
