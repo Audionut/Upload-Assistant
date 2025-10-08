@@ -349,39 +349,41 @@ class SHRI(UNIT3D):
         return iso_code  # Fallback to original code
 
     async def finalize_disc_name(self, meta, name, region_id=None, distributor_id=None):
-        """Add region/distributor codes for BDMV releases"""
+        """
+        Add region/distributor codes for BDMV releases.
+        - Region: mandatory, injected into name only when prompted
+        - Distributor: optional, used only for API metadata
+        """
         
-        # Get region (mandatory)
+        # Get region (mandatory for BDMV)
         region_name = meta.get('region')
         if region_name:
             region_id = await self.common.unit3d_region_ids(region_name)
-        elif not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False)):
+        elif not meta.get('unattended') or meta.get('unattended_confirm'):
             while True:
-                region_name = input("SHRI: Region code not found for disc. Please enter it manually (mandatory): ").strip()
+                region_name = input("SHRI: Region code not found for disc. Please enter it manually (mandatory): ").strip().upper()
                 if region_name:
-                    region_id = await self.common.unit3d_region_ids(region_name.upper())
+                    region_id = await self.common.unit3d_region_ids(region_name)
+                    
+                    # Inject region into name after resolution/edition
+                    if region_id and region_name not in name:
+                        resolution = meta.get("resolution", "")
+                        edition = meta.get("edition", "")
+                        
+                        if edition:
+                            name = name.replace(f"{resolution} {edition}", f"{resolution} {edition} {region_name}", 1)
+                        elif resolution:
+                            name = name.replace(resolution, f"{resolution} {region_name}", 1)
                     break
                 print("Region code is required.")
 
-        # Get distributor (optional)
+        # Get distributor (optional, metadata only)
         distributor_name = meta.get('distributor')
         if distributor_name:
             distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
         elif not meta.get('unattended'):
-            distributor_name = input("SHRI: Distributor (optional, Enter to skip): ").strip()
+            distributor_name = input("SHRI: Distributor (optional, Enter to skip): ").strip().upper()
             if distributor_name:
-                distributor_id = await self.common.unit3d_distributor_ids(distributor_name.upper())
-
-        # Inject names (not IDs) after resolution/edition
-        if region_name or distributor_name:
-            codes = " ".join(filter(None, [region_name, distributor_name])).upper()
-            if codes not in name:
-                resolution = meta.get("resolution", "")
-                edition = meta.get("edition", "")
-                
-                if edition:
-                    name = name.replace(f"{resolution} {edition}", f"{resolution} {edition} {codes}", 1)
-                elif resolution:
-                    name = name.replace(resolution, f"{resolution} {codes}", 1)
+                distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
 
         return name, region_id, distributor_id
