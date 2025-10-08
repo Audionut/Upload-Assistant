@@ -7,6 +7,8 @@ from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+_shri_session_data = {}
+
 
 class SHRI(UNIT3D):
     """ShareIsland tracker implementation with Italian localization support"""
@@ -43,6 +45,7 @@ class SHRI(UNIT3D):
         - Multi-language audio tags (ITALIAN - ENGLISH format)
         - Italian subtitle [SUBS] tag when no Italian audio present
         - Release group tag cleaning and validation
+        - BDMV region injection
         """
         if not meta.get("language_checked", False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
@@ -241,6 +244,105 @@ class SHRI(UNIT3D):
         }.get(effective_type, "0")
         return {"type_id": type_id}
 
+    async def get_additional_checks(self, meta):
+        """
+        Validate and prompt for BDMV region/distributor before upload.
+        Stores validated IDs in module-level dict keyed by UUID for use during upload.
+        """
+        if meta.get("is_disc") == "BDMV":
+            region_name = meta.get("region")
+
+            # Prompt for region if not in meta
+            if not region_name:
+                if not meta.get("unattended") or meta.get("unattended_confirm"):
+                    while True:
+                        region_name = (
+                            input(
+                                "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
+                            )
+                            .strip()
+                            .upper()
+                        )
+                        if region_name:
+                            break
+                        print("Region code is required.")
+
+            # Validate region name was provided
+            if not region_name:
+                console.print("[bold red]Region required; skipping SHRI.[/bold red]")
+                return False
+
+            # Validate region code with API
+            region_id = await self.common.unit3d_region_ids(region_name)
+            if not region_id:
+                console.print(
+                    f"[bold red]Invalid region code '{region_name}'; skipping SHRI.[/bold red]"
+                )
+                return False
+
+            # Handle optional distributor
+            distributor_name = meta.get("distributor")
+            if not distributor_name and not meta.get("unattended"):
+                distributor_name = (
+                    input("SHRI: Distributor (optional, Enter to skip): ")
+                    .strip()
+                    .upper()
+                )
+
+            if distributor_name:
+                distributor_id = await self.common.unit3d_distributor_ids(
+                    distributor_name
+                )
+
+            # Store in module-level dict keyed by UUID (survives instance recreation)
+            _shri_session_data[meta["uuid"]] = {
+                "_shri_region_id": region_id,
+                "_shri_region_name": region_name,
+                "_shri_distributor_id": distributor_id if distributor_name else None,
+            }
+
+        return await super().get_additional_checks(meta)
+
+    async def get_region_id(self, meta):
+        """Override to use validated region ID stored in meta"""
+        data = _shri_session_data.get(meta["uuid"], {})
+        region_id = data.get("_shri_region_id")
+        if region_id:
+            return {"region_id": region_id}
+        return await super().get_region_id(meta)
+
+    async def get_distributor_id(self, meta):
+        """Override to use validated distributor ID stored in meta"""
+        data = _shri_session_data.get(meta["uuid"], {})
+        distributor_id = data.get("_shri_distributor_id")
+        if distributor_id:
+            return {"distributor_id": distributor_id}
+        return await super().get_distributor_id(meta)
+
+    async def finalize_disc_name(self, meta, name):
+        """
+        Inject region code into BDMV release name after resolution/edition.
+        Uses region name stored during validation phase.
+        """
+        data = _shri_session_data.get(meta["uuid"], {})
+        region_name = data.get("_shri_region_name")
+
+        # Only inject if region was validated and not already in name
+        if region_name and f" {region_name} " not in name:
+            resolution = meta.get("resolution", "")
+            edition = meta.get("edition", "")
+
+            if edition:
+                name = name.replace(
+                    f"{resolution} {edition}",
+                    f"{resolution} {edition} {region_name}",
+                    1,
+                )
+            elif resolution:
+                name = name.replace(resolution, f"{resolution} {region_name}", 1)
+
+        return name
+
     def get_basename(self, meta):
         """Extract basename from first file in filelist or path"""
         path = next(iter(meta["filelist"]), meta["path"])
@@ -335,60 +437,4 @@ class SHRI(UNIT3D):
         if lang:
             return lang.name.upper()
 
-        return iso_code  # Fallback to original code
-
-    async def finalize_disc_name(self, meta, name, region_id=None, distributor_id=None):
-        """
-        Add region/distributor codes for BDMV releases.
-        - Region: mandatory, injected into name only when prompted
-        - Distributor: optional, used only for API metadata
-        """
-
-        # Get region (mandatory for BDMV)
-        region_name = meta.get("region")
-        if region_name:
-            region_id = await self.common.unit3d_region_ids(region_name)
-        elif not meta.get("unattended") or meta.get("unattended_confirm"):
-            while True:
-                region_name = (
-                    input(
-                        "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
-                    )
-                    .strip()
-                    .upper()
-                )
-                if region_name:
-                    region_id = await self.common.unit3d_region_ids(region_name)
-
-                    # Inject region into name after resolution/edition
-                    if region_id and region_name not in name:
-                        resolution = meta.get("resolution", "")
-                        edition = meta.get("edition", "")
-
-                        if edition:
-                            name = name.replace(
-                                f"{resolution} {edition}",
-                                f"{resolution} {edition} {region_name}",
-                                1,
-                            )
-                        elif resolution:
-                            name = name.replace(
-                                resolution, f"{resolution} {region_name}", 1
-                            )
-                    break
-                print("Region code is required.")
-
-        # Get distributor (optional, metadata only)
-        distributor_name = meta.get("distributor")
-        if distributor_name:
-            distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
-        elif not meta.get("unattended"):
-            distributor_name = (
-                input("SHRI: Distributor (optional, Enter to skip): ").strip().upper()
-            )
-            if distributor_name:
-                distributor_id = await self.common.unit3d_distributor_ids(
-                    distributor_name
-                )
-
-        return name, region_id, distributor_id
+        return iso_code
