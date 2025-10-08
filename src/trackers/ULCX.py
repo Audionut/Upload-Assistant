@@ -94,7 +94,7 @@ class ULCX(UNIT3D):
             ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
             if meta.get('mal_id', 0) != 0:
                 ulcx_name = ulcx_name
-            elif imdb_aka and imdb_aka != "":
+            elif imdb_aka and imdb_aka != "" and imdb_aka != imdb_name and not meta.get('no_aka', False):
                 ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
         elif meta.get('mal_id', 0) != 0 and aka:
             ulcx_name = ulcx_name.replace(f"{aka} ", "", 1)

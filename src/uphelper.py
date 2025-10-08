@@ -141,9 +141,18 @@ class UploadHelper:
         if not meta.get('emby', False):
             if int(meta.get('freeleech', 0)) != 0:
                 console.print(f"[bold]Freeleech:[/bold] {meta['freeleech']}")
-            tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
-            res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
-            console.print(f"{res} / {meta['type']}{tag}")
+
+            info_parts = []
+            info_parts.append(meta['source'] if meta['is_disc'] == 'DVD' else meta['resolution'])
+            info_parts.append(meta['type'])
+            if meta.get('tag', ''):
+                info_parts.append(meta['tag'][1:])
+            if meta.get('region', ''):
+                info_parts.append(meta['region'])
+            if meta.get('distributor', ''):
+                info_parts.append(meta['distributor'])
+            console.print(' / '.join(info_parts))
+
             if meta.get('personalrelease', False) is True:
                 console.print("[bold green]Personal Release![/bold green]")
             console.print()
