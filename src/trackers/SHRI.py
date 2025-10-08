@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
+import cli_ui
+import os
 import pycountry
 import re
-import os
-from src.console import console
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -28,6 +28,7 @@ class SHRI(UNIT3D):
         self.id_url = f"{self.base_url}/api/torrents/"
         self.upload_url = f"{self.base_url}/api/torrents/upload"
         self.search_url = f"{self.base_url}/api/torrents/filter"
+        self.requests_url = f"{self.base_url}/api/requests/filter"
         self.torrent_url = f"{self.base_url}/torrents/"
         self.banned_groups = []
 
@@ -256,12 +257,11 @@ class SHRI(UNIT3D):
             if not region_name:
                 if not meta.get("unattended") or meta.get("unattended_confirm"):
                     while True:
+                        region_name = cli_ui.ask_string(
+                            "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
+                        )
                         region_name = (
-                            input(
-                                "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
-                            )
-                            .strip()
-                            .upper()
+                            region_name.strip().upper() if region_name else None
                         )
                         if region_name:
                             break
@@ -269,24 +269,23 @@ class SHRI(UNIT3D):
 
             # Validate region name was provided
             if not region_name:
-                console.print("[bold red]Region required; skipping SHRI.[/bold red]")
+                cli_ui.error("Region required; skipping SHRI.")
                 return False
 
             # Validate region code with API
             region_id = await self.common.unit3d_region_ids(region_name)
             if not region_id:
-                console.print(
-                    f"[bold red]Invalid region code '{region_name}'; skipping SHRI.[/bold red]"
-                )
+                cli_ui.error(f"Invalid region code '{region_name}'; skipping SHRI.")
                 return False
 
             # Handle optional distributor
             distributor_name = meta.get("distributor")
             if not distributor_name and not meta.get("unattended"):
+                distributor_name = cli_ui.ask_string(
+                    "SHRI: Distributor (optional, Enter to skip): "
+                )
                 distributor_name = (
-                    input("SHRI: Distributor (optional, Enter to skip): ")
-                    .strip()
-                    .upper()
+                    distributor_name.strip().upper() if distributor_name else None
                 )
 
             if distributor_name:
