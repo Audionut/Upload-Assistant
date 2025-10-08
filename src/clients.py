@@ -348,14 +348,14 @@ class Clients():
                         console.log(f"Checking piece size, count and size: pieces={reuse_torrent.pieces}, piece_size={piece_in_mib} MiB, .torrent size={torrent_file_size_kib} KiB")
 
                     # Piece size and count validations
-                    if not meta.get('prefer_small_pieces', False):
-                        if reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608 and ('max_piece_size' not in meta or meta['max_piece_size'] >= 8):
-                            if meta['debug']:
-                                console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size")
-                            valid = False
-                    if reuse_torrent.pieces >= 5000 and reuse_torrent.piece_size < 4294304 and ('max_piece_size' not in meta or meta['max_piece_size'] >= 4):
+                    max_piece_size = meta.get('max_piece_size')
+                    if reuse_torrent.pieces >= 5000 and reuse_torrent.piece_size < 4294304 and (max_piece_size is None or max_piece_size >= 4):
                         if meta['debug']:
                             console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size")
+                        valid = False
+                    elif reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608 and (max_piece_size is None or max_piece_size >= 8) and not meta.get('prefer_small_pieces', False):
+                        if meta['debug']:
+                            console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size")
                         valid = False
                     elif 'max_piece_size' not in meta and reuse_torrent.pieces >= 12000:
                         if meta['debug']:
