@@ -2,12 +2,15 @@
 import pycountry
 import re
 import os
+from src.console import console
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
 class SHRI(UNIT3D):
+    """ShareIsland tracker implementation with Italian localization support"""
+
     # Pre-compile regex patterns for performance
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
@@ -28,10 +31,7 @@ class SHRI(UNIT3D):
 
     async def get_additional_data(self, meta):
         """Get additional tracker-specific upload data"""
-        data = {
-            "mod_queue_opt_in": await self.get_flag(meta, "modq"),
-        }
-        return data
+        return {"mod_queue_opt_in": await self.get_flag(meta, "modq")}
 
     async def get_name(self, meta):
         """
@@ -62,7 +62,7 @@ class SHRI(UNIT3D):
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
-        # TV SPECIFIC
+        # TV specific
         season = meta.get("season") or ""
         episode = meta.get("episode") or ""
         episode_title = meta.get("episode_title") or ""
@@ -108,7 +108,6 @@ class SHRI(UNIT3D):
             if len(audio_langs) >= 4:
                 result.append("Multi")
             else:
-                # 3 or fewer: show all languages
                 result.extend(remaining)
 
             audio_lang_str = " - ".join(result)
@@ -118,8 +117,7 @@ class SHRI(UNIT3D):
         # Detect Hybrid from filename if not in title
         hybrid = ""
         basename_upper = self.get_basename(meta).upper()
-        title_upper = title.upper()
-        if "HYBRID" in basename_upper and "HYBRID" not in title_upper:
+        if "HYBRID" in basename_upper and "HYBRID" not in title.upper():
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
@@ -149,19 +147,16 @@ class SHRI(UNIT3D):
                 if video_codec and audio:
                     name = name.replace(audio, f"{video_codec} {audio}", 1)
 
-            # BDMV: inject resolution after year
+            # BDMV: inject resolution and region
             elif meta.get("is_disc") == "BDMV":
-                if resolution and resolution not in name:
+                if resolution and f" {resolution} " not in name:
                     parts = name.split()
                     if year in parts:
                         idx = parts.index(year) + 1
                         parts.insert(idx, resolution)
                         name = " ".join(parts)
 
-                name, region_id, distributor_id = await self.finalize_disc_name(meta, name)
-                if not region_id:
-                    print("Region ID not found; skipping SHRI upload.")
-                    return
+                name = await self.finalize_disc_name(meta, name)
 
         elif effective_type == "REMUX":
             # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
@@ -190,9 +185,8 @@ class SHRI(UNIT3D):
         if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
             name = f"{name} [SUBS]"
 
-        # Extract tag from filename if not in meta
+        # Extract and clean release group tag
         tag = meta.get("tag", "").strip()
-
         if not tag:
             basename = self.get_basename(meta)
 
@@ -227,11 +221,6 @@ class SHRI(UNIT3D):
         if not tag or any(inv in tag.lower() for inv in invalid_tags):
             tag = "NoGroup"
 
-        # Validate tag
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag or any(inv in tag.lower() for inv in invalid_tags):
-            tag = "NoGroup"
-
         name = f"{name}-{tag}"
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
@@ -259,7 +248,7 @@ class SHRI(UNIT3D):
 
     def _is_remux(self, meta):
         """
-        Detect REMUX releases.
+        Detect REMUX releases via filename markers or mediainfo analysis.
 
         Methods:
         - Filename markers: remux, vu, untouched (excludes group tags at end)
@@ -272,7 +261,7 @@ class SHRI(UNIT3D):
         if "remux" in name_no_ext:
             return True
 
-        # Check for VU/UNTOUCHED markers, but not at end as group tag
+        # Check for VU/UNTOUCHED markers (not at end as group tag)
         for marker in ["vu", "untouched", "vu1080", "vu720"]:
             if marker in name_no_ext and not name_no_ext.endswith(f"-{marker}"):
                 return True
@@ -332,7 +321,7 @@ class SHRI(UNIT3D):
         )
 
     def _get_language_name(self, iso_code):
-        """Get full language name from ISO code"""
+        """Convert ISO language code to full language name"""
         if not iso_code:
             return ""
 
@@ -354,36 +343,52 @@ class SHRI(UNIT3D):
         - Region: mandatory, injected into name only when prompted
         - Distributor: optional, used only for API metadata
         """
-        
+
         # Get region (mandatory for BDMV)
-        region_name = meta.get('region')
+        region_name = meta.get("region")
         if region_name:
             region_id = await self.common.unit3d_region_ids(region_name)
-        elif not meta.get('unattended') or meta.get('unattended_confirm'):
+        elif not meta.get("unattended") or meta.get("unattended_confirm"):
             while True:
-                region_name = input("SHRI: Region code not found for disc. Please enter it manually (mandatory): ").strip().upper()
+                region_name = (
+                    input(
+                        "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
+                    )
+                    .strip()
+                    .upper()
+                )
                 if region_name:
                     region_id = await self.common.unit3d_region_ids(region_name)
-                    
+
                     # Inject region into name after resolution/edition
                     if region_id and region_name not in name:
                         resolution = meta.get("resolution", "")
                         edition = meta.get("edition", "")
-                        
+
                         if edition:
-                            name = name.replace(f"{resolution} {edition}", f"{resolution} {edition} {region_name}", 1)
+                            name = name.replace(
+                                f"{resolution} {edition}",
+                                f"{resolution} {edition} {region_name}",
+                                1,
+                            )
                         elif resolution:
-                            name = name.replace(resolution, f"{resolution} {region_name}", 1)
+                            name = name.replace(
+                                resolution, f"{resolution} {region_name}", 1
+                            )
                     break
                 print("Region code is required.")
 
         # Get distributor (optional, metadata only)
-        distributor_name = meta.get('distributor')
+        distributor_name = meta.get("distributor")
         if distributor_name:
             distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
-        elif not meta.get('unattended'):
-            distributor_name = input("SHRI: Distributor (optional, Enter to skip): ").strip().upper()
+        elif not meta.get("unattended"):
+            distributor_name = (
+                input("SHRI: Distributor (optional, Enter to skip): ").strip().upper()
+            )
             if distributor_name:
-                distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
+                distributor_id = await self.common.unit3d_distributor_ids(
+                    distributor_name
+                )
 
         return name, region_id, distributor_id
