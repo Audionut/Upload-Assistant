@@ -179,7 +179,7 @@ class AL(UNIT3D):
         response = requests.get(f"https://api.jikan.moe/v4/anime/{anime_id}")
         content = response.json()
         title = content['data']['title'] if content['data']['title'] else None
-        meta['mal_rating'] = content['data']['rating'].upper() if content['data']['rating'] else None
+        meta['mal_rating'] = content['data']['rating'].upper() if content['data']['rating'] else ""
         return title
 
     async def format_audios(self, tracks):
