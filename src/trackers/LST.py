@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -18,6 +19,14 @@ class LST(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
         pass
+
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        return should_continue
 
     async def get_type_id(self, meta):
         type_id = {

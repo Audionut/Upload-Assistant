@@ -354,7 +354,7 @@ class Prep():
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
-            valid_mi = validate_mediainfo(base_dir, folder_id, path=meta['path'], filelist=meta['filelist'], debug=meta['debug'])
+            valid_mi = validate_mediainfo(meta, debug=meta['debug'])
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
@@ -894,6 +894,14 @@ class Prep():
                     meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
             else:
                 meta['edition'] = ""
+
+            meta['valid_mi_settings'] = True
+            if meta['type'] in ["ENCODE"]:
+                valid_mi_settings = validate_mediainfo(meta, debug=meta['debug'], settings=True)
+                if not valid_mi_settings:
+                    console.print("[red]MediaInfo validation failed. This file does not contain encode settings.")
+                    meta['valid_mi_settings'] = False
+                    await asyncio.sleep(2)
 
             meta.get('stream', False)
             meta['stream'] = await self.stream_optimized(meta['stream'])
