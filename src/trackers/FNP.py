@@ -23,15 +23,15 @@ class FNP(UNIT3D):
 
     async def get_resolution_id(self, meta):
         resolution_id = {
-            '4320p': '1',
-            '2160p': '2',
-            '1080p': '3',
-            '1080i': '11',
+            '4320p': '0',
+            '2160p': '1',
+            '1080p': '2',
+            '1080i': '4',
             '720p': '5',
             '576p': '6',
-            '576i': '15',
+            '576i': '7',
             '480p': '8',
-            '480i': '14'
+            '480i': '9'
         }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
 
