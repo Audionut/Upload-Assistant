@@ -95,10 +95,15 @@ class Clients():
         torrent_storage_dir = client.get('torrent_storage_dir')
         torrent_client = client.get('torrent_client', '').lower()
         mtv_config = self.config['TRACKERS'].get('MTV')
+        piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
         if isinstance(mtv_config, dict):
-            prefer_small_pieces = mtv_config.get('prefer_mtv_torrent', False)
+            mtv_torrent = mtv_config.get('prefer_mtv_torrent', False)
+            prefer_small_pieces = mtv_torrent
         else:
-            prefer_small_pieces = False
+            if piece_limit:
+                prefer_small_pieces = True
+            else:
+                prefer_small_pieces = False
         best_match = None  # Track the best match for fallback if prefer_small_pieces is enabled
 
         # Iterate through pre-specified hashes
@@ -244,8 +249,12 @@ class Clients():
                         return resolved_path
 
                     # Track best match for small pieces
-                    if piece_size <= 8388608:
+                    if piece_size <= 8388608 and mtv_torrent:
                         console.print(f"[green]Found a valid torrent with preferred piece size from client search: [bold yellow]{found_hash}")
+                        return resolved_path
+
+                    if piece_size < 16777216 and piece_limit:  # 16 MiB
+                        console.print(f"[green]Found a valid torrent with piece size under 16 MiB from client search: [bold yellow]{found_hash}")
                         return resolved_path
 
                     if best_match is None or piece_size < best_match['piece_size']:
@@ -340,14 +349,14 @@ class Clients():
 
                     # Piece size and count validations
                     if not meta.get('prefer_small_pieces', False):
-                        if reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608:
+                        if reuse_torrent.pieces >= 8000 and reuse_torrent.piece_size < 8488608 and ('max_piece_size' not in meta or meta['max_piece_size'] >= 8):
                             if meta['debug']:
                                 console.print("[bold red]Torrent needs to have less than 8000 pieces with a 8 MiB piece size")
                             valid = False
-                        elif reuse_torrent.pieces >= 4000 and reuse_torrent.piece_size < 4294304:
-                            if meta['debug']:
-                                console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size")
-                            valid = False
+                    if reuse_torrent.pieces >= 5000 and reuse_torrent.piece_size < 4294304 and ('max_piece_size' not in meta or meta['max_piece_size'] >= 4):
+                        if meta['debug']:
+                            console.print("[bold red]Torrent needs to have less than 5000 pieces with a 4 MiB piece size")
+                        valid = False
                     elif 'max_piece_size' not in meta and reuse_torrent.pieces >= 12000:
                         if meta['debug']:
                             console.print("[bold red]Torrent needs to have less than 12000 pieces to be valid")
@@ -365,7 +374,8 @@ class Clients():
                             console.log("[bold red]Provided .torrent has files that were not expected")
                         valid = False
                     else:
-                        console.print(f"[bold green]REUSING .torrent with infohash: [bold yellow]{torrenthash}")
+                        if meta['debug']:
+                            console.log(f"[bold green]REUSING .torrent with infohash: [bold yellow]{torrenthash}")
                 except Exception as e:
                     console.print(f'[bold red]Error checking reuse torrent: {e}')
                     valid = False
@@ -2124,8 +2134,18 @@ class Clients():
                         extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
                         os.makedirs(extracted_torrent_dir, exist_ok=True)
 
-                        # Try the best match first
-                        torrent_hash = best_match['hash']
+                        # Set up piece size preference logic
+                        mtv_config = self.config.get('TRACKERS', {}).get('MTV', {})
+                        prefer_small_pieces = mtv_config.get('prefer_mtv_torrent', False)
+                        piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
+
+                        # Use piece preference if MTV preference is true, otherwise use general piece limit
+                        use_piece_preference = prefer_small_pieces or piece_limit
+                        piece_size_best_match = None  # Track the best match for fallback if piece preference is enabled
+
+                        # Try the best match first (from the sorted matching torrents)
+                        best_torrent_match = matching_torrents[0]
+                        torrent_hash = best_torrent_match['hash']
                         torrent_file_path = None
 
                         if torrent_storage_dir:
@@ -2170,98 +2190,185 @@ class Clients():
                         if torrent_file_path:
                             valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
                             if valid:
-                                try:
-                                    await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
-                                    if meta['debug']:
-                                        console.print("[green]Created BASE.torrent from existing torrent")
-                                    meta['base_torrent_created'] = True
-                                    meta['hash_used'] = torrent_hash
-                                    found_valid_torrent = True
-                                except Exception as e:
-                                    console.print(f"[bold red]Error creating BASE.torrent: {e}")
+                                if use_piece_preference:
+                                    # **Track best match based on piece size**
+                                    try:
+                                        torrent_data = Torrent.read(torrent_file_path)
+                                        piece_size = torrent_data.piece_size
+                                        # For prefer_small_pieces: prefer smallest pieces
+                                        # For piece_limit: prefer torrents with piece size <= 16 MiB (16777216 bytes)
+                                        is_better_match = False
+                                        if prefer_small_pieces:
+                                            # MTV preference: always prefer smaller pieces
+                                            is_better_match = piece_size_best_match is None or piece_size < piece_size_best_match['piece_size']
+                                        elif piece_limit:
+                                            # General preference: prefer <= 16 MiB pieces, then smaller within that range
+                                            if piece_size <= 16777216:  # 16 MiB
+                                                is_better_match = (piece_size_best_match is None or
+                                                                   piece_size_best_match['piece_size'] > 16777216 or
+                                                                   piece_size < piece_size_best_match['piece_size'])
+
+                                        if is_better_match:
+                                            piece_size_best_match = {
+                                                'hash': torrent_hash,
+                                                'torrent_path': torrent_path if torrent_path else torrent_file_path,
+                                                'piece_size': piece_size
+                                            }
+                                            if meta['debug']:
+                                                console.print(f"[green]Updated best match: {piece_size_best_match}")
+                                    except Exception as e:
+                                        console.print(f"[bold red]Error reading torrent data for {torrent_hash}: {e}")
+                                        if os.path.exists(torrent_file_path) and torrent_file_path.startswith(extracted_torrent_dir):
+                                            os.remove(torrent_file_path)
+                                else:
+                                    # If piece preference is disabled, return first valid torrent
+                                    try:
+                                        await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                                        if meta['debug']:
+                                            console.print(f"[green]Created BASE.torrent from first valid torrent: {torrent_hash}")
+                                        meta['base_torrent_created'] = True
+                                        meta['hash_used'] = torrent_hash
+                                        found_valid_torrent = True
+                                    except Exception as e:
+                                        console.print(f"[bold red]Error creating BASE.torrent: {e}")
                             else:
                                 if meta['debug']:
-                                    console.print(f"[bold red]Validation failed for best match torrent {torrent_file_path}")
+                                    console.print(f"[bold red]{torrent_hash} failed validation")
                                 if os.path.exists(torrent_file_path) and torrent_file_path.startswith(extracted_torrent_dir):
                                     os.remove(torrent_file_path)
 
-                                # Try other matches if the best match isn't valid
-                                if meta['debug']:
-                                    console.print("[yellow]Trying other torrent matches...")
-                                for torrent_match in matching_torrents[1:]:  # Skip the first one since we already tried it
-                                    alt_torrent_hash = torrent_match['hash']
-                                    alt_torrent_file_path = None
+                                # If first torrent fails validation, continue to try other matches
+                                if not found_valid_torrent:
+                                    if meta['debug']:
+                                        console.print("[yellow]First torrent failed validation, trying other torrent matches...")
 
-                                    if meta.get('debug', False):
-                                        console.print(f"[cyan]Trying alternative torrent: {alt_torrent_hash}")
+                        # Try other matches if the best match isn't valid or if we need to find all valid torrents for piece preference
+                        if not found_valid_torrent or (use_piece_preference and not piece_size_best_match):
+                            if meta['debug']:
+                                console.print("[yellow]Trying other torrent matches...")
+                            for torrent_match in matching_torrents[1:]:  # Skip the first one since we already tried it
+                                alt_torrent_hash = torrent_match['hash']
+                                alt_torrent_file_path = None
 
-                                    # Check if alternative torrent file exists in storage directory
-                                    if torrent_storage_dir:
-                                        alt_potential_path = os.path.join(torrent_storage_dir, f"{alt_torrent_hash}.torrent")
-                                        if os.path.exists(alt_potential_path):
-                                            alt_torrent_file_path = alt_potential_path
-                                            if meta.get('debug', False):
-                                                console.print(f"[cyan]Found existing alternative .torrent file: {alt_torrent_file_path}")
+                                if meta.get('debug', False):
+                                    console.print(f"[cyan]Trying alternative torrent: {alt_torrent_hash}")
 
-                                    # If not found in storage directory, export from qBittorrent
-                                    if not alt_torrent_file_path:
-                                        alt_torrent_file_content = None
-                                        if proxy_url:
-                                            qbt_proxy_url = proxy_url.rstrip('/')
-                                            try:
-                                                async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
-                                                                            data={'hash': alt_torrent_hash}) as response:
-                                                    if response.status == 200:
-                                                        alt_torrent_file_content = await response.read()
-                                                    else:
-                                                        console.print(f"[red]Failed to export alternative torrent via proxy: {response.status}")
-                                            except Exception as e:
-                                                console.print(f"[red]Error exporting alternative torrent via proxy: {e}")
-                                        else:
-                                            alt_torrent_file_content = await self.retry_qbt_operation(
-                                                lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
-                                                f"Export alternative torrent {alt_torrent_hash}"
-                                            )
-                                        if alt_torrent_file_content is not None:
-                                            alt_torrent_file_path = os.path.join(extracted_torrent_dir, f"{alt_torrent_hash}.torrent")
+                                # Check if alternative torrent file exists in storage directory
+                                if torrent_storage_dir:
+                                    alt_potential_path = os.path.join(torrent_storage_dir, f"{alt_torrent_hash}.torrent")
+                                    if os.path.exists(alt_potential_path):
+                                        alt_torrent_file_path = alt_potential_path
+                                        if meta.get('debug', False):
+                                            console.print(f"[cyan]Found existing alternative .torrent file: {alt_torrent_file_path}")
 
-                                            with open(alt_torrent_file_path, "wb") as f:
-                                                f.write(alt_torrent_file_content)
-
-                                            if meta.get('debug', False):
-                                                console.print(f"[green]Exported alternative .torrent file to: {alt_torrent_file_path}")
-                                        else:
-                                            console.print(f"[bold red]Failed to export alternative .torrent for {alt_torrent_hash} after retries")
-                                            continue
-
-                                    # Validate the alternative torrent
-                                    if alt_torrent_file_path:
-                                        alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                            meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client, print_err=False
+                                # If not found in storage directory, export from qBittorrent
+                                if not alt_torrent_file_path:
+                                    alt_torrent_file_content = None
+                                    if proxy_url:
+                                        qbt_proxy_url = proxy_url.rstrip('/')
+                                        try:
+                                            async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                        data={'hash': alt_torrent_hash}) as response:
+                                                if response.status == 200:
+                                                    alt_torrent_file_content = await response.read()
+                                                else:
+                                                    console.print(f"[red]Failed to export alternative torrent via proxy: {response.status}")
+                                        except Exception as e:
+                                            console.print(f"[red]Error exporting alternative torrent via proxy: {e}")
+                                    else:
+                                        alt_torrent_file_content = await self.retry_qbt_operation(
+                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
+                                            f"Export alternative torrent {alt_torrent_hash}"
                                         )
+                                    if alt_torrent_file_content is not None:
+                                        alt_torrent_file_path = os.path.join(extracted_torrent_dir, f"{alt_torrent_hash}.torrent")
 
-                                        if alt_valid:
+                                        with open(alt_torrent_file_path, "wb") as f:
+                                            f.write(alt_torrent_file_content)
+
+                                        if meta.get('debug', False):
+                                            console.print(f"[green]Exported alternative .torrent file to: {alt_torrent_file_path}")
+                                    else:
+                                        console.print(f"[bold red]Failed to export alternative .torrent for {alt_torrent_hash} after retries")
+                                        continue
+
+                                # Validate the alternative torrent
+                                if alt_torrent_file_path:
+                                    alt_valid, alt_torrent_path = await self.is_valid_torrent(
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client, print_err=False
+                                    )
+
+                                    if alt_valid:
+                                        if use_piece_preference:
+                                            # **Track best match based on piece size**
+                                            try:
+                                                torrent_data = Torrent.read(alt_torrent_file_path)
+                                                piece_size = torrent_data.piece_size
+                                                # For prefer_small_pieces: prefer smallest pieces
+                                                # For piece_limit: prefer torrents with piece size <= 16 MiB (16777216 bytes)
+                                                is_better_match = False
+                                                if prefer_small_pieces:
+                                                    # MTV preference: always prefer smaller pieces
+                                                    is_better_match = piece_size_best_match is None or piece_size < piece_size_best_match['piece_size']
+                                                elif piece_limit:
+                                                    # General preference: prefer <= 16 MiB pieces, then smaller within that range
+                                                    if piece_size <= 16777216:  # 16 MiB
+                                                        is_better_match = (piece_size_best_match is None or
+                                                                           piece_size_best_match['piece_size'] > 16777216 or
+                                                                           piece_size < piece_size_best_match['piece_size'])
+
+                                                if is_better_match:
+                                                    piece_size_best_match = {
+                                                        'hash': alt_torrent_hash,
+                                                        'torrent_path': alt_torrent_path if alt_torrent_path else alt_torrent_file_path,
+                                                        'piece_size': piece_size
+                                                    }
+                                                    if meta['debug']:
+                                                        console.print(f"[green]Updated best match: {piece_size_best_match}")
+                                            except Exception as e:
+                                                console.print(f"[bold red]Error reading torrent data for {alt_torrent_hash}: {e}")
+                                        else:
+                                            # If piece preference is disabled, return first valid torrent
                                             try:
                                                 await create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
                                                 if meta['debug']:
                                                     console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
-                                                meta['infohash'] = alt_torrent_hash  # Update infohash to use the valid torrent
+                                                meta['infohash'] = alt_torrent_hash
                                                 meta['base_torrent_created'] = True
-                                                meta['hash_used'] = torrent_hash
+                                                meta['hash_used'] = alt_torrent_hash
                                                 found_valid_torrent = True
                                                 break
                                             except Exception as e:
                                                 console.print(f"[bold red]Error creating BASE.torrent for alternative: {e}")
-                                        else:
-                                            if meta['debug']:
-                                                console.print(f"[yellow]Alternative torrent {alt_torrent_hash} also invalid")
-                                            if os.path.exists(alt_torrent_file_path) and alt_torrent_file_path.startswith(extracted_torrent_dir):
-                                                os.remove(alt_torrent_file_path)
+                                    else:
+                                        if meta['debug']:
+                                            console.print(f"[bold red]{alt_torrent_hash} failed validation")
+                                        if os.path.exists(alt_torrent_file_path) and alt_torrent_file_path.startswith(extracted_torrent_dir):
+                                            os.remove(alt_torrent_file_path)
 
-                                if not found_valid_torrent:
-                                    if meta['debug']:
-                                        console.print("[bold red]No valid torrents found after checking all matches")
-                                    meta['we_checked_them_all'] = True
+                            if not found_valid_torrent:
+                                if meta['debug']:
+                                    console.print("[bold red]No valid torrents found after checking all matches, falling back to a best match if preference is set")
+                                meta['we_checked_them_all'] = True
+
+                        # **Return the best match if piece preference is enabled**
+                        if use_piece_preference and piece_size_best_match and not found_valid_torrent:
+                            try:
+                                preference_type = "MTV preference" if prefer_small_pieces else "16 MiB piece limit"
+                                console.print(f"[green]Using best match torrent ({preference_type}) with hash: {piece_size_best_match['hash']}")
+                                await create_base_from_existing_torrent(piece_size_best_match['torrent_path'], meta['base_dir'], meta['uuid'])
+                                if meta['debug']:
+                                    piece_size_mib = piece_size_best_match['piece_size'] / 1024 / 1024
+                                    console.print(f"[green]Created BASE.torrent from best match torrent: {piece_size_best_match['hash']} (piece size: {piece_size_mib:.1f} MiB)")
+                                meta['infohash'] = piece_size_best_match['hash']
+                                meta['base_torrent_created'] = True
+                                meta['hash_used'] = piece_size_best_match['hash']
+                                found_valid_torrent = True
+                            except Exception as e:
+                                console.print(f"[bold red]Error creating BASE.torrent from best match: {e}")
+                        elif use_piece_preference and not piece_size_best_match:
+                            console.print("[yellow]No preferred torrents found matching piece size preferences.")
+                            meta['we_checked_them_all'] = True
 
             # Display results summary
             if meta['debug']:
