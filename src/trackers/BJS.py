@@ -605,7 +605,6 @@ class BJS(COMMON):
         if response.status_code in [301, 302, 307] and 'Location' in response.headers:
             redirect_url = f"{self.base_url}/{response.headers['Location']}"
             response = await self.session.get(redirect_url)
-        response.raise_for_status()
 
         return BeautifulSoup(response.text, 'html.parser')
 

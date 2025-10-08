@@ -269,6 +269,10 @@ config = {
         # predb is not consistent, can timeout, but can find some releases not found on SRRDB
         "check_predb": False,
 
+        # Set true to prefer torrents with piece size <= 16 MiB when searching for existing torrents in clients
+        # Does not override MTV preference for small pieces
+        "prefer_max_16_torrent": False,
+
     },
 
     # these are used for DB links on AR

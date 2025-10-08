@@ -5,7 +5,7 @@ import re
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
-from src.languages import parsed_mediainfo, process_desc_language
+from src.languages import process_desc_language
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -35,51 +35,50 @@ class HUNO(UNIT3D):
 
         if await self.get_audio(meta) == "SKIPPED":
             console.print(f'{self.tracker}: No audio languages were found, the upload cannot continue.')
-            should_continue = False
+            return False
 
         if meta['video_codec'] != "HEVC" and meta['type'] in {"ENCODE", "WEBRIP", "DVDRIP", "HDTV"}:
             if not meta['unattended']:
                 console.print('[bold red]Only x265/HEVC encodes are allowed at HUNO')
-            should_continue = False
+            return False
+
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
 
         if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
-            parsed_info = await parsed_mediainfo(meta)
-            for video_track in parsed_info.get('video', []):
-                encoding_settings = video_track.get('encoding_settings')
-                if not encoding_settings:
-                    if not meta['unattended']:
-                        console.print("No encoding settings found in MEDIAINFO for HUNO")
-                    should_continue = False
-                    break
+            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            for track in tracks:
+                if track.get('@type') == "Video":
+                    encoding_settings = track.get('Encoded_Library_Settings', {})
 
-                if encoding_settings:
-                    crf_match = re.search(r'crf[ =:]+([\d.]+)', encoding_settings, re.IGNORECASE)
-                    if crf_match:
-                        crf_value = float(crf_match.group(1))
-                        if crf_value > 22:
-                            if not meta['unattended']:
-                                console.print(f"CRF value too high: {crf_value} for HUNO")
-                            should_continue = False
-                            break
-                    else:
-                        bit_rate = video_track.get('bit_rate')
-                        if bit_rate and "Animation" not in meta.get('genre', ""):
-                            bit_rate_num = None
-                            # Match number and unit (e.g., 42.4 Mb/s, 42400 kb/s, etc.)
-                            match = re.search(r'([\d.]+)\s*([kM]?b/s)', bit_rate.replace(',', '').replace(' ', ''), re.IGNORECASE)
-                            if match:
-                                value = float(match.group(1))
-                                unit = match.group(2).lower()
-                                if unit == 'mb/s':
-                                    bit_rate_num = int(value * 1000)
-                                elif unit == 'kb/s':
-                                    bit_rate_num = int(value)
-                                else:
-                                    bit_rate_num = int(value)
-                            if bit_rate_num is not None and bit_rate_num < 3000:
+                    if encoding_settings:
+                        crf_match = re.search(r'crf[ =:]+([\d.]+)', encoding_settings, re.IGNORECASE)
+                        if crf_match:
+                            if meta.get('debug', False):
+                                console.print(f"Found CRF value: {crf_match.group(1)}")
+                            crf_value = float(crf_match.group(1))
+                            if crf_value > 22:
                                 if not meta['unattended']:
-                                    console.print(f"Video bitrate too low: {bit_rate_num} kbps for HUNO")
-                                should_continue = False
+                                    console.print(f"CRF value too high: {crf_value} for HUNO")
+                                return False
+                        else:
+                            if meta.get('debug', False):
+                                console.print("No CRF value found in encoding settings.")
+                            bit_rate = track.get('BitRate')
+                            if bit_rate and "Animation" not in meta.get('genre', ""):
+                                try:
+                                    bit_rate_num = int(bit_rate)
+                                except (ValueError, TypeError):
+                                    bit_rate_num = None
+
+                                if bit_rate_num is not None:
+                                    bit_rate_kbps = bit_rate_num / 1000
+
+                                    if bit_rate_kbps < 3000:
+                                        if not meta.get('unattended', False):
+                                            console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for HUNO")
+                                        return False
 
         return should_continue
 

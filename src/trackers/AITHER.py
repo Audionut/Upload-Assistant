@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+from src.console import console
 from src.languages import process_desc_language, has_english_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -21,6 +22,14 @@ class AITHER(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
         pass
+
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        if meta['valid_mi'] is False:
+            console.print("[bold red]No unique ID in mediainfo, skipping AITHER upload.")
+            return False
+
+        return should_continue
 
     async def get_additional_data(self, meta):
         data = {

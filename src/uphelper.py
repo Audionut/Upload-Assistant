@@ -172,7 +172,6 @@ class UploadHelper:
                 meta['keep_folder'] = False
 
             if meta.get('keep_folder') and meta['isdir']:
-                console.print("[bold yellow]Uploading with --keep-folder[/bold yellow]")
                 kf_confirm = console.input("[bold yellow]You specified --keep-folder. Uploading in folders might not be allowed.[/bold yellow] [green]Proceed? y/N: [/green]").strip().lower()
                 if kf_confirm != 'y':
                     console.print("[bold red]Aborting...[/bold red]")

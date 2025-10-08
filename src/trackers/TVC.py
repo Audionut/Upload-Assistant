@@ -11,6 +11,7 @@ import json
 import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
+from src.rehostimages import check_hosts
 
 
 class TVC():
@@ -87,6 +88,20 @@ class TVC():
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
+        url_host_mapping = {
+            "ibb.co": "imgbb",
+            "ptpimg.me": "ptpimg",
+            "pixhost.to": "pixhost",
+            "imagebam.com": "bam",
+        }
+
+        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam']
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        if 'TVC_images_key' in meta:
+            image_list = meta['TVC_images_key']
+        else:
+            image_list = meta['image_list']
+
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
         if meta['category'] == 'TV':
@@ -95,7 +110,7 @@ class TVC():
             cat_id = 44
         # type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature)
+        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list=image_list)
 
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0

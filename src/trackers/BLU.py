@@ -56,6 +56,10 @@ class BLU(UNIT3D):
                 else:
                     return False
 
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
+
         return should_continue
 
     async def get_name(self, meta):

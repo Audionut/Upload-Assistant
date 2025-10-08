@@ -333,41 +333,49 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
     return mi
 
 
-def validate_mediainfo(base_dir, folder_id, path, filelist, debug):
-    if not (path.lower().endswith('.mkv') or any(str(f).lower().endswith('.mkv') for f in filelist)):
+def validate_mediainfo(meta, debug, settings=False):
+    if not any(str(f).lower().endswith('.mkv') for f in meta.get('filelist', [])):
         if debug:
-            console.print(f"[yellow]Skipping {path} (not an .mkv file)[/yellow]")
+            console.print(f"[yellow]Skipping {meta.get('path')} (not an .mkv file)[/yellow]")
         return True
-    mediainfo_path = f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt"
+
     unique_id = None
-    in_general = False
+    valid_settings = False
 
     if debug:
-        console.print(f"[cyan]Validating MediaInfo at: {mediainfo_path}")
+        console.print("[cyan]Validating MediaInfo")
 
-    try:
-        with open(mediainfo_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip() == "General":
-                    in_general = True
-                    continue
-                if in_general:
-                    if line.strip() == "":
-                        break
-                    if line.strip().startswith("Unique ID"):
-                        unique_id = line.split(":", 1)[1].strip()
-                        break
-    except FileNotFoundError:
-        console.print(f"[red]MediaInfo file not found: {mediainfo_path}[/red]")
-        return False
+    mediainfo_data = meta.get('mediainfo', {})
+
+    if "media" in mediainfo_data and "track" in mediainfo_data["media"]:
+        tracks = mediainfo_data["media"]["track"]
+
+        for track in tracks:
+            track_type = track.get("@type", "")
+
+            if settings and track_type == "Video":
+                encoding_settings = track.get("Encoded_Library_Settings")
+                if encoding_settings and encoding_settings != {} and str(encoding_settings).strip():
+                    valid_settings = True
+                    if debug:
+                        console.print(f"[green]Found encoding settings: {encoding_settings}[/green]")
+                    break
+
+            elif not settings and track_type == "General":
+                unique_id_value = track.get("UniqueID")
+                if unique_id_value and unique_id_value != {} and str(unique_id_value).strip():
+                    unique_id = str(unique_id_value)
+                    if debug:
+                        console.print(f"[green]Found Unique ID: {unique_id}[/green]")
+                    break
 
     if debug:
-        if unique_id:
-            console.print(f"[green]Found Unique ID: {unique_id}[/green]")
-        else:
-            console.print("[yellow]Unique ID not found in General section.[/yellow]")
+        if settings and not valid_settings:
+            console.print("[yellow]Mediainfo failed validation (no encoding settings)[/yellow]")
+        elif not settings and not unique_id:
+            console.print("[yellow]Mediainfo failed validation (no unique ID)[/yellow]")
 
-    return bool(unique_id)
+    return bool(valid_settings) if settings else bool(unique_id)
 
 
 async def get_conformance_error(meta):
