@@ -153,6 +153,12 @@ class DescriptionBuilder:
             return custom_description_header
         return ''
 
+    async def get_tonemapped_header(self):
+        tonemapped_description_header = self.config['DEFAULT'].get('tonemapped_header', '')
+        if tonemapped_description_header:
+            return tonemapped_description_header
+        return ''
+
     async def get_logo_section(self, meta, tracker):
         """Returns the logo URL and size if applicable."""
         if not self.config['TRACKERS'][tracker].get('add_logo', self.config['DEFAULT'].get('add_logo', False)):
