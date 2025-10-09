@@ -1038,13 +1038,6 @@ class COMMON():
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-                    if imdb != 0:
-                        imdb_str = str(f'tt{imdb}').zfill(7)
-                    else:
-                        imdb_str = None
-
-                    console.print(f"[green]Valid IDs found from {tracker}: TMDb: {tmdb}, IMDb: {imdb_str}, TVDb: {tvdb}, MAL: {mal}[/green]")
-
             if tmdb or imdb or tvdb:
                 if not id:
                     # Only prompt the user for ID selection if not searching by ID

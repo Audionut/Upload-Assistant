@@ -790,8 +790,9 @@ async def do_the_thing(base_dir):
                     try:
                         shutil.rmtree(tmp_path)
                         os.makedirs(tmp_path, exist_ok=True)
-                        console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
-                        console.print()
+                        if meta['debug']:
+                            console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
+                            console.print()
                     except Exception as e:
                         console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 
