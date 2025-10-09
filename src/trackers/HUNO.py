@@ -142,10 +142,12 @@ class HUNO(UNIT3D):
         return {}
 
     async def get_internal(self, meta):
+        internal = 0
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                return {'internal': 1}
-        return {}
+                internal = 1
+
+        return {'internal': internal}
 
     async def get_additional_files(self, meta):
         return {}
