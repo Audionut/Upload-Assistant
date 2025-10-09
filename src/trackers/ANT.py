@@ -59,12 +59,16 @@ class ANT:
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
+        if meta.get('mkbrr', False):
+            tracker_url = self.config['TRACKERS']['ANT'].get('announce_url', "https://fake.tracker").strip()
+        else:
+            tracker_url = ''
 
         # Trigger regeneration automatically if size constraints aren't met
         if torrent_file_size_kib > 250:  # 250 KiB
             console.print("[yellow]Existing .torrent exceeds 250 KiB and will be regenerated to fit constraints.")
-            meta['max_piece_size'] = '256'  # 256 MiB
-            create_torrent(meta, Path(meta['path']), "ANT")
+            meta['max_piece_size'] = '128'  # 128 MiB
+            create_torrent(meta, Path(meta['path']), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
         await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
@@ -190,8 +194,8 @@ class ANT:
             # User description
             desc_parts.append(user_desc)
 
-            # Signature
-            desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/align]")
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header())
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
