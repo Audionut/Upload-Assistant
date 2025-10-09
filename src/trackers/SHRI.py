@@ -237,8 +237,6 @@ class SHRI(UNIT3D):
         name = f"{name}-{tag}"
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
-        _shri_session_data.pop(meta["uuid"], None)
-
         return {"name": name}
 
     async def get_type_id(self, meta):
