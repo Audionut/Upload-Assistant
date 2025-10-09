@@ -719,7 +719,8 @@ class ASC:
                 continue
 
             if source == 'Internet Movie Database':
-                parts.append(f"\n[url={meta.get('imdb_info', {}).get('imdb_url', '')}]{img_tag}[/url]\n[b]{value}[/b]\n")
+                imdb_url = str({meta.get('imdb_info', {}).get('imdb_url', '')})
+                parts.append(f"\n[url={imdb_url}]{img_tag}[/url]\n[b]{value}[/b]\n")
             elif source == 'TMDb':
                 parts.append(f"[url=https://www.themoviedb.org/{meta['category'].lower()}/{meta['tmdb']}]{img_tag}[/url]\n[b]{value}[/b]\n")
             else:

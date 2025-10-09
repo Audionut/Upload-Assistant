@@ -361,7 +361,7 @@ class TL:
             'name': self.get_name(meta),
             'category': self.get_category(meta),
             'nonscene': 'on' if not meta.get("scene") else 'off',
-            'imdbURL': meta.get('imdb_info', {}).get('imdb_url', ''),
+            'imdbURL': str(meta.get('imdb_info', {}).get('imdb_url', '')),
             'tvMazeURL': tvMazeURL,
             'igdbURL': '',
             'torrentNFO': '1',

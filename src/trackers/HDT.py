@@ -349,7 +349,7 @@ class HDT:
 
         # IMDB
         if int(meta.get('imdb_id')) != 0:
-            data['infosite'] = meta.get('imdb_info', {}).get('imdb_url', '') + '/'
+            data['infosite'] = str(meta.get('imdb_info', {}).get('imdb_url', '') + '/')
 
         # Full Season Pack
         if int(meta.get('tv_pack', '0')) != 0:

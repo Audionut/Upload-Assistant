@@ -56,7 +56,8 @@ class MTV():
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
+        if not os.path.exists(torrent_file_path):
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
         if not await aiofiles.os.path.exists(torrent_file_path):
             torrent_filename = "BASE"
             torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
@@ -269,7 +270,7 @@ class MTV():
     async def edit_group_desc(self, meta):
         description = ""
         if meta['imdb_id'] != 0:
-            description += {meta.get('imdb_info', {}).get('imdb_url', '')}
+            description += str(meta.get('imdb_info', {}).get('imdb_url', ''))
         if meta['tmdb'] != 0:
             description += f"\nhttps://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}"
         if meta['tvdb_id'] != 0:

@@ -306,7 +306,7 @@ class HDB():
             if meta.get('tvdb_id', 0) != 0:
                 data['tvdb'] = meta['tvdb_id']
             if meta.get('imdb_id') != 0:
-                data['imdb'] = meta.get('imdb_info', {}).get('imdb_url', '') + '/',
+                data['imdb'] = str(meta.get('imdb_info', {}).get('imdb_url', '')) + '/',
             else:
                 data['imdb'] = 0
             if meta.get('category') == 'TV':
