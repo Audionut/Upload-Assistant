@@ -30,7 +30,7 @@ Common options:
   -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
   -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
-  -df, --description-file    Path to custom description file
+  -df, --descfile    Path to custom description file
   -serv, --service           Streaming service
   --no-aka                   Remove AKA from title
   -daily, --daily            Air date of a daily type episode (YYYY-MM-DD)
@@ -220,7 +220,7 @@ class Args():
                         meta['manual_type'] = value2.upper().replace('-', '')
                     elif key == 'tag':
                         meta[key] = f"-{value2}"
-                    elif key == 'description-file':
+                    elif key == 'descfile':
                         meta[key] = os.path.abspath(value2)
                     elif key == 'comparison':
                         meta[key] = os.path.abspath(value2)
