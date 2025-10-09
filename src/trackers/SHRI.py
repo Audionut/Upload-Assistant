@@ -128,43 +128,24 @@ class SHRI(UNIT3D):
 
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
-            name = meta["name"]
-
-            # Apply Italian title if enabled
-            if italian_title and use_italian_title:
-                name = name.replace(meta.get("title", ""), italian_title, 1)
-
-            # Remove tag
-            tag = meta.get("tag", "").strip()
-            if tag:
-                name = name.replace(tag, "")
-
-            # Remove AKA
-            aka = meta.get("aka", "")
-            if aka:
-                name = name.replace(f"{aka}", "")
-
-            # DVD: add resolution before source, codec before audio
-            if meta.get("is_disc") == "DVD":
-                if resolution and source:
-                    name = name.replace(source, f"{resolution} {source}", 1)
-                if video_codec and audio:
-                    name = name.replace(audio, f"{video_codec} {audio}", 1)
-
-            # BDMV: inject resolution and region
-            elif meta.get("is_disc") == "BDMV":
-                if resolution and f" {resolution} " not in name:
-                    parts = name.split()
-                    if year in parts:
-                        idx = parts.index(year) + 1
-                        parts.insert(idx, resolution)
-                        name = " ".join(parts)
-
-            name = await self.finalize_disc_name(meta, name)
+            # Inject region from validated session data if available
+            region = _shri_session_data.get(meta["uuid"], {}).get(
+                "_shri_region_name"
+            ) or meta.get("region", "")
+            if meta["is_disc"] == "BDMV":
+                # BDMV: Title Year 3D Edition Hybrid REPACK Resolution Region UHD Source HDR VideoCodec Audio
+                name = f"{title} {year} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
+            elif meta["is_disc"] == "DVD":
+                dvd_size = meta.get("dvd_size", "")
+                # DVD: Title Year 3D Edition REPACK Resolution Region Source DVDSize Audio
+                name = f"{title} {year} {season}{episode} {three_d} {edition} {repack} {resolution} {region} {source} {dvd_size} {audio}"
+            elif meta["is_disc"] == "HDDVD":
+                # HDDVD: Title Year Edition REPACK Resolution Region Source VideoCodec Audio
+                name = f"{title} {year} {edition} {repack} {resolution} {region} {source} {video_codec} {audio}"
 
         elif effective_type == "REMUX":
             # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {three_d} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
@@ -330,30 +311,6 @@ class SHRI(UNIT3D):
         if distributor_id:
             return {"distributor_id": distributor_id}
         return await super().get_distributor_id(meta)
-
-    async def finalize_disc_name(self, meta, name):
-        """
-        Inject region code into BDMV release name after resolution/edition.
-        Uses region name stored during validation phase.
-        """
-        data = _shri_session_data.get(meta["uuid"], {})
-        region_name = data.get("_shri_region_name")
-
-        # Only inject if region was validated and not already in name
-        if region_name and f" {region_name} " not in name:
-            resolution = meta.get("resolution", "")
-            edition = meta.get("edition", "")
-
-            if edition:
-                name = name.replace(
-                    f"{resolution} {edition}",
-                    f"{resolution} {edition} {region_name}",
-                    1,
-                )
-            elif resolution:
-                name = name.replace(resolution, f"{resolution} {region_name}", 1)
-
-        return name
 
     def get_basename(self, meta):
         """Extract basename from first file in filelist or path"""
