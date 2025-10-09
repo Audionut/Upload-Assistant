@@ -346,7 +346,7 @@ class UNIT3D:
             torrent_bytes = await f.read()
         files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         files.update(await self.get_additional_files(meta))
-        headers = {'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'}
+        headers = {'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})'}
         params = {'api_token': self.api_key}
 
         if meta['debug'] is False:

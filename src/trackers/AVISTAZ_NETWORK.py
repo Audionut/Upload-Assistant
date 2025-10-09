@@ -35,7 +35,6 @@ class AZTrackerBase:
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = ''
         self.media_code = ''
 
     def get_resolution(self, meta):

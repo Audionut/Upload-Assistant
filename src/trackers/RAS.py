@@ -46,7 +46,8 @@ class RAS(UNIT3D):
             logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
             if logo_path:
                 meta['logo'] = logo_path
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
+        signature = f"\n[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
         return {'description': desc}

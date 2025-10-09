@@ -25,7 +25,6 @@ class HDS:
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/HDS.txt")

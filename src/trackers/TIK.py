@@ -166,7 +166,8 @@ class TIK(UNIT3D):
         return {'resolution_id': resolution_id}
 
     async def get_description(self, meta):
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
+        signature = f"\n[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
         if meta.get('description_link') or meta.get('description_file'):
             async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'r', encoding='utf-8') as f:
                 desc = await f.read()

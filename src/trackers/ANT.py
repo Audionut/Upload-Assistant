@@ -31,7 +31,6 @@ class ANT:
             'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'TBS', 'Telly', 'TM', 'UPiNSMOKE', 'URANiME', 'WAF', 'xRed',
             'XS', 'YIFY', 'YTS', 'Zeus', 'ZKBL', 'ZmN', 'ZMNT'
         ]
-        self.signature = None
         pass
 
     async def get_flags(self, meta):
