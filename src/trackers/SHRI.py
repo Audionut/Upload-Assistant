@@ -181,6 +181,18 @@ class SHRI(UNIT3D):
             # WEB: Title Year Edition LANG Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
             name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
 
+        elif effective_type == "CINEMA_NEWS":
+            basename_upper = self.get_basename(meta).upper()
+            source_marker = next(
+                # fmt: off
+                (marker for marker in ["HDTS", "TS", "MD", "LD", "CAM", "HDCAM", "TC", "HDTC"] 
+                if re.search(rf'\b{marker}\b', basename_upper)),
+                # fmt: on
+                "TS"
+            )
+            # Cinema News: Title Year Edition LANG REPACK Resolution Source Audio VideoCodec
+            name = f"{title} {year} {edition} {audio_lang_str} {repack} {resolution} {source_marker} {audio} {video_encode}"
+
         else:
             # Fallback: use original name with cleaned audio
             name = meta["name"].replace("Dual-Audio", "").strip()
@@ -234,6 +246,7 @@ class SHRI(UNIT3D):
         """Map release type to ShareIsland type IDs"""
         effective_type = self._get_effective_type(meta)
         type_id = {
+            "CINEMA_NEWS": "42",
             "DISC": "26",
             "REMUX": "7",
             "WEBDL": "27",
@@ -247,10 +260,10 @@ class SHRI(UNIT3D):
 
     async def get_additional_checks(self, meta):
         """
-        Validate and prompt for BDMV region/distributor before upload.
+        Validate and prompt for DVD/HDDVD region/distributor before upload.
         Stores validated IDs in module-level dict keyed by UUID for use during upload.
         """
-        if meta.get("is_disc") == "BDMV":
+        if meta.get("is_disc") in ["DVD", "HDDVD"]:
             region_name = meta.get("region")
 
             # Prompt for region if not in meta
@@ -383,7 +396,16 @@ class SHRI(UNIT3D):
         return False
 
     def _get_effective_type(self, meta):
-        """Determine effective type, overriding ENCODE with REMUX when detected"""
+        """
+        Determine effective type with priority hierarchy:
+        1. Cinema News (CAM/HDCAM/TC/HDTC/TS/HDTS/MD/LD keywords)
+        2. REMUX detection (overrides ENCODE)
+        3. Base type from meta
+        """
+        basename = self.get_basename(meta)
+        if re.search(r"\b(HDTS|TS|MD|LD|CAM|HDCAM|TC|HDTC)\b", basename, re.IGNORECASE):
+            return "CINEMA_NEWS"
+
         return "REMUX" if self._is_remux(meta) else meta.get("type", "ENCODE")
 
     def _get_italian_title(self, imdb_info):
