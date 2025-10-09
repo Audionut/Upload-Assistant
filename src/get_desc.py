@@ -226,7 +226,7 @@ class DescriptionBuilder:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             if await self.common.path_exists(mi_path):
                 async with aiofiles.open(mi_path, 'r', encoding='utf-8') as mi:
-                    return mi.read()
+                    return await mi.read()
 
         cache_file_dir = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
         cache_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_SHORT.txt')
@@ -240,12 +240,6 @@ class DescriptionBuilder:
 
         def run_mediainfo_parse(video_file, mi_template):
             return MediaInfo.parse(video_file, output='STRING', full=False, mediainfo_options={'inform': f'file://{mi_template}'})
-
-        def create_dirs(path):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        def sync_path_exists(path):
-            return os.path.exists(path)
 
         file_exists, file_size = await loop.run_in_executor(None, check_file_status, cache_file_path)
 
@@ -263,7 +257,7 @@ class DescriptionBuilder:
         mi_template = os.path.join(meta['base_dir'], 'data', 'templates', 'MEDIAINFO.txt')
         mi_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_CLEANPATH.txt')
 
-        template_exists = await loop.run_in_executor(None, sync_path_exists, mi_template)
+        template_exists = await self.common.path_exists(mi_template)
 
         if template_exists:
             try:
@@ -278,8 +272,7 @@ class DescriptionBuilder:
                 if media_info_content:
                     media_info_content = media_info_content.replace('\r\n', '\n')
                     try:
-                        await loop.run_in_executor(None, create_dirs, cache_file_path)
-
+                        await self.common.makedirs(cache_file_dir)
                         async with aiofiles.open(cache_file_path, mode='w', encoding='utf-8') as f:
                             await f.write(media_info_content)
                     except Exception:
@@ -288,13 +281,13 @@ class DescriptionBuilder:
                     return media_info_content
 
             except Exception:
-                cleanpath_exists = await loop.run_in_executor(None, sync_path_exists, mi_file_path)
+                cleanpath_exists = await self.common.path_exists(mi_file_path)
                 if cleanpath_exists:
                     async with aiofiles.open(mi_file_path, 'r', encoding='utf-8') as f:
                         return await f.read()
 
         else:
-            cleanpath_exists = await loop.run_in_executor(None, sync_path_exists, mi_file_path)
+            cleanpath_exists = await self.common.path_exists(mi_file_path)
             if cleanpath_exists:
                 async with aiofiles.open(mi_file_path, 'r', encoding='utf-8') as f:
                     tech_info = await f.read()
