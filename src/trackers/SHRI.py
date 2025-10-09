@@ -20,6 +20,8 @@ class SHRI(UNIT3D):
     CINEMA_NEWS_PATTERN = re.compile(
         r"\b(HDTS|TS|MD|LD|CAM|HDCAM|TC|HDTC)\b", re.IGNORECASE
     )
+    CINEMA_VIDEO_PATTERN = re.compile(r"\b(HDTS|TS|CAM|HDCAM|TC|HDTC)\b", re.IGNORECASE)
+    CINEMA_AUDIO_PATTERN = re.compile(r"\b(MD|LD)\b", re.IGNORECASE)
 
     def __init__(self, config):
         super().__init__(config, tracker_name="SHRI")
@@ -174,13 +176,18 @@ class SHRI(UNIT3D):
 
         elif effective_type == "CINEMA_NEWS":
             basename_upper = self.get_basename(meta).upper()
-            source_marker = next(
-                # fmt: off
-                (marker for marker in ["HDTS", "TS", "MD", "LD", "CAM", "HDCAM", "TC", "HDTC"] 
-                if re.search(rf'\b{marker}\b', basename_upper)),
-                "TS"
-                # fmt: on
-            )
+            markers = []
+
+            video_match = self.CINEMA_VIDEO_PATTERN.search(basename_upper)
+            if video_match:
+                markers.append(video_match.group(0))
+
+            audio_match = self.CINEMA_AUDIO_PATTERN.search(basename_upper)
+            if audio_match:
+                markers.append(audio_match.group(0))
+
+            source_marker = " ".join(markers)
+
             # Cinema News: Title Year Edition LANG REPACK Resolution Source Audio VideoCodec
             name = f"{title} {year} {edition} {audio_lang_str} {repack} {resolution} {source_marker} {audio} {video_encode}"
 
