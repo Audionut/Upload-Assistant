@@ -160,7 +160,7 @@ class SHRI(UNIT3D):
                         parts.insert(idx, resolution)
                         name = " ".join(parts)
 
-                name = await self.finalize_disc_name(meta, name)
+            name = await self.finalize_disc_name(meta, name)
 
         elif effective_type == "REMUX":
             # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
