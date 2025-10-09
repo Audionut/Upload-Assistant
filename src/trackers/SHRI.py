@@ -16,7 +16,10 @@ class SHRI(UNIT3D):
     # Pre-compile regex patterns for performance
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
-    MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU)\b", re.IGNORECASE)
+    MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU1080|VU720|VU)\b", re.IGNORECASE)
+    CINEMA_NEWS_PATTERN = re.compile(
+        r"\b(HDTS|TS|MD|LD|CAM|HDCAM|TC|HDTC)\b", re.IGNORECASE
+    )
 
     def __init__(self, config):
         super().__init__(config, tracker_name="SHRI")
@@ -46,7 +49,7 @@ class SHRI(UNIT3D):
         - Multi-language audio tags (ITALIAN - ENGLISH format)
         - Italian subtitle [SUBS] tag when no Italian audio present
         - Release group tag cleaning and validation
-        - BDMV region injection
+        - DISC region injection
         """
         if not meta.get("language_checked", False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
@@ -168,8 +171,8 @@ class SHRI(UNIT3D):
                 # fmt: off
                 (marker for marker in ["HDTS", "TS", "MD", "LD", "CAM", "HDCAM", "TC", "HDTC"] 
                 if re.search(rf'\b{marker}\b', basename_upper)),
-                # fmt: on
                 "TS"
+                # fmt: on
             )
             # Cinema News: Title Year Edition LANG REPACK Resolution Source Audio VideoCodec
             name = f"{title} {year} {edition} {audio_lang_str} {repack} {resolution} {source_marker} {audio} {video_encode}"
@@ -214,12 +217,13 @@ class SHRI(UNIT3D):
         tag = tag.lstrip("-").strip()
         tag = re.sub(r"^[A-Z]{2,3}\s+", "", tag)
 
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag or any(inv in tag.lower() for inv in invalid_tags):
+        if not tag or self.INVALID_TAG_PATTERN.search(tag):
             tag = "NoGroup"
 
         name = f"{name}-{tag}"
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
+
+        _shri_session_data.pop(meta["uuid"], None)
 
         return {"name": name}
 
@@ -333,9 +337,9 @@ class SHRI(UNIT3D):
             return True
 
         # Check for VU/UNTOUCHED markers (not at end as group tag)
-        for marker in ["vu", "untouched", "vu1080", "vu720"]:
-            if marker in name_no_ext and not name_no_ext.endswith(f"-{marker}"):
-                return True
+        match = self.MARKER_PATTERN.search(name_no_ext)
+        if match and not name_no_ext.lower().endswith(f"-{match.group(0).lower()}"):
+            return True
 
         try:
             mi = meta.get("mediainfo", {})
@@ -360,7 +364,7 @@ class SHRI(UNIT3D):
         3. Base type from meta
         """
         basename = self.get_basename(meta)
-        if re.search(r"\b(HDTS|TS|MD|LD|CAM|HDCAM|TC|HDTC)\b", basename, re.IGNORECASE):
+        if self.CINEMA_NEWS_PATTERN.search(basename):
             return "CINEMA_NEWS"
 
         return "REMUX" if self._is_remux(meta) else meta.get("type", "ENCODE")
