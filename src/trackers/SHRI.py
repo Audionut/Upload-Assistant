@@ -66,6 +66,7 @@ class SHRI(UNIT3D):
         year = str(meta.get("year", ""))
         resolution = meta.get("resolution", "")
         source = meta.get("source", "")
+        source = source.replace("Blu-ray", "BluRay")
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
@@ -85,11 +86,16 @@ class SHRI(UNIT3D):
         audio = meta.get("audio", "").replace("Dual-Audio", "").strip()
         audio = re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio).strip()
 
-        # Build audio language tag: original → ITALIAN → others (Multi for 4+)
+        # Build audio language tag: original → ITALIAN → ENGLISH → others/Multi (4+)
         audio_lang_str = ""
         if meta.get("audio_languages"):
-            audio_langs = [lang.upper() for lang in meta["audio_languages"]]
-            audio_langs = list(dict.fromkeys(audio_langs))
+            # Normalize all to full names
+            audio_langs = [
+                self._get_language_name(lang.upper())
+                for lang in meta["audio_languages"]
+            ]
+            audio_langs = [lang for lang in audio_langs if lang]  # Remove empty
+            audio_langs = list(dict.fromkeys(audio_langs))  # Dedupe preserving order
 
             orig_lang_iso = meta.get("original_language", "").upper()
             orig_lang_full = self._get_language_name(orig_lang_iso)
@@ -97,22 +103,23 @@ class SHRI(UNIT3D):
             result = []
             remaining = audio_langs.copy()
 
-            # Priority 1: Original language always first
+            # Priority 1: Original language
             if orig_lang_full and orig_lang_full in remaining:
                 result.append(orig_lang_full)
                 remaining.remove(orig_lang_full)
 
-            # Priority 2: Italian always second (if present and not already added)
-            italian_variants = ["ITALIAN", "ITA", "IT"]
-            italian_lang = next(
-                (lang for lang in remaining if lang in italian_variants), None
-            )
-            if italian_lang:
+            # Priority 2: Italian (if not already added)
+            if "ITALIAN" in remaining:
                 result.append("ITALIAN")
-                remaining.remove(italian_lang)
+                remaining.remove("ITALIAN")
 
-            # 4+ languages: add Multi after first two
-            if len(audio_langs) >= 4:
+            # Priority 3: English (if not already added)
+            if "ENGLISH" in remaining:
+                result.append("ENGLISH")
+                remaining.remove("ENGLISH")
+
+            # Handle remaining: show individually if ≤3 total, else add Multi
+            if len(result) + len(remaining) > 3:
                 result.append("Multi")
             else:
                 result.extend(remaining)
