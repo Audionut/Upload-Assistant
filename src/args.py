@@ -30,7 +30,7 @@ Common options:
   -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
   -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
-  -df, --descfile    Path to custom description file
+  -df, --descfile            Path to custom description file
   -serv, --service           Streaming service
   --no-aka                   Remove AKA from title
   -daily, --daily            Air date of a daily type episode (YYYY-MM-DD)
