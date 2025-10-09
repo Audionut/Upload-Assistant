@@ -217,6 +217,9 @@ class HDT:
                 screenshots_block += f"<a href='{image['raw_url']}'><img src='{image['img_url']}' height=137></a> "
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")
 

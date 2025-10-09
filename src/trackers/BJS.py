@@ -370,6 +370,9 @@ class BJS:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
 

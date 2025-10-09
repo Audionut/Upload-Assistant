@@ -116,6 +116,9 @@ class TL:
                     screenshots_block += '<br><br>'
             desc_parts.append('<center>' + screenshots_block + '</center>')
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Signature
         desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">{meta['ua_signature']}</a></center>""")
 

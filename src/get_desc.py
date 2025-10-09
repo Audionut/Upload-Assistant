@@ -153,9 +153,9 @@ class DescriptionBuilder:
             return custom_description_header
         return ''
 
-    async def get_tonemapped_header(self):
-        tonemapped_description_header = self.config['DEFAULT'].get('tonemapped_header', '')
-        if tonemapped_description_header:
+    async def get_tonemapped_header(self, meta, tracker):
+        tonemapped_description_header = self.config['TRACKERS'][tracker].get('tonemapped_header', self.config['DEFAULT'].get('tonemapped_header', ''))
+        if tonemapped_description_header and meta.get('tonemapped', False):
             return tonemapped_description_header
         return ''
 

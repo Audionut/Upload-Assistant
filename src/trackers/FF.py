@@ -213,6 +213,9 @@ class FF:
 
             desc_parts.append(screenshots_block)
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")
 

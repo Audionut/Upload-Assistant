@@ -195,7 +195,7 @@ class ANT:
             desc_parts.append(user_desc)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header())
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
