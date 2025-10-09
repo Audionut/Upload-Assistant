@@ -28,40 +28,40 @@ def _get_active_trackers_with_disc_requirements(meta):
 def _get_strictest_requirements(active_trackers):
     """Calculate strictest requirements across all active trackers."""
     strictest = {'region': 'optional', 'distributor': 'optional'}
-    
+
     for tracker in active_trackers:
         requirements = TRACKER_DISC_REQUIREMENTS.get(tracker, {})
         if requirements.get('region') == 'mandatory':
             strictest['region'] = 'mandatory'
         if requirements.get('distributor') == 'mandatory':
             strictest['distributor'] = 'mandatory'
-    
+
     return strictest
 
 
 def _should_remove_tracker(tracker, region, distributor):
     """Check if tracker should be removed based on skipped fields."""
     requirements = TRACKER_DISC_REQUIREMENTS.get(tracker, {})
-    
+
     if requirements.get('region') == 'mandatory' and region == "SKIPPED":
         return True
     if requirements.get('distributor') == 'mandatory' and distributor == "SKIPPED":
         return True
-    
+
     return False
 
 
 async def get_name(meta):
     active_trackers = _get_active_trackers_with_disc_requirements(meta)
-    
+
     if active_trackers:
         region, distributor = await missing_disc_info(meta, active_trackers)
-        
+
         for tracker in active_trackers:
             if _should_remove_tracker(tracker, region, distributor):
                 if tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
-        
+
         if distributor and 'SKIPPED' not in distributor:
             meta['distributor'] = distributor
         if region and 'SKIPPED' not in region:
@@ -459,15 +459,15 @@ async def missing_disc_info(meta, active_trackers=None):
 
     if meta.get('is_disc') != "BDMV":
         return region_name, distributor_name
-    
+
     strictest = _get_strictest_requirements(active_trackers or [])
-    
+
     if not region_id:
         region_name = await _prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
         if region_name and region_name != "SKIPPED":
             region_name = region_name.upper()
             region_id = await common.unit3d_region_ids(region_name)
-    
+
     if not distributor_id:
         distributor_name = await _prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
         if distributor_name and distributor_name != "SKIPPED":
@@ -483,10 +483,10 @@ async def _prompt_for_field(meta, field_name, is_mandatory):
     """Prompt user for disc field with appropriate mandatory/optional text."""
     if meta['unattended'] and not meta.get('unattended_confirm', False):
         return "SKIPPED"
-    
+
     suffix = " (MANDATORY): " if is_mandatory else " (optional, press Enter to skip): "
     prompt = f"{field_name} not found for disc. Please enter it manually{suffix}"
-    
+
     try:
         value = cli_ui.ask_string(prompt)
         return value.upper() if value else "SKIPPED"
