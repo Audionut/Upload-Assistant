@@ -229,12 +229,7 @@ jobs:
                 fi
               fi
             done
-            
-            # If no changes found, add default message
-            if [ "$FOUND_CHANGES" = false ]; then
-              echo "* Other minor updates and improvements"
-            fi
-            
+
             echo ""
             if [ "${{ env.PREVIOUS_TAG }}" != "initial" ]; then
               echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ env.PREVIOUS_TAG }}...${{ env.VERSION }}"
@@ -255,8 +250,10 @@ jobs:
             echo "" >> "$VERSION_FILE"
           fi
 
-          # Prepend new release info
+          # Update version and prepend new release info
           TEMP_FILE=$(mktemp)
+          
+          # Start with the NEW version (maintaining 'v' prefix format)
           echo "__version__ = \"${{ env.VERSION }}\"" > "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
           echo "\"\"\"" >> "$TEMP_FILE"
@@ -268,7 +265,7 @@ jobs:
           echo "\"\"\"" >> "$TEMP_FILE"
           echo "" >> "$TEMP_FILE"
           
-          # Skip the first line of existing version.py (old __version__)
+          # Add the rest of the existing file (skip first line since we're replacing it)
           if [ -f "$VERSION_FILE" ]; then
             tail -n +2 "$VERSION_FILE" >> "$TEMP_FILE"
           fi

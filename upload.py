@@ -667,12 +667,21 @@ def get_remote_version(url):
 
 def extract_changelog(content, from_version, to_version):
     """Extracts the changelog entries between the specified versions."""
-    pattern = rf'__version__\s*=\s*"{re.escape(to_version)}"\s*(.*?)__version__\s*=\s*"{re.escape(from_version)}"'
-    match = re.search(pattern, content, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    else:
-        return None
+    # Try to find the to_version with 'v' prefix first (current format)
+    patterns_to_try = [
+        rf'__version__\s*=\s*"{re.escape(to_version)}"\s*\n\s*"""\s*(.*?)\s*"""',  # Try with 'v' prefix
+        rf'__version__\s*=\s*"{re.escape(to_version.lstrip("v"))}"\s*\n\s*"""\s*(.*?)\s*"""'  # Try without 'v' prefix
+    ]
+
+    for pattern in patterns_to_try:
+        match = re.search(pattern, content, re.DOTALL)
+        if match:
+            changelog = match.group(1).strip()
+            # Remove the comment markers (# ) that were added by the GitHub Action
+            changelog = re.sub(r'^# ', '', changelog, flags=re.MULTILINE)
+            return changelog
+
+    return None
 
 
 async def update_notification(base_dir):
