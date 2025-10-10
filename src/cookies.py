@@ -259,7 +259,7 @@ class CookieUploader:
                         )
 
                 else:
-                    self.upload_debug(data, session)
+                    self.upload_debug(tracker, data, session)
                     status_message = "Debug mode enabled, not uploading"
 
         except httpx.ConnectTimeout:
@@ -285,10 +285,10 @@ class CookieUploader:
         meta["tracker_status"][tracker]["status_message"] = status_message
         return False
 
-    def upload_debug(self, data, session):
+    def upload_debug(self, tracker, data, session):
         """Print debug information about the upload session."""
         # Headers
-        table_headers = Table(title="Headers", show_header=True, header_style="bold cyan")
+        table_headers = Table(title=f"{tracker}: Headers", show_header=True, header_style="bold cyan")
         table_headers.add_column("Key", style="cyan")
         table_headers.add_column("Value", style="magenta")
         for k, v in session.headers.items():
@@ -296,19 +296,19 @@ class CookieUploader:
         console.print(table_headers, justify="center")
 
         # Cookies
-        cookies_panel = Panel(str(session.cookies), title="Cookies - DO NOT SHARE THIS", border_style="green")
+        cookies_panel = Panel(str(session.cookies), title=f"{tracker}: Cookies - DO NOT SHARE THIS", border_style="green")
         console.print(cookies_panel, justify="center")
 
         # Form data
         if isinstance(data, dict):
-            table_data = Table(title="Form Data - DO NOT SHARE THIS", show_header=True, header_style="bold cyan")
+            table_data = Table(title=f"{tracker}: Form Data - DO NOT SHARE THIS", show_header=True, header_style="bold cyan")
             table_data.add_column("Key", style="cyan")
             table_data.add_column("Value", style="magenta")
             for k, v in data.items():
                 table_data.add_row(k, str(v))
             console.print(table_data, justify="center")
         else:
-            data_panel = Panel(str(data), title="Form Data", border_style="blue")
+            data_panel = Panel(str(data), title=f"{tracker}: Form Data", border_style="blue")
             console.print(data_panel, justify="center")
 
     async def load_torrent_file(self, meta, tracker, torrent_field_name, torrent_name, source_flag, default_announce):

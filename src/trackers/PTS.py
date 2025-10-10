@@ -178,7 +178,7 @@ class PTS:
 
         return found_items
 
-    async def get_data(self, meta, disctype):
+    async def get_data(self, meta):
         data = {
             'name': meta['name'],
             'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
