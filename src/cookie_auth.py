@@ -10,7 +10,8 @@ from rich.table import Table
 
 
 class CookieValidator:
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         pass
 
     async def load_session_cookies(self, meta, tracker):
@@ -148,10 +149,11 @@ class CookieValidator:
         return
 
     async def find_html_token(self, tracker, token_pattern, response):
+        """Find the auth token in a web page using a regular expression pattern."""
         auth_match = re.search(token_pattern, response)
         if not auth_match:
             console.print(
-                f"{tracker}: The required token could not be found in the page's HTML.\n"
+                f"{tracker}: The required token could not be found in the page's HTML. Pattern used: {token_pattern}\n"
                 f"{tracker}: This can happen if the site HTML has changed or if the login failed silently."
             )
             return False

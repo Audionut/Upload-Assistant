@@ -18,6 +18,8 @@ from src.languages import process_desc_language
 class FF:
     def __init__(self, config):
         self.config = config
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = "FF"
         self.banned_groups = []
         self.source_flag = "FunFile"
@@ -33,7 +35,7 @@ class FF:
         if not os.path.exists(cookie_file):
             await self.login(meta)
 
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         valid_cookies = await self.validate_cookies(meta)
         if valid_cookies:
             return True
@@ -42,7 +44,7 @@ class FF:
             return await self.validate_cookies(meta)
 
     async def validate_cookies(self, meta):
-        return await CookieValidator().cookie_validation(
+        return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
@@ -583,7 +585,7 @@ class FF:
         return data
 
     async def upload(self, meta, disctype):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
         torrent_name = self.edit_name(meta)
         files = {}
@@ -592,7 +594,7 @@ class FF:
         if nfo:
             files['nfo'] = nfo['nfo']
 
-        upload = await CookieAuthUploader(self.config).handle_upload(
+        upload = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

@@ -12,6 +12,8 @@ from src.get_desc import DescriptionBuilder
 class HDS:
     def __init__(self, config):
         self.config = config
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'HDS'
         self.source_flag = 'HD-Space'
         self.banned_groups = ['']
@@ -22,8 +24,8 @@ class HDS:
         }, timeout=30)
 
     async def validate_credentials(self, meta):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
-        return await CookieValidator().cookie_validation(
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
             test_url=f'{self.base_url}/index.php?page=upload',
@@ -295,10 +297,10 @@ class HDS:
         return data
 
     async def upload(self, meta, disctype):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        upload = await CookieAuthUploader(self.config).handle_upload(
+        upload = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 class HDT:
     def __init__(self, config):
         self.config = config
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'HDT'
         self.source_flag = 'hd-torrents.org'
 
@@ -30,8 +32,8 @@ class HDT:
         }, timeout=60.0)
 
     async def validate_credentials(self, meta):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
-        return await CookieValidator().cookie_validation(
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
@@ -314,10 +316,10 @@ class HDT:
         return data
 
     async def upload(self, meta, disctype):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        await CookieAuthUploader(self.config).handle_upload(
+        await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

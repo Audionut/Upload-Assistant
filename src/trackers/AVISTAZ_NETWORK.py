@@ -26,6 +26,7 @@ class AZTrackerBase:
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
 
         tracker_config = self.config['TRACKERS'][self.tracker]
         self.base_url = tracker_config.get('base_url')
@@ -194,8 +195,8 @@ class AZTrackerBase:
             return False
 
     async def validate_credentials(self, meta):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
-        return await CookieValidator().cookie_validation(
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
             test_url=f'{self.base_url}/torrents',
@@ -815,7 +816,7 @@ class AZTrackerBase:
         return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
-        self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
 
