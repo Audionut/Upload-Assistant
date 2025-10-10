@@ -174,7 +174,7 @@ class ANT:
         builder = DescriptionBuilder(self.config)
         desc_parts = []
 
-        # Avoid unnecessary descriptions, adding only the logo and signature if there is a user description
+        # Avoid unnecessary descriptions, adding only the logo if there is a user description
         user_desc = await builder.get_user_description(meta)
         if user_desc:
             # Custom Header

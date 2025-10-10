@@ -115,7 +115,7 @@ class PTS(COMMON):
         if custom_description_header:
             description_parts.append(custom_description_header)
 
-        description_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")
+        description_parts.append(f"[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
         final_description = "\n\n".join(filter(None, description_parts))
         from src.bbcode import BBCODE
