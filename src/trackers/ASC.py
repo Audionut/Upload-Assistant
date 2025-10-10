@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
 from src.console import console
-from src.cookies import CookieValidator, CookieUploader
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -836,7 +836,7 @@ class ASC:
         data = await self.get_data(meta)
         upload_url = await self.get_upload_url(meta)
 
-        upload = await CookieUploader(self.config).handle_upload(
+        upload = await CookieAuthUploader(self.config).handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

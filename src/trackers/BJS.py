@@ -15,7 +15,7 @@ from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookies import CookieValidator, CookieUploader
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
@@ -1192,7 +1192,7 @@ class BJS:
         if issue:
             meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
         else:
-            upload = await CookieUploader(self.config).handle_upload(
+            upload = await CookieAuthUploader(self.config).handle_upload(
                 meta=meta,
                 tracker=self.tracker,
                 source_flag=self.source_flag,

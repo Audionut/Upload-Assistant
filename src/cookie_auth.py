@@ -62,7 +62,9 @@ class CookieValidator:
         if not cookie_jar:
             return False
 
-        headers = {"User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"}
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
 
         try:
             async with httpx.AsyncClient(headers=headers, timeout=20.0, cookies=cookie_jar) as session:
@@ -111,7 +113,9 @@ class CookieValidator:
         except httpx.ProxyError:
             console.print(f"{tracker}: Proxy error. Failed to connect via proxy.")
         except httpx.DecodingError:
-            console.print(f"{tracker}: Decoding failed. Response content is not valid (e.g., unexpected encoding).")
+            console.print(
+                f"{tracker}: Decoding failed. Response content is not valid (e.g., unexpected encoding)."
+            )
         except httpx.TooManyRedirects:
             console.print(f"{tracker}: Too many redirects. Request exceeded the maximum redirect limit.")
         except httpx.HTTPStatusError as e:
@@ -155,7 +159,7 @@ class CookieValidator:
             return str(auth_match.group(1))
 
 
-class CookieUploader:
+class CookieAuthUploader:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -220,7 +224,9 @@ class CookieUploader:
         if additional_files:
             files.update(additional_files)
 
-        headers = {"User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"}
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
 
         try:
             async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies) as session:
@@ -233,7 +239,11 @@ class CookieUploader:
                         success = True
 
                     elif success_status_code:
-                        valid_codes = {int(code.strip()) for code in str(success_status_code).split(",") if code.strip().isdigit()}
+                        valid_codes = {
+                            int(code.strip())
+                            for code in str(success_status_code).split(",")
+                            if code.strip().isdigit()
+                        }
 
                         if int(response.status_code) in valid_codes:
                             success = True
@@ -299,12 +309,16 @@ class CookieUploader:
         console.print(table_headers, justify="center")
 
         # Cookies
-        cookies_panel = Panel(str(session.cookies), title=f"{tracker}: Cookies - DO NOT SHARE THIS", border_style="green")
+        cookies_panel = Panel(
+            str(session.cookies), title=f"{tracker}: Cookies - DO NOT SHARE THIS", border_style="green"
+        )
         console.print(cookies_panel, justify="center")
 
         # Form data
         if isinstance(data, dict):
-            table_data = Table(title=f"{tracker}: Form Data - DO NOT SHARE THIS", show_header=True, header_style="bold cyan")
+            table_data = Table(
+                title=f"{tracker}: Form Data - DO NOT SHARE THIS", show_header=True, header_style="bold cyan"
+            )
             table_data.add_column("Key", style="cyan")
             table_data.add_column("Value", style="magenta")
             for k, v in data.items():
@@ -314,7 +328,9 @@ class CookieUploader:
             data_panel = Panel(str(data), title=f"{tracker}: Form Data", border_style="blue")
             console.print(data_panel, justify="center")
 
-    async def load_torrent_file(self, meta, tracker, torrent_field_name, torrent_name, source_flag, default_announce):
+    async def load_torrent_file(
+        self, meta, tracker, torrent_field_name, torrent_name, source_flag, default_announce
+    ):
         """Load the torrent file into memory."""
         await self.common.edit_torrent(meta, tracker, source_flag, announce_url=default_announce)
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
@@ -331,7 +347,9 @@ class CookieUploader:
             )
         }
 
-    async def handle_successful_upload(self, meta, tracker, response, id_pattern, source_flag, user_announce_url, torrent_url):
+    async def handle_successful_upload(
+        self, meta, tracker, response, id_pattern, source_flag, user_announce_url, torrent_url
+    ):
         torrent_id = ""
         if id_pattern:
             match = re.search(id_pattern, response.text)
@@ -340,11 +358,15 @@ class CookieUploader:
                 meta["tracker_status"][tracker]["torrent_id"] = torrent_id
 
         meta["tracker_status"][tracker]["status_message"] = "Torrent uploaded successfully."
-        await self.common.add_tracker_torrent(meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id)
+        await self.common.add_tracker_torrent(
+            meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id
+        )
 
         return True
 
-    async def handle_failed_upload(self, meta, tracker, success_status_code, success_text, error_text, response):
+    async def handle_failed_upload(
+        self, meta, tracker, success_status_code, success_text, error_text, response
+    ):
         message = ["data error: The upload appears to have failed. It may have uploaded, go check."]
         if success_text:
             message.append(f"Could not find the success text '{success_text}' in the response.")

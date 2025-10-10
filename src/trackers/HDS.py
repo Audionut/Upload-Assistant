@@ -5,7 +5,7 @@ import platform
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookies import CookieValidator, CookieUploader
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 
 
@@ -298,7 +298,7 @@ class HDS:
         self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        upload = await CookieUploader(self.config).handle_upload(
+        upload = await CookieAuthUploader(self.config).handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

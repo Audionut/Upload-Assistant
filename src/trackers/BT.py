@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookies import CookieValidator, CookieUploader
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
@@ -657,7 +657,7 @@ class BT:
         self.session.cookies = await CookieValidator().load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        await CookieUploader(self.config).handle_upload(
+        await CookieAuthUploader(self.config).handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,

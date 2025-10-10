@@ -10,7 +10,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookies import CookieValidator, CookieUploader
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 
@@ -592,7 +592,7 @@ class FF:
         if nfo:
             files['nfo'] = nfo['nfo']
 
-        upload = await CookieUploader(self.config).handle_upload(
+        upload = await CookieAuthUploader(self.config).handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
