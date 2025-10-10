@@ -91,7 +91,7 @@ class UNIT3D:
 
     async def get_description(self, meta):
         signature = f"\n[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature)
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
         return {'description': desc}
