@@ -1,19 +1,21 @@
-import requests
+import aiofiles
 import asyncio
-import re
-import os
-from pathlib import Path
-import json
 import glob
 import httpx
+import json
+import os
+import re
+import requests
+
+from torf import Torrent
 from unidecode import unidecode
 from urllib.parse import urlparse, quote
-from src.trackers.COMMON import COMMON
-from src.exceptions import *  # noqa F403
+
 from src.console import console
-from datetime import datetime
-from torf import Torrent
-from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
+from data.config import config
+from src.exceptions import *  # noqa F403
+from src.torrentcreate import create_torrent
+from src.trackers.COMMON import COMMON
 
 
 class HDB():
@@ -222,61 +224,26 @@ class HDB():
                 console.print("[bold red]Dual-Audio Encodes are not allowed for non-anime and non-disc content")
             return
 
-        # Download new .torrent from site
         hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        torrent = Torrent.read(torrent_path)
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        if not await aiofiles.os.path.exists(torrent_file_path):
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
+
+        loop = asyncio.get_running_loop()
+        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
-            if meta.get('mkbrr', False):
-                from data.config import config
-                tracker_url = config['TRACKERS']['HDB'].get('announce_url', "https://fake.tracker").strip()
+            tracker_url = config['TRACKERS']['HDB'].get('announce_url', "https://fake.tracker").strip()
+            meta['max_piece_size'] = '16'
+            torrent_create = f"[{self.tracker}]"
 
-                # Create the torrent with the tracker URL
-                torrent_create = f"[{self.tracker}]"
-                create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
-                torrent_filename = "[HDB]"
-
-                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-            else:
-                if meta['is_disc']:
-                    include = []
-                    exclude = []
-                else:
-                    include = ["*.mkv", "*.mp4", "*.ts"]
-                    exclude = ["*.*", "*sample.mkv", "!sample*.*"]
-
-                # Create a new torrent with piece size explicitly set to 16 MiB
-                new_torrent = CustomTorrent(
-                    meta=meta,
-                    path=Path(meta['path']),
-                    trackers=["https://fake.tracker"],
-                    source="Audionut",
-                    private=True,
-                    exclude_globs=exclude,  # Ensure this is always a list
-                    include_globs=include,  # Ensure this is always a list
-                    creation_date=datetime.now(),
-                    comment="Created by Upload Assistant",
-                    created_by="Upload Assistant"
-                )
-
-                # Explicitly set the piece size and update metainfo
-                new_torrent.piece_size = 16777216  # 16 MiB in bytes
-                new_torrent.metainfo['info']['piece length'] = 16777216  # Ensure 'piece length' is set
-
-                # Validate and write the new torrent
-                new_torrent.validate_piece_size()
-                new_torrent.generate(callback=torf_cb, interval=5)
-                new_torrent.write(torrent_path, overwrite=True)
-                torrent_filename = "[HDB]"
-                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-        else:
-            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
+            create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
         # Proceed with the upload process
-        with open(torrent_path, 'rb') as torrentFile:
+        with open(torrent_file_path, 'rb') as torrentFile:
             if len(meta['filelist']) == 1:
                 torrentFileName = unidecode(os.path.basename(meta['video']).replace(' ', '.'))
             else:
@@ -332,7 +299,7 @@ class HDB():
                     if match:
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
-                        await self.download_new_torrent(id, torrent_path)
+                        await self.download_new_torrent(id, torrent_file_path)
                     else:
                         console.print(data)
                         console.print("\n\n")
