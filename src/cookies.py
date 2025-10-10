@@ -103,21 +103,24 @@ class CookieValidator:
                 return token or True
 
         except httpx.ConnectTimeout:
-            console.print(f"{tracker}: Connection timed out")
+            console.print(f"{tracker}: Connection timeout. Server took too long to respond.")
         except httpx.ReadTimeout:
-            console.print(f"{tracker}: Read timed out")
+            console.print(f"{tracker}: Read timeout. Data transfer stopped prematurely.")
         except httpx.ConnectError:
-            console.print(f"{tracker}: Failed to connect to the server")
+            console.print(f"{tracker}: Connection failed. Check URL, port, and network status.")
         except httpx.ProxyError:
-            console.print(f"{tracker}: Proxy connection failed")
+            console.print(f"{tracker}: Proxy error. Failed to connect via proxy.")
         except httpx.DecodingError:
-            console.print(f"{tracker}: Response decoding failed")
+            console.print(f"{tracker}: Decoding failed. Response content is not valid (e.g., unexpected encoding).")
         except httpx.TooManyRedirects:
-            console.print(f"{tracker}: Too many redirects")
+            console.print(f"{tracker}: Too many redirects. Request exceeded the maximum redirect limit.")
         except httpx.HTTPStatusError as e:
-            console.print(f"{tracker}: HTTP error {e.response.status_code}: {e}")
+            status_code = e.response.status_code
+            reason = e.response.reason_phrase if e.response.reason_phrase else "Unknown Reason"
+            url = e.request.url
+            console.print(f"{tracker}: HTTP status error {status_code}: {reason} for {url}")
         except httpx.RequestError as e:
-            console.print(f"{tracker}: Request error: {e}")
+            console.print(f"{tracker}: General request error: {e}")
         except Exception as e:
             console.print(f"{tracker}: Unexpected error: {e}")
 
@@ -263,23 +266,23 @@ class CookieUploader:
                     status_message = "Debug mode enabled, not uploading"
 
         except httpx.ConnectTimeout:
-            status_message = f"{tracker}: Connection timed out"
+            status_message = "Connection timed out"
         except httpx.ReadTimeout:
-            status_message += f"{tracker}: Read timed out"
+            status_message += "Read timed out"
         except httpx.ConnectError:
-            status_message += f"{tracker}: Failed to connect to the server"
+            status_message += "Failed to connect to the server"
         except httpx.ProxyError:
-            status_message += f"{tracker}: Proxy connection failed"
+            status_message += "Proxy connection failed"
         except httpx.DecodingError:
-            status_message += f"{tracker}: Response decoding failed"
+            status_message += "Response decoding failed"
         except httpx.TooManyRedirects:
-            status_message += f"{tracker}: Too many redirects"
+            status_message += "Too many redirects"
         except httpx.HTTPStatusError as e:
-            status_message += f"{tracker}: HTTP error {e.response.status_code}: {e}"
+            status_message += f"HTTP error {e.response.status_code}: {e}"
         except httpx.RequestError as e:
-            status_message += f"{tracker}: Request error: {e}"
+            status_message += f"Request error: {e}"
         except Exception as e:
-            status_message += f"{tracker}: Unexpected error: {e}"
+            status_message += f"Unexpected error: {e}"
 
         await self.common.add_tracker_torrent(meta, tracker, source_flag, user_announce_url, torrent_url)
         meta["tracker_status"][tracker]["status_message"] = status_message
@@ -341,14 +344,14 @@ class CookieUploader:
 
         return True
 
-    async def handle_failed_upload(self, meta, tracker, status_code, success_text, error_text, response):
+    async def handle_failed_upload(self, meta, tracker, success_status_code, success_text, error_text, response):
         message = ["data error: The upload appears to have failed. It may have uploaded, go check."]
         if success_text:
             message.append(f"Could not find the success text '{success_text}' in the response.")
-        elif error_text in response.text:
+        elif error_text:
             message.append(f"Found the error text '{error_text}' in the response.")
-        elif status_code and response.status_code != int(status_code):
-            message.append(f"Expected status code '{status_code}', got '{response.status_code}'.")
+        elif success_status_code:
+            message.append(f"Expected status code '{success_status_code}', got '{response.status_code}'.")
         else:
             message.append("Unknown upload error.")
 
