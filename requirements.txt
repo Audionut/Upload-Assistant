@@ -20,9 +20,7 @@ Pillow
 psutil
 pycountry
 pyimgbox
-pymediainfo; sys_platform == "win32"
-pymediainfo==6.0.1; sys_platform == "darwin"
-pymediainfo==6.0.1; sys_platform == "linux"
+pymediainfo
 pyotp
 pyoxipng
 pyparsebluray

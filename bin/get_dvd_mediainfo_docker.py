@@ -64,6 +64,8 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
         file_list = zip_ref.namelist()
         mediainfo_file = output_dir / "mediainfo"
 
+        print(f"CLI archive contents: {file_list}")
+
         # Look for the mediainfo binary in the archive
         for member in file_list:
             if member.endswith('/mediainfo') or member == 'mediainfo':
@@ -80,22 +82,24 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
         file_list = zip_ref.namelist()
         lib_file = output_dir / "libmediainfo.so.0"
 
+        print(f"Library archive contents: {file_list}")
+
         # Look for the library file in the archive
         lib_candidates = [
             "lib/libmediainfo.so.0.0.0",
             "libmediainfo.so.0.0.0",
-            "libmediainfo.so.0"
+            "libmediainfo.so.0",
+            "MediaInfo/libmediainfo.so.0.0.0",
+            "MediaInfo/lib/libmediainfo.so.0.0.0"
         ]
 
         for candidate in lib_candidates:
             if candidate in file_list:
                 zip_ref.extract(candidate, output_dir.parent)
                 extracted_path = output_dir.parent / candidate
+                # Move to final location
                 shutil.move(str(extracted_path), str(lib_file))
                 # Set appropriate permissions for library file (readable by all)
-                os.chmod(extracted_path, 0o644)
-                shutil.move(str(extracted_path), str(lib_file))
-                # Verify library permissions
                 os.chmod(lib_file, 0o644)
                 print(f"Extracted library: {lib_file}")
                 break
