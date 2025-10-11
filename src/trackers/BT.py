@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
 from src.bbcode import BBCODE
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
@@ -21,12 +22,13 @@ class BT:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'BT'
         self.banned_groups = []
         self.source_flag = 'BT'
         self.base_url = 'https://brasiltracker.org'
         self.torrent_url = f'{self.base_url}/torrents.php?id='
-        self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
@@ -94,51 +96,15 @@ class BT:
                 for alias in aliases_tuple:
                     self.ultimate_lang_map[alias.lower()] = correct_id
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
-            return False
-
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload.php'
-            response = await self.session.get(upload_page_url, timeout=30.0)
-            response.raise_for_status()
-
-            if 'login.php' in str(response.url):
-                console.print(f'[bold red]Falha na validação do {self.tracker}. O cookie parece estar expirado (redirecionado para login).[/bold red]')
-                return False
-
-            auth_match = re.search(r'name="auth" value="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f'[bold red]Falha na validação do {self.tracker}. Token auth não encontrado.[/bold red]')
-                console.print('[yellow]A estrutura do site pode ter mudado ou o login falhou silenciosamente.[/yellow]')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
-                return False
-
-            return str(auth_match.group(1))
-
-        except httpx.TimeoutException:
-            console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]Erro HTTP ao validar credenciais do {self.tracker}: Status {e.response.status_code}.[/bold red]')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
-            return False
-        except Exception as e:
-            console.print(f'{self.tracker}: Erro desconhecido ao validar credenciais do {self.tracker}: {e}[/bold red]')
-            return False
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=f'{self.base_url}/upload.php',
+            error_text='login.php',
+            token_pattern=r'name="auth" value="([^"]+)"'
+        )
 
     async def load_localized_data(self, meta):
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
@@ -614,8 +580,7 @@ class BT:
         else:
             return 'N/A'
 
-    async def get_data(self, meta, disctype):
-        await self.load_cookies(meta)
+    async def get_data(self, meta):
         await self.load_localized_data(meta)
         has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
         resolution_width, resolution_height = await self.get_resolution(meta)
@@ -691,39 +656,20 @@ class BT:
         return data
 
     async def upload(self, meta, disctype):
-        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-        data = await self.get_data(meta, disctype)
-        status_message = ''
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        data = await self.get_data(meta)
 
-        if not meta.get('debug', False):
-            torrent_id = ''
-            upload_url = f'{self.base_url}/upload.php'
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        await self.cookie_auth_uploader.handle_upload(
+            meta=meta,
+            tracker=self.tracker,
+            source_flag=self.source_flag,
+            torrent_url=self.torrent_url,
+            data=data,
+            torrent_field_name='file_input',
+            upload_cookies=self.session.cookies,
+            upload_url=f"{self.base_url}/upload.php",
+            id_pattern=r'groupid=(\d+)',
+            success_status_code="200, 302, 303",
+        )
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
-
-                response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-
-                if response.status_code in (200, 302, 303):
-                    status_message = 'Enviado com sucesso.'
-
-                    match = re.search(r'id=(\d+)', response.headers['Location'])
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                else:
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-                    status_message = f'data error - O upload pode ter falhado, a resposta HTML foi salva em: {response_save_path}'
-                    return
-
-            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-
-        else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return
