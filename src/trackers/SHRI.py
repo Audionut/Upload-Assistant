@@ -435,47 +435,44 @@ class SHRI(UNIT3D):
     async def _get_best_italian_audio_format(self, meta):
         """Select best quality Italian audio track and format as string"""
         # fmt: off
+        def clean(s):
+            return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", s.replace("Dual-Audio", "")).strip()
+        def has_object_audio(t):
+            features = str(t.get("Format_AdditionalFeatures", "")) + str(t.get("Format_Commercial", ""))
+            return any(x in features for x in ["JOC", "Atmos", "16-ch", "DTS:X", "DTS-X"])
         tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
-        if not tracks:
-            return meta.get("audio", "")
-        italian_audio = [
-            t for t in tracks
-            if t.get("@type") == "Audio"
-            and str(t.get("Language", "")).lower() in {"it", "it-it"}
-            and "commentary" not in str(t.get("Title", "")).lower()
-        ]
-        if not italian_audio:
-            return meta.get("audio", "")
+        italian = [t for t in tracks 
+                if t.get("@type") == "Audio" 
+                and str(t.get("Language", "")).lower() in {"it", "it-it"}
+                and "commentary" not in str(t.get("Title", "")).lower()]
+        if not tracks or not italian:
+            return clean(meta.get("audio", ""))
 
         # Heuristic: Lossless > Channels > Object audio > Bitrate
-        best = max(
-            italian_audio,
-            key=lambda t: (
-                t.get("Compression_Mode") == "Lossless",
-                int(t.get("Channels", 0)),
-                any(x in str(t.get("Format_AdditionalFeatures", "")) + str(t.get("Format_Commercial", ""))
-                    for x in ["JOC", "Atmos", "16-ch", "DTS:X", "DTS-X"]),
-                int(t.get("BitRate", 0)),
-            ),
-        )
+        best = max(italian, key=lambda t: (
+            t.get("Compression_Mode") == "Lossless",
+            int(t.get("Channels", 0)),
+            has_object_audio(t),
+            int(t.get("BitRate", 0))
+        ))
 
-        # Build format string
-        format_map = {
-            "MLP FBA": "TrueHD", "E-AC-3": "DD+", "Enhanced AC-3": "DD+",
-            "AC-3": "DD", "DTS-HD Master Audio": "DTS-HD MA",
-            "DTS-HD High-Res Audio": "DTS-HD HRA",
-        }
+        # Format mapping
+        format_map = {"MLP FBA": "TrueHD", "E-AC-3": "DD+", "Enhanced AC-3": "DD+",
+                "AC-3": "DD", "DTS-HD Master Audio": "DTS-HD MA",
+                "DTS-HD High-Res Audio": "DTS-HD HRA"}
+        commercial = best.get("Format_Commercial", "")
+        format_name = format_map.get(commercial) or format_map.get(best.get("Format", "")) or best.get("Format", "")
+        # Channel layout
         channels = int(best.get("Channels", 2))
         layout = best.get("ChannelLayout") or best.get("ChannelPositions", "")
         chan = f"{channels - 1}.1" if "LFE" in layout else f"{channels}.0"
+        # Build result
+        result = f"{format_name} {chan}"
+        features = str(best.get("Format_AdditionalFeatures", "")) + commercial
 
-        result = f"{format_map.get(best.get('Format', ''), best.get('Format', ''))} {chan}"
-
-        # Append object audio marker
-        features = str(best.get("Format_AdditionalFeatures", "")) + str(best.get("Format_Commercial", ""))
         if any(x in features for x in ["JOC", "Atmos", "16-ch"]):
             result += " Atmos"
         elif "DTS:X" in features or "DTS-X" in features:
             result += " DTS:X"
 
-        return re.sub(r"\s*(Dual-Audio|-[A-Z]{3}(-[A-Z]{3})*)\s*", "", result).strip()
+        return clean(result)
