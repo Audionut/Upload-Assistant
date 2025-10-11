@@ -20,9 +20,9 @@ class CBR(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             '3LTON', '4yEo', 'ADE', 'AFG', 'AROMA', 'AniHLS', 'AniURL', 'AnimeRG', 'BLUDV', 'CHD', 'CM8', 'Comando', 'CrEwSaDe', 'DNL', 'DeadFish',
-            'ELiTE', 'FGT', 'FRDS', 'FUM', 'FaNGDiNG0', 'Flights', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'Hiro360', 'ION10', 'JIVE', 'KiNGDOM',
+            'DragsterPS', 'DRENAN', 'ELiTE', 'FGT', 'FRDS', 'FUM', 'FaNGDiNG0', 'Flights', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'Hiro360', 'ION10', 'JIVE', 'KiNGDOM',
             'LEGi0N', 'LOAD', 'Lapumia', 'Leffe', 'MACCAULAY', 'MeGusta', 'NOIVTC', 'NhaNc3', 'OFT', 'Oj', 'PRODJi', 'PiRaTeS', 'PlaySD', 'RAPiDCOWS',
-            'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'RetroPeeps', 'SANTi', 'SILVEIRATeam', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'SicFoI', 'TGx', 'TM',
+            'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'RetroPeeps', 'S74Ll10n', 'SANTi', 'SILVEIRATeam', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'SicFoI', 'TGx', 'TM',
             'TRiToN', 'Telly', 'UPiNSMOKE', 'URANiME', 'WAF', 'XS', 'YIFY', 'ZKBL', 'ZMNT', 'ZmN', 'aXXo', 'd3g', 'eSc', 'iPlanet', 'mHD', 'mSD', 'nHD',
             'nSD', 'nikt0', 'playXD', 'x0r', 'xRed'
         ]
