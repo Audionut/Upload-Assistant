@@ -279,7 +279,7 @@ class CookieValidator:
         except httpx.RequestError as e:
             console.print(f"{tracker}: General request error: {e}")
         except Exception as e:
-            console.print(f"{tracker}: Unexpected error: {e}")
+            console.print(f"{tracker}: Unexpected validation error: {e}")
 
         return False
 
@@ -382,11 +382,14 @@ class CookieAuthUploader:
             "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
         }
 
-        try:
-            async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies) as session:
+        if meta.get("debug", False):
+            self.upload_debug(tracker, data)
+            status_message = "Debug mode enabled, not uploading"
 
-                if not meta.get("debug", False):
-                    success = False
+        else:
+            success = False
+            try:
+                async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies) as session:
                     response = await session.post(upload_url, data=data, files=files)
 
                     if success_text and success_text in response.text:
@@ -425,67 +428,53 @@ class CookieAuthUploader:
                             response,
                         )
 
-                else:
-                    self.upload_debug(tracker, data, session)
-                    status_message = "Debug mode enabled, not uploading"
-
-        except httpx.ConnectTimeout:
-            status_message = "Connection timed out"
-        except httpx.ReadTimeout:
-            status_message += "Read timed out"
-        except httpx.ConnectError:
-            status_message += "Failed to connect to the server"
-        except httpx.ProxyError:
-            status_message += "Proxy connection failed"
-        except httpx.DecodingError:
-            status_message += "Response decoding failed"
-        except httpx.TooManyRedirects:
-            status_message += "Too many redirects"
-        except httpx.HTTPStatusError as e:
-            status_message += f"HTTP error {e.response.status_code}: {e}"
-        except httpx.RequestError as e:
-            status_message += f"Request error: {e}"
-        except Exception as e:
-            status_message += f"Unexpected error: {e}"
+            except httpx.ConnectTimeout:
+                status_message = "Connection timed out"
+            except httpx.ReadTimeout:
+                status_message += "Read timed out"
+            except httpx.ConnectError:
+                status_message += "Failed to connect to the server"
+            except httpx.ProxyError:
+                status_message += "Proxy connection failed"
+            except httpx.DecodingError:
+                status_message += "Response decoding failed"
+            except httpx.TooManyRedirects:
+                status_message += "Too many redirects"
+            except httpx.HTTPStatusError as e:
+                status_message += f"HTTP error {e.response.status_code}: {e}"
+            except httpx.RequestError as e:
+                status_message += f"Request error: {e}"
+            except Exception as e:
+                status_message += f"Unexpected upload error: {e}"
 
         await self.common.add_tracker_torrent(meta, tracker, source_flag, user_announce_url, torrent_url)
         meta["tracker_status"][tracker]["status_message"] = status_message
         return False
 
-    def upload_debug(self, tracker, data, session):
-        """Print debug information about the upload session."""
-        # Headers
-        table_headers = Table(title=f"{tracker}: Headers", show_header=True, header_style="bold cyan")
-        table_headers.add_column("Key", style="cyan")
-        table_headers.add_column("Value", style="magenta")
-        for k, v in session.headers.items():
-            table_headers.add_row(k, str(v))
-        console.print(table_headers, justify="center")
+    def upload_debug(self, tracker, data):
+        try:
+            if isinstance(data, dict):
+                sensitive_keywords = ['password', 'passkey', 'auth', 'csrf', 'token']
 
-        # Cookies
-        cookies_str = str(session.cookies)
-        truncated_cookies = cookies_str[:50] + '...' if len(cookies_str) > 50 else cookies_str
-        cookies_panel = Panel(
-            truncated_cookies, title=f"{tracker}: Truncated Cookie", border_style="green"
-        )
-        console.print(cookies_panel, justify="center")
+                table_data = Table(
+                    title=f"{tracker}: Form Data", show_header=True, header_style="bold cyan"
+                )
+                table_data.add_column("Key", style="cyan")
+                table_data.add_column("Value", style="magenta")
 
-        # Form data
-        if isinstance(data, dict):
-            table_data = Table(
-                title=f"{tracker}: Form Data - DO NOT SHARE THIS", show_header=True, header_style="bold cyan"
-            )
-            table_data.add_column("Key", style="cyan")
-            table_data.add_column("Value", style="magenta")
-            for k, v in data.items():
-                if k == 'auth':
-                    table_data.add_row(k, "[REDACTED]")
-                else:
-                    table_data.add_row(k, str(v))
-            console.print(table_data, justify="center")
-        else:
-            data_panel = Panel(str(data), title=f"{tracker}: Form Data", border_style="blue")
-            console.print(data_panel, justify="center")
+                for k, v in data.items():
+                    if any(keyword in k.lower() for keyword in sensitive_keywords):
+                        table_data.add_row(k, "[REDACTED]")
+                    else:
+                        table_data.add_row(k, str(v))
+
+                console.print(table_data, justify="center", markup=False)
+            else:
+                data_panel = Panel(str(data), title=f"{tracker}: Form Data - DO NOT SHARE THIS", border_style="blue")
+                console.print(data_panel, justify="center")
+        except Exception as e:
+            console.print(f"Error displaying form data: {e}")
+            raise
 
     async def load_torrent_file(
         self, meta, tracker, torrent_field_name, torrent_name, source_flag, default_announce
