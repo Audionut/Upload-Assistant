@@ -68,7 +68,6 @@ class SHRI(UNIT3D):
         year = str(meta.get("year", ""))
         resolution = meta.get("resolution", "")
         source = meta.get("source", "")
-        source = source.replace("Blu-ray", "BluRay")
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
@@ -155,23 +154,23 @@ class SHRI(UNIT3D):
                 name = f"{title} {year} {edition} {repack} {resolution} {region} {source} {video_codec} {audio}"
 
         elif effective_type == "REMUX":
-            # REMUX: Title Year Edition 3D LANG Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
+            # REMUX: Title Year 3D LANG Edition Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
-            # DVDRip/BRRip: Title Year Edition LANG Hybrid REPACK Resolution Type Audio HDR VideoCodec
-            name = f"{title} {year} {season} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
+            # DVDRip/BRRip: Title Year LANG Edition Hybrid REPACK Resolution Type Audio HDR VideoCodec
+            name = f"{title} {year} {season} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("ENCODE", "HDTV"):
-            # Encode/HDTV: Title Year Edition LANG Hybrid REPACK Resolution UHD Source Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
+            # Encode/HDTV: Title Year LANG Edition Hybrid REPACK Resolution UHD Source Audio HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            # WEB: Title Year Edition LANG Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {edition} {audio_lang_str} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
+            # WEB: Title Year LANG Edition Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
 
         elif effective_type == "CINEMA_NEWS":
             basename_upper = self.get_basename(meta).upper()
@@ -187,8 +186,8 @@ class SHRI(UNIT3D):
 
             source_marker = " ".join(markers)
 
-            # Cinema News: Title Year Edition LANG REPACK Resolution Source Audio VideoCodec
-            name = f"{title} {year} {edition} {audio_lang_str} {repack} {resolution} {source_marker} {audio} {video_encode}"
+            # Cinema News: Title Year LANG Edition REPACK Resolution Source Audio VideoCodec
+            name = f"{title} {year} {audio_lang_str} {edition} {repack} {resolution} {source_marker} {audio} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio
