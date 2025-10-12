@@ -445,6 +445,7 @@ class SHRI(UNIT3D):
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
         ITALIAN_LANGS = {"it", "it-it", "italian", "italiano"}
+
         def extract_quality(track, is_bdinfo):
             if is_bdinfo:
                 bitrate_match = re.search(r'(\d+)', track.get("bitrate", "0"))
@@ -460,10 +461,12 @@ class SHRI(UNIT3D):
                 "JOC" in track.get("Format_AdditionalFeatures", "") or "Atmos" in track.get("Format_Commercial", ""),
                 int(track.get("BitRate", 0))
             )
+
         def fallback():
             return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", meta.get("audio", "").replace("Dual-Audio", "")).strip()
 
         bdinfo = meta.get("bdinfo")
+
         if bdinfo and bdinfo.get("audio"):
             italian = [t for t in bdinfo["audio"] if t.get("language", "").lower() in ITALIAN_LANGS]
             if not italian:
@@ -473,8 +476,8 @@ class SHRI(UNIT3D):
         else:
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             italian = [
-                t for t in tracks[1:] 
-                if t.get("@type") == "Audio" 
+                t for t in tracks[1:]
+                if t.get("@type") == "Audio"
                 and isinstance(t.get("Language"), str)
                 and t.get("Language", "").lower() in ITALIAN_LANGS
                 and "commentary" not in str(t.get("Title", "")).lower()
