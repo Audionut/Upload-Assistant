@@ -331,53 +331,62 @@ class SHRI(UNIT3D):
         path = next(iter(meta["filelist"]), meta["path"])
         return os.path.basename(path)
 
-    def _is_remux(self, meta):
-        """
-        Detect REMUX releases via filename markers or mediainfo analysis.
+    def _detect_type_from_technical_analysis(self, meta):
+        """Unified type detection: filename markers + MediaInfo analysis"""
+        base_type = meta.get("type", "ENCODE")
+        if base_type in ("DISC", "DVDRIP", "BRRIP"):
+            return base_type
+        # Priority 1: Explicit REMUX markers
+        if self._has_remux_marker(meta):
+            return "REMUX"
+        # Priority 2: Technical analysis
+        return self._analyze_encode_type(meta)
 
-        Methods:
-        - Filename markers: remux, vu, untouched (excludes group tags at end)
-        - Mediainfo: no encoding settings + BluRay/HDDVD source
-        """
-        basename = self.get_basename(meta)
-        # Remove extension to check markers properly
-        name_no_ext = os.path.splitext(basename)[0].lower()
-
+    def _has_remux_marker(self, meta):
+        """Check filename for REMUX indicators"""
+        name_no_ext = os.path.splitext(self.get_basename(meta))[0].lower()
         if "remux" in name_no_ext:
             return True
-
-        # Check for VU/UNTOUCHED markers (not at end as group tag)
         match = self.MARKER_PATTERN.search(name_no_ext)
-        if match and not name_no_ext.lower().endswith(f"-{match.group(0).lower()}"):
+        if match and not name_no_ext.endswith(f"-{match.group(0).lower()}"):
             return True
+        return False
 
+    def _analyze_encode_type(self, meta):
+        """Distinguish REMUX/WEBDL/WEBRIP/ENCODE via MediaInfo"""
         try:
             mi = meta.get("mediainfo", {})
             video_track = mi.get("media", {}).get("track", [{}])[1]
-
-            if (
-                not video_track.get("Encoded_Library_Settings")
-                and meta.get("source") in ("BluRay", "HDDVD")
-                and meta.get("type") not in ("DISC", "WEBDL", "WEBRIP")
-            ):
-                return True
+            source = meta.get("source", "").upper()
+            # Has encode settings = definitely encoded
+            if video_track.get("Encoded_Library_Settings"):
+                return "WEBRIP" if "WEB" in source else "ENCODE"
+            # Profile 8 = streaming-only
+            if "dvhe.08" in video_track.get("HDR_Format_Profile", ""):
+                return "WEBDL"
+            # No encode settings + WEB source = WEB-DL
+            if "WEB" in source:
+                return "WEBDL"
+            # No encode settings + disc source = REMUX
+            if source in ("BLURAY", "HDDVD"):
+                return "REMUX"
         except (IndexError, KeyError):
             pass
 
-        return False
+        return meta.get("type", "ENCODE")
 
     def _get_effective_type(self, meta):
         """
         Determine effective type with priority hierarchy:
         1. Cinema News (CAM/HDCAM/TC/HDTC/TS/HDTS/MD/LD keywords)
-        2. REMUX detection (overrides ENCODE)
+        2. Technical analysis (REMUX/ENCODE/WEB-DL/WEBRip detection)
         3. Base type from meta
         """
         basename = self.get_basename(meta)
         if self.CINEMA_NEWS_PATTERN.search(basename):
             return "CINEMA_NEWS"
 
-        return "REMUX" if self._is_remux(meta) else meta.get("type", "ENCODE")
+        return self._detect_type_from_technical_analysis(meta)
 
     def _get_italian_title(self, imdb_info):
         """Extract Italian title from IMDb AKAs"""
