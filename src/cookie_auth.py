@@ -478,7 +478,10 @@ class CookieAuthUploader:
             table_data.add_column("Key", style="cyan")
             table_data.add_column("Value", style="magenta")
             for k, v in data.items():
-                table_data.add_row(k, str(v))
+                if k == 'auth':
+                    table_data.add_row(k, "[REDACTED]")
+                else:
+                    table_data.add_row(k, str(v))
             console.print(table_data, justify="center")
         else:
             data_panel = Panel(str(data), title=f"{tracker}: Form Data", border_style="blue")
