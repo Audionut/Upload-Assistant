@@ -125,36 +125,7 @@ def update_oeimg_to_onlyimage():
         console.print("[yellow]No 'oeimg' or 'oeimg_api' found to update in config.py[/yellow]")
 
 
-async def validate_tracker_logins(meta):
-    if not meta.get('emby', False):
-        if meta.get('trackers'):
-            trackers = meta['trackers']
-        else:
-            default_trackers = config['TRACKERS'].get('default_trackers', '')
-            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
-
-        if isinstance(trackers, str):
-            if "," in trackers:
-                trackers = [t.strip().upper() for t in trackers.split(',')]
-            else:
-                trackers = [trackers.strip().upper()]  # Make it a list with one element
-        elif isinstance(trackers, list):
-            # Handle list that might contain comma-separated strings
-            expanded_trackers = []
-            for t in trackers:
-                if isinstance(t, str):
-                    if ',' in t:
-                        # Split comma-separated tracker strings
-                        expanded_trackers.extend([x.strip().upper() for x in t.split(',')])
-                    else:
-                        expanded_trackers.append(t.strip().upper())
-                else:
-                    expanded_trackers.append(str(t).upper())
-            trackers = expanded_trackers
-        else:
-            trackers = [str(trackers).upper()]
-
-    # Initialize tracker_status
+async def validate_tracker_logins(meta, trackers=None):
     if 'tracker_status' not in meta:
         meta['tracker_status'] = {}
 
@@ -399,6 +370,12 @@ async def process_meta(meta, base_dir, bot=None):
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
         await asyncio.sleep(0.2)
+
+        try:
+            await validate_tracker_logins(meta, trackers)
+            await asyncio.sleep(0.2)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
 
         successful_trackers = await process_all_trackers(meta)
 
@@ -933,11 +910,7 @@ async def do_the_thing(base_dir):
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
-            # Run validation and processing concurrently
-            await asyncio.gather(
-                validate_tracker_logins(meta),
-                process_meta(meta, base_dir, bot=bot)
-            )
+            await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 if not meta.get('emby', False):

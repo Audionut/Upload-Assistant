@@ -172,14 +172,14 @@ class CookieValidator:
 
                         cookie_jar.save(ignore_discard=True, ignore_expires=True)
                         console.print(f"{tracker}: [green]Cookies saved to {cookie_file}[/green]")
-                        
+
                         # Save auth key to a separate file if found
                         if auth_key:
                             auth_file = cookie_file.replace('.txt', '_auth.txt')
                             async with aiofiles.open(auth_file, 'w', encoding='utf-8') as f:
                                 await f.write(auth_key)
                             console.print(f"{tracker}: [green]Auth key saved to {auth_file}[/green]")
-                        
+
                         return True
 
                 console.print(f"{tracker}: [red]Login validation failed.[/red]")

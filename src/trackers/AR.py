@@ -11,7 +11,7 @@ import urllib.parse
 from src.exceptions import *  # noqa F403
 from bs4 import BeautifulSoup
 from src.console import console
-from src.cookie_auth import CookieValidator
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
 
@@ -20,6 +20,7 @@ class AR():
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
+        self.cookie_uploader = CookieAuthUploader(config)
         self.tracker = 'AR'
         self.source_flag = 'AlphaRatio'
         self.username = config['TRACKERS']['AR'].get('username', '').strip()
@@ -372,7 +373,7 @@ class AR():
         # Get auth key
         auth_key = await self.get_auth_key(meta)
         if not auth_key:
-            meta['tracker_status'][self.tracker]['status_message'] = "Failed to extract auth key"
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: Failed to extract auth key"
             return
 
         # must use scene name if scene release
@@ -408,11 +409,11 @@ class AR():
         # Load cookies for upload
         upload_cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not upload_cookies:
-            meta['tracker_status'][self.tracker]['status_message'] = "Failed to load cookies for upload"
+            meta['tracker_status'][self.tracker]['status_message'] = "data error:Failed to load cookies for upload"
             return
 
-        # Use centralized cookie_upload
-        await self.cookie_validator.cookie_upload(
+        # Use centralized handle_upload from CookieAuthUploader
+        await self.cookie_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             data=data,

@@ -392,16 +392,32 @@ class Args():
                 meta[key] = value
             if key == 'trackers':
                 if value:
-                    tracker_value = value
+                    # Extract from list if it's a single-item list (from nargs=1)
+                    if isinstance(value, list) and len(value) == 1:
+                        tracker_value = value[0]
+                    else:
+                        tracker_value = value
+
                     if isinstance(tracker_value, str):
                         tracker_value = tracker_value.strip('"\'')
 
-                    if isinstance(tracker_value, str) and ',' in tracker_value:
-                        meta[key] = [t.strip().upper() for t in tracker_value.split(',')]
-                    elif isinstance(tracker_value, str):
-                        meta[key] = [tracker_value.strip().upper()]
+                        # Split by comma if present
+                        if ',' in tracker_value:
+                            meta[key] = [t.strip().upper() for t in tracker_value.split(',')]
+                        else:
+                            meta[key] = [tracker_value.strip().upper()]
                     elif isinstance(tracker_value, list):
-                        meta[key] = [t.strip().upper() if isinstance(t, str) else str(t).upper() for t in tracker_value]
+                        # Handle list of strings
+                        expanded = []
+                        for t in tracker_value:
+                            if isinstance(t, str):
+                                if ',' in t:
+                                    expanded.extend([x.strip().upper() for x in t.split(',')])
+                                else:
+                                    expanded.append(t.strip().upper())
+                            else:
+                                expanded.append(str(t).upper())
+                        meta[key] = expanded
                     else:
                         meta[key] = [str(tracker_value).upper()]
                 else:
