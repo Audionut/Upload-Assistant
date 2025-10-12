@@ -160,6 +160,8 @@ async def validate_tracker_logins(meta):
 
     # Filter trackers that are in both the list and tracker_class_map
     valid_trackers = [tracker for tracker in trackers if tracker in tracker_class_map and tracker in http_trackers]
+    if "RTF" in trackers:
+        valid_trackers.append("RTF")
 
     if valid_trackers:
 
@@ -173,7 +175,10 @@ async def validate_tracker_logins(meta):
                 meta[f'{tracker_name}_secret_token'] = []
                 if meta['debug']:
                     console.print(f"[cyan]Validating {tracker_name} credentials...[/cyan]")
-                login = await tracker_class.validate_credentials(meta)
+                if tracker_name == "RTF":
+                    login = await tracker_class.api_test(meta)
+                else:
+                    login = await tracker_class.validate_credentials(meta)
 
                 if not login:
                     meta['tracker_status'][tracker_name]['skipped'] = True

@@ -83,8 +83,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
-                    if tracker == "RTF":
-                        await tracker_class.api_test(meta)
                     try:
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
@@ -105,8 +103,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
-                    if tracker == "AR":
-                        await tracker_class.validate_credentials(meta) is True
                     try:
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:

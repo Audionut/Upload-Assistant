@@ -130,23 +130,28 @@ class AR():
                 await self.close_session()
                 raise
 
-        if await self.load_session(meta):
-            response = await self.get_initial_response()
-            if await self.validate_login(response):
-                return True
-        else:
-            console.print("[yellow]No session file found. Attempting to log in...")
-            if await self.login():
-                console.print("[green]Login successful, saving session file.")
-                valid = await self.save_session(meta)
-                if valid:
-                    if meta['debug']:
-                        console.print("[blue]Session file saved successfully.")
+        try:
+            if await self.load_session(meta):
+                response = await self.get_initial_response()
+                if await self.validate_login(response):
                     return True
-                else:
-                    return False
             else:
-                console.print('[red]Failed to validate credentials. Please confirm that the site is up and your passkey is valid. Exiting')
+                console.print("[yellow]No session file found. Attempting to log in...")
+                if await self.login():
+                    console.print("[green]Login successful, saving session file.")
+                    valid = await self.save_session(meta)
+                    if valid:
+                        if meta['debug']:
+                            console.print("[blue]Session file saved successfully.")
+                        return True
+                    else:
+                        return False
+                else:
+                    console.print('[red]Failed to validate credentials. Please confirm that the site is up and your passkey is valid. Exiting')
+                    return False
+        finally:
+            # Always close the session when done with validation
+            await self.close_session()
 
         await self.close_session()
         return False
@@ -368,6 +373,7 @@ class AR():
 
     async def search_existing(self, meta, DISCTYPE):
         dupes = {}
+        await self.start_session()
 
         # Combine title and year
         title = str(meta.get('title', '')).strip()
@@ -524,6 +530,7 @@ class AR():
 
             if meta['debug'] is False:
                 # Use existing session instead of creating a new one if possible
+                await self.start_session()
                 upload_session = self.session or None
                 try:
                     async with aiofiles.open(torrent_path, 'rb') as torrent_file:
