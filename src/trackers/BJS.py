@@ -326,7 +326,7 @@ class BJS:
             desc_parts.append(f'[align=center]{episode_overview}[/align]')
 
         # File information
-        if 'DVD' in meta.get('is_disc', ''):
+        if meta.get('is_disc', '') == 'DVD':
             desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
 
         bd_info = await builder.get_bdinfo_section(meta)

@@ -1,4 +1,24 @@
-__version__ = "v6.1.0"
+__version__ = "v6.1.1"
+
+"""
+Release Notes for version v6.1.1 (2025-10-11):
+
+# ## What's Changed
+# 
+# * fix(BJS): NoneType error (#880) by @wastaken7 in 88e7f40
+# * fix: ASC IMDb link, signatures (#884) by @wastaken7 in f555acf
+# * fix: anime tagging by @Audionut in 1ebb00c
+# * fix: skip checking AV1 encode settings by @Audionut in 4741097
+# * tvmaze episode data use meta objects by @Audionut in d805d85
+# * tvmaze - rely on meta object for additional check by @Audionut in f82babf
+# * set meta object by @Audionut in 968cee7
+# * unit3d bbcode parser, white space handling by @Audionut in 55f636c
+# * BHD fix empty returns by @Audionut in 63d49d1
+# * Revert "unit3d bbcode parser, white space handling" by @Audionut in b22b12d
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.1.0...v6.1.1
+"""
+
 
 """
 Release Notes for version v6.1.0 (2025-10-10):

@@ -9,6 +9,7 @@ async def get_tag(video, meta):
     # Using regex from cross-seed (https://github.com/cross-seed/cross-seed/tree/master?tab=Apache-2.0-1-ov-file)
     release_group = None
     basename = os.path.basename(video)
+    matched_anime = False
 
     # Try specialized regex patterns first
     if meta.get('anime', False):
@@ -16,10 +17,11 @@ async def get_tag(video, meta):
         basename_stripped = os.path.splitext(basename)[0]
         anime_match = re.search(r'^\s*\[(.+?)\]', basename_stripped)
         if anime_match:
+            matched_anime = True
             release_group = anime_match.group(1)
             if meta['debug']:
                 console.print(f"Anime regex match: {release_group}")
-    else:
+    if not meta.get('anime', False) or not matched_anime:
         if not meta.get('is_disc') == "BDMV":
             # Non-anime pattern: group at the end after last hyphen, avoiding resolutions and numbers
             if os.path.isdir(video):

@@ -120,7 +120,9 @@ class TL:
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
         # Signature
-        desc_parts.append(f"""<center><a href="https://github.com/Audionut/Upload-Assistant">{meta['ua_signature']}</a></center>""")
+        desc_parts.append(
+            f"""<div style="text-align: right; font-size: 11px;"><a href="https://github.com/Audionut/Upload-Assistant">{meta['ua_signature']}</a></div>"""
+        )
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

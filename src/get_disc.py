@@ -1,5 +1,6 @@
 import os
 import itertools
+from bin.MI.get_linux_mi import download_dvd_mediainfo
 from src.discparse import DiscParse
 
 
@@ -50,7 +51,8 @@ async def get_disc(meta):
         else:
             discs, bdinfo = await parse.get_bdinfo(meta, meta['discs'], meta['uuid'], meta['base_dir'], meta['discs'])
     elif is_disc == "DVD" and not meta.get('emby', False):
-        discs = await parse.get_dvdinfo(discs, base_dir=meta['base_dir'])
+        download_dvd_mediainfo(meta['base_dir'], debug=meta['debug'])
+        discs = await parse.get_dvdinfo(discs, base_dir=meta['base_dir'], debug=meta['debug'])
         export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')
         export.write(discs[0]['ifo_mi'])
         export.close()

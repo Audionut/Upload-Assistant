@@ -2,8 +2,61 @@ import aiofiles
 import json
 import os
 import platform
+import subprocess
 from pymediainfo import MediaInfo
 from src.console import console
+
+
+def setup_mediainfo_library(base_dir, debug=False):
+    system = platform.system().lower()
+
+    if system == 'windows':
+        cli_path = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
+        if os.path.exists(cli_path):
+            if debug:
+                console.print(f"[blue]Windows MediaInfo CLI: {cli_path} (found)[/blue]")
+            return {
+                'cli': cli_path,
+                'lib': None,  # Windows uses CLI only
+                'lib_dir': None
+            }
+        else:
+            if debug:
+                console.print(f"[yellow]Windows MediaInfo CLI: {cli_path} (not found)[/yellow]")
+            return None
+
+    elif system == 'linux':
+        if base_dir.endswith("bin/MI") or base_dir.endswith("bin\\MI"):
+            lib_dir = os.path.join(base_dir, "linux")
+        else:
+            lib_dir = os.path.join(base_dir, "bin", "MI", "linux")
+
+        mediainfo_lib = os.path.join(lib_dir, "libmediainfo.so.0")
+        mediainfo_cli = os.path.join(lib_dir, "mediainfo")
+        cli_available = os.path.exists(mediainfo_cli)
+        lib_available = os.path.exists(mediainfo_lib)
+
+        if debug:
+            console.print(f"[blue]MediaInfo CLI binary: {mediainfo_cli} ({'found' if cli_available else 'not found'})[/blue]")
+            console.print(f"[blue]MediaInfo library: {mediainfo_lib} ({'found' if lib_available else 'not found'})[/blue]")
+
+        if lib_available:
+            # Set library directory for LD_LIBRARY_PATH
+            current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+            if lib_dir not in current_ld_path:
+                if current_ld_path:
+                    os.environ['LD_LIBRARY_PATH'] = f"{lib_dir}:{current_ld_path}"
+                else:
+                    os.environ['LD_LIBRARY_PATH'] = lib_dir
+                if debug:
+                    console.print(f"[blue]Updated LD_LIBRARY_PATH to include: {lib_dir}[/blue]")
+
+        return {
+            'cli': mediainfo_cli if cli_available else None,
+            'lib': mediainfo_lib if lib_available else None,
+            'lib_dir': lib_dir
+        }
+    return None
 
 
 async def mi_resolution(res, guess, width, scan, height, actual_height):
@@ -81,6 +134,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
 
 
 async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False, debug=False):
+
     def filter_mediainfo(data):
         filtered = {
             "creatingLibrary": data.get("creatingLibrary"),
@@ -256,32 +310,78 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
         return filtered
 
     mediainfo_cmd = None
+    mediainfo_config = None
+
     if is_dvd:
         if debug:
-            console.print("[bold yellow]DVD detected, using specialized MediaInfo binary...")
-        mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
+            console.print("[bold yellow]DVD detected, using specialized MediaInfo...")
 
-        if platform.system() == "windows" and os.path.exists(mediainfo_binary):
-            mediainfo_cmd = mediainfo_binary
+        current_platform = platform.system().lower()
 
-    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") and export_text:
+        if current_platform in ["linux", "windows"]:
+            mediainfo_config = setup_mediainfo_library(base_dir, debug=debug)
+            if mediainfo_config:
+                if mediainfo_config['cli']:
+                    mediainfo_cmd = mediainfo_config['cli']
+
+                # Configure library if available (Linux only)
+                if mediainfo_config['lib']:
+                    try:
+                        if hasattr(MediaInfo, '_library_file'):
+                            MediaInfo._library_file = mediainfo_config['lib']
+
+                        test_parse = MediaInfo.can_parse()
+                        if debug:
+                            console.print(f"[green]Configured specialized MediaInfo library (can_parse: {test_parse})[/green]")
+
+                        if not test_parse:
+                            if debug:
+                                console.print("[yellow]Library test failed, may fall back to system MediaInfo[/yellow]")
+
+                    except Exception as e:
+                        if debug:
+                            console.print(f"[yellow]Could not configure specialized library: {e}[/yellow]")
+                else:
+                    if debug:
+                        console.print("[yellow]MediaInfo library not available[/yellow]")
+            else:
+                if debug:
+                    console.print("[yellow]No specialized MediaInfo components found, using system MediaInfo[/yellow]")
+        else:
+            if debug:
+                console.print(f"[yellow]DVD processing on {current_platform} not supported with specialized MediaInfo[/yellow]")
+
+    # Force regeneration if using specialized MediaInfo (to ensure version consistency)
+    force_regenerate = mediainfo_cmd is not None and is_dvd
+
+    if (not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") or force_regenerate) and export_text:
         if debug:
-            console.print("[bold yellow]Exporting MediaInfo...")
+            if force_regenerate and os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt"):
+                console.print("[bold yellow]Regenerating MediaInfo text (specialized version)...")
+            else:
+                console.print("[bold yellow]Exporting MediaInfo...")
         if not isdir:
             os.chdir(os.path.dirname(video))
 
-        if mediainfo_cmd:
-            import subprocess
+        if mediainfo_cmd and is_dvd:
             try:
-                # Handle both string and list command formats
-                if isinstance(mediainfo_cmd, list):
-                    result = subprocess.run(mediainfo_cmd + [video], capture_output=True, text=True)
+                cmd = [mediainfo_cmd, video]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode == 0 and result.stdout:
+                    media_info = result.stdout
                 else:
-                    result = subprocess.run([mediainfo_cmd, video], capture_output=True, text=True)
-                media_info = result.stdout
-            except Exception as e:
-                console.print(f"[bold red]Error using specialized MediaInfo binary: {e}")
-                console.print("[bold yellow]Falling back to standard MediaInfo...")
+                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+            except subprocess.TimeoutExpired:
+                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+            except (subprocess.CalledProcessError, Exception) as e:
+                console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
+                if debug and 'result' in locals():
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for text...")
                 media_info = MediaInfo.parse(video, output="STRING", full=False)
         else:
             media_info = MediaInfo.parse(video, output="STRING", full=False)
@@ -304,32 +404,54 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
         if debug:
             console.print("[bold green]MediaInfo Exported.")
 
-    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json"):
-        if mediainfo_cmd:
-            import subprocess
+    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json") or force_regenerate:
+        if mediainfo_cmd and is_dvd:
             try:
-                # Handle both string and list command formats
-                if isinstance(mediainfo_cmd, list):
-                    result = subprocess.run(mediainfo_cmd + ["--Output=JSON", video], capture_output=True, text=True)
+                cmd = [mediainfo_cmd, "--Output=JSON", video]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode == 0 and result.stdout:
+                    media_info_json = result.stdout
+                    media_info_dict = json.loads(media_info_json)
                 else:
-                    result = subprocess.run([mediainfo_cmd, "--Output=JSON", video], capture_output=True, text=True)
-                media_info_json = result.stdout
+                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+            except subprocess.TimeoutExpired:
+                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
+                media_info_json = MediaInfo.parse(video, output="JSON")
                 media_info_dict = json.loads(media_info_json)
-            except Exception as e:
-                console.print(f"[bold red]Error getting JSON from specialized MediaInfo binary: {e}")
-                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...")
+            except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
+                console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
+                if debug and 'result' in locals():
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                    if result.stdout:
+                        console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
                 media_info_json = MediaInfo.parse(video, output="JSON")
                 media_info_dict = json.loads(media_info_json)
         else:
+            # Use standard MediaInfo library for non-DVD or when specialized CLI not available
             media_info_json = MediaInfo.parse(video, output="JSON")
             media_info_dict = json.loads(media_info_json)
 
         filtered_info = filter_mediainfo(media_info_dict)
+
         async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
             await export.write(json.dumps(filtered_info, indent=4))
+            if debug:
+                console.print(f"[green]JSON file written to: {base_dir}/tmp/{folder_id}/MediaInfo.json[/green]")
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'r', encoding='utf-8') as f:
         mi = json.loads(await f.read())
+
+    # Cleanup: Reset library configuration if we modified it
+    if is_dvd and platform.system().lower() in ['linux', 'windows']:
+        # Reset MediaInfo library file to default (Linux only)
+        if hasattr(MediaInfo, '_library_file'):
+            MediaInfo._library_file = None
+        if debug:
+            console.print("[blue]Reset MediaInfo library configuration[/blue]")
 
     return mi
 
