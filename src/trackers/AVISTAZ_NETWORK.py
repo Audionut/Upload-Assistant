@@ -195,14 +195,17 @@ class AZTrackerBase:
             return False
 
     async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        return await self.cookie_validator.cookie_validation(
-            meta=meta,
-            tracker=self.tracker,
-            test_url=f'{self.base_url}/torrents',
-            error_text='Page not found',
-            token_pattern=r'name="_token" content="([^"]+)"'
-        )
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
+            return await self.cookie_validator.cookie_validation(
+                meta=meta,
+                tracker=self.tracker,
+                test_url=f'{self.base_url}/torrents',
+                error_text='Page not found',
+                token_pattern=r'name="_token" content="([^"]+)"'
+            )
+        return False
 
     async def search_existing(self, meta, disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
@@ -816,7 +819,9 @@ class AZTrackerBase:
         return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
 
