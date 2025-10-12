@@ -3,6 +3,8 @@ import http.cookiejar
 import httpx
 import os
 import re
+import traceback
+from bs4 import BeautifulSoup
 from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
@@ -25,6 +27,21 @@ class CookieValidator:
             console.print(f"{tracker}: Please ensure the cookie file is in the correct format (Netscape).")
             return False
         except FileNotFoundError:
+            # Attempt automatic login for AR tracker
+            if tracker == 'AR':
+                console.print(f"{tracker}: [yellow]Cookie file not found. Attempting automatic login...[/yellow]")
+                if await self.ar_login(meta, tracker, cookie_file):
+                    # Try loading the newly created cookie file
+                    try:
+                        cookie_jar.load(ignore_discard=True, ignore_expires=True)
+                        return cookie_jar
+                    except Exception as e:
+                        console.print(f"{tracker}: Failed to load cookies after login: {e}")
+                        return False
+                else:
+                    console.print(f"{tracker}: Automatic login failed.")
+                    return False
+
             console.print(
                 f"{tracker}: [red]Cookie file not found.[/red]\n"
                 f"{tracker}: You must first log in through your usual browser and export the cookies to: [yellow]{cookie_file}[/yellow]\n"
@@ -44,6 +61,141 @@ class CookieValidator:
             cookie_jar.save(ignore_discard=True, ignore_expires=True)
         except Exception as e:
             console.print(f"{tracker}: Failed to update the cookie file: {e}")
+
+    async def get_ar_auth_key(self, meta, tracker):
+        """Retrieve the saved auth key for AR tracker."""
+        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
+        auth_file = cookie_file.replace('.txt', '_auth.txt')
+
+        if os.path.exists(auth_file):
+            try:
+                async with aiofiles.open(auth_file, 'r', encoding='utf-8') as f:
+                    auth_key = await f.read()
+                    auth_key = auth_key.strip()
+                    if auth_key:
+                        return auth_key
+            except Exception as e:
+                console.print(f"{tracker}: Error reading auth key: {e}")
+
+        return None
+
+    async def ar_login(self, meta, tracker, cookie_file):
+        """Perform automatic login to AR and save cookies in Netscape format."""
+        username = self.config['TRACKERS'][tracker].get('username', '').strip()
+        password = self.config['TRACKERS'][tracker].get('password', '').strip()
+
+        if not username or not password:
+            console.print(f"{tracker}: Username or password not configured in config.")
+            return False
+
+        base_url = 'https://alpharatio.cc'
+        login_url = f'{base_url}/login.php'
+
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
+
+        try:
+            async with httpx.AsyncClient(headers=headers, timeout=30.0, follow_redirects=True) as client:
+                # Perform login
+                login_data = {
+                    "username": username,
+                    "password": password,
+                    "keeplogged": "1",
+                    "login": "Login",
+                }
+
+                response = await client.post(login_url, data=login_data)
+
+                if response.status_code != 200:
+                    console.print(f"{tracker}: Login failed with status code {response.status_code}")
+                    return False
+
+                # Check for login success by looking for error indicators
+                if 'login.php?act=recover' in response.text or 'Forgot your password' in response.text:
+                    console.print(f"{tracker}: [red]Login failed. Please check your username and password.[/red]")
+                    if meta.get('debug', False):
+                        failure_path = f"{meta['base_dir']}/tmp/{meta.get('uuid', 'debug')}/[{tracker}]Failed_Login.html"
+                        os.makedirs(os.path.dirname(failure_path), exist_ok=True)
+                        async with aiofiles.open(failure_path, "w", encoding="utf-8") as f:
+                            await f.write(response.text)
+                        console.print(f"Login response saved to [yellow]{failure_path}[/yellow] for debugging.")
+                    return False
+
+                # Validate we're logged in by checking the torrents page
+                test_response = await client.get(f'{base_url}/torrents.php')
+                if test_response.status_code == 200:
+                    if 'login.php?act=recover' not in test_response.text:
+                        console.print(f"{tracker}: [green]Login successful![/green]")
+
+                        # Extract auth key from the response page
+                        auth_key = None
+                        soup = BeautifulSoup(test_response.text, 'html.parser')
+                        logout_link = soup.find('a', href=True, text='Logout')
+                        if logout_link:
+                            href = logout_link['href']
+                            auth_match = re.search(r'auth=([^&]+)', href)
+                            if auth_match:
+                                auth_key = auth_match.group(1)
+                                console.print(f"{tracker}: [green]Auth key extracted successfully[/green]")
+
+                        # Save cookies in Netscape format
+                        os.makedirs(os.path.dirname(cookie_file), exist_ok=True)
+                        cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
+
+                        # Convert httpx cookies to MozillaCookieJar format
+                        for cookie_name, cookie_value in client.cookies.items():
+                            # Get the cookie object for additional attributes
+                            for cookie in client.cookies.jar:
+                                if cookie.name == cookie_name:
+                                    ck = http.cookiejar.Cookie(
+                                        version=0,
+                                        name=cookie.name,
+                                        value=cookie.value,
+                                        port=None,
+                                        port_specified=False,
+                                        domain=cookie.domain if cookie.domain else '.alpharatio.cc',
+                                        domain_specified=True,
+                                        domain_initial_dot=(cookie.domain or '.alpharatio.cc').startswith('.'),
+                                        path=cookie.path if cookie.path else '/',
+                                        path_specified=True,
+                                        secure=bool(cookie._rest.get('secure')) if hasattr(cookie, '_rest') else True,
+                                        expires=None,
+                                        discard=False,
+                                        comment=None,
+                                        comment_url=None,
+                                        rest={},
+                                        rfc2109=False
+                                    )
+                                    cookie_jar.set_cookie(ck)
+                                    break
+
+                        cookie_jar.save(ignore_discard=True, ignore_expires=True)
+                        console.print(f"{tracker}: [green]Cookies saved to {cookie_file}[/green]")
+                        
+                        # Save auth key to a separate file if found
+                        if auth_key:
+                            auth_file = cookie_file.replace('.txt', '_auth.txt')
+                            async with aiofiles.open(auth_file, 'w', encoding='utf-8') as f:
+                                await f.write(auth_key)
+                            console.print(f"{tracker}: [green]Auth key saved to {auth_file}[/green]")
+                        
+                        return True
+
+                console.print(f"{tracker}: [red]Login validation failed.[/red]")
+                return False
+
+        except httpx.TimeoutException:
+            console.print(f"{tracker}: Connection timed out. The site may be down or unreachable.")
+            return False
+        except httpx.ConnectError:
+            console.print(f"{tracker}: Failed to connect. The site may be down or your connection is blocked.")
+            return False
+        except Exception as e:
+            console.print(f"{tracker}: Login error: {e}")
+            if meta.get('debug', False):
+                console.print(traceback.format_exc())
+            return False
 
     async def cookie_validation(
         self,
