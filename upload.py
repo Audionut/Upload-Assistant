@@ -126,19 +126,68 @@ def update_oeimg_to_onlyimage():
 
 
 async def validate_tracker_logins(meta):
-    if meta['debug']:
-        console.print(f"Validating tracker logins: {meta.get('trackers', [])}")
-    tracker_name = next((tracker for tracker in meta.get('trackers', []) if tracker in tracker_class_map), None)
-    if tracker_name:
+    if not meta.get('emby', False):
+        if meta.get('trackers'):
+            trackers = meta['trackers']
+        else:
+            default_trackers = config['TRACKERS'].get('default_trackers', '')
+            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
+
+        if isinstance(trackers, str):
+            if "," in trackers:
+                trackers = [t.strip().upper() for t in trackers.split(',')]
+            else:
+                trackers = [trackers.strip().upper()]  # Make it a list with one element
+        elif isinstance(trackers, list):
+            # Handle list that might contain comma-separated strings
+            expanded_trackers = []
+            for t in trackers:
+                if isinstance(t, str):
+                    if ',' in t:
+                        # Split comma-separated tracker strings
+                        expanded_trackers.extend([x.strip().upper() for x in t.split(',')])
+                    else:
+                        expanded_trackers.append(t.strip().upper())
+                else:
+                    expanded_trackers.append(str(t).upper())
+            trackers = expanded_trackers
+        else:
+            trackers = [str(trackers).upper()]
+
+    # Initialize tracker_status
+    if 'tracker_status' not in meta:
         meta['tracker_status'] = {}
-        tracker_class = tracker_class_map[tracker_name](config=config)
-        if tracker_name in http_trackers:
-            meta[f'{tracker_name}_secret_token'] = []
-            login = await tracker_class.validate_credentials(meta)
-            if not login:
-                meta['tracker_status'][tracker_name] = {'skipped': True}
-        if isinstance(login, str) and login:
-            meta[f'{tracker_name}_secret_token'] = login
+
+    # Filter trackers that are in both the list and tracker_class_map
+    valid_trackers = [tracker for tracker in trackers if tracker in tracker_class_map and tracker in http_trackers]
+
+    if valid_trackers:
+
+        async def validate_single_tracker(tracker_name):
+            """Validate credentials for a single tracker."""
+            try:
+                if tracker_name not in meta['tracker_status']:
+                    meta['tracker_status'][tracker_name] = {}
+
+                tracker_class = tracker_class_map[tracker_name](config=config)
+                meta[f'{tracker_name}_secret_token'] = []
+                if meta['debug']:
+                    console.print(f"[cyan]Validating {tracker_name} credentials...[/cyan]")
+                login = await tracker_class.validate_credentials(meta)
+
+                if not login:
+                    meta['tracker_status'][tracker_name]['skipped'] = True
+                elif isinstance(login, str) and login:
+                    meta[f'{tracker_name}_secret_token'] = login
+
+                return tracker_name, login
+            except Exception as e:
+                console.print(f"[red]Error validating {tracker_name}: {e}[/red]")
+                meta['tracker_status'][tracker_name]['skipped'] = True
+                return tracker_name, False
+
+        # Run all tracker validations concurrently
+        await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
 
 
 async def process_meta(meta, base_dir, bot=None):
