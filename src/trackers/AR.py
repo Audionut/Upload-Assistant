@@ -106,15 +106,15 @@ class AR():
         description += "\n" + subheading + "Links" + heading_end + "\n"
         if 'IMAGES' in self.config:
             if movie['imdb_id'] != 0:
-                description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
+                description += f"[url={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/url]"
             if movie['tmdb'] != 0:
-                description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
+                description += f" [url=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/url]"
             if movie['tvdb_id'] != 0:
-                description += f" [URL=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]"
+                description += f" [url=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/url]"
             if movie['tvmaze_id'] != 0:
-                description += f" [URL=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]"
+                description += f" [url=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/url]"
             if movie['mal_id'] != 0:
-                description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
+                description += f" [url=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/url]"
         else:
             if movie['imdb_id'] != 0:
                 description += f"{movie.get('imdb_info', {}).get('imdb_url', '')}"
@@ -129,9 +129,9 @@ class AR():
         return description
 
     async def edit_desc(self, meta):
-        heading = "[COLOR=GREEN][size=6]"
-        subheading = "[COLOR=RED][size=4]"
-        heading_end = "[/size][/COLOR]"
+        heading = "[color=green][size=6]"
+        subheading = "[color=red][size=4]"
+        heading_end = "[/size][/color]"
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
             base = await f.read()
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
@@ -347,7 +347,7 @@ class AR():
             async with aiofiles.open(desc_path, 'r', encoding='utf-8') as desc_file:
                 desc = await desc_file.read()
         except FileNotFoundError:
-            meta['tracker_status'][self.tracker]['status_message'] = f"Description file not found at {desc_path}"
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: Description file not found at {desc_path}"
             return
 
         # Handle cover image input
