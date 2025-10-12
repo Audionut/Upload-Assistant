@@ -117,7 +117,8 @@ async def process_all_trackers(meta):
 
                 if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                     dupes = await filter_dupes(dupes, local_meta, tracker_name)
-                    local_meta, is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
+                    meta['we_asked'] = False
+                    is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
                     if is_dupe:
                         local_tracker_status['dupe'] = True
                 elif 'skipping' in local_meta:
@@ -153,12 +154,35 @@ async def process_all_trackers(meta):
                         not local_meta['unattended']
                         or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))
                     ) and not we_already_asked:
-                        edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
-                        if edit_choice.lower() == 'y':
-                            local_tracker_status['upload'] = True
-                            successful_trackers += 1
-                        else:
-                            local_tracker_status['upload'] = False
+                        try:
+                            tracker_rename = await tracker_class.get_name(meta)
+                        except Exception:
+                            try:
+                                tracker_rename = await tracker_class.edit_name(meta)
+                            except Exception:
+                                tracker_rename = None
+
+                        display_name = None
+                        if tracker_rename is not None:
+                            if isinstance(tracker_rename, dict) and 'name' in tracker_rename:
+                                display_name = tracker_rename['name']
+                            elif isinstance(tracker_rename, str):
+                                display_name = tracker_rename
+
+                        if display_name is not None and display_name != "" and display_name != meta['name']:
+                            console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
+                        try:
+                            edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
+                            if edit_choice.lower() == 'y':
+                                local_tracker_status['upload'] = True
+                                successful_trackers += 1
+                            else:
+                                local_tracker_status['upload'] = False
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup()
+                            reset_terminal()
+                            sys.exit(1)
                     else:
                         local_tracker_status['upload'] = True
                         successful_trackers += 1

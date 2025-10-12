@@ -12,15 +12,25 @@ from xml.etree import ElementTree as ET
 import re
 from langcodes import Language
 from collections import defaultdict
-import platform
 from src.console import console
 from data.config import config
+from src.exportmi import setup_mediainfo_library
 
 
 class DiscParse():
     def __init__(self):
         self.config = config
+        self.mediainfo_config = None
         pass
+
+    def setup_mediainfo_for_dvd(self, base_dir, debug=False):
+        """Setup MediaInfo binary for DVD processing using the complete setup from exportmi"""
+        if self.mediainfo_config is None:
+            self.mediainfo_config = setup_mediainfo_library(base_dir, debug)
+
+        if self.mediainfo_config and self.mediainfo_config['cli']:
+            return self.mediainfo_config['cli']
+        return None
 
     """
     Get and parse bdinfo
@@ -459,7 +469,7 @@ class DiscParse():
     Parse VIDEO_TS and get mediainfos
     """
 
-    async def get_dvdinfo(self, discs, base_dir=None):
+    async def get_dvdinfo(self, discs, base_dir=None, debug=False):
         for each in discs:
             path = each.get('path')
             os.chdir(path)
@@ -473,14 +483,14 @@ class DiscParse():
                     filesdict[trimmed[:2]] = []
                 filesdict[trimmed[:2]].append(trimmed)
             main_set_duration = 0
-            mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
+            mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=debug)
 
             for vob_set in filesdict.values():
                 try:
                     ifo_file = f"VTS_{vob_set[0][:2]}_0.IFO"
 
                     try:
-                        if platform.system() == "Windows":
+                        if mediainfo_binary:
                             process = await asyncio.create_subprocess_exec(
                                 mediainfo_binary, "--Output=JSON", ifo_file,
                                 stdout=asyncio.subprocess.PIPE,
@@ -488,15 +498,18 @@ class DiscParse():
                             )
                             stdout, stderr = await process.communicate()
 
-                            if process and process.returncode == 0:
+                            if process.returncode == 0 and stdout:
                                 vob_set_mi = stdout.decode()
                             else:
+                                console.print(f"[yellow]Specialized MediaInfo failed for {ifo_file}, falling back to standard[/yellow]")
+                                if stderr:
+                                    console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
                                 vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
                         else:
                             vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
 
                     except Exception as e:
-                        console.print(f"[yellow]Error with DVD MediaInfo binary: {str(e)}")
+                        console.print(f"[yellow]Error with DVD MediaInfo binary for JSON: {str(e)}")
                         # Fall back to standard MediaInfo
                         vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
 
@@ -530,10 +543,10 @@ class DiscParse():
             each['ifo'] = ifo = f"{path}/VTS_{set}_0.IFO"
 
             try:
-                mediainfo_binary = os.path.join(base_dir, "bin", "MI", "windows", "MediaInfo.exe")
+                mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=True)
 
                 try:
-                    if platform.system() == "Windows":
+                    if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
                             mediainfo_binary, os.path.basename(vob),
                             stdout=asyncio.subprocess.PIPE,
@@ -541,9 +554,12 @@ class DiscParse():
                         )
                         stdout, stderr = await process.communicate()
 
-                        if process and process.returncode == 0:
+                        if process.returncode == 0 and stdout:
                             each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
                         else:
+                            console.print("[yellow]Specialized MediaInfo failed for VOB, falling back[/yellow]")
+                            if stderr:
+                                console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
                             each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
@@ -552,7 +568,7 @@ class DiscParse():
                     each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
 
                 try:
-                    if platform.system() == "Windows":
+                    if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
                             mediainfo_binary, os.path.basename(ifo),
                             stdout=asyncio.subprocess.PIPE,
@@ -560,9 +576,12 @@ class DiscParse():
                         )
                         stdout, stderr = await process.communicate()
 
-                        if process and process.returncode == 0:
+                        if process.returncode == 0 and stdout:
                             each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
                         else:
+                            console.print("[yellow]Specialized MediaInfo failed for IFO, falling back[/yellow]")
+                            if stderr:
+                                console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
                             each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
                     else:
                         each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
@@ -571,7 +590,7 @@ class DiscParse():
                     each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
 
                 try:
-                    if platform.system() == "Windows":
+                    if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
                             mediainfo_binary, vob,
                             stdout=asyncio.subprocess.PIPE,
@@ -590,7 +609,7 @@ class DiscParse():
                     each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
 
                 try:
-                    if platform.system() == "Windows":
+                    if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
                             mediainfo_binary, ifo,
                             stdout=asyncio.subprocess.PIPE,

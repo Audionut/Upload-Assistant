@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import asyncio
 import httpx
 import json
@@ -8,34 +9,36 @@ import platform
 import pycountry
 import re
 import unicodedata
-from .COMMON import COMMON
 from bs4 import BeautifulSoup
 from datetime import datetime
 from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
+from src.trackers.COMMON import COMMON
 from tqdm import tqdm
 from typing import Optional
 from urllib.parse import urlparse
 
 
-class BJS(COMMON):
+class BJS:
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = 'BJS'
-        self.banned_groups = ['']
+        self.banned_groups = []
         self.source_flag = 'BJ'
         self.base_url = 'https://bj-share.info'
         self.torrent_url = 'https://bj-share.info/torrents.php?torrentid='
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
         self.cover = ''
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via Upload Assistant[/url][/center]"
 
     async def get_additional_checks(self, meta):
         should_continue = True
@@ -57,7 +60,7 @@ class BJS(COMMON):
             console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
             return False
 
-        self.session.cookies = await self.parseCookieFile(cookie_file)
+        self.session.cookies = await self.common.parseCookieFile(cookie_file)
 
     async def validate_credentials(self, meta):
         await self.load_cookies(meta)
@@ -93,25 +96,53 @@ class BJS(COMMON):
         except httpx.RequestError as e:
             console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
             return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Erro desconhecido ao validar credenciais do {self.tracker}: {e}[/bold red]')
+            return False
 
-    def load_localized_data(self, meta):
-        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+    async def load_localized_data(self, meta):
+        localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
+        main_ptbr_data = {}
+        episode_ptbr_data = {}
+        data = {}
 
         if os.path.isfile(localized_data_file):
-            with open(localized_data_file, "r", encoding="utf-8") as f:
-                self.tmdb_data = json.load(f)
-        else:
-            self.tmdb_data = {}
+            try:
+                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    data = json.loads(content)
+            except json.JSONDecodeError:
+                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                data = {}
+            except Exception as e:
+                print(f'Error reading file {localized_data_file}: {e}')
+                data = {}
 
-    async def ptbr_tmdb_data(self, meta):
-        brazil_data_in_meta = self.tmdb_data.get('pt-BR', {}).get('main')
-        if brazil_data_in_meta:
-            return brazil_data_in_meta
+        main_ptbr_data = data.get('pt-BR', {}).get('main')
 
-        data = await get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings')
-        self.load_localized_data(meta)
+        if not main_ptbr_data:
+            main_ptbr_data = await get_tmdb_localized_data(
+                meta,
+                data_type='main',
+                language='pt-BR',
+                append_to_response='credits,videos,content_ratings'
+            )
 
-        return data
+        if self.config['DEFAULT']['episode_overview']:
+            if meta['category'] == 'TV' and not meta.get('tv_pack'):
+                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+                if not episode_ptbr_data:
+                    episode_ptbr_data = await get_tmdb_localized_data(
+                        meta,
+                        data_type='episode',
+                        language='pt-BR',
+                        append_to_response=''
+                    )
+
+        self.main_tmdb_data = main_ptbr_data
+        self.episode_tmdb_data = episode_ptbr_data
+
+        return
 
     def get_container(self, meta):
         container = meta.get('container', '')
@@ -142,9 +173,8 @@ class BJS(COMMON):
             'Russo', 'Sueco', 'Tailandês', 'Tamil', 'Tcheco', 'Telugo', 'Turco',
             'Ucraniano', 'Urdu', 'Vietnamita', 'Zulu', 'Outro'
         }
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        lang_code = tmdb_data.get('original_language')
-        origin_countries = tmdb_data.get('origin_country', [])
+        lang_code = self.main_tmdb_data.get('original_language')
+        origin_countries = self.main_tmdb_data.get('origin_country', [])
 
         if not lang_code:
             return 'Outro'
@@ -300,59 +330,68 @@ class BJS(COMMON):
         return 'Outro'
 
     async def get_title(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-
-        title = tmdb_data.get('name') or tmdb_data.get('title') or ''
+        title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
     async def build_description(self, meta):
-        description = []
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        disc_map = {
-            'BDMV': ('BD_SUMMARY_00.txt', 'BDInfo'),
-            'DVD': ('MEDIAINFO_CLEANPATH.txt', 'MediaInfo'),
-        }
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        disc_type = meta.get('is_disc')
-        if disc_type in disc_map:
-            filename, title = disc_map[disc_type]
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{filename}"
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    if content.strip():
-                        description.append(f'[hide={title}][pre]{content}[/pre][/hide]')
+        # Logo
+        logo_resize_url = meta.get('tmdb_logo', '')
+        if logo_resize_url:
+            desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
 
-        base_desc = ''
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                base_desc = f.read()
-                if base_desc:
-                    description.append(base_desc)
+        # TV
+        title = self.episode_tmdb_data.get('name', '')
+        episode_image = self.episode_tmdb_data.get('still_path', '')
+        episode_overview = self.episode_tmdb_data.get('overview', '')
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description.append(custom_description_header)
+        if episode_overview:
+            desc_parts.append(f'[align=center]{title}[/align]')
 
-        description.append(self.signature)
+            if episode_image:
+                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300{episode_image}[/img][/align]")
 
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            desc = '\n\n'.join(filter(None, description))
-            desc = re.sub(r"\[spoiler=([^]]+)]", r"[hide=\1]", desc, flags=re.IGNORECASE)
-            desc = re.sub(r"\[spoiler\]", "[hide]", desc, flags=re.IGNORECASE)
-            desc = re.sub(r"\[/spoiler\]", "[/hide]", desc, flags=re.IGNORECASE)
-            desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
-            final_description = re.sub(r'\n{3,}', '\n\n', desc)
-            descfile.write(final_description)
+            desc_parts.append(f'[align=center]{episode_overview}[/align]')
 
-        return final_description
+        # File information
+        if meta.get('is_disc', '') == 'DVD':
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
+
+        bd_info = await builder.get_bdinfo_section(meta)
+        if bd_info:
+            desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        # Signature
+        desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
+        bbcode = BBCODE()
+        description = bbcode.convert_named_spoiler_to_named_hide(description)
+        description = bbcode.convert_spoiler_to_hide(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_extra_lines(description)
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
+
+        return description
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        video_results = tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
             youtube = f'http://www.youtube.com/watch?v={youtube_code}'
@@ -362,8 +401,7 @@ class BJS(COMMON):
         return youtube
 
     async def get_rating(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        ratings = tmdb_data.get('content_ratings', {}).get('results', [])
+        ratings = self.main_tmdb_data.get('content_ratings', {}).get('results', [])
 
         if not ratings:
             return ''
@@ -389,12 +427,11 @@ class BJS(COMMON):
         return br_rating or us_rating or ''
 
     async def get_tags(self, meta):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
         tags = ''
 
-        if tmdb_data and isinstance(tmdb_data.get('genres'), list):
+        if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
             genre_names = [
-                g.get('name', '') for g in tmdb_data['genres']
+                g.get('name', '') for g in self.main_tmdb_data['genres']
                 if isinstance(g.get('name'), str) and g.get('name').strip()
             ]
 
@@ -409,7 +446,7 @@ class BJS(COMMON):
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
 
@@ -780,8 +817,7 @@ class BJS(COMMON):
             return None
 
     async def get_cover(self, meta, disctype):
-        tmdb_data = await self.ptbr_tmdb_data(meta)
-        cover_path = tmdb_data.get('poster_path') or meta.get('tmdb_poster')
+        cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
             print('Nenhum poster_path encontrado nos dados do TMDB.')
             return None
@@ -951,7 +987,7 @@ class BJS(COMMON):
 
         return ' / '.join(ordered_tags)
 
-    def get_credits(self, meta, role):
+    async def get_credits(self, meta, role):
         role_map = {
             'director': ('directors', 'tmdb_directors'),
             'creator': ('creators', 'tmdb_creators'),
@@ -977,7 +1013,7 @@ class BJS(COMMON):
                 if not self.cover:  # Only ask for input if there's no info in the site already
                     role_display_name = prompt_name_map.get(role, role.capitalize())
                     prompt_message = (f'{role_display_name} não encontrado(s).\nPor favor, insira manualmente (separados por vírgula): ')
-                    user_input = input(prompt_message)
+                    user_input = await self.common.async_input(prompt=prompt_message)
 
                     if user_input.strip():
                         return user_input.strip()
@@ -1059,8 +1095,7 @@ class BJS(COMMON):
 
     async def fetch_data(self, meta, disctype):
         await self.load_cookies(meta)
-        self.load_localized_data(meta)
-        tmdb_data = await self.ptbr_tmdb_data(meta)
+        await self.load_localized_data(meta)
         category = meta['category']
 
         data = {}
@@ -1083,7 +1118,7 @@ class BJS(COMMON):
             'remaster_title': self.build_remaster_title(meta),
             'resolucaoh': self.get_resolution(meta).get('height'),
             'resolucaow': self.get_resolution(meta).get('width'),
-            'sinopse': tmdb_data.get('overview') or await asyncio.to_thread(input, 'Digite a sinopse: '),
+            'sinopse': self.main_tmdb_data.get('overview') or await self.common.async_input(prompt='Digite a sinopse: '),
             'submit': 'true',
             'tags': await self.get_tags(meta),
             'tipolegenda': await self.get_subtitle(meta),
@@ -1098,12 +1133,12 @@ class BJS(COMMON):
         if category == 'MOVIE':
             data.update({
                 'adulto': '2',
-                'diretor': self.get_credits(meta, 'director'),
+                'diretor': await self.get_credits(meta, 'director'),
             })
 
         if category == 'TV':
             data.update({
-                'diretor': self.get_credits(meta, 'creator'),
+                'diretor': await self.get_credits(meta, 'creator'),
                 'tipo': 'episode' if meta.get('tv_pack') == 0 else 'season',
                 'season': meta.get('season_int', ''),
                 'episode': meta.get('episode_int', ''),
@@ -1114,24 +1149,24 @@ class BJS(COMMON):
             data.update({
                 'validimdb': 'yes',
                 'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
-                'elenco': self.get_credits(meta, 'cast'),
+                'elenco': await self.get_credits(meta, 'cast'),
             })
             if category == 'MOVIE':
                 data.update({
-                    'datalancamento': self.get_release_date(tmdb_data),
+                    'datalancamento': self.get_release_date(self.main_tmdb_data),
                 })
 
             if category == 'TV':
                 # Convert country code to name
                 country_list = [
                     country.name
-                    for code in tmdb_data.get('origin_country', [])
+                    for code in self.main_tmdb_data.get('origin_country', [])
                     if (country := pycountry.countries.get(alpha_2=code))
                 ]
                 data.update({
-                    'network': ', '.join([p.get('name', '') for p in tmdb_data.get('networks', [])]) or '',  # Optional
-                    'numtemporadas': tmdb_data.get('number_of_seasons', ''),  # Optional
-                    'datalancamento': self.get_release_date(tmdb_data),
+                    'network': ', '.join([p.get('name', '') for p in self.main_tmdb_data.get('networks', [])]) or '',  # Optional
+                    'numtemporadas': self.main_tmdb_data.get('number_of_seasons', ''),  # Optional
+                    'datalancamento': self.get_release_date(self.main_tmdb_data),
                     'pais': ', '.join(country_list),  # Optional
                     'diretorserie': ', '.join(set(meta.get('tmdb_directors', []) or meta.get('imdb_info', {}).get('directors', [])[:5])),  # Optional
                     'avaliacao': await self.get_rating(meta),  # Optional
@@ -1190,7 +1225,8 @@ class BJS(COMMON):
         status_message = ''
         data = await self.fetch_data(meta, disctype)
         requests = await self.get_requests(meta)
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
+        status_message = ''
 
         issue = await self.check_data(meta, data)
         if issue:
@@ -1225,7 +1261,7 @@ class BJS(COMMON):
                             f.write(response.text)
                         console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
 
-                await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
             else:
                 console.print(data)

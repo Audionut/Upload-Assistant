@@ -60,9 +60,9 @@ async def get_name(meta):
         episode_title = ""
     if meta.get('is_disc', "") == "BDMV":  # Disk
         video_codec = meta.get('video_codec', "")
-        region = meta.get('region', "")
+        region = meta.get('region', "") if meta.get('region', "") is not None else ""
     elif meta.get('is_disc', "") == "DVD":
-        region = meta.get('region', "")
+        region = meta.get('region', "") if meta.get('region', "") is not None else ""
         dvd_size = meta.get('dvd_size', "")
     else:
         video_codec = meta.get('video_codec', "")

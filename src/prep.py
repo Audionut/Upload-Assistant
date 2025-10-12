@@ -896,7 +896,7 @@ class Prep():
                 meta['edition'] = ""
 
             meta['valid_mi_settings'] = True
-            if meta['type'] in ["ENCODE"]:
+            if not meta['is_disc'] and meta['type'] in ["ENCODE"] and meta['video_codec'] not in ["AV1"]:
                 valid_mi_settings = validate_mediainfo(meta, debug=meta['debug'], settings=True)
                 if not valid_mi_settings:
                     console.print("[red]MediaInfo validation failed. This file does not contain encode settings.")

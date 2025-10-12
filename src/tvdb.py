@@ -179,7 +179,7 @@ async def get_tvdb_token(api_key, base_dir):
 
 async def get_tvdb_series_episodes(base_dir, token, tvdb_id, season, episode, api_key=None, retry_attempted=False, debug=False):
     if debug:
-        console.print(f"[cyan]Fetching episode list for series ID {tvdb_id}...[/cyan]")
+        console.print(f"[cyan]Fetching episode list for tvdb series ID {tvdb_id}...[/cyan]")
 
     url = f"https://api4.thetvdb.com/v4/series/{tvdb_id}/extended?meta=episodes&short=false"
     headers = {

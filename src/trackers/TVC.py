@@ -430,7 +430,7 @@ class TVC():
         description = ""
         description += "\n\n" + subheading + "Links" + heading_end + "\n"
         if movie['imdb_id'] != "0":
-            description += f"[URL=https://www.imdb.com/title/tt{movie['imdb']}][img]{self.images['imdb_75']}[/img][/URL]"
+            description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.images['imdb_75']}[/img][/URL]"
         if movie['tmdb'] != "0":
             description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.images['tmdb_75']}[/img][/URL]"
         if movie['tvdb_id'] != 0:

@@ -311,8 +311,7 @@ class ACM(UNIT3D):
                     await descfile.write(f'[url={web_url}][img=350]{img_url}[/img][/url]')
                 await descfile.write('\n[/center]')
 
-            if self.signature:
-                await descfile.write(self.signature)
+            await descfile.write(f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
         async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
             final_desc = await f.read()

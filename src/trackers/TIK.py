@@ -166,8 +166,9 @@ class TIK(UNIT3D):
         return {'resolution_id': resolution_id}
 
     async def get_description(self, meta):
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature, comparison=True)
-        if meta.get('desclink') or meta.get('descfile'):
+        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
+        if meta.get('description_link') or meta.get('description_file'):
             async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'r', encoding='utf-8') as f:
                 desc = await f.read()
 
@@ -273,7 +274,7 @@ class TIK(UNIT3D):
         desc_text.append("[code]\n")
         if meta['is_disc'] == 'BDMV':
             desc_text.append(f"  Disc Label.........:{meta.get('bdinfo', {}).get('label', '')}\n")
-        desc_text.append(f"  IMDb...............: [url]https://www.imdb.com/title/tt{meta.get('imdb_id')}{meta.get('imdb_rating', '')}[/url]\n")
+        desc_text.append(f"  IMDb...............: [url]{str(meta.get('imdb_info', {}).get('imdb_url', ''))}{str(meta.get('imdb_rating', ''))}[/url]\n")
         desc_text.append(f"  Year...............: {meta.get('year', '')}\n")
         desc_text.append(f"  Country............: {country_name}\n")
         if meta['is_disc'] == 'BDMV':

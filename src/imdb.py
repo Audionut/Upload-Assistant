@@ -265,6 +265,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
         return imdb_info  # Return empty if no data found
 
     imdb_info['imdbID'] = imdbID
+    imdb_info['imdb_url'] = f"https://www.imdb.com/title/{imdbID}"
     imdb_info['title'] = await safe_get(title_data, ['titleText', 'text'])
     countries_list = await safe_get(title_data, ['countriesOfOrigin', 'countries'], [])
     if isinstance(countries_list, list) and countries_list:

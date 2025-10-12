@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import base64
 import bencodepy
 import glob
@@ -8,9 +9,11 @@ import httpx
 import os
 import re
 import unicodedata
-from src.languages import process_desc_language
-from src.console import console
 from .COMMON import COMMON
+from src.bbcode import BBCODE
+from src.console import console
+from src.get_desc import DescriptionBuilder
+from src.languages import process_desc_language
 
 
 class SPD:
@@ -31,8 +34,6 @@ class SPD:
             f"https://ramjet.speedappio.org/{self.passkey}/announce"
         ]
         self.banned_groups = []
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Upload Assistant",
             'accept': 'application/json',
@@ -185,34 +186,49 @@ class SPD:
             console.print_exception()
 
     async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        description_parts = []
+        user_description = await builder.get_user_description(meta)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        if user_description or episode_overview:  # Avoid unnecessary descriptions
+            # Custom Header
+            desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+            # Logo
+            logo_resize_url = meta.get('tmdb_logo', '')
+            if logo_resize_url:
+                desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header)
+            # TV
+            if episode_overview:
+                desc_parts.append(f'[center]{title}[/center]')
 
-        if self.signature:
-            description_parts.append(self.signature)
+                if episode_image:
+                    desc_parts.append(f"[center][img]{episode_image}[/img][/center]")
 
-        final_description = "\n\n".join(filter(None, description_parts))
-        desc = final_description
-        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
-        desc = re.sub(r"(\[spoiler=[^]]+])", "[spoiler]", desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
+                desc_parts.append(f'[center]{episode_overview}[/center]')
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
+            # User description
+            desc_parts.append(user_description)
 
-        return desc
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        # Signature
+        desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
+        bbcode = BBCODE()
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
+        description = bbcode.remove_extra_lines(description)
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
+
+        return description
 
     async def edit_name(self, meta):
         torrent_name = meta['name']
@@ -268,7 +284,7 @@ class SPD:
             'technicalDetails': await self.edit_desc(meta),
             'screenshots': await self.get_screenshots(meta),
             'type': await self.get_cat_id(meta),
-            'url': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+            'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
         }
 
         if not meta.get('debug', False):
