@@ -105,7 +105,10 @@ class RTF():
 
         else:
             console.print("[cyan]RTF Request Data:")
-            console.print(json_data)
+            debug_data = json_data.copy()
+            if 'file' in debug_data and debug_data['file']:
+                debug_data['file'] = debug_data['file'][:10] + '...'
+            console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def search_existing(self, meta, disctype):

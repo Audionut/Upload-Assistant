@@ -463,8 +463,10 @@ class CookieAuthUploader:
         console.print(table_headers, justify="center")
 
         # Cookies
+        cookies_str = str(session.cookies)
+        truncated_cookies = cookies_str[:50] + '...' if len(cookies_str) > 50 else cookies_str
         cookies_panel = Panel(
-            str(session.cookies), title=f"{tracker}: Cookies - DO NOT SHARE THIS", border_style="green"
+            truncated_cookies, title=f"{tracker}: Truncated Cookie", border_style="green"
         )
         console.print(cookies_panel, justify="center")
 
