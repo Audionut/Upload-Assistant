@@ -474,26 +474,8 @@ class MTV():
                 return vcookie
             else:
                 return False
-        vapi = await self.validate_api()
-        if vapi is not True:
-            console.print('[red]Failed to validate API. Please confirm that the site is up and your API key is valid.')
-        return True
 
-    async def validate_api(self):
-        url = self.search_url
-        params = {
-            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-        }
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(url=url, params=params)
-                if not response.is_success:
-                    if "unauthorized api key" in response.text.lower():
-                        console.print("[red]Invalid API Key")
-                    return False
-                return True
-        except Exception:
-            return False
+        return True
 
     async def validate_cookies(self, meta, cookiefile):
         url = "https://www.morethantv.me/index.php"
