@@ -175,7 +175,7 @@ class RTF():
                     console.print('[bold red]Your API key is incorrect SO generating a new one')
                     await self.generate_new_api(meta)
                 else:
-                    return
+                    return True
         except httpx.RequestError as e:
             console.print(f'[bold red]Error testing API: {str(e)}')
             await self.generate_new_api(meta)
@@ -225,6 +225,7 @@ class RTF():
                         file.write(new_config_data)
 
                     console.print(f'[bold green]API Key successfully saved to {config_path}')
+                    return True
                 else:
                     console.print('[bold red]API response does not contain a token.')
             else:
