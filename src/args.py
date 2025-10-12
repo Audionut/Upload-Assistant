@@ -220,7 +220,7 @@ class Args():
                         meta['manual_type'] = value2.upper().replace('-', '')
                     elif key == 'tag':
                         meta[key] = f"-{value2}"
-                    elif key == 'descfile':
+                    elif key == 'description_file':
                         meta[key] = os.path.abspath(value2)
                     elif key == 'comparison':
                         meta[key] = os.path.abspath(value2)

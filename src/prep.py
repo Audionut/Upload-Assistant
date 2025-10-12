@@ -375,7 +375,8 @@ class Prep():
                     console.print(f"[red] None of the required languages ({meta['has_languages']}) is available on the file {audio_languages}")
                     raise Exception("No matching languages")
             except Exception as e:
-                console.print(f"[red]Error checking languages: {e}")
+                console.print(f"[red]{e}")
+                return Exception("Language check failed")
 
         if not meta.get('emby', False):
             if 'description' not in meta or meta.get('description') is None:

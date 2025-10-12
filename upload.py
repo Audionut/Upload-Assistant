@@ -193,7 +193,15 @@ async def process_meta(meta, base_dir, bot=None):
             console.print("[yellow]Running in Auto Mode")
     prep = Prep(screens=meta['screens'], img_host=meta['imghost'], config=config)
     try:
-        meta = await prep.gather_prep(meta=meta, mode='cli')
+        results = await asyncio.gather(
+            prep.gather_prep(meta=meta, mode='cli'),
+            return_exceptions=True  # Returns exceptions instead of raising them
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                return
+            else:
+                meta = result
     except Exception as e:
         console.print(f"Error in gather_prep: {e}")
         console.print(traceback.format_exc())
