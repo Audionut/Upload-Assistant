@@ -47,6 +47,7 @@ async def process_all_trackers(meta):
         if tracker_name in tracker_class_map:
             tracker_class = tracker_class_map[tracker_name](config=config)
             if tracker_name in http_trackers:
+                meta[f'{tracker_name}_secret_token'] = []
                 login = await tracker_class.validate_credentials(meta)
                 if not login:
                     local_tracker_status['skipped'] = True
