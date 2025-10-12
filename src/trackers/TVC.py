@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# import discord
 import asyncio
 import requests
 import traceback
@@ -11,7 +10,6 @@ import json
 import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
-from src.rehostimages import check_hosts
 
 
 class TVC():
@@ -34,10 +32,10 @@ class TVC():
         self.banned_groups = []
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
         self.images = {
-            "imdb_75": 'https://i.imgur.com/Mux5ObG.png',
-            "tmdb_75": 'https://i.imgur.com/r3QzUbk.png',
-            "tvdb_75": 'https://i.imgur.com/UWtUme4.png',
-            "tvmaze_75": 'https://i.imgur.com/ZHEF5nE.png',
+            "imdb_75": 'https://i.postimg.cc/nLrVgPFB/imdb.png',
+            "tmdb_75": 'https://i.postimg.cc/4xLs6Q6J/tmdb.png',
+            "tvdb_75": 'https://i.postimg.cc/VsqwG8qW/tvdb.png',
+            "tvmaze_75": 'https://i.postimg.cc/pL6MhXvF/tvmaze.png',
             "mal_75": 'https://i.imgur.com/PBfdP3M.png'
         }
 
@@ -83,25 +81,11 @@ class TVC():
                 '540': 'SD',
                 '480p': 'SD',
                 '480i': 'SD'
-            }.get(resolution, 'SD')
+                }.get(resolution, 'SD')
         return resolution_id
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        url_host_mapping = {
-            "ibb.co": "imgbb",
-            "ptpimg.me": "ptpimg",
-            "pixhost.to": "pixhost",
-            "imagebam.com": "bam",
-        }
-
-        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
-        if 'TVC_images_key' in meta:
-            image_list = meta['TVC_images_key']
-        else:
-            image_list = meta['image_list']
-
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
         if meta['category'] == 'TV':
@@ -110,7 +94,7 @@ class TVC():
             cat_id = 44
         # type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list=image_list)
+        await self.unit3d_edit_desc(meta, self.tracker, self.signature)
 
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
@@ -178,9 +162,46 @@ class TVC():
             elif "AU" in meta['origin_country_code']:
                 tvc_name += " [AUS]"
             elif "NZ" in meta['origin_country_code']:
-                tvc_name += " [NZ]"
+                tvc_name += " [NZL]"
             elif "CA" in meta['origin_country_code']:
-                tvc_name += " [CA]"
+                tvc_name += " [CAN]"
+            elif "IT" in meta['origin_country_code']:
+                tvc_name += " [ITA]"
+            elif "FR" in meta['origin_country_code']:
+                tvc_name += " [FRA]"
+            elif "DE" in meta['origin_country_code']:
+                tvc_name += " [GER]"
+            elif "ES" in meta['origin_country_code']:
+                tvc_name += " [SPA]"
+            elif "PT" in meta['origin_country_code']:
+                tvc_name += " [POR]"
+            elif "BE" in meta['origin_country_code']:
+                tvc_name += " [BEL]"
+            elif "DK" in meta['origin_country_code']:
+                tvc_name += " [DNK]"
+            elif "NL" in meta['origin_country_code']:
+                tvc_name += " [NLD]"
+            elif "SE" in meta['origin_country_code']:
+                tvc_name += " [SWE]"
+            elif "NO" in meta['origin_country_code']:
+                tvc_name += " [NOR]"
+            elif "FI" in meta['origin_country_code']:
+                tvc_name += " [FIN]"
+            elif "IS" in meta['origin_country_code']:
+                tvc_name += " [ISL]"
+            elif "PL" in meta['origin_country_code']:
+                tvc_name += " [POL]"
+            elif "RU" in meta['origin_country_code']:
+                tvc_name += " [RUS]"
+            elif "AT" in meta['origin_country_code']:
+                tvc_name += " [AST]"
+            elif "CZ" in meta['origin_country_code']:
+                tvc_name += " [CZE]"
+            elif "EE" in meta['origin_country_code']:
+                tvc_name += " [EST]"
+            elif "CH" in meta['origin_country_code']:
+                tvc_name += " [CHE]"
+
 
         if meta.get('unattended', False) is False:
             upload_to_tvc = cli_ui.ask_yes_no(f"Upload to {self.tracker} with the name {tvc_name}?", default=False)
@@ -413,9 +434,9 @@ class TVC():
             descfile.write(desc)
             images = meta['image_list']
             # only adding 2 screens as that is mentioned in rules.
-            if len(images) > 0 and int(meta['screens']) >= 2:
+            if len(images) > 0 and int(meta['screens']) >= 9:
                 descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
-                for each in range(len(images[:2])):
+                for each in range(len(images[:9])):
                     web_url = images[each]['web_url']
                     img_url = images[each]['img_url']
                     descfile.write(f"[url={web_url}][img=350]{img_url}[/img][/url]")
@@ -430,7 +451,7 @@ class TVC():
         description = ""
         description += "\n\n" + subheading + "Links" + heading_end + "\n"
         if movie['imdb_id'] != "0":
-            description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.images['imdb_75']}[/img][/URL]"
+            description += f"[URL=https://www.imdb.com/title/tt{movie['imdb']}][img]{self.images['imdb_75']}[/img][/URL]"
         if movie['tmdb'] != "0":
             description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.images['tmdb_75']}[/img][/URL]"
         if movie['tvdb_id'] != 0:
