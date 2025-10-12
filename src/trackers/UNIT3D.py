@@ -19,8 +19,6 @@ class UNIT3D:
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url', '')
         self.api_key = tracker_config.get('api_key', '')
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         pass
 
     async def get_additional_checks(self, meta):
@@ -92,7 +90,8 @@ class UNIT3D:
         return {'name': meta['name']}
 
     async def get_description(self, meta):
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
+        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
         return {'description': desc}
@@ -101,7 +100,7 @@ class UNIT3D:
         if meta['bdinfo'] is not None:
             mediainfo = None
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
                 mediainfo = await f.read()
         return {'mediainfo': mediainfo}
 
@@ -347,7 +346,7 @@ class UNIT3D:
             torrent_bytes = await f.read()
         files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         files.update(await self.get_additional_files(meta))
-        headers = {'User-Agent': f'{self.ua_name} ({platform.system()} {platform.release()})'}
+        headers = {'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})'}
         params = {'api_token': self.api_key}
 
         if meta['debug'] is False:

@@ -1,22 +1,22 @@
 import aiofiles
-import asyncio
-from src.console import console
-import traceback
-from torf import Torrent
-import httpx
-import xml.etree.ElementTree as ET
-import os
-import cli_ui
-import pickle
-import re
 import aiofiles.os
+import asyncio
+import cli_ui
+import httpx
+import os
+import pickle
 import pyotp
-from pathlib import Path
-from src.trackers.COMMON import COMMON
-from datetime import datetime
-from src.torrentcreate import CustomTorrent, torf_cb, create_torrent
-from src.rehostimages import check_hosts
+import re
+import traceback
+import xml.etree.ElementTree as ET
+
+from torf import Torrent
+
 from data.config import config
+from src.console import console
+from src.rehostimages import check_hosts
+from src.torrentcreate import create_torrent
+from src.trackers.COMMON import COMMON
 
 
 class MTV():
@@ -56,10 +56,8 @@ class MTV():
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
         if not await aiofiles.os.path.exists(torrent_file_path):
-            torrent_filename = "BASE"
-            torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+            await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename="BASE")
 
         loop = asyncio.get_running_loop()
         torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
@@ -68,44 +66,12 @@ class MTV():
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
-                if meta.get('mkbrr', False):
-                    tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
+                meta['max_piece_size'] = '8'
+                tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
+                torrent_create = f"[{self.tracker}]"
 
-                    # Create the torrent with the tracker URL
-                    torrent_create = f"[{self.tracker}]"
-                    create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
-                    torrent_filename = "[MTV]"
-
-                    await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-                else:
-                    meta['max_piece_size'] = '8'
-                    if meta['is_disc']:
-                        include = []
-                        exclude = []
-                    else:
-                        include = ["*.mkv", "*.mp4", "*.ts"]
-                        exclude = ["*.*", "*sample.mkv", "!sample*.*"]
-
-                    new_torrent = CustomTorrent(
-                        meta=meta,
-                        path=Path(meta['path']),
-                        trackers=["https://fake.tracker"],
-                        source="Audionut",
-                        private=True,
-                        exclude_globs=exclude,  # Ensure this is always a list
-                        include_globs=include,  # Ensure this is always a list
-                        creation_date=datetime.now(),
-                        comment="Created by Upload Assistant",
-                        created_by="Upload Assistant"
-                    )
-
-                    new_torrent.piece_size = 8 * 1024 * 1024
-                    new_torrent.validate_piece_size()
-                    new_torrent.generate(callback=torf_cb, interval=5)
-                    new_torrent.write(torrent_file_path, overwrite=True)
-
-                    torrent_filename = "[MTV]"
-                    await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+                create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url)
+                await common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
@@ -269,7 +235,7 @@ class MTV():
     async def edit_group_desc(self, meta):
         description = ""
         if meta['imdb_id'] != 0:
-            description += f"https://www.imdb.com/title/tt{meta['imdb']}"
+            description += str(meta.get('imdb_info', {}).get('imdb_url', ''))
         if meta['tmdb'] != 0:
             description += f"\nhttps://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}"
         if meta['tvdb_id'] != 0:
@@ -408,7 +374,7 @@ class MTV():
         tags = []
         # Genres
         # MTV takes issue with some of the pulled TMDB tags, and I'm not hand checking and attempting
-        # to regex however many tags need changing, so they're just geting skipped
+        # to regex however many tags need changing, so they're just getting skipped
         # tags.extend([x.strip(', ').lower().replace(' ', '.') for x in meta['genres'].split(',')])
         # Resolution
         tags.append(meta['resolution'].lower())

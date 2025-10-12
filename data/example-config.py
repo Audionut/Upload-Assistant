@@ -269,6 +269,10 @@ config = {
         # predb is not consistent, can timeout, but can find some releases not found on SRRDB
         "check_predb": False,
 
+        # Set true to prefer torrents with piece size <= 16 MiB when searching for existing torrents in clients
+        # Does not override MTV preference for small pieces
+        "prefer_max_16_torrent": False,
+
     },
 
     # these are used for DB links on AR
@@ -440,6 +444,8 @@ config = {
             "announce_url": "https://tracker.funfile.org:2711/<PASSKEY>/announce",
             # Set to True if you want to check whether your upload fulfills corresponding requests. This may slightly slow down the upload process.
             "check_requests": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "FL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -490,6 +496,8 @@ config = {
             # cookies need to be in netscape format and need to be in data/cookies/HDS.txt
             "announce_url": "http://hd-space.pw/announce.php?pid=<PASSKEY>",
             "anon": False,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HDT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -507,6 +515,8 @@ config = {
             "url": "https://hd-torrents.me/",
             "anon": False,
             "announce_url": "https://hdts-announce.ru/announce.php?pid=<PASS_KEY/PID>",
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "HHD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -744,6 +754,12 @@ config = {
             "api_upload": True,
             # You can find your passkey at your profile (https://www.torrentleech.org/profile/[YourUserName]/view) -> Torrent Passkey
             "passkey": "",
+            "anon": False,
+            # Rehost images to the TL image host. Does not work with the API upload method.
+            # Keep in mind that screenshots are only anonymous if you enable the "Anonymous Gallery Uploads" option in your profile settings.
+            "img_rehost": True,
+            # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
+            "full_mediainfo": False,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

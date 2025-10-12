@@ -3,10 +3,12 @@ import aiofiles
 import http.cookiejar
 import httpx
 import os
+import platform
 import re
 from bs4 import BeautifulSoup
-from pymediainfo import MediaInfo
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 from urllib.parse import urlparse
 
@@ -26,10 +28,8 @@ class HDT:
         self.torrent_url = f'{self.base_url}/details.php?id='
         self.announce_url = self.config['TRACKERS'][self.tracker]['announce_url']
         self.banned_groups = []
-        self.ua_name = f'Upload Assistant {self.common.get_version()}'.strip()
-        self.signature = f'\n[center][url=https://github.com/Audionut/Upload-Assistant]Created by {self.ua_name}[/url][/center]'
         self.session = httpx.AsyncClient(headers={
-            'User-Agent': self.ua_name
+            'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
     async def load_cookies(self, meta):
@@ -88,6 +88,9 @@ class HDT:
             return False
         except httpx.RequestError as e:
             console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
+            return False
+        except Exception as e:
+            console.print(f'{self.tracker}: Unexpected error validating credentials: {e}')
             return False
 
     async def get_category_id(self, meta):
@@ -169,97 +172,83 @@ class HDT:
         hdt_name = hdt_name.replace(':', '').replace('..', ' ').replace('  ', ' ')
         return hdt_name
 
-    def get_links(self, movie, subheading, heading_end):
-        description = ""
-        description += "\n" + subheading + "Links" + heading_end + "\n"
-        if 'IMAGES' in self.config:
-            if movie['tmdb'] != 0:
-                description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
-            if movie['tvdb_id'] != 0:
-                description += f" [URL=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]"
-            if movie['tvmaze_id'] != 0:
-                description += f" [URL=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]"
-            if movie['mal_id'] != 0:
-                description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
-        else:
-            if movie['tmdb'] != 0:
-                description += f"\nhttps://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}"
-            if movie['tvdb_id'] != 0:
-                description += f"\nhttps://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series"
-            if movie['tvmaze_id'] != 0:
-                description += f"\nhttps://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}"
-            if movie['mal_id'] != 0:
-                description += f"\nhttps://myanimelist.net/anime/{str(movie['mal_id'])}"
-
-        description += "\n\n"
-        return description
-
     async def edit_desc(self, meta):
-        subheading = '[COLOR=RED][size=4]'
-        heading_end = '[/size][/COLOR]'
-        description_parts = []
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        desc_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'DESCRIPTION.txt')
-        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
-            description_parts.append(await f.read())
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        media_info_block = None
+        # Logo
+        logo_resize_url = meta.get('tmdb_logo', '')
+        if logo_resize_url:
+            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
-        if meta.get('is_disc') == 'BDMV':
-            bd_info = meta.get('discs', [{}])[0].get('summary', '')
-            if bd_info:
-                media_info_block = f'[left][font=consolas]{bd_info}[/font][/left]'
-        else:
-            if meta.get('filelist'):
-                video = meta['filelist'][0]
-                mi_template_path = os.path.abspath(os.path.join(meta['base_dir'], 'data', 'templates', 'MEDIAINFO.txt'))
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
 
-                if os.path.exists(mi_template_path):
-                    media_info = MediaInfo.parse(
-                        video,
-                        output='STRING',
-                        full=False,
-                        mediainfo_options={'inform': f'file://{mi_template_path}'}
-                    )
-                    media_info = media_info.replace('\r\n', '\n')
-                    media_info_block = f'[left][font=consolas]{media_info}[/font][/left]'
-                else:
-                    console.print('[bold red]Couldn\'t find the MediaInfo template')
-                    console.print('[green]Using normal MediaInfo for the description.')
+            if episode_image:
+                desc_parts.append(f"[center][img]{episode_image}[/img][/center]")
 
-                    cleanpath_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'MEDIAINFO_CLEANPATH.txt')
-                    async with aiofiles.open(cleanpath_path, 'r', encoding='utf-8') as MI:
-                        media_info_block = f'[left][font=consolas]{await MI.read()}[/font][/left]'
+            desc_parts.append(f'[center]{episode_overview}[/center]')
 
-        if media_info_block:
-            description_parts.append(media_info_block)
+        # File information
+        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        if mediainfo:
+            desc_parts.append(f'[left][font=consolas]{mediainfo}[/font][/left]')
 
-        description_parts.append(self.get_links(meta, subheading, heading_end))
+        bdinfo = await builder.get_bdinfo_section(meta)
+        if bdinfo:
+            desc_parts.append(f'[left][font=consolas]{bdinfo}[/font][/left]')
 
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
+
+        # Screenshots
         images = meta.get('image_list', [])
         if images:
             screenshots_block = ''
-            for i, image in enumerate(images, start=1):
-                img_url = image.get('img_url', '')
-                raw_url = image.get('raw_url', '')
+            for image in images:
+                screenshots_block += f"<a href='{image['raw_url']}'><img src='{image['img_url']}' height=137></a> "
+            desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
-                screenshots_block += (
-                    f"<a href='{raw_url}'><img src='{img_url}' height=137></a> "
-                )
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
-                if i % 3 == 0:
-                    screenshots_block += '\n'
-            description_parts.append(f'[center]{screenshots_block}[/center]')
+        # Signature
+        desc_parts.append(f"[right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/right]")
 
-        description_parts.append(self.signature)
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
-        final_description = '\n'.join(description_parts)
+        bbcode = BBCODE()
+        description = description.replace('[user]', '').replace('[/user]', '')
+        description = description.replace('[align=left]', '').replace('[/align]', '')
+        description = description.replace('[align=right]', '').replace('[/align]', '')
+        description = bbcode.remove_sub(description)
+        description = bbcode.remove_sup(description)
+        description = description.replace('[alert]', '').replace('[/alert]', '')
+        description = description.replace('[note]', '').replace('[/note]', '')
+        description = description.replace('[hr]', '').replace('[/hr]', '')
+        description = description.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
+        description = description.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
+        description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
+        description = description.replace('[ul]', '').replace('[/ul]', '')
+        description = description.replace('[ol]', '').replace('[/ol]', '')
+        description = bbcode.convert_spoiler_to_hide(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = bbcode.remove_spoiler(description)
+        description = bbcode.remove_extra_lines(description)
 
-        output_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f'[{self.tracker}]DESCRIPTION.txt')
-        async with aiofiles.open(output_path, 'w', encoding='utf-8') as description_file:
-            await description_file.write(final_description)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        return final_description
+        return description
 
     async def search_existing(self, meta, disctype):
         if meta['resolution'] not in ['2160p', '1080p', '1080i', '720p']:
@@ -363,7 +352,7 @@ class HDT:
 
         # IMDB
         if int(meta.get('imdb_id')) != 0:
-            data['infosite'] = f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}/"
+            data['infosite'] = str(meta.get('imdb_info', {}).get('imdb_url', '') + '/')
 
         # Full Season Pack
         if int(meta.get('tv_pack', '0')) != 0:

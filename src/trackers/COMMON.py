@@ -40,6 +40,11 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
+    async def async_input(self, prompt):
+        """Gets user input in a non-blocking way using asyncio.to_thread"""
+        user_input = await asyncio.to_thread(input, prompt)
+        return user_input.strip()
+
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
@@ -1033,13 +1038,6 @@ class COMMON():
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-                    if imdb != 0:
-                        imdb_str = str(f'tt{imdb}').zfill(7)
-                    else:
-                        imdb_str = None
-
-                    console.print(f"[green]Valid IDs found from {tracker}: TMDb: {tmdb}, IMDb: {imdb_str}, TVDb: {tvdb}, MAL: {mal}[/green]")
-
             if tmdb or imdb or tvdb:
                 if not id:
                     # Only prompt the user for ID selection if not searching by ID
@@ -1406,24 +1404,6 @@ class COMMON():
 
             bbcode_output += "\n"
             return bbcode_output
-
-    def get_version(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        version_file_path = os.path.join(project_root, 'data', 'version.py')
-        if not os.path.isfile(version_file_path):
-            return ''
-        try:
-            with open(version_file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
-            if match:
-                return match.group(1)
-        except OSError as e:
-            print(f"Error reading version file: {e}")
-            return ''
-
-        return ''
 
     async def get_bdmv_mediainfo(self, meta, remove=None):
         mediainfo = ''

@@ -23,7 +23,7 @@ class DP(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            'aXXo', 'BANDOLEROS', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL',
+            'ARCADE', 'aXXo', 'BANDOLEROS', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL',
             'FaNGDiNG0', 'FiSTER', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime', 'iHYTECH', 'ION10',
             'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD',
             'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
@@ -74,7 +74,8 @@ class DP(UNIT3D):
             logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
             if logo_path:
                 meta['logo'] = logo_path
-        await self.common.unit3d_edit_desc(meta, self.tracker, self.signature)
+        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
         return {'description': desc}

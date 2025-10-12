@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import httpx
-import os
-import re
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
+from src.trackers.COMMON import COMMON
 
 
-class DC():
+class DC:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -26,7 +26,6 @@ class DC():
         self.session = httpx.AsyncClient(headers={
             'X-API-KEY': self.api_key
         }, timeout=30.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
 
     async def mediainfo(self, meta):
         if meta.get('is_disc') == 'BDMV':
@@ -39,26 +38,39 @@ class DC():
         return mediainfo
 
     async def generate_description(self, meta):
-        base_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        dc_desc = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        description_parts = []
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        # BDInfo
-        tech_info = ''
-        if meta.get('is_disc') == 'BDMV':
-            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, 'r', encoding='utf-8') as f:
-                    tech_info = f.read()
+        # Logo
+        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        if logo and logo_size:
+            desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
 
-        if tech_info:
-            description_parts.append(f'{tech_info}')
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
 
-        if os.path.exists(base_desc):
-            with open(base_desc, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+            if episode_image:
+                desc_parts.append(f"[center][img=300]{episode_image}[/img][/center]")
+
+            desc_parts.append(f'[center]{episode_overview}[/center]')
+
+        # File information
+        desc_parts.append(await builder.get_bdinfo_section(meta))
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"[nfo]{meta.get('description_nfo_content')}[/nfo]")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
 
         # Screenshots
         if f'{self.tracker}_images_key' in meta:
@@ -75,43 +87,41 @@ class DC():
                 if i % 2 == 0:
                     screenshots_block += '\n'
             screenshots_block += '\n[/center]'
-            description_parts.append(screenshots_block)
+            desc_parts.append(screenshots_block)
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header)
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
-        if self.signature:
-            description_parts.append(self.signature)
+        # Signature
+        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")
 
-        final_description = '\n\n'.join(filter(None, description_parts))
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         from src.bbcode import BBCODE
         bbcode = BBCODE()
-        desc = final_description
-        desc = desc.replace('[user]', '').replace('[/user]', '')
-        desc = desc.replace('[align=left]', '').replace('[/align]', '')
-        desc = desc.replace('[right]', '').replace('[/right]', '')
-        desc = desc.replace('[align=right]', '').replace('[/align]', '')
-        desc = desc.replace('[sup]', '').replace('[/sup]', '')
-        desc = desc.replace('[sub]', '').replace('[/sub]', '')
-        desc = desc.replace('[alert]', '').replace('[/alert]', '')
-        desc = desc.replace('[note]', '').replace('[/note]', '')
-        desc = desc.replace('[hr]', '').replace('[/hr]', '')
-        desc = desc.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
-        desc = desc.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
-        desc = desc.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
-        desc = desc.replace('[ul]', '').replace('[/ul]', '')
-        desc = desc.replace('[ol]', '').replace('[/ol]', '')
-        desc = re.sub(r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]', r'[nfo]\1[/nfo]', desc, flags=re.DOTALL)
-        desc = re.sub(r'\[img(?!=\d+)[^\]]*\]', '[img]', desc, flags=re.IGNORECASE)
-        desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
-        desc = bbcode.convert_comparison_to_centered(desc, 1000)
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
+        description = description.replace('[user]', '').replace('[/user]', '')
+        description = description.replace('[align=left]', '').replace('[/align]', '')
+        description = description.replace('[right]', '').replace('[/right]', '')
+        description = description.replace('[align=right]', '').replace('[/align]', '')
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
+        description = description.replace('[alert]', '').replace('[/alert]', '')
+        description = description.replace('[note]', '').replace('[/note]', '')
+        description = description.replace('[hr]', '').replace('[/hr]', '')
+        description = description.replace('[h1]', '[u][b]').replace('[/h1]', '[/b][/u]')
+        description = description.replace('[h2]', '[u][b]').replace('[/h2]', '[/b][/u]')
+        description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
+        description = description.replace('[ul]', '').replace('[/ul]', '')
+        description = description.replace('[ol]', '').replace('[/ol]', '')
+        description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = description.strip()
+        description = bbcode.remove_extra_lines(description)
 
-        with open(dc_desc, 'w', encoding='utf-8') as f:
-            f.write(desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        return desc
+        return description
 
     async def get_category_id(self, meta):
         resolution = meta.get('resolution', '')

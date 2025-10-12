@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import cli_ui
 
-from difflib import SequenceMatcher
-
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -58,6 +56,10 @@ class BLU(UNIT3D):
                 else:
                     return False
 
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
+
         return should_continue
 
     async def get_name(self, meta):
@@ -66,15 +68,16 @@ class BLU(UNIT3D):
             blu_name = blu_name.replace(f"{meta['episode_title']} {meta['resolution']}", f"{meta['resolution']}", 1)
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+        imdb_aka = meta.get('imdb_info', {}).get('aka', "")
         year = str(meta.get('year', ""))
         aka = meta.get('aka', "")
-
         if imdb_name and imdb_name != "":
-            difference = SequenceMatcher(None, imdb_name, aka).ratio()
-            if difference >= 0.7 or not aka or aka in imdb_name:
-                if meta['aka'] != "":
-                    blu_name = blu_name.replace(f"{meta['aka']} ", "", 1)
+            if aka:
+                blu_name = blu_name.replace(f"{aka} ", "", 1)
             blu_name = blu_name.replace(f"{meta['title']}", imdb_name, 1)
+
+            if imdb_aka and imdb_aka != "" and imdb_aka != imdb_name and not meta.get('no_aka', False):
+                blu_name = blu_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
 
         if not meta.get('category') == "TV" and imdb_year and imdb_year != "" and year and year != "" and imdb_year != year:
             blu_name = blu_name.replace(f"{year}", imdb_year, 1)

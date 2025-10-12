@@ -7,7 +7,9 @@ import json
 import os
 import platform
 from pathlib import Path
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
 
@@ -29,7 +31,6 @@ class ANT:
             'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'TBS', 'Telly', 'TM', 'UPiNSMOKE', 'URANiME', 'WAF', 'xRed',
             'XS', 'YIFY', 'YTS', 'Zeus', 'ZKBL', 'ZmN', 'ZMNT'
         ]
-        self.signature = None
         pass
 
     async def get_flags(self, meta):
@@ -58,12 +59,16 @@ class ANT:
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
+        if meta.get('mkbrr', False):
+            tracker_url = self.config['TRACKERS']['ANT'].get('announce_url', "https://fake.tracker").strip()
+        else:
+            tracker_url = ''
 
         # Trigger regeneration automatically if size constraints aren't met
         if torrent_file_size_kib > 250:  # 250 KiB
             console.print("[yellow]Existing .torrent exceeds 250 KiB and will be regenerated to fit constraints.")
-            meta['max_piece_size'] = '256'  # 256 MiB
-            create_torrent(meta, Path(meta['path']), "ANT")
+            meta['max_piece_size'] = '128'  # 128 MiB
+            create_torrent(meta, Path(meta['path']), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
         await self.common.edit_torrent(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
@@ -166,11 +171,47 @@ class ANT:
         return mediainfo
 
     async def edit_desc(self, meta):
-        if meta.get('is_disc') == 'BDMV':
-            bd_info = meta.get('discs', [{}])[0].get('summary', '')
-            if bd_info:
-                return f'[spoiler=BDInfo][pre]{bd_info}[/pre][/spoiler]'
-        return
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Avoid unnecessary descriptions, adding only the logo if there is a user description
+        user_desc = await builder.get_user_description(meta)
+        if user_desc:
+            # Custom Header
+            desc_parts.append(await builder.get_custom_header(self.tracker))
+
+            # Logo
+            logo_resize_url = meta.get('tmdb_logo', '')
+            if logo_resize_url:
+                desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
+
+        # BDinfo
+        bdinfo = await builder.get_bdinfo_section(meta)
+        if bdinfo:
+            desc_parts.append(f"[spoiler=BDInfo][pre]{bdinfo}[/pre][/spoiler]")
+
+        if user_desc:
+            # User description
+            desc_parts.append(user_desc)
+
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
+        bbcode = BBCODE()
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_img_resize(description)
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
+        description = description.replace('•', '-').replace('’', "'").replace('–', '-')
+        description = bbcode.remove_extra_lines(description)
+        description = description.strip()
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
+
+        return description
 
     async def search_existing(self, meta, disctype):
         if meta.get('category') == "TV":

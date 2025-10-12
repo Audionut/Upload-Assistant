@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-import asyncio
+import aiofiles
 import httpx
 import json
 import os
 import re
 import unicodedata
 from bs4 import BeautifulSoup
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.rehostimages import check_hosts
 from src.tmdb import get_tmdb_localized_data
@@ -25,7 +27,6 @@ class GPW():
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
         self.banned_groups = [
             'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
             'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
@@ -51,24 +52,36 @@ class GPW():
 
         return await self.common.parseCookieFile(cookie_file)
 
-    def load_localized_data(self, meta):
-        localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
+    async def load_localized_data(self, meta):
+        localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
+        main_ch_data = {}
+        data = {}
 
         if os.path.isfile(localized_data_file):
-            with open(localized_data_file, "r", encoding="utf-8") as f:
-                self.tmdb_data = json.load(f)
-        else:
-            self.tmdb_data = {}
+            try:
+                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    data = json.loads(content)
+            except json.JSONDecodeError:
+                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                data = {}
+            except Exception as e:
+                print(f'Error reading file {localized_data_file}: {e}')
+                data = {}
 
-    async def ch_tmdb_data(self, meta):
-        brazil_data_in_meta = self.tmdb_data.get('zh-cn', {}).get('main')
-        if brazil_data_in_meta:
-            return brazil_data_in_meta
+        main_ch_data = data.get('zh-cn', {}).get('main')
 
-        data = await get_tmdb_localized_data(meta, data_type='main', language='zh-cn', append_to_response='credits')
-        self.load_localized_data(meta)
+        if not main_ch_data:
+            main_ch_data = await get_tmdb_localized_data(
+                meta,
+                data_type='main',
+                language='zh-cn',
+                append_to_response='credits'
+            )
 
-        return data
+        self.tmdb_data = main_ch_data
+
+        return
 
     async def get_container(self, meta):
         container = meta.get('container', '')
@@ -163,86 +176,67 @@ class GPW():
         return 'Outro'
 
     async def get_title(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
-
-        title = tmdb_data.get('name') or tmdb_data.get('title') or ''
+        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
     async def get_release_desc(self, meta):
-        description = []
-
-        # Disc
-        region = meta.get('region', '')
-        distributor = meta.get('distributor', '')
-        if region or distributor:
-            disc_info = ''
-            if region:
-                disc_info += f'[b]Disc Region:[/b] {region}\n'
-            if distributor:
-                disc_info += f'[b]Disc Distributor:[/b] {distributor.title()}'
-            description.append(disc_info)
-
-        base_desc = ''
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(base_desc_path) and os.path.getsize(base_desc_path) > 0:
-            with open(base_desc_path, 'r', encoding='utf-8') as file:
-                base_desc = file.read().strip()
-
-            if base_desc:
-                print('\nFound existing description:\n')
-                print(base_desc)
-                user_input = input('Do you want to use this description? (y/n): ')
-
-                if user_input.lower() == 'y':
-                    description.append(base_desc)
-                    print('Using existing description.')
-                else:
-                    print('Ignoring existing description.')
-
-        # Screenshots
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
         await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
+
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
+
+        # Logo
+        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        if logo and logo_size:
+            desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
+
+        # NFO
+        if meta.get('description_nfo_content', ''):
+            desc_parts.append(f"[pre]{meta.get('description_nfo_content')}[/pre]")
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
+
+        # Screenshots
         if f'{self.tracker}_images_key' in meta:
             images = meta[f'{self.tracker}_images_key']
         else:
             images = meta['image_list']
         if images:
-            screenshots_block = '[center]\n'
-            for i, image in enumerate(images, start=1):
-                screenshots_block += f"[img]{image['raw_url']}[/img] "
-                if i % 2 == 0:
-                    screenshots_block += '\n'
-            screenshots_block += '\n[/center]'
-            description.append(screenshots_block)
+            screenshots_block = ''
+            for image in images:
+                screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description.append(custom_description_header + '\n')
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
-        if self.signature:
-            description.append(self.signature)
+        # Signature
+        desc_parts.append(f"[align=right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/align]")
 
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
-            from src.bbcode import BBCODE
-            bbcode = BBCODE()
-            desc = '\n\n'.join(filter(None, description))
-            desc = desc.replace('[sup]', '').replace('[/sup]', '')
-            desc = desc.replace('[sub]', '').replace('[/sub]', '')
-            desc = bbcode.remove_spoiler(desc)
-            desc = bbcode.convert_code_to_quote(desc)
-            desc = re.sub(r'\[(right|center|left)\]', lambda m: f"[align={m.group(1)}]", desc)
-            desc = re.sub(r'\[/(right|center|left)\]', "[/align]", desc)
-            final_description = re.sub(r'\n{3,}', '\n\n', desc)
-            descfile.write(final_description)
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
-        return final_description
+        bbcode = BBCODE()
+        description = bbcode.remove_sup(description)
+        description = bbcode.remove_sub(description)
+        description = bbcode.convert_to_align(description)
+        description = bbcode.remove_extra_lines(description)
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
+
+        return description
 
     async def get_trailer(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
-        video_results = tmdb_data.get('videos', {}).get('results', [])
+        video_results = self.tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
 
@@ -273,7 +267,7 @@ class GPW():
                 )
 
         if not tags:
-            tags = await asyncio.to_thread(input, f'Enter the genres (in {self.tracker} format): ')
+            tags = await self.common.async_input(prompt=f'Enter the genres (in {self.tracker} format): ')
 
         return tags
 
@@ -583,17 +577,16 @@ class GPW():
         return None
 
     async def get_additional_data(self, meta):
-        tmdb_data = await self.ch_tmdb_data(meta)
         poster_url = ''
         while True:
-            poster_url = input(f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n").strip()
+            poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
             if any(host in poster_url for host in self.approved_image_hosts):
                 break
             else:
                 console.print('[red]Invalid host. Please use a URL from the allowed hosts.[/red]')
 
         data = {
-            'desc': tmdb_data.get('overview', ''),
+            'desc': self.tmdb_data.get('overview', ''),
             'image': poster_url,
             'imdb': meta.get('imdb_info', {}).get('imdbID'),
             'maindesc': meta.get('overview', ''),
@@ -603,11 +596,11 @@ class GPW():
             'tags': await self.get_tags(meta),
             'year': meta.get('year'),
         }
-        data.update(self._get_artist_data(meta))
+        data.update(await self._get_artist_data(meta))
 
         return data
 
-    def _get_artist_data(self, meta) -> Dict[str, str]:
+    async def _get_artist_data(self, meta) -> Dict[str, str]:
         directors = meta.get('imdb_info', {}).get('directors', [])
         directors_id = meta.get('imdb_info', {}).get('directors_id', [])
 
@@ -617,9 +610,9 @@ class GPW():
             chinese_name = ''
         else:
             console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
-            imdb_id = input('Enter Director IMDb ID (e.g., nm0000138): ')
-            english_name = input('Enter Director English name: ')
-            chinese_name = input('Enter Director Chinese name (optional, press Enter to skip): ')
+            imdb_id = await self.common.async_input(prompt='Enter Director IMDb ID (e.g., nm0000138): ')
+            english_name = await self.common.async_input(prompt='Enter Director English name: ')
+            chinese_name = await self.common.async_input(prompt='Enter Director Chinese name (optional, press Enter to skip): ')
 
         post_data = {
             'artist_ids[]': imdb_id,
@@ -635,7 +628,7 @@ class GPW():
         imdb_info = meta.get('imdb_info', {})
         if imdb_info:
             imdbType = imdb_info.get('type', 'movie').lower()
-            if imdbType in ("movie", "tv movie", 'tvmovie'):
+            if imdbType in ("movie", "tv movie", 'tvmovie', 'video'):
                 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
                     movie_type = '1'  # Feature Film
                 else:
@@ -720,7 +713,7 @@ class GPW():
         return flags
 
     async def fetch_data(self, meta, disctype):
-        self.load_localized_data(meta)
+        await self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
         container = await self.get_container(meta)
@@ -786,6 +779,7 @@ class GPW():
         status_message = ''
 
         if not meta.get('debug', False):
+            response_data = ''
             torrent_id = ''
             upload_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=upload'
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -793,16 +787,21 @@ class GPW():
             with open(torrent_path, 'rb') as torrent_file:
                 files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
 
-                async with httpx.AsyncClient(timeout=30) as client:
-                    response = await client.post(url=upload_url, files=files, data=data)
-                    data = response.json()
+                try:
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        response = await client.post(url=upload_url, files=files, data=data)
+                        response_data = response.json()
 
-                if data.get('status') == 200 and 'torrent_id' in data.get('response', {}):
-                    torrent_id = str(data['response']['torrent_id'])
-                    status_message = f'Uploaded successfully. {data}'
-                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                else:
-                    status_message = f'data error - It may have uploaded, go check. {data}'
+                        torrent_id = str(response_data['response']['torrent_id'])
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        status_message = 'Torrent uploaded successfully.'
+
+                except httpx.TimeoutException:
+                    meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
+                except httpx.RequestError as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                except Exception as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
                     return
 
             await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)

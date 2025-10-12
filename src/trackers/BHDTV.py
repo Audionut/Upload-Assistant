@@ -81,7 +81,7 @@ class BHDTV():
             'sdescr': " ",
             'descr': media_info if bd_dump is None else "Disc so Check Mediainfo dump ",
             'screen': desc,
-            'url': f"https://www.tvmaze.com/shows/{meta['tvmaze_id']}" if meta['category'] == 'TV' else f"https://www.imdb.com/title/tt{meta['imdb_id']}",
+            'url': f"https://www.tvmaze.com/shows/{meta['tvmaze_id']}" if meta['category'] == 'TV' else str(meta.get('imdb_info', {}).get('imdb_url', '')),
             'format': 'json'
         }
 

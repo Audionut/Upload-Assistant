@@ -1,4 +1,91 @@
-__version__ = "v6.0.1"
+__version__ = "v6.1.1"
+
+"""
+Release Notes for version v6.1.1 (2025-10-11):
+
+# ## What's Changed
+# 
+# * fix(BJS): NoneType error (#880) by @wastaken7 in 88e7f40
+# * fix: ASC IMDb link, signatures (#884) by @wastaken7 in f555acf
+# * fix: anime tagging by @Audionut in 1ebb00c
+# * fix: skip checking AV1 encode settings by @Audionut in 4741097
+# * tvmaze episode data use meta objects by @Audionut in d805d85
+# * tvmaze - rely on meta object for additional check by @Audionut in f82babf
+# * set meta object by @Audionut in 968cee7
+# * unit3d bbcode parser, white space handling by @Audionut in 55f636c
+# * BHD fix empty returns by @Audionut in 63d49d1
+# * Revert "unit3d bbcode parser, white space handling" by @Audionut in b22b12d
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.1.0...v6.1.1
+"""
+
+
+"""
+Release Notes for version v6.1.0 (2025-10-10):
+
+# 
+# ## RELEASE NOTES
+#  - Some large refactoring of description type handling for some sites, to speed the upload process.
+#  - The actual ffmpeg process now respects process_limit set via config.py.
+#  - The author has seen some issues with latest ffmpeg versions. August based releases work fine here.
+# 
+# ## New config options - see example.py
+#  - prefer_max_16_torrent which will choose an 16 MiB torrent or lower when finding a suitable existing torrent file to use.
+#  - full_mediainfo in some tracker sections, to choose whether to use the full mediainfo or not.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * fix(BLU): derived handling not needed any longer by @Audionut in ca2f507
+# * fix: frame overlay by @Audionut in b40094f
+# * remove tags from arrs by @Audionut in 9c90277
+# * BLU: fix double aka by @Audionut in d93805c
+# * allow debug without apikey by @Audionut in bd27a55
+# * BLU : rule compliance by @Audionut in 9d8a2b8
+# * BLU: correct group capitalization by @Audionut in 1a020d2
+# * PTP: fix getting groupID when multiple search results by @Audionut in e39b95c
+# * fx: sticky id args through functions by @Audionut in 7a018b1
+# * fix: custom link dir name by @Audionut in bbcd94f
+# * Update to ULCX banned groups (#858) by @Zips-sipZ in ebef94b
+# * fix tracker search return by @Audionut in edb10d0
+# * unattended skip by @Audionut in 4dfab79
+# * ACM fix description by @Audionut in e9f1627
+# * fix: don't guessit tags from files by @Audionut in 3c27387
+# * catch arr type file renames by @Audionut in 98ac5c6
+# * refactor bdmv MI handling (#853) by @Audionut in 966158d
+# * fix: site based language handling by @Audionut in 3592157
+# * fix(AVISTAZ): torrent naming conventions, media code search, tokens (#862) by @wastaken7 in 46c8ee0
+# * fix(AVISTAZ): ensure year is converted to string when modifying upload name (#863) by @wastaken7 in 92731d2
+# * ULCX: aka is aka except when it's not aka because other aka is aka by @Audionut in aecb72e
+# * AL: return empty string for mal_rating (#866) by @WOSSFOSS in 087d7a1
+# * feat: add region and distributor information to get_confirmation (#868) by @wastaken7 in b2701a5
+# * Update banned groups in DP.py (#870) by @emb3r in 0502d68
+# * Both [code] and [quote] should coexist in PTP descriptions (#869) by @GizmoBal in df22996
+# * fix: IMDb returns title as aka by @Audionut in 417c932
+# * BLU IMDb naming by @Audionut in f519e23
+# * fix warmup config by @Audionut in d15a7de
+# * wrap capture task in semaphore by @Audionut in 3a4c5f7
+# * some tracker specific in torrent creation by @Audionut in 91fe360
+# * fix: piece size preference in auto torrent and add 16 MiB option by @Audionut in 9a6ce33
+# * TVC: restrict image hosts by @Audionut in 838fc4b
+# * fix torrent validation logic by @Audionut in 3de9fa6
+# * remove pointless print by @Audionut in 240f828
+# * fix(BJS): remove unnecessary raise_for_status call in response handling (#873) by @wastaken7 in 76431f9
+# * validate encode settings (#871) by @Audionut in 2f804c6
+# * HUNO: fix internal state by @Audionut in 5d2e8da
+# * feature: add configurable disc requirements per tracker (#878) by @TheDarkMan in d1b18bf
+# * feat(SAM): add name processing and add additional checks for Portuguese audio/subtitle tracks (#879) by @wastaken7 in 1f2c41a
+# * Simplify tracker specific torrent recreation by @Audionut in 65b62d7
+# * fix: region when None by @Audionut in e52b4ff
+# * print tracker name changes by @Audionut in eefa20c
+# * Enhance metadata handling, description building, and refactor tracker integrations (#860) by @wastaken7 in ee1885b
+# * fix versioning by @Audionut in 00eae1c
+# * release notes by @Audionut in 1e59d0d
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.0.1...v6.1.0
+"""
+
 
 """
 Release Notes for version v6.0.1 (2025-10-04):

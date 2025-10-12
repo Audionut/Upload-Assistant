@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import aiofiles
 import asyncio
 import glob
 import httpx
@@ -8,16 +9,18 @@ import re
 import unicodedata
 from .COMMON import COMMON
 from bs4 import BeautifulSoup
-from pymediainfo import MediaInfo
+from src.bbcode import BBCODE
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 
 
-class FF(COMMON):
+class FF:
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.common = COMMON(config)
         self.tracker = "FF"
-        self.banned_groups = [""]
+        self.banned_groups = []
         self.source_flag = "FunFile"
         self.base_url = "https://www.funfile.org"
         self.torrent_url = "https://www.funfile.org/details.php?id="
@@ -26,7 +29,6 @@ class FF(COMMON):
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30.0)
-        self.signature = "[center][url=https://github.com/Audionut/Upload-Assistant]Created by Upload Assistant[/url][/center]"
 
     async def validate_credentials(self, meta):
         self.cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -35,7 +37,7 @@ class FF(COMMON):
 
         test_url = f"{self.base_url}/upload.php"
         try:
-            self.session.cookies.update(await self.parseCookieFile(self.cookie_file))
+            self.session.cookies.update(await self.common.parseCookieFile(self.cookie_file))
             response = await self.session.get(test_url, timeout=30)
 
             if response.status_code == 200 and 'login.php' not in str(response.url):
@@ -163,45 +165,41 @@ class FF(COMMON):
                 return []
 
     async def generate_description(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        description_parts = []
+        # Custom Header
+        desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        # MediaInfo/BDInfo
-        tech_info = ""
-        if meta.get('is_disc') != 'BDMV':
-            video_file = meta['filelist'][0]
-            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
-            if os.path.exists(mi_template):
-                try:
-                    media_info = MediaInfo.parse(video_file, output="STRING", full=False, mediainfo_options={"inform": f"file://{mi_template}"})
-                    tech_info = str(media_info)
-                except Exception:
-                    console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
-                    mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                    if os.path.exists(mi_file_path):
-                        with open(mi_file_path, 'r', encoding='utf-8') as f:
-                            tech_info = f.read()
-            else:
-                console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
-                mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                if os.path.exists(mi_file_path):
-                    with open(mi_file_path, 'r', encoding='utf-8') as f:
-                        tech_info = f.read()
-        else:
-            bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, 'r', encoding='utf-8') as f:
-                    tech_info = f.read()
+        # Logo
+        logo_resize_url = meta.get('tmdb_logo', '')
+        if logo_resize_url:
+            desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
-        if tech_info:
-            description_parts.append(tech_info)
+        # TV
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[center]{title}[/center]')
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
-                manual_desc = f.read()
-            description_parts.append(manual_desc)
+            if episode_image:
+                desc_parts.append(f'<a href="{episode_image}" target="_blank"><img src="{episode_image}" width="220"></a>')
+
+            desc_parts.append(f'[center]{episode_overview}[/center]')
+
+        # File information
+        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        if mediainfo:
+            desc_parts.append(f'[pre]{mediainfo}[/pre]')
+
+        bdinfo = await builder.get_bdinfo_section(meta)
+        if bdinfo:
+            desc_parts.append(f'[pre]{bdinfo}[/pre]')
+
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
+
+        # Screenshot Header
+        desc_parts.append(await builder.screenshot_header(self.tracker))
 
         # Screenshots
         images = meta.get('image_list', [])
@@ -213,69 +211,66 @@ class FF(COMMON):
                 screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
             screenshots_block += "[/center]"
 
-            description_parts.append(screenshots_block)
+            desc_parts.append(screenshots_block)
 
-        custom_description_header = self.config['DEFAULT'].get('custom_description_header', '')
-        if custom_description_header:
-            description_parts.append(custom_description_header)
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
-        if self.signature:
-            description_parts.append(self.signature)
+        # Signature
+        desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant][center][size=1]{meta['ua_signature']}[/size][/center][/url]")
 
-        final_description = "\n\n".join(filter(None, description_parts))
-        from src.bbcode import BBCODE
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
+
         bbcode = BBCODE()
-        desc = final_description
-        desc = desc.replace("[user]", "").replace("[/user]", "")
-        desc = desc.replace("[align=left]", "").replace("[/align]", "")
-        desc = desc.replace("[right]", "").replace("[/right]", "")
-        desc = desc.replace("[align=right]", "").replace("[/align]", "")
-        desc = desc.replace("[sup]", "").replace("[/sup]", "")
-        desc = desc.replace("[sub]", "").replace("[/sub]", "")
-        desc = desc.replace("[alert]", "").replace("[/alert]", "")
-        desc = desc.replace("[note]", "").replace("[/note]", "")
-        desc = desc.replace("[hr]", "").replace("[/hr]", "")
-        desc = desc.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
-        desc = desc.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
-        desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
-        desc = desc.replace("[ul]", "").replace("[/ul]", "")
-        desc = desc.replace("[ol]", "").replace("[/ol]", "")
-        desc = desc.replace("[hide]", "").replace("[/hide]", "")
-        desc = desc.replace("•", "-").replace("“", '"').replace("”", '"')
-        desc = re.sub(r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]", r"", desc, flags=re.DOTALL)
-        desc = bbcode.convert_comparison_to_centered(desc, 1000)
-        desc = bbcode.remove_spoiler(desc)
+        description = description.replace("[user]", "").replace("[/user]", "")
+        description = description.replace("[align=left]", "").replace("[/align]", "")
+        description = description.replace("[right]", "").replace("[/right]", "")
+        description = description.replace("[align=right]", "").replace("[/align]", "")
+        description = bbcode.remove_sub(description)
+        description = bbcode.remove_sup(description)
+        description = description.replace("[alert]", "").replace("[/alert]", "")
+        description = description.replace("[note]", "").replace("[/note]", "")
+        description = description.replace("[hr]", "").replace("[/hr]", "")
+        description = description.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
+        description = description.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
+        description = description.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
+        description = description.replace("[ul]", "").replace("[/ul]", "")
+        description = description.replace("[ol]", "").replace("[/ol]", "")
+        description = description.replace("[hide]", "").replace("[/hide]", "")
+        description = description.replace("•", "-").replace("“", '"').replace("”", '"')
+        description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = bbcode.remove_spoiler(description)
 
         # [url][img=000]...[/img][/url]
-        desc = re.sub(
+        description = re.sub(
             r"\[url=(?P<href>[^\]]+)\]\[img=(?P<width>\d+)\](?P<src>[^\[]+)\[/img\]\[/url\]",
             r'<a href="\g<href>" target="_blank"><img src="\g<src>" width="\g<width>"></a>',
-            desc,
+            description,
             flags=re.IGNORECASE
         )
 
         # [url][img]...[/img][/url]
-        desc = re.sub(
+        description = re.sub(
             r"\[url=(?P<href>[^\]]+)\]\[img\](?P<src>[^\[]+)\[/img\]\[/url\]",
             r'<a href="\g<href>" target="_blank"><img src="\g<src>" width="220"></a>',
-            desc,
+            description,
             flags=re.IGNORECASE
         )
 
         # [img=200]...[/img] (no [url])
-        desc = re.sub(
+        description = re.sub(
             r"\[img=(?P<width>\d+)\](?P<src>[^\[]+)\[/img\]",
             r'<img src="\g<src>" width="\g<width>">',
-            desc,
+            description,
             flags=re.IGNORECASE
         )
 
-        desc = re.sub(r'\n{3,}', '\n\n', desc)
+        description = bbcode.remove_extra_lines(description)
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(description)
 
-        return desc.encode("utf-8")
+        return description
 
     def get_type_id(self, meta):
         if meta.get('anime'):
@@ -577,7 +572,7 @@ class FF(COMMON):
                 data.update({
                     'movie_type': self.movie_type(meta),
                     'movie_source': self.movie_source(meta),
-                    'movie_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'movie_imdb': str(meta.get('imdb_info', {}).get('imdb_url', '')),
                     'pack': 0,
                 })
 
@@ -585,7 +580,7 @@ class FF(COMMON):
                 data.update({
                     'tv_type': self.tv_type(meta),
                     'tv_source': self.tv_source(meta),
-                    'tv_imdb': f"https://www.imdb.com/title/{meta.get('imdb_info', {}).get('imdbID', '')}",
+                    'tv_imdb': str(meta.get('imdb_info', {}).get('imdb_url', '')),
                     'pack': 1 if meta.get('tv_pack', 0) else 0,
                 })
 
@@ -593,7 +588,7 @@ class FF(COMMON):
 
     async def upload(self, meta, disctype):
         await self.validate_credentials(meta)
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta, disctype)
         requests = await self.get_requests(meta)
         status_message = ''
@@ -637,7 +632,7 @@ class FF(COMMON):
                     return
 
             await asyncio.sleep(5)  # the tracker takes a while to register the hash
-            await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
 
         else:
             console.print(data)

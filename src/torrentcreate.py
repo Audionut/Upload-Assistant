@@ -58,6 +58,10 @@ def calculate_piece_size(total_size, min_size, max_size, files, meta):
     else:
         piece_size = 128 * 1024 * 1024  # 128 MiB
 
+    if any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP']):
+        if piece_size > 16 * 1024 * 1024:
+            piece_size = 16 * 1024 * 1024
+
     # Enforce minimum and maximum limits
     piece_size = max(min_size, min(piece_size, max_size))
 
@@ -258,6 +262,9 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                     console.print(f"[yellow]Setting mkbrr piece length to 2^{power} ({(2**power) / (1024 * 1024):.2f} MiB)")
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
+
+            if not meta.get('max_piece_size') and tracker_url is None and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
+                cmd.extend(['-m', '27'])
 
             if meta.get('mkbrr_threads') != '0':
                 cmd.extend(["--workers", meta['mkbrr_threads']])

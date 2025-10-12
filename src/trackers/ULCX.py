@@ -37,10 +37,8 @@ class ULCX(UNIT3D):
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    meta['skipping'] = {self.tracker}
                     return False
             else:
-                meta['skipping'] = {self.tracker}
                 return False
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -48,19 +46,15 @@ class ULCX(UNIT3D):
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    meta['skipping'] = {self.tracker}
                     return False
             else:
-                meta['skipping'] = {self.tracker}
                 return False
         if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
             if not meta['unattended']:
                 console.print(f'[bold red]Encodes must be at least 720p resolution for {self.tracker}.[/bold red]')
-            meta['skipping'] = {self.tracker}
             return False
         if meta['bloated'] is True:
             console.print(f"[bold red]Non-English dub not allowed at {self.tracker}[/bold red]")
-            meta['skipping'] = {self.tracker}
             return False
 
         if not meta['is_disc'] == "BDMV":
@@ -69,8 +63,11 @@ class ULCX(UNIT3D):
             if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
                 if not meta['unattended']:
                     console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track.')
-                meta['skipping'] = {self.tracker}
                 return False
+
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
 
         return should_continue
 
@@ -94,7 +91,7 @@ class ULCX(UNIT3D):
             ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
             if meta.get('mal_id', 0) != 0:
                 ulcx_name = ulcx_name
-            elif imdb_aka and imdb_aka != "":
+            elif imdb_aka and imdb_aka != "" and imdb_aka != imdb_name and not meta.get('no_aka', False):
                 ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
         elif meta.get('mal_id', 0) != 0 and aka:
             ulcx_name = ulcx_name.replace(f"{aka} ", "", 1)

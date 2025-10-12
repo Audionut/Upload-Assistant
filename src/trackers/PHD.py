@@ -38,10 +38,6 @@ class PHD(AZTrackerBase):
         if source:
             source = source.strip().lower()
 
-        image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-        if len(image_links) < 3:
-            warnings.append(f'{self.tracker}: At least 3 screenshots are required to upload.')
-
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
             warnings.append(

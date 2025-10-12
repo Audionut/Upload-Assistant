@@ -11,12 +11,22 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackers.COMMON import COMMON
 
+TRACKER_DISC_REQUIREMENTS = {
+    'ULCX': {'region': 'mandatory', 'distributor': 'mandatory'},
+    'SHRI': {'region': 'mandatory', 'distributor': 'optional'}
+}
+
 
 async def get_name(meta):
-    if "ULCX" in meta.get('trackers', []):
-        region, distributor = await missing_disc_info(meta)
-        if region and "SKIPPED" in region or distributor and "SKIPPED" in distributor:
-            meta['trackers'].remove("ULCX")
+    active_trackers = [
+        tracker for tracker in TRACKER_DISC_REQUIREMENTS.keys()
+        if tracker in meta.get('trackers', [])
+    ]
+    if active_trackers:
+        region, distributor, trackers_to_remove = await missing_disc_info(meta, active_trackers)
+        for tracker in trackers_to_remove:
+            if tracker in meta['trackers']:
+                meta['trackers'].remove(tracker)
         if distributor and 'SKIPPED' not in distributor:
             meta['distributor'] = distributor
         if region and 'SKIPPED' not in region:
@@ -50,9 +60,9 @@ async def get_name(meta):
         episode_title = ""
     if meta.get('is_disc', "") == "BDMV":  # Disk
         video_codec = meta.get('video_codec', "")
-        region = meta.get('region', "")
+        region = meta.get('region', "") if meta.get('region', "") is not None else ""
     elif meta.get('is_disc', "") == "DVD":
-        region = meta.get('region', "")
+        region = meta.get('region', "") if meta.get('region', "") is not None else ""
         dvd_size = meta.get('dvd_size', "")
     else:
         video_codec = meta.get('video_codec', "")
@@ -400,47 +410,53 @@ async def multi_replace(text, replacements):
     return text
 
 
-async def missing_disc_info(meta):
+async def missing_disc_info(meta, active_trackers):
     common = COMMON(config=config)
     distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
     region_id = await common.unit3d_region_ids(meta.get('region'))
     region_name = meta.get('region', "")
     distributor_name = meta.get('distributor', "")
+    trackers_to_remove = []
 
     if meta.get('is_disc') == "BDMV":
+        strictest = {'region': 'optional', 'distributor': 'optional'}
+        for tracker in active_trackers:
+            requirements = TRACKER_DISC_REQUIREMENTS.get(tracker, {})
+            if requirements.get('region') == 'mandatory':
+                strictest['region'] = 'mandatory'
+            if requirements.get('distributor') == 'mandatory':
+                strictest['distributor'] = 'mandatory'
         if not region_id:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                try:
-                    region_name = cli_ui.ask_string("ULCX: Region code not found for disc. Please enter it manually (UPPERCASE): ")
-                except EOFError:
-                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
-                    sys.exit(1)
+            region_name = await _prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
+            if region_name and region_name != "SKIPPED":
                 region_id = await common.unit3d_region_ids(region_name)
-                if region_name:
-                    region_name = region_name.upper()
-                else:
-                    region_name = "SKIPPED"
-            else:
-                region_name = "SKIPPED"
         if not distributor_id:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                try:
-                    distributor_name = cli_ui.ask_string("ULCX: Distributor name not found for disc. Please enter it manually (UPPERCASE): ")
-                except EOFError:
-                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
-                    sys.exit(1)
+            distributor_name = await _prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
+            if distributor_name and distributor_name != "SKIPPED":
                 console.print(f"Looking up distributor ID for: {distributor_name}")
                 distributor_id = await common.unit3d_distributor_ids(distributor_name)
                 console.print(f"Found distributor ID: {distributor_id}")
-                if distributor_name:
-                    distributor_name = distributor_name.upper()
-                else:
-                    distributor_name = "SKIPPED"
-            else:
-                distributor_name = "SKIPPED"
 
-    return region_name, distributor_name
+        for tracker in active_trackers:
+            requirements = TRACKER_DISC_REQUIREMENTS.get(tracker, {})
+            if ((requirements.get('region') == 'mandatory' and region_name == "SKIPPED") or
+                    (requirements.get('distributor') == 'mandatory' and distributor_name == "SKIPPED")):
+                trackers_to_remove.append(tracker)
+
+    return region_name, distributor_name, trackers_to_remove
+
+
+async def _prompt_for_field(meta, field_name, is_mandatory):
+    """Prompt user for disc field with appropriate mandatory/optional text."""
+    if meta['unattended'] and not meta.get('unattended_confirm', False):
+        return "SKIPPED"
+    suffix = " (MANDATORY): " if is_mandatory else " (optional, press Enter to skip): "
+    prompt = f"{field_name} not found for disc. Please enter it manually{suffix}"
+    try:
+        value = cli_ui.ask_string(prompt)
+        return value.upper() if value else "SKIPPED"
+    except EOFError:
+        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+        await cleanup()
+        reset_terminal()
+        sys.exit(1)

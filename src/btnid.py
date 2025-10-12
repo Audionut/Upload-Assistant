@@ -97,15 +97,15 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
             except ValueError as e:
                 print(f"[ERROR] Failed to parse BHD response as JSON: {e}")
                 print(f"Response content: {response.text[:200]}...")
-                return meta
+                return 0, 0
     except (httpx.RequestError, httpx.HTTPStatusError) as e:
         print(f"[ERROR] Failed to fetch BHD data: {e}")
-        return meta
+        return 0, 0
 
     if data.get("status_code") == 0 or data.get("success") is False:
         error_message = data.get("status_message", "Unknown BHD API error")
         print(f"[ERROR] BHD API error: {error_message}")
-        return meta
+        return 0, 0
 
     # Handle different response formats from BHD API
     first_result = None
@@ -120,12 +120,11 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
 
     if not first_result:
         print("No valid results found in BHD API response.")
-        return meta
+        return 0, 0
 
     name = first_result.get("name", "").lower()
     if not torrent_id:
         torrent_id = first_result.get("id", 0)
-        print("BHD Torrent ID:", torrent_id)
 
     # Check if description is just "1" indicating we need to fetch it separately
     description_value = first_result.get("description")

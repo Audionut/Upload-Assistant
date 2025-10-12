@@ -1,3 +1,4 @@
+import aiofiles
 import asyncio
 import bbcode
 import bencodepy
@@ -12,6 +13,7 @@ import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from tqdm.asyncio import tqdm
@@ -33,7 +35,6 @@ class AZTrackerBase:
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
-        self.signature = ''
         self.media_code = ''
 
     def get_resolution(self, meta):
@@ -137,7 +138,7 @@ class AZTrackerBase:
 
             if attempt == 0 and not self.media_code:
                 console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
-                user_choice = input(f"{self.tracker}: Do you want to add it to the site database? (y/n): \n").lower()
+                user_choice = await self.common.async_input(prompt=f"{self.tracker}: Do you want to add it to the site database? (y/n): \n")
 
                 if user_choice in ['y', 'yes']:
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
@@ -260,7 +261,7 @@ class AZTrackerBase:
             if warnings:
                 console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    choice = input('Do you want to continue anyway? [y/N]: ').strip().lower()
+                    choice = await self.common.async_input(prompt='Do you want to continue anyway? [y/N]: ')
                     if choice != 'y':
                         meta['skipping'] = f'{self.tracker}'
                         return
@@ -412,7 +413,7 @@ class AZTrackerBase:
                 if missing_audio_languages:
                     console.print('No audio language/s found.')
                     console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input = console.input('[bold yellow]Enter languages: [/bold yellow]')
+                    user_input = await self.common.async_input(prompt='[bold yellow]Enter languages: [/bold yellow]')
 
                     langs = [lang.strip() for lang in user_input.split(',')]
                     for lang in langs:
@@ -638,40 +639,35 @@ class AZTrackerBase:
         return tags
 
     async def edit_desc(self, meta):
-        base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        builder = DescriptionBuilder(self.config)
+        desc_parts = []
 
-        description_parts = []
+        # TV stuff
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        if episode_overview:
+            desc_parts.append(f'[b]Episode:[/b] {title}')
+            desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
 
-        if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as file:
-                manual_desc = file.read()
+        # User description
+        desc_parts.append(await builder.get_user_description(meta))
 
-            if manual_desc:
-                console.print('\n[green]Found existing description:[/green]\n')
-                print(manual_desc)
-                user_input = input('Do you want to use this description? (y/n): ')
+        description = '\n\n'.join(part for part in desc_parts if part.strip())
 
-                if user_input.lower() == 'y':
-                    description_parts.append(manual_desc)
-                    console.print('Using existing description.')
-                else:
-                    console.print('Ignoring existing description.')
-
-        raw_bbcode_desc = '\n\n'.join(filter(None, description_parts))
+        if not description:
+            return ''
 
         processed_desc, amount = re.subn(
             r'\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]',
             '',
-            raw_bbcode_desc,
+            description,
             flags=re.DOTALL
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} NFO section(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} NFO section.')
 
         processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} Link(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} link(s).')
 
         bbcode_tags_pattern = r'\[/?(size|align|left|center|right|img|table|tr|td|spoiler|url)[^\]]*\]'
         processed_desc, amount = re.subn(
@@ -681,12 +677,12 @@ class AZTrackerBase:
             flags=re.IGNORECASE
         )
         if amount > 0:
-            console.print(f'{self.tracker}: Deleted {amount} BBCode tag(s) from description.')
+            console.print(f'{self.tracker}: Deleted from description: {amount} BBCode tag(s).')
 
         final_html_desc = bbcode.render_html(processed_desc)
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(final_html_desc)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+            await description_file.write(final_html_desc)
 
         return final_html_desc
 

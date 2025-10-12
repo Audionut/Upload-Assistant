@@ -6,6 +6,7 @@ import sys
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
+from src.trackersetup import tracker_class_map
 
 
 class UploadHelper:
@@ -13,9 +14,26 @@ class UploadHelper:
         if not dupes:
             if meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
-            meta['upload'] = True
-            return meta, False
+            return False
         else:
+            tracker_class = tracker_class_map[tracker_name](config=config)
+            try:
+                tracker_rename = await tracker_class.get_name(meta)
+            except Exception:
+                try:
+                    tracker_rename = await tracker_class.edit_name(meta)
+                except Exception:
+                    tracker_rename = None
+            display_name = None
+            if tracker_rename is not None:
+                if isinstance(tracker_rename, dict) and 'name' in tracker_rename:
+                    display_name = tracker_rename['name']
+                elif isinstance(tracker_rename, str):
+                    display_name = tracker_rename
+
+            if display_name is not None and display_name != "" and display_name != meta['name']:
+                console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
+
             if meta.get('trumpable', False):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
                 if trumpable_dupes:
@@ -72,23 +90,21 @@ class UploadHelper:
                                 sys.exit(1)
                         else:
                             upload = True
-                            meta['we_asked'] = False
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
-                    meta['we_asked'] = True
                 else:
                     upload = True
 
             if upload is False:
-                return meta, True
+                return True
             else:
                 for each in dupes:
                     each_name = each['name'] if isinstance(each, dict) else each
                     if each_name == meta['name']:
                         meta['name'] = f"{meta['name']} DUPE?"
 
-                return meta, False
+                return False
 
     async def get_confirmation(self, meta):
         if meta['debug'] is True:
@@ -172,7 +188,6 @@ class UploadHelper:
                 meta['keep_folder'] = False
 
             if meta.get('keep_folder') and meta['isdir']:
-                console.print("[bold yellow]Uploading with --keep-folder[/bold yellow]")
                 kf_confirm = console.input("[bold yellow]You specified --keep-folder. Uploading in folders might not be allowed.[/bold yellow] [green]Proceed? y/N: [/green]").strip().lower()
                 if kf_confirm != 'y':
                     console.print("[bold red]Aborting...[/bold red]")
