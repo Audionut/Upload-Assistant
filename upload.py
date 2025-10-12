@@ -125,6 +125,22 @@ def update_oeimg_to_onlyimage():
         console.print("[yellow]No 'oeimg' or 'oeimg_api' found to update in config.py[/yellow]")
 
 
+async def validate_tracker_logins(meta):
+    if meta['debug']:
+        console.print(f"Validating tracker logins: {meta.get('trackers', [])}")
+    tracker_name = next((tracker for tracker in meta.get('trackers', []) if tracker in tracker_class_map), None)
+    if tracker_name:
+        meta['tracker_status'] = {}
+        tracker_class = tracker_class_map[tracker_name](config=config)
+        if tracker_name in http_trackers:
+            meta[f'{tracker_name}_secret_token'] = []
+            login = await tracker_class.validate_credentials(meta)
+            if not login:
+                meta['tracker_status'][tracker_name] = {'skipped': True}
+        if isinstance(login, str) and login:
+            meta[f'{tracker_name}_secret_token'] = login
+
+
 async def process_meta(meta, base_dir, bot=None):
     """Process the metadata for each queued path."""
     if use_discord and bot:
@@ -150,7 +166,6 @@ async def process_meta(meta, base_dir, bot=None):
         if str(ua).lower() == "true":
             meta['unattended'] = True
             console.print("[yellow]Running in Auto Mode")
-    meta['base_dir'] = base_dir
     prep = Prep(screens=meta['screens'], img_host=meta['imghost'], config=config)
     try:
         meta = await prep.gather_prep(meta=meta, mode='cli')
@@ -735,6 +750,7 @@ async def do_the_thing(base_dir):
     if meta.get('current_version', ''):
         signature += f" {meta['current_version']}"
     meta['ua_signature'] = signature
+    meta['base_dir'] = base_dir
 
     cleanup_only = any(arg in ('--cleanup', '-cleanup') for arg in sys.argv) and len(sys.argv) <= 2
     sanitize_meta = config['DEFAULT'].get('sanitize_meta', True)
@@ -783,6 +799,7 @@ async def do_the_thing(base_dir):
         processed_files_count = 0
         skipped_files_count = 0
         base_meta = {k: v for k, v in meta.items()}
+
         for path in queue:
             total_files = len(queue)
             try:
@@ -862,7 +879,11 @@ async def do_the_thing(base_dir):
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
-            await process_meta(meta, base_dir, bot=bot)
+            # Run validation and processing concurrently
+            await asyncio.gather(
+                validate_tracker_logins(meta),
+                process_meta(meta, base_dir, bot=bot)
+            )
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 if not meta.get('emby', False):

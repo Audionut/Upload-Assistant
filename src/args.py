@@ -373,24 +373,24 @@ class Args():
                         meta[key] = value2
                 else:
                     meta[key] = value
-            elif key in ("manual_edition"):
+            if key in ("manual_edition"):
                 if isinstance(value, list) and len(value) == 1:
                     meta[key] = value[0]
                 else:
                     meta[key] = value
-            elif key in ("manual_dvds"):
+            if key in ("manual_dvds"):
                 meta[key] = value
-            elif key in ("freeleech"):
+            if key in ("freeleech"):
                 meta[key] = 100
-            elif key in ("tag") and value == []:
+            if key in ("tag") and value == []:
                 meta[key] = ""
-            elif key in ["manual_episode_title"] and value == []:
+            if key in ["manual_episode_title"] and value == []:
                 meta[key] = ""
-            elif key in ["manual_episode_title"]:
+            if key in ["manual_episode_title"]:
                 meta[key] = value
-            elif key in ["tvmaze_manual"]:
+            if key in ["tvmaze_manual"]:
                 meta[key] = value
-            elif key == 'trackers':
+            if key == 'trackers':
                 if value:
                     tracker_value = value
                     if isinstance(tracker_value, str):
@@ -398,8 +398,12 @@ class Args():
 
                     if isinstance(tracker_value, str) and ',' in tracker_value:
                         meta[key] = [t.strip().upper() for t in tracker_value.split(',')]
+                    elif isinstance(tracker_value, str):
+                        meta[key] = [tracker_value.strip().upper()]
+                    elif isinstance(tracker_value, list):
+                        meta[key] = [t.strip().upper() if isinstance(t, str) else str(t).upper() for t in tracker_value]
                     else:
-                        meta[key] = [tracker_value.strip().upper()] if isinstance(tracker_value, str) else [tracker_value.upper()]
+                        meta[key] = [str(tracker_value).upper()]
                 else:
                     meta[key] = []
             else:

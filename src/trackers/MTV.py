@@ -490,7 +490,7 @@ class MTV():
                     try:
                         resp = await client.get(url=url)
                         if meta['debug']:
-                            console.print('[cyan]Validating Cookies:')
+                            console.print('[cyan]Validating MTV Cookies:')
 
                         if "Logout" in resp.text:
                             return True
