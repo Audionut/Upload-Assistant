@@ -3,6 +3,7 @@ import cli_ui
 import os
 import pycountry
 import re
+from src.audio import get_audio_v2
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -441,81 +442,46 @@ class SHRI(UNIT3D):
         return iso_code
 
     async def _get_best_italian_audio_format(self, meta):
-        """Select best quality Italian audio track and format as string"""
+        """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
-        AUDIO = {
-            "DTS": "DTS", "AAC": "AAC", "AAC LC": "AAC", "AC-3": "DD", 
-            "E-AC-3": "DD+", "Enhanced AC-3": "DD+", "MLP FBA": "TrueHD",
-            "FLAC": "FLAC", "Opus": "Opus", "PCM": "LPCM",
-            "Dolby Digital Audio": "DD", "Dolby Digital Plus Audio": "DD+",
-            "Dolby TrueHD Audio": "TrueHD", "DTS Audio": "DTS",
-            "DTS-HD Master Audio": "DTS-HD MA", "DTS-HD High-Res Audio": "DTS-HD HRA"
-        }
-        COMMERCIAL_NAMES = {
-            "Dolby Digital": "DD", "Dolby Digital Plus": "DD+",
-            "Dolby TrueHD": "TrueHD", "DTS-ES": "DTS-ES",
-            "DTS-HD Master Audio": "DTS-HD MA"
-        }
-        AUDIO_EXTRA = {"XLL": "-HD MA", "XLL X": ":X", "ES": "-ES"}
-        FORMAT_EXTRA = {"JOC": " Atmos", "16-ch": " Atmos", "Atmos Audio": " Atmos"}
-        FORMAT_SETTINGS_EXTRA = {"Dolby Surround EX": "EX"}
-        def clean(s):
-            return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", s.replace("Dual-Audio", "")).strip()
-        def has_object_audio(t):
-            return any(x in t["additional"] + t["codec"] for x in ["JOC", "Atmos", "16-ch", "DTS:X", "DTS-X"])
-        def normalize_track(lang, codec, additional, channels, chan_str, bitrate, lossless, profile, settings):
-            """Create unified track structure"""
-            return {
-                "lang": str(lang).lower(), "codec": str(codec), "additional": str(additional),
-                "channels": channels, "chan_str": chan_str, "bitrate": bitrate,
-                "lossless": lossless, "profile": str(profile), "settings": str(settings)
-            }
-        tracks = []
-        bdinfo = meta.get("bdinfo") or {}
-        try:
-            if bdinfo.get("audio"):
-                for t in bdinfo["audio"]:
-                    channels = int(float(t.get("channels", "2.0").split(".")[0]))
-                    bitrate_match = re.search(r'(\d+)', t.get("bitrate", "0"))
-                    tracks.append(normalize_track(
-                        lang=t.get("language", ""), codec=t.get("codec", ""), additional=t.get("atmos_why_you_be_like_this", ""),
-                        channels=channels, chan_str=t.get("channels", "2.0"), bitrate=int(bitrate_match.group(1)) * 1000 if bitrate_match else 0,
-                        lossless=any(x in t.get("codec", "").lower() for x in ["truehd", "dts-hd ma", "flac", "pcm"]), profile="", settings=""
-                    ))
-            else:
-                for t in meta.get("mediainfo", {}).get("media", {}).get("track", []):
-                    if t.get("@type") != "Audio":
-                        continue
-                    channels = int(t.get("Channels", 2))
-                    layout = t.get("ChannelLayout") or t.get("ChannelPositions", "")
-                    tracks.append(normalize_track(
-                        lang=str(t.get("Language", "")), codec=t.get("Format_Commercial") or t.get("Format", ""), additional=t.get("Format_AdditionalFeatures", ""),
-                        channels=channels, chan_str=f"{channels - 1}.1" if "LFE" in layout else f"{channels}.0", bitrate=int(t.get("BitRate", 0)),
-                        lossless=t.get("Compression_Mode") == "Lossless", profile=t.get("Format_Profile", ""), settings=t.get("Format_Settings", "")
-                    ))
-            italian = [t for t in tracks if t["lang"] in {"it", "it-it", "italian", "italiano"}]
+        ITALIAN_LANGS = {"it", "it-it", "italian", "italiano"}
+        def extract_quality(track, is_bdinfo):
+            if is_bdinfo:
+                bitrate_match = re.search(r'(\d+)', track.get("bitrate", "0"))
+                return (
+                    any(x in track.get("codec", "").lower() for x in ["truehd", "dts-hd ma", "flac", "pcm"]),
+                    int(float(track.get("channels", "2.0").split(".")[0])),
+                    "atmos" in track.get("atmos_why_you_be_like_this", "").lower(),
+                    int(bitrate_match.group(1)) if bitrate_match else 0
+                )
+            return (
+                track.get("Compression_Mode") == "Lossless",
+                int(track.get("Channels", 2)),
+                "JOC" in track.get("Format_AdditionalFeatures", "") or "Atmos" in track.get("Format_Commercial", ""),
+                int(track.get("BitRate", 0))
+            )
+        def fallback():
+            return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", meta.get("audio", "").replace("Dual-Audio", "")).strip()
+
+        bdinfo = meta.get("bdinfo")
+        if bdinfo and bdinfo.get("audio"):
+            italian = [t for t in bdinfo["audio"] if t.get("language", "").lower() in ITALIAN_LANGS]
             if not italian:
-                return clean(meta.get("audio", ""))
-            
-            best = max(italian, key=lambda t: (t["lossless"], t["channels"], has_object_audio(t), t["bitrate"]))
-            
-            format_name = COMMERCIAL_NAMES.get(best["codec"]) or AUDIO.get(best["codec"]) or best["codec"]
-            # Apply audio_extra (profile suffixes like -HD MA)
-            for key, suffix in AUDIO_EXTRA.items():
-                if key in best["profile"]:
-                    format_name += suffix
-            result = f"{format_name} {best['chan_str']}"
-            # Apply format_extra (Atmos, etc)
-            for key, suffix in FORMAT_EXTRA.items():
-                if key in best["additional"] or key in best["codec"]:
-                    result += suffix
-                    break
-            # Apply format_settings_extra (EX, etc)
-            for key, suffix in FORMAT_SETTINGS_EXTRA.items():
-                if key in best["settings"]:
-                    result += f" {suffix}"
-                    break
-        except Exception as e:
-                cli_ui.warning(f"Audio format detection failed: {e}[/yellow]")
-                return clean(meta.get("audio", ""))
-        return clean(result)
+                return fallback()
+            best = max(italian, key=lambda t: extract_quality(t, True))
+            audio_str, _, _ = await get_audio_v2(None, meta, {"audio": [best]})
+        else:
+            tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+            italian = [
+                t for t in tracks[1:] 
+                if t.get("@type") == "Audio" 
+                and isinstance(t.get("Language"), str)
+                and t.get("Language", "").lower() in ITALIAN_LANGS
+                and "commentary" not in str(t.get("Title", "")).lower()
+            ]
+            if not italian:
+                return fallback()
+            best = max(italian, key=lambda t: extract_quality(t, False))
+            audio_str, _, _ = await get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
+
+        return audio_str.replace("Dual-Audio", "").strip()
