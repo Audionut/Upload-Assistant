@@ -131,8 +131,7 @@ class SHRI(UNIT3D):
 
         # Detect Hybrid from filename if not in title
         hybrid = ""
-        basename_upper = self.get_basename(meta).upper()
-        if "HYBRID" in basename_upper and "HYBRID" not in title.upper():
+        if meta.get("webdv", False) and "HYBRID" not in title.upper():
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
