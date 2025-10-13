@@ -391,9 +391,10 @@ class SHRI(UNIT3D):
 
     def _get_italian_title(self, imdb_info):
         """Extract Italian title from IMDb AKAs"""
-        akas = imdb_info.get("akas", [])
-        for aka in akas:
-            if isinstance(aka, dict) and aka.get("country") == "Italy":
+        for aka in imdb_info.get("akas", []):
+            if isinstance(aka, dict) and (
+                aka.get("country") == "Italy" or aka.get("language") == "Italy"
+            ):
                 return aka.get("title")
         return None
 
