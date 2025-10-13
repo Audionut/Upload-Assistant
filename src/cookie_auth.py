@@ -1,4 +1,6 @@
 import aiofiles
+import bencodepy
+import hashlib
 import http.cookiejar
 import httpx
 import os
@@ -336,6 +338,7 @@ class CookieAuthUploader:
         error_text="",
         success_text="",
         additional_files={},
+        hash_is_id=False,
     ):
         """
         Upload a torrent to a tracker using cookies for authentication.
@@ -414,6 +417,7 @@ class CookieAuthUploader:
                             tracker,
                             response,
                             id_pattern,
+                            hash_is_id,
                             source_flag,
                             user_announce_url,
                             torrent_url,
@@ -496,10 +500,12 @@ class CookieAuthUploader:
         }
 
     async def handle_successful_upload(
-        self, meta, tracker, response, id_pattern, source_flag, user_announce_url, torrent_url
+        self, meta, tracker, response, id_pattern, hash_is_id, source_flag, user_announce_url, torrent_url
     ):
         torrent_id = ""
-        if id_pattern:
+        if hash_is_id:
+            await self.get_hash(meta, tracker)
+        elif id_pattern:
             match = re.search(id_pattern, response.text)
             if match:
                 torrent_id = match.group(1)
@@ -510,6 +516,16 @@ class CookieAuthUploader:
             meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id
         )
 
+        return True
+
+    async def get_hash(self, meta, tracker):
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_content = await torrent_file.read()
+            torrent_data = bencodepy.decode(torrent_content)
+            info = bencodepy.encode(torrent_data[b'info'])
+            info_hash = hashlib.sha1(info).hexdigest()
+            meta["tracker_status"][tracker]["torrent_id"] = info_hash
         return True
 
     async def handle_failed_upload(
