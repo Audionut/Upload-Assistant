@@ -468,15 +468,15 @@ class SHRI(UNIT3D):
                 int(track.get("BitRate", 0))
             )
 
-        def fallback():
-            return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", meta.get("audio", "").replace("Dual-Audio", "")).strip()
+        def clean(audio_str):
+            return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio_str.replace("Dual-Audio", "").replace("Dubbed", "")).strip()
 
         bdinfo = meta.get("bdinfo")
 
         if bdinfo and bdinfo.get("audio"):
             italian = [t for t in bdinfo["audio"] if t.get("language", "").lower() in ITALIAN_LANGS]
             if not italian:
-                return fallback()
+                return clean(meta.get("audio", ""))
             best = max(italian, key=lambda t: extract_quality(t, True))
             audio_str, _, _ = await get_audio_v2(None, meta, {"audio": [best]})
         else:
@@ -489,8 +489,8 @@ class SHRI(UNIT3D):
                 and "commentary" not in str(t.get("Title", "")).lower()
             ]
             if not italian:
-                return fallback()
+                return clean(meta.get("audio", ""))
             best = max(italian, key=lambda t: extract_quality(t, False))
             audio_str, _, _ = await get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
 
-        return audio_str.replace("Dual-Audio", "").strip()
+        return clean(audio_str)
