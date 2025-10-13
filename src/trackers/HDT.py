@@ -328,7 +328,7 @@ class HDT:
             torrent_field_name='torrent',
             upload_cookies=self.session.cookies,
             upload_url=f"{self.base_url}/upload.php",
-            id_pattern=r'download\.php\?id=([^&]+)',
+            hash_is_id=True,
             success_text="Upload successful!",
             default_announce='https://hdts-announce.ru/announce.php'
         )

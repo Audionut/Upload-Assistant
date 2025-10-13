@@ -309,7 +309,7 @@ class HDS:
             torrent_field_name='torrent',
             upload_cookies=self.session.cookies,
             upload_url="https://hd-space.org/index.php?page=upload",
-            id_pattern=r'download\.php\?id=([^&]+)',
+            hash_is_id=True,
             success_text="download.php?id=",
         )
 
