@@ -1,8 +1,6 @@
 import aiofiles
 import asyncio
 import bbcode
-import bencodepy
-import hashlib
 import httpx
 import json
 import os
@@ -220,6 +218,10 @@ class AZTrackerBase:
                 else:
                     meta['skipping'] = f'{self.tracker}'
                     return
+
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
 
         if not await self.get_media_code(meta):
             console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
@@ -662,10 +664,6 @@ class AZTrackerBase:
 
                 with open(torrent_path, 'rb') as torrent_file:
                     files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                    torrent_data = bencodepy.decode(torrent_file.read())
-                    info = bencodepy.encode(torrent_data[b'info'])
-                    info_hash = hashlib.sha1(info).hexdigest()
-
                     task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
                     if task_response.status_code == 302 and 'Location' in task_response.headers:
@@ -680,7 +678,7 @@ class AZTrackerBase:
 
                         return {
                             'task_id': task_id,
-                            'info_hash': info_hash,
+                            'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
                             'redirect_url': redirect_url,
                         }
 

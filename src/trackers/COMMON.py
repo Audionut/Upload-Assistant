@@ -1,7 +1,9 @@
 import aiofiles
 import asyncio
+import bencodepy
 import click
 import glob
+import hashlib
 import httpx
 import json
 import os
@@ -96,6 +98,15 @@ class COMMON():
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
+
+    async def get_torrent_hash(self, meta, tracker):
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_content = await torrent_file.read()
+            torrent_data = bencodepy.decode(torrent_content)
+            info = bencodepy.encode(torrent_data[b'info'])
+            info_hash = hashlib.sha1(info).hexdigest()
+        return info_hash
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None):
         if image_list is not None:
