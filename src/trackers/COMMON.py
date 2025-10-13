@@ -101,16 +101,19 @@ class COMMON():
                 new_torrent.metainfo['announce-list'] = [new_tracker]
             else:
                 new_torrent.metainfo['announce'] = new_tracker
-            new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
 
-            await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
-
             # Calculate hash
+            torrent_hash = None
             if hash_is_id:
                 info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
                 torrent_hash = hashlib.sha1(info_bytes).hexdigest()
-                return torrent_hash
+
+            new_torrent.metainfo['comment'] = comment + torrent_hash if hash_is_id else comment
+
+            await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
+
+            return torrent_hash
 
         return None
 
