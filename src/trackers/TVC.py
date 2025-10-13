@@ -33,12 +33,11 @@ class TVC():
         self.signature = ""
         self.banned_groups = []
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
-        self.images = {
+      self.images = {
             "imdb_75": 'https://i.postimg.cc/nLrVgPFB/imdb.png',
             "tmdb_75": 'https://i.postimg.cc/4xLs6Q6J/tmdb.png',
             "tvdb_75": 'https://i.postimg.cc/VsqwG8qW/tvdb.png',
-            "tvmaze_75": 'https://i.postimg.cc/pL6MhXvF/tvmaze.png',
-            "mal_75": 'https://i.postimg.cc/506STyN4/PBfdP3M.png'
+            "tvmaze_75": 'https://i.postimg.cc/pL6MhXvF/tvmaze.png'
         }
 
         pass
@@ -93,10 +92,10 @@ class TVC():
             "ptpimg.me": "ptpimg",
             "pixhost.to": "pixhost",
             "imagebam.com": "bam",
-            "onlyimage.org": "onlyimage",
+            "onlyimage.org":"onlyimage"
         }
 
-        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
+        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam','onlyimage']
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         if 'TVC_images_key' in meta:
             image_list = meta['TVC_images_key']
@@ -173,7 +172,7 @@ class TVC():
             else:
                 tvc_name = tvc_name.replace(']', ' (SDH SUBS)]')
 
-        if 'origin_country_code' in meta:
+         if 'origin_country_code' in meta:
             if "IE" in meta['origin_country_code']:
                 tvc_name += " [IRL]"
             elif "AU" in meta['origin_country_code']:
@@ -420,29 +419,29 @@ class TVC():
                             rd_info += "[color=orange][size=15]" + cc['iso_3166_1'] + " TV Release info [/size][/color]" + "\n" + str(rd['release_date'])[:10] + " on " + channel + "\n"
             # movie release info adding
             if rd_info != "":
-                desc += "[center][color=green][size=25]Release Info[/size][/color][/center]" + "\n\n"
+                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
                 desc += rd_info + "\n\n"
             # getting season release info. need to fix so it gets season info instead of first episode info.
             elif meta['category'] == "TV" and meta['tv_pack'] == 1 and 'first_air_date' in meta:
                 channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
-                desc += "[center][color=green][size=25]Release Info[/size][/color][/center]" + "\n\n"
-                desc += f"[center][color=orange][size=15]First episode of this season aired {meta['season_air_first_date']} on channel {channel}[/size][/color][/center]" + "\n\n"
+                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
+                desc += f"[color=orange][size=15]First episode of this season aired {meta['season_air_first_date']} on channel {channel}[/size][/color]" + "\n\n"
             elif meta['category'] == "TV" and meta['tv_pack'] != 1 and 'episode_airdate' in meta:
                 channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
-                desc += "[center][color=green][size=25]Release Info[/size][/color][/center]" + "\n\n"
-                desc += f"[center][color=orange][size=15]Episode aired on channel {channel} on {meta['episode_airdate']}[/size][/color][/center]" + "\n\n"
+                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
+                desc += f"[color=orange][size=15]Episode aired on channel {channel} on {meta['episode_airdate']}[/size][/color]" + "\n\n"
             else:
-                desc += "[center][color=green][size=25]Release Info[/size][/color][/center]" + "\n\n"
-                desc += "[center][color=orange][size=15]TMDB has No TV release info for this[/size][/color][/center]" + "\n\n"
+                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
+                desc += "[color=orange][size=15]TMDB has No TV release info for this[/size][/color]" + "\n\n"
 
             if meta['category'] == 'TV' and meta['tv_pack'] != 1 and 'episode_overview' in meta:
-                desc += "\n\n" + "[center][color=green][size=25]PLOT[/size][/color][/center]\n" + "[center]Episode Name: " + str(meta['episode_name']) + "[/center]" + "\n" + str(meta['episode_overview'] + "\n\n")
+                desc += "\n\n" + "[color=green][size=25]PLOT[/size][/color]\n" + "Episode Name: " + str(meta['episode_name']) + "\n" + str(meta['episode_overview'] + "\n\n")
             else:
-                desc += "[center][color=green][size=25]PLOT[/size][/color]" + "\n" + str(meta['overview'] + "[/center]" + "\n\n")
+                desc += "[color=green][size=25]PLOT[/size][/color]" + "\n" + str(meta['overview'] + "\n\n")
             # Max two screenshots as per rules
             if len(base) > 2 and meta['description'] != "PTP":
                 desc += "[color=green][size=25]Notes/Extra Info[/size][/color]" + " \n \n" + str(base) + " \n \n "
-            desc += self.get_links(meta, "[center][color=green][size=25]", "[/size][/color][/center]")
+            desc += self.get_links(meta, "[color=green][size=25]", "[/size][/COLOR]")
             desc = bbcode.convert_pre_to_code(desc)
             desc = bbcode.convert_hide_to_spoiler(desc)
             if comparison is False:
@@ -451,7 +450,7 @@ class TVC():
             images = meta['image_list']
             # only adding 2 screens as that is mentioned in rules.
             if len(images) > 0 and int(meta['screens']) >= 2:
-                descfile.write("[center][color=green][size=25]Screenshots[/size][/color][/center]\n\n[center]")
+                descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
                 for each in range(len(images[:2])):
                     web_url = images[each]['web_url']
                     img_url = images[each]['img_url']
@@ -465,7 +464,7 @@ class TVC():
 
     def get_links(self, movie, subheading, heading_end):
         description = ""
-        description += "\n\n" + subheading + "[center]Links[/center]" + heading_end + "\n"
+        description += "\n\n" + subheading + "Links" + heading_end + "\n"
         if movie['imdb_id'] != "0":
             description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.images['imdb_75']}[/img][/URL]"
         if movie['tmdb'] != "0":
