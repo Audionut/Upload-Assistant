@@ -389,13 +389,19 @@ class SHRI(UNIT3D):
         return self._detect_type_from_technical_analysis(meta)
 
     def _get_italian_title(self, imdb_info):
-        """Extract Italian title from IMDb AKAs"""
+        """Extract Italian title from IMDb AKAs with priority"""
+        country_match = None
+        language_match = None
+
         for aka in imdb_info.get("akas", []):
-            if isinstance(aka, dict) and (
-                aka.get("country") == "Italy" or aka.get("language") == "Italy"
-            ):
-                return aka.get("title")
-        return None
+            if isinstance(aka, dict):
+                if aka.get("country") == "Italy":
+                    country_match = aka.get("title")
+                    break  # Country match takes priority
+                elif aka.get("language") == "Italy" and not language_match:
+                    language_match = aka.get("title")
+
+        return country_match or language_match
 
     def _has_italian_audio(self, meta):
         """Check for Italian audio tracks, excluding commentary"""
