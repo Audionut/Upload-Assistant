@@ -33,11 +33,12 @@ class TVC():
         self.signature = ""
         self.banned_groups = []
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
-      self.images = {
+        self.images = {
             "imdb_75": 'https://i.postimg.cc/nLrVgPFB/imdb.png',
             "tmdb_75": 'https://i.postimg.cc/4xLs6Q6J/tmdb.png',
             "tvdb_75": 'https://i.postimg.cc/VsqwG8qW/tvdb.png',
-            "tvmaze_75": 'https://i.postimg.cc/pL6MhXvF/tvmaze.png'
+            "tvmaze_75": 'https://i.postimg.cc/pL6MhXvF/tvmaze.png',
+            "mal_75": 'https://i.postimg.cc/506STyN4/PBfdP3M.png'
         }
 
         pass
@@ -92,10 +93,10 @@ class TVC():
             "ptpimg.me": "ptpimg",
             "pixhost.to": "pixhost",
             "imagebam.com": "bam",
-            "onlyimage.org":"onlyimage"
+            "onlyimage.org": "onlyimage",
         }
 
-        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam','onlyimage']
+        approved_image_hosts = ['ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         if 'TVC_images_key' in meta:
             image_list = meta['TVC_images_key']
@@ -172,7 +173,7 @@ class TVC():
             else:
                 tvc_name = tvc_name.replace(']', ' (SDH SUBS)]')
 
-         if 'origin_country_code' in meta:
+        if 'origin_country_code' in meta:
             if "IE" in meta['origin_country_code']:
                 tvc_name += " [IRL]"
             elif "AU" in meta['origin_country_code']:
