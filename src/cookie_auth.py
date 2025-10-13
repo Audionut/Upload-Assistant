@@ -501,18 +501,19 @@ class CookieAuthUploader:
         self, meta, tracker, response, id_pattern, hash_is_id, source_flag, user_announce_url, torrent_url
     ):
         torrent_id = ""
-        if hash_is_id:
-            meta["tracker_status"][tracker]["torrent_id"] = await self.common.get_torrent_hash(meta, tracker)
-        elif id_pattern:
+        if id_pattern:
             match = re.search(id_pattern, response.text)
             if match:
                 torrent_id = match.group(1)
                 meta["tracker_status"][tracker]["torrent_id"] = torrent_id
-
-        meta["tracker_status"][tracker]["status_message"] = "Torrent uploaded successfully."
-        await self.common.add_tracker_torrent(
+        torrent_hash = await self.common.add_tracker_torrent(
             meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id
         )
+
+        if hash_is_id and torrent_hash is not None:
+            meta["tracker_status"][tracker]["torrent_id"] = torrent_hash
+
+        meta["tracker_status"][tracker]["status_message"] = "Torrent uploaded successfully."
 
         return True
 

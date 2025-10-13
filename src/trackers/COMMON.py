@@ -81,11 +81,14 @@ class COMMON():
                     with open(path, "wb") as f:
                         async for chunk in r.aiter_bytes():
                             f.write(chunk)
-                    return
+
+                    # Calculate hash after download
+                    torrent_hash = await self.get_torrent_hash(meta, tracker)
+                    return torrent_hash
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
-                return
+                return None
 
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
@@ -97,7 +100,14 @@ class COMMON():
                 new_torrent.metainfo['announce'] = new_tracker
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
+
+            # Calculate hash
+            info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
+            torrent_hash = hashlib.sha1(info_bytes).hexdigest()
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
+            return torrent_hash
+
+        return None
 
     async def get_torrent_hash(self, meta, tracker):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
