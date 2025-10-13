@@ -71,7 +71,7 @@ class COMMON():
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
     # used to add tracker url, comment and source flag to torrent file
-    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None):
+    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None, hash_is_id=False):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl is not None:
             session = httpx.AsyncClient(headers=headers, params=params, timeout=30.0)
@@ -83,8 +83,11 @@ class COMMON():
                             f.write(chunk)
 
                     # Calculate hash after download
-                    torrent_hash = await self.get_torrent_hash(meta, tracker)
-                    return torrent_hash
+                    if hash_is_id:
+                        torrent_hash = await self.get_torrent_hash(meta, tracker)
+                        return torrent_hash
+                    else:
+                        return None
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
@@ -101,11 +104,13 @@ class COMMON():
             new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
 
-            # Calculate hash
-            info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
-            torrent_hash = hashlib.sha1(info_bytes).hexdigest()
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
-            return torrent_hash
+
+            # Calculate hash
+            if hash_is_id:
+                info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
+                torrent_hash = hashlib.sha1(info_bytes).hexdigest()
+                return torrent_hash
 
         return None
 

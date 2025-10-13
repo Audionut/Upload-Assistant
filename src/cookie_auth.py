@@ -507,7 +507,7 @@ class CookieAuthUploader:
                 torrent_id = match.group(1)
                 meta["tracker_status"][tracker]["torrent_id"] = torrent_id
         torrent_hash = await self.common.add_tracker_torrent(
-            meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id
+            meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id, hash_is_id=hash_is_id
         )
 
         if hash_is_id and torrent_hash is not None:
