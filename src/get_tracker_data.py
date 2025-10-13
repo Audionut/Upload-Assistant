@@ -3,10 +3,12 @@ import cli_ui
 import json
 import os
 import requests
+import sys
 import time
 
 from data.config import config
 from src.btnid import get_btn_torrents
+from src.cleanup import cleanup, reset_terminal
 from src.clients import Clients
 from src.console import console
 from src.trackermeta import update_metadata_from_tracker
@@ -184,13 +186,19 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                         if imdb != 0 or tvdb != 0:
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[green]Found BTN IDs: IMDb={imdb}, TVDb={tvdb}[/green]")
-                                if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
-                                    if imdb != 0:
-                                        meta['imdb_id'] = int(imdb)
-                                    if tvdb != 0:
-                                        meta['tvdb_id'] = int(tvdb)
-                                    found_match = True
-                                    meta['matched_tracker'] = "BTN"
+                                try:
+                                    if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
+                                        if imdb != 0:
+                                            meta['imdb_id'] = int(imdb)
+                                        if tvdb != 0:
+                                            meta['tvdb_id'] = int(tvdb)
+                                        found_match = True
+                                        meta['matched_tracker'] = "BTN"
+                                except EOFError:
+                                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                    await cleanup()
+                                    reset_terminal()
+                                    sys.exit(1)
                             else:
                                 if imdb != 0:
                                     meta['imdb_id'] = int(imdb)
@@ -201,12 +209,20 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                         await save_tracker_timestamp("BTN", base_dir=base_dir)
                 elif tracker_to_process == "ANT":
                     imdb_tmdb_list = await tracker_class_map['ANT'](config=config).get_data_from_files(meta)
-                    console.print(f"[green]ANT tracker data found: {imdb_tmdb_list}[/green]")
                     if imdb_tmdb_list:
-                        for d in imdb_tmdb_list:
-                            meta.update(d)
-                        found_match = True
-                        meta['matched_tracker'] = "ANT"
+                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                            console.print(f"[green]Found ANT IDs: {imdb_tmdb_list}[/green]")
+                            try:
+                                if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
+                                    for d in imdb_tmdb_list:
+                                        meta.update(d)
+                                    found_match = True
+                                    meta['matched_tracker'] = "ANT"
+                            except EOFError:
+                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                                await cleanup()
+                                reset_terminal()
+                                sys.exit(1)
                     await save_tracker_timestamp("ANT", base_dir=base_dir)
                 else:
                     meta = await process_tracker(tracker_to_process, meta, only_id)

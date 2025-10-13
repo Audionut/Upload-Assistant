@@ -1,7 +1,6 @@
 import aiohttp
 import asyncio
 import click
-import cli_ui
 import io
 from io import BytesIO
 import os
@@ -76,7 +75,7 @@ async def check_images_concurrently(imagelist, meta):
     # Function to check each image's URL, host, and log resolution
     save_directory = f"{meta['base_dir']}/tmp/{meta['uuid']}"
 
-    timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_connect=10, sock_read=10)
+    timeout = aiohttp.ClientTimeout(total=15, connect=5, sock_connect=5, sock_read=5)
 
     async def check_and_collect(image_dict):
         img_url = image_dict.get('raw_url')
@@ -220,14 +219,6 @@ async def check_image_link(url, timeout=None):
 async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id=False):
     # Unpack the expected 9 elements, ignoring any additional ones
     tmdb, imdb, tvdb, mal, desc, category, infohash, imagelist, filename, *rest = tracker_data
-    if tmdb or imdb or tvdb or mal:
-        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-            console.print(f"[green]{tracker_name} found IDs: TMDB={tmdb}, IMDb={imdb}, TVDb={tvdb}, MAL={mal}[/green]")
-            if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
-                pass
-            else:
-                return False
-
     if tmdb:
         meta['tmdb_id'] = tmdb
         if meta['debug']:
@@ -246,6 +237,7 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
             console.print("set MAL ID:", meta['mal_id'])
     if desc and not only_id:
         meta['description'] = desc
+        meta['saved_description'] = True
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
             if len(desc) > 0:
                 description.write((desc or "") + "\n")
@@ -258,14 +250,13 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
         if meta['debug']:
             console.print("set Category:", meta['category'])
 
-    if not meta.get('image_list'):  # Only handle images if image_list is not already populated
-        if imagelist:  # Ensure imagelist is not empty before setting
-            valid_images = await check_images_concurrently(imagelist, meta)
-            if valid_images:
-                meta['image_list'] = valid_images
-                if meta.get('image_list'):  # Double-check if image_list is set before handling it
-                    if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
-                        await handle_image_list(meta, tracker_name, valid_images)
+    if imagelist:  # Ensure imagelist is not empty before setting
+        valid_images = await check_images_concurrently(imagelist, meta)
+        if valid_images:
+            meta['image_list'] = valid_images
+            if meta.get('image_list'):  # Double-check if image_list is set before handling it
+                if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
+                    await handle_image_list(meta, tracker_name, valid_images)
 
     if filename:
         meta[f'{tracker_name.lower()}_filename'] = filename
