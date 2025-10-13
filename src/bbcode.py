@@ -441,25 +441,37 @@ class BBCODE:
             desc = desc.replace(spoilers[i], f"SPOILER_PLACEHOLDER-{i} ")
             spoiler_placeholders.append(spoilers[i])
 
-        # Get Images from [img] tags and remove them from the description
+        # Get Images from [img] tags, checking if they're wrapped in [url] tags
         imagelist = []
+
+        # First, find images wrapped in URL tags: [url=web_url][img]img_url[/img][/url]
+        url_img_pattern = r"\[url=(https?://[^\]]+)\]\[img[^\]]*\](.*?)\[/img\]\[/url\]"
+        url_img_matches = re.findall(url_img_pattern, desc, flags=re.IGNORECASE)
+        for web_url, img_url in url_img_matches:
+            image_dict = {
+                'img_url': img_url.strip(),
+                'raw_url': img_url.strip(),
+                'web_url': web_url.strip(),
+            }
+            imagelist.append(image_dict)
+            # Remove the entire [url=...][img]...[/img][/url] structure
+            desc = re.sub(rf"\[url={re.escape(web_url)}\]\[img[^\]]*\]{re.escape(img_url)}\[/img\]\[/url\]", '', desc, flags=re.IGNORECASE)
+
+        # Then find standalone [img] tags (not wrapped in URL)
         img_tags = re.findall(r"\[img[^\]]*\](.*?)\[/img\]", desc, re.IGNORECASE)
         if img_tags:
             for img_url in img_tags:
-                image_dict = {
-                    'img_url': img_url.strip(),
-                    'raw_url': img_url.strip(),
-                    'web_url': img_url.strip(),
-                }
-                imagelist.append(image_dict)
-                # Remove the [img] tag and its contents from the description
+                img_url = img_url.strip()
+                # Check if this image was already added (wrapped in URL)
+                if not any(img['img_url'] == img_url for img in imagelist):
+                    image_dict = {
+                        'img_url': img_url,
+                        'raw_url': img_url,
+                        'web_url': img_url,
+                    }
+                    imagelist.append(image_dict)
+                # Remove the [img] tag
                 desc = re.sub(rf"\[img[^\]]*\]{re.escape(img_url)}\[/img\]", '', desc, flags=re.IGNORECASE)
-
-        # Now, remove matching URLs from [URL] tags
-        for img in imagelist:
-            img_url = re.escape(img['img_url'])
-            desc = re.sub(rf"\[URL={img_url}\]\[/URL\]", '', desc, flags=re.IGNORECASE)
-            desc = re.sub(rf"\[URL={img_url}\]\[img[^\]]*\]{img_url}\[/img\]\[/URL\]", '', desc, flags=re.IGNORECASE)
 
         # Filter out bot images from imagelist
         bot_image_urls = [
@@ -501,16 +513,19 @@ class BBCODE:
             \sAuto\sUploader\[\/b\]\s*\[\/center\]|
             \[center\]\[url=https:\/\/github\.com\/z-ink\/uploadrr\]\[img=\d+\]https:\/\/i\.ibb\.co\/2NVWb0c\/uploadrr\.webp\[\/img\]\[\/url\]\[\/center\]|
             \n\[center\]\[url=https:\/\/github\.com\/edge20200\/Only-Uploader\]Powered\sby\s
-            Only-Uploader\[\/url\]\[\/center\]
+            Only-Uploader\[\/url\]\[\/center\]|
+            \[center\]\[url=\/torrents\?perPage=\d+&name=[^\]]*\]\[\/url\]\[\/center\]
         """
         desc = re.sub(bot_signature_regex, "", desc, flags=re.IGNORECASE | re.VERBOSE)
+        # Remove Aither internal signature
+        desc = re.sub(r"\[center\]\[b\]\[size=\d+\]🖌️\[/size\]\[/b\][\s\S]*?This is an internal release which was first released exclusively on Aither\.[\s\S]*?🍻 Cheers to all the Aither.*?\[/center\]", "", desc, flags=re.IGNORECASE)
         desc = re.sub(r"\[center\].*Created by.*Upload Assistant.*\[\/center\]", "", desc, flags=re.IGNORECASE)
         desc = re.sub(r"\[right\].*Created by.*Upload Assistant.*\[\/right\]", "", desc, flags=re.IGNORECASE)
 
         # Remove leftover [img] or [URL] tags in the description
         desc = re.sub(r"\[img\][\s\S]*?\[\/img\]", "", desc, flags=re.IGNORECASE)
         desc = re.sub(r"\[img=[\s\S]*?\]", "", desc, flags=re.IGNORECASE)
-        desc = re.sub(r"\[URL=[\s\S]*?\]\[\/URL\]", "", desc, flags=re.IGNORECASE)
+        # desc = re.sub(r"\[URL=[\s\S]*?\]\[\/URL\]", "", desc, flags=re.IGNORECASE)
 
         # Strip trailing whitespace and newlines:
         desc = desc.rstrip()
