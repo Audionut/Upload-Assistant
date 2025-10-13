@@ -1067,8 +1067,7 @@ class COMMON():
                     console.print(f"Extracted description: {description}", markup=False)
 
                     if meta.get('unattended') or (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')):
-                        meta['description'] = description
-                        meta['saved_description'] = True
+                        return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
                     else:
                         console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
                         edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
@@ -1077,16 +1076,11 @@ class COMMON():
                             edited_description = click.edit(description)
                             if edited_description:
                                 description = edited_description.strip()
-                            meta['description'] = description
-                            meta['saved_description'] = True
                         elif edit_choice.lower() == 'd':
                             description = None
-                            imagelist = []
                             console.print("[yellow]Description discarded.[/yellow]")
                         else:
                             console.print("[green]Keeping the original description.[/green]")
-                            meta['description'] = description
-                            meta['saved_description'] = True
                     if not meta.get('keep_images'):
                         imagelist = []
                 else:
