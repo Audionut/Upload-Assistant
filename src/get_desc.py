@@ -1,9 +1,8 @@
-import os
-import asyncio
 import aiofiles
-import urllib.parse
-import requests
 import glob
+import os
+import requests
+import urllib.parse
 from src.console import console
 from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
@@ -227,8 +226,10 @@ class DescriptionBuilder:
         if meta.get('is_disc') == 'BDMV':
             return ''
 
-        # Check if full mediainfo should be used
-        if self.config['TRACKERS'][tracker].get('full_mediainfo', self.config['DEFAULT'].get('full_mediainfo', False)):
+        if self.config['TRACKERS'][tracker].get(
+            'full_mediainfo',
+            self.config['DEFAULT'].get('full_mediainfo', False)
+        ):
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             if await self.common.path_exists(mi_path):
                 async with aiofiles.open(mi_path, 'r', encoding='utf-8') as mi:
@@ -237,25 +238,14 @@ class DescriptionBuilder:
         cache_file_dir = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
         cache_file_path = os.path.join(cache_file_dir, 'MEDIAINFO_SHORT.txt')
 
-        loop = asyncio.get_running_loop()
-
-        def check_file_status(path):
-            exists = os.path.exists(path)
-            size = os.path.getsize(path) if exists else 0
-            return exists, size
-
-        def run_mediainfo_parse(video_file, mi_template):
-            return MediaInfo.parse(video_file, output='STRING', full=False, mediainfo_options={'inform': f'file://{mi_template}'})
-
-        file_exists, file_size = await loop.run_in_executor(None, check_file_status, cache_file_path)
+        file_exists = os.path.exists(cache_file_path)
+        file_size = os.path.getsize(cache_file_path) if file_exists else 0
 
         if file_exists and file_size > 0:
             try:
                 async with aiofiles.open(cache_file_path, mode='r', encoding='utf-8') as f:
                     media_info_content = await f.read()
-
                 return media_info_content
-
             except Exception:
                 pass
 
@@ -267,11 +257,11 @@ class DescriptionBuilder:
 
         if template_exists:
             try:
-                media_info_result = await loop.run_in_executor(
-                    None,
-                    run_mediainfo_parse,
+                media_info_result = MediaInfo.parse(
                     video_file,
-                    mi_template
+                    output='STRING',
+                    full=False,
+                    mediainfo_options={'inform': f'file://{mi_template}'}
                 )
                 media_info_content = str(media_info_result)
 
