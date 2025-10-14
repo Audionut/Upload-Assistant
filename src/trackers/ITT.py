@@ -98,11 +98,9 @@ class ITT(UNIT3D):
         """
 
         if type == 'DISC' or type == "REMUX":
-            # Name Year S##E## Cut REPACK Resolution Edition Region 3D SOURCE TYPE Hi10P HDR VCodec Dub ACodec Channels Object-Tag
             itt_name = f"{title} {year} {season}{episode} {repack} {resolution} {edition} {region} {three_d} {source} {'REMUX' if type == 'REMUX' else ''} {hdr} {video_codec} {dubs} {audio}"
 
         else:
-            # Name Year S##E## Cut REPACK Resolution Edition 3D SOURCE TYPE Dub ACodec Channels Object Hi10P HDR VCodec-Tag
             itt_name = f"{title} {year} {season}{episode} {repack} {resolution} {edition} {three_d} {source} {type} {dubs} {audio} {hdr} {video_codec}"
 
         try:
@@ -127,12 +125,28 @@ class ITT(UNIT3D):
         italian_languages = ["Italian", "Italiano"]
         if not any(
             lang in meta.get("audio_languages", []) for lang in italian_languages
+        ) and not any(
+            lang in meta.get('subtitle_languages', []) for lang in italian_languages
         ):
             console.print(
-                "[bold red]ITA: Non sono ammessi film e serie tv che non comprendono il doppiaggio in italiano.[/bold red]\n"
-                "[bold red]ENG: Films and TV series that do not include Italian dubbing are not permitted.[/bold red]\n"
+                "[bold red]Films and TV series that do not include Italian dubbing/subtitles are not permitted.[/bold red]\n"
                 "Upload Rules: https://itatorrents.xyz/wikis/5"
             )
             return False
 
         return should_continue
+
+    async def get_additional_data(self, meta):
+        data = {}
+        """
+        if not meta.get("language_checked", False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        italian_languages = ["Italian", "Italiano"]
+        if not any(
+            lang in meta.get("audio_languages", []) for lang in italian_languages
+        ) and any(
+            lang in meta.get('subtitle_languages', []) for lang in italian_languages
+        ):
+            data = {'foreign': 1}  # placeholder
+        """
+        return data
