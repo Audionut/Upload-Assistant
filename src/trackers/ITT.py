@@ -16,28 +16,11 @@ class ITT(UNIT3D):
         self.base_url = 'https://itatorrents.xyz'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
         pass
-
-    async def get_type_id(self, meta):
-        type_id = {
-            'DISC': '1',
-            'REMUX': '2',
-            'WEBDL': '4',
-            'WEBRIP': '5',
-            'HDTV': '6',
-            'ENCODE': '3',
-            'DLMux': '27',
-            'BDMux': '29',
-            'WEBMux': '26',
-            'DVDMux': '39',
-            'BDRip': '25',
-            'DVDRip': '24',
-            'Cinema-MD': '14',
-        }.get(meta['type'], '0')
-        return {'type_id': type_id}
 
     async def get_name(self, meta):
         type = meta.get('type', "").upper()
@@ -120,33 +103,19 @@ class ITT(UNIT3D):
 
     async def get_additional_checks(self, meta):
         should_continue = True
+        # From rules:
+        # "Non sono ammessi film e serie tv che non comprendono il doppiaggio in italiano."
+        # Translates to "Films and TV series that do not include Italian dubbing are not permitted."
         if not meta.get("language_checked", False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         italian_languages = ["Italian", "Italiano"]
         if not any(
             lang in meta.get("audio_languages", []) for lang in italian_languages
-        ) and not any(
-            lang in meta.get('subtitle_languages', []) for lang in italian_languages
         ):
             console.print(
-                "[bold red]Films and TV series that do not include Italian dubbing/subtitles are not permitted.[/bold red]\n"
+                "[bold red]Films and TV series that do not include Italian dubbing are not permitted.[/bold red]\n"
                 "Upload Rules: https://itatorrents.xyz/wikis/5"
             )
             return False
 
         return should_continue
-
-    async def get_additional_data(self, meta):
-        data = {}
-        """
-        if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        italian_languages = ["Italian", "Italiano"]
-        if not any(
-            lang in meta.get("audio_languages", []) for lang in italian_languages
-        ) and any(
-            lang in meta.get('subtitle_languages', []) for lang in italian_languages
-        ):
-            data = {'foreign': 1}  # placeholder
-        """
-        return data
