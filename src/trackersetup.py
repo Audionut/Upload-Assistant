@@ -73,6 +73,7 @@ from src.trackers.YOINK import YOINK
 from src.trackers.YUS import YUS
 from src.trackers.EMUW import EMUW
 
+
 class TRACKER_SETUP:
     def __init__(self, config):
         self.config = config
