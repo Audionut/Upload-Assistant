@@ -33,7 +33,7 @@ class TVC():
         self.signature = ""
         self.banned_groups = []
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
-      self.images = {
+        self.images = {
             "imdb_75": 'https://i.postimg.cc/nLrVgPFB/imdb.png',
             "tmdb_75": 'https://i.postimg.cc/4xLs6Q6J/tmdb.png',
             "tvdb_75": 'https://i.postimg.cc/VsqwG8qW/tvdb.png',
@@ -173,7 +173,7 @@ class TVC():
             else:
                 tvc_name = tvc_name.replace(']', ' (SDH SUBS)]')
 
-         if 'origin_country_code' in meta:
+        if 'origin_country_code' in meta:
             if "IE" in meta['origin_country_code']:
                 tvc_name += " [IRL]"
             elif "AU" in meta['origin_country_code']:
