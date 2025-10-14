@@ -13,7 +13,8 @@ from src.trackers.COMMON import COMMON
 
 TRACKER_DISC_REQUIREMENTS = {
     'ULCX': {'region': 'mandatory', 'distributor': 'mandatory'},
-    'SHRI': {'region': 'mandatory', 'distributor': 'optional'}
+    'SHRI': {'region': 'mandatory', 'distributor': 'optional'},
+    'OTW': {'region': 'mandatory', 'distributor': 'optional'},
 }
 
 
