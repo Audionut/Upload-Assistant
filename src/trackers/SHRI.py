@@ -466,7 +466,7 @@ class SHRI(UNIT3D):
                     bitrate_int = int(track.get("BitRate", 0)) if track.get("BitRate", 0) else 0
                 except (ValueError, TypeError) as e:
                     cli_ui.warning(f"Invalid BitRate value in audio track: {track.get('BitRate')}\n"
-                        f"Using 0 as default. Error: {e}.")
+                                   f"Using 0 as default. Error: {e}.")
                     bitrate_int = 0
                 return (
                     track.get("Compression_Mode") == "Lossless",
