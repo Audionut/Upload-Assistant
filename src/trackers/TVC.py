@@ -135,9 +135,10 @@ class TVC():
             "imgbox.com": "imgbox",
             "pixhost.to": "pixhost",
             "imagebam.com": "bam",
+            "onlyimage.org": "onlyimage",
         }
 
-        approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam']
+        approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         if 'TVC_images_key' in meta:
             image_list = meta['TVC_images_key']
@@ -449,7 +450,7 @@ class TVC():
             descfile.write(desc)
             images = screens
             # using screen number in config to know how many screens to add. note max 2 is mentioned in rules.
-            if len(images) > 0 and int(meta['screens']) >= self.config['TRACKERS'][self.tracker]['image_count']:
+            if len(images) > 0 and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                 descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
                 for each in range(len(images[:self.config['TRACKERS'][self.tracker]['image_count']])):
                     web_url = images[each]['web_url']
