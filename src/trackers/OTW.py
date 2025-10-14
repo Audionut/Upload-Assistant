@@ -86,7 +86,7 @@ class OTW(UNIT3D):
         aka = meta.get('aka', '')
         type = meta['type']
         if aka:
-            otw_name = otw_name.replace(meta["aka"], '')
+            otw_name = otw_name.replace(f"{aka} ", '')
         if meta['is_disc'] == "DVD":
             otw_name = otw_name.replace(source, f"{source} {resolution}")
         if meta['is_disc'] == "DVD" or type == "REMUX":
@@ -98,21 +98,24 @@ class OTW(UNIT3D):
 
             tmdb_year = meta.get('year')
             if tmdb_year and str(tmdb_year).isdigit():
-                years.append(int(tmdb_year))
+                year = str(tmdb_year)
+            else:
+                if tmdb_year and str(tmdb_year).isdigit():
+                    years.append(int(tmdb_year))
 
-            imdb_year = meta.get('imdb_info', {}).get('year')
-            if imdb_year and str(imdb_year).isdigit():
-                years.append(int(imdb_year))
+                imdb_year = meta.get('imdb_info', {}).get('year')
+                if imdb_year and str(imdb_year).isdigit():
+                    years.append(int(imdb_year))
 
-            series_year = meta.get('tvdb_episode_data', {}).get('series_year')
-            if series_year and str(series_year).isdigit():
-                years.append(int(series_year))
-            # Use the oldest year if any found, else empty string
-            year = str(min(years)) if years else ""
+                series_year = meta.get('tvdb_episode_data', {}).get('series_year')
+                if series_year and str(series_year).isdigit():
+                    years.append(int(series_year))
+                # Use the oldest year if any found, else empty string
+                year = str(min(years)) if years else ""
             if not meta.get('no_year', False) and not meta.get('search_year', ''):
                 otw_name = otw_name.replace(meta['title'], f"{meta['title']} {year}", 1)
 
-        return {'name': meta['name']}
+        return {'name': otw_name}
 
     async def get_additional_data(self, meta):
         data = {

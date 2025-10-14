@@ -775,6 +775,8 @@ config = {
         "TVC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # 2 is listed as max images in rules. Please do not change unless you have permission
+            "image_count": 2,
             "api_key": "",
             "announce_url": "https://tvchaosuk.com/announce/<PASSKEY>",
             "anon": False,
