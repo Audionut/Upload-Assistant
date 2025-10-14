@@ -111,7 +111,7 @@ class TVC():
             cat_id = 44
         # type_id = await self.get_type_id(meta['type'])
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list=image_list)
+        await self.unit3d_edit_desc(meta, self.tracker, self.signature)
 
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
