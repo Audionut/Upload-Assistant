@@ -237,7 +237,7 @@ class SHRI(UNIT3D):
 
         return {"name": name}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         """Map release type to ShareIsland type IDs"""
         effective_type = self._get_effective_type(meta)
         type_id = {
@@ -250,8 +250,16 @@ class SHRI(UNIT3D):
             "ENCODE": "15",
             "DVDRIP": "15",
             "BRRIP": "15",
-        }.get(effective_type, "0")
-        return {"type_id": type_id}
+        }
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        else:
+            resolved_id = type_id.get(effective_type, '0')
+            return {'type_id': resolved_id}
 
     async def get_additional_checks(self, meta):
         """
