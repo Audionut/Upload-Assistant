@@ -366,10 +366,25 @@ class SHRI(UNIT3D):
         """Distinguish REMUX/WEBDL/WEBRIP/ENCODE via MediaInfo"""
         try:
             mi = meta.get("mediainfo", {})
-            video_track = mi.get("media", {}).get("track", [{}])[1]
+            tracks = mi.get("media", {}).get("track", [])
+            general_track = tracks[0]
+            video_track = tracks[1]
             source = meta.get("source", "").upper()
-            # Has encode settings = definitely encoded
-            if video_track.get("Encoded_Library_Settings"):
+            # Check video track encode settings
+            has_video_encoding = video_track.get(
+                "Encoded_Library_Settings"
+            ) and not isinstance(video_track.get("Encoded_Library_Settings"), dict)
+            # Check general track for tools (including extra field)
+            encoded_app = str(general_track.get("Encoded_Application", "")).lower()
+            extra = general_track.get("extra", {})
+            writing_frontend = str(extra.get("Writing_frontend", "")).lower()
+            # Combine both fields
+            tool_string = f"{encoded_app} {writing_frontend}"
+            # Encoding tools
+            encoding_tools = ['handbrake', 'x264', 'x265', 'ffmpeg -c:v', 'staxrip']
+            has_encoding_app = any(tool in tool_string for tool in encoding_tools)
+            # If ANY encoding detected = definitely encoded
+            if has_video_encoding or has_encoding_app:
                 return "WEBRIP" if "WEB" in source else "ENCODE"
             # Profile 8 = streaming-only
             if "dvhe.08" in video_track.get("HDR_Format_Profile", ""):
