@@ -502,4 +502,3 @@ class EMUW(UNIT3D):
             upload_data['personal_release'] = 1
 
         return upload_data
-
