@@ -22,6 +22,46 @@ class ITT(UNIT3D):
         self.banned_groups = []
         pass
 
+    async def get_type_id(self, meta):
+        type_id_map = {
+            'DISC': '1',
+            'REMUX': '2',
+            'WEBDL': '4',
+            'WEBRIP': '5',
+            'HDTV': '6',
+            'ENCODE': '3',
+            'DLMux': '27',
+            'BDMux': '29',
+            'WEBMux': '26',
+            'DVDMux': '39',
+            'BDRip': '25',
+            'DVDRip': '24',
+            'Cinema-MD': '14',
+        }
+        type_id = '0'
+
+        uuid_string = meta.get('uuid', '')
+        if uuid_string:
+            lower_uuid = uuid_string.lower()
+
+            if 'dlmux' in lower_uuid:
+                type_id = '27'
+            elif 'bdmux' in lower_uuid:
+                type_id = '29'
+            elif 'webmux' in lower_uuid:
+                type_id = '26'
+            elif 'dvdmux' in lower_uuid:
+                type_id = '39'
+            elif 'bdrip' in lower_uuid:
+                type_id = '25'
+            elif 'dvdrip' in lower_uuid:
+                type_id = '24'
+
+        if type_id == '0':
+            type_id = type_id_map.get(meta.get('type'), '0')
+
+        return {'type_id': type_id}
+
     async def get_name(self, meta):
         type = meta.get('type', "").upper()
         title = meta.get('title', "")
