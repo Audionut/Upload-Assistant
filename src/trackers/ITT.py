@@ -35,7 +35,7 @@ class ITT(UNIT3D):
             'WEBMux': '26',
             'DVDMux': '39',
             'BDRip': '25',
-            'DVDRip': '24',
+            'DVDRIP': '24',
             'Cinema-MD': '14',
         }
         type_id = '0'
@@ -54,8 +54,6 @@ class ITT(UNIT3D):
                 type_id = '39'
             elif 'bdrip' in lower_uuid:
                 type_id = '25'
-            elif 'dvdrip' in lower_uuid:
-                type_id = '24'
 
         if type_id == '0':
             type_id = type_id_map.get(meta.get('type'), '0')
