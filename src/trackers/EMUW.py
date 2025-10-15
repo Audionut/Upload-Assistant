@@ -36,7 +36,12 @@ class EMUW(UNIT3D):
         """
         # Get Spanish title if available and configured
         title = await self._get_title(meta)
-        season = self._get_season_tag(meta)
+
+        # Get season using season_int
+        season = ""
+        if meta['category'] == 'TV' and meta.get('season_int'):
+            season = f"S{meta['season_int']:02d}"
+
         year = meta.get('year', '')
         resolution = self._map_resolution(meta.get('resolution', ''))
         video_format = self._map_format(meta)
@@ -52,8 +57,16 @@ class EMUW(UNIT3D):
         # Check for Spanish subtitles
         subs_tag = " SUBS" if self._has_spanish_subs(meta) else ""
 
-        # Extract group tag
-        tag = self._extract_group_tag(meta)
+        # Get tag from meta['tag']
+        tag = meta.get('tag', '').strip()
+
+        # Remove leading dash if present
+        if tag.startswith('-'):
+            tag = tag[1:]
+
+        # Filter out invalid tags and use default if needed
+        if not tag or tag.lower() in ['nogrp', 'nogroup', 'unknown', 'unk', 'hd.ma.5.1', 'untouched']:
+            tag = 'EMUWAREZ'
 
         # Build final name
         name_parts = [part for part in [title, season, str(year), resolution, video_format, video_codec, audio_str] if
@@ -62,13 +75,7 @@ class EMUW(UNIT3D):
 
         # Clean up spaces and build final name
         base_name = re.sub(r'\s{2,}', ' ', base_name).strip()
-
-        # Fix: Remove leading dash from tag if it exists
-        tag_separator = '-'
-        if tag.startswith('-'):
-            tag = tag[1:]
-
-        emuwarez_name = f"{base_name}{subs_tag}{tag_separator}{tag}"
+        emuwarez_name = f"{base_name}{subs_tag}-{tag}"
 
         return {'name': emuwarez_name}
 
@@ -108,52 +115,6 @@ class EMUW(UNIT3D):
             return spanish_title
 
         return meta.get('title', '')
-
-    def _get_season_tag(self, meta):
-        """Build season tag for TV shows (e.g., S03)"""
-        if meta.get('category') != 'TV':
-            return ""
-
-        season_int = meta.get('season_int')
-        if season_int:
-            return f"S{season_int:02d}"
-
-        return ""
-
-    def _extract_group_tag(self, meta):
-        """
-        Extract group tag with multiple fallback strategies
-        Priority: meta['tag'] → filename patterns → default
-        """
-        # Check meta['tag']
-        tag = meta.get('tag', '').strip()
-
-        # Remove leading dash if present
-        if tag.startswith('-'):
-            tag = tag[1:]
-
-        # Filter out invalid tags (including BDMV problematic tags)
-        if tag and tag.lower() not in ['nogrp', 'nogroup', 'unknown', 'unk', 'hd.ma.5.1', 'untouched']:
-            return tag
-
-        # Extract from filename patterns (excluding title-based patterns to avoid metadata issues)
-        patterns = [
-            (meta.get('path', ''), r'-([A-Za-z0-9]+?)(?:\.[a-z0-9]{2,4})?$'),
-            (meta.get('path', ''), r'\[([A-Za-z0-9]+)\](?:\.[a-z0-9]{2,4})?$'),
-            (meta.get('basename', ''), r'-([A-Za-z0-9]+)(?:\.[a-z0-9]{2,4})?$'),
-            (meta.get('uuid', ''), r'-([A-Za-z0-9]+)'),
-        ]
-
-        for source, pattern in patterns:
-            if source:
-                match = re.search(pattern, source)
-                if match:
-                    extracted = match.group(1).strip()
-                    if extracted and extracted.lower() not in ['nogrp', 'nogroup', 'unknown', 'unk', 'hd.ma.5.1',
-                                                               'untouched']:
-                        return extracted
-
-        return 'EMUWAREZ'
 
     def _map_resolution(self, resolution):
         """Map resolution to EMUW nomenclature"""
@@ -442,48 +403,89 @@ class EMUW(UNIT3D):
         """Search for duplicate torrents using cloudscraper for Cloudflare bypass"""
         dupes = []
 
+        # Build search name using meta['name'] like UNIT3D
+        search_name = meta['name']
+
+        # Add season for TV shows
+        if meta['category'] == 'TV' and meta.get('season'):
+            search_name = f"{search_name} {meta['season']}"
+
+        # Add edition if present
+        if meta.get('edition'):
+            search_name = f"{search_name} {meta['edition']}"
+
         params = {
             'tmdbId': meta.get('tmdb', ''),
             'categories[]': await self.get_cat_id(meta['category']),
-            'types[]': await self.get_type_id(meta['type']),
-            'resolutions[]': await self.get_res_id(meta['resolution']),
-            'name': ""
+            'name': search_name
         }
-
-        if meta['category'] == 'TV' and meta.get('season'):
-            params['name'] += f" S{str(meta['season']).zfill(2)}"
-
-        if meta.get('edition'):
-            params['name'] += f" {meta['edition']}"
 
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][self.tracker]['api_key'].strip()}",
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': f'Upload Assistant/2.2 ({platform.system()} {platform.release()})'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': self.base_url,
+            'Origin': self.base_url
         }
 
         scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'mobile': False,
+                'desktop': True
+            },
+            delay=10
         )
 
         try:
+            # Establish session
+            scraper.get(self.base_url, timeout=15.0)
+
+            # Make API request
             response = scraper.get(url=self.search_url, params=params, headers=headers, timeout=15.0)
 
             if response.status_code == 200:
-                data = response.json()
-                if 'data' in data and isinstance(data['data'], list):
-                    for torrent in data['data']:
-                        if 'attributes' in torrent and 'name' in torrent['attributes']:
-                            dupes.append(torrent['attributes']['name'])
-            elif response.status_code in [401, 403]:
-                console.print(f"[red]Authentication failed for {self.tracker}")
+                try:
+                    data = response.json()
+                    if 'data' in data and isinstance(data['data'], list):
+                        for torrent in data['data']:
+                            if 'attributes' in torrent:
+                                attributes = torrent['attributes']
+                                if 'name' in attributes:
+                                    if not meta['is_disc']:
+                                        result = {
+                                            'name': attributes['name'],
+                                            'size': attributes.get('size'),
+                                            'files': [file['name'] for file in attributes.get('files', []) if
+                                                      isinstance(file, dict) and 'name' in file],
+                                            'file_count': len(attributes.get('files', [])) if isinstance(
+                                                attributes.get('files'), list) else 0,
+                                            'trumpable': attributes.get('trumpable', False),
+                                            'link': attributes.get('details_link', None)
+                                        }
+                                    else:
+                                        result = {
+                                            'name': attributes['name'],
+                                            'size': attributes.get('size'),
+                                            'trumpable': attributes.get('trumpable', False),
+                                            'link': attributes.get('details_link', None)
+                                        }
+                                    dupes.append(result)
+                except Exception as json_error:
+                    console.print(f"[red]Failed to parse JSON: {json_error}")
+
+            elif response.status_code == 403:
+                console.print(f"[red]Cloudflare protection blocked API access to {self.tracker}")
             elif response.status_code == 429:
                 console.print(f"[yellow]Rate limited by {self.tracker}, waiting 60s...")
                 await asyncio.sleep(60)
+            else:
+                console.print(f"[yellow]Unexpected status code: {response.status_code}")
 
         except Exception as e:
-            console.print(f"[red]Search error for {self.tracker}: {str(e)}")
+            console.print(f"[red]Search error for {self.tracker}: {type(e).__name__}: {str(e)}")
 
         return dupes
 
