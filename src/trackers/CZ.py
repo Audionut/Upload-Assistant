@@ -14,6 +14,7 @@ class CZ(AZTrackerBase):
         self.banned_groups = ['']
         self.base_url = 'https://cinemaz.to'
         self.torrent_url = f'{self.base_url}/torrent/'
+        self.requests_url = f'{self.base_url}/requests'
 
     async def rules(self, meta):
         warnings = []

@@ -24,7 +24,8 @@ class FF:
         self.banned_groups = []
         self.source_flag = "FunFile"
         self.base_url = "https://www.funfile.org"
-        self.torrent_url = "https://www.funfile.org/details.php?id="
+        self.torrent_url = f"{self.base_url}/details.php?id="
+        self.requests_url = f"{self.base_url}/requests.php"
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
@@ -62,11 +63,11 @@ class FF:
             "login": "Login"
         }
 
-        print(f"[{self.tracker}] Trying to login...")
+        print(f"{self.tracker}: Trying to login...")
         response = await self.session.post(login_url, data=payload)
 
         if response.status_code == 302:
-            print(f"[{self.tracker}] Login Successful!")
+            print(f"{self.tracker}: Login Successful!")
 
             async with aiofiles.open(cookie_file, "w") as f:
                 await f.write("# Netscape HTTP Cookie File\n")
@@ -80,9 +81,9 @@ class FF:
                     name = cookie.name
                     value = cookie.value
                     await f.write(f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}\n")
-            print(f"[{self.tracker}] Saving the cookie file...")
+            print(f"{self.tracker}: Saving the cookie file...")
         else:
-            print(f"[{self.tracker}] Login failed. Status code: {response.status_code}")
+            print(f"{self.tracker}: Login failed. Status code: {response.status_code}")
 
     async def search_existing(self, meta, disctype):
         if meta['category'] == 'MOVIE':
@@ -105,12 +106,13 @@ class FF:
 
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 category = self.get_type_id(meta)
 
                 query_1 = meta['title']
                 query_2 = meta['title'].replace(' ', '.')
 
-                search_url_1 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_1}"
+                search_url_1 = f"{self.requests_url}?filter = open & category = {category} & search = {query_1}"
 
                 if query_1 != query_2:
                     search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
@@ -265,7 +267,7 @@ class FF:
 
         description = bbcode.remove_extra_lines(description)
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{self.tracker}:DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(description)
 
         return description
@@ -594,7 +596,7 @@ class FF:
         if nfo:
             files['nfo'] = nfo['nfo']
 
-        upload = await self.cookie_auth_uploader.handle_upload(
+        await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -608,12 +610,5 @@ class FF:
             success_status_code=302,
             additional_files=files
         )
-
-        if upload:
-            requests = await self.get_requests(meta)
-            if requests:
-                meta["tracker_status"][self.tracker]["status_message"] = (
-                    'Torrent uploaded successfully. Your upload may fulfill existing requests, check prior console logs.'
-                )
 
         return

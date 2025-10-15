@@ -28,6 +28,7 @@ class AZTrackerBase:
 
         tracker_config = self.config['TRACKERS'][self.tracker]
         self.base_url = tracker_config.get('base_url')
+        self.requests_url = tracker_config.get('requests_url')
         self.announce_url = tracker_config.get('announce_url')
         self.source_flag = tracker_config.get('source_flag')
 
@@ -481,9 +482,9 @@ class AZTrackerBase:
     async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
-
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 category = meta.get('category').lower()
 
                 if category == 'tv':
@@ -491,7 +492,7 @@ class AZTrackerBase:
                 else:
                     query = meta['title']
 
-                search_url = f'{self.base_url}/requests?type={category}&search={query}&condition=new'
+                search_url = f'{self.requests_url}?type={category}&search={query}&condition=new'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -880,7 +881,6 @@ class AZTrackerBase:
 
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
-        requests = await self.get_requests(meta)
         status_message = ''
 
         issue = await self.check_data(meta, data)
@@ -912,9 +912,6 @@ class AZTrackerBase:
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                    if requests:
-                        status_message += ' Your upload may fulfill existing requests, check prior console logs.'
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"

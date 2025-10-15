@@ -18,7 +18,8 @@ class HDS:
         self.source_flag = 'HD-Space'
         self.banned_groups = ['']
         self.base_url = 'https://hd-space.org'
-        self.torrent_url = 'https://hd-space.org/index.php?page=torrent-details&id='
+        self.torrent_url = f'{self.base_url}/index.php?page=torrent-details&id='
+        self.requests_url = f'{self.base_url}/index.php?page=viewrequests'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30)
@@ -220,6 +221,7 @@ class HDS:
             return False
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 query = meta['title']
                 search_url = f'{self.base_url}/index.php?'
 
@@ -300,7 +302,7 @@ class HDS:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        upload = await self.cookie_auth_uploader.handle_upload(
+        await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -312,10 +314,5 @@ class HDS:
             hash_is_id=True,
             success_text="download.php?id=",
         )
-
-        if upload:
-            requests = await self.get_requests(meta)
-            if requests:
-                meta["tracker_status"][self.tracker]["status_message"] = 'Torrent uploaded successfully. Your upload may fulfill existing requests, check prior console logs.'
 
         return

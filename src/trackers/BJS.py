@@ -36,6 +36,7 @@ class BJS:
         self.source_flag = 'BJ'
         self.base_url = 'https://bj-share.info'
         self.torrent_url = 'https://bj-share.info/torrents.php?torrentid='
+        self.requests_url = f'{self.base_url}/requests.php?'
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
@@ -993,6 +994,7 @@ class BJS:
             return False
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 cat = meta['category']
                 if cat == 'TV':
                     cat = 2
@@ -1003,7 +1005,7 @@ class BJS:
 
                 query = meta['title']
 
-                search_url = f'{self.base_url}/requests.php?submit=true&search={query}&showall=on&filter_cat[{cat}]=1'
+                search_url = f'{self.requests_url}submit=true&search={query}&showall=on&filter_cat[{cat}]=1'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -1194,7 +1196,7 @@ class BJS:
         if issue:
             meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
         else:
-            upload = await self.cookie_auth_uploader.handle_upload(
+            await self.cookie_auth_uploader.handle_upload(
                 meta=meta,
                 tracker=self.tracker,
                 source_flag=self.source_flag,
@@ -1206,12 +1208,5 @@ class BJS:
                 id_pattern=r'torrentid=(\d+)',
                 success_text="action=download&id=",
             )
-
-            if upload:
-                requests = await self.get_requests(meta)
-                if requests:
-                    meta["tracker_status"][self.tracker]["status_message"] = (
-                        'Torrent uploaded successfully. Your upload may fulfill existing requests, check prior console logs.'
-                    )
 
         return

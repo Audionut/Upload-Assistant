@@ -27,6 +27,7 @@ class ASC:
         self.banned_groups = []
         self.base_url = 'https://cliente.amigos-share.club'
         self.torrent_url = 'https://cliente.amigos-share.club/torrents-details.php?id='
+        self.requests_url = f'{self.base_url}/pedidos.php'
         self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
@@ -720,6 +721,7 @@ class ASC:
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
+            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
             try:
                 category = meta['category']
                 if meta.get('anime'):
@@ -734,8 +736,7 @@ class ASC:
                         category = 119
 
                 query = meta['title']
-
-                search_url = f'{self.base_url}/pedidos.php?search={query}&category={category}'
+                search_url = f'{self.requests_url}?search={query}&category={category}'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -837,7 +838,7 @@ class ASC:
         data = await self.get_data(meta)
         upload_url = await self.get_upload_url(meta)
 
-        upload = await self.cookie_auth_uploader.handle_upload(
+        await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -850,12 +851,8 @@ class ASC:
             success_text="torrents-details.php?id=",
         )
 
-        if upload:
-            requests = await self.get_requests(meta)
-            if requests:
-                meta["tracker_status"][self.tracker]["status_message"] = 'Torrent uploaded successfully. Your upload may fulfill existing requests, check prior console logs.'
-
-            # Approval
+        # Approval
+        if not meta.get('debug', False):
             should_approve = await self.get_approval(meta)
             if should_approve:
                 await self.auto_approval(meta['tracker_status'][self.tracker]['torrent_id'])
