@@ -153,6 +153,9 @@ config = {
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
+        # Use this client for injection (aka actually adding the torrent for uploading)
+        "inject_torrent_client": "",
+
         # Play the bell sound effect when asking for confirmation
         "sfx_on_prompt": True,
 
@@ -867,6 +870,19 @@ config = {
 
             # Set to False to skip verify certificate for HTTPS connections; for instance, if the connection is using a self-signed certificate.
             # "VERIFY_WEBUI_CERTIFICATE": True,
+        },
+        "qbittorrent_searching": {
+            # an example of using a qBitTorrent client just for searching, when using another client for injection
+            "torrent_client": "qbit",
+            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
+            # If using the qui reverse proxy, no other auth type needs to be set
+            "qui_proxy_url": "",
+            # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
+            "enable_search": True,
+            "qbit_url": "http://127.0.0.1",
+            "qbit_port": "8080",
+            "qbit_user": "",
+            "qbit_pass": "",
         },
         "rtorrent": {
             "torrent_client": "rtorrent",
