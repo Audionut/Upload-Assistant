@@ -77,6 +77,8 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         # Check if a specific tracker is already set in meta
         if not meta.get('emby', False):
             tracker_keys = {
+                # preference some unit3d based trackers first
+                # since they can return tdb/imdb/tvdb ids
                 'aither': 'AITHER',
                 'blu': 'BLU',
                 'lst': 'LST',
@@ -87,6 +89,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 'btn': 'BTN',
                 'bhd': 'BHD',
                 'hdb': 'HDB',
+                'sp': 'SP',
                 'rf': 'RF',
                 'otw': 'OTW',
                 'yus': 'YUS',
@@ -150,6 +153,17 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 return meta
 
             while not found_match and specific_tracker:
+                meta_trackers = meta.get('trackers', [])
+                if isinstance(meta_trackers, str):
+                    meta_trackers = [t.strip().upper() for t in meta_trackers.split(',')]
+                elif isinstance(meta_trackers, list):
+                    meta_trackers = [t.upper() if isinstance(t, str) else t for t in meta_trackers]
+
+                if any(tracker in meta_trackers for tracker in specific_tracker) and meta.get('site_check', False):
+                    console.print("[yellow]Found the matching content in your client[/yellow]")
+                    meta['skip_this_content'] = True
+                    return meta
+
                 available_trackers, waiting_trackers = await get_available_trackers(specific_tracker, base_dir, debug=meta['debug'])
 
                 if available_trackers:

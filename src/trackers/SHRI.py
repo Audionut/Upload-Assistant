@@ -461,12 +461,19 @@ class SHRI(UNIT3D):
                     "atmos" in track.get("atmos_why_you_be_like_this", "").lower(),
                     int(bitrate_match.group(1)) if bitrate_match else 0
                 )
-            return (
-                track.get("Compression_Mode") == "Lossless",
-                int(track.get("Channels", 2)),
-                "JOC" in track.get("Format_AdditionalFeatures", "") or "Atmos" in track.get("Format_Commercial", ""),
-                int(track.get("BitRate", 0))
-            )
+            else:
+                try:
+                    bitrate_int = int(track.get("BitRate", 0)) if track.get("BitRate", 0) else 0
+                except (ValueError, TypeError) as e:
+                    cli_ui.warning(f"Invalid BitRate value in audio track: {track.get('BitRate')}\n"
+                                   f"Using 0 as default. Error: {e}.")
+                    bitrate_int = 0
+                return (
+                    track.get("Compression_Mode") == "Lossless",
+                    int(track.get("Channels", 2)),
+                    "JOC" in track.get("Format_AdditionalFeatures", "") or "Atmos" in track.get("Format_Commercial", ""),
+                    bitrate_int
+                )
 
         def clean(audio_str):
             return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio_str.replace("Dual-Audio", "").replace("Dubbed", "")).strip()
