@@ -6,6 +6,7 @@ beautifulsoup4
 bencode.py
 cli-ui
 click
+cloudscraper
 deluge-client
 discord
 ffmpeg-python
@@ -33,4 +34,3 @@ tqdm
 transmission_rpc
 unidecode
 urllib3
-cloudscraper
