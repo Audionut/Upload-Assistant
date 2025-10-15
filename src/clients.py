@@ -54,7 +54,10 @@ class Clients():
         else:
             return
         if meta.get('client', None) is None:
-            default_torrent_client = self.config['DEFAULT']['default_torrent_client']
+            if self.config['DEFAULT'].get('inject_torrent_client', "") != "":
+                default_torrent_client = self.config['DEFAULT']['inject_torrent_client']
+            else:
+                default_torrent_client = self.config['DEFAULT']['default_torrent_client']
         else:
             default_torrent_client = meta['client']
         if meta.get('client', None) == 'none':
