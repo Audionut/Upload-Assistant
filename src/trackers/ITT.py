@@ -63,12 +63,7 @@ class ITT(UNIT3D):
         if meta.get('no_year', False) is True:
             year = ''
 
-        if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        dubs = ''
-        audio_languages = set(meta.get('audio_languages', []))
-        if audio_languages:
-            dubs = " ".join([lang[:3].upper() for lang in audio_languages])
+        dubs = await self.get_dubs(meta)
 
         """
         From https://itatorrents.xyz/wikis/20
@@ -100,6 +95,15 @@ class ITT(UNIT3D):
         itt_name = name_notag + tag
 
         return {"name": re.sub(r"\s{2,}", " ", itt_name)}
+
+    async def get_dubs(self, meta):
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        dubs = ''
+        audio_languages = set(meta.get('audio_languages', []))
+        if audio_languages:
+            dubs = " ".join([lang[:3].upper() for lang in audio_languages])
+        return dubs
 
     async def get_additional_checks(self, meta):
         should_continue = True
