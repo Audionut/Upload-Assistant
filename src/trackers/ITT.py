@@ -22,6 +22,29 @@ class ITT(UNIT3D):
         self.banned_groups = []
         pass
 
+    async def get_type_name(self, meta):
+        type_name = None
+
+        uuid_string = meta.get('uuid', '')
+        if uuid_string:
+            lower_uuid = uuid_string.lower()
+
+            if 'dlmux' in lower_uuid:
+                type_name = 'DLMux'
+            elif 'bdmux' in lower_uuid:
+                type_name = 'BDMux'
+            elif 'webmux' in lower_uuid:
+                type_name = 'WEBMux'
+            elif 'dvdmux' in lower_uuid:
+                type_name = 'DVDMux'
+            elif 'bdrip' in lower_uuid:
+                type_name = 'BDRip'
+
+        if type_name is None:
+            type_name = meta.get('type')
+
+        return type_name
+
     async def get_type_id(self, meta):
         type_id_map = {
             'DISC': '1',
@@ -38,30 +61,15 @@ class ITT(UNIT3D):
             'DVDRIP': '24',
             'Cinema-MD': '14',
         }
-        type_id = '0'
 
-        uuid_string = meta.get('uuid', '')
-        if uuid_string:
-            lower_uuid = uuid_string.lower()
+        type_name = await self.get_type_name(meta)
 
-            if 'dlmux' in lower_uuid:
-                type_id = '27'
-            elif 'bdmux' in lower_uuid:
-                type_id = '29'
-            elif 'webmux' in lower_uuid:
-                type_id = '26'
-            elif 'dvdmux' in lower_uuid:
-                type_id = '39'
-            elif 'bdrip' in lower_uuid:
-                type_id = '25'
-
-        if type_id == '0':
-            type_id = type_id_map.get(meta.get('type'), '0')
+        type_id = type_id_map.get(type_name, '0')
 
         return {'type_id': type_id}
 
     async def get_name(self, meta):
-        type = meta.get('type', "").upper()
+        type = await self.get_type_name(meta)
         title = meta.get('title', "")
         year = meta.get('year', "")
         if int(meta.get('manual_year')) > 0:
@@ -117,7 +125,14 @@ class ITT(UNIT3D):
             itt_name = f"{title} {year} {season}{episode} {repack} {resolution} {edition} {region} {three_d} {source} {'REMUX' if type == 'REMUX' else ''} {hdr} {video_codec} {dubs} {audio}"
 
         else:
-            itt_name = f"{title} {year} {season}{episode} {repack} {resolution} {edition} {three_d} {source} {type} {dubs} {audio} {hdr} {video_codec}"
+            type = (
+                type
+                .replace('WEBDL', 'WEB-DL')
+                .replace('WEBRIP', 'WEBRip')
+                .replace('DVDRIP', 'DVDRip')
+                .replace('ENCODE', 'BluRay')
+            )
+            itt_name = f"{title} {year} {season}{episode} {repack} {resolution} {edition} {three_d} {type} {dubs} {audio} {hdr} {video_codec}"
 
         try:
             itt_name = ' '.join(itt_name.split())
@@ -131,6 +146,7 @@ class ITT(UNIT3D):
             exit()
         name_notag = itt_name
         itt_name = name_notag + tag
+        itt_name = itt_name.replace('Dubbed', '').replace('Dual-Audio', '')
 
         return {"name": re.sub(r"\s{2,}", " ", itt_name)}
 
