@@ -1718,17 +1718,23 @@ async def worker_wrapper(image, optimize_image_task, executor):
 
 async def kill_all_child_processes():
     """Ensures all child processes (e.g., ProcessPoolExecutor workers) are terminated."""
-    current_process = psutil.Process()
-    children = current_process.children(recursive=True)  # Get child processes once
+    try:
+        current_process = psutil.Process()
+        children = current_process.children(recursive=True)  # Get child processes once
 
-    for child in children:
-        console.print(f"[red]Killing stuck worker process: {child.pid}[/red]")
-        child.terminate()
+        for child in children:
+            console.print(f"[red]Killing stuck worker process: {child.pid}[/red]")
+            child.terminate()
 
-    gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
-    for process in still_alive:
-        console.print(f"[red]Force killing stubborn process: {process.pid}[/red]")
-        process.kill()
+        gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
+        for process in still_alive:
+            console.print(f"[red]Force killing stubborn process: {process.pid}[/red]")
+            process.kill()
+    except (psutil.AccessDenied, PermissionError) as e:
+        # Handle restricted environments like Termux/Android where /proc/stat is inaccessible
+        console.print(f"[yellow]Warning: Unable to access process information (restricted environment): {e}[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Error during child process cleanup: {e}[/yellow]")
 
 
 def optimize_image_task(image):

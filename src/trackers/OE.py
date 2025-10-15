@@ -131,24 +131,33 @@ class OE(UNIT3D):
         resolution = meta.get('resolution')
         video_encode = meta.get('video_encode')
         name_type = meta.get('type', "")
-        tag_lower = meta['tag'].lower()
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        source = meta.get('source', "")
+        audio = meta.get('audio', "")
+        video_codec = meta.get('video_codec', "")
+
         imdb_name = meta.get('imdb_info', {}).get('title', "")
-        title = meta.get('title', "")
-        oe_name = oe_name.replace(f"{title}", imdb_name, 1)
-        year = str(meta.get('year', ""))
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
-        scale = "DS4K" if "DS4K" in meta['uuid'].upper() else "RM4K" if "RM4K" in meta['uuid'].upper() else ""
-        if not meta.get('category') == "TV":
+        imdb_aka = meta.get('imdb_info', {}).get('aka', "")
+        year = str(meta.get('year', ""))
+        aka = meta.get('aka', "")
+        if imdb_name and imdb_name != "":
+            if aka:
+                oe_name = oe_name.replace(f"{aka} ", "", 1)
+            oe_name = oe_name.replace(f"{meta['title']}", imdb_name, 1)
+
+            if imdb_aka and imdb_aka != "" and imdb_aka != imdb_name and not meta.get('no_aka', False):
+                oe_name = oe_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
+
+        if not meta.get('category') == "TV" and imdb_year and imdb_year != "" and year and year != "" and imdb_year != year:
             oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
         if name_type == "DVDRIP":
             if meta.get('category') == "MOVIE":
-                oe_name = oe_name.replace(f"{meta['source']}{meta['video_encode']}", f"{resolution}", 1)
-                oe_name = oe_name.replace((meta['audio']), f"{meta['audio']}{video_encode}", 1)
+                oe_name = oe_name.replace(f"{source}{video_encode}", f"{resolution}", 1)
+                oe_name = oe_name.replace((audio), f"{audio}{video_encode}", 1)
             else:
-                oe_name = oe_name.replace(f"{meta['source']}", f"{resolution}", 1)
-                oe_name = oe_name.replace(f"{meta['video_codec']}", f"{meta['audio']} {meta['video_codec']}", 1)
+                oe_name = oe_name.replace(f"{source}", f"{resolution}", 1)
+                oe_name = oe_name.replace(f"{video_codec}", f"{audio} {video_codec}", 1)
 
         if not meta.get('audio_languages'):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
@@ -156,11 +165,14 @@ class OE(UNIT3D):
             audio_languages = meta['audio_languages']
             if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
                 foreign_lang = meta['audio_languages'][0].upper()
-                oe_name = oe_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
+                oe_name = oe_name.replace(f"{resolution}", f"{foreign_lang} {resolution}", 1)
 
+        scale = "DS4K" if "DS4K" in meta['uuid'].upper() else "RM4K" if "RM4K" in meta['uuid'].upper() else ""
         if name_type in ["ENCODE", "WEBDL", "WEBRIP"] and scale != "":
             oe_name = oe_name.replace(f"{resolution}", f"{scale}", 1)
 
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
                 oe_name = re.sub(f"-{invalid_tag}", "", oe_name, flags=re.IGNORECASE)
