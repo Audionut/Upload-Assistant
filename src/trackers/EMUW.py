@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import re
-import platform
 import asyncio
 import cloudscraper
 from src.console import console
@@ -503,3 +502,4 @@ class EMUW(UNIT3D):
             upload_data['personal_release'] = 1
 
         return upload_data
+    
