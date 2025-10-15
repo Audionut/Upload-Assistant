@@ -435,6 +435,14 @@ config = {
             # Send uploads to DP modq for staff approval
             "modq": False,
         },
+        "EMUW": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Use Spanish title instead of English title, if available
+            "use_spanish_title": False,
+        },
         "FF": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -814,14 +822,6 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
-        },
-        "EMUW": {
-            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
-            "link_dir_name": "",
-            "api_key": "",
-            "anon": False,
-            # Use Spanish title instead of English title, if available
-            "use_spanish_title": False,
         },
         "MANUAL": {
             # Replace link with filebrowser (https://github.com/filebrowser/filebrowser) link to the Upload-Assistant directory, this will link to your filebrowser instead of uploading to uguu.se

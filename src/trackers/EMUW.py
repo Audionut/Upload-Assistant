@@ -60,10 +60,6 @@ class EMUW(UNIT3D):
                       part]
         base_name = ' '.join(name_parts)
 
-        name_parts = [part for part in [title, season, str(year), resolution, video_format, video_codec, audio_str] if
-                      part]
-        base_name = ' '.join(name_parts)
-
         # Clean up spaces and build final name
         base_name = re.sub(r'\s{2,}', ' ', base_name).strip()
 
@@ -80,14 +76,22 @@ class EMUW(UNIT3D):
         """Get Spanish title if available and configured"""
         spanish_title = None
 
-        # Try to get from IMDb
+        # Try to get from IMDb with priority: country match, then language match
         imdb_info = meta.get('imdb_info') or {}
         akas = imdb_info.get('akas', [])
 
+        country_match = None
+        language_match = None
+
         for aka in akas:
-            if isinstance(aka, dict) and aka.get("country") == "Spain":
-                spanish_title = aka.get("title")
-                break
+            if isinstance(aka, dict):
+                if aka.get("country") in ["Spain", "ES"]:
+                    country_match = aka.get("title")
+                    break  # Country match takes priority
+                elif aka.get("language") in ["Spain", "Spanish", "ES"] and not language_match:
+                    language_match = aka.get("title")
+
+        spanish_title = country_match or language_match
 
         # Try TMDb if not found
         if not spanish_title and meta.get('tmdb'):
@@ -95,7 +99,7 @@ class EMUW(UNIT3D):
                 tmdb_id=meta.get('tmdb'),
                 category=meta.get('category', 'MOVIE'),
                 target_language='es',
-                debug=False
+                debug=meta.get('debug', False)
             )
 
         # Use Spanish title if configured
@@ -110,15 +114,11 @@ class EMUW(UNIT3D):
         if meta.get('category') != 'TV':
             return ""
 
-        season_num = meta.get('season', '')
-        if not season_num:
-            return ""
+        season_int = meta.get('season_int')
+        if season_int:
+            return f"S{season_int:02d}"
 
-        season_str = str(season_num).replace('S', '').replace('s', '')
-        try:
-            return f"S{int(season_str):02d}"
-        except (ValueError, TypeError):
-            return f"S{season_str}"
+        return ""
 
     def _extract_group_tag(self, meta):
         """
@@ -127,16 +127,19 @@ class EMUW(UNIT3D):
         """
         # Check meta['tag']
         tag = meta.get('tag', '').strip()
-        if tag and tag.lower() not in ['nogrp', 'nogroup', 'unknown', '-unk-', '']:
+
+        # Remove leading dash if present
+        if tag.startswith('-'):
+            tag = tag[1:]
+
+        # Filter out invalid tags (including BDMV problematic tags)
+        if tag and tag.lower() not in ['nogrp', 'nogroup', 'unknown', 'unk', 'hd.ma.5.1', 'untouched']:
             return tag
 
-        # Extract from filename patterns
+        # Extract from filename patterns (excluding title-based patterns to avoid metadata issues)
         patterns = [
             (meta.get('path', ''), r'-([A-Za-z0-9]+?)(?:\.[a-z0-9]{2,4})?$'),
             (meta.get('path', ''), r'\[([A-Za-z0-9]+)\](?:\.[a-z0-9]{2,4})?$'),
-            (meta.get('title', ''), r'-([A-Za-z0-9]+?)(?:[\]\s\n\r]|$)'),
-            (meta.get('title', ''), r'\[([A-Za-z0-9]+)\]$'),
-            (meta.get('title', ''), r'~([A-Za-z0-9]+?)(?:[\]\s\n\r]|$)'),
             (meta.get('basename', ''), r'-([A-Za-z0-9]+)(?:\.[a-z0-9]{2,4})?$'),
             (meta.get('uuid', ''), r'-([A-Za-z0-9]+)'),
         ]
@@ -146,7 +149,8 @@ class EMUW(UNIT3D):
                 match = re.search(pattern, source)
                 if match:
                     extracted = match.group(1).strip()
-                    if extracted and extracted.lower() not in ['nogrp', 'nogroup', 'unknown', 'unk']:
+                    if extracted and extracted.lower() not in ['nogrp', 'nogroup', 'unknown', 'unk', 'hd.ma.5.1',
+                                                               'untouched']:
                         return extracted
 
         return 'EMUWAREZ'
