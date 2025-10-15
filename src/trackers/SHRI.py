@@ -381,7 +381,7 @@ class SHRI(UNIT3D):
             # Combine both fields
             tool_string = f"{encoded_app} {writing_frontend}"
             # Encoding tools
-            encoding_tools = ['handbrake', 'x264', 'x265', 'ffmpeg -c:v', 'staxrip']
+            encoding_tools = ["handbrake", "x264", "x265", "ffmpeg -c:v", "staxrip"]
             has_encoding_app = any(tool in tool_string for tool in encoding_tools)
             # If ANY encoding detected = definitely encoded
             if has_video_encoding or has_encoding_app:
