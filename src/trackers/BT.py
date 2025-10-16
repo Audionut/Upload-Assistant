@@ -145,8 +145,8 @@ class BT:
                         append_to_response=''
                     )
 
-        self.main_tmdb_data = main_ptbr_data
-        self.episode_tmdb_data = episode_ptbr_data
+        self.main_tmdb_data = main_ptbr_data or {}
+        self.episode_tmdb_data = episode_ptbr_data or {}
 
         return
 
