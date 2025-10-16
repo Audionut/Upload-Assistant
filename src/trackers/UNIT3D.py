@@ -354,6 +354,8 @@ class UNIT3D:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                    response.raise_for_status()
+
                     response_data = response.json()
                     meta['tracker_status'][self.tracker]['status_message'] = await self.process_response_data(response_data)
                     torrent_id = await self.get_torrent_id(response_data)
@@ -369,6 +371,14 @@ class UNIT3D:
                         params=params,
                         downurl=response_data['data']
                     )
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 403:
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        "data error: Forbidden (403). You probably don't have upload permissions or your API key is incorrect."
+                    )
+                else:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
             except httpx.RequestError as e:
