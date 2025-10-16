@@ -360,8 +360,17 @@ class EMUW(UNIT3D):
 
         for track in tracks:
             if track.get('@type') == 'Text':
-                lang = track.get('Language', '').lower()
-                title = track.get('Title', '').lower()
+                lang = track.get('Language', '')
+                if isinstance(lang, str):
+                    lang = lang.lower()
+                else:
+                    lang = ''
+
+                title = track.get('Title', '')
+                if isinstance(title, str):
+                    title = title.lower()
+                else:
+                    title = ''
 
                 if lang in ['es', 'spa', 'spanish', 'es-es', 'español']:
                     return True
