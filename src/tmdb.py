@@ -466,7 +466,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                         return tmdb_id, category
 
                         # Put unattended handling here, since it will work based on the sorted results
-                        if unattended:
+                        if unattended and not debug:
                             tmdb_id = int(sorted_results[0]['id'])
                             return tmdb_id, category
 

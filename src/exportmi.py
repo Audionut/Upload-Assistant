@@ -351,96 +351,88 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             if debug:
                 console.print(f"[yellow]DVD processing on {current_platform} not supported with specialized MediaInfo[/yellow]")
 
-    # Force regeneration if using specialized MediaInfo (to ensure version consistency)
-    force_regenerate = mediainfo_cmd is not None and is_dvd
+    if debug:
+        console.print("[bold yellow]Exporting MediaInfo...")
+    if not isdir:
+        os.chdir(os.path.dirname(video))
 
-    if (not os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt") or force_regenerate) and export_text:
-        if debug:
-            if force_regenerate and os.path.exists(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt"):
-                console.print("[bold yellow]Regenerating MediaInfo text (specialized version)...")
+    if mediainfo_cmd and is_dvd:
+        try:
+            cmd = [mediainfo_cmd, video]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+            if result.returncode == 0 and result.stdout:
+                media_info = result.stdout
             else:
-                console.print("[bold yellow]Exporting MediaInfo...")
-        if not isdir:
-            os.chdir(os.path.dirname(video))
+                raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
 
-        if mediainfo_cmd and is_dvd:
-            try:
-                cmd = [mediainfo_cmd, video]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-                if result.returncode == 0 and result.stdout:
-                    media_info = result.stdout
-                else:
-                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
-
-            except subprocess.TimeoutExpired:
-                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
-                media_info = MediaInfo.parse(video, output="STRING", full=False)
-            except (subprocess.CalledProcessError, Exception) as e:
-                console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
-                if debug and 'result' in locals():
-                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
-                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
-                console.print("[bold yellow]Falling back to standard MediaInfo for text...")
-                media_info = MediaInfo.parse(video, output="STRING", full=False)
-        else:
+        except subprocess.TimeoutExpired:
+            console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
             media_info = MediaInfo.parse(video, output="STRING", full=False)
+        except (subprocess.CalledProcessError, Exception) as e:
+            console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
+            if debug and 'result' in locals():
+                console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+            console.print("[bold yellow]Falling back to standard MediaInfo for text...")
+            media_info = MediaInfo.parse(video, output="STRING", full=False)
+    else:
+        media_info = MediaInfo.parse(video, output="STRING", full=False)
 
-        if isinstance(media_info, str):
-            filtered_media_info = "\n".join(
-                line for line in media_info.splitlines()
-                if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-            )
-        else:
-            filtered_media_info = "\n".join(
-                line for line in media_info.splitlines()
-                if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-            )
+    if isinstance(media_info, str):
+        filtered_media_info = "\n".join(
+            line for line in media_info.splitlines()
+            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+        )
+    else:
+        filtered_media_info = "\n".join(
+            line for line in media_info.splitlines()
+            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+        )
 
-        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
-            await export.write(filtered_media_info.replace(video, os.path.basename(video)))
-        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
-            await export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
-        if debug:
-            console.print("[bold green]MediaInfo Exported.")
+    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
+        await export.write(filtered_media_info.replace(video, os.path.basename(video)))
+    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8') as export_cleanpath:
+        await export_cleanpath.write(filtered_media_info.replace(video, os.path.basename(video)))
+    if debug:
+        console.print("[bold green]MediaInfo Exported.")
 
-    if not os.path.exists(f"{base_dir}/tmp/{folder_id}/MediaInfo.json") or force_regenerate:
-        if mediainfo_cmd and is_dvd:
-            try:
-                cmd = [mediainfo_cmd, "--Output=JSON", video]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if mediainfo_cmd and is_dvd:
+        try:
+            cmd = [mediainfo_cmd, "--Output=JSON", video]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-                if result.returncode == 0 and result.stdout:
-                    media_info_json = result.stdout
-                    media_info_dict = json.loads(media_info_json)
-                else:
-                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
-
-            except subprocess.TimeoutExpired:
-                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
-                media_info_json = MediaInfo.parse(video, output="JSON")
+            if result.returncode == 0 and result.stdout:
+                media_info_json = result.stdout
                 media_info_dict = json.loads(media_info_json)
-            except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
-                console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
-                if debug and 'result' in locals():
-                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
-                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
-                    if result.stdout:
-                        console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
-                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
-                media_info_json = MediaInfo.parse(video, output="JSON")
-                media_info_dict = json.loads(media_info_json)
-        else:
-            # Use standard MediaInfo library for non-DVD or when specialized CLI not available
+            else:
+                raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+        except subprocess.TimeoutExpired:
+            console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
             media_info_json = MediaInfo.parse(video, output="JSON")
             media_info_dict = json.loads(media_info_json)
+        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
+            console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
+            if debug and 'result' in locals():
+                console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                if result.stdout:
+                    console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
+            console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
+            media_info_json = MediaInfo.parse(video, output="JSON")
+            media_info_dict = json.loads(media_info_json)
+    else:
+        # Use standard MediaInfo library for non-DVD or when specialized CLI not available
+        media_info_json = MediaInfo.parse(video, output="JSON")
+        media_info_dict = json.loads(media_info_json)
 
-        filtered_info = filter_mediainfo(media_info_dict)
+    filtered_info = filter_mediainfo(media_info_dict)
 
-        async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
-            await export.write(json.dumps(filtered_info, indent=4))
-            if debug:
-                console.print(f"[green]JSON file written to: {base_dir}/tmp/{folder_id}/MediaInfo.json[/green]")
+    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'w', encoding='utf-8') as export:
+        await export.write(json.dumps(filtered_info, indent=4))
+        if debug:
+            console.print(f"[green]JSON file written to: {base_dir}/tmp/{folder_id}/MediaInfo.json[/green]")
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'r', encoding='utf-8') as f:
         mi = json.loads(await f.read())
