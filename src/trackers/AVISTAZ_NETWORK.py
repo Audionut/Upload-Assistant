@@ -2,6 +2,7 @@ import aiofiles
 import asyncio
 import bbcode
 import httpx
+import importlib
 import json
 import os
 import platform
@@ -25,6 +26,7 @@ class AZTrackerBase:
         self.tracker = tracker_name
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
+        self.az_class = getattr(importlib.import_module(f"src.trackers.{self.tracker}"), self.tracker)
 
         tracker_config = self.config['TRACKERS'][self.tracker]
         self.base_url = tracker_config.get('base_url')
@@ -156,7 +158,7 @@ class AZTrackerBase:
 
     async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'type_id': category,
             'title': title,
             'imdb_id': imdb_id if imdb_id else '',
@@ -401,7 +403,7 @@ class AZTrackerBase:
         }
 
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'qquuid': str(uuid.uuid4()),
             'qqfilename': filename,
             'qqtotalfilesize': str(len(image_bytes))
@@ -644,7 +646,7 @@ class AZTrackerBase:
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -825,7 +827,7 @@ class AZTrackerBase:
         lang_info = await self.get_lang(meta) or {}
 
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),

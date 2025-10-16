@@ -42,9 +42,11 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
-    async def async_input(self, prompt):
+    async def async_input(self, prompt=False):
         """Gets user input in a non-blocking way using asyncio.to_thread"""
-        user_input = await asyncio.to_thread(input, prompt)
+        if prompt:
+            console.print(prompt)
+        user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):

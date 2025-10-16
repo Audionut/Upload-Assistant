@@ -143,7 +143,6 @@ async def validate_tracker_logins(meta, trackers=None):
                     meta['tracker_status'][tracker_name] = {}
 
                 tracker_class = tracker_class_map[tracker_name](config=config)
-                meta[f'{tracker_name}_secret_token'] = []
                 if meta['debug']:
                     console.print(f"[cyan]Validating {tracker_name} credentials...[/cyan]")
                 if tracker_name == "RTF":
@@ -153,8 +152,6 @@ async def validate_tracker_logins(meta, trackers=None):
 
                 if not login:
                     meta['tracker_status'][tracker_name]['skipped'] = True
-                elif isinstance(login, str) and login:
-                    meta[f'{tracker_name}_secret_token'] = login
 
                 return tracker_name, login
             except Exception as e:

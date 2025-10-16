@@ -41,7 +41,6 @@ class BJS:
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
-        self.cover = ''
 
     async def get_additional_checks(self, meta):
         should_continue = True
@@ -106,8 +105,8 @@ class BJS:
                         append_to_response=''
                     )
 
-        self.main_tmdb_data = main_ptbr_data
-        self.episode_tmdb_data = episode_ptbr_data
+        self.main_tmdb_data = main_ptbr_data or {}
+        self.episode_tmdb_data = episode_ptbr_data or {}
 
         return
 
@@ -619,6 +618,7 @@ class BJS:
             return
 
         try:
+            BJS.already_has_the_info = False
             params = self._extract_upload_params(meta)
 
             soup = await self._fetch_search_page(meta)
@@ -671,6 +671,7 @@ class BJS:
 
             ajax_tasks = self._extract_torrent_ids(rows_to_process)
             found_items = await self._process_ajax_responses(ajax_tasks, params)
+            BJS.already_has_the_info = bool(found_items)
 
             return found_items
 
@@ -955,6 +956,9 @@ class BJS:
         return ' / '.join(ordered_tags)
 
     async def get_credits(self, meta, role):
+        if BJS.already_has_the_info:
+            return 'N/A'
+
         role_map = {
             'director': ('directors', 'tmdb_directors'),
             'creator': ('creators', 'tmdb_creators'),
@@ -977,17 +981,17 @@ class BJS:
                 return ', '.join(unique_names)
 
             else:
-                if not self.cover:  # Only ask for input if there's no info in the site already
-                    role_display_name = prompt_name_map.get(role, role.capitalize())
-                    prompt_message = (f'{role_display_name} não encontrado(s).\nPor favor, insira manualmente (separados por vírgula): ')
-                    user_input = await self.common.async_input(prompt=prompt_message)
+                role_display_name = prompt_name_map.get(role, role.capitalize())
+                prompt_message = (
+                    f'{role_display_name} não encontrado(s).\n'
+                    'Por favor, insira manualmente (separados por vírgula): '
+                )
+                user_input = await self.common.async_input(prompt=prompt_message)
 
-                    if user_input.strip():
-                        return user_input.strip()
-                    else:
-                        return 'skipped'
+                if user_input.strip():
+                    return user_input.strip()
                 else:
-                    return 'N/A'
+                    return 'skipped'
 
     async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
@@ -1071,7 +1075,7 @@ class BJS:
         # These fields are common across all upload types
         data.update({
             'audio': await self.get_audio(meta),
-            'auth': meta[f'{self.tracker}_secret_token'],
+            'auth': BJS.secret_token,
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
             'duracaoHR': self.get_runtime(meta).get('hours'),
@@ -1086,7 +1090,7 @@ class BJS:
             'remaster_title': self.build_remaster_title(meta),
             'resolucaoh': self.get_resolution(meta).get('height'),
             'resolucaow': self.get_resolution(meta).get('width'),
-            'sinopse': self.main_tmdb_data.get('overview') or await self.common.async_input(prompt='Digite a sinopse: '),
+            'sinopse': await self.get_overview(),
             'submit': 'true',
             'tags': await self.get_tags(meta),
             'tipolegenda': await self.get_subtitle(meta),
@@ -1176,6 +1180,20 @@ class BJS:
             })
 
         return data
+
+    async def get_overview(self):
+        overview = self.main_tmdb_data.get('overview', '')
+        if not overview:
+            if not BJS.already_has_the_info:
+                console.print(
+                    "[bold red]Sinopse não encontrada no TMDB. Por favor, insira manualmente.[/bold red]"
+                )
+                overview = await self.common.async_input(
+                    prompt='[green]Digite a sinopse:[/green]'
+                )
+            else:
+                return 'N/A'
+        return overview
 
     async def check_data(self, meta, data):
         if not meta.get('debug', False):

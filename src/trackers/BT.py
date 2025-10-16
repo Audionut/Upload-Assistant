@@ -588,7 +588,7 @@ class BT:
         data = {
             'audio_c': await self.get_audio_codec(meta),
             'audio': await self.get_audio(meta),
-            'auth': meta[f'{self.tracker}_secret_token'],
+            'auth': BT.secret_token,
             'bitrate': await self.get_bitrate(meta),
             'desc': '',
             'diretor': await self.get_credits(meta),

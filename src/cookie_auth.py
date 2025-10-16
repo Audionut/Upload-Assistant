@@ -3,6 +3,7 @@ import http.cookiejar
 import httpx
 import os
 import re
+import importlib
 import traceback
 from bs4 import BeautifulSoup
 from src.console import console
@@ -251,7 +252,15 @@ class CookieValidator:
                     if not match:
                         await self.handle_validation_failure(meta, tracker, text)
                         return False
-                    token = str(match.group(1))
+                    cls = getattr(
+                        importlib.import_module(f'src.trackers.{tracker}'),
+                        tracker
+                    )
+                    setattr(
+                        cls,
+                        "secret_token",
+                        str(match.group(1))
+                    )
 
                 # Save cookies only after a confirmed valid login
                 await self.save_session_cookies(tracker, cookie_jar)
