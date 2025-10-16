@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import Literal
 import cli_ui
 import os
 import pycountry
@@ -136,6 +137,7 @@ class SHRI(UNIT3D):
 
         repack = meta.get("repack", "").strip()
 
+        name = None
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
             # Inject region from validated session data if available
@@ -263,7 +265,7 @@ class SHRI(UNIT3D):
             type_id = type_mapping.get(effective_type, "0")
             return {"type_id": type_id}
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta) -> Literal[True]:
         """
         Validate and prompt for DVD/HDDVD region/distributor before upload.
         Stores validated IDs in module-level dict keyed by UUID for use during upload.
@@ -288,16 +290,17 @@ class SHRI(UNIT3D):
             # Validate region name was provided
             if not region_name:
                 cli_ui.error("Region required; skipping SHRI.")
-                return False
+                raise ValueError("Region required for disc upload")
 
             # Validate region code with API
             region_id = await self.common.unit3d_region_ids(region_name)
             if not region_id:
                 cli_ui.error(f"Invalid region code '{region_name}'; skipping SHRI.")
-                return False
+                raise ValueError(f"Invalid region code: {region_name}")
 
             # Handle optional distributor
             distributor_name = meta.get("distributor")
+            distributor_id = None
             if not distributor_name and not meta.get("unattended"):
                 distributor_name = cli_ui.ask_string(
                     "SHRI: Distributor (optional, Enter to skip): "
