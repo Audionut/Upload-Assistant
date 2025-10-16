@@ -375,7 +375,11 @@ class UNIT3D:
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 403:
                     meta['tracker_status'][self.tracker]['status_message'] = (
-                        "data error: Forbidden (403). You probably don't have upload permissions or your API key is incorrect."
+                        "data error: Forbidden (403). You probably don't have upload permissions."
+                    )
+                elif e.response.status_code == 302:
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        "data error: Redirect (302). This might indicate an issue with authentication, check if your API key is valid."
                     )
                 else:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
