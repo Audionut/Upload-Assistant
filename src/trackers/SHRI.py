@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import Literal
 import cli_ui
 import os
 import pycountry
@@ -136,6 +137,7 @@ class SHRI(UNIT3D):
 
         repack = meta.get("repack", "").strip()
 
+        name = None
         # Build name per ShareIsland type-specific format
         if effective_type == "DISC":
             # Inject region from validated session data if available
@@ -237,10 +239,9 @@ class SHRI(UNIT3D):
 
         return {"name": name}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         """Map release type to ShareIsland type IDs"""
-        effective_type = self._get_effective_type(meta)
-        type_id = {
+        type_mapping = {
             "CINEMA_NEWS": "42",
             "DISC": "26",
             "REMUX": "7",
@@ -250,10 +251,21 @@ class SHRI(UNIT3D):
             "ENCODE": "15",
             "DVDRIP": "15",
             "BRRIP": "15",
-        }.get(effective_type, "0")
-        return {"type_id": type_id}
+        }
 
-    async def get_additional_checks(self, meta):
+        if mapping_only:
+            return type_mapping
+
+        elif reverse:
+            return {v: k for k, v in type_mapping.items()}
+        elif type is not None:
+            return {"type_id": type_mapping.get(type, "0")}
+        else:
+            effective_type = self._get_effective_type(meta)
+            type_id = type_mapping.get(effective_type, "0")
+            return {"type_id": type_id}
+
+    async def get_additional_checks(self, meta) -> Literal[True]:
         """
         Validate and prompt for DVD/HDDVD region/distributor before upload.
         Stores validated IDs in module-level dict keyed by UUID for use during upload.
@@ -278,16 +290,17 @@ class SHRI(UNIT3D):
             # Validate region name was provided
             if not region_name:
                 cli_ui.error("Region required; skipping SHRI.")
-                return False
+                raise ValueError("Region required for disc upload")
 
             # Validate region code with API
             region_id = await self.common.unit3d_region_ids(region_name)
             if not region_id:
                 cli_ui.error(f"Invalid region code '{region_name}'; skipping SHRI.")
-                return False
+                raise ValueError(f"Invalid region code: {region_name}")
 
             # Handle optional distributor
             distributor_name = meta.get("distributor")
+            distributor_id = None
             if not distributor_name and not meta.get("unattended"):
                 distributor_name = cli_ui.ask_string(
                     "SHRI: Distributor (optional, Enter to skip): "
@@ -356,10 +369,23 @@ class SHRI(UNIT3D):
         """Distinguish REMUX/WEBDL/WEBRIP/ENCODE via MediaInfo"""
         try:
             mi = meta.get("mediainfo", {})
-            video_track = mi.get("media", {}).get("track", [{}])[1]
+            tracks = mi.get("media", {}).get("track", [])
+            general_track = tracks[0]
+            video_track = tracks[1]
             source = meta.get("source", "").upper()
-            # Has encode settings = definitely encoded
-            if video_track.get("Encoded_Library_Settings"):
+            # Check video track encode settings
+            has_video_encoding = video_track.get(
+                "Encoded_Library_Settings"
+            ) and not isinstance(video_track.get("Encoded_Library_Settings"), dict)
+            # Check general track for tools (including extra field)
+            encoded_app = str(general_track.get("Encoded_Application", "")).lower()
+            extra = general_track.get("extra", {})
+            writing_frontend = str(extra.get("Writing_frontend", "")).lower()
+            tool_string = f"{encoded_app} {writing_frontend}"
+            encoding_tools = ["handbrake", "x264", "x265", "ffmpeg -c:v", "staxrip"]
+            has_encoding_app = any(tool in tool_string for tool in encoding_tools)
+            # If ANY encoding detected = definitely encoded
+            if has_video_encoding or has_encoding_app:
                 return "WEBRIP" if "WEB" in source else "ENCODE"
             # Profile 8 = streaming-only
             if "dvhe.08" in video_track.get("HDR_Format_Profile", ""):
