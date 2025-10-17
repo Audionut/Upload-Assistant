@@ -53,6 +53,7 @@ class UNIT3D:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url=self.search_url, params=params)
+                response.raise_for_status()
                 if response.status_code == 200:
                     data = response.json()
                     for each in data['data']:
@@ -76,6 +77,13 @@ class UNIT3D:
                         dupes.append(result)
                 else:
                     console.print(f'[bold red]Failed to search torrents. HTTP Status: {response.status_code}')
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 302:
+                meta['tracker_status'][self.tracker]['status_message'] = (
+                    "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
+                )
+            else:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
         except httpx.TimeoutException:
             console.print('[bold red]Request timed out after 10 seconds')
         except httpx.RequestError as e:
@@ -375,11 +383,11 @@ class UNIT3D:
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 403:
                     meta['tracker_status'][self.tracker]['status_message'] = (
-                        "data error: Forbidden (403). You probably don't have upload permissions."
+                        "data error: Forbidden (403). This may indicate that you do not have upload permission."
                     )
                 elif e.response.status_code == 302:
                     meta['tracker_status'][self.tracker]['status_message'] = (
-                        "data error: Redirect (302). This might indicate an issue with authentication, check if your API key is valid."
+                        "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
                     )
                 else:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
