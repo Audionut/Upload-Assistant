@@ -246,12 +246,12 @@ class CookieValidator:
                     return False
 
                 # Find the auth token if it is needed
-                token = ""
                 if token_pattern:
                     match = re.search(token_pattern, text)
                     if not match:
                         await self.handle_validation_failure(meta, tracker, text)
                         return False
+                    # Dynamically set a class attribute to store the token
                     cls = getattr(
                         importlib.import_module(f'src.trackers.{tracker}'),
                         tracker
@@ -264,7 +264,7 @@ class CookieValidator:
 
                 # Save cookies only after a confirmed valid login
                 await self.save_session_cookies(tracker, cookie_jar)
-                return token or True
+                return True
 
         except httpx.ConnectTimeout:
             console.print(f"{tracker}: Connection timeout. Server took too long to respond.")

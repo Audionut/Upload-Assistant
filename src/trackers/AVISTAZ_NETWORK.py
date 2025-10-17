@@ -792,11 +792,8 @@ class AZTrackerBase:
         if is_disc == 'DVD':
             return '4'
 
-        if source == 'dvd' and source_type == 'remux':
-            return '17'
-
         if source_type == 'remux':
-            if source == 'dvd':
+            if 'dvd' in source:
                 return '17'
             if source in ('bluray', 'blu-ray'):
                 return '14'

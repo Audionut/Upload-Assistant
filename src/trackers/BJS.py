@@ -784,13 +784,16 @@ class BJS:
             print(f'Exceção no upload de {filename}: {e}')
             return None
 
-    async def get_cover(self, meta, disctype):
+    async def get_cover(self, meta):
         cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
             print('Nenhum poster_path encontrado nos dados do TMDB.')
             return None
 
         cover_tmdb_url = f'https://image.tmdb.org/t/p/w500{cover_path}'
+        if BJS.already_has_the_info:
+            return cover_tmdb_url
+
         try:
             response = await self.session.get(cover_tmdb_url, timeout=120)
             response.raise_for_status()
@@ -1065,7 +1068,7 @@ class BJS:
                 console.print(traceback.format_exc())
                 return []
 
-    async def get_data(self, meta, disctype):
+    async def get_data(self, meta):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         await self.load_localized_data(meta)
         category = meta['category']
@@ -1175,7 +1178,7 @@ class BJS:
         # Only upload images if not debugging
         if not meta.get('debug', False):
             data.update({
-                'image': await self.get_cover(meta, disctype),
+                'image': await self.get_cover(meta),
                 'screenshots[]': await self.get_screenshots(meta),
             })
 
@@ -1208,7 +1211,7 @@ class BJS:
         return False
 
     async def upload(self, meta, disctype):
-        data = await self.get_data(meta, disctype)
+        data = await self.get_data(meta)
 
         issue = await self.check_data(meta, data)
         if issue:
