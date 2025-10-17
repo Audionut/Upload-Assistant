@@ -132,6 +132,9 @@ class SHRI(UNIT3D):
 
         effective_type = self._get_effective_type(meta)
 
+        if effective_type != "DISC":
+            source = source.replace("Blu-ray", "BluRay")
+
         # Detect Hybrid from filename if not in title
         hybrid = ""
         if (
