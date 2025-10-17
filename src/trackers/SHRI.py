@@ -70,6 +70,8 @@ class SHRI(UNIT3D):
         year = str(meta.get("year", ""))
         resolution = meta.get("resolution", "")
         source = meta.get("source", "")
+        if isinstance(source, list):
+            source = source[0] if source else ""
         video_codec = meta.get("video_codec", "")
         video_encode = meta.get("video_encode", "")
 
@@ -132,7 +134,9 @@ class SHRI(UNIT3D):
 
         # Detect Hybrid from filename if not in title
         hybrid = ""
-        if meta.get("webdv", False) and "HYBRID" not in title.upper():
+        if (
+            meta.get("webdv", False) or isinstance(meta.get("source", ""), list)
+        ) and "HYBRID" not in title.upper():
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()
@@ -372,7 +376,11 @@ class SHRI(UNIT3D):
             tracks = mi.get("media", {}).get("track", [])
             general_track = tracks[0]
             video_track = tracks[1]
-            source = meta.get("source", "").upper()
+            source = meta.get("source", "")
+            if isinstance(source, list):
+                source = [s.upper() for s in source]
+            else:
+                source = [source.upper()] if source else []
             # Check video track encode settings
             has_video_encoding = video_track.get(
                 "Encoded_Library_Settings"
@@ -386,15 +394,15 @@ class SHRI(UNIT3D):
             has_encoding_app = any(tool in tool_string for tool in encoding_tools)
             # If ANY encoding detected = definitely encoded
             if has_video_encoding or has_encoding_app:
-                return "WEBRIP" if "WEB" in source else "ENCODE"
+                return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
             # Profile 8 = streaming-only
             if "dvhe.08" in video_track.get("HDR_Format_Profile", ""):
                 return "WEBDL"
             # No encode settings + WEB source = WEB-DL
-            if "WEB" in source:
+            if any("WEB" in s for s in source):
                 return "WEBDL"
             # No encode settings + disc source = REMUX
-            if source in ("BLURAY", "HDDVD"):
+            if any(s in ("BLURAY", "BLU-RAY", "HDDVD") for s in source):
                 return "REMUX"
         except (IndexError, KeyError):
             pass
@@ -412,7 +420,9 @@ class SHRI(UNIT3D):
         if self.CINEMA_NEWS_PATTERN.search(basename):
             return "CINEMA_NEWS"
 
-        return self._detect_type_from_technical_analysis(meta)
+        detected_type = self._detect_type_from_technical_analysis(meta)
+        cli_ui.info(f"{self.tracker} Detected type: {detected_type}")
+        return detected_type
 
     def _get_italian_title(self, imdb_info):
         """Extract Italian title from IMDb AKAs with priority"""
