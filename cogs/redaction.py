@@ -51,9 +51,6 @@ async def clean_meta_for_export(meta):
     if 'torrent_comments' in meta:
         del meta['torrent_comments']
 
-    for key in [k for k in meta.keys() if '_secret_token' in k]:
-        del meta[key]
-
     with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
         json.dump(meta, f, indent=4)
 

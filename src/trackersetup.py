@@ -613,10 +613,16 @@ class TRACKER_SETUP:
             try:
                 url = tracker_instance.requests_url
             except AttributeError:
-                # tracker without requests url not supported
-                return
+                if tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                    pass
+                else:
+                    # tracker without requests url not supported
+                    return
             if tracker.upper() == "BHD":
                 requests = await self.bhd_request_check(meta, tracker, url)
+            elif tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                requests = await tracker_instance.get_requests(meta)
+                return
             else:
                 requests = await self.get_tracker_requests(meta, tracker, url)
                 type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)

@@ -1,7 +1,9 @@
 import aiofiles
 import asyncio
+import bencodepy
 import click
 import glob
+import hashlib
 import httpx
 import json
 import os
@@ -40,9 +42,11 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
-    async def async_input(self, prompt):
+    async def async_input(self, prompt=False):
         """Gets user input in a non-blocking way using asyncio.to_thread"""
-        user_input = await asyncio.to_thread(input, prompt)
+        if prompt:
+            console.print(prompt)
+        user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
     async def edit_torrent(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
@@ -69,7 +73,7 @@ class COMMON():
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
     # used to add tracker url, comment and source flag to torrent file
-    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None):
+    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None, hash_is_id=False):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl is not None:
             session = httpx.AsyncClient(headers=headers, params=params, timeout=30.0)
@@ -79,11 +83,17 @@ class COMMON():
                     with open(path, "wb") as f:
                         async for chunk in r.aiter_bytes():
                             f.write(chunk)
-                    return
+
+                    # Calculate hash after download
+                    if hash_is_id:
+                        torrent_hash = await self.get_torrent_hash(meta, tracker)
+                        return torrent_hash
+                    else:
+                        return None
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
-                return
+                return None
 
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
@@ -93,9 +103,30 @@ class COMMON():
                 new_torrent.metainfo['announce-list'] = [new_tracker]
             else:
                 new_torrent.metainfo['announce'] = new_tracker
-            new_torrent.metainfo['comment'] = comment
             new_torrent.metainfo['info']['source'] = source_flag
+
+            # Calculate hash
+            torrent_hash = None
+            if hash_is_id:
+                info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
+                torrent_hash = hashlib.sha1(info_bytes).hexdigest()
+
+            new_torrent.metainfo['comment'] = comment + torrent_hash if hash_is_id else comment
+
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
+
+            return torrent_hash
+
+        return None
+
+    async def get_torrent_hash(self, meta, tracker):
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_content = await torrent_file.read()
+            torrent_data = bencodepy.decode(torrent_content)
+            info = bencodepy.encode(torrent_data[b'info'])
+            info_hash = hashlib.sha1(info).hexdigest()
+        return info_hash
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None):
         if image_list is not None:

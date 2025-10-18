@@ -297,9 +297,9 @@ class Prep():
                     try:
                         guess_name = ntpath.basename(video).replace('-', ' ')
                         filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
-                    except Exception:
-                        console.print("[red]Error extracting title from video name.")
-                        sys.exit(0)
+                    except Exception as e:
+                        return Exception(f"[red]Error extracting title from video name: {e}[/red]")
+
             untouched_filename = os.path.basename(video)
 
             if not meta.get('emby', False):
@@ -353,8 +353,7 @@ class Prep():
                                 console.print(f"[yellow]Removed temporary metadata file: {file_path}[/yellow]")
                     except Exception as e:
                         console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
-                # Exit with error code for automation
-                sys.exit(1)
+                return Exception("Conformance errors found in mediainfo")
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):

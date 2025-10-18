@@ -126,6 +126,44 @@ def update_oeimg_to_onlyimage():
         console.print("[yellow]No 'oeimg' or 'oeimg_api' found to update in config.py[/yellow]")
 
 
+async def validate_tracker_logins(meta, trackers=None):
+    if 'tracker_status' not in meta:
+        meta['tracker_status'] = {}
+
+    # Filter trackers that are in both the list and tracker_class_map
+    valid_trackers = [tracker for tracker in trackers if tracker in tracker_class_map and tracker in http_trackers]
+    if "RTF" in trackers:
+        valid_trackers.append("RTF")
+
+    if valid_trackers:
+
+        async def validate_single_tracker(tracker_name):
+            """Validate credentials for a single tracker."""
+            try:
+                if tracker_name not in meta['tracker_status']:
+                    meta['tracker_status'][tracker_name] = {}
+
+                tracker_class = tracker_class_map[tracker_name](config=config)
+                if meta['debug']:
+                    console.print(f"[cyan]Validating {tracker_name} credentials...[/cyan]")
+                if tracker_name == "RTF":
+                    login = await tracker_class.api_test(meta)
+                else:
+                    login = await tracker_class.validate_credentials(meta)
+
+                if not login:
+                    meta['tracker_status'][tracker_name]['skipped'] = True
+
+                return tracker_name, login
+            except Exception as e:
+                console.print(f"[red]Error validating {tracker_name}: {e}[/red]")
+                meta['tracker_status'][tracker_name]['skipped'] = True
+                return tracker_name, False
+
+        # Run all tracker validations concurrently
+        await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
+
+
 async def process_meta(meta, base_dir, bot=None):
     """Process the metadata for each queued path."""
     if use_discord and bot:
@@ -151,7 +189,6 @@ async def process_meta(meta, base_dir, bot=None):
         if str(ua).lower() == "true":
             meta['unattended'] = True
             console.print("[yellow]Running in Auto Mode")
-    meta['base_dir'] = base_dir
     prep = Prep(screens=meta['screens'], img_host=meta['imghost'], config=config)
     try:
         results = await asyncio.gather(
@@ -324,6 +361,12 @@ async def process_meta(meta, base_dir, bot=None):
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
         await asyncio.sleep(0.2)
+
+        try:
+            await validate_tracker_logins(meta, trackers)
+            await asyncio.sleep(0.2)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
 
         successful_trackers = await process_all_trackers(meta)
 
@@ -774,6 +817,7 @@ async def do_the_thing(base_dir):
     if meta.get('current_version', ''):
         signature += f" {meta['current_version']}"
     meta['ua_signature'] = signature
+    meta['base_dir'] = base_dir
 
     cleanup_only = any(arg in ('--cleanup', '-cleanup') for arg in sys.argv) and len(sys.argv) <= 2
     sanitize_meta = config['DEFAULT'].get('sanitize_meta', True)
@@ -822,6 +866,7 @@ async def do_the_thing(base_dir):
         processed_files_count = 0
         skipped_files_count = 0
         base_meta = {k: v for k, v in meta.items()}
+
         for path in queue:
             total_files = len(queue)
             try:

@@ -1,10 +1,8 @@
 import aiofiles
 import asyncio
 import bbcode
-import bencodepy
-import hashlib
-import http.cookiejar
 import httpx
+import importlib
 import json
 import os
 import platform
@@ -13,6 +11,7 @@ import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
 from src.console import console
+from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
@@ -26,9 +25,12 @@ class AZTrackerBase:
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
+        self.az_class = getattr(importlib.import_module(f"src.trackers.{self.tracker}"), self.tracker)
 
         tracker_config = self.config['TRACKERS'][self.tracker]
         self.base_url = tracker_config.get('base_url')
+        self.requests_url = tracker_config.get('requests_url')
         self.announce_url = tracker_config.get('announce_url')
         self.source_flag = tracker_config.get('source_flag')
 
@@ -156,7 +158,7 @@ class AZTrackerBase:
 
     async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'type_id': category,
             'title': title,
             'imdb_id': imdb_id if imdb_id else '',
@@ -193,67 +195,18 @@ class AZTrackerBase:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        self.cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
-
-        try:
-            self.cookie_jar.load(ignore_discard=True, ignore_expires=True)
-        except FileNotFoundError:
-            console.print(f'{self.tracker}: [bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
-
-        self.session.cookies = self.cookie_jar
-
-    async def save_cookies(self):
-        # They seem to change their cookies frequently, we need to update the .txt
-        if self.cookie_jar is None:
-            console.print(f'{self.tracker}: Cookie jar not initialized, cannot save cookies.')
-            return
-
-        try:
-            self.cookie_jar.save(ignore_discard=True, ignore_expires=True)
-        except Exception as e:
-            console.print(f'{self.tracker}: Failed to update the cookie file: {e}')
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload'
-            response = await self.session.get(upload_page_url)
-            response.raise_for_status()
-
-            if 'login' in str(response.url) or 'Forgot Your Password' in response.text or 'Page not found!' in response.text:
-                console.print(f'{self.tracker}: Validation failed. The cookie appears to be expired or invalid.')
-                return False
-
-            auth_match = re.search(r'name="_token" content="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f"{self.tracker}: Validation failed. Could not find 'auth' token on upload page.")
-                console.print('This can happen if the site HTML has changed or if the login failed silently..')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'The server response was saved to {failure_path} for analysis.')
-                return False
-
-            await self.save_cookies()
-            return str(auth_match.group(1))
-
-        except httpx.TimeoutException:
-            console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'{self.tracker}: HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
-            return False
-        except Exception as e:
-            console.print(f'{self.tracker}: Unexpected error validating credentials: {e}')
-            return False
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
+            return await self.cookie_validator.cookie_validation(
+                meta=meta,
+                tracker=self.tracker,
+                test_url=f'{self.base_url}/torrents',
+                error_text='Page not found',
+                token_pattern=r'name="_token" content="([^"]+)"'
+            )
+        return False
 
     async def search_existing(self, meta, disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
@@ -268,6 +221,10 @@ class AZTrackerBase:
                 else:
                     meta['skipping'] = f'{self.tracker}'
                     return
+
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
 
         if not await self.get_media_code(meta):
             console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
@@ -446,7 +403,7 @@ class AZTrackerBase:
         }
 
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'qquuid': str(uuid.uuid4()),
             'qqfilename': filename,
             'qqtotalfilesize': str(len(image_bytes))
@@ -527,9 +484,9 @@ class AZTrackerBase:
     async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
-
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 category = meta.get('category').lower()
 
                 if category == 'tv':
@@ -537,7 +494,7 @@ class AZTrackerBase:
                 else:
                     query = meta['title']
 
-                search_url = f'{self.base_url}/requests?type={category}&search={query}&condition=new'
+                search_url = f'{self.requests_url}?type={category}&search={query}&condition=new'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -689,7 +646,7 @@ class AZTrackerBase:
     async def create_task_id(self, meta):
         await self.get_media_code(meta)
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'type_id': await self.get_cat_id(meta['category']),
             'movie_id': self.media_code,
             'media_info': await self.get_file_info(meta),
@@ -710,10 +667,6 @@ class AZTrackerBase:
 
                 with open(torrent_path, 'rb') as torrent_file:
                     files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                    torrent_data = bencodepy.decode(torrent_file.read())
-                    info = bencodepy.encode(torrent_data[b'info'])
-                    info_hash = hashlib.sha1(info).hexdigest()
-
                     task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
                     if task_response.status_code == 302 and 'Location' in task_response.headers:
@@ -728,7 +681,7 @@ class AZTrackerBase:
 
                         return {
                             'task_id': task_id,
-                            'info_hash': info_hash,
+                            'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
                             'redirect_url': redirect_url,
                         }
 
@@ -839,11 +792,8 @@ class AZTrackerBase:
         if is_disc == 'DVD':
             return '4'
 
-        if source == 'dvd' and source_type == 'remux':
-            return '17'
-
         if source_type == 'remux':
-            if source == 'dvd':
+            if 'dvd' in source:
                 return '17'
             if source in ('bluray', 'blu-ray'):
                 return '14'
@@ -867,12 +817,14 @@ class AZTrackerBase:
         return keyword_map.get(source_type.lower())
 
     async def fetch_data(self, meta):
-        await self.load_cookies(meta)
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
         task_info = await self.create_task_id(meta)
         lang_info = await self.get_lang(meta) or {}
 
         data = {
-            '_token': meta[f'{self.tracker}_secret_token'],
+            '_token': self.az_class.secret_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
             'file_name': self.edit_name(meta),
@@ -928,7 +880,6 @@ class AZTrackerBase:
 
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
-        requests = await self.get_requests(meta)
         status_message = ''
 
         issue = await self.check_data(meta, data)
@@ -960,9 +911,6 @@ class AZTrackerBase:
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                    if requests:
-                        status_message += ' Your upload may fulfill existing requests, check prior console logs.'
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"

@@ -3,18 +3,20 @@ import httpx
 import os
 import platform
 import re
-from pymediainfo import MediaInfo
-from .COMMON import COMMON
 from bs4 import BeautifulSoup
+from pymediainfo import MediaInfo
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
 
 
-class PTS(COMMON):
+class PTS:
     def __init__(self, config):
-        super().__init__(config)
+        self.config = config
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = "PTS"
-        self.banned_groups = [""]
+        self.banned_groups = []
         self.source_flag = "[www.ptskit.org] PTSKIT"
         self.base_url = "https://www.ptskit.org"
         self.torrent_url = "https://www.ptskit.org/details.php?id="
@@ -24,26 +26,14 @@ class PTS(COMMON):
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f"[bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]")
-            return False
-
-        self.session.cookies = await self.parseCookieFile(cookie_file)
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-
-        upload_page_url = f"{self.base_url}/upload.php"
-        response = await self.session.get(upload_page_url, timeout=30.0)
-        response.raise_for_status()
-
-        if 'login.php' in str(response.url):
-            console.print(f"[bold red]{self.tracker} validation failed. Cookie appears to be expired (redirected to login).[/bold red]")
-            return False
-
-        return True
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=f'{self.base_url}/upload.php',
+            success_text='forums.php',
+        )
 
     async def get_type(self, meta):
         if meta.get('anime'):
@@ -190,7 +180,7 @@ class PTS(COMMON):
 
         return found_items
 
-    async def gather_data(self, meta, disctype):
+    async def get_data(self, meta):
         data = {
             'name': meta['name'],
             'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
@@ -201,42 +191,20 @@ class PTS(COMMON):
         return data
 
     async def upload(self, meta, disctype):
-        await self.load_cookies(meta)
-        await self.edit_torrent(meta, self.tracker, self.source_flag)
-        data = await self.gather_data(meta, disctype)
-        status_message = ''
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        data = await self.get_data(meta)
 
-        if not meta.get('debug', False):
-            torrent_id = ''
-            upload_url = f"{self.base_url}/takeupload.php"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        await self.cookie_auth_uploader.handle_upload(
+            meta=meta,
+            tracker=self.tracker,
+            source_flag=self.source_flag,
+            torrent_url=self.torrent_url,
+            data=data,
+            torrent_field_name='file',
+            upload_cookies=self.session.cookies,
+            upload_url=f"{self.base_url}/takeupload.php",
+            id_pattern=r'download\.php\?id=([^&]+)',
+            success_status_code="302, 303",
+        )
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file': (f"{self.tracker}.placeholder.torrent", torrent_file, "application/x-bittorrent")}
-
-                response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-
-                if response.status_code in (302, 303):
-                    status_message = "Uploaded successfully."
-
-                    redirect_url = response.headers['Location']
-                    match = re.search(r'id=(\d+)', redirect_url)
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                else:
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    console.print(f"Upload failed, HTML response was saved to: {response_save_path}")
-                    meta['skipping'] = f"{self.tracker}"
-                    return
-
-            await self.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-
-        else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return
