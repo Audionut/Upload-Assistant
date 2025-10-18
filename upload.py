@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import aiofiles
 import asyncio
 import cli_ui
 import discord
@@ -394,6 +395,41 @@ async def process_meta(meta, base_dir, bot=None):
 
     else:
         meta['we_are_uploading'] = True
+        common = COMMON(config)
+        if meta.get('site_check', False):
+            for tracker in meta['trackers']:
+                log_path = f"{base_dir}/tmp/{tracker}_search_results.json"
+                if not await common.path_exists(log_path):
+                    await common.makedirs(os.path.dirname(log_path))
+
+                search_data = []
+                if os.path.exists(log_path):
+                    try:
+                        async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+                            content = await f.read()
+                            search_data = json.loads(content) if content.strip() else []
+                    except Exception:
+                        search_data = []
+
+                existing_uuids = {entry.get('uuid') for entry in search_data if isinstance(entry, dict)}
+
+                if meta['uuid'] not in existing_uuids:
+                    search_entry = {
+                        'uuid': meta['uuid'],
+                        'path': meta.get('path', ''),
+                        'imdb_id': meta.get('imdb_id', 0),
+                        'tmdb_id': meta.get('tmdb_id', 0),
+                        'tvdb_id': meta.get('tvdb_id', 0),
+                        'mal_id': meta.get('mal_id', 0),
+                        'tvmaze_id': meta.get('tvmaze_id', 0),
+                    }
+                    search_data.append(search_entry)
+
+                    async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
+                        await f.write(json.dumps(search_data, indent=4))
+            meta['we_are_uploading'] = False
+            return
+
         filename = meta.get('title', None)
         bdmv_filename = meta.get('filename', None)
         bdinfo = meta.get('bdinfo', None)
@@ -413,7 +449,6 @@ async def process_meta(meta, base_dir, bot=None):
             upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
             if tracker in trackers and upload_status is True:
                 if not bdmv_mi_created:
-                    common = COMMON(config)
                     await common.get_bdmv_mediainfo(meta)
                     bdmv_mi_created = True
 
@@ -918,7 +953,7 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
-                if not meta.get('emby', False):
+                if not meta.get('emby', False) and not meta.get('site_check', False):
                     console.print("we are not uploading.......")
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1

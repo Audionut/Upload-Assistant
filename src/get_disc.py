@@ -46,6 +46,9 @@ async def get_disc(meta):
                 }
                 discs.append(disc)
     if is_disc == "BDMV":
+        if meta.get('site_check', False):
+            print('BDMV disc checking is not supported in site_check mode, yet.')
+            return Exception
         if meta.get('edit', False) is False:
             discs, bdinfo = await parse.get_bdinfo(meta, discs, meta['uuid'], meta['base_dir'], meta.get('discs', []))
         else:

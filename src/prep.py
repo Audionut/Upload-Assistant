@@ -112,7 +112,10 @@ class Prep():
         if meta['debug']:
             console.print(f"[cyan]ID: {meta['uuid']}")
 
-        meta['is_disc'], videoloc, bdinfo, meta['discs'] = await get_disc(meta)
+        try:
+            meta['is_disc'], videoloc, bdinfo, meta['discs'] = await get_disc(meta)
+        except Exception:
+            raise
 
         # Debugging information
         # console.print(f"Debug: meta['filelist'] before population: {meta.get('filelist', 'Not Set')}")
@@ -566,7 +569,7 @@ class Prep():
 
         # if there's no region/distributor info, lets ping some unit3d trackers and see if we get it
         ping_unit3d_config = self.config['DEFAULT'].get('ping_unit3d', False)
-        if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False) and not meta.get('emby', False):
+        if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False) and not meta.get('emby', False) and not meta.get('site_check', False):
             await ping_unit3d(meta)
 
         # the first user override check that allows to set metadata ids.
@@ -857,7 +860,7 @@ class Prep():
         meta['bluray_score'] = int(float(self.config['DEFAULT'].get('bluray_score', 100)))
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
-        if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False):
+        if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False) and not meta.get('edit', False) and not meta.get('site_check', False):
             await get_bluray_releases(meta)
 
             # and if we getting bluray/dvd images, we'll rehost them
