@@ -2102,9 +2102,10 @@ class Clients():
                     console.print("[bold red]Failed to connect to qBittorrent - check host/port")
                     return []
 
+            search_term = meta['uuid'][:15]
             try:
                 if proxy_url:
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info?search={search_term}") as response:
                         if response.status == 200:
                             torrents_data = await response.json()
                             # Convert to objects that match qbittorrentapi structure
@@ -2120,6 +2121,22 @@ class Clients():
                                     if not hasattr(self, 'comment'):
                                         self.comment = ''
                             torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                            if len(torrents) == 0:
+                                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                                    if response.status == 200:
+                                        torrents_data = await response.json()
+
+                                        class MockTorrent:
+                                            def __init__(self, data):
+                                                for key, value in data.items():
+                                                    setattr(self, key, value)
+                                                if not hasattr(self, 'files'):
+                                                    self.files = []
+                                                if not hasattr(self, 'tracker'):
+                                                    self.tracker = ''
+                                                if not hasattr(self, 'comment'):
+                                                    self.comment = ''
+                                        torrents = [MockTorrent(torrent) for torrent in torrents_data]
                         else:
                             console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
                             return []
