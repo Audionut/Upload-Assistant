@@ -1,3 +1,4 @@
+import aiofiles
 import asyncio
 import cli_ui
 import httpx
@@ -6,9 +7,11 @@ import os
 import re
 import sys
 
+from data.config import config
 from datetime import datetime, timedelta
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
@@ -81,8 +84,6 @@ class TRACKER_SETUP:
         pass
 
     def trackers_enabled(self, meta):
-        from data.config import config
-
         if meta.get('trackers') is not None:
             trackers = meta['trackers']
         else:
@@ -527,7 +528,7 @@ class TRACKER_SETUP:
                         console.print(f"[bold red]Error processing response data: {e}[/bold red]")
                         return requests
                 else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                    console.print(f"[bold red]Failed to search torrents on {tracker}. HTTP Status: {response.status_code}")
         except httpx.TimeoutException:
             console.print("[bold red]Request timed out after 5 seconds")
         except httpx.RequestError as e:
@@ -652,6 +653,23 @@ class TRACKER_SETUP:
             else:
                 console.print(f"[red]Invalid TMDB ID format in meta: {tmdb_id}[/red]")
                 return False
+
+            # Initialize request log for this tracker
+            common = COMMON(config)
+            log_path = f"{meta['base_dir']}/tmp/{tracker}_request_results.json"
+            if not await common.path_exists(log_path):
+                await common.makedirs(os.path.dirname(log_path))
+
+            request_data = []
+            try:
+                async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    request_data = json.loads(content) if content.strip() else []
+            except Exception:
+                request_data = []
+
+            existing_uuids = {entry.get('uuid') for entry in request_data if isinstance(entry, dict)}
+
             for each in requests:
                 type_name = False
                 resolution = False
@@ -696,6 +714,19 @@ class TRACKER_SETUP:
                                 console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
                                 console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
                                 console.print()
+
+                            if meta.get('uuid') not in existing_uuids:
+                                request_entry = {
+                                    'uuid': meta.get('uuid'),
+                                    'path': meta.get('path', ''),
+                                    'url': new_url,
+                                    'name': api_name,
+                                    'bounty': api_bounty,
+                                    'description': api_description,
+                                    'claimed': api_claimed
+                                }
+                                request_data.append(request_entry)
+                                existing_uuids.add(meta.get('uuid'))
                         elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
                             console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                             console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
@@ -705,6 +736,19 @@ class TRACKER_SETUP:
                                 console.print("[bold red]Type and/or resolution was set to ANY, double check any description requirements:[/bold red]")
                                 console.print(f"[bold yellow]Request desc:[/bold yellow] {api_description[:100]}")
                                 console.print()
+
+                            if meta.get('uuid') not in existing_uuids:
+                                request_entry = {
+                                    'uuid': meta.get('uuid'),
+                                    'path': meta.get('path', ''),
+                                    'url': new_url,
+                                    'name': api_name,
+                                    'bounty': api_bounty,
+                                    'description': api_description,
+                                    'claimed': api_claimed
+                                }
+                                request_data.append(request_entry)
+                                existing_uuids.add(meta.get('uuid'))
                         else:
                             console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                             console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
@@ -714,6 +758,20 @@ class TRACKER_SETUP:
                                 console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
                             console.print(f"[bold green]Request desc: {api_description[:100]}[/bold green]")
                             console.print()
+
+                            if not api_claimed and meta.get('uuid') not in existing_uuids:
+                                request_entry = {
+                                    'uuid': meta.get('uuid'),
+                                    'path': meta.get('path', ''),
+                                    'url': new_url,
+                                    'name': api_name,
+                                    'bounty': api_bounty,
+                                    'description': api_description,
+                                    'claimed': api_claimed,
+                                    'match_type': 'partial'
+                                }
+                                request_data.append(request_entry)
+                                existing_uuids.add(meta.get('uuid'))
                 else:
                     unclaimed = each.get('status') == 1
                     internal = each.get('internal') == 1
@@ -763,24 +821,77 @@ class TRACKER_SETUP:
                         console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
                         console.print()
+
+                        if meta.get('uuid') not in existing_uuids:
+                            request_entry = {
+                                'uuid': meta.get('uuid'),
+                                'path': meta.get('path', ''),
+                                'url': each.get('url', ''),
+                                'name': api_name,
+                                'bounty': api_bounty,
+                                'claimed': claimed_status
+                            }
+                            request_data.append(request_entry)
+                            existing_uuids.add(meta.get('uuid'))
                     if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and not dv and not hdr and 'uhd' in each.get('resolution').lower():
                         console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
                         console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
                         console.print()
+
+                        if meta.get('uuid') not in existing_uuids:
+                            request_entry = {
+                                'uuid': meta.get('uuid'),
+                                'path': meta.get('path', ''),
+                                'url': each.get('url', ''),
+                                'name': api_name,
+                                'bounty': api_bounty,
+                                'claimed': claimed_status
+                            }
+                            request_data.append(request_entry)
+                            existing_uuids.add(meta.get('uuid'))
                     if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and dv and hdr:
                         console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
                         console.print()
+
+                        if meta.get('uuid') not in existing_uuids:
+                            request_entry = {
+                                'uuid': meta.get('uuid'),
+                                'path': meta.get('path', ''),
+                                'url': each.get('url', ''),
+                                'name': api_name,
+                                'bounty': api_bounty,
+                                'claimed': claimed_status
+                            }
+                            request_data.append(request_entry)
+                            existing_uuids.add(meta.get('uuid'))
                     if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and not dv and not hdr:
                         console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
                         console.print()
+
+                        if meta.get('uuid') not in existing_uuids:
+                            request_entry = {
+                                'uuid': meta.get('uuid'),
+                                'path': meta.get('path', ''),
+                                'url': each.get('url', ''),
+                                'name': api_name,
+                                'bounty': api_bounty,
+                                'claimed': claimed_status
+                            }
+                            request_data.append(request_entry)
+                            existing_uuids.add(meta.get('uuid'))
                     else:
                         console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         if internal:
                             console.print("[bold red]Request is internal only[/bold red]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - {each.get('url')}")
                         console.print()
+
+            # Save all logged requests to file
+            if request_data:
+                async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(request_data, indent=4))
 
             return requests
 
