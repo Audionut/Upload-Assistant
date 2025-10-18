@@ -43,6 +43,12 @@ class UploadHelper:
                     ])
                     console.print("[bold red]Trumpable found![/bold red]")
                     console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+
+                    meta['aither_trumpable'] = [
+                        {'name': d.get('name'), 'link': d.get('link')}
+                        for d in trumpable_dupes
+                    ]
+
                 # Remove trumpable dupes from the main list
                 dupes = [d for d in dupes if not (isinstance(d, dict) and d.get('trumpable'))]
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):

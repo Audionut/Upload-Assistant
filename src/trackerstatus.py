@@ -114,6 +114,10 @@ async def process_all_trackers(meta):
                     is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
                     if is_dupe:
                         local_tracker_status['dupe'] = True
+
+                    if tracker_name == "AITHER" and 'aither_trumpable' in local_meta:
+                        meta['aither_trumpable'] = local_meta['aither_trumpable']
+
                 elif 'skipping' in local_meta:
                     local_tracker_status['skipped'] = True
 

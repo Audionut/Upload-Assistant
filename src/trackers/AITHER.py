@@ -20,6 +20,7 @@ class AITHER(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.banned_groups = []
         pass
 

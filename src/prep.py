@@ -102,6 +102,7 @@ class Prep():
         meta['we_asked_tvmaze'] = False
         meta['audio_languages'] = None
         meta['subtitle_languages'] = None
+        meta['aither_trumpable'] = None
 
         folder_id = os.path.basename(meta['path'])
         if meta.get('uuid', None) is None:
@@ -404,6 +405,22 @@ class Prep():
 
         if meta['debug']:
             pathed_time_start = time.time()
+
+        if not meta.get('emby') and meta.get('trackers'):
+            trackers = meta['trackers']
+        else:
+            default_trackers = config['TRACKERS'].get('default_trackers', '')
+            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
+
+        if isinstance(trackers, str):
+            if "," in trackers:
+                trackers = [t.strip().upper() for t in trackers.split(',')]
+            else:
+                trackers = [trackers.strip().upper()]  # Make it a list with one element
+        else:
+            trackers = [t.strip().upper() for t in trackers]
+        meta['trackers'] = trackers
+        meta['requested_trackers'] = trackers
 
         # auto torrent searching with qbittorrent that grabs torrent ids for metadata searching
         if not any(meta.get(id_type) for id_type in hash_ids + tracker_ids) and not meta.get('skip_trackers', False) and not meta.get('edit', False):

@@ -225,21 +225,6 @@ async def process_meta(meta, base_dir, bot=None):
     helper = UploadHelper()
 
     if not meta.get('emby', False):
-        if meta.get('trackers'):
-            trackers = meta['trackers']
-        else:
-            default_trackers = config['TRACKERS'].get('default_trackers', '')
-            trackers = [tracker.strip() for tracker in default_trackers.split(',')]
-
-        if isinstance(trackers, str):
-            if "," in trackers:
-                trackers = [t.strip().upper() for t in trackers.split(',')]
-            else:
-                trackers = [trackers.strip().upper()]  # Make it a list with one element
-        else:
-            trackers = [t.strip().upper() for t in trackers]
-        meta['trackers'] = trackers
-
         if meta.get('trackers_remove', False):
             remove_list = [t.strip().upper() for t in meta['trackers_remove'].split(',')]
             for tracker in remove_list:
@@ -398,6 +383,15 @@ async def process_meta(meta, base_dir, bot=None):
         common = COMMON(config)
         if meta.get('site_check', False):
             for tracker in meta['trackers']:
+                upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+                if not upload_status:
+                    if tracker == "AITHER" and meta.get('aither_trumpable') and len(meta.get('aither_trumpable', [])) > 0:
+                        pass
+                    else:
+                        continue
+                if tracker not in meta['tracker_status']:
+                    continue
+
                 log_path = f"{base_dir}/tmp/{tracker}_search_results.json"
                 if not await common.path_exists(log_path):
                     await common.makedirs(os.path.dirname(log_path))
@@ -423,6 +417,8 @@ async def process_meta(meta, base_dir, bot=None):
                         'mal_id': meta.get('mal_id', 0),
                         'tvmaze_id': meta.get('tvmaze_id', 0),
                     }
+                    if tracker == "AITHER":
+                        search_entry['trumpable'] = meta.get('aither_trumpable', '')
                     search_data.append(search_entry)
 
                     async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
@@ -953,18 +949,19 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
-                if not meta.get('emby', False) and not meta.get('site_check', False):
-                    console.print("we are not uploading.......")
-                if 'queue' in meta and meta.get('queue') is not None:
-                    processed_files_count += 1
+                if not meta.get('site_check', False):
                     if not meta.get('emby', False):
-                        skipped_files_count += 1
-                        console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
-                    else:
-                        console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
-                    if not meta['debug'] or "debug" in os.path.basename(log_file):
-                        if log_file:
-                            await save_processed_file(log_file, path)
+                        console.print("we are not uploading.......")
+                    if 'queue' in meta and meta.get('queue') is not None:
+                        processed_files_count += 1
+                        if not meta.get('emby', False):
+                            skipped_files_count += 1
+                            console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
+                        else:
+                            console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
+                        if not meta['debug'] or "debug" in os.path.basename(log_file):
+                            if log_file:
+                                await save_processed_file(log_file, path)
 
             else:
                 console.print()
@@ -1034,7 +1031,20 @@ async def do_the_thing(base_dir):
             if find_requests and meta['trackers'] not in ([], None) and not (meta.get('site_check', False) and 'is_disc' not in meta):
                 console.print("[green]Searching for requests on supported trackers.....")
                 tracker_setup = TRACKER_SETUP(config=config)
-                await tracker_setup.tracker_request(meta, meta['trackers'])
+                if meta.get('site_check', False):
+                    trackers = meta['requested_trackers']
+                else:
+                    trackers = meta['trackers']
+                await tracker_setup.tracker_request(meta, trackers)
+
+            if meta.get('site_check', False):
+                if 'queue' in meta and meta.get('queue') is not None:
+                    processed_files_count += 1
+                    skipped_files_count += 1
+                    console.print(f"[cyan]Processed {processed_files_count}/{total_files} files.")
+                    if not meta['debug'] or "debug" in os.path.basename(log_file):
+                        if log_file:
+                            await save_processed_file(log_file, path)
 
             if sanitize_meta and not meta.get('emby', False):
                 try:
