@@ -28,7 +28,7 @@ class BHD():
         self.upload_url = 'https://beyond-hd.me/api/upload/'
         self.torrent_url = 'https://beyond-hd.me/details/'
         self.requests_url = f"https://beyond-hd.me/api/requests/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
-        self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK']
+        self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT']
         pass
 
     async def upload(self, meta, disctype):
@@ -334,6 +334,33 @@ class BHD():
             console.print("[bold red]Non-English dub not allowed at BHD[/bold red]")
             meta['skipping'] = "BHD"
             return []
+
+        if meta['type'] not in ['WEBDL']:
+            if meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
+                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                        pass
+                    else:
+                        meta['skipping'] = "BHD"
+                        return []
+                else:
+                    meta['skipping'] = "BHD"
+                    return []
+
+        disallowed_keywords = {'XXX', 'Erotic', 'Porn'}
+        disallowed_genres = {'Adult', 'Erotica'}
+        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])) or any(genre.lower() in disallowed_genres for genre in map(str.lower, meta.get('combined_genres', []))):
+            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
+                console.print('[bold red]Porn/xxx is not allowed at BHD.')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    meta['skipping'] = "BHD"
+                    return []
+            else:
+                meta['skipping'] = "BHD"
+                return []
 
         dupes = []
         category = meta['category']

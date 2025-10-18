@@ -971,6 +971,26 @@ class Prep():
                 services = await get_service(get_services_only=True)
                 meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
+            # Combine genres from TMDB and IMDb
+            tmdb_genres = meta.get('genres', '') or ''
+            imdb_genres = meta.get('imdb_info', {}).get('genres', '') or ''
+
+            all_genres = []
+            if tmdb_genres:
+                all_genres.extend([g.strip() for g in tmdb_genres.split(',') if g.strip()])
+            if imdb_genres:
+                all_genres.extend([g.strip() for g in imdb_genres.split(',') if g.strip()])
+
+            seen = set()
+            unique_genres = []
+            for genre in all_genres:
+                genre_lower = genre.lower()
+                if genre_lower not in seen:
+                    seen.add(genre_lower)
+                    unique_genres.append(genre)
+
+            meta['combined_genres'] = ', '.join(unique_genres) if unique_genres else ''
+
         # return duplicate ids so I don't have to catch every site file
         # this has the other advantage of stringing imdb for this object
         meta['tmdb'] = meta.get('tmdb_id')

@@ -2,6 +2,7 @@ from guessit import guessit
 import os
 import re
 from src.console import console
+from src.region import get_distributor
 
 
 async def get_edition(video, bdinfo, filelist, manual_edition, meta):
@@ -323,12 +324,11 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
     # Handle distributor info
     if edition:
-        from src.region import get_distributor
         distributors = await get_distributor(edition)
 
         bad = ['internal', 'limited', 'retail', 'version', 'remastered']
 
-        if distributors:
+        if distributors and meta['is_disc']:
             bad.append(distributors.lower())
             meta['distributor'] = distributors
 
@@ -338,9 +338,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
             while '  ' in edition:
                 edition = edition.replace('  ', ' ')
 
-        if edition != "":
-            if meta['debug']:
-                console.print(f"Final Edition: {edition}")
+        if edition != "" and meta['debug']:
+            console.print(f"Final Edition: {edition}")
 
     return edition, repack, hybrid
 

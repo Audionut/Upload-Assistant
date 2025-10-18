@@ -26,9 +26,7 @@ class OTW(UNIT3D):
             'LAMA', 'Leffe', 'LOAD', 'mHD', 'NhaNc3', 'nHD', 'NOIVTC', 'nSD', 'PiRaTeS',
             'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'SANTi',
             'SicFoI', 'SPASM', 'STUTTERSHIT', 'Telly', 'TM', 'UPiNSMOKE', 'WAF', 'xRed',
-            'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN', '4f8c4100292', 'Azkars', 'Sync0rdi',
-            ['EVO', 'Raw Content Only'], ['TERMiNAL', 'Raw Content Only'],
-            ['ViSION', 'Note the capitalization and characters used'], ['CMRG', 'Raw Content Only']
+            'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN', '4f8c4100292', 'Azkars', 'Sync0rdi'
         ]
         pass
 
@@ -41,14 +39,30 @@ class OTW(UNIT3D):
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    should_continue = False
+                    return False
             else:
-                should_continue = False
+                return False
         disallowed_keywords = {'XXX', 'Erotic', 'Porn', 'Hentai', 'Adult Animation', 'Orgy', 'softcore'}
         if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
-            if not meta['unattended']:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult animation not allowed at OTW.')
-            should_continue = False
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    return False
+            else:
+                return False
+
+        if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
+            if meta.get('tag', "") and any(x in meta['tag'] for x in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']):
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at OTW[/bold red]')
+                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                        pass
+                    else:
+                        return False
+                else:
+                    return False
 
         return should_continue
 
