@@ -373,40 +373,89 @@ class SHRI(UNIT3D):
         return False
 
     def _analyze_encode_type(self, meta):
-        """Distinguish REMUX/WEBDL/WEBRIP/ENCODE via MediaInfo"""
+        """
+        Detect release type from MediaInfo technical analysis.
+
+        Priority order:
+        1. dvhe.08 profile → WEB-DL (streaming-only DV profile)
+        2. CRF in settings → WEBRIP/ENCODE (user re-encode)
+        3. Service fingerprints → WEB-DL (CR core 142, Netflix rc=2pass)
+        4. Encoding detected → WEBRIP/ENCODE
+        5. No encoding + WEB → WEB-DL
+        6. No encoding + disc → REMUX
+        """
         try:
             mi = meta.get("mediainfo", {})
             tracks = mi.get("media", {}).get("track", [])
             general_track = tracks[0]
             video_track = tracks[1]
+
+            # Normalize source list
             source = meta.get("source", "")
             if isinstance(source, list):
                 source = [s.upper() for s in source]
             else:
                 source = [source.upper()] if source else []
-            # Check video track encode settings
-            has_video_encoding = video_track.get(
-                "Encoded_Library_Settings"
-            ) and not isinstance(video_track.get("Encoded_Library_Settings"), dict)
-            # Check general track for tools (including extra field)
+
+            service = str(meta.get("service", "")).upper()
+
+            # Extract encoding metadata (check for empty dicts)
+            raw_settings = video_track.get("Encoded_Library_Settings", "")
+            raw_library = video_track.get("Encoded_Library", "")
+            has_settings = raw_settings and not isinstance(raw_settings, dict)
+            has_library = raw_library and not isinstance(raw_library, dict)
+
+            encoding_settings = str(raw_settings).lower() if has_settings else ""
+            encoded_library = str(raw_library).lower() if has_library else ""
+
+            # Priority 1: dvhe.08 profile is streaming-only (never on disc)
+            hdr_profile = video_track.get("HDR_Format_Profile", "")
+            if "dvhe.08" in hdr_profile:
+                return "WEBDL"
+
+            # Priority 2: CRF = definitive user re-encode
+            if "crf=" in encoding_settings:
+                return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
+
+            # Priority 3: Service-specific fingerprints
+            if service == "CR":
+                if "core 142" in encoded_library:
+                    return "WEBDL"  # Official CR encode
+                if has_library:
+                    core_match = re.search(r"core (\d+)", encoded_library)
+                    if core_match and int(core_match.group(1)) >= 152:
+                        return "WEBRIP"  # Modern core = user re-encode
+                if encoding_settings and "bitrate=" in encoding_settings:
+                    return "WEBDL"  # CR-style settings without clear version
+
+            # Netflix: Main@L4.0 + x264 core 118/148 + rc=2pass
+            format_profile = video_track.get("Format_Profile", "")
+            if "Main@L4.0" in format_profile and "rc=2pass" in encoding_settings:
+                if "core 118" in encoded_library or "core 148" in encoded_library:
+                    return "WEBDL"
+
+            # Priority 4: Detect encoding activity
+            if encoding_settings:
+                return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
+
+            # Check general track for encoding tools
             encoded_app = str(general_track.get("Encoded_Application", "")).lower()
             extra = general_track.get("extra", {})
             writing_frontend = str(extra.get("Writing_frontend", "")).lower()
             tool_string = f"{encoded_app} {writing_frontend}"
             encoding_tools = ["handbrake", "x264", "x265", "ffmpeg -c:v", "staxrip"]
-            has_encoding_app = any(tool in tool_string for tool in encoding_tools)
-            # If ANY encoding detected = definitely encoded
-            if has_video_encoding or has_encoding_app:
+
+            if any(tool in tool_string for tool in encoding_tools):
                 return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
-            # Profile 8 = streaming-only
-            if "dvhe.08" in video_track.get("HDR_Format_Profile", ""):
-                return "WEBDL"
-            # No encode settings + WEB source = WEB-DL
+
+            # Priority 5: No encoding + WEB source = WEB-DL
             if any("WEB" in s for s in source):
                 return "WEBDL"
-            # No encode settings + disc source = REMUX
+
+            # Priority 6: No encoding + disc source = REMUX
             if any(s in ("BLURAY", "BLU-RAY", "HDDVD") for s in source):
                 return "REMUX"
+
         except (IndexError, KeyError):
             pass
 
