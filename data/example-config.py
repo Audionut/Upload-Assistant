@@ -156,6 +156,16 @@ config = {
         # Use this client for injection (aka actually adding the torrent for uploading)
         "inject_torrent_client": "",
 
+        # A list of clients to search for torrents.
+        # eg: ['qbittorrent', 'qbittorrent_searching']
+        # will fallback to default_torrent_client if empty
+        "searching_client_list": [''],
+
+        # set true to skip automated client torrent searching
+        # this will search qbittorrent clients for matching torrents
+        # and use found torrent id's for existing hash and site searching
+        'skip_auto_torrent': False,
+
         # Play the bell sound effect when asking for confirmation
         "sfx_on_prompt": True,
 
@@ -203,11 +213,6 @@ config = {
 
         # set true to use argument overrides from data/templates/user-args.json
         "user_overrides": False,
-
-        # set true to skip automated client torrent searching
-        # this will search qbittorrent clients for matching torrents
-        # and use found torrent id's for existing hash and site searching
-        'skip_auto_torrent': False,
 
         # If there is no region/distributor ids specified, we can use existing torrents to check
         # This will use data from matching torrents in qBitTorrent/RuTorrent to find matching site ids
