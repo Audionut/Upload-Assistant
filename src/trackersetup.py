@@ -527,7 +527,7 @@ class TRACKER_SETUP:
                         console.print(f"[bold red]Error processing response data: {e}[/bold red]")
                         return requests
                 else:
-                    console.print(f"[bold red]Failed to search torrents on {tracker}. HTTP Status: {response.status_code}")
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.TimeoutException:
             console.print("[bold red]Request timed out after 5 seconds")
         except httpx.RequestError as e:

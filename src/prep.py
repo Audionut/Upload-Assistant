@@ -518,9 +518,12 @@ class Prep():
             if meta.get('infohash') is not None and not meta['base_torrent_created'] and not meta['we_checked_them_all'] and not ids:
                 meta = await client.get_ptp_from_hash(meta)
 
-            if not meta.get('edit', False) and not ids:
+            meta['skip_this_content'] = False
+            if (meta.get('site_check', False) and not meta.get('edit', False)) or (not meta.get('edit', False) and not ids):
                 # Reuse information from trackers with fallback
                 await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
+                if meta.get('skip_this_content', False):
+                    raise Exception()
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
                 ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
