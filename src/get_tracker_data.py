@@ -126,6 +126,22 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
             if meta.get('category') == "MOVIE" and "BTN" in specific_tracker:
                 specific_tracker.remove("BTN")
 
+            meta_trackers = meta.get('trackers', [])
+            if isinstance(meta_trackers, str):
+                meta_trackers = [t.strip().upper() for t in meta_trackers.split(',')]
+            elif isinstance(meta_trackers, list):
+                meta_trackers = [t.upper() if isinstance(t, str) else t for t in meta_trackers]
+
+            # for just searching, remove any specific trackers already in meta['trackers']
+            # since that tracker was found in client, and remove it from meta['trackers']
+            for tracker in list(specific_tracker):
+                if tracker in meta_trackers and meta.get('site_check', False):
+                    console.print(f"[yellow]Found {tracker} in your trackers list, removing from specific_tracker[/yellow]")
+                    specific_tracker.remove(tracker)
+                    meta_trackers.remove(tracker)
+
+            meta['trackers'] = meta_trackers
+
             async def process_tracker(tracker_name, meta, only_id):
                 nonlocal found_match
                 if tracker_class_map is None:
@@ -158,11 +174,6 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     meta_trackers = [t.strip().upper() for t in meta_trackers.split(',')]
                 elif isinstance(meta_trackers, list):
                     meta_trackers = [t.upper() if isinstance(t, str) else t for t in meta_trackers]
-
-                if any(tracker in meta_trackers for tracker in specific_tracker) and meta.get('site_check', False):
-                    console.print("[yellow]Found the matching content in your client[/yellow]")
-                    meta['skip_this_content'] = True
-                    return meta
 
                 available_trackers, waiting_trackers = await get_available_trackers(specific_tracker, base_dir, debug=meta['debug'])
 
