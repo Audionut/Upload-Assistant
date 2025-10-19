@@ -3,6 +3,7 @@ import aiohttp
 import asyncio
 import base64
 import bencode
+import collections
 import errno
 import os
 import platform
@@ -21,11 +22,14 @@ from src.console import console
 from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
+# These have to be global variables to be shared across all instances since a new instance is made every time
+qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfuly logged into
+qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+
 
 class Clients():
     def __init__(self, config):
         self.config = config
-        pass
 
     async def retry_qbt_operation(self, operation_func, operation_name, max_retries=2, initial_timeout=10.0):
         for attempt in range(max_retries + 1):
@@ -42,6 +46,41 @@ class Clients():
                 else:
                     console.print(f"[bold red]{operation_name} failed after {max_retries + 1} attempts (final timeout: {timeout}s)")
                     raise  # Re-raise the TimeoutError so caller can handle it
+
+    async def init_qbittorrent_client(self, client):
+        # Creates and logs into a qbittorrent client, with caching to avoid redundant logins
+        # If login fails, returns None
+        client_key = (client['qbit_url'], client['qbit_port'], client['qbit_user'])
+        async with qbittorrent_locks[client_key]:
+            # We lock to further prevent concurrent logins for the same client. If two clients try to init at the same time, if the first one succeeds, the second one can use the cached client.
+            potential_cached_client = qbittorrent_cached_clients.get(client_key)
+            if potential_cached_client is not None:
+                return potential_cached_client
+
+            qbt_client = qbittorrentapi.Client(
+                host=client['qbit_url'],
+                port=client['qbit_port'],
+                username=client['qbit_user'],
+                password=client['qbit_pass'],
+                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
+            )
+            try:
+                await self.retry_qbt_operation(
+                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                    "qBittorrent login"
+                )
+            except asyncio.TimeoutError:
+                console.print("[bold red]Connection to qBittorrent timed out after retries")
+                return None
+            except qbittorrentapi.LoginFailed:
+                console.print("[bold red]Failed to login to qBittorrent - incorrect credentials")
+                return None
+            except qbittorrentapi.APIConnectionError:
+                console.print("[bold red]Failed to connect to qBittorrent - check host/port")
+                return None
+            else:
+                qbittorrent_cached_clients[client_key] = qbt_client
+                return qbt_client
 
     async def add_to_client(self, meta, tracker):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
@@ -142,20 +181,11 @@ class Clients():
                                     console.print(f"[red]Error exporting torrent via proxy: {e}")
                                     continue
                         else:
-                            qbt_client = qbittorrentapi.Client(
-                                host=client['qbit_url'],
-                                port=client['qbit_port'],
-                                username=client['qbit_user'],
-                                password=client['qbit_pass'],
-                                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-                            )
-                            try:
-                                await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                                    "qBittorrent login"
-                                )
-                            except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
+                            potential_qbt_client = await self.init_qbittorrent_client(client)
+                            if not potential_qbt_client:
                                 continue
+                            else:
+                                qbt_client = potential_qbt_client
 
                             try:
                                 torrent_file_content = await self.retry_qbt_operation(
@@ -198,21 +228,7 @@ class Clients():
                 if proxy_url:
                     qbt_session = aiohttp.ClientSession()
                 else:
-                    qbt_client = qbittorrentapi.Client(
-                        host=client['qbit_url'],
-                        port=client['qbit_port'],
-                        username=client['qbit_user'],
-                        password=client['qbit_pass'],
-                        VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-                    )
-                    try:
-                        await self.retry_qbt_operation(
-                            lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                            "qBittorrent login"
-                        )
-                    except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError) as e:
-                        console.print(f"[bold red]Failed to connect to qBittorrent: {e}")
-                        qbt_client = None
+                    qbt_client = await self.init_qbittorrent_client(client)
 
                 found_hash = await self.search_qbit_for_torrent(meta, client, qbt_client, qbt_session, proxy_url)
 
@@ -408,27 +424,10 @@ class Clients():
 
         try:
             if qbt_client is None and proxy_url is None:
-                qbt_client = qbittorrentapi.Client(
-                    host=client['qbit_url'],
-                    port=client['qbit_port'],
-                    username=client['qbit_user'],
-                    password=client['qbit_pass'],
-                    VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-                )
-                try:
-                    await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                        "qBittorrent login"
-                    )
-                except qbittorrentapi.LoginFailed:
-                    console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
+                potential_qbt_client = await self.init_qbittorrent_client(client)
+                if potential_qbt_client is None:
                     return None
-                except qbittorrentapi.APIConnectionError:
-                    console.print("[bold red]APIConnectionError: INCORRECT HOST/PORT")
-                    return None
-                except asyncio.TimeoutError:
-                    console.print("[bold red]Login to qBittorrent timed out after retries")
-                    return None
+                qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
                 qbt_session = aiohttp.ClientSession()
 
@@ -1045,29 +1044,14 @@ class Clients():
             qbt_session = aiohttp.ClientSession()
             qbt_proxy_url = proxy_url.rstrip('/')
         else:
-            qbt_client = qbittorrentapi.Client(
-                host=client['qbit_url'],
-                port=client['qbit_port'],
-                username=client['qbit_user'],
-                password=client['qbit_pass'],
-                VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
-            )
+            potential_qbt_client = await self.init_qbittorrent_client(client)
+            if not potential_qbt_client:
+                return
+            else:
+                qbt_client = potential_qbt_client
 
         if meta['debug']:
             console.print("[bold yellow]Adding and rechecking torrent")
-
-        if qbt_client:
-            try:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                    "qBittorrent login"
-                )
-            except (asyncio.TimeoutError, qbittorrentapi.LoginFailed):
-                console.print("[bold red]Failed to login to qBittorrent")
-                return
-            except qbittorrentapi.APIConnectionError:
-                console.print("[bold red]Failed to connect to qBittorrent")
-                return
 
         # Apply remote pathing to `tracker_dir` before assigning `save_path`
         if use_symlink or use_hardlink:
@@ -1451,23 +1435,11 @@ class Clients():
                 qbt_session = aiohttp.ClientSession()
                 qbt_proxy_url = proxy_url.rstrip('/')
             else:
-                qbt_client = qbittorrentapi.Client(
-                    host=client['qbit_url'],
-                    port=client['qbit_port'],
-                    username=client['qbit_user'],
-                    password=client['qbit_pass'],
-                    VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True),
-                    REQUESTS_ARGS={'timeout': 10}
-                )
-
-                try:
-                    await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                        "qBittorrent login"
-                    )
-                except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError):
-                    console.print("[bold red]Failed to login to qBittorrent")
+                potential_qbt_client = await self.init_qbittorrent_client(client)
+                if not potential_qbt_client:
                     return meta
+                else:
+                    qbt_client = potential_qbt_client
 
             info_hash_v1 = meta.get('infohash')
             if meta['debug']:
@@ -1852,32 +1824,11 @@ class Clients():
                         await session.close()
                     return []
             else:
-                try:
-                    qbt_client = qbittorrentapi.Client(
-                        host=client_config['qbit_url'],
-                        port=int(client_config['qbit_port']),
-                        username=client_config['qbit_user'],
-                        password=client_config['qbit_pass'],
-                        VERIFY_WEBUI_CERTIFICATE=client_config.get('VERIFY_WEBUI_CERTIFICATE', True),
-                        REQUESTS_ARGS={'timeout': 10}
-                    )
-
-                    try:
-                        await self.retry_qbt_operation(
-                            lambda: asyncio.to_thread(qbt_client.auth_log_in),
-                            "qBittorrent login"
-                        )
-                    except asyncio.TimeoutError:
-                        console.print("[bold red]Connection to qBittorrent timed out after retries")
-                        return []
-
-                except qbittorrentapi.LoginFailed:
-                    console.print("[bold red]Failed to login to qBittorrent - incorrect credentials")
+                potential_qbt_client = await self.init_qbittorrent_client(client_config)
+                if not potential_qbt_client:
                     return []
-
-                except qbittorrentapi.APIConnectionError:
-                    console.print("[bold red]Failed to connect to qBittorrent - check host/port")
-                    return []
+                else:
+                    qbt_client = potential_qbt_client
 
             try:
                 if proxy_url:
