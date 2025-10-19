@@ -202,49 +202,78 @@ class SHRI(UNIT3D):
             # Fallback: use original name with cleaned audio
             name = meta["name"].replace("Dual-Audio", "").strip()
 
+        # Ensure name is always a string
+        if not name:
+            name = meta.get("name", "UNKNOWN")
+
         # Add [SUBS] for Italian subtitles without Italian audio
         if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
             name = f"{name} [SUBS]"
 
-        # Extract and clean release group tag
-        tag = meta.get("tag", "").strip()
-        if not tag:
-            basename = self.get_basename(meta)
-
-            # Get extension from mediainfo and remove it
-            ext = (
-                meta.get("mediainfo", {})
-                .get("media", {})
-                .get("track", [{}])[0]
-                .get("FileExtension", "")
-            )
-            name_no_ext = (
-                basename[: -len(ext) - 1]
-                if ext and basename.endswith(f".{ext}")
-                else basename
-            )
-
-            # Extract tag after last hyphen
-            if "-" in name_no_ext:
-                potential_tag = name_no_ext.split("-")[-1]
-                if (
-                    potential_tag
-                    and len(potential_tag) <= 30
-                    and potential_tag.replace("_", "").replace(".", "").isalnum()
-                ):
-                    tag = potential_tag
-
-        # Clean and validate tag
-        tag = tag.lstrip("-").strip()
-        tag = re.sub(r"^[A-Z]{2,3}\s+", "", tag)
-
-        if not tag or self.INVALID_TAG_PATTERN.search(tag):
-            tag = "NoGroup"
-
-        name = f"{name}-{tag}"
+        # Cleanup whitespace
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
+        # Extract tag and append if valid
+        tag = self._extract_clean_release_group(meta, name)
+        if tag:
+            name = f"{name}-{tag}"
+
         return {"name": name}
+
+    def _extract_clean_release_group(self, meta, current_name):
+        """Extract release group if not already in the calculated name"""
+        tag = meta.get("tag", "").strip().lstrip("-")
+        if tag and " " not in tag and not self.INVALID_TAG_PATTERN.search(tag):
+            return tag
+
+        basename = self.get_basename(meta)
+        # Get extension from mediainfo and remove it
+        ext = (
+            meta.get("mediainfo", {})
+            .get("media", {})
+            .get("track", [{}])[0]
+            .get("FileExtension", "")
+        )
+        name_no_ext = (
+            basename[: -len(ext) - 1]
+            if ext and basename.endswith(f".{ext}")
+            else basename
+        )
+        parts = re.split(r"[-.]", name_no_ext)
+        if not parts:
+            return "NoGroup"
+
+        potential_tag = parts[-1].strip()
+        # Handle space-separated components
+        if " " in potential_tag:
+            potential_tag = potential_tag.split()[-1]
+
+        if (
+            not potential_tag
+            or len(potential_tag) > 30
+            or not potential_tag.replace("_", "").isalnum()
+            or self.INVALID_TAG_PATTERN.search(potential_tag)
+        ):
+            return "NoGroup"
+
+        # Special case: UNTOUCHED/VU at end is valid tag, don't reject
+        if self.MARKER_PATTERN.search(potential_tag):
+            return potential_tag
+
+        # Check against calculated name
+        name_normalized = (
+            current_name.lower()
+            .replace("-", "")
+            .replace(".", "")
+            .replace(" ", "")
+            .replace("_", "")
+        )
+        tag_normalized = potential_tag.lower().replace("_", "")
+
+        if tag_normalized in name_normalized:
+            return "NoGroup"
+
+        return potential_tag
 
     async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         """Map release type to ShareIsland type IDs"""
