@@ -86,6 +86,8 @@ class FF:
             print(f"{self.tracker}: Login failed. Status code: {response.status_code}")
 
     async def search_existing(self, meta, disctype):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
         if meta['category'] == 'MOVIE':
             query = meta['title']
         if meta['category'] == 'TV':

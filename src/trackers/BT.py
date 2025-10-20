@@ -412,6 +412,8 @@ class BT:
 
         found_items = []
         try:
+            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
             response = await self.session.get(search_url)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')

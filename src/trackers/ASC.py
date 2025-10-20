@@ -530,6 +530,8 @@ class ASC:
         }
 
     async def search_existing(self, meta, disctype):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
         found_items = []
         if meta.get('anime'):
             search_name = await self.get_title(meta)

@@ -618,6 +618,8 @@ class BJS:
             return
 
         try:
+            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
             BJS.already_has_the_info = False
             params = self._extract_upload_params(meta)
 

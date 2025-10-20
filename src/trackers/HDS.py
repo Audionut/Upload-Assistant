@@ -118,6 +118,8 @@ class HDS:
         return description
 
     async def search_existing(self, meta, disctype):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
         dupes = []
         imdb_id = meta.get('imdb', '')
         if imdb_id == '0':
