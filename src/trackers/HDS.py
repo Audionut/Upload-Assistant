@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import aiofiles
+import glob
 import httpx
+import os
 import platform
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
@@ -298,9 +300,19 @@ class HDS:
 
         return data
 
+    async def get_nfo(self, meta):
+        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
+
+        if nfo_files:
+            nfo_path = nfo_files[0]
+            return {'nfo': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+        return {}
+
     async def upload(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
+        files = await self.get_nfo(meta)
 
         await self.cookie_auth_uploader.handle_upload(
             meta=meta,
@@ -313,6 +325,7 @@ class HDS:
             upload_url="https://hd-space.org/index.php?page=upload",
             hash_is_id=True,
             success_text="download.php?id=",
+            additional_files=files,
         )
 
         return

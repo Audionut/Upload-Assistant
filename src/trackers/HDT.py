@@ -324,6 +324,7 @@ class HDT:
         if nfo_files:
             nfo_path = nfo_files[0]
             return {'nfos': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+        return {}
 
     async def upload(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
