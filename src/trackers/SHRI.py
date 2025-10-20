@@ -409,9 +409,10 @@ class SHRI(UNIT3D):
         1. dvhe.08 profile → WEB-DL (streaming-only DV profile)
         2. CRF in settings → WEBRIP/ENCODE (user re-encode)
         3. Service fingerprints → WEB-DL (CR core 142, Netflix rc=2pass)
-        4. Encoding detected → WEBRIP/ENCODE
-        5. No encoding + WEB → WEB-DL
-        6. No encoding + disc → REMUX
+        4. BluRay empty metadata → ENCODE (GPU encode detection)
+        5. Encoding detected → WEBRIP/ENCODE
+        6. No encoding + WEB → WEB-DL
+        7. No encoding + disc → REMUX
         """
         try:
             mi = meta.get("mediainfo", {})
@@ -463,7 +464,16 @@ class SHRI(UNIT3D):
                 if "core 118" in encoded_library or "core 148" in encoded_library:
                     return "WEBDL"
 
-            # Priority 4: Detect encoding activity
+            # Priority 4: BluRay empty metadata = GPU encode (stripped during re-encode)
+            if any(s in ("BLURAY", "BLU-RAY") for s in source):
+                bit_depth = video_track.get("BitDepth")
+                chroma = video_track.get("ChromaSubsampling")
+
+                # Empty dicts mean metadata stripped = definitive encode
+                if isinstance(bit_depth, dict) and isinstance(chroma, dict):
+                    return "ENCODE"
+
+            # Priority 5: Detect encoding activity
             if encoding_settings:
                 return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
 
@@ -477,11 +487,11 @@ class SHRI(UNIT3D):
             if any(tool in tool_string for tool in encoding_tools):
                 return "WEBRIP" if any("WEB" in s for s in source) else "ENCODE"
 
-            # Priority 5: No encoding + WEB source = WEB-DL
+            # Priority 6: No encoding + WEB source = WEB-DL
             if any("WEB" in s for s in source):
                 return "WEBDL"
 
-            # Priority 6: No encoding + disc source = REMUX
+            # Priority 7: No encoding + disc source = REMUX
             if any(s in ("BLURAY", "BLU-RAY", "HDDVD") for s in source):
                 return "REMUX"
 
