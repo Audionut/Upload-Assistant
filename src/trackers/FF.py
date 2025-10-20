@@ -112,7 +112,7 @@ class FF:
                 query_1 = meta['title']
                 query_2 = meta['title'].replace(' ', '.')
 
-                search_url_1 = f"{self.requests_url}?filter = open & category = {category} & search = {query_1}"
+                search_url_1 = f"{self.requests_url}?filter=open&category={category}&search={query_1}"
 
                 if query_1 != query_2:
                     search_url_2 = f"{self.base_url}/requests.php?filter=open&category={category}&search={query_2}"
@@ -182,7 +182,7 @@ class FF:
             desc_parts.append(f'[center]{title}[/center]')
 
             if episode_image:
-                desc_parts.append(f'<a href="{episode_image}" target="_blank"><img src="{episode_image}" width="220"></a>')
+                desc_parts.append(f'[center]<a href="{episode_image}" target="_blank"><img src="{episode_image}" width="220"></a>[/center]')
 
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
@@ -267,7 +267,9 @@ class FF:
 
         description = bbcode.remove_extra_lines(description)
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{self.tracker}:DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
+        async with aiofiles.open(
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8'
+        ) as description_file:
             await description_file.write(description)
 
         return description
