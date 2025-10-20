@@ -846,9 +846,10 @@ class ASC:
 
         # Internal
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            data.update({
-                'internal': 'yes',
-            })
+            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                data.update({
+                    'internal': 'yes',
+                })
 
         # Screenshots
         for i, img in enumerate(meta.get('image_list', [])[:4]):
