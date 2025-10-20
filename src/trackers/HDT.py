@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import aiofiles
+import glob
 import httpx
+import os
 import platform
 import re
 from bs4 import BeautifulSoup
@@ -315,9 +317,18 @@ class HDT:
 
         return data
 
+    async def get_nfo(self, meta):
+        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
+
+        if nfo_files:
+            nfo_path = nfo_files[0]
+            return {'nfos': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+
     async def upload(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
+        files = await self.get_nfo(meta)
 
         await self.cookie_auth_uploader.handle_upload(
             meta=meta,
@@ -330,7 +341,8 @@ class HDT:
             upload_url=f"{self.base_url}/upload.php",
             hash_is_id=True,
             success_text="Upload successful!",
-            default_announce='https://hdts-announce.ru/announce.php'
+            default_announce='https://hdts-announce.ru/announce.php',
+            additional_files=files,
         )
 
         return
