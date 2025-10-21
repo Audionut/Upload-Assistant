@@ -2,6 +2,7 @@
 # import discord
 import aiofiles
 import asyncio
+import cli_ui
 import httpx
 import json
 import os
@@ -86,7 +87,6 @@ class ANT:
             'tmdbid': meta['tmdb'],
             'mediainfo': await self.mediainfo(meta),
             'flags[]': flags,
-            'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4]),
             'release_desc': await self.edit_desc(meta),
         }
         if meta['bdinfo'] is not None:
@@ -98,6 +98,20 @@ class ANT:
         if meta['scene']:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
+
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Adult content detected[/bold red]')
+                if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
+                    data['screenshots'] = '\n'.join([x['raw_url'] for x in meta['image_list']][:4])
+                else:
+                    data['screenshots'] = ''  # No screenshots for adult content
+            else:
+                data['screenshots'] = ''
+        else:
+            data['screenshots'] = '\n'.join([x['raw_url'] for x in meta['image_list']][:4])
+
         headers = {
             'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }

@@ -140,15 +140,15 @@ class OE(UNIT3D):
         imdb_aka = meta.get('imdb_info', {}).get('aka', "")
         year = str(meta.get('year', ""))
         aka = meta.get('aka', "")
-        if imdb_name and imdb_name != "":
+        if imdb_name and imdb_name.strip():
             if aka:
                 oe_name = oe_name.replace(f"{aka} ", "", 1)
             oe_name = oe_name.replace(f"{meta['title']}", imdb_name, 1)
 
-            if imdb_aka and imdb_aka != "" and imdb_aka != imdb_name and not meta.get('no_aka', False):
+            if imdb_aka and imdb_aka.strip() and imdb_aka != imdb_name and not meta.get('no_aka', False):
                 oe_name = oe_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
 
-        if not meta.get('category') == "TV" and imdb_year and imdb_year != "" and year and year != "" and imdb_year != year:
+        if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
         if name_type == "DVDRIP":

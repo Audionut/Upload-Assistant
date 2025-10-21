@@ -23,7 +23,7 @@ class LDU(UNIT3D):
         pass
 
     async def get_category_id(self, meta):
-        genres = f"{meta.get('keywords', '')} {meta.get('genres', '')}"
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         sound_mixes = meta.get('imdb_info', {}).get('sound_mixes', [])
 
         category_id = {

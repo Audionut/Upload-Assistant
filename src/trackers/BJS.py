@@ -1173,9 +1173,10 @@ class BJS:
 
         # Internal
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            data.update({
-                'internalrel': 1,
-            })
+            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                data.update({
+                    'internalrel': 1,
+                })
 
         # Only upload images if not debugging
         if not meta.get('debug', False):

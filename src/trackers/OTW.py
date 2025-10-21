@@ -33,7 +33,7 @@ class OTW(UNIT3D):
     async def get_additional_checks(self, meta):
         should_continue = True
 
-        if not any(genre in meta['genres'] for genre in ['Animation', 'Family']):
+        if not any(genre in meta['combined_genres'] for genre in ['Animation', 'Family']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
@@ -99,14 +99,12 @@ class OTW(UNIT3D):
         resolution = meta['resolution']
         aka = meta.get('aka', '')
         type = meta['type']
+        video_codec = meta.get('video_codec', '')
         if aka:
             otw_name = otw_name.replace(f"{aka} ", '')
-        if meta['is_disc'] == "DVD":
-            otw_name = otw_name.replace(source, f"{source} {resolution}")
-        if meta['is_disc'] == "DVD" or type == "REMUX":
-            otw_name = otw_name.replace(meta['audio'], f"{meta.get('video_codec', '')} {meta['audio']}", 1)
-        elif meta['is_disc'] == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
+        if meta['is_disc'] == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             otw_name = otw_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
+            otw_name = otw_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
         if meta['category'] == "TV":
             years = []
 

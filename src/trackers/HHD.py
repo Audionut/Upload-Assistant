@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import discord
+from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -26,6 +27,14 @@ class HHD(UNIT3D):
             'TSP', 'TSPxL', 'ViSION', 'VXT', 'WAF', 'WKS', 'x0r', 'YAWNiX', 'YIFY', 'YTS', 'PSA', ['EVO', 'WEB-DL only']
         ]
         pass
+
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        if meta['type'] == "DVDRIP":
+            console.print("[bold red]DVDRIP uploads are not allowed on HHD.[/bold red]")
+            return False
+
+        return should_continue
 
     async def get_resolution_id(self, meta, mapping_only=False, reverse=False, resolution=None):
         resolution_id = {
