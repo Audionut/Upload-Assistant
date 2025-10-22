@@ -427,13 +427,13 @@ class SHRI(UNIT3D):
             general_track = tracks[0]
             video_track = tracks[1]
 
-            # Normalize source
+            # Normalize source list
             source = meta.get("source", "")
-            source = (
-                [s.upper() for s in source]
-                if isinstance(source, list)
-                else ([source.upper()] if source else [])
-            )
+            if isinstance(source, list):
+                source = [s.upper() for s in source]
+            else:
+                source = [source.upper()] if source else []
+
             service = str(meta.get("service", "")).upper()
 
             # Extract encoding metadata
