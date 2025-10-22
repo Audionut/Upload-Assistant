@@ -401,13 +401,6 @@ class SHRI(UNIT3D):
             return True
         return False
 
-    def _get_encoding_tool_string(self, general_track):
-        """Extract encoding tool string from mediainfo general track"""
-        encoded_app = str(general_track.get("Encoded_Application", "")).lower()
-        extra = general_track.get("extra", {})
-        writing_frontend = str(extra.get("Writing_frontend", "")).lower()
-        return f"{encoded_app} {writing_frontend}"
-
     def _analyze_encode_type(self, meta):
         """
         Detect release type from MediaInfo technical analysis.
@@ -421,6 +414,15 @@ class SHRI(UNIT3D):
         6. No encoding + WEB -> WEB-DL
         7. No encoding + disc -> REMUX
         """
+
+        def has_encoding_tools(general_track, tools):
+            """Check if general track contains specified encoding tools"""
+            encoded_app = str(general_track.get("Encoded_Application", "")).lower()
+            extra = general_track.get("extra", {})
+            writing_frontend = str(extra.get("Writing_frontend", "")).lower()
+            tool_string = f"{encoded_app} {writing_frontend}"
+            return any(tool in tool_string for tool in tools)
+
         try:
             mi = meta.get("mediainfo", {})
             tracks = mi.get("media", {}).get("track", [])
@@ -451,10 +453,8 @@ class SHRI(UNIT3D):
             )
 
             if has_streaming_dv and not encoding_settings:
-                tool_string = self._get_encoding_tool_string(general_track)
-                if not any(
-                    tool in tool_string
-                    for tool in ["handbrake", "staxrip", "megatagger", "x264", "x265"]
+                if not has_encoding_tools(
+                    general_track, ["handbrake", "staxrip", "megatagger"]
                 ):
                     return "WEBDL"
 
@@ -487,21 +487,18 @@ class SHRI(UNIT3D):
                     return "ENCODE"
 
             # Priority 5: Encoding tools (source-aware)
-            tool_string = self._get_encoding_tool_string(general_track)
-
             # BluRay: x264/x265 indicates re-encode
             if any(s in ("BLURAY", "BLU-RAY") for s in source):
-                if any(
-                    tool in tool_string
-                    for tool in ["x264", "x265", "handbrake", "staxrip", "megatagger"]
+                if has_encoding_tools(
+                    general_track,
+                    ["x264", "x265", "handbrake", "staxrip", "megatagger"],
                 ):
                     return "ENCODE"
 
             # WEB: only explicit user tools indicate re-encode
             if any("WEB" in s for s in source):
-                if any(
-                    tool in tool_string
-                    for tool in ["handbrake", "staxrip", "megatagger"]
+                if has_encoding_tools(
+                    general_track, ["handbrake", "staxrip", "megatagger"]
                 ):
                     return "WEBRIP"
 
