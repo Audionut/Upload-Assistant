@@ -90,7 +90,7 @@ class SHRI(UNIT3D):
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = await self._get_best_italian_audio_format(meta)
 
-        # Build audio language tag: original → ITALIAN → ENGLISH → others/Multi (4+)
+        # Build audio language tag: original -> ITALIAN -> ENGLISH -> others/Multi (4+)
         audio_lang_str = ""
         if meta.get("audio_languages"):
             # Normalize all to full names
@@ -122,7 +122,7 @@ class SHRI(UNIT3D):
                 result.append("ENGLISH")
                 remaining.remove("ENGLISH")
 
-            # Handle remaining: show individually if ≤3 total, else add Multi
+            # Handle remaining: show individually if <=3 total, else add Multi
             if len(result) + len(remaining) > 3:
                 result.append("Multi")
             else:
@@ -406,13 +406,13 @@ class SHRI(UNIT3D):
         Detect release type from MediaInfo technical analysis.
 
         Priority order:
-        1. dvhe.08 profile → WEB-DL (streaming-only DV profile)
-        2. CRF in settings → WEBRIP/ENCODE (user re-encode)
-        3. Service fingerprints → WEB-DL (CR core 142, Netflix rc=2pass)
-        4. BluRay empty metadata → ENCODE (GPU encode detection)
-        5. Encoding detected → WEBRIP/ENCODE
-        6. No encoding + WEB → WEB-DL
-        7. No encoding + disc → REMUX
+        1. dvhe.08 profile -> WEB-DL (streaming-only DV profile)
+        2. CRF in settings -> WEBRIP/ENCODE (user re-encode)
+        3. Service fingerprints -> WEB-DL (CR core 142, Netflix rc=2pass)
+        4. BluRay empty metadata -> ENCODE (GPU encode detection)
+        5. Encoding detected -> WEBRIP/ENCODE
+        6. No encoding + WEB -> WEB-DL
+        7. No encoding + disc -> REMUX
         """
         try:
             mi = meta.get("mediainfo", {})
