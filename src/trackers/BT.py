@@ -625,6 +625,8 @@ class BT:
                     'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
                     'title_br': await self.get_title(meta),
                 })
+            if meta.get('scene', False):
+                data['scene'] = 'on'
 
         # Common data TV/Anime
         tv_pack = bool(meta.get('tv_pack'))
