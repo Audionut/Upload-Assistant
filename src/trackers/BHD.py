@@ -243,11 +243,6 @@ class BHD():
                             await desc.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n")
                             await desc.write("\n")
             await desc.write(base.replace("[img]", "[img width=300]"))
-            try:
-                # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
-                screensPerRow = int(self.config['DEFAULT'].get('screens_per_row', 2))
-            except Exception:
-                screensPerRow = 2
             if meta.get('comparison') and meta.get('comparison_groups'):
                 await desc.write("[center]")
                 comparison_groups = meta.get('comparison_groups', {})
@@ -295,9 +290,6 @@ class BHD():
                     img_url = images[each]['img_url']
                     if (each == len(images) - 1):
                         await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]")
-                    elif (each + 1) % screensPerRow == 0:
-                        await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
-                        await desc.write("\n")
                     elif (each + 1) % 2 == 0:
                         await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url]\n")
                         await desc.write("\n")
@@ -348,9 +340,8 @@ class BHD():
                     meta['skipping'] = "BHD"
                     return []
 
-        disallowed_keywords = {'XXX', 'Erotic', 'Porn'}
-        disallowed_genres = {'Adult', 'Erotica'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])) or any(genre.lower() in disallowed_genres for genre in map(str.lower, meta.get('combined_genres', []))):
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print('[bold red]Porn/xxx is not allowed at BHD.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):

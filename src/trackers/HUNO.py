@@ -154,7 +154,7 @@ class HUNO(UNIT3D):
 
     async def get_audio(self, meta):
         channels = meta.get('channels', "")
-        codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace(channels, "")
+        codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
         languages = ""
 
         if not meta.get('language_checked', False):
