@@ -666,17 +666,51 @@ class HDB():
             uploadSuccess = True
             if meta.get('comparison', False):
                 num_groups = len(sorted_group_indices) if sorted_group_indices else 3
+                max_chunk_size = 100 * 1024 * 1024  # 100 MiB in bytes
                 bbcode = ""
-                for i in range(0, len(files), num_groups):
-                    fileList = dict(list(files.items())[i:i+num_groups])
-                    for j in range(0, len(fileList)):
-                        fileList['images_files[' + str(j) + ']'] = fileList.pop('images_files[' + str(i+j) + ']')
+
+                chunks = []
+                current_chunk = []
+                current_chunk_size = 0
+
+                files_list = list(files.items())
+                for i in range(0, len(files_list), num_groups):
+                    row_items = files_list[i:i+num_groups]
+                    row_size = sum(os.path.getsize(all_image_files[i+j]) for j in range(len(row_items)))
+
+                    # If adding this row would exceed chunk size and we already have items, start new chunk
+                    if current_chunk and current_chunk_size + row_size > max_chunk_size:
+                        chunks.append(current_chunk)
+                        current_chunk = []
+                        current_chunk_size = 0
+
+                    current_chunk.extend(row_items)
+                    current_chunk_size += row_size
+
+                if current_chunk:
+                    chunks.append(current_chunk)
+
+                if meta['debug']:
+                    console.print(f"[cyan]Split into {len(chunks)} chunks based on 100 MiB limit")
+
+                # Upload each chunk
+                for chunk_idx, chunk in enumerate(chunks):
+                    fileList = {}
+                    for j, (key, value) in enumerate(chunk):
+                        fileList[f'images_files[{j}]'] = value
+
+                    if meta['debug']:
+                        chunk_size_mb = sum(os.path.getsize(all_image_files[int(key.split('[')[1].split(']')[0])]) for key, _ in chunk) / (1024 * 1024)
+                        console.print(f"[cyan]Uploading chunk {chunk_idx + 1}/{len(chunks)} ({len(fileList)} images, {chunk_size_mb:.2f} MiB)")
+
                     response = requests.post(url, data=data, files=fileList)
                     if response.status_code == 200:
-                        console.print("[green]Upload successful!")
+                        console.print(f"[green]Chunk {chunk_idx + 1}/{len(chunks)} upload successful!")
                         bbcode += response.text
                     else:
+                        console.print(f"[red]Chunk {chunk_idx + 1}/{len(chunks)} upload failed with status code {response.status_code}")
                         uploadSuccess = False
+                        break
             else:
                 response = requests.post(url, data=data, files=files)
                 if response.status_code == 200:
