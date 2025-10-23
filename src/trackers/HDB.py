@@ -395,29 +395,11 @@ class HDB():
         return dupes
 
     async def validate_credentials(self, meta):
-        vapi = await self.validate_api()
         vcookie = await self.validate_cookies(meta)
-        if vapi is not True:
-            console.print('[red]Failed to validate API. Please confirm that the site is up and your passkey is valid.')
-            return False
         if vcookie is not True:
             console.print('[red]Failed to validate cookies. Please confirm that the site is up and your passkey is valid.')
             return False
         return True
-
-    async def validate_api(self):
-        url = "https://hdbits.org/api/test"
-        data = {
-            'username': self.username,
-            'passkey': self.passkey
-        }
-        try:
-            r = requests.post(url, data=json.dumps(data)).json()
-            if r.get('status', 5) == 0:
-                return True
-            return False
-        except Exception:
-            return False
 
     async def validate_cookies(self, meta):
         common = COMMON(config=self.config)
