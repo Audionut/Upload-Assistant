@@ -157,24 +157,6 @@ class DC:
             return category_map[category].get(resolution)
         return None
 
-    async def login(self):
-        if not self.api_key:
-            console.print(f'[bold red]API key for {self.tracker} is not configured.[/bold red]')
-            return False
-
-        url = f'{self.api_base_url}/torrents'
-
-        try:
-            response = await self.session.get(url, headers=self.session.headers, timeout=15)
-            if response.status_code == 200:
-                return True
-            else:
-                console.print(f'[bold red]Authentication failed for {self.tracker}. Status: {response.status_code}[/bold red]')
-                return False
-        except httpx.RequestError as e:
-            console.print(f'[bold red]Error during {self.tracker} authentication: {e}[/bold red]')
-            return False
-
     async def search_existing(self, meta, results):
         imdb_id = meta.get('imdb_info', {}).get('imdbID')
         if not imdb_id:
