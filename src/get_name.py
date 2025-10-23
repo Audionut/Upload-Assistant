@@ -101,7 +101,7 @@ async def get_name(meta):
                 name = f"{title} {alt_title} {year} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
                 potential_missing = ['edition', 'region', 'distributor']
             elif meta['is_disc'] == 'DVD':
-                name = f"{title} {alt_title} {year} {edition} {repack} {source} {region} {dvd_size} {audio}"
+                name = f"{title} {alt_title} {year} {repack} {edition} {region} {source} {dvd_size} {audio}"
                 potential_missing = ['edition', 'distributor']
             elif meta['is_disc'] == 'HDDVD':
                 name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"
@@ -133,7 +133,7 @@ async def get_name(meta):
                 name = f"{title} {year} {alt_title} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
                 potential_missing = ['edition', 'region', 'distributor']
             if meta['is_disc'] == 'DVD':
-                name = f"{title} {year} {alt_title} {season}{episode}{three_d} {edition} {repack} {source} {region} {dvd_size} {audio}"
+                name = f"{title} {year} {alt_title} {season}{episode}{three_d} {repack} {edition} {region} {source} {dvd_size} {audio}"
                 potential_missing = ['edition', 'distributor']
             elif meta['is_disc'] == 'HDDVD':
                 name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"

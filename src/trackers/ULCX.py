@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import cli_ui
+import re
 
 from src.console import console
 from src.languages import process_desc_language, has_english_language
@@ -77,6 +79,26 @@ class ULCX(UNIT3D):
         }
 
         return data
+
+    async def get_description(self, meta):
+        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+            desc = await f.read()
+
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+            pattern = r'(\[center\](?:\s*\[url=[^\]]+\]\[img(?:=[0-9]+)?\][^\]]+\[/img\]\[/url\]\s*)+\[/center\])'
+
+            def wrap_in_spoiler(match):
+                center_block = match.group(1)
+                return f'[center][spoiler=Screenshots]{center_block}[/spoiler][/center]'
+
+            desc = re.sub(pattern, wrap_in_spoiler, desc, flags=re.DOTALL)
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as f:
+                await f.write(desc)
+
+        return {'description': desc}
 
     async def get_name(self, meta):
         ulcx_name = meta['name']

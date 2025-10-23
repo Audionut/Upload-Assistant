@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import re
+from src.console import console
+from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -15,30 +18,46 @@ class LT(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
-        self.banned_groups = []
+        self.banned_groups = ["EVO"]
         pass
 
     async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-            'ANIME': '5',
-            'TELENOVELAS': '8',
-            'Asiáticas & Turcas': '20',
         }.get(meta['category'], '0')
-        # if is anime
-        if meta['anime'] is True and category_id == '2':
-            category_id = '5'
-        # elif is telenovela
-        elif category_id == '2' and ("telenovela" in meta['keywords'] or "telenovela" in meta['overview']):
-            category_id = '8'
-        # if is  TURCAS o Asiáticas
-        elif meta["original_language"] in ['ja', 'ko', 'tr'] and category_id == '2' and 'Drama' in meta['genres']:
-            category_id = '20'
+
+        keywords = meta.get('keywords', '').lower()
+        overview = meta.get('overview', '').lower()
+        genres = meta.get('genres', '').lower()
+        soap_keywords = ['telenovela', 'novela', 'soap', 'culebrón', 'culebron']
+
+        if meta['category'] == 'TV':
+            # Anime
+            if meta.get('anime', False):
+                category_id = '5'
+            # Telenovela / Soap
+            elif any(kw in keywords for kw in soap_keywords) or any(kw in overview for kw in soap_keywords):
+                category_id = '8'
+            # Turkish & Asian
+            elif 'drama' in genres and meta.get('origin_country', '') in [
+                'AE', 'AF', 'AM', 'AZ', 'BD', 'BH', 'BN', 'BT', 'CN', 'CY', 'GE', 'HK', 'ID', 'IL', 'IN',
+                'IQ', 'IR', 'JO', 'JP', 'KG', 'KH', 'KP', 'KR', 'KW', 'KZ', 'LA', 'LB', 'LK', 'MM', 'MN',
+                'MO', 'MV', 'MY', 'NP', 'OM', 'PH', 'PK', 'PS', 'QA', 'SA', 'SG', 'SY', 'TH', 'TJ', 'TL',
+                'TM', 'TR', 'TW', 'UZ', 'VN', 'YE'
+            ]:
+                category_id = '20'
+
         return {'category_id': category_id}
 
     async def get_name(self, meta):
-        lt_name = meta['name'].replace('Dual-Audio', '').replace('Dubbed', '').replace(meta['aka'], '').replace('  ', ' ').strip()
+        lt_name = (
+            meta['name']
+            .replace('Dual-Audio', '')
+            .replace('Dubbed', '')
+            .replace(meta['aka'], '')
+        )
+
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
             # Check if is HYBRID (Copied from BLU.py)
             if 'hybrid' in meta.get('uuid').lower():
@@ -67,7 +86,28 @@ class LT(UNIT3D):
             else:
                 lt_name = lt_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
 
-        return {'name': lt_name}
+        return {"name": re.sub(r"\s{2,}", " ", lt_name)}
+
+    async def get_additional_checks(self, meta):
+        should_continue = True
+        if not meta.get("language_checked", False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+        spanish_languages = [
+            "Spanish", "Spanish (Latin America)", "spanish", "spanish (latin america)"
+        ]
+        if not any(
+            lang in meta.get("audio_languages", []) for lang in spanish_languages
+        ) and not any(
+            lang in meta.get("subtitle_languages", []) for lang in spanish_languages
+        ):
+            # https://lat-team.com/wikis/5
+            # 11.- All contributions must include the original Spanish language or its respective dubbing. If there is no dubbing, Spanish subtitles must be included.
+            console.print(
+                "[bold red]LT requires at least one Spanish audio or subtitle track."
+            )
+            return False
+
+        return should_continue
 
     async def get_distributor_ids(self, meta):
         return {}
