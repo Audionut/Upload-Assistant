@@ -662,11 +662,30 @@ class HDB():
 
             if meta['debug']:
                 console.print(f"[green]Uploading {len(files)} images to HDB...")
-            response = requests.post(url, data=data, files=files)
 
-            if response.status_code == 200:
-                console.print("[green]Upload successful!")
-                bbcode = response.text
+            uploadSuccess = True
+            if meta.get('comparison', False):
+                num_groups = len(sorted_group_indices) if sorted_group_indices else 3
+                bbcode = ""
+                for i in range(0, len(files), num_groups):
+                    fileList = dict(list(files.items())[i:i+num_groups])
+                    for j in range(0, len(fileList)):
+                        fileList['images_files[' + str(j) + ']'] = fileList.pop('images_files[' + str(i+j) + ']')
+                    response = requests.post(url, data=data, files=fileList)
+                    if response.status_code == 200:
+                        console.print("[green]Upload successful!")
+                        bbcode += response.text
+                    else:
+                        uploadSuccess = False
+            else:
+                response = requests.post(url, data=data, files=files)
+                if response.status_code == 200:
+                    console.print("[green]Upload successful!")
+                    bbcode = response.text
+                else:
+                    uploadSuccess = False
+
+            if uploadSuccess is True:
                 if meta.get('comparison', False):
                     matches = re.findall(r'\[url=.*?\]\[img\].*?\[/img\]\[/url\]', bbcode)
                     formatted_bbcode = ""
