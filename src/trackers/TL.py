@@ -380,7 +380,7 @@ class TL:
 
         anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
         if anon:
-            data['is_anonymous_upload': 'on']
+            data.update({'is_anonymous_upload': 'on'})
 
         return data
 
