@@ -87,7 +87,8 @@ class ULCX(UNIT3D):
             desc = await f.read()
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             pattern = r'(\[center\](?:\s*\[url=[^\]]+\]\[img(?:=[0-9]+)?\][^\]]+\[/img\]\[/url\]\s*)+\[/center\])'
 
             def wrap_in_spoiler(match):

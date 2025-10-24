@@ -138,8 +138,10 @@ class SHRI(UNIT3D):
         # Detect Hybrid from filename if not in title
         hybrid = ""
         if (
-            meta.get("webdv", False) or isinstance(meta.get("source", ""), list)
-        ) and "HYBRID" not in title.upper():
+            not edition
+            and (meta.get("webdv", False) or isinstance(meta.get("source", ""), list))
+            and "HYBRID" not in title.upper()
+        ):
             hybrid = "Hybrid"
 
         repack = meta.get("repack", "").strip()

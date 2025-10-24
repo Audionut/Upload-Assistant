@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # import discord
 import langcodes
+import re
 from src.languages import has_english_language
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -24,6 +25,7 @@ class LDU(UNIT3D):
 
     async def get_category_id(self, meta):
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         sound_mixes = meta.get('imdb_info', {}).get('sound_mixes', [])
 
         category_id = {
@@ -36,7 +38,7 @@ class LDU(UNIT3D):
 
         if 'hentai' in genres.lower():
             category_id = '10'
-        elif any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+        elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not await has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '45'
             else:

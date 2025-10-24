@@ -43,7 +43,8 @@ class OE(UNIT3D):
         should_continue = True
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended']:
                 console.print('[bold red]Erotic not allowed at OE.')
             should_continue = False

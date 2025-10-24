@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import cli_ui
+import re
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -27,7 +28,8 @@ class YUS(UNIT3D):
         should_continue = True
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print('[bold red]Porn/xxx is not allowed at YUS.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):

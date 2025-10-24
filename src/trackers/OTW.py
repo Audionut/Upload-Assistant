@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import cli_ui
+import re
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.trackers.UNIT3D import UNIT3D
@@ -44,7 +45,8 @@ class OTW(UNIT3D):
                 return False
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']):
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult animation not allowed at OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
