@@ -533,7 +533,7 @@ class HDB():
                         descfile.write(f"{hdbimg_bbcode}")
                         descfile.write("[/center]")
                     else:
-                        descfile.write(f"{hdbimg_bbcode}")
+                        descfile.write(f"[center]{hdbimg_bbcode}[/center]")
             else:
                 images = meta['image_list']
                 if len(images) > 0:
