@@ -112,8 +112,8 @@ class RTF():
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def search_existing(self, meta, disctype):
-        disallowed_keywords = {'XXX', 'Erotic', 'softcore'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
             console.print('[bold red]Erotic not allowed at RTF.')
             meta['skipping'] = "RTF"
             return []

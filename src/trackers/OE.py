@@ -23,18 +23,18 @@ class OE(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            '0neshot', '3LT0N', '4K4U', '4yEo', '$andra', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time',
+            '0neshot', '3LT0N', '4K4U', '4yEo', '$andra', '[Oj]', 'AFG', 'AkihitoSubs', 'Alcaide_Kira', 'AniHLS', 'Anime Time',
             'AnimeRG', 'AniURL', 'AOC', 'AR', 'AROMA', 'ASW', 'aXXo', 'BakedFish', 'BiTOR', 'BRrip', 'bonkai',
             'Cleo', 'CM8', 'C4K', 'CrEwSaDe', 'core', 'd3g', 'DDR', 'DE3PM', 'DeadFish', 'DeeJayAhmed', 'DNL', 'ELiTE',
             'EMBER', 'eSc', 'EVO', 'EZTV', 'FaNGDiNG0', 'FGT', 'fenix', 'FUM', 'FRDS', 'FROZEN', 'GalaxyTV',
             'GalaxyRG', 'GalaxyRG265', 'GERMini', 'Grym', 'GrymLegacy', 'HAiKU', 'HD2DVD', 'HDTime', 'Hi10',
-            'HiQVE', 'ION10', 'iPlanet', 'JacobSwaggedUp', 'JIVE', 'Judas', 'KiNGDOM', 'LAMA', 'Leffe', 'LiGaS',
+            'HiQVE', 'ION10', 'iPlanet', 'iVy', 'JacobSwaggedUp', 'JIVE', 'Judas', 'KiNGDOM', 'LAMA', 'Leffe', 'LiGaS',
             'LOAD', 'LycanHD', 'MeGusta', 'MezRips', 'mHD', 'Mr.Deadpool', 'mSD', 'NemDiggers', 'neoHEVC', 'NeXus',
             'nHD', 'nikt0', 'nSD', 'NhaNc3', 'NOIVTC', 'pahe.in', 'PlaySD', 'playXD', 'PRODJi', 'ProRes',
             'project-gxs', 'PSA', 'QaS', 'Ranger', 'RAPiDCOWS', 'RARBG', 'Raze', 'RCDiVX', 'RDN', 'Reaktor',
-            'REsuRRecTioN', 'RMTeam', 'ROBOTS', 'rubix', 'SANTi', 'SHUTTERSHIT', 'SpaceFish', 'SPASM', 'SSA',
-            'TBS', 'Telly', 'Tenrai-Sensei', 'TERMiNAL', 'TGx', 'TM', 'topaz', 'TSP', 'TSPxL', 'URANiME', 'UTR',
-            'VipapkSudios', 'ViSION', 'WAF', 'Wardevil', 'x0r', 'xRed', 'XS', 'YakuboEncodes', 'YIFY', 'YTS',
+            'REsuRRecTioN', 'RMTeam', 'ROBOTS', 'rubix', 'SANTi', 'SHUTTERSHIT', 'SM737', 'SpaceFish', 'SPASM', 'SSA',
+            'TBS', 'Telly', 'Tenrai-Sensei', 'TERMiNAL', 'TGx', 'TM', 'topaz', 'ToVaR', 'TSP', 'TSPxL', 'UnKn0wn', 'URANiME', 'UTR',
+            'VipapkSudios', 'ViSION', 'WAF', 'Wardevil', 'x0r', 'xRed', 'XS', 'YakuboEncodes', 'YAWNTiC', 'YAWNiX', 'YIFY', 'YTS',
             'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT'
         ]
         pass
@@ -42,8 +42,8 @@ class OE(UNIT3D):
     async def get_additional_checks(self, meta):
         should_continue = True
 
-        disallowed_keywords = {'XXX', 'softcore', 'concert'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
             if not meta['unattended']:
                 console.print('[bold red]Erotic not allowed at OE.')
             should_continue = False

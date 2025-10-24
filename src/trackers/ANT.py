@@ -115,7 +115,7 @@ class ANT:
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
 
-        if meta.get('is_disc') == 'BDMV' and data['flagchangereason'] is None:
+        if meta.get('is_disc') == 'BDMV' and data.get('flagchangereason') is None:
             data.update({'flagchangereason': "BDMV Uploaded with Upload Assistant"})
 
         headers = {

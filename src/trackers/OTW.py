@@ -42,8 +42,9 @@ class OTW(UNIT3D):
                     return False
             else:
                 return False
-        disallowed_keywords = {'XXX', 'Erotic', 'Porn', 'Hentai', 'Adult Animation', 'Orgy', 'softcore'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
+
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult animation not allowed at OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
