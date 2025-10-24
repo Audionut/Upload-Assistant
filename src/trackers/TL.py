@@ -380,7 +380,7 @@ class TL:
 
         anon = not (meta['anon'] == 0 and not self.tracker_config.get('anon', False))
         if anon:
-            data['is_anonymous_upload': 'on']
+            data.update({'is_anonymous_upload': 'on'})
 
         return data
 
@@ -410,6 +410,8 @@ class TL:
                     status_message = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
+
                 else:
                     status_message = 'data error - Upload failed: No success redirect found.'
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
@@ -418,8 +420,6 @@ class TL:
                         await failure_file.write(f"Headers: {response.headers}\n")
                         await failure_file.write(response.text)
                     console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
-
-                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
 
             except httpx.RequestError as e:
                 status_message = f'data error - {str(e)}'

@@ -83,8 +83,8 @@ class BLU(UNIT3D):
         if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             blu_name = blu_name.replace(f"{year}", imdb_year, 1)
 
-        if webdv and webdv.strip():
-            blu_name = blu_name.replace(f"{webdv} ", "", 1)
+        if webdv:
+            blu_name = blu_name.replace("HYBRID ", "", 1)
 
         if meta['tracker_status'][self.tracker].get('other', False):
             blu_name = blu_name.replace(f"{meta['resolution']}", f"{meta['resolution']} DVP5/DVP8", 1)
