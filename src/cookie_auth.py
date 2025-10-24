@@ -399,7 +399,7 @@ class CookieAuthUploader:
         else:
             success = False
             try:
-                async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies) as session:
+                async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies, follow_redirects=True) as session:
                     response = await session.post(upload_url, data=data, files=files)
 
                     if success_text and success_text in response.text:
@@ -511,10 +511,18 @@ class CookieAuthUploader:
     ):
         torrent_id = ""
         if id_pattern:
-            match = re.search(id_pattern, response.text)
-            if match:
-                torrent_id = match.group(1)
+            # First try to match the pattern in the response URL (for redirects)
+            url_match = re.search(id_pattern, str(response.url))
+            if url_match:
+                torrent_id = url_match.group(1)
                 meta["tracker_status"][tracker]["torrent_id"] = torrent_id
+            else:
+                # Fall back to searching in response text
+                text_match = re.search(id_pattern, response.text)
+                if text_match:
+                    torrent_id = text_match.group(1)
+                    meta["tracker_status"][tracker]["torrent_id"] = torrent_id
+
         torrent_hash = await self.common.add_tracker_torrent(
             meta, tracker, source_flag, user_announce_url, torrent_url + torrent_id, hash_is_id=hash_is_id
         )

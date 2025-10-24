@@ -30,11 +30,13 @@ class AR():
         self.upload_url = f'{self.base_url}/upload.php'
         self.search_url = f'{self.base_url}/torrents.php'
         self.test_url = f'{self.base_url}/torrents.php'
+        self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = []
 
     async def get_type(self, meta):
-
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
             return "14"
 
@@ -82,6 +84,8 @@ class AR():
         if meta['category'] == "MOVIE":
             if meta['sd']:
                 return '7'
+            elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+                return '13'
             else:
                 return {
                     '8640p': '9',
@@ -421,7 +425,7 @@ class AR():
             upload_url=self.upload_url,
             torrent_field_name="file_input",
             source_flag=self.source_flag,
-            torrent_url=f"{self.base_url}/torrents.php?id={{}}",
+            torrent_url=self.torrent_url,
             id_pattern=r'torrents\.php\?id=(\d+)',
             success_status_code="200",
         )

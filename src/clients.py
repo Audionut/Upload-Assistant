@@ -2473,7 +2473,7 @@ async def match_tracker_url(tracker_urls, meta):
         'otw': ["https://oldtoons.world"],
         'phd': ["tracker.privatehd"],
         'ptp': ["passthepopcorn.me"],
-        'rf': ["https://reelflix.xyz"],
+        'rf': ["https://reelflix.xyz", "https://reelflix.cc"],
         'rtf': ["peer.retroflix"],
         'sp': ["https://seedpool.org"],
         'spd': ["ramjet.speedapp.io", "ramjet.speedapp.to", "ramjet.speedappio.org"],
