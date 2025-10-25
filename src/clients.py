@@ -23,7 +23,7 @@ from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfuly logged into
+qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
 qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
