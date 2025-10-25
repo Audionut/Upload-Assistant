@@ -379,6 +379,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TMDb ID: {tmdb}[/green]")
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
                     found_match = True
+                    meta['imdb_id'] = int(imdb) if imdb else meta.get('imdb_id', 0)
+                    meta['tmdb_id'] = int(tmdb) if tmdb else meta.get('tmdb_id', 0)
                     if meta.get('description') and meta.get('description') != "":
                         description = meta.get('description')
                         console.print("[bold green]Successfully grabbed description from BHD")
