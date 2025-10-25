@@ -180,7 +180,7 @@ class ASC:
 
             anime_language = self.anime_language_map.get(meta.get('original_language', '').lower(), '6')
 
-            if self.get_audio(meta) in ('2', '3', '4'):
+            if await self.get_audio(meta) in ('2', '3', '4'):
                 lang = '8'
             else:
                 lang = self.language_map.get(meta.get('original_language', '').lower(), '11')
@@ -534,6 +534,7 @@ class ASC:
 
         found_items = []
         if meta.get('anime'):
+            await self.load_localized_data(meta)
             search_name = await self.get_title(meta)
             search_query = search_name.replace(' ', '+')
             search_url = f'{self.base_url}/torrents-search.php?search={search_query}'
@@ -817,11 +818,11 @@ class ASC:
 
         if meta.get('anime'):
             anime_info = await self.get_languages(meta)
-            data.update = {
+            data.update({
                 'idioma': anime_info['idioma'],
                 'lang': anime_info['lang'],
                 'type': anime_info['type'],
-            }
+            })
 
         # Internal
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
