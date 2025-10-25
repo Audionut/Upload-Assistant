@@ -47,7 +47,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 |FunFile|FF|GreatPosterWall|GPW|
 |hawke-uno|HUNO|HDBits|HDB|
 |HD-Space|HDS|HD-Torrents|HDT|
-|HomieHelpDesk|HHD|ImmortalSeed|IS
+|HomieHelpDesk|HHD|ImmortalSeed|IS|
 |ItaTorrents|ITT|LastDigitalUnderground|LDU|
 |Lat-Team|LT|Locadora|LCD|
 |LST|LST|MoreThanTV|MTV|
