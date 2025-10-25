@@ -10,7 +10,7 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     - Otherwise, only returns `tvmaze_id`.
     """
     if debug:
-        console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year})[/cyan]")
+        console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year}) and returning {return_full_tuple}.[/cyan]")
     # Convert TVDB ID to integer
     try:
         tvdbID = int(tvdbID) if tvdbID not in (None, '', '0') else 0
@@ -109,14 +109,10 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
         if debug:
             console.print(f"[cyan]Automatically selected show: {selected_show.get('name')} (TVmaze ID: {tvmaze_id})[/cyan]")
 
-    if 'externals' in selected_show:
-        if 'thetvdb' in selected_show['externals'] and not tvdbID:
-            tvdbID = selected_show['externals']['thetvdb']
-            if tvdbID:
-                tvdbID = int(tvdbID)
-                return_full_tuple = True
-    if debug:
+    if debug and return_full_tuple:
         console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__}), IMDb ID: {imdbID} (type: {type(imdbID).__name__}), TVDB ID: {tvdbID} (type: {type(tvdbID).__name__})[/cyan]")
+    elif debug:
+        console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__})[/cyan]")
     if tvmaze_id is None:
         tvmaze_id = 0
     if imdbID is None:

@@ -9,14 +9,6 @@ config = {
         # visit "https://www.themoviedb.org/settings/api" copy api key and insert below
         "tmdb_api": "",
 
-        # tvdb api key
-        # visit "https://www.thetvdb.com/dashboard/account/apikey" copy api key and insert below
-        "tvdb_api": "",
-
-        # visit "https://thetvdb.github.io/v4-api/#/Login/post_login" enter api key, generate token and insert token below
-        # the pin in the login form is not needed (don't modify), only enter your api key
-        "tvdb_token": "",
-
         # btn api key used to get details from btn
         "btn_api": "",
 

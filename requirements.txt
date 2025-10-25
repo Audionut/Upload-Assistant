@@ -32,5 +32,6 @@ tmdbsimple
 torf
 tqdm
 transmission_rpc
+tvdb-v4-official
 unidecode
 urllib3
