@@ -12,12 +12,12 @@ from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 
 
-class IM:
+class IS:
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
-        self.tracker = 'IM'
+        self.tracker = 'IS'
         self.source_flag = 'https://immortalseed.me'
         self.banned_groups = ['']
         self.base_url = 'https://immortalseed.me'
@@ -243,10 +243,10 @@ class IM:
         if meta.get('scene_name'):
             return meta.get('scene_name')
         else:
-            im_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
-            im_name = re.sub(r"\s{2,}", " ", im_name)
-            im_name = im_name.replace(' ', '.')
-        return im_name
+            is_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+            is_name = re.sub(r"\s{2,}", " ", is_name)
+            is_name = is_name.replace(' ', '.')
+        return is_name
 
     async def get_data(self, meta):
         data = {
