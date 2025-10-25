@@ -82,6 +82,7 @@ class IM:
         return description
 
     async def search_existing(self, meta, disctype):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         dupes = []
 
         if meta['category'] == "MOVIE":

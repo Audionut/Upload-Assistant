@@ -543,6 +543,8 @@ config = {
             "anon": False,
         },
         "IM": {
+            # for IM to work you need to export cookies from https://immortalseed.me/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/IM.txt
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "announce_url": "https://immortalseed.me/announce.php?passkey=<PASSKEY>",
