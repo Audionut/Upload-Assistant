@@ -2454,6 +2454,7 @@ async def match_tracker_url(tracker_urls, meta):
         'bt': ["t.brasiltracker.org"],
         'btn': ["https://broadcasthe.net"],
         'cbr': ["capybarabr.com"],
+        'cz': ["tracker.cinemaz.to"],
         'dc': ["tracker.digitalcore.club", "trackerprxy.digitalcore.club"],
         'dp': ["https://darkpeers.org"],
         'ff': ["tracker.funfile.org"],
