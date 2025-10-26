@@ -23,7 +23,6 @@ pycountry
 pyimgbox
 pymediainfo==7.0.1
 pyotp
-pyoxipng
 pyparsebluray
 qbittorrent-api
 requests

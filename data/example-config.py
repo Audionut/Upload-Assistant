@@ -147,9 +147,6 @@ config = {
         # Providing the option to add a header, in bbcode, above the screenshot section where supported
         "screenshot_header": "",
 
-        # Enable lossless PNG Compression (True/False)
-        "optimize_images": True,
-
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
