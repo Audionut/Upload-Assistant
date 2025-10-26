@@ -596,6 +596,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                 if meta['debug']:
                     console.print(f"[yellow]Removing smallest image: {smallest} ({smallest_size} bytes)[/yellow]")
                 os.remove(smallest)
+                capture_results.remove(smallest)
 
         valid_results = []
         remaining_retakes = []
@@ -753,6 +754,10 @@ async def capture_dvd_screenshot(task):
             "-pred", "mixed",
             image
         ]
+
+        # Print the command for debugging
+        if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         # Run command
         process = await asyncio.create_subprocess_exec(
@@ -1571,7 +1576,7 @@ async def get_frame_info(path, ss_time, meta):
         # Print the actual FFmpeg command for debugging
         cmd = info_command.compile()
         if meta.get('debug', False):
-            console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]")
+            console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         returncode, _, stderr = await run_ffmpeg(info_command)
         assert returncode is not None
