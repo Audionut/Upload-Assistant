@@ -28,6 +28,7 @@ try:
 except ValueError:
     task_limit = 1
 tone_map = config['DEFAULT'].get('tone_map', False)
+ffmpeg_compression = str(config['DEFAULT'].get('ffmpeg_compression', '6'))
 algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
 desat = float(config['DEFAULT'].get('desat', 10.0))
 
@@ -382,7 +383,7 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
             "-i", file,
             "-vframes", "1",
             "-vf", vf_chain,
-            "-compression_level", "6",
+            "-compression_level", ffmpeg_compression,
             "-pred", "mixed",
             image_path
         ]
@@ -750,7 +751,7 @@ async def capture_dvd_screenshot(task):
             "-i", input_file,
             "-vframes", "1",
             "-vf", vf_chain,
-            "-compression_level", "6",
+            "-compression_level", ffmpeg_compression,
             "-pred", "mixed",
             image
         ]
@@ -1274,7 +1275,7 @@ async def capture_screenshot(args):
                 cmd_local += [
                     "-vframes", "1",
                     "-vf", vf_chain,
-                    "-compression_level", "5",
+                    "-compression_level", ffmpeg_compression,
                     "-pred", "mixed",
                     "-loglevel", loglevel,
                 ]
@@ -1432,7 +1433,7 @@ async def capture_screenshot(args):
             "-i", path,
             "-vframes", "1",
             "-vf", vf_chain,
-            "-compression_level", "6",
+            "-compression_level", ffmpeg_compression,
             "-pred", "mixed",
             image_path
         ]
