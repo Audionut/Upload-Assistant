@@ -5,6 +5,7 @@ import base64
 import bencode
 import collections
 import errno
+import json
 import os
 import platform
 import qbittorrentapi
@@ -15,7 +16,9 @@ import subprocess
 import time
 import traceback
 import transmission_rpc
+import urllib.parse
 import xmlrpc.client
+
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
 from src.console import console
@@ -23,7 +26,7 @@ from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfuly logged into
+qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
 qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
@@ -2053,11 +2056,47 @@ class Clients():
                 else:
                     qbt_client = potential_qbt_client
 
+            search_term = meta['uuid']
             try:
                 if proxy_url:
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    # Build qui's enhanced filter options with expression support
+                    qui_filters = {
+                        "status": [],  # Empty = all statuses, or specify like ["downloading","seeding"]
+                        "excludeStatus": ["unregistered", "tracker_down"],
+                        "categories": [],
+                        "excludeCategories": [],
+                        "tags": [],
+                        "excludeTags": [],
+                        "trackers": [],
+                        "excludeTrackers": [],
+                    }
+
+                    # Build URL query string
+                    query_parts = [
+                        f"search={urllib.parse.quote(search_term)}",
+                        f"filters={urllib.parse.quote(json.dumps(qui_filters))}",
+                        "sort=added_on",
+                        "reverse=true",
+                        "limit=100"
+                    ]
+                    query_string = "&".join(query_parts)
+                    url = f"{qbt_proxy_url}/api/v2/torrents/search?{query_string}"
+
+                    if meta['debug']:
+                        console.print(f"[cyan]Searching qBittorrent via proxy: {url}...")
+
+                    async with qbt_session.get(url) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            response_data = await response.json()
+
+                            # The qui proxy returns {'torrents': [...]} while standard API returns [...]
+                            if isinstance(response_data, dict) and 'torrents' in response_data:
+                                torrents_data = response_data['torrents']
+                            else:
+                                torrents_data = response_data
+
+                            if meta['debug']:
+                                console.print(f"[cyan]Retrieved {len(torrents_data)} torrents via proxy search for '{search_term}'")
                             # Convert to objects that match qbittorrentapi structure
 
                             class MockTorrent:
@@ -2123,63 +2162,67 @@ class Clients():
                     has_working_tracker = False
 
                     if is_match:
-                        try:
-                            if proxy_url:
-                                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/trackers",
-                                                           params={'hash': torrent.hash}) as response:
-                                    if response.status == 200:
-                                        torrent_trackers = await response.json()
-                                    else:
-                                        if meta['debug']:
-                                            console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} via proxy: {response.status}")
+                        if not proxy_url:
+                            try:
+                                if proxy_url:
+                                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/trackers",
+                                                               params={'hash': torrent.hash}) as response:
+                                        if response.status == 200:
+                                            torrent_trackers = await response.json()
+                                        else:
+                                            if meta['debug']:
+                                                console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} via proxy: {response.status}")
+                                            continue
+                                else:
+                                    torrent_trackers = await self.retry_qbt_operation(
+                                        lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
+                                        f"Get trackers for torrent {torrent.name}"
+                                    )
+                            except (asyncio.TimeoutError, qbittorrentapi.APIError):
+                                if meta['debug']:
+                                    console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} after retries")
+                                continue
+                            except Exception as e:
+                                if meta['debug']:
+                                    console.print(f"[yellow]Error getting trackers for torrent {torrent.name}: {e}")
+                                continue
+
+                            try:
+                                display_trackers = []
+
+                                # Filter out DHT, PEX, LSD "trackers"
+                                for tracker in torrent_trackers:
+                                    if tracker.get('url', []).startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
                                         continue
-                            else:
-                                torrent_trackers = await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
-                                    f"Get trackers for torrent {torrent.name}"
-                                )
-                        except (asyncio.TimeoutError, qbittorrentapi.APIError):
-                            if meta['debug']:
-                                console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} after retries")
-                            continue
-                        except Exception as e:
-                            if meta['debug']:
-                                console.print(f"[yellow]Error getting trackers for torrent {torrent.name}: {e}")
-                            continue
+                                    display_trackers.append(tracker)
 
-                        try:
-                            display_trackers = []
+                                    for tracker in display_trackers:
+                                        url = tracker.get('url', 'Unknown URL')
+                                        status_code = tracker.get('status', 0)
+                                        status_text = {
+                                            0: "Disabled",
+                                            1: "Not contacted",
+                                            2: "Working",
+                                            3: "Updating",
+                                            4: "Error"
+                                        }.get(status_code, f"Unknown ({status_code})")
 
-                            # Filter out DHT, PEX, LSD "trackers"
-                            for tracker in torrent_trackers:
-                                if tracker.get('url', []).startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
-                                    continue
-                                display_trackers.append(tracker)
+                                        if status_code == 2:
+                                            has_working_tracker = True
+                                            if meta['debug']:
+                                                console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
 
-                                for tracker in display_trackers:
-                                    url = tracker.get('url', 'Unknown URL')
-                                    status_code = tracker.get('status', 0)
-                                    status_text = {
-                                        0: "Disabled",
-                                        1: "Not contacted",
-                                        2: "Working",
-                                        3: "Updating",
-                                        4: "Error"
-                                    }.get(status_code, f"Unknown ({status_code})")
+                                        elif meta['debug']:
+                                            msg = tracker.get('msg', '')
+                                            console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
 
-                                    if status_code == 2:
-                                        has_working_tracker = True
-                                        if meta['debug']:
-                                            console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
-
-                                    elif meta['debug']:
-                                        msg = tracker.get('msg', '')
-                                        console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
-
-                        except qbittorrentapi.APIError as e:
-                            if meta['debug']:
-                                console.print(f"[red]Error fetching trackers for torrent {torrent.name}: {e}")
-                            continue
+                            except qbittorrentapi.APIError as e:
+                                if meta['debug']:
+                                    console.print(f"[red]Error fetching trackers for torrent {torrent.name}: {e}")
+                                continue
+                        else:
+                            has_working_tracker = True  # Assume true when using proxy (no API access)
+                            url = torrent.tracker
 
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
