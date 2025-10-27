@@ -1330,6 +1330,26 @@ class Clients():
             except Exception as e:
                 console.print(f"[yellow]Error adding tracker tag: {e}")
 
+        if tracker in client.get("super_seed_trackers", []):
+            try:
+                if meta['debug']:
+                    console.print(f"{tracker}: Setting super-seed mode.")
+                if proxy_url:
+                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/setSuperSeeding",
+                                                data={'hashes': torrent.infohash, "value": "true"}) as response:
+                        if response.status != 200:
+                            console.print(f"{tracker}: Failed to set super-seed via proxy: {response.status}")
+                else:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_set_super_seeding, torrent_hashes=torrent.infohash),
+                        "Set super-seed mode",
+                        initial_timeout=10.0
+                    )
+            except asyncio.TimeoutError:
+                console.print(f"{tracker}: Super-seed request timed out")
+            except Exception as e:
+                console.print(f"{tracker}: Super-seed error: {e}")
+
         if client.get('qbit_tag'):
             try:
                 if proxy_url:
