@@ -661,7 +661,7 @@ class BT:
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 data.update({
-                    'internalrel': 1,
+                    'internal': 1,
                 })
 
         return data
