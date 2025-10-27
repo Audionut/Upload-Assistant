@@ -205,11 +205,11 @@ class DiscParse():
                             if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
                                 if shutil.which("bdinfo"):
                                     proc = await asyncio.create_subprocess_exec(
-                                        f"bdinfo", path, '-m', playlist['file'], save_dir
+                                        "bdinfo", path, '-m', playlist['file'], save_dir
                                     )
                                 elif shutil.which("BDInfo"):
                                     proc = await asyncio.create_subprocess_exec(
-                                        f"BDInfo", path, '-m', playlist['file'], save_dir
+                                        "BDInfo", path, '-m', playlist['file'], save_dir
                                     )
                                 else:
                                     proc = await asyncio.create_subprocess_exec(
