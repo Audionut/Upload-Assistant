@@ -657,6 +657,13 @@ class BT:
         if anon:
             data['anonymous'] = '1'
 
+        # Internal
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                data.update({
+                    'internalrel': 1,
+                })
+
         return data
 
     async def upload(self, meta, disctype):
