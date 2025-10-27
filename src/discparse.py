@@ -203,9 +203,18 @@ class DiscParse():
                         try:
                             # Scanning playlist block (as before)
                             if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-                                proc = await asyncio.create_subprocess_exec(
-                                    'mono', f"{base_dir}/bin/BDInfo/BDInfo.exe", path, '-m', playlist['file'], save_dir
-                                )
+                                if shutil.which("bdinfo"):
+                                    proc = await asyncio.create_subprocess_exec(
+                                        f"bdinfo", path, '-m', playlist['file'], save_dir
+                                    )
+                                elif shutil.which("BDInfo"):
+                                    proc = await asyncio.create_subprocess_exec(
+                                        f"BDInfo", path, '-m', playlist['file'], save_dir
+                                    )
+                                else:
+                                    proc = await asyncio.create_subprocess_exec(
+                                        'mono', f"{base_dir}/bin/BDInfo/BDInfo.exe", path, '-m', playlist['file'], save_dir
+                                    )
                             elif sys.platform.startswith('win32'):
                                 proc = await asyncio.create_subprocess_exec(
                                     f"{base_dir}/bin/BDInfo/BDInfo.exe", '-m', playlist['file'], path, save_dir
