@@ -797,12 +797,6 @@ config = {
             "announce_url": "https://tvchaosuk.com/announce/<PASSKEY>",
             "anon": False,
         },
-        "UHD": {
-            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
-            "link_dir_name": "",
-            "api_key": "",
-            "anon": False,
-        },
         "ULCX": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
