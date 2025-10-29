@@ -824,13 +824,6 @@ class ASC:
                 'type': anime_info['type'],
             })
 
-        # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internal': 'yes',
-                })
-
         # Screenshots
         for i, img in enumerate(meta.get('image_list', [])[:4]):
             data[f'screens{i+1}'] = img.get('raw_url')
@@ -861,6 +854,11 @@ class ASC:
             if should_approve:
                 await self.auto_approval(meta['tracker_status'][self.tracker]['torrent_id'])
 
+        # Internal
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                await self.set_internal_flag(meta)
+
         return
 
     async def auto_approval(self, torrent_id):
@@ -880,3 +878,20 @@ class ASC:
             return False
 
         return True
+
+    async def set_internal_flag(self, meta):
+        data = {
+            'id': meta['tracker_status'][self.tracker]['torrent_id'],
+            'internal': 'yes'
+        }
+
+        try:
+            response = await self.session.post(
+                f"{self.base_url}/torrents-edit.php?action=doedit",
+                data=data
+            )
+            response.raise_for_status()
+
+        except Exception as e:
+            console.print(f'[bold red]Erro ao definir a flag interna: {e}[/bold red]')
+            return
