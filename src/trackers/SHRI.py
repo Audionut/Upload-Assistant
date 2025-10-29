@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from typing import Literal
+import aiofiles
+import certifi
 import cli_ui
 import os
 import pycountry
 import re
+import requests
 from src.audio import get_audio_v2
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
@@ -666,3 +669,362 @@ class SHRI(UNIT3D):
             audio_str, _, _ = await get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
 
         return clean(audio_str)
+
+    async def get_description(self, meta):
+        """Generate Italian BBCode description for ShareIsland"""
+        title = meta.get("title", "Unknown")
+        italian_title = self._get_italian_title(meta.get("imdb_info", {}))
+        if italian_title:
+            title = italian_title
+
+        category = meta.get("category", "MOVIE")
+
+        # Build info line: resolution, source, codec, audio, language
+        info_parts = []
+        if meta.get("resolution"):
+            info_parts.append(meta["resolution"])
+
+        source = meta.get("source", "")
+        if isinstance(source, list):
+            source = source[0] if source else ""
+        if source:
+            info_parts.append(source.replace("Blu-ray", "BluRay"))
+
+        video_codec = meta.get("video_codec", "")
+        if "HEVC" in video_codec or "H.265" in video_codec:
+            info_parts.append("x265")
+        elif "AVC" in video_codec or "H.264" in video_codec:
+            info_parts.append("x264")
+        elif video_codec:
+            info_parts.append(video_codec)
+
+        # if meta.get("hdr") and meta["hdr"] != "SDR":
+        #     info_parts.append(meta["hdr"])
+
+        audio = await self._get_best_italian_audio_format(meta)
+        if audio:
+            info_parts.append(audio)
+
+        if meta.get("audio_languages"):
+            langs = [
+                self._get_language_name(lang.upper())
+                for lang in meta["audio_languages"]
+            ]
+            langs = [lang for lang in langs if lang]
+            if "ITALIAN" in langs:
+                info_parts.append("Italiano")
+            elif "ENGLISH" in langs:
+                info_parts.append("Inglese")
+            elif langs:
+                info_parts.append(langs[0].title())
+
+        info_line = " ".join(info_parts)
+
+        # Fetch TMDb data and format components
+        summary, logo_url = await self._fetch_tmdb_italian(meta)
+        screens = await self._format_screens_italian(meta)
+        synthetic_mi = await self._get_synthetic_mediainfo(meta)
+
+        bbcode = self._build_bbcode(
+            title, info_line, logo_url, summary, screens, synthetic_mi, category
+        )
+
+        # Save description file
+        desc_file = (
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        )
+        async with aiofiles.open(desc_file, "w", encoding="utf-8") as f:
+            await f.write(bbcode)
+
+        return {"description": bbcode}
+
+    async def _fetch_tmdb_italian(self, meta):
+        """Fetch Italian overview and logo from TMDb API"""
+        api_key = self.config.get("DEFAULT", {}).get("tmdb_api", "N/A")
+        tmdb_id = meta.get("tmdb", "")
+
+        summary = "Riassunto non disponibile."
+        logo_url = ""
+
+        if not tmdb_id:
+            return summary, logo_url
+
+        # Use /tv/ endpoint for series, /movie/ for films
+        category = meta.get("category", "MOVIE")
+        media_type = "tv" if category == "TV" else "movie"
+
+        try:
+            url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}"
+            params = {"api_key": api_key, "language": "it-IT"}
+            resp = requests.get(url, params=params, timeout=5, verify=certifi.where())
+            resp.encoding = "utf-8"
+
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_summary = data.get("overview", "Riassunto non disponibile.")
+                summary = " ".join(raw_summary.split())
+
+                # Try meta logo first, then fetch from TMDb
+                logo_path = meta.get("tmdb_logo", "")
+                if logo_path:
+                    logo_url = f"https://image.tmdb.org/t/p/w300/{logo_path}"
+                else:
+                    img_url = (
+                        f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/images"
+                    )
+                    img_resp = requests.get(
+                        img_url,
+                        params={"api_key": api_key},
+                        timeout=5,
+                        verify=certifi.where(),
+                    )
+                    if img_resp.status_code == 200:
+                        img_data = img_resp.json()
+                        logos = img_data.get("logos", [])
+                        # Prefer Italian, fallback to English
+                        for lang in ["it", "en"]:
+                            for logo in logos:
+                                if logo.get("iso_639_1") == lang:
+                                    logo_url = f"https://image.tmdb.org/t/p/w300{logo['file_path']}"
+                                    break
+                            if logo_url:
+                                break
+        except Exception as e:
+            print(f"[DEBUG] TMDb fetch error: {e}")
+
+        return summary, logo_url
+
+    async def _format_screens_italian(self, meta):
+        """Format up to 6 screenshots in 2-column grid with [img=350]"""
+        images = meta.get("image_list", [])
+        if not images:
+            return "[center]Nessuno screenshot disponibile[/center]"
+
+        screens = []
+        for img in images[:6]:
+            raw_url = img.get("raw_url", "")
+            web_url = img.get("web_url", raw_url)
+            if raw_url:
+                screens.append(f"[url={web_url}][img=350]{raw_url}[/img][/url]")
+
+        if not screens:
+            return "[center]Nessuno screenshot disponibile[/center]"
+
+        # 2 screenshots per row
+        row1 = (
+            " ".join(screens[:2]) + " \n"
+            if len(screens) >= 2
+            else " ".join(screens) + " \n"
+        )
+        row2 = " ".join(screens[2:4]) + " \n" if len(screens) > 2 else ""
+        row3 = " ".join(screens[4:6]) + " \n" if len(screens) > 4 else ""
+        return f"[center]{row1}{row2}{row3}[/center]"
+
+    async def _get_synthetic_mediainfo(self, meta):
+        """Extract formatted mediainfo from meta.json structure"""
+
+        def safe_int(val, default=0):
+            """Convert to int, handling dict/None cases"""
+            try:
+                return default if isinstance(val, dict) else int(val)
+            except (ValueError, TypeError):
+                return default
+
+        def get_audio_format_details(audio_track):
+            """Map raw audio formats to commercial names"""
+            fmt_map = {
+                "E-AC-3": ("DDP", "Dolby Digital Plus"),
+                "AC-3": ("DD", "Dolby Digital"),
+                "TrueHD": ("TrueHD", "Dolby TrueHD"),
+                "MLP FBA": ("TrueHD", "Dolby TrueHD"),
+                "DTS-HD MA": ("DTS-HD MA", "DTS-HD Master Audio"),
+                "AAC": ("AAC", "Advanced Audio Codec"),
+            }
+
+            if not audio_track:
+                return "AAC", "AAC"
+
+            fmt_raw = audio_track.get("Format", "AAC")
+
+            # Detect Atmos in MLP FBA streams
+            if fmt_raw == "MLP FBA":
+                commercial = audio_track.get("Format_Commercial_IfAny", "")
+                if isinstance(commercial, str) and "atmos" in commercial.lower():
+                    return "TrueHD Atmos", "Dolby TrueHD with Atmos"
+
+            return fmt_map.get(fmt_raw, (fmt_raw, fmt_raw))
+
+        try:
+            mi = meta.get("mediainfo", {}).get("media", {})
+            tracks = mi.get("track", [])
+
+            # Parse track types
+            general = next((t for t in tracks if t.get("@type") == "General"), {})
+            video = next((t for t in tracks if t.get("@type") == "Video"), {})
+            audio_tracks = [t for t in tracks if t.get("@type") == "Audio"]
+            text_tracks = [t for t in tracks if t.get("@type") == "Text"]
+
+            # Prefer Italian audio, fallback to first track
+            ita_audio = next(
+                (t for t in audio_tracks if t.get("Language", "").lower() == "it"), None
+            )
+            if not ita_audio and audio_tracks:
+                ita_audio = audio_tracks[0]
+
+            # General info
+            fn = os.path.basename(meta.get("filelist", ["file.mkv"])[0])
+            size = f"{safe_int(general.get('FileSize', 0)) / (1024**3):.1f} GiB"
+
+            dur_sec = float(general.get("Duration", 0))
+            hours = safe_int(dur_sec // 3600)
+            minutes = safe_int((dur_sec % 3600) // 60)
+            dur = f"{hours} h {minutes} min" if hours > 0 else f"{minutes} min"
+
+            total_br = (
+                f"{safe_int(general.get('OverallBitRate', 0)) / 1000000:.1f} Mb/s"
+            )
+            chap = "Si" if safe_int(general.get("MenuCount", 0)) > 0 else "No"
+
+            # Video info
+            vid_format = video.get("Format", "N/A")
+            codec = "x265" if "HEVC" in vid_format else "x264"
+            depth = f"{video.get('BitDepth', 10)} bits"
+            vid_br = f"{safe_int(video.get('BitRate', 0)) / 1000000:.1f} Mb/s"
+            res = meta.get("resolution", "N/A")
+            asp = video.get("DisplayAspectRatio", "0")
+
+            # Audio info - remove hyphens from format (AC-3 → AC3)
+            afmt = (
+                ita_audio.get("Format", "N/A").replace("-", "") if ita_audio else "N/A"
+            )
+
+            # Try commercial name from mediainfo, fallback to mapping
+            afmt_name = (
+                ita_audio.get("Format_Commercial_IfAny", "") if ita_audio else ""
+            )
+            if isinstance(afmt_name, dict) or not afmt_name:
+                afmt_name = ita_audio.get("Title", "") if ita_audio else ""
+            if isinstance(afmt_name, dict) or not afmt_name:
+                _, afmt_name = (
+                    get_audio_format_details(ita_audio) if ita_audio else ("", afmt)
+                )
+
+            # Map channel count to standard format
+            ch = ita_audio.get("Channels", "2") if ita_audio else "2"
+            if ch == "6":
+                ch = "5.1"
+            elif ch == "8":
+                ch = "7.1"
+            elif ch == "2":
+                ch = "2.0"
+
+            aud_br = (
+                f"{safe_int(ita_audio.get('BitRate', 0)) / 1000:.0f} kb/s"
+                if ita_audio
+                else "0 kb/s"
+            )
+            lang = (
+                "Italiano"
+                if ita_audio and ita_audio.get("Language", "").lower() == "it"
+                else "Inglese"
+            )
+
+            # Subtitle languages
+            if text_tracks:
+                sub_langs = set()
+                for t in text_tracks:
+                    lang_code = t.get("Language", "")
+                    if lang_code:
+                        lang_name = self._get_language_name(lang_code.upper())
+                        if lang_name:
+                            sub_langs.add(lang_name.title())
+                subs = ", ".join(sorted(sub_langs)) if sub_langs else "Assenti"
+            else:
+                subs = "Assenti"
+
+            return {
+                "fn": fn,
+                "size": size,
+                "dur": dur,
+                "total_br": total_br,
+                "chap": chap,
+                "vid_format": vid_format,
+                "codec": codec,
+                "depth": depth,
+                "vid_br": vid_br,
+                "res": res,
+                "asp": asp,
+                "aud_format": afmt,
+                "aud_name": afmt_name,
+                "ch": ch,
+                "aud_br": aud_br,
+                "lang": lang,
+                "subs": subs,
+            }
+        except Exception as e:
+            print(f"[DEBUG] Mediainfo extraction error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return None
+
+    def _build_bbcode(
+        self, title, info_line, logo_url, summary, screens, synthetic_mi, category
+    ):
+        """Build ShareIsland BBCode template"""
+        category_header = "--- SERIE TV ---" if category == "TV" else "--- FILM ---"
+        logo_section = (
+            f"[center][img=250]{logo_url}[/img][/center]\n" if logo_url else ""
+        )
+
+        # Mediainfo section
+        mediainfo_section = ""
+        if synthetic_mi:
+            mediainfo_section = f"""[size=13][b][color=#da8d49]INFO GENERALI[/color][/b][/size]
+[size=11][color=#FFFFFF]Nome File       : {synthetic_mi['fn']}[/color][/size]
+[size=11][color=#FFFFFF]Dimensioni File : {synthetic_mi['size']}[/color][/size]
+[size=11][color=#FFFFFF]Durata          : {synthetic_mi['dur']}[/color][/size]
+[size=11][color=#FFFFFF]Bitrate Totale  : {synthetic_mi['total_br']}[/color][/size]
+[size=11][color=#FFFFFF]Capitoli        : {synthetic_mi['chap']}[/color][/size]
+
+[size=13][b][color=#da8d49]VIDEO[/color][/b][/size]
+[size=11][color=#FFFFFF]Formato         : {synthetic_mi['vid_format']}[/color][/size]
+[size=11][color=#FFFFFF]Compressore     : {synthetic_mi['codec']}[/color][/size]
+[size=11][color=#FFFFFF]Profondità Bit  : {synthetic_mi['depth']}[/color][/size]
+[size=11][color=#FFFFFF]Bitrate         : {synthetic_mi['vid_br']}[/color][/size]
+[size=11][color=#FFFFFF]Risoluzione     : {synthetic_mi['res']}[/color][/size]
+[size=11][color=#FFFFFF]Rapporto        : {synthetic_mi['asp']}[/color][/size]
+
+[size=13][b][color=#da8d49]AUDIO[/color][/b][/size]
+[size=11][color=#FFFFFF]Formato         : {synthetic_mi['aud_format']}[/color][/size]
+[size=11][color=#FFFFFF]Nome            : {synthetic_mi['aud_name']}[/color][/size]
+[size=11][color=#FFFFFF]Canali          : {synthetic_mi['ch']}[/color][/size]
+[size=11][color=#FFFFFF]Bitrate         : {synthetic_mi['aud_br']}[/color][/size]
+[size=11][color=#FFFFFF]Lingua          : {synthetic_mi['lang']}[/color][/size]
+
+[size=13][b][color=#da8d49]SOTTOTITOLI[/color][/b][/size]
+[size=11][color=#FFFFFF]{synthetic_mi['subs']}[/color][/size]
+
+"""
+
+        bbcode = f"""[code]
+{logo_section}[center][size=13][b][color=#e8024b]{category_header}[/color][/b][/size][/center]
+[center][size=13][b][color=#ffffff]{title}[/color][/b][/size][/center]
+[center][size=13][color=#ffffff]{info_line}[/color][/size][/center]
+
+[center][size=13][b][color=#e8024b]--- RIASSUNTO ---[/color][/b][/size][/center]
+{summary}
+
+[center][size=13][b][color=#e8024b]--- SCREENS ---[/color][/b][/size][/center]
+{screens}
+{mediainfo_section}[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+[size=11][color=#FFFFFF]Nulla da aggiungere.[/color][/size]
+[size=11][color=#FFFFFF]Questa è una release interna pubblicata in esclusiva su Shareisland. Si prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie![/color][/size]
+
+[size=13][b][color=#e8024b]--- SHOUTOUTS ---[/color][/b][/size]
+[size=11][color=#FFFFFF]SHOUTOUTS : ShareIsland Staff[/color][/size]
+
+[size=13][color=#0592a3][size=16][b]BUON DOWNLOAD![/b][/size][/color][/size]
+[/code]"""
+
+        return bbcode
