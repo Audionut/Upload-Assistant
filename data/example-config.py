@@ -858,7 +858,7 @@ config = {
             # List of trackers to activate "super-seed" (or "initial seeding") mode when adding the torrent.
             # https://www.bittorrent.org/beps/bep_0016.html
             # Super-seed mode is NOT recommended for general use.
-            # Super-seed mode is only recommended for initial seeding servers.
+            # Super-seed mode is only recommended for initial seeding servers where bandwidth management is paramount.
             "super_seed_trackers": [""],
             # Use the UA tracker acronym as a tag in qBitTorrent
             "use_tracker_as_tag": False,
