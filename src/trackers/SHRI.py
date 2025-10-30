@@ -553,6 +553,7 @@ class SHRI(UNIT3D):
             return "CINEMA_NEWS"
 
         detected_type = self._detect_type_from_technical_analysis(meta)
+        cli_ui.info(f"UA Detected type: {meta.get('type')}")
         cli_ui.info(f"{self.tracker} Detected type: {detected_type}")
         return detected_type
 
@@ -698,8 +699,8 @@ class SHRI(UNIT3D):
         elif video_codec:
             info_parts.append(video_codec)
 
-        # if meta.get("hdr") and meta["hdr"] != "SDR":
-        #     info_parts.append(meta["hdr"])
+        if meta.get("hdr") and meta["hdr"] != "SDR":
+            info_parts.append(meta["hdr"])
 
         audio = await self._get_best_italian_audio_format(meta)
         if audio:
@@ -891,12 +892,19 @@ class SHRI(UNIT3D):
             depth = f"{video.get('BitDepth', 10)} bits"
             vid_br = f"{safe_int(video.get('BitRate', 0)) / 1000000:.1f} Mb/s"
             res = meta.get("resolution", "N/A")
-            asp = video.get("DisplayAspectRatio", "0")
+            asp_decimal = video.get("DisplayAspectRatio")
+            asp_float = float(asp_decimal) if asp_decimal else 0.0
+            if 1.77 <= asp_float <= 1.79:
+                asp = "16:9"
+            elif 1.32 <= asp_float <= 1.34:
+                asp = "4:3"
+            elif 2.35 <= asp_float <= 2.45:
+                asp = "2.39:1"
+            else:
+                asp = f"{asp_float:.2f}:1" if asp_float != 0.0 else "N/A"
 
-            # Audio info - remove hyphens from format (AC-3 → AC3)
-            afmt = (
-                ita_audio.get("Format", "N/A").replace("-", "") if ita_audio else "N/A"
-            )
+            # Audio info
+            afmt = ita_audio.get("Format", "N/A") if ita_audio else "N/A"
 
             # Try commercial name from mediainfo, fallback to mapping
             afmt_name = (
@@ -1022,7 +1030,7 @@ class SHRI(UNIT3D):
 [size=11][color=#FFFFFF]Questa è una release interna pubblicata in esclusiva su Shareisland. Si prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie![/color][/size]
 
 [size=13][b][color=#e8024b]--- SHOUTOUTS ---[/color][/b][/size]
-[size=11][color=#FFFFFF]SHOUTOUTS : ShareIsland Staff[/color][/size]
+[size=11][color=#FFFFFF]SHOUTOUTS : ShareIsland Crew[/color][/size]
 
 [size=13][color=#0592a3][size=16][b]BUON DOWNLOAD![/b][/size][/color][/size]
 [/code]"""
