@@ -239,7 +239,7 @@ class TRACKER_SETUP:
         if 'taoe' in group_tags:
             group_tags = 'taoe'
 
-        if tracker.upper() in ("AITHER", "LST"):
+        if tracker.upper() in ("AITHER", "LST", "SPD"):
             file_path = await self.get_banned_groups(meta, tracker)
             if file_path == "empty":
                 console.print(f"[bold red]No banned groups found for '{tracker}'.")

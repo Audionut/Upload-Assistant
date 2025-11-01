@@ -731,8 +731,6 @@ config = {
             "link_dir_name": "",
             # You can create an API key here https://speedapp.io/profile/api-tokens. Required Permission: Upload torrents
             "api_key": "",
-            # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
-            "passkey": "",
             # Select the upload channel, if you don't know what this is, leave it empty.
             # You can also set this manually using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
             "channel": "",
