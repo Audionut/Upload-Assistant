@@ -12,7 +12,7 @@ import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
-
+from src.languages import process_desc_language
 
 class TVC():
     """
@@ -151,6 +151,7 @@ class TVC():
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
             mi = json.load(f)
         # get_audio_languages is a regular function (not async), call directly
+
         self.get_audio_languages(meta, mi)
 
         if meta['category'] == 'TV':
@@ -158,9 +159,26 @@ class TVC():
         else:
             cat_id = 44
 
-        # override category if primary audio is not English
-        audio_langs = [lang.lower() for lang in (meta.get('audio_languages') or [])]
-        if audio_langs and not any(x in ' '.join(audio_langs) for x in ('en', 'eng', 'english')):
+     # ensure language detection helpers have run and consider subs too
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        # normalize audio and subtitle lists to lowercase strings
+        audio_langs = [str(l).lower() for l in (meta.get('audio_languages') or [])]
+        subtitle_langs = [str(l).lower() for l in (meta.get('subtitle_languages') or [])]
+
+        # matchers for English
+        english_tokens = ('en', 'eng', 'english')
+
+        # helper to check if any english token appears in the language entries
+        def has_english(lang_list):
+            if not lang_list:
+                return False
+            joined = ' '.join(lang_list)
+            return any(tok in joined for tok in english_tokens)
+
+        # if audio exists and neither audio nor subs contain English, mark as foreign
+        if audio_langs and not (has_english(audio_langs) or has_english(subtitle_langs)):
             cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
 
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
@@ -300,6 +318,21 @@ class TVC():
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
+
+    def get_audio_languages(self, meta, mi):
+        """
+        Populate meta['audio_languages'] with normalized language names (Titlecase).
+        Synchronous because it parses the already-loaded MediaInfo JSON.
+        """
+        audio_langs = set()
+        for track in mi.get("media", {}).get("track", []):
+            if track.get("@type") == "Audio" and "Language" in track:
+                lang = str(track["Language"]).strip()
+                if lang:
+                    # Normalize to Titlecase so comparisons like "English" match
+                    audio_langs.add(lang.title())
+        meta['audio_languages'] = list(audio_langs) if audio_langs else []
+        return
 
     # why the fuck is this even a thing.....
     async def get_tmdb_data(self, meta):
@@ -512,14 +545,4 @@ class TVC():
                         if str(s).lower().__contains__("sdh"):
                             meta['sdh_subs'] = 1
 
-        return
-
-    # get audio function
-    # used for detecting foreign
-    def get_audio_languages(self, meta, mi):
-        audio_langs = set()
-        for track in mi.get("media", {}).get("track", []):
-            if track.get("@type") == "Audio" and "Language" in track:
-                audio_langs.add(track["Language"].lower())
-        meta['audio_languages'] = list(audio_langs) if audio_langs else []
         return
