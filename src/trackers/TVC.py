@@ -40,7 +40,7 @@ class TVC():
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
         self.tv_types = ["comedy", "documentary", "drama", "entertainment", "factual", "foreign", "kids", "movies", "News", "radio", "reality", "soaps", "sci-fi", "sport", "holding bin"]
-        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "42",      "32",    "43",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
+        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "43",      "32",    "43",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
 
         genres = genres.split(', ')
         if len(genres) >= 1:
