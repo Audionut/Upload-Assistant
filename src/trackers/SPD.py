@@ -315,14 +315,17 @@ class SPD:
                         console.print("[bold red]Confirm it uploaded correctly and try to download manually")
                         console.print(response)
 
+                else:
+                    status_message = f'data error: {response}'
+
             except httpx.HTTPStatusError as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
             except httpx.TimeoutException:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
             except httpx.RequestError as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
             except Exception as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
+                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
                 return
 
         else:
