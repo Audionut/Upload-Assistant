@@ -14,6 +14,7 @@ from src.console import console
 from src.rehostimages import check_hosts
 from src.languages import process_desc_language
 
+
 class TVC():
     """
     Edit for Tracker:
@@ -159,13 +160,13 @@ class TVC():
         else:
             cat_id = 44
 
-     # ensure language detection helpers have run and consider subs too
+        # ensure language detection helpers have run and consider subs too
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
         # normalize audio and subtitle lists to lowercase strings
-        audio_langs = [str(l).lower() for l in (meta.get('audio_languages') or [])]
-        subtitle_langs = [str(l).lower() for l in (meta.get('subtitle_languages') or [])]
+        audio_langs = [str(lang).lower() for lang in (meta.get('audio_languages') or [])]
+        subtitle_langs = [str(lang).lower() for lang in (meta.get('subtitle_languages') or [])]
 
         # matchers for English
         english_tokens = ('en', 'eng', 'english')
