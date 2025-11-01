@@ -513,7 +513,6 @@ class TVC():
                             meta['sdh_subs'] = 1
 
         return
-    # get subs function^^^^
 
     # get audio function
     # used for detecting foreign
@@ -524,4 +523,3 @@ class TVC():
                 audio_langs.add(track["Language"].lower())
         meta['audio_languages'] = list(audio_langs) if audio_langs else []
         return
-    # get audio function^^^^
