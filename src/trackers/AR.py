@@ -365,8 +365,13 @@ class AR():
         # Tag Compilation
         genres = meta.get('genres')
         if genres:
-            genres = ', '.join(tag.strip('.') for tag in (item.replace(' ', '.') for item in genres.split(',')))
-            genres = re.sub(r'\.{2,}', '.', genres)
+                tags = []
+                for item in genres.split(','):
+                    for subitem in item.split('&'):
+                        tags.append(subitem.strip())
+                genres = ', '.join(tags)
+                
+                genres = re.sub(r'\.{2,}', '.', genres)
 
         # adding tags
         tags = ""
