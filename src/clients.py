@@ -2075,8 +2075,8 @@ class Clients():
                 else:
                     qbt_client = potential_qbt_client
 
+            search_term = meta['uuid']
             try:
-                search_term = meta['uuid']
                 if proxy_url:
                     # Build qui's enhanced filter options with expression support
                     qui_filters = {
