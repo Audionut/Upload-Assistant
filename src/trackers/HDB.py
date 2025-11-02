@@ -574,8 +574,14 @@ class HDB():
             # Interleave images for correct ordering
             all_image_files = []
             sorted_group_indices = sorted(group_images.keys(), key=lambda x: int(x))
-            if len(sorted_group_indices) < 4:
-                thumb_size = 'w250'
+            if len(sorted_group_indices) < 3:
+                thumb_size = 'w350'
+            elif len(sorted_group_indices) == 3:
+                thumb_size = 'w300'
+            elif len(sorted_group_indices) == 4:
+                thumb_size = 'w200'
+            elif len(sorted_group_indices) == 5:
+                thumb_size = 'w150'
             else:
                 thumb_size = 'w100'
 
