@@ -61,10 +61,10 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
 |seedpool|SP|ShareIsland|SHRI|
 |SkipTheCommericals|STC|SpeedApp|SPD|
 |Swarmazon|SN|TorrentHR|THR|
-|TorrentLeech|TL|ToTheGlory|TTG|
-|TVChaosUK|TVC|ULCX|ULCX|
-|UTOPIA|UTP|YOiNKED|YOINK|
-|YUSCENE|YUS|
+|Torrenteros|TTR|TorrentLeech|TL|
+|ToTheGlory|TTG|TVChaosUK|TVC|
+|ULCX|ULCX|UTOPIA|UTP|
+|YOiNKED|YOINK|YUSCENE|YUS|
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
