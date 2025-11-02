@@ -2757,6 +2757,7 @@ async def match_tracker_url(tracker_urls, meta):
         'stc': ["https://skipthecommercials.xyz"],
         'thr': ["torrenthr"],
         'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'ttr': ["https://torrenteros.org"],
         'tvc': ["https://tvchaosuk.com"],
         'ulcx': ["https://upload.cx"],
         'yoink': ["yoinked.org"],
