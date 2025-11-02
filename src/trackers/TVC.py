@@ -12,6 +12,7 @@ import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
+from src.languages import process_desc_language
 
 
 class TVC():
@@ -39,7 +40,7 @@ class TVC():
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
         self.tv_types = ["comedy", "documentary", "drama", "entertainment", "factual", "foreign", "kids", "movies", "News", "radio", "reality", "soaps", "sci-fi", "sport", "holding bin"]
-        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "42",      "32",    "44",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
+        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "43",      "32",    "43",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
 
         genres = genres.split(', ')
         if len(genres) >= 1:
@@ -147,14 +148,43 @@ class TVC():
 
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
+        # load MediaInfo and extract audio languages first
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
+            mi = json.load(f)
+        # get_audio_languages is a regular function (not async), call directly
+
+        self.get_audio_languages(meta, mi)
+
         if meta['category'] == 'TV':
             cat_id = await self.get_cat_id(meta['genres'])
         else:
             cat_id = 44
-        # type_id = await self.get_type_id(meta['type'])
+
+        # ensure language detection helpers have run and consider subs too
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+        # normalize audio and subtitle lists to lowercase strings
+        audio_langs = [str(lang).lower() for lang in (meta.get('audio_languages') or [])]
+        subtitle_langs = [str(lang).lower() for lang in (meta.get('subtitle_languages') or [])]
+
+        # matchers for English
+        english_tokens = ('en', 'eng', 'english')
+
+        # helper to check if any english token appears in the language entries
+        def has_english(lang_list):
+            if not lang_list:
+                return False
+            joined = ' '.join(lang_list)
+            return any(tok in joined for tok in english_tokens)
+
+        # if audio exists and neither audio nor subs contain English, mark as foreign
+        if audio_langs and not (has_english(audio_langs) or has_english(subtitle_langs)):
+            cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
+
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
         # this is a different function that common function
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list, approved_image_hosts=approved_image_hosts)
+        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
 
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
@@ -289,6 +319,21 @@ class TVC():
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
+
+    def get_audio_languages(self, meta, mi):
+        """
+        Populate meta['audio_languages'] with normalized language names (Titlecase).
+        Synchronous because it parses the already-loaded MediaInfo JSON.
+        """
+        audio_langs = set()
+        for track in mi.get("media", {}).get("track", []):
+            if track.get("@type") == "Audio" and "Language" in track:
+                lang = str(track["Language"]).strip()
+                if lang:
+                    # Normalize to Titlecase so comparisons like "English" match
+                    audio_langs.add(lang.title())
+        meta['audio_languages'] = list(audio_langs) if audio_langs else []
+        return
 
     # why the fuck is this even a thing.....
     async def get_tmdb_data(self, meta):
@@ -426,11 +471,11 @@ class TVC():
             elif meta['category'] == "TV" and meta['tv_pack'] == 1 and 'first_air_date' in meta:
                 channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
                 desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += f"[color=orange][size=15]First episode of this season aired {meta['season_air_first_date']} on channel {channel}[/size][/color]" + "\n\n"
+                desc += f"[color=orange][size=15]This season premièred {meta['season_air_first_date']} on  {channel}[/size][/color]" + "\n\n"
             elif meta['category'] == "TV" and meta['tv_pack'] != 1 and 'episode_airdate' in meta:
                 channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
                 desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += f"[color=orange][size=15]Episode aired on channel {channel} on {meta['episode_airdate']}[/size][/color]" + "\n\n"
+                desc += f"[color=orange][size=15]Episode aired on {channel} on {meta['episode_airdate']}[/size][/color]" + "\n\n"
             else:
                 desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
                 desc += "[color=orange][size=15]TMDB has No TV release info for this[/size][/color]" + "\n\n"
@@ -502,4 +547,3 @@ class TVC():
                             meta['sdh_subs'] = 1
 
         return
-    # get subs function^^^^
