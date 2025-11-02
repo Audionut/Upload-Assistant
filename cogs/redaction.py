@@ -11,6 +11,8 @@ def redact_value(val):
     if isinstance(val, str):
         # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
         val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
+        # Redact content between /proxy/ and /api (e.g. /proxy/<secret>/api)
+        val = re.sub(r'(?<=/proxy/)[^/]+(?=/api)', '[REDACTED]', val)
         # Redact query params like ?passkey=... or &token=...
         val = re.sub(r'([?&](passkey|key|token|auth|info_hash)=)[^&]+', r'\1[REDACTED]', val, flags=re.I)
         # Redact long hex or base64-like strings (common for tokens)
