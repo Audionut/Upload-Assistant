@@ -183,7 +183,8 @@ class TVC():
                 for t in mi.get('media', {}).get('track', []):
                     if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
                         subtitle_langs_local.append(str(t['Language']).strip().title())
-            except Exception:
+            except (KeyError, TypeError, AttributeError) as e:
+                console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
                 subtitle_langs_local = []
 
             subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
@@ -539,7 +540,7 @@ class TVC():
             descfile.close()
         return
 
-    def get_links(self, movie, subheading, heading_end):
+    def get_links(self, meta, subheading, heading_end):
         """
         Builds a centered Links block with a short label and icon links.
         Returns the fully formatted block (including heading end tag).
@@ -548,20 +549,20 @@ class TVC():
         parts.append(f"\n\n[center]{subheading}Links{heading_end}\n")
         parts.append("[b]External Info Sources:[/b]\n\n")
 
-        if movie.get('imdb_id', "0") != "0":
-            parts.append(f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL] ")
+        if meta.get('imdb_id', "0") != "0":
+            parts.append(f"[URL={meta.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL] ")
 
-        if movie.get('tmdb', "0") != "0":
-            parts.append(f"[URL=https://www.themoviedb.org/{str(movie.get('category', '').lower())}/{str(movie.get('tmdb'))}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
+        if meta.get('tmdb', "0") != "0":
+            parts.append(f"[URL=https://www.themoviedb.org/{str(meta.get('category', '').lower())}/{str(meta.get('tmdb'))}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
 
-        if movie.get('tvdb_id', 0) != 0:
-            parts.append(f"[URL=https://www.thetvdb.com/?id={str(movie.get('tvdb_id'))}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
+       if meta.get('tvdb_id', 0) != 0:
+            parts.append(f"[URL=https://www.thetvdb.com/?id={str(meta.get('tvdb_id'))}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
 
-        if movie.get('tvmaze_id', 0) != 0:
-            parts.append(f"[URL=https://www.tvmaze.com/shows/{str(movie.get('tvmaze_id'))}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
+       if meta.get('tvmaze_id', 0) != 0:
+            parts.append(f"[URL=https://www.tvmaze.com/shows/{str(meta.get('tvmaze_id'))}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
 
-        if movie.get('mal_id', 0) != 0:
-            parts.append(f"[URL=https://myanimelist.net/anime/{str(movie.get('mal_id'))}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
+        if meta.get('mal_id', 0) != 0:
+            parts.append(f"[URL=https://myanimelist.net/anime/{str(meta.get('mal_id'))}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
 
         parts.append("\n\n[/center]\n\n")
         return "".join(parts)
