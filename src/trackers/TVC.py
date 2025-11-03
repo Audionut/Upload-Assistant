@@ -51,7 +51,7 @@ class TVC():
     def format_date_ddmmyyyy(self, date_str):
         try:
             return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
-        except ValueError:
+        except (ValueError, TypeError):
             return date_str
 
     async def get_cat_id(self, genres):
@@ -255,8 +255,12 @@ class TVC():
                     else:
                         tvc_name = f"{meta['title']} ({year}) {meta['season']}{meta['episode']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
 
-        if not meta['is_disc']:
+        if not meta['is_disc'] and mi.get("media"):
             self.get_subs_info(meta, mi)
+        elif not meta['is_disc']:
+            meta['has_subs'] = 0
+            meta.pop('eng_subs', None)
+            meta.pop('sdh_subs', None)
 
         if meta['video_codec'] == 'HEVC':
             tvc_name = tvc_name.replace(']', ' HEVC]')
@@ -350,10 +354,22 @@ class TVC():
         """
         audio_langs = set()
         for track in mi.get("media", {}).get("track", []):
-            if track.get("@type") == "Audio" and "Language" in track:
-                lang = str(track["Language"]).strip()
-                if lang:
-                    audio_langs.add(lang.title())
+            if track.get("@type") != "Audio":
+                continue
+            lang_val = (
+                track.get("Language/String")
+                or track.get("Language/String1")
+                or track.get("Language/String2")
+                or track.get("Language")
+            )
+            lang = str(lang_val).strip() if lang_val else ""
+            if not lang:
+                continue
+            lowered = lang.lower()
+            if lowered in {"en", "eng", "en-us", "en-gb", "en-ie", "en-au"}:
+                audio_langs.add("English")
+            else:
+                audio_langs.add(lang.title())
         return list(audio_langs) if audio_langs else []
 
     # why the fuck is this even a thing.....
