@@ -575,7 +575,6 @@ class TVC():
         if meta.get('mal_id', 0) != 0:
             parts.append(f"[URL=https://myanimelist.net/anime/{meta.get('mal_id')!s}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
 
-
         parts.append("\n\n[/center]\n\n")
         return "".join(parts)
 
