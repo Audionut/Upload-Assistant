@@ -14,7 +14,7 @@ from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
 from src.languages import process_desc_language, has_english_language
-
+from datetime import datetime
 
 class TVC():
     """
@@ -47,6 +47,12 @@ class TVC():
             "43", "32", "44", "45", "51", "52", "30",
             "33", "42", "53"
         ]
+
+    def format_date_ddmmyyyy(self, date_str):
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+            except Exception:
+                return date_str
 
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
@@ -243,7 +249,9 @@ class TVC():
                     tvc_name = f"{meta['title']} ({meta['year'] if 'season_air_first_date' and len(meta['season_air_first_date']) >= 4 else meta['season_air_first_date'][:4]}) Series {meta['season_int']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
                 else:
                     if 'episode_airdate' in meta:
-                        tvc_name = f"{meta['title']} ({year}) {meta['season']}{meta['episode']} ({meta['episode_airdate']}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
+                        formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
+                        tvc_name = f"{meta['title']} ({year}) {meta['season']}{meta['episode']} ({formatted_date}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
+
                     else:
                         tvc_name = f"{meta['title']} ({year}) {meta['season']}{meta['episode']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
 
@@ -482,7 +490,9 @@ class TVC():
                 desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]This season premiered {meta['season_air_first_date']} on {channel}[/size][/color][/center]\n\n"
             elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_airdate' in meta:
                 channel = meta.get('networks', 'N/A')
-                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]Episode aired on {channel} on {meta['episode_airdate']}[/size][/color][/center]\n\n"
+                formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
+                desc += f"[center][color=orange][size=15]Episode aired on {channel} on {formatted_date}[/size][/color][/center]\n\n"
+
             else:
                 desc += "[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]TMDB has No TV release info for this[/size][/color][/center]\n\n"
 
