@@ -555,7 +555,7 @@ class TVC():
         if meta.get('tmdb', "0") != "0":
             parts.append(f"[URL=https://www.themoviedb.org/{str(meta.get('category', '').lower())}/{str(meta.get('tmdb'))}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
 
-       if meta.get('tvdb_id', 0) != 0:
+        if meta.get('tvdb_id', 0) != 0:
             parts.append(f"[URL=https://www.thetvdb.com/?id={str(meta.get('tvdb_id'))}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
 
        if meta.get('tvmaze_id', 0) != 0:
