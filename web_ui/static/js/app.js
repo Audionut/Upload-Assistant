@@ -575,7 +575,7 @@ function AudionutsUAGUI() {
                 type="text"
                 value={customArgs}
                 onChange={(e) => setCustomArgs(e.target.value)}
-                placeholder="--tmdb tv/12345 or movie/12345 --trackers BLU,RED,LST --type flac,movie,tv-show --source CD,PAL, WEB"
+                placeholder="--tmdb movie/12345 --trackers ptp,aither,ulcx --no-edition --no-tag"
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
                   isDarkMode 
                     ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
@@ -584,7 +584,7 @@ function AudionutsUAGUI() {
                 disabled={isExecuting}
               />
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Common: --tmdb tv/12345 or movie/12345 --trackers BLU,RED,LST --type flac,movie,tv-show --source CD,PAL
+                Common: --tmdb movie/12345 --trackers ptp,aither,ulcx --no-edition --no-tag
               </p>
             </div>
 
