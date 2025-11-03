@@ -14,15 +14,10 @@ class DC:
         self.tracker = 'DC'
         self.source_flag = 'DigitalCore.club'
         self.base_url = 'https://digitalcore.club'
+        self.api_base_url = f'{self.base_url}/api/v1/torrents'
         self.torrent_url = f'{self.base_url}/torrent/'
-        self.api_base_url = f'{self.base_url}/api/v1'
         self.banned_groups = ['']
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
-        self.passkey = self.config['TRACKERS'][self.tracker].get('passkey')
-        self.announce_list = [
-            f'https://tracker.digitalcore.club/announce/{self.passkey}',
-            f'https://trackerprxy.digitalcore.club/announce/{self.passkey}'
-        ]
         self.session = httpx.AsyncClient(headers={
             'X-API-KEY': self.api_key
         }, timeout=30.0)
@@ -157,25 +152,23 @@ class DC:
             return category_map[category].get(resolution)
         return None
 
-    async def search_existing(self, meta, results):
+    async def search_existing(self, meta, disctype):
         imdb_id = meta.get('imdb_info', {}).get('imdbID')
         if not imdb_id:
             console.print(f'[bold yellow]Cannot perform search on {self.tracker}: IMDb ID not found in metadata.[/bold yellow]')
             return []
 
-        search_url = f'{self.api_base_url}/torrents'
         search_params = {'searchText': imdb_id}
         search_results = []
         dupes = []
         try:
-            response = await self.session.get(search_url, params=search_params, headers=self.session.headers, timeout=15)
+            response = await self.session.get(self.api_base_url, params=search_params, headers=self.session.headers, timeout=15)
             response.raise_for_status()
 
             if response.text and response.text != '[]':
                 search_results = response.json()
-                results = search_results
                 if search_results and isinstance(search_results, list):
-                    should_continue = await self.get_title(meta, results)
+                    should_continue = await self.get_title(meta, search_results)
                     if not should_continue:
                         print('An UNRAR duplicate of this specific release already exists on site.')
                         meta['skipping'] = f'{self.tracker}'
@@ -200,20 +193,19 @@ class DC:
 
         return []
 
-    async def get_title(self, meta, results):
-        results = results
+    async def get_title(self, meta, search_results):
         is_scene = bool(meta.get('scene_name'))
         base_name = meta['scene_name'] if is_scene else meta['uuid']
 
         needs_unrar_tag = False
 
-        if results:
+        if search_results:
             upload_title = {meta['uuid']}
             if is_scene:
                 upload_title.add(meta['scene_name'])
 
             matching_titles = [
-                t for t in results
+                t for t in search_results
                 if t.get('name') in upload_title
             ]
 
@@ -228,12 +220,19 @@ class DC:
 
         if needs_unrar_tag:
             upload_base_name = meta['scene_name'] if is_scene else meta['uuid']
-            title = f'{upload_base_name} [UNRAR].torrent'
+            title = f'{upload_base_name} [UNRAR]'
         else:
-            title = f'{base_name}.torrent'
+            title = f'{base_name}'
 
         container = '.' + meta.get('container', 'mkv')
         title = title.replace(container, '').replace(container.upper(), '')
+
+        if title is not None and title != "" and title != meta['name']:
+            console.print(
+                f"[bold yellow]{self.tracker} applies a naming change for this release: [green]{title}[/green][/bold yellow]"
+            )
+
+        DC.torrent_title = title
 
         return title
 
@@ -266,38 +265,53 @@ class DC:
 
         return data
 
-    async def upload(self, meta, results):
+    async def upload(self, meta, disctype):
         await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta)
-        title = await self.get_title(meta, results)
         status_message = ''
-        torrent_id = ''
 
         if not meta.get('debug', False):
-            upload_url = f'{self.api_base_url}/torrents/upload'
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            try:
+                upload_url = f'{self.api_base_url}/upload'
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file': (title, torrent_file, 'application/x-bittorrent')}
+                with open(torrent_path, 'rb') as torrent_file:
+                    files = {'file': (DC.torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
 
-                response = await self.session.post(upload_url, data=data, files=files, headers=self.session.headers, timeout=90)
-                response.raise_for_status()
-                status_message = response.json()
+                    response = await self.session.post(upload_url, data=data, files=files, headers=self.session.headers, timeout=90)
+                    response.raise_for_status()
+                    response_data = response.json()
 
-                if response.status_code == 200 and status_message.get('id'):
-                    torrent_id = str(status_message.get('id', ''))
-                    if torrent_id:
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                    if response.status_code == 200 and response_data.get('id'):
+                        torrent_id = str(response_data['id'])
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
+                        status_message = response_data.get('message')
 
-                else:
-                    console.print(f"{status_message.get('message', 'Unknown API error.')}")
-                    meta['skipping'] = f"{self.tracker}"
-                    return
+                        await self.common.add_tracker_torrent(
+                            meta,
+                            tracker=self.tracker,
+                            source_flag=None,
+                            new_tracker=None,
+                            comment=None,
+                            headers=self.session.headers,
+                            downurl=f'{self.api_base_url}/download/{torrent_id}'
+                        )
+
+                    else:
+                        status_message = f"data error: {response_data.get('message', 'Unknown API error.')}"
+
+            except httpx.HTTPStatusError as e:
+                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+            except httpx.TimeoutException:
+                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
+            except httpx.RequestError as e:
+                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+            except Exception as e:
+                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
+                return
 
         else:
             console.print(data)
             status_message = 'Debug mode enabled, not uploading'
-
-        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id + '/')
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
