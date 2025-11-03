@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# import discord
 import asyncio
 import requests
 import traceback
@@ -15,6 +14,7 @@ from src.console import console
 from src.rehostimages import check_hosts
 from src.languages import process_desc_language, has_english_language
 from datetime import datetime
+
 
 class TVC():
     """
@@ -49,10 +49,10 @@ class TVC():
         ]
 
     def format_date_ddmmyyyy(self, date_str):
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
-            except Exception:
-                return date_str
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+        except Exception:
+            return date_str
 
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
