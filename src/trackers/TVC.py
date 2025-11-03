@@ -243,9 +243,6 @@ class TVC():
                     else:
                         tvc_name = f"{meta['title']} ({year}) {meta['season']}{meta['episode']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
-            mi = json.load(f)
-
         if not meta['is_disc']:
             self.get_subs_info(meta, mi)
 
