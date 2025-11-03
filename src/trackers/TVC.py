@@ -48,8 +48,6 @@ class TVC():
             "33", "42", "53"
         ]
 
-        pass
-
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
         # Use instance attributes self.tv_types / self.tv_types_ids defined in __init__
@@ -163,8 +161,7 @@ class TVC():
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
             mi = json.load(f)
 
-            # mi already loaded above; reuse it (no additional file reads)
-            # parse audio languages from MediaInfo (pure helper)
+            # parse audio languages from MediaInfo
             audio_langs_local = self.get_audio_languages(mi)
 
             if meta['category'] == 'TV':
