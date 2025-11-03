@@ -161,44 +161,44 @@ class TVC():
         try:
             with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
                     mi = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError) as e:
+        except (FileNotFoundError, json.JSONDecodeError) as e:
                 console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
                 mi = {}
 
             # parse audio languages from MediaInfo
-            audio_langs_local = self.get_audio_languages(mi)
+        audio_langs_local = self.get_audio_languages(mi)
 
-            if meta['category'] == 'TV':
-                cat_id = await self.get_cat_id(meta['genres'])
-            else:
-                cat_id = 44
+        if meta['category'] == 'TV':
+            cat_id = await self.get_cat_id(meta['genres'])
+        else:
+            cat_id = 44
 
-            # ensure language detection helpers have run and consider subs too
-            if not meta.get('language_checked', False):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
+        # ensure language detection helpers have run and consider subs too
+        if not meta.get('language_checked', False):
+            await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-            # prefer pipeline-populated meta values; fall back to local parse
-            # treat empty lists as falsy: meta.get('audio_languages') may be [] which should fall back
-            audio_meta = meta.get('audio_languages') or audio_langs_local
+        # prefer pipeline-populated meta values; fall back to local parse
+        # treat empty lists as falsy: meta.get('audio_languages') may be [] which should fall back
+        audio_meta = meta.get('audio_languages') or audio_langs_local
 
-            # gather subtitle languages (best-effort) but do NOT use them to decide "foreign"
+        # gather subtitle languages (best-effort) but do NOT use them to decide "foreign"
+        subtitle_langs_local = []
+        try:
+            for t in mi.get('media', {}).get('track', []):
+                if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
+                    subtitle_langs_local.append(str(t['Language']).strip().title())
+        except (KeyError, TypeError, AttributeError) as e:
+            console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
             subtitle_langs_local = []
-            try:
-                for t in mi.get('media', {}).get('track', []):
-                    if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
-                        subtitle_langs_local.append(str(t['Language']).strip().title())
-            except (KeyError, TypeError, AttributeError) as e:
-                console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
-                subtitle_langs_local = []
 
-            subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
+        subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
 
-            # Check English presence in audio only (per new rule)
-            audio_has_english = await has_english_language(audio_meta)
+        # Check English presence in audio only (per new rule)
+        audio_has_english = await has_english_language(audio_meta)
 
-            # mark as foreign only when audio languages are present and NONE are English
-            if audio_meta and not audio_has_english:
-                cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
+        # mark as foreign only when audio languages are present and NONE are English
+        if audio_meta and not audio_has_english:
+            cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
 
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
         # this is a different function that common function
