@@ -26,29 +26,29 @@ class TVC():
     """
 
     def __init__(self, config):
-            self.config = config
-            self.tracker = 'TVC'
-            self.source_flag = 'TVCHAOS'
-            self.upload_url = 'https://tvchaosuk.com/api/torrents/upload'
-            self.search_url = 'https://tvchaosuk.com/api/torrents/filter'
-            self.torrent_url = 'https://tvchaosuk.com/torrents/'
-            self.signature = ""
-            self.banned_groups = []
-            tmdb.API_KEY = config['DEFAULT']['tmdb_api']
+        self.config = config
+        self.tracker = 'TVC'
+        self.source_flag = 'TVCHAOS'
+        self.upload_url = 'https://tvchaosuk.com/api/torrents/upload'
+        self.search_url = 'https://tvchaosuk.com/api/torrents/filter'
+        self.torrent_url = 'https://tvchaosuk.com/torrents/'
+        self.signature = ""
+        self.banned_groups = []
+        tmdb.API_KEY = config['DEFAULT']['tmdb_api']
 
-            # TV type mappings used throughout the class (make them instance attributes)
-            self.tv_types = [
-                "comedy", "documentary", "drama", "entertainment", "factual",
-                "foreign", "kids", "movies", "News", "radio", "reality", "soaps",
-                "sci-fi", "sport", "holding bin"
-            ]
-            self.tv_types_ids = [
-                "29", "5", "11", "14", "19",
-                "43", "32", "44", "45", "51", "52", "30",
-                "33", "42", "53"
-            ]
+        # TV type mappings used throughout the class (make them instance attributes)
+        self.tv_types = [
+            "comedy", "documentary", "drama", "entertainment", "factual",
+            "foreign", "kids", "movies", "News", "radio", "reality", "soaps",
+            "sci-fi", "sport", "holding bin"
+        ]
+        self.tv_types_ids = [
+            "29", "5", "11", "14", "19",
+            "43", "32", "44", "45", "51", "52", "30",
+            "33", "42", "53"
+        ]
 
-            pass
+        pass
 
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
