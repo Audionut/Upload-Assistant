@@ -158,8 +158,12 @@ class TVC():
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
         # load MediaInfo and extract audio languages first
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
-            mi = json.load(f)
+        try:
+            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                    mi = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
+                mi = {}
 
             # parse audio languages from MediaInfo
             audio_langs_local = self.get_audio_languages(mi)
@@ -490,7 +494,10 @@ class TVC():
                 # split overview into sentences and write each sentence on its own line
                 # simple split using .!? but tolerant to missing punctuation
 
+                # Split on sentence boundaries; if no punctuation, treat entire overview as one sentence
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
+                if not sentences and overview:
+                    sentences = [overview]
 
                 desc += "[center][color=green][size=25]PLOT[/size][/color]\n"
                 if episode_name:
@@ -498,9 +505,6 @@ class TVC():
                 if sentences:
                     for s in sentences:
                         desc += s.rstrip() + "\n"
-                else:
-                    # fallback if splitting yields nothing
-                    desc += overview + "\n"
                 desc += "[/center]\n\n"
             else:
                 overview = str(meta.get('overview', '')).strip()
