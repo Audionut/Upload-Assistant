@@ -67,7 +67,7 @@ class TTR(UNIT3D):
                     suffix = 'Castellano'
                 else:
                     user_choice = await ask_spanish_type("subtitle")
-                    suffix = {'1': 'Castellano Subs', '2': 'Latino Subs', '3': 'Castellano Latino Subs'}.get(user_choice, 'Castellano')
+                    suffix = {'1': 'Castellano Subs', '2': 'Latino Subs', '3': 'Castellano Latino Subs'}.get(user_choice, 'Castellano Subs')
 
                 name += f" {suffix}"
 
