@@ -12,7 +12,6 @@ class DC:
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'DC'
-        self.source_flag = 'DigitalCore.club'
         self.base_url = 'https://digitalcore.club'
         self.api_base_url = f'{self.base_url}/api/v1/torrents'
         self.torrent_url = f'{self.base_url}/torrent/'
@@ -266,14 +265,13 @@ class DC:
         return data
 
     async def upload(self, meta, disctype):
-        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta)
         status_message = ''
 
         if not meta.get('debug', False):
             try:
                 upload_url = f'{self.api_base_url}/upload'
-                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
 
                 with open(torrent_path, 'rb') as torrent_file:
                     files = {'file': (DC.torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
