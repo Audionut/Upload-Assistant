@@ -447,7 +447,7 @@ class TVC():
 
         return dupes
 
-    async def unit3d_edit_desc(self, meta, tracker, signature, screens, comparison=False):
+    async def unit3d_edit_desc(self, meta, tracker, signature, image_list, comparison=False):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w') as descfile:
             bbcode = BBCODE()
@@ -527,7 +527,7 @@ class TVC():
             descfile.write(desc)
 
             # Keep screenshots handling exactly as original code did
-            images = screens
+            images = image_list
             if len(images) > 0 and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                 descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
                 for each in range(len(images[:self.config['TRACKERS'][self.tracker]['image_count']])):
