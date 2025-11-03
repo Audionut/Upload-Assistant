@@ -125,13 +125,14 @@ class TTR(UNIT3D):
                 )
                 return False
             else:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                if meta.get('unattended'):
+                    if not meta.get('unattended_confirm', False):
+                        return False
+                else:
                     console.print(f"{self.tracker}: [yellow]No Spanish audio track found, but Spanish subtitles are present.[/yellow]")
                     console.print(f"{self.tracker}: [yellow]Do you want to upload anyway? y/N[/yellow]")
                     user_choice = await self.common.async_input()
                     if user_choice.lower() != 'y':
                         return False
-                else:
-                    return False
 
         return True
