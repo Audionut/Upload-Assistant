@@ -5,6 +5,7 @@ import requests
 import traceback
 import cli_ui
 import os
+import re
 import tmdbsimple as tmdb
 from src.bbcode import BBCODE
 import json
@@ -12,6 +13,7 @@ import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
+from src.languages import process_desc_language, has_english_language
 
 
 class TVC():
@@ -39,7 +41,7 @@ class TVC():
     async def get_cat_id(self, genres):
         # Note sections are based on Genre not type, source, resolution etc..
         self.tv_types = ["comedy", "documentary", "drama", "entertainment", "factual", "foreign", "kids", "movies", "News", "radio", "reality", "soaps", "sci-fi", "sport", "holding bin"]
-        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "42",      "32",    "44",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
+        self.tv_types_ids = ["29", "5",            "11",   "14",            "19",      "43",      "32",    "44",    "45",    "51",   "52",      "30",     "33",    "42",    "53"]
 
         genres = genres.split(', ')
         if len(genres) >= 1:
@@ -147,14 +149,48 @@ class TVC():
 
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
-        if meta['category'] == 'TV':
-            cat_id = await self.get_cat_id(meta['genres'])
-        else:
-            cat_id = 44
-        # type_id = await self.get_type_id(meta['type'])
+        # load MediaInfo and extract audio languages first
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
+            mi = json.load(f)
+
+            # mi already loaded above; reuse it (no additional file reads)
+            # parse audio languages from MediaInfo (pure helper)
+            audio_langs_local = self.get_audio_languages(mi)
+
+            if meta['category'] == 'TV':
+                cat_id = await self.get_cat_id(meta['genres'])
+            else:
+                cat_id = 44
+
+            # ensure language detection helpers have run and consider subs too
+            if not meta.get('language_checked', False):
+                await process_desc_language(meta, desc=None, tracker=self.tracker)
+
+            # prefer pipeline-populated meta values; fall back to local parse
+            # treat empty lists as falsy: meta.get('audio_languages') may be [] which should fall back
+            audio_meta = meta.get('audio_languages') or audio_langs_local
+
+            # gather subtitle languages (best-effort) but do NOT use them to decide "foreign"
+            subtitle_langs_local = []
+            try:
+                for t in mi.get('media', {}).get('track', []):
+                    if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
+                        subtitle_langs_local.append(str(t['Language']).strip().title())
+            except Exception:
+                subtitle_langs_local = []
+
+            subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
+
+            # Check English presence in audio only (per new rule)
+            audio_has_english = await has_english_language(audio_meta)
+
+            # mark as foreign only when audio languages are present and NONE are English
+            if audio_meta and not audio_has_english:
+                cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
+
         resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
         # this is a different function that common function
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list, approved_image_hosts=approved_image_hosts)
+        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
 
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
@@ -290,6 +326,19 @@ class TVC():
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         open_torrent.close()
 
+    def get_audio_languages(self, mi):
+        """
+        Parse MediaInfo object and return a list of normalized audio languages.
+        Do NOT mutate meta here; return the languages so the caller can decide.
+        """
+        audio_langs = set()
+        for track in mi.get("media", {}).get("track", []):
+            if track.get("@type") == "Audio" and "Language" in track:
+                lang = str(track["Language"]).strip()
+                if lang:
+                    audio_langs.add(lang.title())
+        return list(audio_langs) if audio_langs else []
+
     # why the fuck is this even a thing.....
     async def get_tmdb_data(self, meta):
         import tmdbsimple as tmdb
@@ -393,63 +442,83 @@ class TVC():
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w') as descfile:
             bbcode = BBCODE()
+
+            # discs (unchanged logic, tightened spacing)
             if meta.get('discs', []) != []:
                 discs = meta['discs']
                 if discs[0]['type'] == "DVD":
-                    descfile.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n")
-                    descfile.write("\n")
+                    descfile.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n\n")
                 if len(discs) >= 2:
                     for each in discs[1:]:
                         if each['type'] == "BDMV":
-                            descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n")
-                            descfile.write("\n")
+                            descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
                         if each['type'] == "DVD":
                             descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/spoiler]\n")
-                            descfile.write("\n")
+                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/spoiler]\n\n")
             desc = ""
 
-            # release info
+            # Release info: collect and format
             rd_info = ""
-            # getting movie release info
             if meta['category'] != "TV" and 'release_dates' in meta:
                 for cc in meta['release_dates']['results']:
                     for rd in cc['release_dates']:
                         if rd['type'] == 6:
                             channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
-                            rd_info += "[color=orange][size=15]" + cc['iso_3166_1'] + " TV Release info [/size][/color]" + "\n" + str(rd['release_date'])[:10] + " on " + channel + "\n"
-            # movie release info adding
-            if rd_info != "":
-                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += rd_info + "\n\n"
-            # getting season release info. need to fix so it gets season info instead of first episode info.
-            elif meta['category'] == "TV" and meta['tv_pack'] == 1 and 'first_air_date' in meta:
-                channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
-                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += f"[color=orange][size=15]First episode of this season aired {meta['season_air_first_date']} on channel {channel}[/size][/color]" + "\n\n"
-            elif meta['category'] == "TV" and meta['tv_pack'] != 1 and 'episode_airdate' in meta:
-                channel = meta['networks'] if 'networks' in meta and meta['networks'] != "" else "N/A"
-                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += f"[color=orange][size=15]Episode aired on channel {channel} on {meta['episode_airdate']}[/size][/color]" + "\n\n"
-            else:
-                desc += "[color=green][size=25]Release Info[/size][/color]" + "\n\n"
-                desc += "[color=orange][size=15]TMDB has No TV release info for this[/size][/color]" + "\n\n"
+                            rd_info += f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n{str(rd['release_date'])[:10]} on {channel}\n"
 
-            if meta['category'] == 'TV' and meta['tv_pack'] != 1 and 'episode_overview' in meta:
-                desc += "\n\n" + "[color=green][size=25]PLOT[/size][/color]\n" + "Episode Name: " + str(meta['episode_name']) + "\n" + str(meta['episode_overview'] + "\n\n")
+            if rd_info != "":
+                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n{rd_info}[/center]\n\n"
+            elif meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
+                channel = meta.get('networks', 'N/A')
+                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]This season premièred {meta['season_air_first_date']} on  {channel}[/size][/color][/center]\n\n"
+            elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_airdate' in meta:
+                channel = meta.get('networks', 'N/A')
+                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]Episode aired on {channel} on {meta['episode_airdate']}[/size][/color][/center]\n\n"
             else:
-                desc += "[color=green][size=25]PLOT[/size][/color]" + "\n" + str(meta['overview'] + "\n\n")
-            # Max two screenshots as per rules
-            if len(base) > 2 and meta['description'] != "PTP":
-                desc += "[color=green][size=25]Notes/Extra Info[/size][/color]" + " \n \n" + str(base) + " \n \n "
+                desc += "[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]TMDB has No TV release info for this[/size][/color][/center]\n\n"
+
+            # PLOT - improved formatting: bold episode label, sentence-per-line
+            if meta['category'] == 'TV' and meta.get('tv_pack') != 1 and 'episode_overview' in meta:
+                episode_name = str(meta.get('episode_name', '')).strip()
+                overview = str(meta.get('episode_overview', '')).strip()
+
+                # split overview into sentences and write each sentence on its own line
+                # simple split using .!? but tolerant to missing punctuation
+
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
+
+                desc += "[center][color=green][size=25]PLOT[/size][/color]\n"
+                if episode_name:
+                    desc += f"[b]Episode Name:[/b] {episode_name}\n\n"
+                if sentences:
+                    for s in sentences:
+                        desc += s.rstrip() + "\n"
+                else:
+                    # fallback if splitting yields nothing
+                    desc += overview + "\n"
+                desc += "[/center]\n\n"
+            else:
+                overview = str(meta.get('overview', '')).strip()
+                desc += f"[center][color=green][size=25]PLOT[/size][/color]\n{overview}\n[/center]\n\n"
+
+            # Notes/Extra Info (only if base content exists)
+            if base.strip() and meta.get('description', '') != "PTP":
+                desc += f"[center][color=green][size=25]Notes/Extra Info[/size][/color]\n\n{base}\n\n[/center]\n\n"
+
+            # Links - improved block (get_links returns a centred block)
             desc += self.get_links(meta, "[color=green][size=25]", "[/size][/COLOR]")
+
+            # bbcode conversions & comparison collapse (preserve behavior)
             desc = bbcode.convert_pre_to_code(desc)
             desc = bbcode.convert_hide_to_spoiler(desc)
             if comparison is False:
                 desc = bbcode.convert_comparison_to_collapse(desc, 1000)
+
+            # write description
             descfile.write(desc)
+
+            # Keep screenshots handling exactly as original code did
             images = screens
-            # using screen number in config to know how many screens to add. note max 2 is mentioned in rules.
             if len(images) > 0 and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                 descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
                 for each in range(len(images[:self.config['TRACKERS'][self.tracker]['image_count']])):
@@ -464,22 +533,35 @@ class TVC():
         return
 
     def get_links(self, movie, subheading, heading_end):
-        description = ""
-        description += "\n\n" + subheading + "Links" + heading_end + "\n"
-        if movie['imdb_id'] != "0":
-            description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
-        if movie['tmdb'] != "0":
-            description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
-        if movie['tvdb_id'] != 0:
-            description += f" [URL=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]"
-        if movie['tvmaze_id'] != 0:
-            description += f" [URL=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]"
-        if movie['mal_id'] != 0:
-            description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
-        return description + " \n \n "
+        """
+        Builds a centered Links block with a short label and icon links.
+        Returns the fully formatted block (including heading end tag).
+        """
+        parts = []
+        parts.append(f"\n\n[center]{subheading}Links{heading_end}\n")
+        parts.append("[b]External Info Sources:[/b]\n\n")
+
+        if movie.get('imdb_id', "0") != "0":
+            parts.append(f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL] ")
+
+        if movie.get('tmdb', "0") != "0":
+            parts.append(f"[URL=https://www.themoviedb.org/{str(movie.get('category', '').lower())}/{str(movie.get('tmdb'))}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
+
+        if movie.get('tvdb_id', 0) != 0:
+            parts.append(f"[URL=https://www.thetvdb.com/?id={str(movie.get('tvdb_id'))}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
+
+        if movie.get('tvmaze_id', 0) != 0:
+            parts.append(f"[URL=https://www.tvmaze.com/shows/{str(movie.get('tvmaze_id'))}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
+
+        if movie.get('mal_id', 0) != 0:
+            parts.append(f"[URL=https://myanimelist.net/anime/{str(movie.get('mal_id'))}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
+
+        parts.append("\n\n[/center]\n\n")
+        return "".join(parts)
 
     # get subs function
     # used in naming conventions
+
     def get_subs_info(self, meta, mi):
         subs = ""
         subs_num = 0
@@ -502,4 +584,3 @@ class TVC():
                             meta['sdh_subs'] = 1
 
         return
-    # get subs function^^^^
