@@ -160,9 +160,9 @@ class TVC():
         # load MediaInfo and extract audio languages first
         try:
             with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
-                    mi = json.load(f)
+                mi = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-                console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
+            console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
                 mi = {}
 
             # parse audio languages from MediaInfo
