@@ -163,7 +163,7 @@ class TVC():
                 mi = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
-                mi = {}
+            mi = {}
 
             # parse audio languages from MediaInfo
         audio_langs_local = self.get_audio_languages(mi)
