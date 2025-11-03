@@ -267,6 +267,7 @@ class DC:
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
         status_message = ''
+        response = None
 
         if not meta.get('debug', False):
             try:
@@ -303,9 +304,11 @@ class DC:
             except httpx.TimeoutException:
                 status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
             except httpx.RequestError as e:
-                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+                resp_text = getattr(getattr(e, 'response', None), 'text', 'No response received')
+                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {resp_text}'
             except Exception as e:
-                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
+                resp_text = response.text if response is not None else 'No response received'
+                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {resp_text}'
                 return
 
         else:
