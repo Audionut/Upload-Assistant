@@ -78,13 +78,19 @@ class TTR(UNIT3D):
 
             for track in tracks:
                 if track.get('@type') == 'Audio':
-                    spanish_audio_type = get_spanish_type(track.get('Language', '').strip())
+                    lang = track.get('Language', '')
+                    if isinstance(lang, dict):
+                        lang = ''
+                    spanish_audio_type = get_spanish_type(str(lang).strip())
                     if spanish_audio_type:
                         break
 
             for track in tracks:
                 if track.get('@type') == 'Text':
-                    spanish_subs_type = get_spanish_type(track.get('Language', '').strip())
+                    lang = track.get('Language', '')
+                    if isinstance(lang, dict):
+                        lang = ''
+                    spanish_subs_type = get_spanish_type(str(lang).strip())
                     if spanish_subs_type:
                         break
 
