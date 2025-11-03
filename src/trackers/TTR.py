@@ -64,7 +64,7 @@ class TTR(UNIT3D):
 
             elif spanish_subtitle:
                 if unattended or confirm:
-                    suffix = 'Castellano'
+                    suffix = 'Castellano Subs'
                 else:
                     user_choice = await ask_spanish_type("subtitle")
                     suffix = {'1': 'Castellano Subs', '2': 'Latino Subs', '3': 'Castellano Latino Subs'}.get(user_choice, 'Castellano Subs')
