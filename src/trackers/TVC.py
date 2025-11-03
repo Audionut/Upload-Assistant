@@ -50,19 +50,19 @@ class TVC():
 
             pass
 
-        async def get_cat_id(self, genres):
-            # Note sections are based on Genre not type, source, resolution etc..
-            # Use instance attributes self.tv_types / self.tv_types_ids defined in __init__
-            genres = genres.split(', ')
-            if len(genres) >= 1:
-                for i in genres:
-                    g = i.lower().replace(',', '')
-                    for s in self.tv_types:
-                        if s.__contains__(g):
-                            return self.tv_types_ids[self.tv_types.index(s)]
+    async def get_cat_id(self, genres):
+        # Note sections are based on Genre not type, source, resolution etc..
+        # Use instance attributes self.tv_types / self.tv_types_ids defined in __init__
+        genres = genres.split(', ')
+        if len(genres) >= 1:
+            for i in genres:
+                g = i.lower().replace(',', '')
+                for s in self.tv_types:
+                    if s.__contains__(g):
+                        return self.tv_types_ids[self.tv_types.index(s)]
 
-            # returning holding bin/misc id
-            return self.tv_types_ids[14]
+        # returning holding bin/misc id
+        return self.tv_types_ids[14]
 
     async def get_res_id(self, tv_pack, resolution):
         if tv_pack:
