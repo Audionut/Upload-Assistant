@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# import discord
 import asyncio
 import requests
 import traceback
@@ -51,7 +52,7 @@ class TVC():
     def format_date_ddmmyyyy(self, date_str):
         try:
             return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
-        except Exception:
+        except ValueError:
             return date_str
 
     async def get_cat_id(self, genres):
