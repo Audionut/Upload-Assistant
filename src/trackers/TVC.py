@@ -511,7 +511,7 @@ class TVC():
                 desc += f"[center][color=green][size=25]Notes/Extra Info[/size][/color]\n\n{base}\n\n[/center]\n\n"
 
             # Links - improved block (get_links returns a centred block)
-            desc += self.get_links(meta, "[color=green][size=25]", "[/size][/COLOR]")
+            desc += self.get_links(meta, "[color=green][size=25]", "[/size][/color]")
 
             # bbcode conversions & comparison collapse (preserve behavior)
             desc = bbcode.convert_pre_to_code(desc)
@@ -550,16 +550,16 @@ class TVC():
             parts.append(f"[URL={meta.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL] ")
 
         if meta.get('tmdb', "0") != "0":
-            parts.append(f"[URL=https://www.themoviedb.org/{str(meta.get('category', '').lower())}/{str(meta.get('tmdb'))}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
+            parts.append(f"[URL=https://www.themoviedb.org/{meta.get('category', '').lower()}/{meta.get('tmdb')!s}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
 
         if meta.get('tvdb_id', 0) != 0:
-            parts.append(f"[URL=https://www.thetvdb.com/?id={str(meta.get('tvdb_id'))}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
+            parts.append(f"[URL=https://www.thetvdb.com/?id={meta.get('tvdb_id')!s}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
 
         if meta.get('tvmaze_id', 0) != 0:
-            parts.append(f"[URL=https://www.tvmaze.com/shows/{str(meta.get('tvmaze_id'))}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
+            parts.append(f"[URL=https://www.tvmaze.com/shows/{meta.get('tvmaze_id')!s}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
 
         if meta.get('mal_id', 0) != 0:
-            parts.append(f"[URL=https://myanimelist.net/anime/{str(meta.get('mal_id'))}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
+            parts.append(f"[URL=https://myanimelist.net/anime/{meta.get('mal_id')!s}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
 
         parts.append("\n\n[/center]\n\n")
         return "".join(parts)
