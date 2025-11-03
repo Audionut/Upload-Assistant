@@ -475,7 +475,7 @@ class TVC():
                 desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n{rd_info}[/center]\n\n"
             elif meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
                 channel = meta.get('networks', 'N/A')
-                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]This season premièred {meta['season_air_first_date']} on  {channel}[/size][/color][/center]\n\n"
+                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]This season premiered {meta['season_air_first_date']} on {channel}[/size][/color][/center]\n\n"
             elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_airdate' in meta:
                 channel = meta.get('networks', 'N/A')
                 desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]Episode aired on {channel} on {meta['episode_airdate']}[/size][/color][/center]\n\n"
