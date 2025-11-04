@@ -247,11 +247,7 @@ class tvdb_data:
 
     async def get_imdb_id_from_tvdb_episode_id(self, episode_id, debug=False):
         try:
-            try:
-                episode_data = tvdb.get_episode_extended(episode_id)
-            except http_err as http_err:
-                console.print(f"[red]HTTP error retrieving episode data for ID {episode_id}: {http_err}[/red]")
-                return None
+            episode_data = tvdb.get_episode_extended(episode_id)
             if debug:
                 console.print(f"[yellow]Episode data retrieved for episode ID {episode_id}[/yellow]")
 
