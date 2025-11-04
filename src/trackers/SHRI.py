@@ -5,6 +5,7 @@ import certifi
 import cli_ui
 import os
 import pycountry
+import random
 import re
 import requests
 from src.audio import get_audio_v2
@@ -727,7 +728,7 @@ class SHRI(UNIT3D):
         synthetic_mi = await self._get_synthetic_mediainfo(meta)
 
         bbcode = self._build_bbcode(
-            title, info_line, logo_url, summary, screens, synthetic_mi, category
+            title, info_line, logo_url, summary, screens, synthetic_mi, category, meta
         )
 
         # Save description file
@@ -977,13 +978,51 @@ class SHRI(UNIT3D):
             return None
 
     def _build_bbcode(
-        self, title, info_line, logo_url, summary, screens, synthetic_mi, category
+        self, title, info_line, logo_url, summary, screens, synthetic_mi, category, meta
     ):
         """Build ShareIsland BBCode template"""
         category_header = "--- SERIE TV ---" if category == "TV" else "--- FILM ---"
+        release_group = meta.get("tag", "").lstrip("-").strip()
+        pirate_shouts = [
+            "The Scene never dies",
+            "Arrr! Powered by Rum & Bandwidth",
+            "Seed or walk the plank!",
+            "Released by Nobody — claimed by Everybody",
+            "From the depths of the digital seas",
+            "Where bits are free and rum flows endlessly",
+            "Pirates don't ask, they share",
+            "For the glory of the Scene!",
+            "Scene is the paradise",
+        ]
+        shoutouts = (
+            f"SHOUTOUTS : {release_group}"
+            if release_group
+            else f"SHOUTOUTS : {random.choice(pirate_shouts)}"
+        )
         logo_section = (
             f"[center][img=250]{logo_url}[/img][/center]\n" if logo_url else ""
         )
+
+        # Build LINKS section
+        imdb_id = meta.get("imdb_id", "")
+        tmdb_id = meta.get("tmdb", "")
+        media_type = "tv" if category == "TV" else "movie"
+
+        links_section = ""
+        if imdb_id or tmdb_id:
+            links_section = (
+                "\n[size=13][b][color=#e8024b]--- LINKS ---[/color][/b][/size]\n"
+            )
+            if imdb_id:
+                # Format IMDb ID
+                if isinstance(imdb_id, int):
+                    imdb_id = f"tt{imdb_id:07d}"
+                elif not imdb_id.startswith("tt"):
+                    imdb_id = f"tt{imdb_id}"
+                links_section += f"[size=11][color=#FFFFFF]IMDb: https://www.imdb.com/title/{imdb_id}/[/color][/size]\n"
+            if tmdb_id:
+                links_section += f"[size=11][color=#FFFFFF]TMDb: https://www.themoviedb.org/{media_type}/{tmdb_id}[/color][/size]\n"
+            links_section += "\n"
 
         # Mediainfo section
         mediainfo_section = ""
@@ -1025,12 +1064,12 @@ class SHRI(UNIT3D):
 
 [center][size=13][b][color=#e8024b]--- SCREENS ---[/color][/b][/size][/center]
 {screens}
-{mediainfo_section}[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+{links_section}{mediainfo_section}[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
 [size=11][color=#FFFFFF]Nulla da aggiungere.[/color][/size]
 [size=11][color=#FFFFFF]Questa è una release interna pubblicata in esclusiva su Shareisland. Si prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie![/color][/size]
 
 [size=13][b][color=#e8024b]--- SHOUTOUTS ---[/color][/b][/size]
-[size=11][color=#FFFFFF]SHOUTOUTS : ShareIsland Crew[/color][/size]
+[size=11][color=#FFFFFF]{shoutouts}[/color][/size]
 
 [size=13][color=#0592a3][size=16][b]BUON DOWNLOAD![/b][/size][/color][/size]
 [/code]"""
