@@ -545,7 +545,10 @@ async def get_tv_data(meta):
                 meta['search_year'] = ""
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
-            meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+            try:
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+            except Exception as e:
+                console.print(f"[red]Error fetching TVDb episode data: {e}[/red]")
 
         if meta.get('tvdb_episode_name', None):
             meta['auto_episode_title'] = meta['tvdb_episode_name']
@@ -614,7 +617,10 @@ async def get_tv_data(meta):
                 meta['search_year'] = ""
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
-            meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+            try:
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+            except Exception as e:
+                console.print(f"[red]Error fetching TVDb episode data: {e}[/red]")
 
         if meta.get('tvdb_episode_id', None):
             meta['tvdb_imdb_id'] = await tvdb_handler.get_imdb_id_from_tvdb_episode_id(meta['tvdb_episode_id'], debug=meta.get('debug', False))
