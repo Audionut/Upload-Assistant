@@ -292,7 +292,7 @@ class THR():
             #         full_mi = mi_file.read()
             #         desc.write(f"[/align]\n[hide=FULL MEDIAINFO]{full_mi}[/hide][align=center]")
             #         mi_file.close()
-            desc.write("\n\n[size=2][url=https://www.torrenthr.org/forums.php?action=viewtopic&topicid=8977]Created by L4G's Upload Assistant[/url][/size][/align]")
+            desc.write(f"\n\n[size=2][url=https://www.torrenthr.org/forums.php?action=viewtopic&topicid=8977]{meta['ua_signature']}[/url][/size][/align]")
             desc.close()
         return pronfo
 
