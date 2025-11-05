@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import Literal
+import asyncio
 import aiofiles
 import certifi
 import cli_ui
@@ -758,7 +759,9 @@ class SHRI(UNIT3D):
         try:
             url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}"
             params = {"api_key": api_key, "language": "it-IT"}
-            resp = requests.get(url, params=params, timeout=5, verify=certifi.where())
+            resp = await asyncio.to_thread(
+                requests.get, url, params=params, timeout=5, verify=certifi.where()
+            )
             resp.encoding = "utf-8"
 
             if resp.status_code == 200:
@@ -774,7 +777,8 @@ class SHRI(UNIT3D):
                     img_url = (
                         f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}/images"
                     )
-                    img_resp = requests.get(
+                    img_resp = await asyncio.to_thread(
+                        requests.get,
                         img_url,
                         params={"api_key": api_key},
                         timeout=5,
@@ -1004,7 +1008,7 @@ class SHRI(UNIT3D):
         )
 
         # Build LINKS section
-        imdb_id = meta.get('imdb', '')
+        imdb_id = meta.get("imdb", "")
         tmdb_id = meta.get("tmdb", "")
         media_type = "tv" if category == "TV" else "movie"
 
