@@ -170,6 +170,7 @@ class THR():
             for track in mi['media']['track']:
                 if track['@type'] == "Text":
                     language = track.get('Language')
+                    language = language.split('-')[0] if language else language
                     if language in ['hr', 'en', 'bs', 'sr', 'sl']:
                         if language not in sub_langs:
                             sub_langs.append(language)
