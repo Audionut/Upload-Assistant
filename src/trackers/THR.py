@@ -215,6 +215,10 @@ class THR():
                 desc.write(f"IMDb: {str(meta.get('imdb_info', {}).get('imdb_url', ''))}\n")
             if meta['tvdb_id'] != 0:
                 desc.write(f"TVDB: https://www.thetvdb.com/?id={meta['tvdb_id']}&tab=series\n")
+            if meta['tvmaze_id'] != 0:
+                desc.write(f"TVMaze: https://www.tvmaze.com/shows/{meta['tvmaze_id']}\n")
+            if meta['mal_id'] != 0:
+                desc.write(f"MAL: https://myanimelist.net/anime/{meta['mal_id']}\n")
             desc.write("[/quote]")
             desc.write(base)
             # REHOST IMAGES
