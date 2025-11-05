@@ -1004,7 +1004,7 @@ class SHRI(UNIT3D):
         )
 
         # Build LINKS section
-        imdb_id = meta.get("imdb_id", "")
+        imdb_id = meta.get('imdb', '')
         tmdb_id = meta.get("tmdb", "")
         media_type = "tv" if category == "TV" else "movie"
 
@@ -1014,11 +1014,6 @@ class SHRI(UNIT3D):
                 "\n[size=13][b][color=#e8024b]--- LINKS ---[/color][/b][/size]\n"
             )
             if imdb_id:
-                # Format IMDb ID
-                if isinstance(imdb_id, int):
-                    imdb_id = f"tt{imdb_id:07d}"
-                elif not imdb_id.startswith("tt"):
-                    imdb_id = f"tt{imdb_id}"
                 links_section += f"[size=11][color=#FFFFFF]IMDb: https://www.imdb.com/title/{imdb_id}/[/color][/size]\n"
             if tmdb_id:
                 links_section += f"[size=11][color=#FFFFFF]TMDb: https://www.themoviedb.org/{media_type}/{tmdb_id}[/color][/size]\n"
