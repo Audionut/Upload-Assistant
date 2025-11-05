@@ -231,7 +231,7 @@ async def get_resolution(guess, folder_id, base_dir):
             scan = mi['media']['track'][1]['ScanType']
         except Exception:
             scan = "Progressive"
-        if scan == "Progressive":
+        if not scan or scan == "Progressive":
             scan = "p"
         elif scan == "Interlaced":
             scan = 'i'
