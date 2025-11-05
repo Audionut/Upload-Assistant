@@ -264,7 +264,7 @@ class THR():
                 with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt") as bd_file:
                     desc.write(f"[nfo]{bd_file.read()}[/nfo]")
                     bd_file.close()
-            else:
+            elif self.config['TRACKERS']['THR'].get('pronfo_api_key'):
                 # ProNFO
                 pronfo_url = f"https://www.pronfo.com/api/v1/access/upload/{self.config['TRACKERS']['THR'].get('pronfo_api_key', '')}"
                 data = {
