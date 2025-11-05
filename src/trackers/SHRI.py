@@ -1018,7 +1018,7 @@ class SHRI(UNIT3D):
                 "\n[size=13][b][color=#e8024b]--- LINKS ---[/color][/b][/size]\n"
             )
             if imdb_id:
-                links_section += f"[size=11][color=#FFFFFF]IMDb: https://www.imdb.com/title/{imdb_id}/[/color][/size]\n"
+                links_section += f"[size=11][color=#FFFFFF]IMDb: https://www.imdb.com/title/tt{imdb_id}/[/color][/size]\n"
             if tmdb_id:
                 links_section += f"[size=11][color=#FFFFFF]TMDb: https://www.themoviedb.org/{media_type}/{tmdb_id}[/color][/size]\n"
             links_section += "\n"
