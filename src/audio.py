@@ -3,6 +3,182 @@ import traceback
 from src.console import console
 
 
+def determine_channel_count(channels, channel_layout, additional, format):
+    if not channels or not str(channels).isnumeric():
+        return "Unknown"
+
+    channels = int(channels)
+    channel_layout = channel_layout.strip() if channel_layout else ""
+
+    # Handle specific Atmos/immersive audio cases first
+    if is_atmos_or_immersive_audio(additional, format, channel_layout):
+        return handle_atmos_channel_count(channels, channel_layout)
+
+    # Handle standard channel layouts with proper LFE detection
+    if channel_layout:
+        return parse_channel_layout(channels, channel_layout)
+
+    # Fallback for when no layout information is available
+    return fallback_channel_count(channels)
+
+
+def is_atmos_or_immersive_audio(additional, format, channel_layout):
+    """Check if this is Dolby Atmos, DTS:X, or other immersive audio format."""
+    atmos_indicators = [
+        'JOC', 'Atmos', '16-ch', 'Atmos Audio',
+        'TrueHD Atmos', 'E-AC-3 JOC', 'Dolby Atmos'
+    ]
+
+    dtsx_indicators = ['DTS:X', 'X', 'XLL X']
+
+    # Check in additional features
+    if additional:
+        if any(indicator in str(additional) for indicator in atmos_indicators + dtsx_indicators):
+            return True
+
+    # Check in format
+    if format and any(indicator in str(format) for indicator in atmos_indicators + dtsx_indicators):
+        return True
+
+    # Check for height channels in layout (indicating immersive audio)
+    if channel_layout:
+        height_indicators = [
+            'Tfc', 'Tfl', 'Tfr', 'Tbl', 'Tbr', 'Tbc',  # Top channels
+            'TFC', 'TFL', 'TFR', 'TBL', 'TBR', 'TBC',  # Top channels (uppercase)
+            'Vhc', 'Vhl', 'Vhr',  # Vertical height channels
+            'Ch', 'Lh', 'Rh', 'Chr', 'Lhr', 'Rhr',  # Height variants
+            'Top', 'Height'  # Generic height indicators
+        ]
+        if any(indicator in channel_layout for indicator in height_indicators):
+            return True
+
+    return False
+
+
+def handle_atmos_channel_count(channels, channel_layout):
+    """Handle Dolby Atmos and immersive audio channel counting."""
+    if not channel_layout:
+        # Common Atmos configurations based on total channel count
+        # Prioritize higher complexity configurations for ambiguous counts
+        if channels == 16:
+            return "7.1.8"   # 7.1 + 8 height (theoretical maximum for consumer)
+        elif channels == 14:
+            return "7.1.6"   # 7.1 + 6 height
+        elif channels == 12:
+            return "7.1.4"   # 7.1 + 4 height
+        elif channels == 10:
+            return "7.1.2"   # 7.1 + 2 height (more common than 5.1.4)
+        elif channels == 8:
+            return "7.1"     # Standard 7.1 bed layer (could also be 5.1.2)
+        elif channels == 6:
+            return "5.1"     # Standard 5.1 bed layer
+        else:
+            return f"{channels-1}.1"
+
+    # Parse the layout to count bed and height channels
+    bed_channels, lfe_count, height_channels = parse_atmos_layout(channel_layout)
+
+    if height_channels > 0:
+        if lfe_count > 0:
+            return f"{bed_channels}.{lfe_count}.{height_channels}"
+        else:
+            return f"{bed_channels}.0.{height_channels}"
+    else:
+        # Fallback to standard counting
+        return parse_channel_layout(channels, channel_layout)
+
+
+def parse_atmos_layout(channel_layout):
+    """Parse channel layout to separate bed channels, LFE, and height channels."""
+    if not channel_layout:
+        return 0, 0, 0
+
+    layout = channel_layout.upper()
+
+    # Split by spaces to get individual channel identifiers
+    channels = layout.split()
+    bed_count = 0
+    height_count = 0
+    lfe_count = 0
+
+    for channel in channels:
+        channel = channel.strip()
+        if not channel:
+            continue
+
+        # Check for LFE first
+        if 'LFE' in channel:
+            lfe_count += 1
+        # Check for height channels
+        elif any(height_indicator in channel for height_indicator in [
+            'TFC', 'TFL', 'TFR', 'TBL', 'TBR', 'TBC',  # Top channels
+            'VHC', 'VHL', 'VHR',  # Vertical height
+            'CH', 'LH', 'RH', 'CHR', 'LHR', 'RHR',  # Height variants
+            'TSL', 'TSR', 'TLS', 'TRS'  # Top surround
+        ]):
+            height_count += 1
+        # Everything else is a bed channel
+        elif channel in ['L', 'R', 'C', 'FC', 'LS', 'RS', 'SL', 'SR',
+                         'BL', 'BR', 'BC', 'SB', 'FLC', 'FRC', 'LC', 'RC',
+                         'LW', 'RW', 'FLW', 'FRW', 'LSS', 'RSS', 'SIL', 'SIR',
+                         'LB', 'RB', 'CB', 'CS']:
+            bed_count += 1
+
+    return bed_count, lfe_count, height_count
+
+
+def parse_channel_layout(channels, channel_layout):
+    """Parse standard channel layout to determine proper channel count notation."""
+    layout = channel_layout.upper()
+
+    # Count LFE channels
+    lfe_count = layout.count('LFE')
+    if lfe_count == 0 and 'LFE' in layout:
+        lfe_count = 1
+
+    # Handle multiple LFE channels (rare but possible)
+    if lfe_count > 1:
+        main_channels = channels - lfe_count
+        return f"{main_channels}.{lfe_count}"
+    elif lfe_count == 1:
+        return f"{channels - 1}.1"
+    else:
+        # No LFE detected
+        if channels <= 2:
+            return f"{channels}.0"
+        else:
+            # Check for specific mono layouts
+            if 'MONO' in layout or channels == 1:
+                return "1.0"
+            # Check for specific stereo layouts
+            elif channels == 2:
+                return "2.0"
+            # For multichannel without LFE, assume it's a .0 configuration
+            else:
+                return f"{channels}.0"
+
+
+def fallback_channel_count(channels):
+    """Fallback channel counting when no layout information is available."""
+    if channels <= 2:
+        return f"{channels}.0"
+    elif channels == 3:
+        return "2.1"  # Assume L/R/LFE
+    elif channels == 4:
+        return "3.1"  # Assume L/R/C/LFE
+    elif channels == 5:
+        return "4.1"  # Assume L/R/C/Ls/Rs (no LFE) or L/R/Ls/Rs/LFE
+    elif channels == 6:
+        return "5.1"  # Standard 5.1
+    elif channels == 7:
+        return "6.1"  # 6.1 or 7.0
+    elif channels == 8:
+        return "7.1"  # Standard 7.1
+    else:
+        # For higher channel counts, assume last channel is LFE
+        return f"{channels - 1}.1"
+
+
 async def get_audio_v2(mi, meta, bdinfo):
     extra = dual = ""
     has_commentary = False
@@ -56,15 +232,8 @@ async def get_audio_v2(mi, meta, bdinfo):
         except Exception:
             channel_layout = ''
 
-        if channel_layout and "LFE" in channel_layout:
-            chan = f"{int(channels) - 1}.1"
-        elif channel_layout == "":
-            if int(channels) <= 2:
-                chan = f"{int(channels)}.0"
-            else:
-                chan = f"{int(channels) - 1}.1"
-        else:
-            chan = f"{channels}.0"
+        # Enhanced channel count determination based on MediaArea AudioChannelLayout
+        chan = determine_channel_count(channels, channel_layout, additional, format)
 
         if meta.get('dual_audio', False):
             dual = "Dual-Audio"
@@ -218,7 +387,6 @@ async def get_audio_v2(mi, meta, bdinfo):
     if format.startswith("DTS"):
         if additional and additional.endswith("X"):
             codec = "DTS:X"
-            chan = f"{int(channels) - 1}.1"
 
     if format == "MPEG Audio":
         if format_profile == "Layer 2":
