@@ -659,7 +659,7 @@ class SHRI(UNIT3D):
     async def _get_best_italian_audio_format(self, meta):
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
-        ITALIAN_LANGS = {"it", "it-it"}
+        ITALIAN_LANGS = {"it", "it-it", "italian", "italiano"}
 
         def extract_quality(track, is_bdinfo):
             if is_bdinfo:
