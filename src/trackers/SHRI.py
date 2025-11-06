@@ -44,6 +44,13 @@ class SHRI(UNIT3D):
         self.torrent_url = f"{self.base_url}/torrents/"
         self.banned_groups = []
 
+    def _get_language_code(self, track):
+        """Extract language code from MediaInfo track, handling dict/string/empty cases."""
+        lang = track.get("Language", "")
+        if isinstance(lang, dict):
+            return lang.get("String", "").lower()
+        return str(lang).lower() if lang else ""
+
     async def get_additional_data(self, meta):
         """Get additional tracker-specific upload data"""
         return {"mod_queue_opt_in": await self.get_flag(meta, "modq")}
@@ -582,8 +589,7 @@ class SHRI(UNIT3D):
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
             track.get("@type") == "Audio"
-            and isinstance(track.get("Language"), str)
-            and track.get("Language").lower() in {"it", "it-it"}
+            and self._get_language_code(track) in {"it", "it-it"}
             and "commentary" not in str(track.get("Title", "")).lower()
             for track in tracks[2:]
         )
@@ -596,8 +602,7 @@ class SHRI(UNIT3D):
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
             track.get("@type") == "Text"
-            and isinstance(track.get("Language"), str)
-            and track.get("Language").lower() in {"it", "it-it"}
+            and self._get_language_code(track) in {"it", "it-it"}
             for track in tracks
         )
 
@@ -662,8 +667,7 @@ class SHRI(UNIT3D):
             italian = [
                 t for t in tracks[1:]
                 if t.get("@type") == "Audio"
-                and isinstance(t.get("Language"), str)
-                and t.get("Language", "").lower() in ITALIAN_LANGS
+                and self._get_language_code(t) in ITALIAN_LANGS
                 and "commentary" not in str(t.get("Title", "")).lower()
             ]
             if not italian:
@@ -852,13 +856,6 @@ class SHRI(UNIT3D):
             except (ValueError, TypeError):
                 return default
 
-        def get_language_code(track):
-            """Extract language code from MediaInfo track, handling dict/string/empty cases."""
-            lang = track.get("Language", "")
-            if isinstance(lang, dict):
-                return lang.get("String", "").lower()
-            return str(lang).lower() if lang else ""
-
         def get_audio_format_details(audio_track):
             """Map raw audio formats to commercial names"""
             fmt_map = {
@@ -895,7 +892,7 @@ class SHRI(UNIT3D):
 
             # Prefer Italian audio, fallback to first track
             ita_audio = next(
-                (t for t in audio_tracks if get_language_code(t) == "it"), None
+                (t for t in audio_tracks if self._get_language_code(t) == "it"), None
             )
             if not ita_audio and audio_tracks:
                 ita_audio = audio_tracks[0]
@@ -961,7 +958,7 @@ class SHRI(UNIT3D):
             )
             lang = (
                 "Italiano"
-                if ita_audio and get_language_code(ita_audio) == "it"
+                if ita_audio and self._get_language_code(ita_audio) == "it"
                 else "Inglese"
             )
 
@@ -969,9 +966,9 @@ class SHRI(UNIT3D):
             if text_tracks:
                 sub_langs = set()
                 for t in text_tracks:
-                    lang_code = t.get("Language", "")
+                    lang_code = self._get_language_code(t)
                     if lang_code:
-                        lang_name = self._get_language_name(lang_code.upper())
+                        lang_name = self._get_language_name(lang_code)
                         if lang_name:
                             sub_langs.add(lang_name.title())
                 subs = ", ".join(sorted(sub_langs)) if sub_langs else "Assenti"
