@@ -9,6 +9,7 @@ import pycountry
 import random
 import re
 import requests
+from babel import Locale
 from src.audio import get_audio_v2
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
@@ -44,14 +45,19 @@ class SHRI(UNIT3D):
         self.torrent_url = f"{self.base_url}/torrents/"
         self.banned_groups = []
 
-    def _get_language_code(self, track):
-        """Extract and normalize language code from MediaInfo track to ISO alpha-2 format."""
-        lang = track.get("Language", "")
-        if isinstance(lang, dict):
-            lang = lang.get("String", "")
+    def _get_language_code(self, track_or_string):
+        """Extract and normalize language to ISO alpha-2 code"""
+        if isinstance(track_or_string, dict):
+            lang = track_or_string.get("Language", "")
+            if isinstance(lang, dict):
+                lang = lang.get("String", "")
+        else:
+            lang = track_or_string
         if not lang:
             return ""
         lang_str = str(lang).lower()
+        if len(lang_str) == 2:
+            return lang_str
         try:
             lang_obj = (
                 pycountry.languages.get(name=lang_str.title())
@@ -634,6 +640,22 @@ class SHRI(UNIT3D):
 
         return iso_code
 
+    def _get_italian_language_name(self, iso_code):
+        """Convert ISO language code to Italian language name using Babel"""
+        if not iso_code:
+            return ""
+
+        try:
+            locale = Locale.parse(iso_code.lower())
+            italian_name = locale.get_display_name("it")
+            return (
+                italian_name.title()
+                if italian_name
+                else self._get_language_name(iso_code).title()
+            )
+        except (ValueError, AttributeError, KeyError):
+            return self._get_language_name(iso_code).title()
+
     async def _get_best_italian_audio_format(self, meta):
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
@@ -725,7 +747,7 @@ class SHRI(UNIT3D):
 
         if meta.get("audio_languages"):
             langs = [
-                self._get_language_name(lang.upper())
+                self._get_italian_language_name(self._get_language_code(lang))
                 for lang in meta["audio_languages"]
             ]
             langs = [lang for lang in langs if lang]
@@ -967,11 +989,15 @@ class SHRI(UNIT3D):
                 if ita_audio
                 else "0 kb/s"
             )
-            lang = (
-                "Italiano"
-                if ita_audio and self._get_language_code(ita_audio) == "it"
-                else "Inglese"
-            )
+            if ita_audio:
+                audio_lang_code = self._get_language_code(ita_audio)
+                lang = (
+                    self._get_italian_language_name(audio_lang_code)
+                    if audio_lang_code
+                    else "Inglese"
+                )
+            else:
+                lang = "Inglese"
 
             # Subtitle languages
             if text_tracks:
@@ -979,7 +1005,7 @@ class SHRI(UNIT3D):
                 for t in text_tracks:
                     lang_code = self._get_language_code(t)
                     if lang_code:
-                        lang_name = self._get_language_name(lang_code)
+                        lang_name = self._get_italian_language_name(lang_code)
                         if lang_name:
                             sub_langs.add(lang_name.title())
                 subs = ", ".join(sorted(sub_langs)) if sub_langs else "Assenti"

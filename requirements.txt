@@ -1,6 +1,7 @@
 aiofiles
 aiohttp
 anitopy
+babel
 bbcode
 beautifulsoup4
 bencode.py
