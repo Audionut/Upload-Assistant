@@ -795,14 +795,22 @@ class SHRI(UNIT3D):
                     if img_resp.status_code == 200:
                         img_data = img_resp.json()
                         logos = img_data.get("logos", [])
-                        # Prefer Italian, fallback to English
-                        for lang in ["it", "en"]:
-                            for logo in logos:
-                                if logo.get("iso_639_1") == lang:
-                                    logo_url = f"https://image.tmdb.org/t/p/w300{logo['file_path']}"
-                                    break
-                            if logo_url:
+                        # Priority: Italian > English > any other > first available
+                        logo_url = ""
+                        fallback_logo = None
+                        for logo in logos:
+                            lang = logo.get("iso_639_1")
+                            path = logo.get("file_path")
+                            if lang == "it":
+                                logo_url = f"https://image.tmdb.org/t/p/w300{path}"
                                 break
+                            elif lang == "en" and not logo_url:
+                                logo_url = f"https://image.tmdb.org/t/p/w300{path}"
+                            elif not fallback_logo:
+                                fallback_logo = path
+                        # Use fallback if no Italian/English found
+                        if not logo_url and fallback_logo:
+                            logo_url = f"https://image.tmdb.org/t/p/w300{fallback_logo}"
         except Exception as e:
             print(f"[DEBUG] TMDb fetch error: {e}")
 
@@ -844,6 +852,13 @@ class SHRI(UNIT3D):
             except (ValueError, TypeError):
                 return default
 
+        def get_language_code(track):
+            """Extract language code from MediaInfo track, handling dict/string/empty cases."""
+            lang = track.get("Language", "")
+            if isinstance(lang, dict):
+                return lang.get("String", "").lower()
+            return str(lang).lower() if lang else ""
+
         def get_audio_format_details(audio_track):
             """Map raw audio formats to commercial names"""
             fmt_map = {
@@ -880,7 +895,7 @@ class SHRI(UNIT3D):
 
             # Prefer Italian audio, fallback to first track
             ita_audio = next(
-                (t for t in audio_tracks if t.get("Language", "").lower() == "it"), None
+                (t for t in audio_tracks if get_language_code(t) == "it"), None
             )
             if not ita_audio and audio_tracks:
                 ita_audio = audio_tracks[0]
@@ -946,7 +961,7 @@ class SHRI(UNIT3D):
             )
             lang = (
                 "Italiano"
-                if ita_audio and ita_audio.get("Language", "").lower() == "it"
+                if ita_audio and get_language_code(ita_audio) == "it"
                 else "Inglese"
             )
 
