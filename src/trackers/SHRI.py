@@ -1044,7 +1044,15 @@ class SHRI(UNIT3D):
         self, title, info_line, logo_url, summary, screens, synthetic_mi, category, meta
     ):
         """Build ShareIsland BBCode template"""
-        category_header = "--- SERIE TV ---" if category == "TV" else "--- FILM ---"
+        if category == "TV":
+            is_pack = meta.get("tv_pack", 0) == 1
+            category_header = (
+                "--- SERIE TV (STAGIONE) ---"
+                if is_pack
+                else "--- SERIE TV (EPISODIO) ---"
+            )
+        else:
+            category_header = "--- FILM ---"
         release_group = meta.get("tag", "").lstrip("-").strip()
 
         if release_group.lower() == "island":
