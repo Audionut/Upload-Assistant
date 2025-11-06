@@ -710,7 +710,7 @@ class SHRI(UNIT3D):
 
         return clean(audio_str)
 
-    async def get_description(self, meta):
+    async def get_description(self, meta, is_test=False):
         """Generate Italian BBCode description for ShareIsland"""
         title = meta.get("title", "Unknown")
         italian_title = self._get_italian_title(meta.get("imdb_info", {}))
@@ -728,7 +728,9 @@ class SHRI(UNIT3D):
         if isinstance(source, list):
             source = source[0] if source else ""
         if source:
-            info_parts.append(source.replace("Blu-ray", "BluRay"))
+            info_parts.append(
+                source.replace("Blu-ray", "BluRay").replace("Web", "WEB-DL")
+            )
 
         video_codec = meta.get("video_codec", "")
         if "HEVC" in video_codec or "H.265" in video_codec:
@@ -777,12 +779,12 @@ class SHRI(UNIT3D):
                 "[code]\n", f"[code]\n{custom_description_header}\n\n"
             )
 
-        # Save description file
-        desc_file = (
-            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        )
-        async with aiofiles.open(desc_file, "w", encoding="utf-8") as f:
-            await f.write(bbcode)
+        if not is_test:
+            desc_file = (
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+            )
+            async with aiofiles.open(desc_file, "w", encoding="utf-8") as f:
+                await f.write(bbcode)
 
         return {"description": bbcode}
 
