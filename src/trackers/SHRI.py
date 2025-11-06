@@ -45,11 +45,22 @@ class SHRI(UNIT3D):
         self.banned_groups = []
 
     def _get_language_code(self, track):
-        """Extract language code from MediaInfo track, handling dict/string/empty cases."""
+        """Extract and normalize language code from MediaInfo track to ISO alpha-2 format."""
         lang = track.get("Language", "")
         if isinstance(lang, dict):
-            return lang.get("String", "").lower()
-        return str(lang).lower() if lang else ""
+            lang = lang.get("String", "")
+        if not lang:
+            return ""
+        lang_str = str(lang).lower()
+        try:
+            lang_obj = (
+                pycountry.languages.get(name=lang_str.title())
+                or pycountry.languages.get(alpha_2=lang_str)
+                or pycountry.languages.get(alpha_3=lang_str)
+            )
+            return lang_obj.alpha_2.lower() if lang_obj else lang_str
+        except (AttributeError, KeyError, LookupError):
+            return lang_str
 
     async def get_additional_data(self, meta):
         """Get additional tracker-specific upload data"""
