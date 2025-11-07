@@ -476,6 +476,8 @@ class TVC():
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w') as descfile:
             bbcode = BBCODE()
 
+            desc = ""
+
             # Discs
             if meta.get('discs', []):
                 discs = meta['discs']
@@ -486,9 +488,10 @@ class TVC():
                         descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
                     if each['type'] == "DVD":
                         descfile.write(f"{each['name']}:\n")
-                        descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
-
-            desc = ""
+                        descfile.write(
+                            f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] "
+                            f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
+                        )
 
             # Release info for non-TV categories
             rd_info = ""
@@ -497,8 +500,10 @@ class TVC():
                     for rd in cc['release_dates']:
                         if rd['type'] == 6:
                             channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
-                            rd_info += f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n{str(rd['release_date'])[:10]} on {channel}\n"
-
+                            rd_info += (
+                                f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n"
+                                f"{str(rd['release_date'])[:10]} on {channel}\n"
+                            )
             if rd_info:
                 desc += f"[center]{rd_info}[/center]\n\n"
 
@@ -508,12 +513,11 @@ class TVC():
                 airdate = self.format_date_ddmmyyyy(meta['season_air_first_date'])
 
                 desc += "[center]\n"
+                desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
                 desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
 
-                # External info icons
-                desc += self.get_links(meta)
+                desc += self.get_links(meta, "", "")
 
-                # Screenshots (bold headline, centered)
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                     desc += "\n\n[b]Screenshots[/b]\n\n"
                     for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
@@ -538,12 +542,10 @@ class TVC():
                 if 'episode_airdate' in meta:
                     channel = meta.get('networks', 'N/A')
                     formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-                    desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n\n"
+                    desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n"
 
-                # External info icons
-                desc += self.get_links(meta)
+                desc += self.get_links(meta, "", "")
 
-                # Screenshots (bold headline, centered)
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                     desc += "\n\n[b]Screenshots[/b]\n\n"
                     for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
@@ -552,15 +554,31 @@ class TVC():
                         desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
                 desc += "[/center]\n\n"
 
-            # Fallback overview
+            # Movie / fallback overview
             else:
                 overview = str(meta.get('overview', '')).strip()
-                desc += f"[center]{overview}[/center]\n\n"
+                desc += "[center]\n"
+                if meta['category'] == "Movie":
+                    desc += f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n\n"
+                    desc += overview + "\n"
+                    if 'release_date' in meta:
+                        formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
+                        desc += f"\n[b]Released on:[/b] {formatted_date}\n"
+                    desc += self.get_links(meta, "", "")
+                    if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
+                        desc += "\n\n[b]Screenshots[/b]\n\n"
+                        for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
+                            web_url = each['web_url']
+                            img_url = each['img_url']
+                            desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
+                    desc += "[/center]\n\n"
+                else:
+                    desc += overview + "\n[/center]\n\n"
 
-            # Notes/Extra Info (autohide if empty or default)
+            # Notes/Extra Info
             notes_content = base.strip()
             if notes_content and notes_content.lower() != "ptp":
-                desc += f"[center][color=green][size=25]Notes/Extra Info[/size][/color]\n\n{notes_content}\n\n[/center]\n\n"
+                desc += f"[center][b]Notes / Extra Info[/b]\n\n{notes_content}\n\n[/center]\n\n"
 
             # BBCode conversions
             desc = bbcode.convert_pre_to_code(desc)
@@ -582,7 +600,7 @@ class TVC():
         """
         parts = []
 
-        parts.append("[b]External Info Sources:[/b]\n\n")
+        parts.append("\n[b]External Info Sources:[/b]\n\n")
 
         if meta.get('imdb_id', 0):
             parts.append(f"[URL={meta.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]")
