@@ -2231,7 +2231,7 @@ class Clients():
 
                             # Filter out DHT, PEX, LSD "trackers"
                             for tracker in torrent_trackers:
-                                if tracker.get('url', []).startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
+                                if tracker.get('url', '').startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
                                     continue
                                 display_trackers.append(tracker)
 
