@@ -20,14 +20,14 @@ class BLU(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AOC', 'AROMA',
-            'aXXo', 'Brrip', 'CHD', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE', 'eSc',
-            'FaNGDiNG0', 'FGT', 'Flights', 'FRDS', 'FUM', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime',
-            'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'Leffe', 'LEGi0N', 'LOAD', 'MeGusta',
-            'mHD', 'mSD', 'NhaNc3', 'nHD', 'nikt0', 'NOIVTC', 'nSD', 'OFT', 'PiRaTeS', 'playBD',
-            'PlaySD', 'playXD', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN', 'REsuRRecTioN', 'RetroPeeps',
-            'RMTeam', 'SANTi', 'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'Telly', 'TM', 'TRiToN',
-            'UPiNSMOKE', 'URANiME', 'WAF', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT',
+            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AOC', 'AROMA', 'aXXo', 'B3LLUM',
+            'BHDStudio', 'Brrip',  'CHD', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'DTLegacy', 'ELiTE',
+            'eSc', 'EZTV', 'EZTV.RE', 'F13', 'FaNGDiNG0', 'FGT', 'Flights', 'FRDS', 'FUM', 'HAiKU', 'hallowed',  
+            'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'LAMA', 'Leffe', 'LEGi0N',
+            'LOAD', 'MeGusta', 'mHD', 'mSD', 'NhaNc3', 'nHD', 'nikt0', 'NOIVTC', 'nSD', 'PiRaTeS', 'playBD',
+            'PlaySD', 'playXD', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RetroPeeps', 'RDN', 'REsuRRecTioN', 'RMTeam', 'SANTi', 'SasukeducK',
+            'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'Telly', 'TheFarm', 'TM', 'TRiToN', 'UPiNSMOKE', 'URANiME', 'WAF',
+            'WKS', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT',
         ]
         pass
 
