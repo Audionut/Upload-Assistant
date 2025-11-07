@@ -516,7 +516,7 @@ class TVC():
                 desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
                 desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
 
-                desc += self.get_links(meta, "", "")
+                desc += self.get_links(meta)
 
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                     desc += "\n\n[b]Screenshots[/b]\n\n"
@@ -544,7 +544,7 @@ class TVC():
                     formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
                     desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n"
 
-                desc += self.get_links(meta, "", "")
+                desc += self.get_links(meta)
 
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                     desc += "\n\n[b]Screenshots[/b]\n\n"
@@ -564,7 +564,7 @@ class TVC():
                     if 'release_date' in meta:
                         formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
                         desc += f"\n[b]Released on:[/b] {formatted_date}\n"
-                    desc += self.get_links(meta, "", "")
+                    desc += self.get_links(meta)
                     if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
                         desc += "\n\n[b]Screenshots[/b]\n\n"
                         for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
@@ -594,7 +594,7 @@ class TVC():
             descfile.close()
         return
 
-    def get_links(self, meta, subheading="", heading_end=""):
+    def get_links(self, meta):
         """
         Returns a string of icon links without any headings or center tags.
         """
@@ -625,14 +625,14 @@ class TVC():
     def get_subs_info(self, meta, mi):
         subs = ""
         subs_num = 0
-        for s in mi.get("media").get("track"):
+        for s in mi.get("media", {}).get("track", []):
             if s["@type"] == "Text":
                 subs_num = subs_num + 1
         if subs_num >= 1:
             meta['has_subs'] = 1
         else:
             meta['has_subs'] = 0
-        for s in mi.get("media").get("track"):
+        for s in mi.get("media", {}).get("track", []):
             if s["@type"] == "Text":
                 if "Language" in s:
                     if not subs_num <= 0:
