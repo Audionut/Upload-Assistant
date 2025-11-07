@@ -2123,6 +2123,7 @@ class Clients():
                     async with qbt_session.get(url) as response:
                         if response.status == 200:
                             response_data = await response.json()
+                            has_working_tracker = True
 
                             # The qui proxy returns {'torrents': [...]} while standard API returns [...]
                             if isinstance(response_data, dict) and 'torrents' in response_data:
@@ -2204,6 +2205,7 @@ class Clients():
                                                            params={'hash': torrent.hash}) as response:
                                     if response.status == 200:
                                         torrent_properties = await response.json()
+                                        torrent.comment = torrent_properties.get('comment', '')
                                     else:
                                         if meta['debug']:
                                             console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {response.status}")
@@ -2222,9 +2224,6 @@ class Clients():
                                 console.print(f"[yellow]Error getting trackers for torrent {torrent.name}: {e}")
                             continue
 
-                        if torrent_properties:
-                            torrent.comment = torrent_properties.get('comment', '')
-                            has_working_tracker = True
                         if proxy_url:
                             torrent_trackers = getattr(torrent, 'trackers', [])
                         try:
@@ -2253,6 +2252,7 @@ class Clients():
                                             console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
 
                                     elif meta['debug']:
+                                        has_working_tracker = False
                                         msg = tracker.get('msg', '')
                                         console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
 
