@@ -476,21 +476,21 @@ class TVC():
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w') as descfile:
             bbcode = BBCODE()
 
-            # discs (unchanged logic, tightened spacing)
-            if meta.get('discs', []) != []:
+            # Discs
+            if meta.get('discs', []):
                 discs = meta['discs']
                 if discs[0]['type'] == "DVD":
                     descfile.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n\n")
-                if len(discs) >= 2:
-                    for each in discs[1:]:
-                        if each['type'] == "BDMV":
-                            descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
-                        if each['type'] == "DVD":
-                            descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
+                for each in discs[1:]:
+                    if each['type'] == "BDMV":
+                        descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
+                    if each['type'] == "DVD":
+                        descfile.write(f"{each['name']}:\n")
+                        descfile.write(f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] [spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n")
+
             desc = ""
 
-            # Release info: collect and format
+            # Release info for non-TV categories
             rd_info = ""
             if meta['category'] != "TV" and 'release_dates' in meta:
                 for cc in meta['release_dates']['results']:
@@ -499,100 +499,107 @@ class TVC():
                             channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
                             rd_info += f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n{str(rd['release_date'])[:10]} on {channel}\n"
 
-            if rd_info != "":
-                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n{rd_info}[/center]\n\n"
+            if rd_info:
+                desc += f"[center]{rd_info}[/center]\n\n"
+
+            # TV pack layout
             elif meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
                 channel = meta.get('networks', 'N/A')
-                desc += f"[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]This season premiered {meta['season_air_first_date']} on {channel}[/size][/color][/center]\n\n"
-            elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_airdate' in meta:
-                channel = meta.get('networks', 'N/A')
-                formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-                desc += f"[center][color=orange][size=15]Episode aired on {channel} on {formatted_date}[/size][/color][/center]\n\n"
+                airdate = self.format_date_ddmmyyyy(meta['season_air_first_date'])
 
-            else:
-                desc += "[center][color=green][size=25]Release Info[/size][/color]\n\n[color=orange][size=15]TMDB has No TV release info for this[/size][/color][/center]\n\n"
+                desc += "[center]\n"
+                desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
 
-            # PLOT - improved formatting: bold episode label, sentence-per-line
-            if meta['category'] == 'TV' and meta.get('tv_pack') != 1 and 'episode_overview' in meta:
+                # External info icons
+                desc += self.get_links(meta, "", "")
+
+                # Screenshots (bold headline, centered)
+                if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
+                    desc += "\n\n[b]Screenshots[/b]\n\n"
+                    for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
+                        web_url = each['web_url']
+                        img_url = each['img_url']
+                        desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
+                desc += "[/center]\n\n"
+
+            # Episode layout
+            elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_overview' in meta:
                 episode_name = str(meta.get('episode_name', '')).strip()
                 overview = str(meta.get('episode_overview', '')).strip()
-
-                # split overview into sentences and write each sentence on its own line
-                # simple split using .!? but tolerant to missing punctuation
-
-                # Split on sentence boundaries; if no punctuation, treat entire overview as one sentence
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
                 if not sentences and overview:
                     sentences = [overview]
 
-                desc += "[center][color=green][size=25]PLOT[/size][/color]\n"
+                desc += "[center]\n"
                 if episode_name:
-                    desc += f"[b]Episode Name:[/b] {episode_name}\n\n"
-                if sentences:
-                    for s in sentences:
-                        desc += s.rstrip() + "\n"
+                    desc += f"[b]Episode Title:[/b] {episode_name}\n\n"
+                for s in sentences:
+                    desc += s.rstrip() + "\n"
+                if 'episode_airdate' in meta:
+                    channel = meta.get('networks', 'N/A')
+                    formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
+                    desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n\n"
+
+                # External info icons
+                desc += self.get_links(meta, "", "")
+
+                # Screenshots (bold headline, centered)
+                if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
+                    desc += "\n\n[b]Screenshots[/b]\n\n"
+                    for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
+                        web_url = each['web_url']
+                        img_url = each['img_url']
+                        desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
                 desc += "[/center]\n\n"
+
+            # Fallback overview
             else:
                 overview = str(meta.get('overview', '')).strip()
-                desc += f"[center][color=green][size=25]PLOT[/size][/color]\n{overview}\n[/center]\n\n"
+                desc += f"[center]{overview}[/center]\n\n"
 
-            # Notes/Extra Info (only if base content exists)
-            if base.strip() and meta.get('description', '') != "PTP":
-                desc += f"[center][color=green][size=25]Notes/Extra Info[/size][/color]\n\n{base}\n\n[/center]\n\n"
+            # Notes/Extra Info (autohide if empty or default)
+            notes_content = base.strip()
+            if notes_content and notes_content.lower() != "ptp":
+                desc += f"[center][color=green][size=25]Notes/Extra Info[/size][/color]\n\n{notes_content}\n\n[/center]\n\n"
 
-            # Links - improved block (get_links returns a centred block)
-            desc += self.get_links(meta, "[color=green][size=25]", "[/size][/color]")
-
-            # bbcode conversions & comparison collapse (preserve behavior)
+            # BBCode conversions
             desc = bbcode.convert_pre_to_code(desc)
             desc = bbcode.convert_hide_to_spoiler(desc)
-            if comparison is False:
+            if not comparison:
                 desc = bbcode.convert_comparison_to_collapse(desc, 1000)
 
-            # write description
+            # Write description
             descfile.write(desc)
 
-            # Keep screenshots handling exactly as original code did
-            images = image_list
-            if len(images) > 0 and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
-                descfile.write("[color=green][size=25]Screenshots[/size][/color]\n\n[center]")
-                for each in range(len(images[:self.config['TRACKERS'][self.tracker]['image_count']])):
-                    web_url = images[each]['web_url']
-                    img_url = images[each]['img_url']
-                    descfile.write(f"[url={web_url}][img=350]{img_url}[/img][/url]")
-                descfile.write("[/center]")
-
-            if signature is not None:
+            if signature:
                 descfile.write(signature)
             descfile.close()
         return
 
-    def get_links(self, meta, subheading, heading_end):
+    def get_links(self, meta, subheading="", heading_end=""):
         """
-        Builds a centered Links block with a short label and icon links.
-        Returns the fully formatted block (including heading end tag).
+        Returns a string of icon links without any headings or center tags.
         """
         parts = []
-        parts.append(f"\n\n[center]{subheading}Links{heading_end}\n")
+
         parts.append("[b]External Info Sources:[/b]\n\n")
 
-        if meta.get('imdb_id', 0) != 0:
-            parts.append(f"[URL={meta.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL] ")
+        if meta.get('imdb_id', 0):
+            parts.append(f"[URL={meta.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]")
 
-        if meta.get('tmdb_id', 0) != 0:
-            parts.append(f"[URL=https://www.themoviedb.org/{meta.get('category', '').lower()}/{meta.get('tmdb_id')!s}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL] ")
+        if meta.get('tmdb_id', 0):
+            parts.append(f"[URL=https://www.themoviedb.org/{meta.get('category', '').lower()}/{meta['tmdb_id']}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]")
 
-        if meta.get('tvdb_id', 0) != 0:
-            parts.append(f"[URL=https://www.thetvdb.com/?id={meta.get('tvdb_id')!s}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL] ")
+        if meta.get('tvdb_id', 0):
+            parts.append(f"[URL=https://www.thetvdb.com/?id={meta['tvdb_id']}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]")
 
-        if meta.get('tvmaze_id', 0) != 0:
-            parts.append(f"[URL=https://www.tvmaze.com/shows/{meta.get('tvmaze_id')!s}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL] ")
+        if meta.get('tvmaze_id', 0):
+            parts.append(f"[URL=https://www.tvmaze.com/shows/{meta['tvmaze_id']}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]")
 
-        if meta.get('mal_id', 0) != 0:
-            parts.append(f"[URL=https://myanimelist.net/anime/{meta.get('mal_id')!s}][img]{self.config['IMAGES']['mal_75']}[/img][/URL] ")
+        if meta.get('mal_id', 0):
+            parts.append(f"[URL=https://myanimelist.net/anime/{meta['mal_id']}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]")
 
-        parts.append("\n\n[/center]\n\n")
-        return "".join(parts)
+        return " ".join(parts)
 
     # get subs function
     # used in naming conventions
