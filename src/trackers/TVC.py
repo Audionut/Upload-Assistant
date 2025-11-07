@@ -511,7 +511,7 @@ class TVC():
                 desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
 
                 # External info icons
-                desc += self.get_links(meta, "", "")
+                desc += self.get_links(meta)
 
                 # Screenshots (bold headline, centered)
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
@@ -541,7 +541,7 @@ class TVC():
                     desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n\n"
 
                 # External info icons
-                desc += self.get_links(meta, "", "")
+                desc += self.get_links(meta)
 
                 # Screenshots (bold headline, centered)
                 if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
