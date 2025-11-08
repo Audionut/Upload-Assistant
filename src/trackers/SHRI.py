@@ -424,7 +424,7 @@ class SHRI(UNIT3D):
             encoded_lib = str(general.get("Encoded_Library", "")).lower()
 
             if "makemkv" in encoded_app or "makemkv" in encoded_lib:
-                video = mi[1] if len(mi) > 1 else {}
+                video = next((t for t in mi if t.get("@type") == "Video"), {})
                 if not video.get("Encoded_Library_Settings"):
                     return True
 
