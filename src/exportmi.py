@@ -3,7 +3,6 @@ import json
 import os
 import platform
 import subprocess
-import shlex
 from pathlib import Path
 from pymediainfo import MediaInfo
 from src.console import console
@@ -31,15 +30,6 @@ def validate_file_path(file_path):
 
     # Convert back to string with proper escaping
     return str(path)
-
-
-def sanitize_command_arg(arg):
-    if not isinstance(arg, str):
-        arg = str(arg)
-
-    # Use shlex.quote for proper shell escaping (even though we use lists)
-    # This provides an extra layer of protection
-    return shlex.quote(arg)
 
 
 def setup_mediainfo_library(base_dir, debug=False):
