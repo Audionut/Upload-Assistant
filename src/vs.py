@@ -39,7 +39,7 @@ def optimize_images(image, config):
     return
 
 
-def vs_screengn(source, encode=None, filter_b_frames=False, num=5, dir=".", config=None):
+def vs_screengn(source, encode=None, num=5, dir=".", config=None):
     if config is None:
         config = {'optimize_images': True}  # Default configuration
 

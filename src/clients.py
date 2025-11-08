@@ -405,7 +405,7 @@ class Clients():
 
         return best_match
 
-    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client, print_err=False):
+    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client):
         valid = False
         wrong_file = False
 

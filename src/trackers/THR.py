@@ -333,7 +333,7 @@ class THR():
                     response = await client.get(page_url)
 
                     page_dupes, has_next_page, next_page_number = await self._process_search_response(
-                        response, meta, all_titles_seen, current_page)
+                        response, meta, current_page)
 
                     for dupe in page_dupes:
                         if dupe not in dupes:
@@ -360,7 +360,7 @@ class THR():
 
         return dupes
 
-    async def _process_search_response(self, response, meta, existing_dupes, current_page):
+    async def _process_search_response(self, response, meta, current_page):
         page_dupes = []
         has_next_page = False
         next_page_number = current_page

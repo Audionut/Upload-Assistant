@@ -62,7 +62,7 @@ async def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, image_list, ffdebug, num_screens=None, force_screenshots=False):
+async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, image_list, num_screens=None, force_screenshots=False):
     img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:
@@ -157,7 +157,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     capture_results = []
     if use_vs:
         from src.vs import vs_screengn
-        vs_screengn(source=file, encode=None, filter_b_frames=False, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
+        vs_screengn(source=file, encode=None, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
     else:
         if meta.get('ffdebug', False):
             loglevel = 'verbose'
