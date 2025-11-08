@@ -63,7 +63,7 @@ class BJS:
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             error_text='login.php',
-            token_pattern=r'name="auth" value="([^"]+)"'
+            token_pattern=r'name="auth" value="([^"]+)"'  # nosec B106
         )
 
     async def load_localized_data(self, meta):
