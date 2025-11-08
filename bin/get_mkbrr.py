@@ -104,6 +104,14 @@ async def ensure_mkbrr_binary(base_dir, debug, version=None):
                 def safe_extract_zip(zip_file, path="."):
                     """Safely extract zip members, checking for directory traversal attacks"""
                     for member in zip_file.namelist():
+                        # Check for symlinks in ZIP files
+                        info = zip_file.getinfo(member)
+                        perm = (info.external_attr >> 16)
+                        if stat.S_ISLNK(perm):
+                            if debug:
+                                console.print(f"[yellow]Warning: Skipping symlink: {member}[/yellow]")
+                            continue
+
                         # Check for absolute paths
                         if os.path.isabs(member):
                             if debug:
@@ -137,6 +145,12 @@ async def ensure_mkbrr_binary(base_dir, debug, version=None):
                 def safe_extract_tar(tar_file, path="."):
                     """Safely extract tar members, checking for directory traversal attacks"""
                     for member in tar_file.getmembers():
+                        # Check for symlinks and hardlinks in TAR files
+                        if member.islnk() or member.issym():
+                            if debug:
+                                console.print(f"[yellow]Warning: Skipping link entry: {member.name}[/yellow]")
+                            continue
+
                         # Check for absolute paths
                         if os.path.isabs(member.name):
                             if debug:
