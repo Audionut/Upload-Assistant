@@ -87,7 +87,7 @@ jobs:
         mypy --ignore-missing-imports --follow-imports=skip --strict-optional src/ || true
 
     - name: Security Analysis with Bandit
-      continue-on-error: true
+      continue-on-error: false
       run: |
         echo "Running security analysis with configuration file..."
         echo ""
@@ -120,7 +120,17 @@ jobs:
       continue-on-error: true
       run: |
         echo "Checking for known security vulnerabilities in dependencies..."
-        safety scan || echo "Safety scan failed"
+        # Install pip-audit as a free alternative to safety
+        pip install pip-audit
+        
+        # Run pip-audit to check for known vulnerabilities
+        echo "Running pip-audit vulnerability scan..."
+        pip-audit --desc --format=text || echo "pip-audit scan completed with warnings"
+        
+        # Optional: Also try safety scan but don't fail if it requires registration
+        echo ""
+        echo "Attempting safety scan (may require registration)..."
+        safety scan --short-report || echo "Safety scan requires registration at https://safetycli.com/"
 
     - name: Dead Code Analysis
       continue-on-error: true
