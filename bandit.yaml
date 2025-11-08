@@ -1,10 +1,10 @@
 # Bandit Security Configuration for Upload Assistant
 #
 # SECURITY IMPLEMENTATION STATUS:
-# tmp directory security: Implemented at application level with 0o700 permissions
-# Location: upload.py do_the_thing() function creates secure tmp directories
-# Coverage: All tmp file operations inherit this security model
-# Testing: Verified that existing directories preserve secure permissions
+# - tmp directory security: Implemented at application level with 0o700 permissions
+# - Location: upload.py do_the_thing() function creates secure tmp directories
+# - Coverage: All tmp file operations inherit this security model
+# - Testing: Verified that existing directories preserve secure permissions
 #
 # SUPPRESSED CHECKS:
 # B108: Hardcoded tmp directory usage - RESOLVED via secure application-level implementation
@@ -16,18 +16,33 @@
 # B605: start_process_with_a_shell - Safe shell commands for system cleanup operations
 # B404: import_subprocess - Generic subprocess module warning, legitimate system operations
 
-[bandit]
 # Skip these security checks that are now handled by our secure tmp implementation
-skips = B108,B102,B703,B110,B607,B603,B605,B404
+skips:
+  - B108
+  - B102
+  - B703
+  - B110
+  - B607
+  - B603
+  - B605
+  - B404
 
 # Paths to exclude from scanning
-exclude_dirs = /tmp,/venv,/.venv,/env,/.git,/__pycache__
+exclude_dirs:
+  - tmp
+  - venv
+  - .venv
+  - env
+  - .git
+  - __pycache__
 
-# Test directories to exclude (if any)
-exclude = */test_*.py,*/tests.py
+# Test files to exclude
+exclude:
+  - "*/test_*.py"
+  - "*/tests.py"
 
 # Only report issues with MEDIUM or HIGH confidence to reduce noise
-confidence = MEDIUM
+confidence: medium
 
 # Only report MEDIUM and HIGH severity issues
-severity = MEDIUM
+severity: medium

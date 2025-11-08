@@ -94,19 +94,25 @@ jobs:
         echo "🔒 SECURITY NOTE: tmp directory security is handled at application level:"
         echo "   ✅ tmp directories created with 0o700 permissions (owner-only access)"
         echo "   ✅ Implemented in upload.py do_the_thing() function"
-        echo "   ✅ Bandit B108 warnings suppressed via .bandit config file"
+        echo "   ✅ Bandit B108 warnings suppressed via bandit.yaml config file"
         echo ""
-        echo "📊 Using .bandit configuration file to skip resolved security issues"
+        echo "📊 Using bandit.yaml configuration file to skip resolved security issues"
         
-        # Check if .bandit config file exists and use it
-        if [ -f ".bandit" ]; then
-          echo "✅ Found .bandit configuration file"
+        # Check if bandit.yaml config file exists and use it
+        if [ -f "bandit.yaml" ]; then
+          echo "✅ Found bandit.yaml configuration file"
+          cat bandit.yaml
+          echo ""
+          echo "Running bandit with YAML configuration..."
+          bandit -r . -f txt -c bandit.yaml || echo "Bandit scan completed with configuration"
+        elif [ -f ".bandit" ]; then
+          echo "✅ Found legacy .bandit configuration file"
           cat .bandit
           echo ""
-          echo "Running bandit with configuration..."
+          echo "Running bandit with legacy configuration..."
           bandit -r . -f txt -c .bandit || echo "Bandit scan completed with configuration"
         else
-          echo "⚠️  .bandit config file not found, running with basic exclusions"
+          echo "⚠️  No bandit config file found, running with basic exclusions"
           bandit -r . -f txt --exclude ./tmp,./venv,./.venv,./env,./.git,./__pycache__ || echo "Bandit scan completed"
         fi
 
