@@ -8,6 +8,7 @@ import traceback
 import re
 import threading
 import queue
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,16 +16,93 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 app = Flask(__name__)
 CORS(app)
 
+# Security and performance configurations
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300  # 5 minutes cache for static files
+
+# Timeout configurations
+REQUEST_TIMEOUT = 300  # 5 minutes for API requests
+PROCESS_TIMEOUT = 3600  # 1 hour maximum for upload processes
+QUEUE_TIMEOUT = 1.0  # 1 second for queue operations
+KILL_TIMEOUT = 10  # 10 seconds for graceful termination
+POST_KILL_TIMEOUT = KILL_TIMEOUT // 2  # 5 seconds to wait after force kill
+
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-# Store active processes
+# Store active processes with timestamps
 active_processes = {}
 
 
 def strip_ansi(text):
     """Remove ANSI escape codes from text"""
     return ANSI_ESCAPE.sub('', text)
+
+
+def terminate_process_gracefully(process, timeout=2):
+    try:
+        # Check if process is already dead
+        if process.poll() is not None:
+            return False
+
+        # Attempt graceful termination
+        process.terminate()
+
+        try:
+            process.wait(timeout=timeout)
+            return True
+        except subprocess.TimeoutExpired:
+            # Force kill if graceful termination failed
+            print("Process didn't terminate gracefully, force killing...")
+            try:
+                process.kill()
+                process.wait(timeout=POST_KILL_TIMEOUT)  # Give kill command time to work
+                return True
+            except subprocess.TimeoutExpired:
+                print("Warning: Process may still be running after kill attempt")
+                return False
+
+    except Exception as e:
+        print(f"Error terminating process: {e}")
+        return False
+
+
+def cleanup_old_processes():
+    """Clean up processes that have been running too long"""
+    current_time = time.time()
+    to_remove = []
+
+    for session_id, process_info in active_processes.items():
+        if 'start_time' in process_info:
+            elapsed = current_time - process_info['start_time']
+            if elapsed > PROCESS_TIMEOUT:
+                print(f"Cleaning up old process for session {session_id} (running {elapsed:.1f}s)")
+                try:
+                    process = process_info['process']
+                    terminate_process_gracefully(process, timeout=2)
+                except Exception as e:
+                    print(f"Error cleaning up process {session_id}: {e}")
+                to_remove.append(session_id)
+
+    for session_id in to_remove:
+        if session_id in active_processes:
+            del active_processes[session_id]
+
+
+@app.before_request
+def limit_request_time():
+    """Set up request timeout monitoring"""
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    """Monitor request duration"""
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        if duration > REQUEST_TIMEOUT:
+            print(f"Warning: Request took {duration:.2f}s (limit: {REQUEST_TIMEOUT}s)")
+    return response
 
 
 @app.route('/')
@@ -165,9 +243,10 @@ def execute_command():
                     universal_newlines=True
                 )
 
-                # Store process for input handling (no queue needed)
+                # Store process for input handling with timestamp
                 active_processes[session_id] = {
-                    'process': process
+                    'process': process,
+                    'start_time': time.time()
                 }
 
                 # Thread to read stdout - stream raw output with ANSI codes
@@ -193,19 +272,36 @@ def execute_command():
                     except Exception as e:
                         print(f"stderr read error: {e}")
 
+                # Thread to monitor process timeout
+                def monitor_timeout():
+                    try:
+                        start_time = time.time()
+                        while process.poll() is None:
+                            elapsed = time.time() - start_time
+                            if elapsed > PROCESS_TIMEOUT:
+                                print(f"Process timeout after {PROCESS_TIMEOUT} seconds, terminating...")
+                                terminate_process_gracefully(process, timeout=2)
+                                output_queue.put(('error', f'\nProcess terminated due to timeout ({PROCESS_TIMEOUT}s)\n'))
+                                break
+                            time.sleep(1)
+                    except Exception as e:
+                        print(f"Timeout monitor error: {e}")
+
                 output_queue = queue.Queue()
 
-                # Start threads (no input thread needed - we write directly)
+                # Start threads including timeout monitor
                 stdout_thread = threading.Thread(target=read_stdout, daemon=True)
                 stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+                timeout_thread = threading.Thread(target=monitor_timeout, daemon=True)
 
                 stdout_thread.start()
                 stderr_thread.start()
+                timeout_thread.start()
 
                 # Stream output as raw characters
                 while process.poll() is None or not output_queue.empty():
                     try:
-                        output_type, char = output_queue.get(timeout=0.1)
+                        output_type, char = output_queue.get(timeout=QUEUE_TIMEOUT)
                         # Send raw character data (preserves ANSI codes)
                         yield f"data: {json.dumps({'type': output_type, 'data': char})}\n\n"
                     except queue.Empty:
@@ -298,14 +394,7 @@ def kill_process():
         process = process_info['process']
 
         # Terminate the process
-        process.terminate()
-
-        # Give it a moment to terminate gracefully
-        try:
-            process.wait(timeout=2)
-        except Exception:
-            # Force kill if it doesn't terminate
-            process.kill()
+        terminate_process_gracefully(process, timeout=KILL_TIMEOUT)
 
         # Clean up
         del active_processes[session_id]
@@ -339,7 +428,18 @@ if __name__ == '__main__':
     print(f"Working directory: {os.getcwd()}")
     print("Server will run at: http://localhost:5000")
     print("Health check: http://localhost:5000/api/health")
+    print(f"Request timeout: {REQUEST_TIMEOUT}s")
+    print(f"Process timeout: {PROCESS_TIMEOUT}s")
     print("=" * 50)
+
+    # Start periodic cleanup thread
+    def periodic_cleanup():
+        while True:
+            time.sleep(300)  # Clean up every 5 minutes
+            cleanup_old_processes()
+
+    cleanup_thread = threading.Thread(target=periodic_cleanup, daemon=True)
+    cleanup_thread.start()
 
     try:
         app.run(

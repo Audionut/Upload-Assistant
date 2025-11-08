@@ -1,4 +1,9 @@
-[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml) [![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch%202025-07-04%2006:06%20UTC))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster) [![Test run (5.1.5.2)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=5.1.5.2&label=Test%20run%20(5.1.5.2%202025-07-19%2014:24%20UTC))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A5.1.5.2)
+[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)
+[![Python Code Analysis](https://github.com/Audionut/Upload-Assistant/actions/workflows/python-code-analysis.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/python-code-analysis.yml)
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![Security: Bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
+[![Security: Safety](https://img.shields.io/badge/security-safety-green.svg)](https://github.com/pyupio/safety)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 Discord support https://discord.gg/QHHAZu7e2A
 
@@ -24,7 +29,7 @@ Better just to be on this fork and bug me about my bugs, rather than bugging som
   - Generates custom .torrents without useless top level folders/nfos.
   - Can re-use existing torrents instead of hashing new.
   - Can automagically search qBitTorrent version 5+ clients for matching existing torrent.
-  - Generates proper name for your upload using Mediainfo/BDInfo and TMDb/IMDb conforming to site rules.
+  - Generates proper name for your upload using Mediainfo/BDInfo and TMDb/IMDb/TVDB conforming to site rules.
   - Checks for existing releases already on site.
   - Adds to your client with fast resume, seeding instantly (rtorrent/qbittorrent/deluge/watch folder).
   - ALL WITH MINIMAL INPUT!
