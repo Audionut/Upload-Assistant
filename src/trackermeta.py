@@ -5,17 +5,18 @@ import io
 from io import BytesIO
 import os
 import sys
+from typing import List, Dict, Any
 
 from PIL import Image
 
-from data.config import config
+from data.config import config  # type: ignore
 from src.btnid import get_bhd_torrents
 from src.console import console
 from src.trackers.COMMON import COMMON
 
 # Define expected amount of screenshots from the config
-expected_images = int(config['DEFAULT']['screens'])
-valid_images = []
+expected_images = int(config['DEFAULT']['screens'])  # type: ignore
+valid_images: List[Dict[str, Any]] = []
 
 
 async def prompt_user_for_confirmation(message: str) -> bool:

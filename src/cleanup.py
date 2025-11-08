@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import threading
+from typing import Set, Union
 
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
@@ -19,8 +20,8 @@ IS_ANDROID = ('android' in platform.platform().lower() or
               os.path.exists('/system/build.prop') or
               'ANDROID_ROOT' in os.environ)
 
-running_subprocesses = set()
-thread_executor: ThreadPoolExecutor = None
+running_subprocesses: Set[subprocess.Popen] = set()
+thread_executor: Union[ThreadPoolExecutor, None] = None
 IS_MACOS = sys.platform == 'darwin'
 
 
@@ -216,7 +217,9 @@ def kill_all_threads():
 if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
     try:
         output = subprocess.check_output(['stty', '-a']).decode()
-        erase_key = re.search(r' erase = (\S+);', output).group(1)
+        match = re.search(r' erase = (\S+);', output)
+        if match:
+            erase_key = match.group(1)
     except (IOError, OSError):
         pass
 

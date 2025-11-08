@@ -75,10 +75,6 @@ def calculate_piece_size(total_size, min_size, max_size, files, meta):
 
 
 class CustomTorrent(torf.Torrent):
-    # Default piece size limits
-    torf.Torrent.piece_size_min = 32768  # 32 KiB
-    torf.Torrent.piece_size_max = 134217728
-
     def __init__(self, meta, *args, **kwargs):
         self._meta = meta
 

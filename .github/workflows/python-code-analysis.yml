@@ -126,14 +126,9 @@ jobs:
         # Run pip-audit to check for known vulnerabilities
         echo "Running pip-audit vulnerability scan..."
         pip-audit --desc --format=text || echo "pip-audit scan completed with warnings"
-        
-        # Optional: Also try safety scan but don't fail if it requires registration
-        echo ""
-        echo "Attempting safety scan (may require registration)..."
-        safety scan --short-report || echo "Safety scan requires registration at https://safetycli.com/"
 
     - name: Dead Code Analysis
-      continue-on-error: true
+      continue-on-error: false
       run: |
         echo "Checking for unused code..."
         vulture . --exclude=venv,env,.venv,.git --min-confidence=80 || true

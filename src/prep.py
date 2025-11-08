@@ -40,7 +40,7 @@ try:
     from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
 except ModuleNotFoundError:
-    console.print(traceback.print_exc())
+    traceback.print_exc()
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
     console.print('[yellow]pip3 install --user -U -r requirements.txt')
     exit()

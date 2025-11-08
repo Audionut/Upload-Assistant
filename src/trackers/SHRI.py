@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
-from typing import Literal
+from typing import Literal, Dict, Any
 import asyncio
-import aiofiles
+import aiofiles  # type: ignore
 import certifi
 import cli_ui
 import os
 import pycountry
 import random
 import re
-import requests
+import requests  # type: ignore
 from babel import Locale
 from src.audio import get_audio_v2
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
-_shri_session_data = {}
+_shri_session_data: Dict[str, Any] = {}
 
 
 class SHRI(UNIT3D):
