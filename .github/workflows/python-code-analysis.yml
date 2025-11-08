@@ -38,7 +38,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # Install code analysis tools
-        pip install mypy bandit safety vulture pycodestyle autopep8
+        pip install mypy bandit vulture pycodestyle autopep8
 
     - name: Python Syntax Check
       run: |
@@ -116,16 +116,19 @@ jobs:
           bandit -r . -f txt --exclude ./tmp,./venv,./.venv,./env,./.git,./__pycache__ || echo "Bandit scan completed"
         fi
 
-    - name: Dependency Security Check
+    - name: Dependency Security Check with Safety
+      continue-on-error: true
+      uses: pyupio/safety-action@v1
+      with:
+        api-key: ${{ secrets.SAFETY_API_KEY }}
+
+    - name: Fallback Security Check
+      if: failure()
       continue-on-error: true
       run: |
-        echo "Checking for known security vulnerabilities in dependencies..."
-        # Install pip-audit as a free alternative to safety
-        pip install pip-audit
-        
-        # Run pip-audit to check for known vulnerabilities
-        echo "Running pip-audit vulnerability scan..."
-        pip-audit --desc --format=text || echo "pip-audit scan completed with warnings"
+        echo "Safety Action failed, running basic safety check..."
+        pip install safety
+        safety check || echo "Basic safety scan completed with warnings"
 
     - name: Dead Code Analysis
       continue-on-error: false
@@ -188,8 +191,8 @@ jobs:
         echo "✅ Syntax checking completed"
         echo "✅ Import validation completed"
         echo "✅ Type checking completed"
-        echo "✅ Security analysis completed"
-        echo "✅ Dependency security check completed"
+        echo "✅ Security analysis with Bandit completed"
+        echo "✅ Dependency security check with Safety completed"
         echo "✅ Dead code analysis completed"
         echo "✅ Common issues check completed"
         echo ""
