@@ -70,7 +70,8 @@ async def ensure_mkbrr_binary(base_dir, debug, version=None):
 
     if binary_path.exists() and binary_path.is_file():
         if not system == "windows":
-            os.chmod(binary_path, 0o755)
+            # Set secure permissions before removal
+            os.chmod(binary_path, 0o600)
         os.remove(binary_path)
         if debug:
             console.print(f"[blue]Removed existing binary at: {binary_path}[/blue]")

@@ -248,7 +248,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
 
             # Ensure executable permission for non-Windows systems
             if not sys.platform.startswith("win"):
-                os.chmod(mkbrr_binary, 0o755)
+                os.chmod(mkbrr_binary, 0o700)
 
             cmd = [mkbrr_binary, "create", path]
 

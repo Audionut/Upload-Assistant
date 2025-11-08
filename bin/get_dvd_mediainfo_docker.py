@@ -176,13 +176,13 @@ def download_dvd_mediainfo_docker():
 
         # Make CLI binary executable and verify permissions
         if cli_file.exists():
-            # Set full executable permissions (owner: rwx, group: rx, other: rx)
-            os.chmod(cli_file, 0o755)
+            # Set secure executable permissions (owner only)
+            os.chmod(cli_file, 0o700)
             # Verify permissions were set correctly
             file_stat = cli_file.stat()
-            is_executable = bool(file_stat.st_mode & 0o111)  # Check if any execute bit is set
+            is_executable = bool(file_stat.st_mode & 0o100)  # Check if owner execute bit is set
             if is_executable:
-                print(f"✓ Set executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})")
+                print(f"✓ Set secure executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})")
             else:
                 raise Exception(f"Failed to set executable permissions on: {cli_file}")
         else:
