@@ -1,12 +1,10 @@
-# =============================================================================
 # Bandit Security Configuration for Upload Assistant
-# =============================================================================
 #
 # SECURITY IMPLEMENTATION STATUS:
-# ✅ tmp directory security: Implemented at application level with 0o700 permissions
-# ✅ Location: upload.py do_the_thing() function creates secure tmp directories
-# ✅ Coverage: All tmp file operations inherit this security model
-# ✅ Testing: Verified that existing directories preserve secure permissions
+# tmp directory security: Implemented at application level with 0o700 permissions
+# Location: upload.py do_the_thing() function creates secure tmp directories
+# Coverage: All tmp file operations inherit this security model
+# Testing: Verified that existing directories preserve secure permissions
 #
 # SUPPRESSED CHECKS:
 # B108: Hardcoded tmp directory usage - RESOLVED via secure application-level implementation
@@ -17,8 +15,6 @@
 # B603: subprocess_without_shell_equals_true - Trusted system commands with safe arguments
 # B605: start_process_with_a_shell - Safe shell commands for system cleanup operations
 # B404: import_subprocess - Generic subprocess module warning, legitimate system operations
-#
-# =============================================================================
 
 [bandit]
 # Skip these security checks that are now handled by our secure tmp implementation
