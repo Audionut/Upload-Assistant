@@ -159,7 +159,7 @@ class SHRI(UNIT3D):
 
             audio_lang_str = " - ".join(result)
 
-        effective_type = self._get_effective_type(meta)
+        effective_type = self.get_effective_type(meta)
 
         if effective_type != "DISC":
             source = source.replace("Blu-ray", "BluRay")
@@ -252,7 +252,7 @@ class SHRI(UNIT3D):
         return {"name": name}
 
     def _extract_clean_release_group(self, meta, current_name):
-        """Extract release group if not already in the calculated name"""
+        """Extract release group - only accepts VU/UNTOUCHED markers from filename"""
         tag = meta.get("tag", "").strip().lstrip("-")
         if tag and " " not in tag and not self.INVALID_TAG_PATTERN.search(tag):
             return tag
@@ -283,25 +283,11 @@ class SHRI(UNIT3D):
             not potential_tag
             or len(potential_tag) > 30
             or not potential_tag.replace("_", "").isalnum()
-            or self.INVALID_TAG_PATTERN.search(potential_tag)
         ):
             return "NoGroup"
 
-        # Special case: UNTOUCHED/VU at end is valid tag, don't reject
-        if self.MARKER_PATTERN.search(potential_tag):
-            return potential_tag
-
-        # Check against calculated name
-        name_normalized = (
-            current_name.lower()
-            .replace("-", "")
-            .replace(".", "")
-            .replace(" ", "")
-            .replace("_", "")
-        )
-        tag_normalized = potential_tag.lower().replace("_", "")
-
-        if tag_normalized in name_normalized:
+        # ONLY accept if it's a VU/UNTOUCHED marker
+        if not self.MARKER_PATTERN.search(potential_tag):
             return "NoGroup"
 
         return potential_tag
@@ -328,7 +314,7 @@ class SHRI(UNIT3D):
         elif type is not None:
             return {"type_id": type_mapping.get(type, "0")}
         else:
-            effective_type = self._get_effective_type(meta)
+            effective_type = self.get_effective_type(meta)
             type_id = type_mapping.get(effective_type, "0")
             return {"type_id": type_id}
 
@@ -413,23 +399,35 @@ class SHRI(UNIT3D):
 
     def _detect_type_from_technical_analysis(self, meta):
         """Unified type detection: filename markers + MediaInfo analysis"""
+        # Priority 1: Explicit REMUX markers (filename check FIRST)
+        if self._has_remux_marker(meta):
+            return "REMUX"
+        # Priority 2: Base type from upstream
         base_type = meta.get("type", "ENCODE")
         if base_type in ("DISC", "DVDRIP", "BRRIP"):
             return base_type
-        # Priority 1: Explicit REMUX markers
-        if self._has_remux_marker(meta):
-            return "REMUX"
-        # Priority 2: Technical analysis
+        # Priority 3: Technical mediainfo analysis
         return self._analyze_encode_type(meta)
 
     def _has_remux_marker(self, meta):
-        """Check filename for REMUX indicators"""
         name_no_ext = os.path.splitext(self.get_basename(meta))[0].lower()
         if "remux" in name_no_ext:
             return True
-        match = self.MARKER_PATTERN.search(name_no_ext)
-        if match and not name_no_ext.endswith(f"-{match.group(0).lower()}"):
+        if self.MARKER_PATTERN.search(name_no_ext):
             return True
+
+        # Check for MakeMKV + no encoding
+        mi = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+        if mi:
+            general = mi[0]
+            encoded_app = str(general.get("Encoded_Application", "")).lower()
+            encoded_lib = str(general.get("Encoded_Library", "")).lower()
+
+            if "makemkv" in encoded_app or "makemkv" in encoded_lib:
+                video = mi[1] if len(mi) > 1 else {}
+                if not video.get("Encoded_Library_Settings"):
+                    return True
+
         return False
 
     def _analyze_encode_type(self, meta):
@@ -567,7 +565,7 @@ class SHRI(UNIT3D):
         # Final fallback: use meta type or default to ENCODE
         return meta.get("type", "ENCODE")
 
-    def _get_effective_type(self, meta):
+    def get_effective_type(self, meta):
         """
         Determine effective type with priority hierarchy:
         1. Cinema News (CAM/HDCAM/TC/HDTC/TS/HDTS/MD/LD keywords)
@@ -579,8 +577,6 @@ class SHRI(UNIT3D):
             return "CINEMA_NEWS"
 
         detected_type = self._detect_type_from_technical_analysis(meta)
-        cli_ui.info(f"UA Detected type: {meta.get('type')}")
-        cli_ui.info(f"{self.tracker} Detected type: {detected_type}")
         return detected_type
 
     def _get_italian_title(self, imdb_info):
@@ -948,7 +944,16 @@ class SHRI(UNIT3D):
 
             # Video info
             vid_format = video.get("Format", "N/A")
-            codec = "x265" if "HEVC" in vid_format else "x264"
+            if "HEVC" in vid_format:
+                codec = "x265"
+            elif "AVC" in vid_format or "H.264" in vid_format:
+                codec = "x264"
+            elif "MPEG" in vid_format:
+                codec = "MPEG-2"
+            elif "VC-1" in vid_format:
+                codec = "VC-1"
+            else:
+                codec = vid_format  # Fallback to format name
             depth = f"{video.get('BitDepth', 10)} bits"
             vid_br = f"{safe_int(video.get('BitRate', 0)) / 1000000:.1f} Mb/s"
             res = meta.get("resolution", "N/A")
