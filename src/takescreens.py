@@ -1580,7 +1580,7 @@ async def get_frame_info(path, ss_time, meta):
             console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         returncode, _, stderr = await run_ffmpeg(info_command)
-        assert returncode is not None
+        assert returncode is not None  # nosec B101
         stderr_text = stderr.decode('utf-8', errors='replace')
 
         # Calculate frame number based on timestamp and framerate

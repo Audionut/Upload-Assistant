@@ -74,7 +74,7 @@ async def gather_files_recursive(path, allowed_extensions=None):
                                 queue.append(alt_path)
                             elif os.path.isfile(alt_path) and (allowed_extensions is None or alt_path.lower().endswith(tuple(allowed_extensions))):
                                 queue.append(alt_path)
-                    except Exception:
+                    except Exception:  # nosec B112
                         continue
 
         except (OSError, PermissionError) as e:
