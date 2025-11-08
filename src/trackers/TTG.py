@@ -4,6 +4,7 @@ import requests
 import asyncio
 import re
 import os
+import stat
 import cli_ui
 import httpx
 from unidecode import unidecode
@@ -46,8 +47,15 @@ class TTG():
             with open(cookiefile, 'w', encoding='utf-8') as f:
                 json.dump(cookie_dict, f, indent=2)
 
-        except Exception as e:
-            print(f"Error saving cookies securely: {e}")
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}")
+            raise
 
     def _load_cookies_secure(self, session, cookiefile):
         """Securely load session cookies from JSON instead of pickle"""
@@ -65,8 +73,11 @@ class TTG():
                     secure=cookie_data.get('secure', False)
                 )
 
-        except Exception as e:
-            print(f"Error loading cookies securely: {e}")
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
             raise
 
     def _load_cookies_dict_secure(self, cookiefile):
@@ -75,8 +86,11 @@ class TTG():
             with open(cookiefile, 'r', encoding='utf-8') as f:
                 cookie_dict = json.load(f)
             return cookie_dict
-        except Exception as e:
-            print(f"Error loading cookies dictionary securely: {e}")
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
             raise
 
     async def edit_name(self, meta):

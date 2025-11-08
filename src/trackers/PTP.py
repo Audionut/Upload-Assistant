@@ -10,6 +10,7 @@ import platform
 import os
 import re
 import requests
+import stat
 
 from pathlib import Path
 from pymediainfo import MediaInfo
@@ -110,8 +111,15 @@ class PTP():
             with open(cookiefile, 'w', encoding='utf-8') as f:
                 json.dump(cookie_dict, f, indent=2)
 
-        except Exception as e:
-            console.print(f"[red]Error saving cookies securely: {e}[/red]")
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}[/red]")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
+            raise
 
     def _load_cookies_secure(self, session, cookiefile):
         """Securely load session cookies from JSON instead of pickle"""
@@ -129,8 +137,11 @@ class PTP():
                     secure=cookie_data.get('secure', False)
                 )
 
-        except Exception as e:
-            console.print(f"[red]Error loading cookies securely: {e}[/red]")
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
             raise
 
     async def get_ptp_id_imdb(self, search_term, search_file_folder, meta):

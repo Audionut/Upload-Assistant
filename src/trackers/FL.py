@@ -2,6 +2,7 @@ import requests
 import asyncio
 import re
 import os
+import stat
 import glob
 import json
 from unidecode import unidecode
@@ -29,58 +30,77 @@ class FL():
 
     def _save_cookies_secure(self, session, filepath):
         """Securely save session cookies to JSON file."""
-        # Convert RequestsCookieJar to dict for JSON serialization
-        cookie_dict = {}
-        for cookie in session.cookies:
-            cookie_dict[cookie.name] = {
-                'value': cookie.value,
-                'domain': cookie.domain,
-                'path': cookie.path,
-                'secure': cookie.secure,
-                'expires': cookie.expires
-            }
+        try:
+            # Convert RequestsCookieJar to dict for JSON serialization
+            cookie_dict = {}
+            for cookie in session.cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
 
-        # Convert .pkl to .json for secure storage
-        if filepath.endswith('.pkl'):
-            filepath = filepath.replace('.pkl', '.json')
+            # Convert .pkl to .json for secure storage
+            if filepath.endswith('.pkl'):
+                filepath = filepath.replace('.pkl', '.json')
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(cookie_dict, f, indent=2)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(filepath, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}")
+            raise
 
     def _load_cookies_secure(self, session, filepath):
         """Securely load cookies from JSON file into session."""
-        # Handle both .pkl and .json files
-        json_filepath = filepath.replace('.pkl', '.json') if filepath.endswith('.pkl') else filepath
+        try:
+            # Handle both .pkl and .json files
+            json_filepath = filepath.replace('.pkl', '.json') if filepath.endswith('.pkl') else filepath
 
-        if os.path.exists(json_filepath):
-            with open(json_filepath, 'r', encoding='utf-8') as f:
-                cookie_dict = json.load(f)
+            if os.path.exists(json_filepath):
+                with open(json_filepath, 'r', encoding='utf-8') as f:
+                    cookie_dict = json.load(f)
 
-            # Convert dict back to session cookies
-            for name, cookie_data in cookie_dict.items():
-                session.cookies.set(
-                    name=name,
-                    value=cookie_data['value'],
-                    domain=cookie_data.get('domain', ''),
-                    path=cookie_data.get('path', '/'),
-                    secure=cookie_data.get('secure', False)
-                )
-        elif os.path.exists(filepath):
-            # Legacy .pkl file exists - convert it
-            console.print(f"[yellow]Converting legacy cookie file {filepath} to secure JSON format...")
-            try:
-                import pickle
-                with open(filepath, 'rb') as f:
-                    legacy_cookies = pickle.load(f)
-                session.cookies.update(legacy_cookies)
-                # Save in new format
-                self._save_cookies_secure(session, filepath)
-                # Remove old pickle file
-                os.remove(filepath)
-                console.print(f"[green]Successfully converted {filepath} to JSON format")
-            except Exception as e:
-                console.print(f"[red]Failed to convert legacy cookie file: {e}")
-                raise
+                # Convert dict back to session cookies
+                for name, cookie_data in cookie_dict.items():
+                    session.cookies.set(
+                        name=name,
+                        value=cookie_data['value'],
+                        domain=cookie_data.get('domain', ''),
+                        path=cookie_data.get('path', '/'),
+                        secure=cookie_data.get('secure', False)
+                    )
+            elif os.path.exists(filepath):
+                # Legacy .pkl file exists - convert it
+                console.print(f"[yellow]Converting legacy cookie file {filepath} to secure JSON format...")
+                try:
+                    import pickle
+                    with open(filepath, 'rb') as f:
+                        legacy_cookies = pickle.load(f)
+                    session.cookies.update(legacy_cookies)
+                    # Save in new format
+                    self._save_cookies_secure(session, filepath)
+                    # Remove old pickle file
+                    os.remove(filepath)
+                    console.print(f"[green]Successfully converted {filepath} to JSON format")
+                except Exception as e:
+                    console.print(f"[red]Failed to convert legacy cookie file: {e}")
+                    raise
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
+            raise
 
     async def get_category_id(self, meta):
         has_ro_audio, has_ro_sub = await self.get_ro_tracks(meta)

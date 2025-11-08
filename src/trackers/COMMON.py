@@ -1174,12 +1174,24 @@ class COMMON():
         compatible with requests."""
 
         cookies = {}
-        with open(cookiefile, 'r') as fp:
-            for line in fp:
-                if not line.startswith(("# ", "\n", "#\n")):
-                    lineFields = re.split(' |\t', line.strip())
-                    lineFields = [x for x in lineFields if x != ""]
-                    cookies[lineFields[5]] = lineFields[6]
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as fp:
+                for line in fp:
+                    if not line.startswith(("# ", "\n", "#\n")):
+                        lineFields = re.split(' |\t', line.strip())
+                        lineFields = [x for x in lineFields if x != ""]
+                        if len(lineFields) >= 7:  # Ensure we have enough fields
+                            cookies[lineFields[5]] = lineFields[6]
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file {cookiefile}: {e}")
+            raise
+        except IndexError as e:
+            console.print(f"[red]Error parsing cookie file format {cookiefile}: {e}")
+            raise
+        except Exception as e:
+            console.print(f"[red]Unexpected error parsing cookie file {cookiefile}: {e}")
+            raise
+
         return cookies
 
     async def ptgen(self, meta, ptgen_site="", ptgen_retry=3):
