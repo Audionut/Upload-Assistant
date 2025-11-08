@@ -220,9 +220,19 @@ config = {
     },
 
     "TRACKERS": {
-        "default_trackers": "TL",
+        "default_trackers": "TL, AITHER",
         "TL": {
             "announce_key": "test",
+        },
+        "AITHER": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # "useAPI": False,  Set to True if using this tracker for automatic ID searching or description parsing
+            "useAPI": False,
+            "api_key": "",
+            "anon": False,
+            # Send uploads to Aither modq for staff approval
+            "modq": False,
         },
     },
 

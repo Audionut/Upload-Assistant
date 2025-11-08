@@ -165,111 +165,65 @@ jobs:
             echo "No critical error patterns detected in script output."
           fi
 
-      - name: Update README badge for master branch
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+      - name: List tmp directory contents (after second test)
+        if: always()
         run: |
-          DATE_STR=$(date -u "+%Y-%m-%d %H:%M UTC")
-          
-          # Read the first line of README.md
-          FIRST_LINE=$(head -1 README.md)
-          echo "Current line: $FIRST_LINE"
-          
-          # Extract existing badges using WORKING regex patterns
-          DOCKER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Create and publish a Docker image\][^]]*\]([^)]*)' || echo "[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)")
-          echo "Docker badge: $DOCKER_BADGE"
-          
-          # Extract existing TAG badge (preserve it) - using WORKING pattern
-          TAG_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Test run ([^)]*[0-9][0-9]*\.[0-9][^)]*)\][^]]*\]([^)]*)' || echo "")
-          echo "Tag badge: $TAG_BADGE"
-          
-          # Create new MASTER badge
-          MASTER_BADGE="[![Test run (Master Branch)](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=master&label=Test%20run%20(Master%20Branch%20${DATE_STR// /%20}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3Amaster)"
-          echo "Master badge: $MASTER_BADGE"
-          
-          # Combine badges (keep existing TAG badge if present)
-          if [ -n "$TAG_BADGE" ]; then
-            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE"
-            echo "Including TAG badge in output"
-          else
-            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE"
-            echo "No TAG badge found to preserve"
+          echo "=== Contents of tmp directory after second test ==="
+          find tmp -type f -name "*DESCRIPTION*" -o -name "*.txt" -o -name "*.nfo" 2>/dev/null || echo "No description files found in tmp directory"
+          echo "=== Full tmp directory structure after second test ==="
+          ls -la tmp/ 2>/dev/null || echo "tmp directory not found"
+          if [ -d tmp ]; then
+            find tmp -type f | head -30
           fi
-          
-          echo "New line: $NEW_FIRST_LINE"
-          
-          # Update the first line
-          echo "$NEW_FIRST_LINE" > README.md.new
-          # Get rest of file (skip first line)
-          tail -n +2 README.md >> README.md.new
-          # Replace the file
-          mv README.md.new README.md
-          
-          # Commit and push
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update master branch badge with latest run date [skip ci]" || echo "No changes to commit"
-          git push
 
-      - name: Update README badge for latest tag
-        if: github.event_name == 'release'
+      - name: List tmp directory contents
+        if: always()
         run: |
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          DATE_STR=$(date -u "+%Y-%m-%d %H:%M UTC")
+          echo "=== Contents of tmp directory ==="
+          find tmp -type f -name "*DESCRIPTION*" -o -name "*.txt" -o -name "*.nfo" 2>/dev/null || echo "No description files found in tmp directory"
+          echo "=== Full tmp directory structure ==="
+          ls -la tmp/ 2>/dev/null || echo "tmp directory not found"
+          if [ -d tmp ]; then
+            find tmp -type f | head -20
+          fi
+
+      - name: Create description files summary
+        if: always()
+        run: |
+          echo "=== Description Files Summary ===" > description_summary.txt
+          echo "Generated at: $(date)" >> description_summary.txt
+          echo "" >> description_summary.txt
           
-          # Read the first line of README.md
-          FIRST_LINE=$(head -1 README.md)
-          echo "Current line: $FIRST_LINE"
-          
-          # Extract existing badges using WORKING regex patterns
-          DOCKER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Create and publish a Docker image\][^]]*\]([^)]*)' || echo "[![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)")
-          echo "Docker badge: $DOCKER_BADGE"
-          
-          # Extract existing MASTER badge (preserve it) - using WORKING pattern
-          MASTER_BADGE=$(echo "$FIRST_LINE" | grep -o '\[\!\[Test run (Master Branch)\][^]]*\]([^)]*)' || echo "")
-          echo "Master badge: $MASTER_BADGE"
-          
-          # Create new TAG badge
-          TAG_BADGE="[![Test run (${TAG_NAME})](https://img.shields.io/github/actions/workflow/status/Audionut/Upload-Assistant/test-run.yaml?branch=${TAG_NAME}&label=Test%20run%20(${TAG_NAME}%20${DATE_STR// /%20}))](https://github.com/Audionut/Upload-Assistant/actions/workflows/test-run.yaml?query=branch%3A${TAG_NAME})"
-          echo "New Tag badge: $TAG_BADGE"
-          
-          # Combine badges (keep existing MASTER badge if present)
-          if [ -n "$MASTER_BADGE" ]; then
-            NEW_FIRST_LINE="$DOCKER_BADGE $MASTER_BADGE $TAG_BADGE"
-            echo "Including MASTER badge in output"
+          if [ -d tmp ]; then
+            echo "Description files found:" >> description_summary.txt
+            find tmp -name "*DESCRIPTION*.txt" -type f | while read file; do
+              echo "- $file ($(wc -l < "$file" 2>/dev/null || echo 0) lines)" >> description_summary.txt
+            done
+            
+            echo "" >> description_summary.txt
+            echo "Other relevant files:" >> description_summary.txt
+            find tmp -name "*.nfo" -o -name "meta.json" -o -name "MEDIAINFO*.txt" -o -name "BD_SUMMARY*.txt" | while read file; do
+              echo "- $file" >> description_summary.txt
+            done
           else
-            NEW_FIRST_LINE="$DOCKER_BADGE $TAG_BADGE"
-            echo "No MASTER badge found to preserve"
+            echo "tmp directory not found" >> description_summary.txt
           fi
           
-          echo "New line: $NEW_FIRST_LINE"
-          
-          # Update the first line
-          echo "$NEW_FIRST_LINE" > README.md.new
-          # Get rest of file (skip first line)
-          tail -n +2 README.md >> README.md.new
-          # Replace the file
-          mv README.md.new README.md
-          
-          # First commit change to the current detached HEAD
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update badge for tag ${TAG_NAME} [skip ci]" || echo "No changes to commit"
-          
-          # Now fetch master branch and apply the same changes there
-          git fetch origin master:master
-          git checkout master
-          
-          # Apply the same badge update to master branch
-          echo "$NEW_FIRST_LINE" > README.md.new
-          tail -n +2 README.md >> README.md.new
-          mv README.md.new README.md
-          
-          # Commit and push to master
-          git add README.md
-          git commit -m "Update badge for tag ${TAG_NAME} [skip ci]" || echo "No changes to commit"
-          git push origin master
+          echo "" >> description_summary.txt
+          echo "=== Summary Content ===" >> description_summary.txt
+          cat description_summary.txt
+
+      - name: Save description files as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: description-files-and-logs
+          path: |
+            tmp/**/*DESCRIPTION*.txt
+            upload_output.txt
+            description_summary.txt
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Cleanup config.py
         if: always()
