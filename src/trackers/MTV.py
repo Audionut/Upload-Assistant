@@ -137,7 +137,7 @@ class MTV():
 
         if not meta['debug']:
             try:
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     cookie_data = await cf.read()
                     cookies = await self.async_json_loads(cookie_data)
 
@@ -487,7 +487,7 @@ class MTV():
         if await aiofiles.os.path.exists(cookiefile):
             try:
 
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
                     cookies_dict = await self.async_json_loads(data)
 
@@ -525,7 +525,7 @@ class MTV():
         url = "https://www.morethantv.me/index.php"
         try:
             if await aiofiles.os.path.exists(cookiefile):
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
                     cookies = await self.async_json_loads(data)
 
@@ -594,7 +594,7 @@ class MTV():
                         console.print('[green]Successfully logged in to MTV')
                         cookies_dict = dict(client.cookies)
                         cookies_data = await self.async_json_dumps(cookies_dict)
-                        async with aiofiles.open(cookiefile, 'wb') as cf:
+                        async with aiofiles.open(cookiefile, 'w', encoding='utf-8') as cf:
                             await cf.write(cookies_data)
                         console.print(f"[green]Cookies saved to {cookiefile}")
                         return True
