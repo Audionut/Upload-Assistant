@@ -6,7 +6,7 @@ bbcode==1.1.0
 beautifulsoup4==4.14.2
 bencode.py==4.0.0
 cli-ui==0.19.0
-click==8.3.0
+click==8.1.8
 cloudscraper==1.2.71
 defusedxml==0.7.1
 deluge-client==1.10.2
