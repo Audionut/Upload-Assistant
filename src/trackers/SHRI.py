@@ -944,13 +944,14 @@ class SHRI(UNIT3D):
 
             # Video info
             vid_format = video.get("Format", "N/A")
-            if "HEVC" in vid_format:
+            vid_format_upper = vid_format.upper()
+            if "HEVC" in vid_format_upper:
                 codec = "x265"
-            elif "AVC" in vid_format or "H.264" in vid_format:
+            elif "AVC" in vid_format_upper or "H.264" in vid_format_upper:
                 codec = "x264"
-            elif "MPEG" in vid_format:
+            elif "MPEG VIDEO" in vid_format_upper or "MPEG-2" in vid_format_upper:
                 codec = "MPEG-2"
-            elif "VC-1" in vid_format:
+            elif "VC-1" in vid_format_upper or "VC1" in vid_format_upper:
                 codec = "VC-1"
             else:
                 codec = vid_format  # Fallback to format name
