@@ -251,23 +251,13 @@ def reset_terminal():
 
         # Kill background jobs safely
         try:
-            # Use safer approach without shell command injection vulnerability
-            # This is Unix-specific and should only run on Unix systems
-            if os.name != 'nt':  # Not Windows
-                try:
-                    # Get job PIDs and kill them individually
-                    jobs_result = subprocess.run(['sh', '-c', 'jobs -p'],
-                                                 capture_output=True, text=True, check=False)
-                    if jobs_result.returncode == 0 and jobs_result.stdout.strip():
-                        pids = jobs_result.stdout.strip().split('\n')
-                        for pid in pids:
-                            if pid.isdigit():
-                                try:
-                                    subprocess.run(['kill', pid], check=False)
-                                except subprocess.CalledProcessError:
-                                    pass
-                except subprocess.CalledProcessError:
-                    pass
+            jobs_result = subprocess.run(['sh', '-c', 'jobs -p'],
+                                         capture_output=True, text=True, check=False)
+            if jobs_result.returncode == 0 and jobs_result.stdout.strip():
+                pids = jobs_result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid.isdigit():
+                        subprocess.run(['kill', pid], check=False)
         except Exception:
             pass
 
