@@ -18,6 +18,7 @@ import traceback
 import transmission_rpc
 import urllib.parse
 import xmlrpc.client
+from typing import Dict, DefaultDict
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -29,8 +30,8 @@ from torf import Torrent
 defusedxml.xmlrpc.monkey_patch()
 
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
-qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+qbittorrent_cached_clients: Dict[str, qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
+qbittorrent_locks: DefaultDict[str, asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
 class Clients():
