@@ -234,7 +234,16 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
     # If using mkbrr, run the external application
     if meta.get('mkbrr'):
         try:
+            # Validate input path to prevent potential command injection
+            if not os.path.exists(path):
+                raise ValueError(f"Path does not exist: {path}")
+
             mkbrr_binary = get_mkbrr_path(meta)
+
+            # Validate mkbrr binary exists and is executable
+            if not os.path.exists(mkbrr_binary):
+                raise FileNotFoundError(f"mkbrr binary not found: {mkbrr_binary}")
+
             output_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"{output_filename}.torrent")
 
             # Ensure executable permission for non-Windows systems

@@ -1,14 +1,16 @@
 import asyncio
-import psutil
-import threading
 import multiprocessing
-import sys
 import os
-import subprocess
-import re
 import platform
+import psutil
+import re
+import subprocess
+import sys
+import threading
+
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
+
 if os.name == "posix":
     import termios
 
@@ -247,9 +249,25 @@ def reset_terminal():
             except (IOError, ValueError):
                 pass
 
-        # Kill background jobs
+        # Kill background jobs safely
         try:
-            os.system("jobs -p | xargs -r kill 2>/dev/null")
+            # Use safer approach without shell command injection vulnerability
+            # This is Unix-specific and should only run on Unix systems
+            if os.name != 'nt':  # Not Windows
+                try:
+                    # Get job PIDs and kill them individually
+                    jobs_result = subprocess.run(['sh', '-c', 'jobs -p'],
+                                                 capture_output=True, text=True, check=False)
+                    if jobs_result.returncode == 0 and jobs_result.stdout.strip():
+                        pids = jobs_result.stdout.strip().split('\n')
+                        for pid in pids:
+                            if pid.isdigit():
+                                try:
+                                    subprocess.run(['kill', pid], check=False)
+                                except subprocess.CalledProcessError:
+                                    pass
+                except subprocess.CalledProcessError:
+                    pass
         except Exception:
             pass
 

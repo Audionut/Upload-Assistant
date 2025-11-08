@@ -192,7 +192,11 @@ async def display_queue(queue, base_dir, queue_name, save_to_log=True):
 
     if save_to_log:
         tmp_dir = os.path.join(base_dir, "tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
+        # Ensure secure permissions for tmp directory
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
+        else:
+            os.chmod(tmp_dir, 0o700)
         log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
         try:

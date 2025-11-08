@@ -7,7 +7,6 @@ import glob
 import httpx
 import json
 import platform
-import pickle
 import os
 import re
 import requests
@@ -94,6 +93,46 @@ class PTP():
     def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
 
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+        except Exception as e:
+            console.print(f"[red]Error saving cookies securely: {e}[/red]")
+
+    def _load_cookies_secure(self, session, cookiefile):
+        """Securely load session cookies from JSON instead of pickle"""
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=cookie_data.get('domain'),
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except Exception as e:
+            console.print(f"[red]Error loading cookies securely: {e}[/red]")
+            raise
+
     async def get_ptp_id_imdb(self, search_term, search_file_folder, meta):
         imdb_id = ptp_torrent_id = None
         filename = str(os.path.basename(search_term))
@@ -106,7 +145,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         console.print(f"[green]Searching PTP for: [bold yellow]{filename}[/bold yellow]")
 
@@ -1253,12 +1292,11 @@ class PTP():
     async def get_AntiCsrfToken(self, meta):
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
-        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"  # Changed from .pickle to .json
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
+                self._load_cookies_secure(session, cookiefile)
                 uploadresponse = session.get("https://passthepopcorn.me/upload.php")
                 loggedIn = await self.validate_login(uploadresponse)
             else:
@@ -1288,8 +1326,7 @@ class PTP():
                         if resp["Result"] != "Ok":
                             raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
                         AntiCsrfToken = resp["AntiCsrfToken"]
-                        with open(cookiefile, 'wb') as cf:
-                            pickle.dump(session.cookies, cf)
+                        self._save_cookies_secure(session.cookies, cookiefile)
                     except Exception:
                         raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
                 except Exception:
@@ -1496,9 +1533,8 @@ class PTP():
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
+                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"  # Changed from .pickle to .json
+                    self._load_cookies_secure(session, cookiefile)
                     response = session.post(url=url, data=data, headers=headers, files=files)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text

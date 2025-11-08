@@ -144,9 +144,9 @@ def download_dvd_mediainfo(base_dir, debug=False):
         with open(version_file, 'w') as f:
             f.write(f"MediaInfo {MEDIAINFO_VERSION}")
 
-        # Make CLI binary executable
+        # Make CLI binary executable (owner only for security)
         if cli_file.exists():
-            os.chmod(cli_file, 0o755)
+            os.chmod(cli_file, 0o700)  # rwx------ (owner only)
 
     if not cli_file.exists():
         raise Exception(f"Failed to extract CLI binary to {cli_file}")

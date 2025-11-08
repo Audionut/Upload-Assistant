@@ -953,7 +953,7 @@ class COMMON():
         """Get region and distributor information from API response"""
         params = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
         url = f"{torrent_url}{id}"
-        response = requests.get(url=url, params=params)
+        response = requests.get(url=url, params=params, timeout=30)
         try:
             json_response = response.json()
         except ValueError:
@@ -1042,7 +1042,7 @@ class COMMON():
             return None, None, None, None, None, None, None, None, None
 
         # Make the GET request with proper encoding handled by 'params'
-        response = requests.get(url=url, params=params)
+        response = requests.get(url=url, params=params, timeout=30)
         # console.print(f"[blue]Raw API Response: {response}[/blue]")
 
         try:
@@ -1192,11 +1192,11 @@ class COMMON():
         # get douban url
         if int(meta.get('imdb_id')) != 0:
             data['search'] = f"tt{meta['imdb_id']}"
-            ptgen = requests.get(url, params=data)
+            ptgen = requests.get(url, params=data, timeout=30)
             if ptgen.json()["error"] is not None:
                 for retry in range(ptgen_retry):
                     try:
-                        ptgen = requests.get(url, params=params)
+                        ptgen = requests.get(url, params=params, timeout=30)
                         if ptgen.json()["error"] is None:
                             break
                     except requests.exceptions.JSONDecodeError:
@@ -1210,10 +1210,10 @@ class COMMON():
             console.print("[red]No IMDb id was found.")
             params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
         try:
-            ptgen = requests.get(url, params=params)
+            ptgen = requests.get(url, params=params, timeout=30)
             if ptgen.json()["error"] is not None:
                 for retry in range(ptgen_retry):
-                    ptgen = requests.get(url, params=params)
+                    ptgen = requests.get(url, params=params, timeout=30)
                     if ptgen.json()["error"] is None:
                         break
             ptgen = ptgen.json()

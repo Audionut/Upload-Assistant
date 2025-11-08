@@ -11,7 +11,6 @@ try:
 
     from difflib import SequenceMatcher
     from guessit import guessit
-    from pathlib import Path
 
     from data.config import config
     from src.apply_overrides import get_source_override
@@ -101,7 +100,8 @@ class Prep():
         if meta.get('uuid', None) is None:
             meta['uuid'] = folder_id
         if not os.path.exists(f"{base_dir}/tmp/{meta['uuid']}"):
-            Path(f"{base_dir}/tmp/{meta['uuid']}").mkdir(parents=True, exist_ok=True)
+            # Create secure subdirectory with proper permissions
+            os.makedirs(f"{base_dir}/tmp/{meta['uuid']}", mode=0o700, exist_ok=True)
 
         if meta['debug']:
             console.print(f"[cyan]ID: {meta['uuid']}")

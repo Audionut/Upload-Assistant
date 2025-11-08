@@ -8,6 +8,7 @@ bencode.py
 cli-ui
 click
 cloudscraper
+defusedxml
 deluge-client
 discord
 ffmpeg-python

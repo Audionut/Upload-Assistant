@@ -36,7 +36,7 @@ async def package(meta):
         poster_img = f"{meta['base_dir']}/tmp/{meta['uuid']}/POSTER.png"
         if meta.get('poster', None) not in ['', None] and not os.path.exists(poster_img):
             if meta.get('rehosted_poster', None) is None:
-                r = requests.get(meta['poster'], stream=True)
+                r = requests.get(meta['poster'], stream=True, timeout=30)
                 if r.status_code == 200:
                     console.print("[bold yellow]Rehosting Poster")
                     r.raw.decode_content = True
@@ -83,7 +83,7 @@ async def package(meta):
             files = {
                 "files[]": (f"{meta['title']}.tar", open(f"{archive}.tar", 'rb'))
             }
-            response = requests.post("https://uguu.se/upload.php", files=files).json()
+            response = requests.post("https://uguu.se/upload.php", files=files, timeout=60).json()
             if meta['debug']:
                 console.print(f"[cyan]{response}")
             url = response['files'][0]['url']
