@@ -144,7 +144,8 @@ def execute_command():
 
                 print(f"Running: {' '.join(command)}")
 
-                yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {' '.join(command)}'})}\n\n"
+                command_str = ' '.join(command)
+                yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
 
                 # Set environment to unbuffered and force line buffering
                 env = os.environ.copy()
