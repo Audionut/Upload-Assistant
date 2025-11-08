@@ -6,6 +6,7 @@ import click
 import glob
 import httpx
 import json
+import pickle  # nosec B403 - Only used for legacy cookie migration
 import platform
 import os
 import re
@@ -123,16 +124,78 @@ class PTP():
 
     def _load_cookies_secure(self, session, cookiefile):
         """Securely load session cookies from JSON instead of pickle"""
+
+        # Check for legacy pickle file and migrate if needed
+        pickle_file = cookiefile.replace('.json', '.pickle')
+        legacy_pickle_file = f"{os.path.dirname(cookiefile)}/PTP"  # Legacy filename without extension
+
+        # Try to migrate from pickle files
+        for potential_pickle in [pickle_file, legacy_pickle_file]:
+            if os.path.exists(potential_pickle) and not os.path.exists(cookiefile):
+                try:
+                    console.print(f"[yellow]Migrating legacy cookie file from {potential_pickle} to {cookiefile}[/yellow]")
+
+                    # Load the pickle file
+                    with open(potential_pickle, 'rb') as f:
+                        session_cookies = pickle.load(f)  # nosec B301 - Legacy migration only
+
+                    # Convert to JSON format
+                    cookie_dict = {}
+                    for cookie in session_cookies:
+                        cookie_dict[cookie.name] = {
+                            'value': cookie.value,
+                            'domain': cookie.domain,
+                            'path': cookie.path,
+                            'secure': cookie.secure,
+                            'expires': getattr(cookie, 'expires', None)
+                        }
+
+                    # Save as JSON
+                    with open(cookiefile, 'w', encoding='utf-8') as f:
+                        json.dump(cookie_dict, f, indent=2)
+
+                    # Set restrictive permissions
+                    os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+                    # Verify the migration was successful by loading the JSON
+                    try:
+                        with open(cookiefile, 'r', encoding='utf-8') as f:
+                            json.load(f)  # Just verify it can be loaded
+
+                        # Migration verified successful - delete the old pickle file
+                        os.remove(potential_pickle)
+                        console.print(f"[green]Successfully migrated cookies to JSON format and removed legacy file {potential_pickle}[/green]")
+
+                    except (OSError, json.JSONDecodeError) as verify_error:
+                        console.print(f"[red]Migration verification failed: {verify_error}. Keeping original file {potential_pickle}[/red]")
+                        # Remove the potentially corrupted JSON file
+                        if os.path.exists(cookiefile):
+                            os.remove(cookiefile)
+                        raise
+
+                    break
+
+                except Exception as e:
+                    console.print(f"[red]Error migrating cookie file {potential_pickle}: {e}[/red]")
+                    # Continue to try next potential file or load JSON normally
+                    continue
+
+        # Load cookies from JSON file
         try:
             with open(cookiefile, 'r', encoding='utf-8') as f:
                 cookie_dict = json.load(f)
 
             # Convert dictionary back to session cookies
             for name, cookie_data in cookie_dict.items():
+                # Prevent None domain values
+                domain = cookie_data.get('domain')
+                if domain is None:
+                    domain = ''  # Use empty string instead of None
+
                 session.cookies.set(
                     name=name,
                     value=cookie_data['value'],
-                    domain=cookie_data.get('domain'),
+                    domain=domain,
                     path=cookie_data.get('path', '/'),
                     secure=cookie_data.get('secure', False)
                 )
