@@ -176,7 +176,7 @@ class AL(UNIT3D):
 
     async def get_mal_data(self, meta):
         anime_id = meta['mal']
-        response = requests.get(f"https://api.jikan.moe/v4/anime/{anime_id}")
+        response = requests.get(f"https://api.jikan.moe/v4/anime/{anime_id}", timeout=10)
         content = response.json()
         title = content['data']['title'] if content['data']['title'] else None
         meta['mal_rating'] = content['data']['rating'].upper() if content['data']['rating'] else ""

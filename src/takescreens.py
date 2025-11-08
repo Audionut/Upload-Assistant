@@ -254,7 +254,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         if os.path.exists(image_path):
                             os.remove(image_path)
 
-                        random_time = random.uniform(0, length)
+                        random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                         screenshot_response = await capture_disc_task(
                             index, file, random_time, image_path, keyframe, loglevel, hdr_tonemap, meta
                         )
@@ -620,7 +620,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
                     index = int(image.rsplit('-', 1)[-1].split('.')[0])
                     input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[index % len(main_set)]}"
-                    adjusted_time = random.uniform(0, voblength)
+                    adjusted_time = random.uniform(0, voblength)  # nosec B311 - Random screenshot timing, not cryptographic
 
                     if os.path.exists(image):  # Prevent unnecessary deletion error
                         try:
@@ -1104,7 +1104,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     break
                 else:
                     # Fallback: use random time if original_time is not available
-                    random_time = random.uniform(0, length)
+                    random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                     console.print(f"[yellow]Retaking screenshot for: {image_path} (Attempt {attempt}/{retry_attempts}) at random time {random_time:.2f}s[/yellow]")
                     try:
                         if os.path.exists(image_path):

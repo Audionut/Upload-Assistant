@@ -8,7 +8,6 @@
 #
 # SUPPRESSED CHECKS:
 # B108: Hardcoded tmp directory usage - RESOLVED via secure application-level implementation
-# B102: exec_used - May be legitimately needed for dynamic operations
 # B703: django_mark_safe - Not applicable to this project
 # B110: try_except_pass - Legitimate error handling pattern for non-critical operations
 # B607: start_process_with_partial_path - Legitimate use of system commands in PATH
@@ -19,7 +18,6 @@
 # Skip these security checks that are now handled by our secure tmp implementation
 skips:
   - B108
-  - B102
   - B703
   - B110
   - B607

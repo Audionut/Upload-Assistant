@@ -250,7 +250,7 @@ class FL():
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
                     self._load_cookies_secure(session, cookiefile)
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -336,7 +336,7 @@ class FL():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 self._load_cookies_secure(session, cookiefile)
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print(resp.url)
                 if resp.text.find("Logout") != -1:
@@ -348,7 +348,7 @@ class FL():
 
     async def login(self, cookiefile):
         with requests.Session() as session:
-            r = session.get("https://filelist.io/login.php")
+            r = session.get("https://filelist.io/login.php", timeout=30)
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
             validator = soup.find('input', {'name': 'validator'}).get('value')
@@ -358,10 +358,10 @@ class FL():
                 'password': self.password,
                 'unlock': '1',
             }
-            response = session.post('https://filelist.io/takelogin.php', data=data)
+            response = session.post('https://filelist.io/takelogin.php', data=data, timeout=30)
             await asyncio.sleep(0.5)
             index = 'https://filelist.io/index.php'
-            response = session.get(index)
+            response = session.get(index, timeout=30)
             if response.text.find("Logout") != -1:
                 console.print('[green]Successfully logged into FL')
                 self._save_cookies_secure(session, cookiefile)
@@ -373,7 +373,7 @@ class FL():
 
     async def download_new_torrent(self, session, id, torrent_path):
         download_url = f"https://filelist.io/download.php?id={id}"
-        r = session.get(url=download_url)
+        r = session.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)
@@ -405,7 +405,7 @@ class FL():
                 files = []
                 for screen in screen_glob:
                     files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=60)
                 final_desc = response.text.replace('\r\n', '\n')
             else:
                 # BD Description Generator
@@ -420,7 +420,7 @@ class FL():
                     files = []
                     for screen in screen_glob:
                         files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=60)
                     final_desc += response.text.replace('\r\n', '\n')
             descfile.write(final_desc)
 

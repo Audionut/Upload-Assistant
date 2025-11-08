@@ -17,7 +17,7 @@ import time
 import traceback
 import transmission_rpc
 import urllib.parse
-import xmlrpc.client
+import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
 from typing import Dict, DefaultDict
 
 from cogs.redaction import redact_private_info

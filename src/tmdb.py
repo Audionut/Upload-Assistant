@@ -1223,7 +1223,7 @@ async def get_romaji(tmdb_name, mal, meta):
 
         url = 'https://graphql.anilist.co'
         try:
-            response = requests.post(url, json={'query': query, 'variables': variables})
+            response = requests.post(url, json={'query': query, 'variables': variables}, timeout=10)
             json_data = response.json()
 
             demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]

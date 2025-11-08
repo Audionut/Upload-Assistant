@@ -224,7 +224,7 @@ class TTG():
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")  # Changed from .pkl to .json
                     self._load_cookies_secure(session, cookiefile)
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
                     mi_dump.close()
 
@@ -308,7 +308,7 @@ class TTG():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 self._load_cookies_secure(session, cookiefile)
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
@@ -328,7 +328,7 @@ class TTG():
             'passan': self.passan
         }
         with requests.Session() as session:
-            response = session.post(url, data=data)
+            response = session.post(url, data=data, timeout=30)
             await asyncio.sleep(0.5)
             if response.url.endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -339,7 +339,7 @@ class TTG():
                     'uid': self.uid
                 }
                 two_factor_url = "https://totheglory.im/take2fa.php"
-                response = session.post(two_factor_url, data=two_factor_data)
+                response = session.post(two_factor_url, data=two_factor_data, timeout=30)
                 await asyncio.sleep(0.5)
             if response.url.endswith('my.php'):
                 console.print('[green]Successfully logged into TTG')
