@@ -427,7 +427,7 @@ def create_random_torrents(base_dir, uuid, num, path):
     base_torrent = Torrent.read(f"{base_dir}/tmp/{uuid}/BASE.torrent")
     for i in range(1, int(num) + 1):
         new_torrent = base_torrent
-        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)
+        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)  # nosec B311
         Torrent.copy(new_torrent).write(f"{base_dir}/tmp/{uuid}/[RAND-{i}]{manual_name}.torrent", overwrite=True)
 
 

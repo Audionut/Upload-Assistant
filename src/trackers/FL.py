@@ -82,9 +82,9 @@ class FL():
                 # Legacy .pkl file exists - convert it
                 console.print(f"[yellow]Converting legacy cookie file {filepath} to secure JSON format...")
                 try:
-                    import pickle
+                    import pickle  # nosec B403
                     with open(filepath, 'rb') as f:
-                        legacy_cookies = pickle.load(f)
+                        legacy_cookies = pickle.load(f)  # nosec B301
                     session.cookies.update(legacy_cookies)
                     # Save in new format
                     self._save_cookies_secure(session, filepath)

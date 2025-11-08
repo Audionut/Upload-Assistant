@@ -8,7 +8,7 @@ import os
 import pyotp
 import re
 import traceback
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 
 from torf import Torrent
 

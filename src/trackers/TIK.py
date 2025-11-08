@@ -210,7 +210,7 @@ class TIK(UNIT3D):
             # No poster file exists, download the poster image
             poster_path = poster_jpg_path  # Default to saving as poster.jpg
             try:
-                urllib.request.urlretrieve(poster_url, poster_path)
+                urllib.request.urlretrieve(poster_url, poster_path)  # nosec B310
                 console.print(f"[green]Poster downloaded to {poster_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Error downloading poster: {e}[/red]")

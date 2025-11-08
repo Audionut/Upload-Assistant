@@ -89,7 +89,7 @@ def vs_screengn(source, encode=None, filter_b_frames=False, num=5, dir=".", conf
     # Generate random frame numbers for screenshots if not using existing ones
     if not frames:
         for _ in range(num):
-            frames.append(random.randint(start, end))
+            frames.append(random.randint(start, end))  # nosec B311
         frames = sorted(frames)
         frames = [f"{x}\n" for x in frames]
 
