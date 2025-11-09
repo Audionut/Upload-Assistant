@@ -43,7 +43,10 @@ async def process_site_upload_queue(meta, base_dir):
     queue = []
     for item in search_results:
         path = item.get('path')
-        imdb_id = item.get('imdb_id')
+        try:
+            imdb_id = item.get('imdb_id')
+        except KeyError:
+            imdb_id = 0
 
         if path and imdb_id and path not in processed_paths:
             # Set tracker and imdb_id in meta for this queue item
@@ -73,7 +76,11 @@ async def process_site_upload_item(queue_item, meta):
     meta['trackers'] = [queue_item['tracker']]
 
     # Set the IMDb ID
-    meta['imdb_id'] = queue_item['imdb_id']
+    try:
+        imdb = queue_item['imdb_id']
+    except KeyError:
+        imdb = 0
+    meta['imdb_id'] = imdb
 
     # Return the path for processing
     return queue_item['path']
@@ -222,7 +229,7 @@ async def _resolve_split_path(path):
     split_path = path.split()
     p1 = split_path[0]
 
-    for i, each in enumerate(split_path):
+    for i, _ in enumerate(split_path):
         try:
             if os.path.exists(p1) and not os.path.exists(f"{p1} {split_path[i + 1]}"):
                 queue.append(p1)
@@ -260,7 +267,7 @@ async def resolve_queue_with_glob_or_split(path, paths, allowed_extensions=None)
         await display_queue(queue)
     elif not os.path.exists(os.path.dirname(path)):
         queue = [
-            file for file in _resolve_split_path(path)
+            file for file in await _resolve_split_path(path)
             if os.path.isdir(file) or (os.path.isfile(file) and (allowed_extensions is None or file.lower().endswith(tuple(allowed_extensions))))
         ]
         await display_queue(queue)
