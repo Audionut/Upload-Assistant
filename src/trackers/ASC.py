@@ -116,7 +116,7 @@ class ASC:
             try:
                 api_results = await asyncio.gather(*coroutines)
 
-                for data_type, result_data in zip(data_types, api_results):
+                for data_type, result_data in zip(data_types, api_results, strict=True):
                     if result_data:  # Only assign if result_data is not None
                         if data_type == 'main':
                             self.main_tmdb_data = result_data
