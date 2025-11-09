@@ -48,7 +48,7 @@ async def process_site_upload_queue(meta, base_dir):
         except KeyError:
             imdb_id = 0
 
-        if path and imdb_id and path not in processed_paths:
+        if path and imdb_id is not None and path not in processed_paths:
             # Set tracker and imdb_id in meta for this queue item
             queue_item = {
                 'path': path,
@@ -343,7 +343,6 @@ async def handle_queue(path, meta, paths, base_dir):
             return [], None
 
     log_file = os.path.join(base_dir, "tmp", f"{meta.get('queue', 'default')}_queue.log")
-    allowed_extensions = ['.mkv', '.mp4', '.ts']
 
     if path.endswith('.txt') and meta.get('unit3d'):
         console.print(f"[bold yellow]Detected a text file for queue input: {path}[/bold yellow]")
