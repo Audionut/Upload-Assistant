@@ -1642,7 +1642,7 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
     filename = f"{save_dir}tmdb_localized_data.json"
 
     # Create a cache key for this specific request
-    cache_key = (language, data_type, filename)
+    cache_key = filename
 
     # Get or create a lock for this cache key
     if cache_key not in _cache_locks:
