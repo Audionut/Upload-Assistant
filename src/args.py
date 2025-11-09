@@ -78,10 +78,11 @@ class Args():
             usage="upload.py [path...] [options]",
         )
 
-        parser.add_argument('path', nargs='+', help="Path to file/directory (in single/double quotes is best)")
+        parser.add_argument('path', nargs='*', help="Path to file/directory (in single/double quotes is best)")
         parser.add_argument('--queue', nargs=1, required=False, help="(--queue queue_name) Process an entire folder (files/subfolders) in a queue")
         parser.add_argument('-lq', '--limit-queue', dest='limit_queue', nargs=1, required=False, help="Limit the amount of queue files processed", type=int, default=0)
         parser.add_argument('-sc', '--site-check', dest='site_check', action='store_true', required=False, help="Just search sites for suitable uploads and create log file, no uploading", default=False)
+        parser.add_argument('-su', '--site-upload', dest='site_upload', nargs=1, required=False, help="Specify a single tracker, and it will process the site searches and upload.", type=str, default=None)
         parser.add_argument('--unit3d', action='store_true', required=False, help="[parse a txt output file from UNIT3D-Upload-Checker]")
         parser.add_argument('-s', '--screens', nargs=1, required=False, help="Number of screenshots", default=int(self.config['DEFAULT']['screens']))
         parser.add_argument('-comps', '--comparison', nargs='+', required=False, help="Use comparison images from a folder (input folder path). See: https://github.com/Audionut/Upload-Assistant/pull/487", default=None)
@@ -189,6 +190,17 @@ class Args():
         args, before_args = parser.parse_known_args(input)
         args = vars(args)
         # console.print(args)
+
+        # Validation: require either path or site_upload
+        if not args.get('path') and not args.get('site_upload'):
+            console.print("[red]Error: Either a path must be provided or --site-upload must be specified.[/red]")
+            parser.print_help()
+            sys.exit(1)
+
+        # For site upload mode, provide a dummy path if none given
+        if args.get('site_upload') and not args.get('path'):
+            args['path'] = ['dummy_path_for_site_upload']
+
         if meta.get('manual_frames') is not None:
             try:
                 # Join the list into a single string, split by commas, and convert to integers
@@ -374,6 +386,13 @@ class Args():
                         meta[key] = value2
                 else:
                     meta[key] = value
+            if key == 'site_upload':
+                if isinstance(value, list) and len(value) == 1:
+                    meta[key] = value[0].upper()  # Extract the tracker acronym and uppercase it
+                elif value is not None:
+                    meta[key] = str(value).upper()
+                else:
+                    meta[key] = None
             if key in ("manual_edition"):
                 if isinstance(value, list) and len(value) == 1:
                     meta[key] = value[0]
