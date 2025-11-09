@@ -1639,29 +1639,37 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
     filename = f"{save_dir}tmdb_localized_data.json"
     localized_data = {}
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-
-                if os.path.exists(filename):
-                    async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
-                        content = await f.read()
-                        localized_data = json.loads(content)
-                else:
+    if os.path.exists(filename):
+        try:
+            async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                try:
+                    localized_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    console.print(f"[red]Warning: JSON decode error in {filename}: {e}. Creating new file.[/red]")
                     localized_data = {}
+        except Exception as e:
+            console.print(f"[red]Error reading localized data file {filename}: {e}[/red]")
+            localized_data = {}
 
-                localized_data.setdefault(language, {})[data_type] = data
+    if not localized_data:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    localized_data = {language: {data_type: data}}
+                    localized_data.setdefault(language, {})[data_type] = data
 
-                async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
-                    data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
-                    await f.write(data_str)
+                    async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
+                        data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
+                        await f.write(data_str)
 
-                return data
-            else:
-                print(f'Error fetching {url}: Status {response.status_code}')
-                return None
-    except httpx.RequestError as e:
-        print(f'Request failed for {url}: {e}')
-        return None
+                    return data
+                else:
+                    print(f'Request failed for {url}: Status code {response.status_code}')
+                    return None
+
+        except httpx.RequestError as e:
+            print(f'Request failed for {url}: {e}')
+            return None
