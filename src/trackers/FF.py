@@ -6,7 +6,6 @@ import httpx
 import os
 import platform
 import re
-import unicodedata
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
@@ -435,13 +434,11 @@ class FF:
             return 'x264'
 
     def edit_name(self, meta):
-        is_scene = bool(meta.get('scene_name'))
-        torrent_name = meta['scene_name'] if is_scene else meta['name']
+        scene_name = meta.get('scene_name', '')
+        name = scene_name if scene_name else meta['uuid']
 
-        name = torrent_name.replace(':', '-')
-        name = unicodedata.normalize("NFKD", name)
-        name = name.encode("ascii", "ignore").decode("ascii")
-        name = re.sub(r'[\\/*?"<>|]', '', name)
+        container = '.' + meta.get('container', 'mkv')
+        name = name.replace(container, '').replace(container.upper(), '')
 
         return name
 
