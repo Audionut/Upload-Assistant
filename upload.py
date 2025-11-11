@@ -1130,9 +1130,6 @@ async def main():
         console.print("[bold red]Program interrupted. Exiting safely.[/bold red]")
     except Exception as e:
         console.print(f"[bold red]Unexpected error: {e}[/bold red]")
-    finally:
-        await cleanup()
-        reset_terminal()
 
 
 if __name__ == "__main__":
@@ -1150,5 +1147,6 @@ if __name__ == "__main__":
         console.print(f"[bold red]Critical error: {e}[/bold red]")
     finally:
         asyncio.run(cleanup())
+        gc.collect()
         reset_terminal()
         sys.exit(0)

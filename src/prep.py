@@ -364,7 +364,11 @@ class Prep():
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
-            valid_mi = validate_mediainfo(meta, debug=meta['debug'])
+            try:
+                valid_mi = validate_mediainfo(meta, debug=meta['debug'])
+            except Exception as e:
+                console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
+                raise Exception(f"Upload Assistant does not support no audio media. Details: {str(e)}")
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
@@ -790,7 +794,7 @@ class Prep():
             meta['aka'] = ""
 
         # if it was skipped earlier, make sure we have the season/episode data
-        if not meta.get('not_anime', False):
+        if not meta.get('not_anime', False) and meta.get('category') == "TV":
             meta = await get_season_episode(video, meta)
 
         if meta['category'] == "TV":

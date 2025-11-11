@@ -71,7 +71,11 @@ class ASC:
         try:
             async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
                 content = await f.read()
-                tmdb_data = json.loads(content)
+                try:
+                    tmdb_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    console.print(f"[red]Warning: JSON decode error in {localized_data_file}: {e}. Continuing with empty data.[/red]")
+                    tmdb_data = {}
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
@@ -109,15 +113,26 @@ class ASC:
         if tasks_to_run:
             data_types, coroutines = zip(*tasks_to_run)
 
-            api_results = await asyncio.gather(*coroutines)
+            try:
+                api_results = await asyncio.gather(*coroutines)
 
-            for data_type, result_data in zip(data_types, api_results):
-                if data_type == 'main':
-                    self.main_tmdb_data = result_data
-                elif data_type == 'season':
-                    self.season_tmdb_data = result_data
-                elif data_type == 'episode':
-                    self.episode_tmdb_data = result_data
+                for data_type, result_data in zip(data_types, api_results, strict=True):
+                    if result_data:  # Only assign if result_data is not None
+                        if data_type == 'main':
+                            self.main_tmdb_data = result_data
+                        elif data_type == 'season':
+                            self.season_tmdb_data = result_data
+                        elif data_type == 'episode':
+                            self.episode_tmdb_data = result_data
+            except Exception as e:
+                console.print(f"[red]Error loading TMDB data: {e}[/red]")
+                # Ensure we have at least empty dicts to prevent KeyErrors
+                if not self.main_tmdb_data:
+                    self.main_tmdb_data = {}
+                if not self.season_tmdb_data:
+                    self.season_tmdb_data = {}
+                if not self.episode_tmdb_data:
+                    self.episode_tmdb_data = {}
 
     async def get_container(self, meta):
         if meta['is_disc'] == 'BDMV':
@@ -315,14 +330,14 @@ class ASC:
         base_name = name
 
         if meta['category'] == 'TV':
-            tv_title_ptbr = self.main_tmdb_data['name']
+            tv_title_ptbr = self.main_tmdb_data.get('name')
             if tv_title_ptbr and tv_title_ptbr.lower() != name.lower():
                 base_name = f"{tv_title_ptbr} ({name})"
 
             return f"{base_name} - {meta.get('season', '')}{meta.get('episode', '')}"
 
         else:
-            movie_title_ptbr = self.main_tmdb_data['title']
+            movie_title_ptbr = self.main_tmdb_data.get('title')
             if movie_title_ptbr and movie_title_ptbr.lower() != name.lower():
                 base_name = f"{movie_title_ptbr} ({name})"
 

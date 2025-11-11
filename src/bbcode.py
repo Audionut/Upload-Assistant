@@ -550,6 +550,11 @@ class BBCODE:
         desc = desc.replace('[/pre]', '[/code]')
         return desc
 
+    def convert_code_to_pre(self, desc):
+        desc = desc.replace('[code]', '[pre]')
+        desc = desc.replace('[/code]', '[/pre]')
+        return desc
+
     def convert_hide_to_spoiler(self, desc):
         desc = desc.replace('[hide', '[spoiler')
         desc = desc.replace('[/hide]', '[/spoiler]')

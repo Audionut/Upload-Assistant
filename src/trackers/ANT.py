@@ -241,6 +241,13 @@ class ANT:
                 console.print('[bold red]ANT only ALLOWS Movies.')
             meta['skipping'] = "ANT"
             return []
+
+        if meta.get('bloated', False):
+            if not meta['unattended']:
+                console.print('[bold red]ANT does not allow bloated releases.')
+            meta['skipping'] = "ANT"
+            return []
+
         dupes = []
         params = {
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),

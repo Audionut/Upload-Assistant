@@ -451,6 +451,7 @@ async def imdb_tmdb(meta, filename):
 
             elif isinstance(episode_details_result, Exception):
                 console.print(f"[red]TMDb episode details API call failed: {episode_details_result}[/red]")
+
     return meta
 
 

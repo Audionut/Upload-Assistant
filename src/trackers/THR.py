@@ -10,6 +10,7 @@ import platform
 import httpx
 from bs4 import BeautifulSoup
 from unidecode import unidecode
+from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -192,6 +193,7 @@ class THR():
 
     async def edit_desc(self, meta):
         pronfo = False
+        bbcode = BBCODE()
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
             if meta['tag'] == "":
@@ -220,7 +222,19 @@ class THR():
             if meta['mal_id'] != 0:
                 desc.write(f"MAL: https://myanimelist.net/anime/{meta['mal_id']}\n")
             desc.write("[/quote]")
-            desc.write(base)
+
+            if base:
+                # replace unsupported bbcode tags
+                base = bbcode.convert_named_spoiler_to_named_hide(base)
+                base = bbcode.convert_spoiler_to_hide(base)
+                base = bbcode.convert_code_to_pre(base)
+                # fix alignment for NFO content inherited from centering the spoiler
+                base = re.sub(r'(?P<open>\[hide=(Scene|FraMeSToR) NFO:\]\[pre\])(?P<content>.*?)(?P<close>\[/pre\]\[/hide\])',
+                              r'\g<open>[align=left]\g<content>[/align]\g<close>',
+                              base,
+                              flags=re.DOTALL)
+                desc.write("\n\n" + base)
+
             # REHOST IMAGES
             os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
             image_patterns = ["*.png", ".[!.]*.png"]
