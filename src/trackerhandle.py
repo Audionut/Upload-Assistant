@@ -17,7 +17,8 @@ async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
         'AITHER': {'mod_q': True, 'draft': False},
         'BHD': {'draft_live': True},
         'BLU': {'mod_q': True, 'draft': False},
-        'LST': {'mod_q': True, 'draft': True}
+        'LST': {'mod_q': True, 'draft': True},
+        'LT': {'mod_q': True, 'draft': False}
     }
 
     modq, draft = None, None
