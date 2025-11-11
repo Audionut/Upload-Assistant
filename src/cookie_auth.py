@@ -441,21 +441,21 @@ class CookieAuthUploader:
             except httpx.ConnectTimeout:
                 meta["tracker_status"][tracker]["status_message"] = "Connection timed out"
             except httpx.ReadTimeout:
-                meta["tracker_status"][tracker]["status_message"] += "Read timed out"
+                meta["tracker_status"][tracker]["status_message"] = "Read timed out"
             except httpx.ConnectError:
-                meta["tracker_status"][tracker]["status_message"] += "Failed to connect to the server"
+                meta["tracker_status"][tracker]["status_message"] = "Failed to connect to the server"
             except httpx.ProxyError:
-                meta["tracker_status"][tracker]["status_message"] += "Proxy connection failed"
+                meta["tracker_status"][tracker]["status_message"] = "Proxy connection failed"
             except httpx.DecodingError:
-                meta["tracker_status"][tracker]["status_message"] += "Response decoding failed"
+                meta["tracker_status"][tracker]["status_message"] = "Response decoding failed"
             except httpx.TooManyRedirects:
-                meta["tracker_status"][tracker]["status_message"] += "Too many redirects"
+                meta["tracker_status"][tracker]["status_message"] = "Too many redirects"
             except httpx.HTTPStatusError as e:
-                meta["tracker_status"][tracker]["status_message"] += f"HTTP error {e.response.status_code}: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"HTTP error {e.response.status_code}: {e}"
             except httpx.RequestError as e:
-                meta["tracker_status"][tracker]["status_message"] += f"Request error: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"Request error: {e}"
             except Exception as e:
-                meta["tracker_status"][tracker]["status_message"] += f"Unexpected upload error: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"Unexpected upload error: {e}"
 
         await self.common.add_tracker_torrent(meta, tracker, source_flag, user_announce_url, torrent_url)
         return False
