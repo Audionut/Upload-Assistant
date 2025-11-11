@@ -1,7 +1,8 @@
+import json
+import os
 import time
 import traceback
-import os
-import json
+import re
 
 from data.config import config
 from src.console import console
@@ -9,15 +10,19 @@ from src.trackers.COMMON import COMMON
 
 
 def determine_channel_count(channels, channel_layout, additional, format):
-    if not channels or not str(channels).isnumeric():
+    # Coerce channels to string and extract first integer (handles values like "6 channels", "8 / 6", etc.)
+    s = str(channels).strip() if channels is not None else ""
+    m = re.search(r"\d+", s)
+    if not m:
         return "Unknown"
 
-    channels = int(channels)
+    channels = int(m.group(0))
     channel_layout = channel_layout.strip() if channel_layout else ""
 
     # Handle specific Atmos/immersive audio cases first
     if is_atmos_or_immersive_audio(additional, format, channel_layout):
-        return handle_atmos_channel_count(channels, channel_layout)
+        if channel_layout:
+            return handle_atmos_channel_count(channels, channel_layout)
 
     # Handle standard channel layouts with proper LFE detection
     if channel_layout:
@@ -34,7 +39,7 @@ def is_atmos_or_immersive_audio(additional, format, channel_layout):
         'TrueHD Atmos', 'E-AC-3 JOC', 'Dolby Atmos'
     ]
 
-    dtsx_indicators = ['DTS:X', 'X', 'XLL X']
+    dtsx_indicators = ['DTS:X', 'XLL X']
 
     # Check in additional features
     if additional:
@@ -62,23 +67,6 @@ def is_atmos_or_immersive_audio(additional, format, channel_layout):
 
 def handle_atmos_channel_count(channels, channel_layout):
     """Handle Dolby Atmos and immersive audio channel counting."""
-    if not channel_layout:
-        # Common Atmos configurations based on total channel count
-        # Prioritize higher complexity configurations for ambiguous counts
-        if channels == 16:
-            return "7.1.8"   # 7.1 + 8 height (theoretical maximum for consumer)
-        elif channels == 14:
-            return "7.1.6"   # 7.1 + 6 height
-        elif channels == 12:
-            return "7.1.4"   # 7.1 + 4 height
-        elif channels == 10:
-            return "7.1.2"   # 7.1 + 2 height (more common than 5.1.4)
-        elif channels == 8:
-            return "7.1"     # Standard 7.1 bed layer (could also be 5.1.2)
-        elif channels == 6:
-            return "5.1"     # Standard 5.1 bed layer
-        else:
-            return f"{channels-1}.1"
 
     # Parse the layout to count bed and height channels
     bed_channels, lfe_count, height_channels = parse_atmos_layout(channel_layout)
@@ -172,7 +160,7 @@ def fallback_channel_count(channels):
     elif channels == 4:
         return "3.1"  # Assume L/R/C/LFE
     elif channels == 5:
-        return "4.1"  # Assume L/R/C/Ls/Rs (no LFE) or L/R/Ls/Rs/LFE
+        return "4.1"  # Assume L/R/Ls/Rs/LFE
     elif channels == 6:
         return "5.1"  # Standard 5.1
     elif channels == 7:
@@ -180,7 +168,6 @@ def fallback_channel_count(channels):
     elif channels == 8:
         return "7.1"  # Standard 7.1
     else:
-        # For higher channel counts, assume last channel is LFE
         return f"{channels - 1}.1"
 
 
