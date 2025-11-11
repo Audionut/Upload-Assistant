@@ -98,7 +98,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
             elif meta.get('is_disc') == "BDMV" and meta.get('discs'):
                 if meta['debug']:
                     console.print("[cyan]Checking BDMV playlists for edition matches...[/cyan]")
-                matched_editions = []
+                matched_editions: list[str] = []
 
                 all_playlists = []
                 for disc in meta['discs']:
@@ -112,8 +112,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                     console.print(f"[cyan]Found {len(all_playlists)} playlists to check against IMDb editions[/cyan]")
 
                 leeway_seconds = 50
-                matched_editions_with_attributes = []
-                matched_editions_without_attributes = []
+                matched_editions_with_attributes: list[str] = []
+                matched_editions_without_attributes: list[str] = []
 
                 for playlist in all_playlists:
                     if playlist.get('file', None):
@@ -171,16 +171,20 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                         console.print(f"[yellow]Using closest match: {selected['name']}[/yellow]")
 
                                     # Add the selected edition to our matches
-                                    if selected == playlist_edition:
+                                    if isinstance(selected, str):
                                         console.print(f"[green]Using playlist edition: {selected}[/green]")
-                                        matched_editions_with_attributes.append(selected)
+                                        if selected not in matched_editions_with_attributes:
+                                            matched_editions_with_attributes.append(selected)
                                     elif selected['has_attributes']:
-                                        if selected['name'] not in matched_editions_with_attributes:
-                                            matched_editions_with_attributes.append(selected['name'])
-                                            console.print(f"[green]Added edition with attributes: {selected['name']}[/green]")
+                                        edition_name = selected['name']
+                                        if edition_name not in matched_editions_with_attributes:
+                                            matched_editions_with_attributes.append(edition_name)
+                                            console.print(f"[green]Added edition with attributes: {edition_name}[/green]")
                                     else:
-                                        matched_editions_without_attributes.append(str(selected['minutes']))
-                                        console.print(f"[yellow]Added edition without attributes: {selected['name']}[/yellow]")
+                                        minutes_value = str(selected['minutes'])
+                                        if minutes_value not in matched_editions_without_attributes:
+                                            matched_editions_without_attributes.append(minutes_value)
+                                            console.print(f"[yellow]Added edition without attributes: {selected['name']}[/yellow]")
 
                                 except Exception as e:
                                     console.print(f"[red]Error processing selection: {e}. Using closest match.[/red]")
