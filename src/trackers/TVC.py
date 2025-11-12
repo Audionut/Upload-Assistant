@@ -401,7 +401,16 @@ class TVC():
                 season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
                 meta['season_air_first_date'] = season_info['air_date']
                 meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
-
+                meta['episodes'] = []
+                # inject episode list
+                for ep in season_info.get('episodes', []):
+                    code = f"S{str(ep.get('season_number')).zfill(2)}E{str(ep.get('episode_number')).zfill(2)}"
+                    meta['episodes'].append({
+                        "code": code,
+                        "title": ep.get("name", "").strip(),
+                        "airdate": ep.get("air_date", ""),
+                        "overview": ep.get("overview", "").strip()
+                    })
                 if hasattr(tv, 'first_air_date'):
                     meta['first_air_date'] = tv.first_air_date
         except Exception:
@@ -516,6 +525,24 @@ class TVC():
                 desc += "[center]\n"
                 desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
                 desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
+                if meta.get('episodes'):
+                    desc += "\n\n[b]Episode List[/b]\n\n"
+                    for ep in meta['episodes']:
+                        ep_num = ep.get('code', '')
+                        ep_title = ep.get('title', '').strip()
+                        ep_date = ep.get('airdate', '')
+                        ep_overview = ep.get('overview', '').strip()
+
+                    desc += f"[b]{ep_num}[/b]"
+                    if ep_title:
+                        desc += f" – {ep_title}"
+                    if ep_date:
+                        formatted_date = self.format_date_ddmmyyyy(ep_date)
+                        desc += f" ({formatted_date})"
+                    desc += "\n"
+
+                    if ep_overview:
+                        desc += f"{ep_overview}\n\n"
 
                 desc += self.get_links(meta)
 
