@@ -433,7 +433,7 @@ class FF:
         else:
             return 'x264'
 
-    def edit_name(self, meta):
+    async def edit_name(self, meta):
         scene_name = meta.get('scene_name', '')
         name = scene_name if scene_name else meta['uuid']
 
@@ -590,7 +590,7 @@ class FF:
     async def upload(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
-        torrent_name = self.edit_name(meta)
+        torrent_name = await self.edit_name(meta)
         files = {}
         files['poster'] = await self.get_poster(meta)
         nfo = self.get_nfo(meta)
