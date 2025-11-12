@@ -15,7 +15,7 @@ class PHD(AZTrackerBase):
             "RARBG", "STUTTERSHIT", "LiGaS", "DDR", "Zeus", "TBS", "SWTYBLZ", "EASports", "C4K", "d3g",
             "MeGusta", "YTS", "YIFY", "Tigole", "x0r", "nikt0", "NhaNc3", "PRoDJi", "RDN", "SANTi",
             "FaNGDiNG0", "FRDS", "HD2DVD", "HDTime", "iPlanet", "KiNGDOM", "Leffe", "4K4U", "Xiaomi",
-            "VisionXpert", "WKS", ['EVO', 'WEB-DL only'], ['FGT', 'WEB-DL only']
+            "VisionXpert", "WKS"
         ]
         self.base_url = 'https://privatehd.to'
         self.torrent_url = f'{self.base_url}/torrent/'
