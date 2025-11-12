@@ -136,49 +136,6 @@ jobs:
         echo "Checking for unused code..."
         vulture . --exclude=venv,env,.venv,.git --min-confidence=80 || true
 
-    - name: Check for Common Issues
-      run: |
-        echo "Checking for common Python issues..."
-        python -c "
-        import os
-        import re
-        import sys
-        
-        issues = []
-        
-        for root, dirs, files in os.walk('.'):
-            dirs[:] = [d for d in dirs if d not in ['.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env']]
-            
-            for file in files:
-                if file.endswith('.py'):
-                    filepath = os.path.join(root, file)
-                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                        lines = content.split('\n')
-                        
-                        for i, line in enumerate(lines, 1):
-                            # Check for bare except clauses
-                            if re.search(r'except\s*:', line):
-                                issues.append(f'{filepath}:{i} - Bare except clause found')
-                            
-                            # Check for print statements (should use logging)
-                            if re.search(r'\bprint\s*\(', line) and 'debug' not in line.lower():
-                                issues.append(f'{filepath}:{i} - Print statement found (consider using logging)')
-                            
-                            # Check for TODO/FIXME comments
-                            if re.search(r'#.*(?:TODO|FIXME|XXX)', line, re.IGNORECASE):
-                                issues.append(f'{filepath}:{i} - TODO/FIXME comment found: {line.strip()}')
-        
-        if issues:
-            print('Found potential issues:')
-            for issue in issues[:50]:  # Limit output
-                print(issue)
-            if len(issues) > 50:
-                print(f'... and {len(issues) - 50} more issues')
-        else:
-            print('No common issues found')
-        "
-
   summary:
     runs-on: ubuntu-latest
     needs: code-analysis
