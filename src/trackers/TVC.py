@@ -400,6 +400,7 @@ class TVC():
             if 'tv_pack' in meta and meta['tv_pack']:
                 season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
                 meta['season_air_first_date'] = season_info['air_date']
+                meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
 
                 if hasattr(tv, 'first_air_date'):
                     meta['first_air_date'] = tv.first_air_date
