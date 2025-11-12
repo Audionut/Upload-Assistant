@@ -305,7 +305,11 @@ class AZTrackerBase:
     async def get_file_info(self, meta):
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
-            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
+            if self.tracker == 'CZ':
+                summary_file = 'BD_SUMMARY_EXT_00'
+            else:
+                summary_file = 'BD_SUMMARY_00'
+            info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/{summary_file}.txt"
         else:
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
 

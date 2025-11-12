@@ -374,7 +374,6 @@ class CookieAuthUploader:
             meta["tracker_status"][tracker]["status_message"] = error
             return False
 
-        status_message = ""
         user_announce_url = self.config["TRACKERS"][tracker]["announce_url"]
 
         files = await self.load_torrent_file(
@@ -394,7 +393,7 @@ class CookieAuthUploader:
 
         if meta.get("debug", False):
             self.upload_debug(tracker, data)
-            status_message = "Debug mode enabled, not uploading"
+            meta["tracker_status"][tracker]["status_message"] = "Debug mode enabled, not uploading"
 
         else:
             success = False
@@ -440,26 +439,25 @@ class CookieAuthUploader:
                         )
 
             except httpx.ConnectTimeout:
-                status_message = "Connection timed out"
+                meta["tracker_status"][tracker]["status_message"] = "Connection timed out"
             except httpx.ReadTimeout:
-                status_message += "Read timed out"
+                meta["tracker_status"][tracker]["status_message"] = "Read timed out"
             except httpx.ConnectError:
-                status_message += "Failed to connect to the server"
+                meta["tracker_status"][tracker]["status_message"] = "Failed to connect to the server"
             except httpx.ProxyError:
-                status_message += "Proxy connection failed"
+                meta["tracker_status"][tracker]["status_message"] = "Proxy connection failed"
             except httpx.DecodingError:
-                status_message += "Response decoding failed"
+                meta["tracker_status"][tracker]["status_message"] = "Response decoding failed"
             except httpx.TooManyRedirects:
-                status_message += "Too many redirects"
+                meta["tracker_status"][tracker]["status_message"] = "Too many redirects"
             except httpx.HTTPStatusError as e:
-                status_message += f"HTTP error {e.response.status_code}: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"HTTP error {e.response.status_code}: {e}"
             except httpx.RequestError as e:
-                status_message += f"Request error: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"Request error: {e}"
             except Exception as e:
-                status_message += f"Unexpected upload error: {e}"
+                meta["tracker_status"][tracker]["status_message"] = f"Unexpected upload error: {e}"
 
         await self.common.add_tracker_torrent(meta, tracker, source_flag, user_announce_url, torrent_url)
-        meta["tracker_status"][tracker]["status_message"] = status_message
         return False
 
     def upload_debug(self, tracker, data):

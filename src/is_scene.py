@@ -62,6 +62,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
                             save_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
                             os.makedirs(save_path, exist_ok=True)
                             nfo_file_path = os.path.join(save_path, f"{release_lower}.nfo")
+                            meta['scene_nfo_file'] = nfo_file_path
 
                             # Download the NFO file
                             nfo_response = requests.get(nfo_url, timeout=30)

@@ -201,37 +201,53 @@ class DiscParse():
                         bdinfo_text = playlist_report_path
                     else:
                         try:
-                            # Scanning playlist block (as before)
+                            bdinfo_executable = None
                             if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-                                if shutil.which("mono"):
-                                    proc = await asyncio.create_subprocess_exec(
-                                        'mono', f"{base_dir}/bin/BDInfo/BDInfo.exe", path, '-m', playlist['file'], save_dir
-                                    )
+                                bdinfo_exe_path = f"{base_dir}/bin/BDInfo/BDInfo.exe"
+                                if shutil.which("mono") and os.path.exists(bdinfo_exe_path):
+                                    bdinfo_executable = ['mono', bdinfo_exe_path, path, '-m', playlist['file'], save_dir]
                                 elif shutil.which("bdinfo"):
-                                    proc = await asyncio.create_subprocess_exec(
-                                        "bdinfo", path, '-m', playlist['file'], save_dir
-                                    )
+                                    bdinfo_executable = ["bdinfo", path, '-m', playlist['file'], save_dir]
+                                elif shutil.which("BDInfo"):
+                                    bdinfo_executable = ["BDInfo", path, '-m', playlist['file'], save_dir]
                                 else:
-                                    proc = await asyncio.create_subprocess_exec(
-                                        "BDInfo", path, '-m', playlist['file'], save_dir
-                                    )
+                                    console.print(f"[bold red]BDInfo not found. Please install mono and place BDInfo.exe in {base_dir}/bin/BDInfo/ or install native bdinfo[/bold red]")
+                                    continue
                             elif sys.platform.startswith('win32'):
-                                proc = await asyncio.create_subprocess_exec(
-                                    f"{base_dir}/bin/BDInfo/BDInfo.exe", '-m', playlist['file'], path, save_dir
-                                )
+                                bdinfo_exe_path = f"{base_dir}/bin/BDInfo/BDInfo.exe"
+                                if os.path.exists(bdinfo_exe_path):
+                                    bdinfo_executable = [bdinfo_exe_path, '-m', playlist['file'], path, save_dir]
+                                else:
+                                    console.print(f"[bold red]BDInfo.exe not found at {bdinfo_exe_path}[/bold red]")
+                                    console.print(f"[yellow]Please download BDInfo and place BDInfo.exe in {base_dir}/bin/BDInfo/[/yellow]")
+                                    continue
                             else:
                                 console.print("[red]Unsupported platform for BDInfo.")
                                 continue
 
-                            await proc.wait()
+                            if bdinfo_executable:
+                                proc = await asyncio.create_subprocess_exec(
+                                    *bdinfo_executable,
+                                    stdout=asyncio.subprocess.PIPE,
+                                    stderr=asyncio.subprocess.PIPE
+                                )
+                                stdout, stderr = await proc.communicate()
 
-                            # Rename the output to playlist_report_path
-                            for file in os.listdir(save_dir):
-                                if file.startswith("BDINFO") and file.endswith(".txt"):
-                                    bdinfo_text = os.path.join(save_dir, file)
-                                    shutil.move(bdinfo_text, playlist_report_path)
-                                    bdinfo_text = playlist_report_path  # Update bdinfo_text to the renamed file
-                                    break
+                                if proc.returncode != 0:
+                                    console.print(f"[bold red]BDInfo failed with return code {proc.returncode}[/bold red]")
+                                    if stderr:
+                                        console.print(f"[red]BDInfo stderr: {stderr.decode().strip()}[/red]")
+                                    if stdout:
+                                        console.print(f"[yellow]BDInfo stdout: {stdout.decode().strip()}[/yellow]")
+                                    continue
+
+                                # Rename the output to playlist_report_path
+                                for file in os.listdir(save_dir):
+                                    if file.startswith("BDINFO") and file.endswith(".txt"):
+                                        bdinfo_text = os.path.join(save_dir, file)
+                                        shutil.move(bdinfo_text, playlist_report_path)
+                                        bdinfo_text = playlist_report_path  # Update bdinfo_text to the renamed file
+                                        break
                         except Exception as e:
                             console.print(f"[bold red]Error scanning playlist {playlist['file']}: {e}")
                             continue

@@ -104,7 +104,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'Foxtel': 'FXTL', 'FYI': 'FYI', 'FYI Network': 'FYI', 'GC': 'GC', 'NHL GameCenter': 'GC', 'GLBL': 'GLBL',
         'Global': 'GLBL', 'GLBO': 'GLBO', 'Globoplay': 'GLBO', 'GLOB': 'GLOB', 'GloboSat Play': 'GLOB', 'GO90': 'GO90', 'GagaOOLala': 'Gaga', 'HBO': 'HBO',
         'HBO Go': 'HBO', 'HGTV': 'HGTV', 'HIDI': 'HIDI', 'HIST': 'HIST', 'History': 'HIST', 'HLMK': 'HLMK', 'Hallmark': 'HLMK',
-        'HMAX': 'HMAX', 'HBO Max': 'HMAX', 'HS': 'HTSR', 'HTSR': 'HTSR', 'HSTR': 'Hotstar', 'HULU': 'HULU', 'Hulu': 'HULU',
+        'HMAX': 'HMAX', 'HBO Max': 'HMAX', 'HBOMAX': 'HMAX', 'HS': 'HTSR', 'HTSR': 'HTSR', 'HSTR': 'Hotstar', 'HULU': 'HULU', 'Hulu': 'HULU',
         'hoichoi': 'HoiChoi', 'ID': 'ID', 'Investigation Discovery': 'ID', 'IFC': 'IFC', 'iflix': 'IFX',
         'National Audiovisual Institute': 'INA', 'ITV': 'ITV', 'JOYN': 'JOYN', 'KAYO': 'KAYO', 'KNOW': 'KNOW', 'Knowledge Network': 'KNOW',
         'KNPY': 'KNPY', 'Kanopy': 'KNPY', 'Kocowa+': 'KCW', 'Kocowa': 'KCW', 'KCW': 'KCW', 'LIFE': 'LIFE', 'Lifetime': 'LIFE', 'LN': 'LN', 'MA': 'MA', 'Looke': 'LOOKE', 'LOOKE': 'LOOKE', 'Movies Anywhere': 'MA',

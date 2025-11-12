@@ -23,6 +23,9 @@ TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 parser = Args(config=config)
 
+# Module-level dict to store async locks for cache keys to prevent race conditions
+_cache_locks = {}
+
 
 async def normalize_title(title):
     return title.lower().replace('&', 'and').replace('  ', ' ').strip()
@@ -1637,31 +1640,68 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
 
     save_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}/"
     filename = f"{save_dir}tmdb_localized_data.json"
-    localized_data = {}
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params)
-            if response.status_code == 200:
-                data = response.json()
+    # Create a cache key for this specific request
+    cache_key = filename
 
-                if os.path.exists(filename):
-                    async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
-                        content = await f.read()
+    # Get or create a lock for this cache key
+    if cache_key not in _cache_locks:
+        _cache_locks[cache_key] = asyncio.Lock()
+
+    cache_lock = _cache_locks[cache_key]
+
+    async with cache_lock:
+        # Re-read the cache file while holding the lock
+        localized_data = {}
+        if os.path.exists(filename):
+            try:
+                async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    try:
                         localized_data = json.loads(content)
+                    except json.JSONDecodeError as e:
+                        console.print(f"[red]Warning: JSON decode error in {filename}: {e}. Creating new file.[/red]")
+                        localized_data = {}
+            except Exception as e:
+                console.print(f"[red]Error reading localized data file {filename}: {e}[/red]")
+                localized_data = {}
+
+        # Re-check if we have cached data for this specific language and data_type
+        cached_result = localized_data.get(language, {}).get(data_type)
+        if cached_result:
+            return cached_result
+
+        # Fetch from API if not in cache
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+
+                    # Merge the fetched data into existing cache
+                    localized_data.setdefault(language, {})[data_type] = data
+
+                    # Attempt to write to disk, but don't fail if write errors occur
+                    try:
+                        async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
+                            data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
+                            await f.write(data_str)
+                    except (OSError, IOError, Exception) as e:
+                        console.print(f'[red]Warning: Failed to write cache to {filename}: {e}[/red]')
+
+                    return data
                 else:
-                    localized_data = {}
+                    console.print(f'[red]Request failed for {url}: Status code {response.status_code}[/red]')
+                    return None
 
-                localized_data.setdefault(language, {})[data_type] = data
-
-                async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
-                    data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
-                    await f.write(data_str)
-
-                return data
-            else:
-                print(f'Error fetching {url}: Status {response.status_code}')
-                return None
-    except httpx.RequestError as e:
-        print(f'Request failed for {url}: {e}')
-        return None
+        except httpx.RequestError as e:
+            console.print(f'[red]Request failed for {url}: {e}[/red]')
+            return None
+        finally:
+            # Optional cleanup: remove the lock if it's no longer being used
+            # Only clean up if this is the only reference to avoid race conditions
+            if cache_key in _cache_locks and not cache_lock.locked():
+                try:
+                    del _cache_locks[cache_key]
+                except KeyError:
+                    pass  # Already deleted by another coroutine
