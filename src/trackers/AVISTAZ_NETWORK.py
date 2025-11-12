@@ -233,7 +233,7 @@ class AZTrackerBase:
                 else:
                     meta['skipping'] = f'{self.tracker}'
                     return
-                    
+
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
