@@ -587,7 +587,7 @@ class TVC():
                     desc += f"{meta['logo']}[/img]\n\n"
 
                 desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
-                desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
+                desc += f"[b]This series premiered on:[/b] {channel} on {airdate}\n"
 
                 # Episode list
                 if meta.get('episodes'):
