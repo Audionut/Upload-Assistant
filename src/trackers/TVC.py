@@ -603,7 +603,7 @@ class TVC():
             else:
                 overview = str(meta.get('overview', '')).strip()
                 desc += "[center]\n"
-                if meta['category'] == "Movie" and meta.get("logo"):
+                if meta['category'].upper() == "MOVIE" and meta.get("logo"):
                     desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
                     desc += f"{meta['logo']}[/img]\n\n"
 
