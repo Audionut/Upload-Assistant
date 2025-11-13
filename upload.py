@@ -488,7 +488,7 @@ async def process_meta(meta, base_dir, bot=None):
                         try:
                             await disc_screenshots(
                                 meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
-                                meta.get('image_list', []), meta.get('ffdebug', False), None
+                                meta.get('image_list', []), None
                             )
                         except asyncio.CancelledError:
                             await cleanup_screenshot_temp_files(meta)
@@ -730,7 +730,7 @@ def get_local_version(version_file):
 def get_remote_version(url):
     """Fetches the latest version information from the remote repository."""
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             content = response.text
             match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
@@ -747,7 +747,7 @@ def get_remote_version(url):
         return None, None
 
 
-def extract_changelog(content, from_version, to_version):
+def extract_changelog(content, to_version):
     """Extracts the changelog entries between the specified versions."""
     # Try to find the to_version with 'v' prefix first (current format)
     patterns_to_try = [
@@ -789,7 +789,7 @@ async def update_notification(base_dir):
         console.print(f"[red][NOTICE] [green]Current version: v[/green][yellow]{local_version}")
         asyncio.create_task(asyncio.sleep(1))
         if verbose and remote_content:
-            changelog = extract_changelog(remote_content, local_version, remote_version)
+            changelog = extract_changelog(remote_content, remote_version)
             if changelog:
                 asyncio.create_task(asyncio.sleep(1))
                 console.print(f"{changelog}")
@@ -801,6 +801,21 @@ async def update_notification(base_dir):
 
 async def do_the_thing(base_dir):
     await asyncio.sleep(0.1)  # Ensure it's not racing
+
+    tmp_dir = os.path.join(base_dir, "tmp")
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
+    else:
+        # Ensure existing directory has secure permissions
+        os.chmod(tmp_dir, 0o700)
+
+    def ensure_secure_tmp_subdir(subdir_path):
+        """Ensure tmp subdirectories are created with secure permissions (0o700)"""
+        if not os.path.exists(subdir_path):
+            os.makedirs(subdir_path, mode=0o700, exist_ok=True)
+        else:
+            os.chmod(subdir_path, 0o700)
+
     bot = None
     meta = dict()
     paths = []
@@ -879,10 +894,13 @@ async def do_the_thing(base_dir):
 
                 tmp_path = os.path.join(base_dir, "tmp", os.path.basename(path))
 
+                # Ensure tmp subdirectory exists with secure permissions
+                ensure_secure_tmp_subdir(tmp_path)
+
                 if meta.get('delete_tmp', False) and os.path.exists(tmp_path):
                     try:
                         shutil.rmtree(tmp_path)
-                        os.makedirs(tmp_path, exist_ok=True)
+                        os.makedirs(tmp_path, mode=0o700, exist_ok=True)
                         if meta['debug']:
                             console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
                             console.print()

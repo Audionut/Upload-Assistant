@@ -318,8 +318,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
         try:
             if meta['is_disc'] == "BDMV":
                 await disc_screenshots(meta, filename, meta['bdinfo'], folder_id, base_dir,
-                                       meta.get('vapoursynth', False), [], meta.get('ffdebug', False),
-                                       needed_screenshots, True)
+                                       meta.get('vapoursynth', False), [], needed_screenshots, True)
             elif meta['is_disc'] == "DVD":
                 await dvd_screenshots(meta, 0, None, True)
             else:

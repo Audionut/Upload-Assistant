@@ -40,7 +40,7 @@ class HDT:
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             success_text='usercp.php',
-            token_pattern=r'name="csrfToken" value="([^"]+)"'
+            token_pattern=r'name="csrfToken" value="([^"]+)"'  # nosec B106
         )
 
     async def get_category_id(self, meta):

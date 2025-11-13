@@ -75,10 +75,6 @@ def calculate_piece_size(total_size, min_size, max_size, files, meta):
 
 
 class CustomTorrent(torf.Torrent):
-    # Default piece size limits
-    torf.Torrent.piece_size_min = 32768  # 32 KiB
-    torf.Torrent.piece_size_max = 134217728
-
     def __init__(self, meta, *args, **kwargs):
         self._meta = meta
 
@@ -234,12 +230,21 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
     # If using mkbrr, run the external application
     if meta.get('mkbrr'):
         try:
+            # Validate input path to prevent potential command injection
+            if not os.path.exists(path):
+                raise ValueError(f"Path does not exist: {path}")
+
             mkbrr_binary = get_mkbrr_path(meta)
+
+            # Validate mkbrr binary exists and is executable
+            if not os.path.exists(mkbrr_binary):
+                raise FileNotFoundError(f"mkbrr binary not found: {mkbrr_binary}")
+
             output_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"{output_filename}.torrent")
 
             # Ensure executable permission for non-Windows systems
             if not sys.platform.startswith("win"):
-                os.chmod(mkbrr_binary, 0o755)
+                os.chmod(mkbrr_binary, 0o700)
 
             cmd = [mkbrr_binary, "create", path]
 
@@ -418,7 +423,7 @@ def create_random_torrents(base_dir, uuid, num, path):
     base_torrent = Torrent.read(f"{base_dir}/tmp/{uuid}/BASE.torrent")
     for i in range(1, int(num) + 1):
         new_torrent = base_torrent
-        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)
+        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)  # nosec B311
         Torrent.copy(new_torrent).write(f"{base_dir}/tmp/{uuid}/[RAND-{i}]{manual_name}.torrent", overwrite=True)
 
 

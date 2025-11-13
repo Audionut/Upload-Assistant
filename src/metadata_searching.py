@@ -261,7 +261,7 @@ async def imdb_tmdb_tvdb(meta, filename):
     return meta
 
 
-async def imdb_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
+async def imdb_tvdb(meta, filename):
     if meta['debug']:
         console.print("[yellow]Both IMDb and TVDB IDs are present[/yellow]")
     tasks = [

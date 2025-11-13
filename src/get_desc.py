@@ -94,7 +94,7 @@ async def gen_desc(meta):
                 split = os.path.split(parsed.path)
                 raw = parsed._replace(path=f"{split[0]}/raw/{split[1]}" if split[0] != '/' else f"/raw{parsed.path}")
                 raw_url = urllib.parse.urlunparse(raw)
-                description_link_content = requests.get(raw_url).text
+                description_link_content = requests.get(raw_url, timeout=10).text
                 cleaned_content = clean_text(description_link_content)
                 if cleaned_content:
                     if not content_written:

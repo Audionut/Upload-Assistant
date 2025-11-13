@@ -86,7 +86,7 @@ class BHDTV():
         }
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, data=data, files=files)
+            response = requests.post(url=self.upload_url, data=data, files=files, timeout=60)
             try:
                 # pprint(data)
                 meta['tracker_status'][self.tracker]['status_message'] = response.json()

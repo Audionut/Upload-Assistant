@@ -329,7 +329,7 @@ class ACM(UNIT3D):
         }
 
         try:
-            response = requests.get(url=self.search_url, params=params)
+            response = requests.get(url=self.search_url, params=params, timeout=30)
             response.raise_for_status()
             response_data = response.json()
 

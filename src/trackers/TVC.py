@@ -265,7 +265,7 @@ class TVC():
             return
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params, timeout=60)
             try:
                 # some reason this does not return json instead it returns something like below.
                 # b'application/x-bittorrent\n{"success":true,"data":"https:\\/\\/tvchaosuk.com\\/torrent\\/download\\/164633.REDACTED","message":"Torrent uploaded successfully."}'

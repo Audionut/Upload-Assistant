@@ -2,10 +2,10 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import os
+import stat
 from pathlib import Path
 import json
 import glob
-import pickle
 import httpx
 from unidecode import unidecode
 from urllib.parse import urlparse
@@ -30,6 +30,56 @@ class PTER():
         self.signature = None
         self.banned_groups = [""]
 
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}[/red]")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
+            raise
+
+    def _load_cookies_secure(self, session, cookiefile):
+        """Securely load session cookies from JSON instead of pickle"""
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=cookie_data.get('domain'),
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
+            raise
+
     async def validate_credentials(self, meta):
         vcookie = await self.validate_cookies(meta)
         if vcookie is not True:
@@ -44,7 +94,7 @@ class PTER():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
 
                 if resp.text.find("""<a href="#" data-url="logout.php" id="logout-confirm">""") != -1:
                     return True
@@ -218,13 +268,12 @@ class PTER():
     async def get_auth_token(self, meta):
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
-        cookiefile = f"{meta['base_dir']}/data/cookies/Pterimg.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/Pterimg.json"  # Changed from .pickle to .json
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                r = session.get("https://s3.pterclub.com")
+                self._load_cookies_secure(session, cookiefile)
+                r = session.get("https://s3.pterclub.com", timeout=30)
                 loggedIn = await self.validate_login(r)
             else:
                 console.print("[yellow]Pterimg Cookies not found. Creating new session.")
@@ -236,14 +285,13 @@ class PTER():
                     'password': self.password,
                     'keep-login': 1
                 }
-                r = session.get("https://s3.pterclub.com")
+                r = session.get("https://s3.pterclub.com", timeout=30)
                 data['auth_token'] = re.search(r'auth_token.*?\"(\w+)\"', r.text).groups()[0]
-                loginresponse = session.post(url='https://s3.pterclub.com/login', data=data)
+                loginresponse = session.post(url='https://s3.pterclub.com/login', data=data, timeout=30)
                 if not loginresponse.ok:
                     raise LoginException("Failed to login to Pterimg. ")  # noqa #F405
                 auth_token = re.search(r'auth_token = *?\"(\w+)\"', loginresponse.text).groups()[0]
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                self._save_cookies_secure(session.cookies, cookiefile)
 
         return auth_token
 
@@ -264,27 +312,26 @@ class PTER():
             'nsfw': 0,
             'auth_token': await self.get_auth_token(meta)
         }
-        cookiefile = f"{meta['base_dir']}/data/cookies/Pterimg.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/Pterimg.json"  # Changed from .pickle to .json
         with requests.Session() as session:
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                    files = {}
-                    for i in range(len(images)):
-                        files = {'source': open(images[i], 'rb')}
-                        req = session.post(f'{url}/json', data=data, files=files)
-                        try:
-                            res = req.json()
-                        except json.decoder.JSONDecodeError:
-                            res = {}
-                        if not req.ok:
-                            if res['error']['message'] in ('重复上传', 'Duplicated upload'):
-                                continue
-                            raise (f'HTTP {req.status_code}, reason: {res["error"]["message"]}')
-                        image_dict = {}
-                        image_dict['web_url'] = res['image']['url']
-                        image_dict['img_url'] = res['image']['url']
-                        image_list.append(image_dict)
+                self._load_cookies_secure(session, cookiefile)
+                files = {}
+                for i in range(len(images)):
+                    files = {'source': open(images[i], 'rb')}
+                    req = session.post(f'{url}/json', data=data, files=files, timeout=60)
+                    try:
+                        res = req.json()
+                    except json.decoder.JSONDecodeError:
+                        res = {}
+                    if not req.ok:
+                        if res['error']['message'] in ('重复上传', 'Duplicated upload'):
+                            continue
+                        raise (f'HTTP {req.status_code}, reason: {res["error"]["message"]}')
+                    image_dict = {}
+                    image_dict['web_url'] = res['image']['url']
+                    image_dict['img_url'] = res['image']['url']
+                    image_list.append(image_dict)
         return image_list
 
     async def edit_name(self, meta):
@@ -384,7 +431,7 @@ class PTER():
                 if os.path.exists(cookiefile):
                     with requests.Session() as session:
                         session.cookies.update(await common.parseCookieFile(cookiefile))
-                        up = session.post(url=url, data=data, files=files)
+                        up = session.post(url=url, data=data, files=files, timeout=60)
                         torrentFile.close()
                         mi_dump.close()
 
@@ -400,7 +447,7 @@ class PTER():
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://pterclub.com/download.php?id={id}&passkey={self.passkey}"
-        r = requests.get(url=download_url)
+        r = requests.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)

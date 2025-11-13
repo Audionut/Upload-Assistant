@@ -260,7 +260,7 @@ class THR():
                     # 'source' : base64.b64encode(open(image, "rb").read()).decode('utf8')
                 }
                 files = {'source': open(image, 'rb')}
-                response = requests.post(url, data=data, files=files)
+                response = requests.post(url, data=data, files=files, timeout=60)
                 try:
                     response = response.json()
                     # med_url = response['image']['medium']['url']
@@ -286,7 +286,7 @@ class THR():
                     'theme': self.config['TRACKERS']['THR'].get('pronfo_theme', 'gray'),
                     'rapi': self.config['TRACKERS']['THR'].get('pronfo_rapi_id')
                 }
-                response = requests.post(pronfo_url, data=data)
+                response = requests.post(pronfo_url, data=data, timeout=30)
                 try:
                     response = response.json()
                     if response.get('error', True) is False:
@@ -347,7 +347,7 @@ class THR():
                     response = await client.get(page_url)
 
                     page_dupes, has_next_page, next_page_number = await self._process_search_response(
-                        response, meta, all_titles_seen, current_page)
+                        response, meta, current_page)
 
                     for dupe in page_dupes:
                         if dupe not in dupes:
@@ -374,7 +374,7 @@ class THR():
 
         return dupes
 
-    async def _process_search_response(self, response, meta, existing_dupes, current_page):
+    async def _process_search_response(self, response, meta, current_page):
         page_dupes = []
         has_next_page = False
         next_page_number = current_page
