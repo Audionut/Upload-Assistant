@@ -586,7 +586,7 @@ class TVC():
             else:
                 overview = str(meta.get('overview', '')).strip()
                 desc += "[center]\n"
-                if meta['category'] == "Movie":
+                if meta['category'].upper() == "MOVIE":
                     desc += f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n\n"
                     desc += overview + "\n"
                     if 'release_date' in meta:
