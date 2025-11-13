@@ -142,6 +142,16 @@ class TVC():
                 name += " [CHE]"
         return name
 
+    async def read_file(self, path: str, encoding: str = "utf-8") -> str:
+        """
+        Async helper to read a text file safely.
+        Uses a with-block to ensure the file handle is closed.
+        """
+        def _read():
+            with open(path, "r", encoding=encoding) as f:
+                return f.read()
+        return await asyncio.to_thread(_read)
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         url_host_mapping = {
@@ -154,15 +164,14 @@ class TVC():
         }
 
         approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
-        if 'TVC_images_key' in meta:
-            image_list = meta['TVC_images_key']
-        else:
-            image_list = meta['image_list']
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping,
+                          img_host_index=1, approved_image_hosts=approved_image_hosts)
+        image_list = meta.get('TVC_images_key', meta['image_list'])
 
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
-        # load MediaInfo and extract audio languages first
+
+        # load MediaInfo.json
         try:
             with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MediaInfo.json", 'r', encoding='utf-8') as f:
                 mi = json.load(f)
@@ -170,7 +179,6 @@ class TVC():
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-            # parse audio languages from MediaInfo
         audio_langs_local = self.get_audio_languages(mi)
 
         if meta['category'] == 'TV':
@@ -178,77 +186,42 @@ class TVC():
         else:
             cat_id = 44
 
-        # ensure language detection helpers have run and consider subs too
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
 
-        # prefer pipeline-populated meta values; fall back to local parse
-        # treat empty lists as falsy: meta.get('audio_languages') may be [] which should fall back
         audio_meta = meta.get('audio_languages') or audio_langs_local
 
-        # gather subtitle languages (best-effort) but do NOT use them to decide "foreign"
         subtitle_langs_local = []
         try:
             for t in mi.get('media', {}).get('track', []):
                 if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
                     subtitle_langs_local.append(str(t['Language']).strip().title())
-        except (KeyError, TypeError, AttributeError) as e:
+        except Exception as e:
             console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
             subtitle_langs_local = []
 
         subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
-
-        # Check English presence in audio only (per new rule)
         audio_has_english = await has_english_language(audio_meta)
 
-        # mark as foreign only when audio languages are present and NONE are English
         if audio_meta and not audio_has_english:
             cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
 
-        resolution_id = await self.get_res_id(meta['tv_pack'] if 'tv_pack' in meta else 0, meta['resolution'])
-        # this is a different function that common function
+        resolution_id = await self.get_res_id(meta.get('tv_pack', 0), meta['resolution'])
         await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         if meta['bdinfo'] is not None:
             mi_dump = None
-            # Async read of BD_SUMMARY
-            bd_dump = await asyncio.to_thread(
-                lambda: open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt",
-                    "r",
-                    encoding="utf-8"
-                ).read()
-            )
+            bd_dump = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt")
         else:
-            # Async read of MEDIAINFO
-            mi_dump = await asyncio.to_thread(
-                lambda: open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt",
-                    "r",
-                    encoding="utf-8"
-                ).read()
-            )
+            mi_dump = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt")
             bd_dump = None
 
-        # Async read of DESCRIPTION
-        desc = await asyncio.to_thread(
-            lambda: open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
-                "r"
-            ).read()
-        )
+        desc = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt")
 
-        # Async open of torrent file
         open_torrent = await asyncio.to_thread(
-            lambda: open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent",
-                "rb"
-            )
+            lambda: open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", "rb")
         )
         files = {'torrent': open_torrent}
 
@@ -534,14 +507,7 @@ class TVC():
         return dupes
 
     async def unit3d_edit_desc(self, meta, tracker, signature, image_list, comparison=False):
-        # Async read of DESCRIPTION.txt
-        base = await asyncio.to_thread(
-            lambda: open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
-                "r",
-                encoding="utf-8"
-            ).read()
-        )
+        base = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt")
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", "w", encoding="utf-8") as descfile:
             bbcode = BBCODE()
