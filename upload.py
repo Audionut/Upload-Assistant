@@ -30,7 +30,7 @@ from src.get_desc import gen_desc
 from src.get_tracker_data import get_tracker_data
 from src.languages import process_desc_language
 from src.nfo_link import nfo_link
-from src.queuemanage import handle_queue
+from src.queuemanage import handle_queue, save_processed_path, process_site_upload_item
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent
 from src.trackerhandle import process_trackers
@@ -867,10 +867,20 @@ async def do_the_thing(base_dir):
         skipped_files_count = 0
         base_meta = {k: v for k, v in meta.items()}
 
-        for path in queue:
+        for queue_item in queue:
             total_files = len(queue)
             try:
                 meta = base_meta.copy()
+
+                if meta.get('site_upload_queue'):
+                    # Extract path and metadata from site upload queue item
+                    path = await process_site_upload_item(queue_item, meta)
+                    current_item_path = path  # Store for logging
+                else:
+                    # Regular queue processing
+                    path = queue_item
+                    current_item_path = path
+
                 meta['path'] = path
                 meta['uuid'] = None
 
@@ -961,7 +971,10 @@ async def do_the_thing(base_dir):
                             console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
                         if not meta['debug'] or "debug" in os.path.basename(log_file):
                             if log_file:
-                                await save_processed_file(log_file, path)
+                                if meta.get('site_upload_queue'):
+                                    await save_processed_path(log_file, current_item_path)
+                                else:
+                                    await save_processed_file(log_file, path)
 
             else:
                 console.print()
@@ -977,7 +990,10 @@ async def do_the_thing(base_dir):
                         console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
                     if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
-                            await save_processed_file(log_file, path)
+                            if meta.get('site_upload_queue'):
+                                await save_processed_path(log_file, current_item_path)
+                            else:
+                                await save_processed_file(log_file, path)
 
             if meta['debug']:
                 finish_time = time.time()
@@ -1034,7 +1050,10 @@ async def do_the_thing(base_dir):
                     console.print(f"[cyan]Processed {processed_files_count}/{total_files} files.")
                     if not meta['debug'] or "debug" in os.path.basename(log_file):
                         if log_file:
-                            await save_processed_file(log_file, path)
+                            if meta.get('site_upload_queue'):
+                                await save_processed_path(log_file, current_item_path)
+                            else:
+                                await save_processed_file(log_file, path)
 
             if meta.get('delete_tmp', False) and os.path.exists(tmp_path) and meta.get('emby', False):
                 try:
