@@ -272,10 +272,11 @@ class TVC():
         if meta['video_codec'] == 'HEVC':
             tvc_name = tvc_name.replace(']', ' HEVC]')
 
-        if 'eng_subs' in meta and meta['eng_subs']:
+        if meta.get('eng_subs'):
             tvc_name = tvc_name.replace(']', ' SUBS]')
-        if 'sdh_subs' in meta and meta['eng_subs']:
-            if 'eng_subs' in meta and meta['eng_subs']:
+
+        if meta.get('sdh_subs'):
+            if meta.get('eng_subs'):
                 tvc_name = tvc_name.replace(' SUBS]', ' (ENG + SDH SUBS)]')
             else:
                 tvc_name = tvc_name.replace(']', ' (SDH SUBS)]')
