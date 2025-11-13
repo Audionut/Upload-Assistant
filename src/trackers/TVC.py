@@ -404,12 +404,12 @@ class TVC():
                 # Inject episode list
                 meta['episodes'] = []
                 for ep in season_info.get('episodes', []):
-                    code = f"S{str(ep.get('season_number')).zfill(2)}E{str(ep.get('episode_number')).zfill(2)}"
+                    code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
                     meta['episodes'].append({
                         "code": code,
-                        "title": ep.get("name", "").strip(),
-                        "airdate": ep.get("air_date", ""),
-                        "overview": ep.get("overview", "").strip()
+                        "title": (ep.get("name") or "").strip(),
+                        "airdate": ep.get("air_date") or "",
+                        "overview": (ep.get("overview") or "").strip()
                     })
                 if hasattr(tv, 'first_air_date'):
                     meta['first_air_date'] = tv.first_air_date
@@ -518,7 +518,7 @@ class TVC():
                 desc += f"[center]{rd_info}[/center]\n\n"
 
             # TV pack layout
-            elif meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
+            if meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
                 channel = meta.get('networks', 'N/A')
                 airdate = self.format_date_ddmmyyyy(meta['season_air_first_date'])
 
@@ -541,7 +541,7 @@ class TVC():
 
                         desc += f"[b]{ep_num}[/b]"
                         if ep_title:
-                            desc += f" – {ep_title}"
+                            desc += f" - {ep_title}"
                         if ep_date:
                             formatted_date = self.format_date_ddmmyyyy(ep_date)
                             desc += f" ({formatted_date})"
