@@ -441,7 +441,7 @@ class FF:
                 ff_name = meta["uuid"]
                 base, ext = os.path.splitext(ff_name)
                 if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
-                    ff_name = base
+                    ff_name = base.replace(" ", ".")
         else:
             ff_name = meta.get("clean_name").replace(" ", ".")
 
