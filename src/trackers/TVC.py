@@ -532,17 +532,17 @@ class TVC():
                         ep_title = ep.get('title', '').strip()
                         ep_date = ep.get('airdate', '')
                         ep_overview = ep.get('overview', '').strip()
-
-                    desc += f"[b]{ep_num}[/b]"
-                    if ep_title:
-                        desc += f" – {ep_title}"
-                    if ep_date:
-                        formatted_date = self.format_date_ddmmyyyy(ep_date)
-                        desc += f" ({formatted_date})"
-                    desc += "\n"
-
-                    if ep_overview:
-                        desc += f"{ep_overview}\n\n"
+                
+                        desc += f"[b]{ep_num}[/b]"
+                        if ep_title:
+                            desc += f" – {ep_title}"
+                        if ep_date:
+                            formatted_date = self.format_date_ddmmyyyy(ep_date)
+                            desc += f" ({formatted_date})"
+                        desc += "\n"
+                
+                        if ep_overview:
+                            desc += f"{ep_overview}\n\n"
 
                 desc += self.get_links(meta)
 
