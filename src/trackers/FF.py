@@ -434,13 +434,18 @@ class FF:
             return 'x264'
 
     async def edit_name(self, meta):
-        scene_name = meta.get('scene_name', '')
-        name = scene_name if scene_name else meta['uuid']
+        if meta.get("scene", False):
+            if meta.get("scene_name", ""):
+                ff_name = meta.get("scene_name")
+            else:
+                ff_name = meta["uuid"]
+                base, ext = os.path.splitext(ff_name)
+                if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
+                    ff_name = base
+        else:
+            ff_name = meta.get("clean_name").replace(" ", ".")
 
-        container = '.' + meta.get('container', 'mkv')
-        name = name.replace(container, '').replace(container.upper(), '')
-
-        return name
+        return ff_name
 
     async def languages(self, meta):
         if not meta.get('language_checked', False):
