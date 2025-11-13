@@ -371,7 +371,7 @@ class TVC():
 
             try:
                 # TVC returns "application/x-bittorrent\n{json}" so strip the prefix
-                json_data = json.loads(response.text.strip('application/x-bittorrent\n'))
+                json_data = json.loads(response.text.removeprefix('application/x-bittorrent\n'))
                 meta['tracker_status'][self.tracker]['status_message'] = json_data
 
                 # Extract torrent ID from returned URL
@@ -389,7 +389,7 @@ class TVC():
             except Exception:
                 console.print(traceback.print_exc())
                 console.print("[yellow]It may have uploaded, go check")
-                console.print(response.text.strip('application/x-bittorrent\n'))
+                console.print(response.text.removeprefix('application/x-bittorrent\n'))
                 return
             finally:
                 await asyncio.to_thread(open_torrent.close)
