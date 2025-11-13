@@ -246,7 +246,14 @@ class TVC():
             if meta['category'] == "TV":
                 if meta['tv_pack']:
                     # seasons called series here.
-                    tvc_name = f"{meta['title']} ({meta['year'] if 'season_air_first_date' and len(meta['season_air_first_date']) >= 4 else meta['season_air_first_date'][:4]}) Series {meta['season_int']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]".replace("  ", " ").replace(' () ', ' ')
+                    # Extract year from season_air_first_date if available
+                    if 'season_air_first_date' in meta and len(meta['season_air_first_date']) >= 4:
+                        season_year = meta['season_air_first_date'][:4]
+                    else:
+                        season_year = meta.get('year', '')
+
+                    tvc_name = f"{meta['title']} - Series {meta['season_int']} ({season_year}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+
                 else:
                     if 'episode_airdate' in meta:
                         formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
