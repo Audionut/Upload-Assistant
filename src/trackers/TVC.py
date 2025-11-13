@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import requests
 import traceback
 import cli_ui
 import os
@@ -217,12 +216,40 @@ class TVC():
 
         if meta['bdinfo'] is not None:
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            # Async read of BD_SUMMARY
+            bd_dump = await asyncio.to_thread(
+                lambda: open(
+                    f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt",
+                    "r",
+                    encoding="utf-8"
+                ).read()
+            )
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+            # Async read of MEDIAINFO
+            mi_dump = await asyncio.to_thread(
+                lambda: open(
+                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt",
+                    "r",
+                    encoding="utf-8"
+                ).read()
+            )
             bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
+
+        # Async read of DESCRIPTION
+        desc = await asyncio.to_thread(
+            lambda: open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
+                "r"
+            ).read()
+        )
+
+        # Async open of torrent file
+        open_torrent = await asyncio.to_thread(
+            lambda: open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent",
+                "rb"
+            )
+        )
         files = {'torrent': open_torrent}
 
         if meta['type'] == "ENCODE" and (str(meta['path']).lower().__contains__("bluray") or str(meta['path']).lower().__contains__("brrip") or str(meta['path']).lower().__contains__("bdrip")):
@@ -329,30 +356,48 @@ class TVC():
             return
 
         if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.upload_url,
+                    files=files,
+                    data=data,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:53.0) Gecko/20100101 Firefox/53.0'
+                    },
+                    params={
+                        'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
+                    }
+                )
+
             try:
-                # some reason this does not return json instead it returns something like below.
-                # b'application/x-bittorrent\n{"success":true,"data":"https:\\/\\/tvchaosuk.com\\/torrent\\/download\\/164633.REDACTED","message":"Torrent uploaded successfully."}'
-                # so you need to convert text to json.
+                # TVC returns "application/x-bittorrent\n{json}" so strip the prefix
                 json_data = json.loads(response.text.strip('application/x-bittorrent\n'))
                 meta['tracker_status'][self.tracker]['status_message'] = json_data
-                # adding torrent link to comment of torrent file
+
+                # Extract torrent ID from returned URL
                 t_id = json_data['data'].split(".")[1].split("/")[3]
                 meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                await common.add_tracker_torrent(meta, self.tracker, self.source_flag,
-                                                 self.config['TRACKERS'][self.tracker].get('announce_url'),
-                                                 "https://tvchaosuk.com/torrents/" + t_id)
+
+                await common.add_tracker_torrent(
+                    meta,
+                    self.tracker,
+                    self.source_flag,
+                    self.config['TRACKERS'][self.tracker].get('announce_url'),
+                    f"https://tvchaosuk.com/torrents/{t_id}"
+                )
 
             except Exception:
                 console.print(traceback.print_exc())
                 console.print("[yellow]It may have uploaded, go check")
                 console.print(response.text.strip('application/x-bittorrent\n'))
                 return
+            finally:
+                await asyncio.to_thread(open_torrent.close)
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        open_torrent.close()
+            await asyncio.to_thread(open_torrent.close)
 
     def get_audio_languages(self, mi):
         """
@@ -489,10 +534,17 @@ class TVC():
         return dupes
 
     async def unit3d_edit_desc(self, meta, tracker, signature, image_list, comparison=False):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r').read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", 'w') as descfile:
-            bbcode = BBCODE()
+        # Async read of DESCRIPTION.txt
+        base = await asyncio.to_thread(
+            lambda: open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
+                "r",
+                encoding="utf-8"
+            ).read()
+        )
 
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", "w", encoding="utf-8") as descfile:
+            bbcode = BBCODE()
             desc = ""
 
             # Discs
