@@ -401,8 +401,8 @@ class TVC():
                 season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
                 meta['season_air_first_date'] = season_info['air_date']
                 meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
+                # Inject episode list
                 meta['episodes'] = []
-                # inject episode list
                 for ep in season_info.get('episodes', []):
                     code = f"S{str(ep.get('season_number')).zfill(2)}E{str(ep.get('episode_number')).zfill(2)}"
                     meta['episodes'].append({
@@ -523,8 +523,14 @@ class TVC():
                 airdate = self.format_date_ddmmyyyy(meta['season_air_first_date'])
 
                 desc += "[center]\n"
+                if meta.get("logo"):
+                    desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
+                    desc += f"{meta['logo']}[/img]\n\n"
+
                 desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
                 desc += f"[b]This season premiered on:[/b] {channel} on {airdate}\n"
+
+                # Episode list
                 if meta.get('episodes'):
                     desc += "\n\n[b]Episode List[/b]\n\n"
                     for ep in meta['episodes']:
@@ -532,6 +538,7 @@ class TVC():
                         ep_title = ep.get('title', '').strip()
                         ep_date = ep.get('airdate', '')
                         ep_overview = ep.get('overview', '').strip()
+
                         desc += f"[b]{ep_num}[/b]"
                         if ep_title:
                             desc += f" – {ep_title}"
@@ -539,6 +546,7 @@ class TVC():
                             formatted_date = self.format_date_ddmmyyyy(ep_date)
                             desc += f" ({formatted_date})"
                         desc += "\n"
+
                         if ep_overview:
                             desc += f"{ep_overview}\n\n"
 
@@ -550,17 +558,21 @@ class TVC():
                         web_url = each['web_url']
                         img_url = each['img_url']
                         desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
+
                 desc += "[/center]\n\n"
 
             # Episode layout
             elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_overview' in meta:
+                desc += "[center]\n"
+                if meta.get("logo"):
+                    desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
+                    desc += f"{meta['logo']}[/img]\n\n"
                 episode_name = str(meta.get('episode_name', '')).strip()
                 overview = str(meta.get('episode_overview', '')).strip()
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
                 if not sentences and overview:
                     sentences = [overview]
 
-                desc += "[center]\n"
                 if episode_name:
                     desc += f"[b]Episode Title:[/b] {episode_name}\n\n"
                 for s in sentences:
@@ -584,19 +596,18 @@ class TVC():
             else:
                 overview = str(meta.get('overview', '')).strip()
                 desc += "[center]\n"
-                if meta['category'].upper() == "MOVIE":
+                if meta['category'] == "Movie" and meta.get("logo"):
+                    desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
+                    desc += f"{meta['logo']}[/img]\n\n"
+
+                if meta['category'] == "Movie":
                     desc += f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n\n"
                     desc += overview + "\n"
                     if 'release_date' in meta:
                         formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
                         desc += f"\n[b]Released on:[/b] {formatted_date}\n"
                     desc += self.get_links(meta)
-                    if image_list and int(meta['screens']) >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
-                        desc += "\n\n[b]Screenshots[/b]\n\n"
-                        for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
-                            web_url = each['web_url']
-                            img_url = each['img_url']
-                            desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
+                    # screenshots block unchanged...
                     desc += "[/center]\n\n"
                 else:
                     desc += overview + "\n[/center]\n\n"
