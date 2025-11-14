@@ -15,13 +15,6 @@ from src.rehostimages import check_hosts
 
 
 class TVC():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
 
     def __init__(self, config):
         self.config = config
@@ -503,3 +496,6 @@ class TVC():
 
         return
     # get subs function^^^^
+
+    # required for tracker type mapping
+    is_other_api = True

@@ -12,13 +12,6 @@ from src.console import console
 
 
 class RTF():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
 
     def __init__(self, config):
         self.config = config
@@ -242,3 +235,6 @@ class RTF():
 
         except Exception as e:
             console.print(f'[bold red]An unexpected error occurred: {str(e)}')
+
+    # required for tracker type mapping
+    is_other_api = True

@@ -8,6 +8,7 @@ from src.console import console
 
 
 class SN():
+
     def __init__(self, config):
         self.config = config
         self.tracker = 'SN'
@@ -179,3 +180,6 @@ class SN():
             await asyncio.sleep(5)
 
         return dupes
+
+    # required for tracker type mapping
+    is_other_api = True

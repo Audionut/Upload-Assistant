@@ -20,13 +20,6 @@ from src.trackers.COMMON import COMMON
 
 
 class MTV():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
 
     def __init__(self, config):
         self.config = config
@@ -730,3 +723,6 @@ class MTV():
             await asyncio.sleep(5)
 
         return dupes
+
+    # required for tracker type mapping
+    is_http = True

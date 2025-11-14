@@ -350,3 +350,6 @@ class TTG():
         else:
             console.print("[red]There was an issue downloading the new .torrent from TTG")
             console.print(r.text)
+
+    # required for tracker type mapping
+    is_http = True

@@ -853,3 +853,6 @@ class HDB():
 
         console.print('[yellow]Could not find a matching release on HDB[/yellow]')
         return hdb_imdb, hdb_tvdb, hdb_name, hdb_torrenthash, hdb_description, hdb_id
+
+    # required for tracker type mapping
+    is_http = True
