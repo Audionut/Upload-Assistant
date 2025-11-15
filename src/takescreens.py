@@ -453,7 +453,11 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             width = float(track.width)
             height = float(track.height)
             frame_rate = float(track.frame_rate)
-    if par < 1:
+    # Use tolerance-based comparison to avoid scaling when PAR is very close to 1.0
+    # This prevents issues like 1920x1040 becoming 1924x1040 when PAR is 1.002
+    if abs(par - 1.0) < 0.01:
+        sar = w_sar = h_sar = 1
+    elif par < 1:
         new_height = dar * height
         sar = width / new_height
         w_sar = 1
@@ -835,7 +839,9 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
             dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
             frame_rate = safe_float(video_track.get('FrameRate'), 24.0, "FrameRate")
 
-            if par == 1:
+            # Use tolerance-based comparison to avoid scaling when PAR is very close to 1.0
+            # This prevents issues like 1920x1040 becoming 1924x1040 when PAR is 1.002
+            if abs(par - 1.0) < 0.01:
                 sar = w_sar = h_sar = 1
             elif par < 1:
                 new_height = dar * height
