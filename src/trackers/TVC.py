@@ -165,7 +165,10 @@ class TVC():
         approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping,
                           img_host_index=1, approved_image_hosts=approved_image_hosts)
-        image_list = meta.get('TVC_images_key', meta['image_list'])
+        image_list = meta.get('TVC_images_key', meta.get('image_list', []))
+        # Ensure it's iterable
+        if not isinstance(image_list, (list, tuple)):
+            image_list = []
 
         await common.edit_torrent(meta, self.tracker, self.source_flag)
         await self.get_tmdb_data(meta)
