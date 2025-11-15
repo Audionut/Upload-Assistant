@@ -11,7 +11,6 @@ import httpx
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
-from src.languages import process_desc_language, has_english_language
 from datetime import datetime
 
 
@@ -179,16 +178,16 @@ class TVC():
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-        audio_langs_local = self.get_audio_languages(mi)
-
         if meta['category'] == 'TV':
             cat_id = await self.get_cat_id(meta['genres'])
         else:
             cat_id = 44
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            meta['language_checked'] = True
 
+        # Parse audio/subtitle languages for metadata only
+        audio_langs_local = self.get_audio_languages(mi)
         audio_meta = meta.get('audio_languages') or audio_langs_local
 
         subtitle_langs_local = []
@@ -199,9 +198,7 @@ class TVC():
         except Exception as e:
             console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
             subtitle_langs_local = []
-
         subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
-        audio_has_english = await has_english_language(audio_meta)
 
         # Foreign category check based on TMDB original_language
         original_lang = meta.get("original_language", "")
