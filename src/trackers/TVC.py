@@ -203,7 +203,9 @@ class TVC():
         subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
         audio_has_english = await has_english_language(audio_meta)
 
-        if audio_meta and not audio_has_english:
+        # Foreign category check based on TMDB original_language
+        original_lang = meta.get("original_language", "")
+        if original_lang and not original_lang.startswith("en") and original_lang not in ["ga", "gd", "cy"]:
             cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
 
         resolution_id = await self.get_res_id(meta.get('tv_pack', 0), meta['resolution'])
@@ -403,15 +405,17 @@ class TVC():
         if meta['category'] == "MOVIE":
             movie = tmdb.Movies(meta['tmdb'])
             response = movie.info()
-            # Capture both localized and original titles
+            # Capture localized and original titles
             meta['title'] = response.get('title', meta.get('title', ''))
             meta['original_title'] = response.get('original_title', meta['title'])
+            meta['original_language'] = response.get('original_language', 'en')
         else:
             tv = tmdb.TV(meta['tmdb'])
             response = tv.info()
-            # Capture both localized and original names
+            # Capture localized and original names
             meta['title'] = response.get('name', meta.get('title', ''))
             meta['original_title'] = response.get('original_name', meta['title'])
+            meta['original_language'] = response.get('original_language', 'en')
 
         # TVC-specific extras
         if meta['category'] == "TV":
@@ -430,7 +434,6 @@ class TVC():
                 season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
                 meta['season_air_first_date'] = season_info.get('air_date', '')
                 meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
-                # Inject episode list
                 meta['episodes'] = []
                 for ep in season_info.get('episodes', []):
                     code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
