@@ -132,7 +132,7 @@ class TVC():
             elif "RU" in meta['origin_country_code']:
                 name += " [RUS]"
             elif "AT" in meta['origin_country_code']:
-                name += " [AST]"
+                name += " [AUT]"
             elif "CZ" in meta['origin_country_code']:
                 name += " [CZE]"
             elif "EE" in meta['origin_country_code']:
@@ -165,8 +165,8 @@ class TVC():
         approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping,
                           img_host_index=1, approved_image_hosts=approved_image_hosts)
+
         image_list = meta.get('TVC_images_key', meta.get('image_list', []))
-        # Ensure it's iterable
         if not isinstance(image_list, (list, tuple)):
             image_list = []
 
@@ -186,13 +186,9 @@ class TVC():
         else:
             cat_id = 44
 
-        if not meta.get('language_checked', False):
-            meta['language_checked'] = True
+        meta['language_checked'] = True
 
-        # Parse audio/subtitle languages for metadata only
-        audio_langs_local = self.get_audio_languages(mi)
-        audio_meta = meta.get('audio_languages') or audio_langs_local
-
+        # Parse subtitle languages for metadata only
         subtitle_langs_local = []
         try:
             for t in mi.get('media', {}).get('track', []):
@@ -200,7 +196,6 @@ class TVC():
                     subtitle_langs_local.append(str(t['Language']).strip().title())
         except Exception as e:
             console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
-            subtitle_langs_local = []
         subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
 
         # Foreign category check based on TMDB original_language
@@ -222,10 +217,9 @@ class TVC():
 
         desc = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt")
 
-        open_torrent = await asyncio.to_thread(
-            lambda: open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", "rb")
-        )
-        files = {'torrent': open_torrent}
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        with open(torrent_path, "rb") as open_torrent:
+            files = {'torrent': open_torrent}
 
         if meta['type'] == "ENCODE" and (str(meta['path']).lower().__contains__("bluray") or str(meta['path']).lower().__contains__("brrip") or str(meta['path']).lower().__contains__("bdrip")):
             type = "BRRip"
@@ -294,13 +288,11 @@ class TVC():
 
         data = {
             'name': tvc_name,
-            # newline does not seem to work on this site for some reason. if you edit and save it again they will but not if pushed by api
             'description': desc.replace('\n', '<br>').replace('\r', '<br>'),
             'mediainfo': mi_dump,
             'bdinfo': bd_dump,
             'category_id': cat_id,
             'type': resolution_id,
-            # 'resolution_id': resolution_id,
             'tmdb': meta['tmdb'],
             'imdb': meta['imdb'],
             'tvdb': meta['tvdb_id'],
@@ -321,12 +313,7 @@ class TVC():
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')
             data['episode_number'] = meta.get('episode_int', '0')
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:53.0) Gecko/20100101 Firefox/53.0'
-        }
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        }
+
         if 'upload_to_tvc' in locals() and upload_to_tvc is False:
             return
 
@@ -336,12 +323,8 @@ class TVC():
                     self.upload_url,
                     files=files,
                     data=data,
-                    headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:53.0) Gecko/20100101 Firefox/53.0'
-                    },
-                    params={
-                        'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
-                    }
+                    headers={'User-Agent': 'Mozilla/5.0'},
+                    params={'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()}
                 )
 
             try:
@@ -372,7 +355,6 @@ class TVC():
             console.print("[cyan]Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await asyncio.to_thread(open_torrent.close)
 
     def get_audio_languages(self, mi):
         """
