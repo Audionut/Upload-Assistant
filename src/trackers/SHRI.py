@@ -305,7 +305,7 @@ class SHRI(UNIT3D):
             "REMUX": "7",
             "WEBDL": "27",
             "WEBRIP": "15",
-            "HDTV": "6",
+            "HDTV": "33",
             "ENCODE": "15",
             "DVDRIP": "15",
             "BRRIP": "15",
