@@ -90,6 +90,7 @@ config = {
         "desat": "10.0",
 
         # Add this header above screenshots in description when screens have been tonemapped (in bbcode)
+        # Can be overridden in a per-tracker setting by adding this same config
         "tonemapped_header": "[center][code] Screenshots have been tonemapped for reference [/code][/center]",
 
         # MULTI PROCESSING
@@ -135,12 +136,17 @@ config = {
         # You might not want to process screens/mediainfo for 40 episodes in a season pack.
         "processLimit": "10",
 
-        # Providing the option to add a description header, in bbcode, at the top of the description section
-        # where supported
+        # Providing the option to add a description header, in bbcode, at the top of the description section where supported
+        # Can be overridden in a per-tracker setting by adding this same config
         "custom_description_header": "",
 
         # Providing the option to add a header, in bbcode, above the screenshot section where supported
+        # Can be overridden in a per-tracker setting by adding this same config
         "screenshot_header": "",
+
+        # Allows adding a custom signature, in BBCode, at the bottom of the description section
+        # Can be overridden in a per-tracker setting by adding this same config
+        "custom_signature": "",
 
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
