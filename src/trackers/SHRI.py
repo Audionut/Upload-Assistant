@@ -56,6 +56,11 @@ class SHRI(UNIT3D):
         if not lang:
             return ""
         lang_str = str(lang).lower()
+
+        # Strip country code if present (e.g., "en-US" → "en")
+        if "-" in lang_str:
+            lang_str = lang_str.split("-")[0]
+
         if len(lang_str) == 2:
             return lang_str
         try:
@@ -750,9 +755,9 @@ class SHRI(UNIT3D):
                 for lang in meta["audio_languages"]
             ]
             langs = [lang for lang in langs if lang]
-            if "ITALIAN" in langs:
+            if "Italiano" in langs:
                 info_parts.append("Italiano")
-            elif "ENGLISH" in langs:
+            elif "Inglese" in langs:
                 info_parts.append("Inglese")
             elif langs:
                 info_parts.append(langs[0].title())
