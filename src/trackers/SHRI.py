@@ -608,7 +608,7 @@ class SHRI(UNIT3D):
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
             track.get("@type") == "Audio"
-            and self._get_language_code(track) in {"it", "it-it"}
+            and self._get_language_code(track) in {"it"}
             and "commentary" not in str(track.get("Title", "")).lower()
             for track in tracks[2:]
         )
@@ -620,8 +620,7 @@ class SHRI(UNIT3D):
 
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
-            track.get("@type") == "Text"
-            and self._get_language_code(track) in {"it", "it-it"}
+            track.get("@type") == "Text" and self._get_language_code(track) in {"it"}
             for track in tracks
         )
 
@@ -661,7 +660,7 @@ class SHRI(UNIT3D):
     async def _get_best_italian_audio_format(self, meta):
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
-        ITALIAN_LANGS = {"it", "it-it", "italian", "italiano"}
+        ITALIAN_LANGS = {"it", "italian", "italiano"}
 
         def extract_quality(track, is_bdinfo):
             if is_bdinfo:
