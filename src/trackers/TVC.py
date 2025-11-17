@@ -225,19 +225,29 @@ class TVC():
             tvc_name = f"{meta['title']} ({meta['year']}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
         else:
             year = meta['year'] if meta['search_year'] != "" else ""
-            year_str = f" ({year})" if year else ""
             if meta.get('no_year', False):
                 year = ''
+            year_str = f" ({year})" if year else ""
+
             if meta['category'] == "TV":
                 if meta['tv_pack']:
                     season_year = meta.get('season_air_first_date', '')[:4] or meta.get('year', '')
-                    tvc_name = f"{meta['title']} - Series {meta['season_int']} ({season_year}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                    tvc_name = (
+                        f"{meta['title']} - Series {meta['season_int']} ({season_year}) "
+                        f"[{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                    )
                 else:
                     if 'episode_airdate' in meta:
                         formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-                        tvc_name = f"{meta['title']}{year_str} {meta['season']}{meta['episode']} ({formatted_date}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        tvc_name = (
+                            f"{meta['title']}{year_str} {meta['season']}{meta['episode']} "
+                            f"({formatted_date}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        )
                     else:
-                        tvc_name = f"{meta['title']}{year_str} {meta['season']}{meta['episode']} [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        tvc_name = (
+                            f"{meta['title']}{year_str} {meta['season']}{meta['episode']} "
+                            f"[{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        )
 
         # Add original language title if foreign
         if cat_id == self.tv_types_ids[self.tv_types.index("foreign")]:
@@ -369,59 +379,58 @@ class TVC():
     # why the fuck is this even a thing.....
     async def get_tmdb_data(self, meta):
         import tmdbsimple as tmdb
+
         if meta['category'] == "MOVIE":
             movie = tmdb.Movies(meta['tmdb'])
             response = movie.info()
-            # Capture localized and original titles
             meta['title'] = response.get('title', meta.get('title', ''))
             meta['original_title'] = response.get('original_title', meta['title'])
             meta['original_language'] = response.get('original_language', 'en')
-        else:
+
+        elif meta['category'] == "TV":
             tv = tmdb.TV(meta['tmdb'])
             response = tv.info()
-            # Capture localized and original names
             meta['title'] = response.get('name', meta.get('title', ''))
             meta['original_title'] = response.get('original_name', meta['title'])
             meta['original_language'] = response.get('original_language', 'en')
 
-        # TVC-specific extras
-        if meta['category'] == "TV":
+            # TVC-specific extras
             if hasattr(tv, 'release_dates'):
                 meta['release_dates'] = tv.release_dates()
             if hasattr(tv, 'networks') and len(tv.networks) != 0 and 'name' in tv.networks[0]:
                 meta['networks'] = tv.networks[0]['name']
 
-        try:
-            if 'tv_pack' in meta and not meta['tv_pack']:
-                episode_info = tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int']).info()
-                meta['episode_airdate'] = episode_info.get('air_date', '')
-                meta['episode_name'] = episode_info.get('name', '')
-                meta['episode_overview'] = episode_info.get('overview', '')
-            if 'tv_pack' in meta and meta['tv_pack']:
-                season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
-                meta['season_air_first_date'] = season_info.get('air_date', '')
-                meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
-                meta['episodes'] = []
-                for ep in season_info.get('episodes', []):
-                    code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
-                    meta['episodes'].append({
-                        "code": code,
-                        "title": (ep.get("name") or "").strip(),
-                        "airdate": ep.get("air_date") or "",
-                        "overview": (ep.get("overview") or "").strip()
-                    })
-                if hasattr(tv, 'first_air_date'):
-                    meta['first_air_date'] = tv.first_air_date
-        except Exception:
-            console.print(traceback.print_exc())
-            console.print(
-                f"Unable to get episode information, Make sure episode {meta['season']}{meta['episode']} exists in TMDB. \n"
-                f"https://www.themoviedb.org/{meta['category'].lower()}/{meta['tmdb']}/season/{meta['season_int']}"
-            )
-            meta['season_air_first_date'] = f"{meta['year']}-N/A-N/A"
-            meta['first_air_date'] = f"{meta['year']}-N/A-N/A"
+            try:
+                if 'tv_pack' in meta and not meta['tv_pack']:
+                    episode_info = tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int']).info()
+                    meta['episode_airdate'] = episode_info.get('air_date', '')
+                    meta['episode_name'] = episode_info.get('name', '')
+                    meta['episode_overview'] = episode_info.get('overview', '')
+                if 'tv_pack' in meta and meta['tv_pack']:
+                    season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
+                    meta['season_air_first_date'] = season_info.get('air_date', '')
+                    meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
+                    meta['episodes'] = []
+                    for ep in season_info.get('episodes', []):
+                        code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
+                        meta['episodes'].append({
+                            "code": code,
+                            "title": (ep.get("name") or "").strip(),
+                            "airdate": ep.get("air_date") or "",
+                            "overview": (ep.get("overview") or "").strip()
+                        })
+                    if hasattr(tv, 'first_air_date'):
+                        meta['first_air_date'] = tv.first_air_date
+            except Exception:
+                console.print(traceback.print_exc())
+                console.print(
+                    f"Unable to get episode information, Make sure episode {meta['season']}{meta['episode']} exists in TMDB. \n"
+                    f"https://www.themoviedb.org/tv/{meta['tmdb']}/season/{meta['season_int']}"
+                )
+                meta['season_air_first_date'] = f"{meta['year']}-N/A-N/A"
+                meta['first_air_date'] = f"{meta['year']}-N/A-N/A"
 
-        # Origin country codes
+        # Origin country codes (shared for both movies and TV)
         meta['origin_country_code'] = []
         if 'origin_country' in response:
             if isinstance(response['origin_country'], list):
