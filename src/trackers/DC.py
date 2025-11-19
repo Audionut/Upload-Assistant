@@ -38,19 +38,10 @@ class DC:
         # Custom Header
         desc_parts.append(await builder.get_custom_header(self.tracker))
 
-        # Logo
-        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
-        if logo and logo_size:
-            desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
-
         # TV
         title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
-
-            if episode_image:
-                desc_parts.append(f"[center][img=300]{episode_image}[/img][/center]")
-
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
@@ -63,9 +54,6 @@ class DC:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
-        # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
-
         # Screenshots
         if f'{self.tracker}_images_key' in meta:
             images = meta[f'{self.tracker}_images_key']
@@ -74,9 +62,9 @@ class DC:
         if images:
             screenshots_block = '[center]\n'
             for i, image in enumerate(images, start=1):
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f'[url={web_url}][img=350]{img_url}[/img][/url] '
+                screenshots_block += (
+                    f"[url={image['web_url']}][img=350]{image['raw_url']}[/img][/url] "
+                )
                 # limits to 2 screens per line, as the description box is small
                 if i % 2 == 0:
                     screenshots_block += '\n'
