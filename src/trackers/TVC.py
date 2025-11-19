@@ -8,6 +8,7 @@ import tmdbsimple as tmdb
 from src.bbcode import BBCODE
 import json
 import httpx
+import requests
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -408,7 +409,7 @@ class TVC():
             meta['original_language'] = response.get('original_language', 'en')
             try:
                 meta['release_dates'] = movie.release_dates()
-            except (httpx.RequestError, KeyError) as e:
+            except (requests.exceptions.RequestException, KeyError) as e:
                 console.print(f"[yellow]Warning: Could not fetch movie release dates: {e}")
 
         elif meta['category'] == "TV":
@@ -447,7 +448,7 @@ class TVC():
                     if hasattr(tv, 'first_air_date'):
                         meta['first_air_date'] = tv.first_air_date
 
-            except (httpx.RequestError, KeyError, TypeError) as e:
+            except (requests.exceptions.RequestException, KeyError, TypeError) as e:
                 console.print(f"[yellow]Expected error while fetching TV episode/season info: {e}")
                 console.print(traceback.format_exc())
 
