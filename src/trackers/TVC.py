@@ -338,7 +338,20 @@ class TVC():
                 meta['tracker_status'][self.tracker]['status_message'] = json_data
 
                 # Extract torrent ID from returned URL
-                t_id = json_data['data'].split(".")[1].split("/")[3]
+                data_str = json_data.get('data', '')
+                parts = data_str.split(".")
+                if len(parts) > 1:
+                    subparts = parts[1].split("/")
+                    if len(subparts) > 3:
+                        t_id = subparts[3]
+                    else:
+                        raise ValueError(
+                            f"Invalid TVC response format: expected at least 4 slash-separated parts, got {len(subparts)} in {data_str}"
+                        )
+                else:
+                    raise ValueError(
+                        f"Invalid TVC response format: expected dot-separated parts in {data_str}"
+                    )
                 meta['tracker_status'][self.tracker]['torrent_id'] = t_id
 
                 await common.add_tracker_torrent(
