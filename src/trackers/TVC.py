@@ -202,6 +202,13 @@ class TVC():
         original_lang = meta.get("original_language", "")
         if original_lang and not original_lang.startswith("en") and original_lang not in ["ga", "gd", "cy"]:
             cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
+        elif not original_lang:
+            # Fallback: inspect audio languages from MediaInfo if TMDB data is missing
+            audio_langs = self.get_audio_languages(mi)
+            if audio_langs:
+                meta['audio_languages'] = audio_langs
+                if "English" not in audio_langs:
+                    cat_id = self.tv_types_ids[self.tv_types.index("foreign")]
 
         resolution_id = await self.get_res_id(meta.get('tv_pack', 0), meta['resolution'])
         await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
@@ -611,6 +618,7 @@ class TVC():
                     desc += f"{meta['logo']}[/img]\n\n"
                 episode_name = str(meta.get('episode_name', '')).strip()
                 overview = str(meta.get('episode_overview', '')).strip()
+                # Note: regex may mis-split on abbreviations (e.g. "Dr. Smith") or ellipses ("...")
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
                 if not sentences and overview:
                     sentences = [overview]
@@ -636,6 +644,7 @@ class TVC():
 
             # Movie / fallback overview
             else:
+                # Fallback path: for non‑movie categories with only a generic overview available.
                 overview = str(meta.get('overview', '')).strip()
                 desc += "[center]\n"
                 if meta['category'].upper() == "MOVIE" and meta.get("logo"):
@@ -649,7 +658,16 @@ class TVC():
                         formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
                         desc += f"\n[b]Released on:[/b] {formatted_date}\n"
                     desc += self.get_links(meta)
-                    # screenshots block unchanged...
+
+                    # Screenshots block for movies
+                    screens_count = int(meta.get('screens', 0) or 0)
+                    if image_list and screens_count >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
+                        desc += "\n\n[b]Screenshots[/b]\n\n"
+                        for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
+                            web_url = each['web_url']
+                            img_url = each['img_url']
+                            desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
+
                     desc += "[/center]\n\n"
                 else:
                     desc += overview + "\n[/center]\n\n"
