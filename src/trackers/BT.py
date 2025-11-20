@@ -19,6 +19,7 @@ from src.trackers.COMMON import COMMON
 
 
 class BT:
+
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -684,3 +685,6 @@ class BT:
         )
 
         return
+
+    # required for tracker type mapping
+    is_http = True

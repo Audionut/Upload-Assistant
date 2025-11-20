@@ -5,6 +5,7 @@ from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 
 
 class PHD(AZTrackerBase):
+
     def __init__(self, config):
         super().__init__(config, tracker_name='PHD')
         self.config = config
@@ -349,3 +350,6 @@ class PHD(AZTrackerBase):
         }
 
         return keyword_map.get(source_type.lower())
+
+    # required for tracker type mapping
+    is_http = True

@@ -8,13 +8,6 @@ from src.console import console
 
 
 class NBL():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
 
     def __init__(self, config):
         self.config = config
@@ -29,7 +22,6 @@ class NBL():
                               'PlaySD', 'playXD', 'project-gxs', 'PSA', 'QaS', 'Ranger', 'RAPiDCOWS', 'Raze', 'Reaktor', 'REsuRRecTioN', 'RMTeam', 'ROBOTS',
                               'SpaceFish', 'SPASM', 'SSA', 'Telly', 'Tenrai-Sensei', 'TM', 'Trix', 'URANiME', 'VipapkStudios', 'ViSiON', 'Wardevil', 'xRed',
                               'XS', 'YakuboEncodes', 'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT']
-
         pass
 
     async def get_cat_id(self, meta):
@@ -160,3 +152,6 @@ class NBL():
             console.print_exception()
 
         return dupes
+
+    # required for tracker type mapping
+    is_other_api = True

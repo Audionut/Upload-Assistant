@@ -11,6 +11,7 @@ from src.languages import process_desc_language
 
 
 class PTS:
+
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
@@ -208,3 +209,6 @@ class PTS:
         )
 
         return
+
+    # required for tracker type mapping
+    is_http = True

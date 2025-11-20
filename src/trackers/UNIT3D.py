@@ -12,6 +12,7 @@ from src.trackers.COMMON import COMMON
 
 
 class UNIT3D:
+
     def __init__(self, config, tracker_name):
         self.config = config
         self.tracker = tracker_name
@@ -426,3 +427,6 @@ class UNIT3D:
             pass
 
         return status_message
+
+    # required for tracker type mapping
+    is_api = True
