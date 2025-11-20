@@ -1580,34 +1580,45 @@ class Clients():
             info_hash_v1 = meta.get('infohash')
             if meta['debug']:
                 console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
+
+            class TorrentInfo:
+                def __init__(self, properties_data):
+                    self.hash = properties_data.get('hash', info_hash_v1)
+                    self.infohash_v1 = properties_data.get('infohash_v1', info_hash_v1)
+                    self.name = properties_data.get('name', '')
+                    self.comment = properties_data.get('comment', '')
+                    self.tracker = ''
+                    self.files = []
+
             try:
                 if proxy_url:
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
+                                               params={'hash': info_hash_v1}) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            torrent_properties = await response.json()
+                            if meta['debug']:
+                                console.print(f"[cyan]Retrieved torrent properties via proxy for hash: {info_hash_v1}")
 
-                            class MockTorrent:
-                                def __init__(self, data):
-                                    for key, value in data.items():
-                                        setattr(self, key, value)
-                                    if not hasattr(self, 'files'):
-                                        self.files = []
-                                    if not hasattr(self, 'tracker'):
-                                        self.tracker = ''
-                                    if not hasattr(self, 'comment'):
-                                        self.comment = ''
-                            torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                            torrents = [TorrentInfo(torrent_properties)]
                         else:
-                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            console.print(f"[bold red]Failed to get torrent properties via proxy: {response.status}")
                             if qbt_session:
                                 await qbt_session.close()
                             return meta
                 else:
-                    torrents = await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_info),
-                        "Get torrents list",
-                        initial_timeout=14.0
-                    )
+                    try:
+                        torrent_properties = await self.retry_qbt_operation(
+                            lambda: asyncio.to_thread(qbt_client.torrents_properties, torrent_hash=info_hash_v1),
+                            f"Get torrent properties for hash {info_hash_v1}",
+                            initial_timeout=14.0
+                        )
+                        if meta['debug']:
+                            console.print(f"[cyan]Retrieved torrent properties via client for hash: {info_hash_v1}")
+
+                        torrents = [TorrentInfo(torrent_properties)]
+                    except Exception as e:
+                        console.print(f"[yellow]Failed to get properties: {e}")
+                        return meta
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
                 if qbt_session:
@@ -1628,112 +1639,121 @@ class Clients():
             os.makedirs(extracted_torrent_dir, exist_ok=True)
 
             for torrent in torrents:
-                if torrent.get('infohash_v1') == info_hash_v1:
-                    comment = torrent.get('comment', "")
-                    match = None
+                try:
+                    if getattr(torrent, 'infohash_v1', '') == info_hash_v1:
+                        comment = getattr(torrent, 'comment', "")
+                        match = None
 
-                    if 'torrent_comments' not in meta:
-                        meta['torrent_comments'] = []
+                        if 'torrent_comments' not in meta:
+                            meta['torrent_comments'] = []
 
-                    comment_data = {
-                        'hash': torrent.get('infohash_v1', ''),
-                        'name': torrent.get('name', ''),
-                        'comment': comment,
-                    }
-                    meta['torrent_comments'].append(comment_data)
+                        comment_data = {
+                            'hash': getattr(torrent, 'infohash_v1', ''),
+                            'name': getattr(torrent, 'name', ''),
+                            'comment': comment,
+                        }
+                        meta['torrent_comments'].append(comment_data)
 
+                        if meta.get('debug', False):
+                            console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
+
+                        if "passthepopcorn.me" in comment:
+                            match = re.search(r'torrentid=(\d+)', comment)
+                            if match:
+                                meta['ptp'] = match.group(1)
+                        elif "https://aither.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['aither'] = match.group(1)
+                        elif "https://lst.gg" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['lst'] = match.group(1)
+                        elif "https://onlyencodes.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['oe'] = match.group(1)
+                        elif "https://blutopia.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['blu'] = match.group(1)
+                        elif "https://upload.cx" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['ulcx'] = match.group(1)
+                        elif "https://hdbits.org" in comment:
+                            match = re.search(r'id=(\d+)', comment)
+                            if match:
+                                meta['hdb'] = match.group(1)
+                        elif "https://broadcasthe.net" in comment:
+                            match = re.search(r'id=(\d+)', comment)
+                            if match:
+                                meta['btn'] = match.group(1)
+                        elif "https://beyond-hd.me" in comment:
+                            match = re.search(r'details/(\d+)', comment)
+                            if match:
+                                meta['bhd'] = match.group(1)
+                        elif "/torrents/" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['huno'] = match.group(1)
+
+                        if match:
+                            for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
+                                if meta.get(tracker):
+                                    console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
+
+                        if meta.get('torrent_comments') and meta['debug']:
+                            console.print(f"[green]Stored {len(meta['torrent_comments'])} torrent comments for later use")
+
+                        if not pathed:
+                            torrent_storage_dir = client.get('torrent_storage_dir')
+                            if not torrent_storage_dir:
+                                # Export .torrent file
+                                torrent_hash = getattr(torrent, 'infohash_v1', '')
+                                if meta.get('debug', False):
+                                    console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
+
+                                try:
+                                    if proxy_url:
+                                        async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                    data={'hash': torrent_hash}) as response:
+                                            if response.status == 200:
+                                                torrent_file_content = await response.read()
+                                            else:
+                                                console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                                continue
+                                    else:
+                                        torrent_file_content = await self.retry_qbt_operation(
+                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                            f"Export torrent {torrent_hash}"
+                                        )
+                                    torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+
+                                    with open(torrent_file_path, "wb") as f:
+                                        f.write(torrent_file_content)
+
+                                    # Validate the .torrent file before saving as BASE.torrent
+                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                                    if not valid:
+                                        if meta['debug']:
+                                            console.print(f"[bold red]Validation failed for {torrent_file_path}")
+                                        os.remove(torrent_file_path)  # Remove invalid file
+                                    else:
+                                        await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                                except asyncio.TimeoutError:
+                                    console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
+
+                            found = True
+                            break
+                except Exception as e:
+                    if qbt_session:
+                        await qbt_session.close()
+                    console.print(f"[bold red]Error processing torrent {getattr(torrent, 'name', 'Unknown')}: {e}")
                     if meta.get('debug', False):
-                        console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
-
-                    if "passthepopcorn.me" in comment:
-                        match = re.search(r'torrentid=(\d+)', comment)
-                        if match:
-                            meta['ptp'] = match.group(1)
-                    elif "https://aither.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['aither'] = match.group(1)
-                    elif "https://lst.gg" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['lst'] = match.group(1)
-                    elif "https://onlyencodes.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['oe'] = match.group(1)
-                    elif "https://blutopia.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['blu'] = match.group(1)
-                    elif "https://upload.cx" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['ulcx'] = match.group(1)
-                    elif "https://hdbits.org" in comment:
-                        match = re.search(r'id=(\d+)', comment)
-                        if match:
-                            meta['hdb'] = match.group(1)
-                    elif "https://broadcasthe.net" in comment:
-                        match = re.search(r'id=(\d+)', comment)
-                        if match:
-                            meta['btn'] = match.group(1)
-                    elif "https://beyond-hd.me" in comment:
-                        match = re.search(r'details/(\d+)', comment)
-                        if match:
-                            meta['bhd'] = match.group(1)
-                    elif "/torrents/" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['huno'] = match.group(1)
-
-                    if match:
-                        for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
-                            if meta.get(tracker):
-                                console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
-
-                    if meta.get('torrent_comments') and meta['debug']:
-                        console.print(f"[green]Stored {len(meta['torrent_comments'])} torrent comments for later use")
-
-                    if not pathed:
-                        torrent_storage_dir = client.get('torrent_storage_dir')
-                        if not torrent_storage_dir:
-                            # Export .torrent file
-                            torrent_hash = torrent.get('infohash_v1')
-                            if meta.get('debug', False):
-                                console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
-
-                            try:
-                                if proxy_url:
-                                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
-                                                                data={'hash': torrent_hash}) as response:
-                                        if response.status == 200:
-                                            torrent_file_content = await response.read()
-                                        else:
-                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
-                                            continue
-                                else:
-                                    torrent_file_content = await self.retry_qbt_operation(
-                                        lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
-                                        f"Export torrent {torrent_hash}"
-                                    )
-                                torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
-
-                                with open(torrent_file_path, "wb") as f:
-                                    f.write(torrent_file_content)
-
-                                # Validate the .torrent file before saving as BASE.torrent
-                                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
-                                if not valid:
-                                    if meta['debug']:
-                                        console.print(f"[bold red]Validation failed for {torrent_file_path}")
-                                    os.remove(torrent_file_path)  # Remove invalid file
-                                else:
-                                    await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
-                            except asyncio.TimeoutError:
-                                console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
-
-                    found = True
-                    break
+                        import traceback
+                        console.print(f"[bold red]Traceback: {traceback.format_exc()}")
+                    continue
 
             if not found:
                 console.print("[bold red]Matching site torrent with the specified infohash_v1 not found.")

@@ -6,7 +6,6 @@ import httpx
 import os
 import platform
 import re
-import unicodedata
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
@@ -434,16 +433,19 @@ class FF:
         else:
             return 'x264'
 
-    def edit_name(self, meta):
-        is_scene = bool(meta.get('scene_name'))
-        torrent_name = meta['scene_name'] if is_scene else meta['name']
+    async def edit_name(self, meta):
+        if meta.get("scene", False):
+            if meta.get("scene_name", ""):
+                ff_name = meta.get("scene_name")
+            else:
+                ff_name = meta["uuid"]
+                base, ext = os.path.splitext(ff_name)
+                if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
+                    ff_name = base.replace(" ", ".")
+        else:
+            ff_name = meta.get("clean_name").replace(" ", ".")
 
-        name = torrent_name.replace(':', '-')
-        name = unicodedata.normalize("NFKD", name)
-        name = name.encode("ascii", "ignore").decode("ascii")
-        name = re.sub(r'[\\/*?"<>|]', '', name)
-
-        return name
+        return ff_name
 
     async def languages(self, meta):
         if not meta.get('language_checked', False):
@@ -593,7 +595,7 @@ class FF:
     async def upload(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
-        torrent_name = self.edit_name(meta)
+        torrent_name = await self.edit_name(meta)
         files = {}
         files['poster'] = await self.get_poster(meta)
         nfo = self.get_nfo(meta)

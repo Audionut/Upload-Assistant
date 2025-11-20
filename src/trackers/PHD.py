@@ -11,7 +11,12 @@ class PHD(AZTrackerBase):
         self.common = COMMON(config)
         self.tracker = 'PHD'
         self.source_flag = 'PrivateHD'
-        self.banned_groups = ['']
+        self.banned_groups = [
+            "RARBG", "STUTTERSHIT", "LiGaS", "DDR", "Zeus", "TBS", "SWTYBLZ", "EASports", "C4K", "d3g",
+            "MeGusta", "YTS", "YIFY", "Tigole", "x0r", "nikt0", "NhaNc3", "PRoDJi", "RDN", "SANTi",
+            "FaNGDiNG0", "FRDS", "HD2DVD", "HDTime", "iPlanet", "KiNGDOM", "Leffe", "4K4U", "Xiaomi",
+            "VisionXpert", "WKS"
+        ]
         self.base_url = 'https://privatehd.to'
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'

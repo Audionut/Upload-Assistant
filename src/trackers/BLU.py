@@ -46,7 +46,7 @@ class BLU(UNIT3D):
                         meta['tracker_status'][self.tracker]['other'] = True
 
         if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']):
+            if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content[/bold red]')
                     if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):

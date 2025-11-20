@@ -222,6 +222,18 @@ class AZTrackerBase:
                     meta['skipping'] = f'{self.tracker}'
                     return
 
+        if meta['type'] not in ['WEBDL'] and self.tracker == "PHD":
+            if meta.get('tag', "") in ['FGT', 'EVO']:
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for web-dl[/bold red]')
+                    choice = await self.common.async_input('Do you want to upload anyway? [y/N]: ')
+                    if choice != 'y':
+                        meta['skipping'] = f'{self.tracker}'
+                        return
+                else:
+                    meta['skipping'] = f'{self.tracker}'
+                    return
+
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar

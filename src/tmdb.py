@@ -1000,7 +1000,7 @@ async def tmdb_other_meta(
         original_language = original_language_from_tmdb
 
     # Get anime information if applicable
-    if not anime:
+    if anime:
         if category == "MOVIE":
             filename = filename
         else:

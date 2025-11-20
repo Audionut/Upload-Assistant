@@ -31,7 +31,8 @@ async def search_bluray(meta):
         console.print(f"[yellow]Error reading cached file: {str(e)}[/yellow]")
 
     # If we're here, we need to make a request
-    console.print(f"[dim]Search URL: {url}[/dim]")
+    if meta['debug']:
+        console.print(f"[dim]Search URL: {url}[/dim]")
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -134,7 +135,6 @@ def extract_bluray_links(html_content):
         soup = BeautifulSoup(html_content, 'lxml')
         movie_divs = soup.select('div.figure')
         if not movie_divs:
-            console.print("[red]No movie divs found in the search results[/red]")
             return None
 
         for i, movie_div in enumerate(movie_divs, 1):
@@ -319,7 +319,8 @@ async def get_bluray_releases(meta):
     movie_links = extract_bluray_links(html_content)
 
     if not movie_links:
-        console.print(f"[red]No movies found for IMDB ID: tt{meta['imdb_id']:07d}[/red]")
+        if meta['debug']:
+            console.print(f"[red]No movies found for IMDB ID: tt{meta['imdb_id']:07d}[/red]")
         return []
 
     matching_releases = []

@@ -28,7 +28,7 @@ class DP(UNIT3D):
             'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
             'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
             'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT',
-            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS', ['EVO', 'WEB-DL only']
+            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
         ]
         pass
 
@@ -51,9 +51,14 @@ class DP(UNIT3D):
             console.print(f'[bold red]{self.tracker} requires at least one Nordic/English audio or subtitle track.')
             return False
 
-        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower():
+        if meta['type'] == "ENCODE" and meta.get('tag', "") in ['FGT']:
             if not meta['unattended']:
                 console.print(f"[bold red]{self.tracker} does not allow FGT encodes, skipping upload.")
+            return False
+
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") in ['EVO']:
+            if not meta['unattended']:
+                console.print(f"[bold red]{self.tracker} does not allow EVO for non-WEBDL types, skipping upload.")
             return False
 
         return should_continue

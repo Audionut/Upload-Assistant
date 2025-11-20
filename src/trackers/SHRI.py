@@ -56,6 +56,11 @@ class SHRI(UNIT3D):
         if not lang:
             return ""
         lang_str = str(lang).lower()
+
+        # Strip country code if present (e.g., "en-US" → "en")
+        if "-" in lang_str:
+            lang_str = lang_str.split("-")[0]
+
         if len(lang_str) == 2:
             return lang_str
         try:
@@ -300,7 +305,7 @@ class SHRI(UNIT3D):
             "REMUX": "7",
             "WEBDL": "27",
             "WEBRIP": "15",
-            "HDTV": "6",
+            "HDTV": "33",
             "ENCODE": "15",
             "DVDRIP": "15",
             "BRRIP": "15",
@@ -603,7 +608,7 @@ class SHRI(UNIT3D):
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
             track.get("@type") == "Audio"
-            and self._get_language_code(track) in {"it", "it-it"}
+            and self._get_language_code(track) in {"it"}
             and "commentary" not in str(track.get("Title", "")).lower()
             for track in tracks[2:]
         )
@@ -615,8 +620,7 @@ class SHRI(UNIT3D):
 
         tracks = meta["mediainfo"].get("media", {}).get("track", [])
         return any(
-            track.get("@type") == "Text"
-            and self._get_language_code(track) in {"it", "it-it"}
+            track.get("@type") == "Text" and self._get_language_code(track) in {"it"}
             for track in tracks
         )
 
@@ -656,7 +660,7 @@ class SHRI(UNIT3D):
     async def _get_best_italian_audio_format(self, meta):
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
-        ITALIAN_LANGS = {"it", "it-it", "italian", "italiano"}
+        ITALIAN_LANGS = {"it", "italian", "italiano"}
 
         def extract_quality(track, is_bdinfo):
             if is_bdinfo:
@@ -750,9 +754,9 @@ class SHRI(UNIT3D):
                 for lang in meta["audio_languages"]
             ]
             langs = [lang for lang in langs if lang]
-            if "ITALIAN" in langs:
+            if "Italiano" in langs:
                 info_parts.append("Italiano")
-            elif "ENGLISH" in langs:
+            elif "Inglese" in langs:
                 info_parts.append("Inglese")
             elif langs:
                 info_parts.append(langs[0].title())
@@ -930,7 +934,12 @@ class SHRI(UNIT3D):
                 ita_audio = audio_tracks[0]
 
             # General info
-            fn = os.path.basename(meta.get("filelist", ["file.mkv"])[0])
+            filelist = meta.get("filelist", [])
+            fn = (
+                os.path.basename(filelist[0])
+                if filelist
+                else general.get("FileName", "file.mkv")
+            )
             size = f"{safe_int(general.get('FileSize', 0)) / (1024**3):.1f} GiB"
 
             dur_sec = float(general.get("Duration", 0))
@@ -1047,6 +1056,11 @@ class SHRI(UNIT3D):
             traceback.print_exc()
             return None
 
+    def _strip_bbcode(self, text):
+        """Remove BBCode tags from text, keeping only plain content"""
+        pattern = re.compile(r"\[/?[^\]]+\]")
+        return pattern.sub("", text).strip()
+
     def _build_bbcode(
         self, title, info_line, logo_url, summary, screens, synthetic_mi, category, meta
     ):
@@ -1062,13 +1076,31 @@ class SHRI(UNIT3D):
             category_header = "--- FILM ---"
         release_group = meta.get("tag", "").lstrip("-").strip()
 
+        tonemapped_text = ""
+        if meta.get("tonemapped", False):
+            tonemapped_header = self.config.get("DEFAULT", {}).get(
+                "tonemapped_header", ""
+            )
+            if tonemapped_header:
+                tonemapped_text = self._strip_bbcode(tonemapped_header)
+
         if release_group.lower() == "island":
-            release_notes_section = """[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
-[size=11][color=#FFFFFF]Questa è una release interna pubblicata in esclusiva su Shareisland.[/color][/size]
-[size=11][color=#FFFFFF]Si prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie![/color][/size]"""
+            base_notes = "Questa è una release interna pubblicata in esclusiva su Shareisland.\nSi prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie!"
+            if tonemapped_text:
+                release_notes_section = f"""[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+[size=11][color=#FFFFFF]{base_notes}
+{tonemapped_text}[/color][/size]"""
+            else:
+                release_notes_section = f"""[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+[size=11][color=#FFFFFF]{base_notes}[/color][/size]"""
         else:
-            release_notes_section = """[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
-[size=11][color=#FFFFFF]Nulla da aggiungere.[/color][/size]"""
+            base_notes = "Nulla da aggiungere."
+            if tonemapped_text:
+                release_notes_section = f"""[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+[size=11][color=#FFFFFF]{tonemapped_text}[/color][/size]"""
+            else:
+                release_notes_section = f"""[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
+[size=11][color=#FFFFFF]{base_notes}[/color][/size]"""
 
         pirate_shouts = [
             "The Scene never dies",
@@ -1098,12 +1130,6 @@ class SHRI(UNIT3D):
         imdb_id = meta.get("imdb", "")
         tmdb_id = meta.get("tmdb", "")
         media_type = "tv" if category == "TV" else "movie"
-
-        tonemapped_section = ""
-        if meta.get("tonemapped", False) and self.config.get("DEFAULT", {}).get(
-            "tonemapped_header"
-        ):
-            tonemapped_section = f"\n{self.config['DEFAULT']['tonemapped_header']}\n"
 
         links_section = ""
         if imdb_id or tmdb_id:
@@ -1157,7 +1183,7 @@ class SHRI(UNIT3D):
 {summary}
 
 [center][size=13][b][color=#e8024b]--- SCREENS ---[/color][/b][/size][/center]
-{screens}{tonemapped_section}
+{screens}
 {links_section}{mediainfo_section}{release_notes_section}
 
 [size=13][b][color=#e8024b]--- SHOUTOUTS ---[/color][/b][/size]
