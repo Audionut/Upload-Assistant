@@ -222,7 +222,12 @@ class TVC():
             mi_dump = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt")
             bd_dump = None
 
-        desc = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt")
+        descfile_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"[{self.tracker}]DESCRIPTION.txt")
+        try:
+            desc = await self.read_file(descfile_path)
+        except FileNotFoundError:
+            console.print(f"[yellow]Warning: DESCRIPTION file not found at {descfile_path}")
+            desc = ""
 
         # Naming logic
         if meta['type'] == "ENCODE" and ("bluray" in str(meta['path']).lower() or
@@ -532,24 +537,27 @@ class TVC():
     async def unit3d_edit_desc(self, meta, tracker, signature, image_list, comparison=False):
         base = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt")
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt", "w", encoding="utf-8") as descfile:
-            bbcode = BBCODE()
-            desc = ""
+        # Ensure tmp/<uuid> directory exists
+        desc_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        os.makedirs(desc_dir, exist_ok=True)
+        descfile_path = os.path.join(desc_dir, f"[{tracker}]DESCRIPTION.txt")
+        bbcode = BBCODE()
+        desc = ""
 
-            # Discs
-            if meta.get('discs', []):
-                discs = meta['discs']
-                if discs[0]['type'] == "DVD":
-                    descfile.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n\n")
-                for each in discs[1:]:
-                    if each['type'] == "BDMV":
-                        descfile.write(f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n")
-                    if each['type'] == "DVD":
-                        descfile.write(f"{each['name']}:\n")
-                        descfile.write(
-                            f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] "
-                            f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
-                        )
+        # Discs
+        if meta.get('discs', []):
+            discs = meta['discs']
+            if discs[0]['type'] == "DVD":
+                desc += f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n\n"
+            for each in discs[1:]:
+                if each['type'] == "BDMV":
+                    desc += f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n"
+                if each['type'] == "DVD":
+                    desc += f"{each['name']}:\n"
+                    desc += (
+                        f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler] "
+                        f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
+                    )
 
             # Release info for movies
             rd_info = ""
@@ -683,12 +691,20 @@ class TVC():
             if not comparison:
                 desc = bbcode.convert_comparison_to_collapse(desc, 1000)
 
-            # Write description
-            descfile.write(desc)
-
+            # Append signature if provided
             if signature:
-                descfile.write(signature)
-            descfile.close()
+                desc += f"\n{signature}\n"
+
+            # Write description asynchronously
+            def _write():
+                with open(descfile_path, "w", encoding="utf-8") as f:
+                    f.write(desc)
+
+            try:
+                await asyncio.to_thread(_write)
+            except Exception as e:
+                console.print(f"[bold red]Failed to write DESCRIPTION file: {e}")
+
         return
 
     def get_links(self, meta):
