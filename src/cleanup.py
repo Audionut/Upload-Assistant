@@ -1,15 +1,18 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import asyncio
-import psutil
-import threading
 import multiprocessing
-import sys
 import os
-import subprocess
-import re
 import platform
+import psutil
+import re
+import subprocess
+import sys
+import threading
+from typing import Set, Union
+
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
+
 if os.name == "posix":
     import termios
 
@@ -18,8 +21,8 @@ IS_ANDROID = ('android' in platform.platform().lower() or
               os.path.exists('/system/build.prop') or
               'ANDROID_ROOT' in os.environ)
 
-running_subprocesses = set()
-thread_executor: ThreadPoolExecutor = None
+running_subprocesses: Set[subprocess.Popen] = set()
+thread_executor: Union[ThreadPoolExecutor, None] = None
 IS_MACOS = sys.platform == 'darwin'
 
 
@@ -215,7 +218,9 @@ def kill_all_threads():
 if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
     try:
         output = subprocess.check_output(['stty', '-a']).decode()
-        erase_key = re.search(r' erase = (\S+);', output).group(1)
+        match = re.search(r' erase = (\S+);', output)
+        if match:
+            erase_key = match.group(1)
     except (IOError, OSError):
         pass
 
@@ -248,9 +253,15 @@ def reset_terminal():
             except (IOError, ValueError):
                 pass
 
-        # Kill background jobs
+        # Kill background jobs safely
         try:
-            os.system("jobs -p | xargs -r kill 2>/dev/null")
+            jobs_result = subprocess.run(['sh', '-c', 'jobs -p'],
+                                         capture_output=True, text=True, check=False)
+            if jobs_result.returncode == 0 and jobs_result.stdout.strip():
+                pids = jobs_result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid.isdigit():
+                        subprocess.run(['kill', pid], check=False)
         except Exception:
             pass
 

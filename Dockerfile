@@ -1,6 +1,7 @@
+# Use latest stable Python version for security
 FROM python:3.12
 
-# Update the package list and install system dependencies including mono
+# Update package list and install system dependencies with security best practices
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -11,18 +12,24 @@ RUN apt-get update && \
     mediainfo \
     rustc \
     mono-complete \
-    nano && \
-    rm -rf /var/lib/apt/lists/*
+    nano \
+    ca-certificates \
+    curl && \
+    # Clean up package cache to reduce image size and attack surface
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    # Update CA certificates for secure connections
+    update-ca-certificates
 
 # Set up a virtual environment to isolate our Python dependencies
 RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# Install wheel, requests (for DVD MediaInfo download), and other Python dependencies
-RUN pip install --upgrade pip wheel requests
+# Install wheel, requests (for DVD MediaInfo download), and other Python dependencies with pinned versions
+RUN pip install --upgrade pip==25.3 wheel==0.45.1 requests==2.32.5
 
-# Install Web UI dependencies (in venv)
-RUN pip install --no-cache-dir flask flask-cors
+# Install Web UI dependencies (in venv) with pinned versions
+RUN pip install --no-cache-dir flask==3.1.2 flask-cors==6.0.1
 
 # Set the working directory FIRST
 WORKDIR /Upload-Assistant

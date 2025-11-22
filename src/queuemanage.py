@@ -175,7 +175,7 @@ async def gather_files_recursive(path, allowed_extensions=None):
                                 queue.append(alt_path)
                             elif os.path.isfile(alt_path) and (allowed_extensions is None or alt_path.lower().endswith(tuple(allowed_extensions))):
                                 queue.append(alt_path)
-                    except Exception:
+                    except Exception:  # nosec B112
                         continue
 
         except (OSError, PermissionError) as e:
@@ -314,7 +314,11 @@ async def display_queue(queue, base_dir, queue_name, save_to_log=True):
 
     if save_to_log:
         tmp_dir = os.path.join(base_dir, "tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
+        # Ensure secure permissions for tmp directory
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
+        else:
+            os.chmod(tmp_dir, 0o700)
         log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
         try:

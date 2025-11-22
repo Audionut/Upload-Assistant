@@ -5,6 +5,7 @@ import asyncio
 import base64
 import bencode
 import collections
+import defusedxml.xmlrpc
 import errno
 import os
 import platform
@@ -17,7 +18,8 @@ import time
 import traceback
 import transmission_rpc
 import urllib.parse
-import xmlrpc.client
+import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
+from typing import Dict, DefaultDict, Tuple
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -25,9 +27,12 @@ from src.console import console
 from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
+# Secure XML-RPC client using defusedxml to prevent XML attacks
+defusedxml.xmlrpc.monkey_patch()
+
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
-qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+qbittorrent_cached_clients: Dict[Tuple[str, int, str], qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
+qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
 class Clients():
@@ -261,7 +266,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client, print_err=True)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client)
 
                 if valid:
                     return resolved_path
@@ -371,7 +376,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client, print_err=False
+                        meta, found_torrent_path, found_hash, torrent_client, client
                     )
                 else:
                     valid = False
@@ -401,7 +406,7 @@ class Clients():
 
         return best_match
 
-    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client, print_err=False):
+    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client):
         valid = False
         wrong_file = False
 
@@ -680,7 +685,7 @@ class Clients():
 
             # **Validate the .torrent file**
             try:
-                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
             except Exception as e:
                 console.print(f"[bold red]Error validating torrent {torrent_hash}: {e}")
                 valid = False
@@ -1876,7 +1881,7 @@ class Clients():
 
             if not pathed:
                 valid, resolved_path = await self.is_valid_torrent(
-                    meta, torrent_path, info_hash_v1, 'rtorrent', client, print_err=False
+                    meta, torrent_path, info_hash_v1, 'rtorrent', client
                 )
 
                 if valid:
@@ -2466,7 +2471,7 @@ class Clients():
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
                         if torrent_file_path:
-                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
                             if valid:
                                 if use_piece_preference:
                                     # **Track best match based on piece size**
@@ -2573,7 +2578,7 @@ class Clients():
                                 # Validate the alternative torrent
                                 if alt_torrent_file_path:
                                     alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client, print_err=False
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client
                                     )
 
                                     if alt_valid:
