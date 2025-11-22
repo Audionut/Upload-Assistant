@@ -1000,15 +1000,14 @@ async def tmdb_other_meta(
         original_language = original_language_from_tmdb
 
     # Get anime information if applicable
-    if not anime:
-        if category == "MOVIE":
-            filename = filename
-        else:
-            filename = path
-        mal_id, retrieved_aka, anime, demographic = await get_anime(
-            media_data,
-            {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'filename': filename}
-        )
+    if category == "MOVIE":
+        filename = filename
+    else:
+        filename = path
+    mal_id, retrieved_aka, anime, demographic = await get_anime(
+        media_data,
+        {'title': title, 'aka': retrieved_aka, 'mal_id': 0, 'filename': filename}
+    )
 
     if mal_manual is not None and mal_manual != 0:
         mal_id = mal_manual

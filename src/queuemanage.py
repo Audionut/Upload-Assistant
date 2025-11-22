@@ -9,6 +9,106 @@ from rich.markdown import Markdown
 from rich.style import Style
 
 
+async def process_site_upload_queue(meta, base_dir):
+    site_upload = meta.get('site_upload')
+    if not site_upload:
+        return [], None
+
+    # Get the search results file path
+    search_results_file = os.path.join(base_dir, "tmp", f"{site_upload}_search_results.json")
+
+    if not os.path.exists(search_results_file):
+        console.print(f"[red]Search results file not found: {search_results_file}[/red]")
+        return [], None
+
+    try:
+        with open(search_results_file, 'r', encoding='utf-8') as f:
+            search_results = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        console.print(f"[red]Error loading search results file: {e}[/red]")
+        return [], None
+
+    # Get processed files log
+    processed_files_log = os.path.join(base_dir, "tmp", f"{site_upload}_processed_paths.log")
+    processed_paths = set()
+
+    if os.path.exists(processed_files_log):
+        try:
+            with open(processed_files_log, 'r', encoding='utf-8') as f:
+                processed_paths = set(json.load(f))
+        except (json.JSONDecodeError, IOError) as e:
+            console.print(f"[yellow]Warning: Could not load processed files log: {e}[/yellow]")
+
+    # Extract paths and IMDb IDs, filtering out processed paths
+    queue = []
+    for item in search_results:
+        path = item.get('path')
+        try:
+            imdb_id = item.get('imdb_id')
+        except KeyError:
+            imdb_id = 0
+
+        if path and imdb_id is not None and path not in processed_paths:
+            # Set tracker and imdb_id in meta for this queue item
+            queue_item = {
+                'path': path,
+                'imdb_id': imdb_id,
+                'tracker': site_upload
+            }
+            queue.append(queue_item)
+
+    console.print(f"[cyan]Found {len(queue)} unprocessed items for {site_upload} upload[/cyan]")
+
+    if queue:
+        # Display the queue
+        paths_only = [item['path'] for item in queue]
+        md_text = "\n - ".join(paths_only)
+        console.print("\n[bold green]Queuing these files for site upload:[/bold green]", end='')
+        console.print(Markdown(f"- {md_text.rstrip()}\n\n", style=Style(color='cyan')))
+        console.print(f"[yellow]Tracker: {site_upload}[/yellow]")
+        console.print("\n\n")
+
+    return queue, processed_files_log
+
+
+async def process_site_upload_item(queue_item, meta):
+    # Set the tracker argument (-tk XXX)
+    meta['trackers'] = [queue_item['tracker']]
+
+    # Set the IMDb ID
+    try:
+        imdb = queue_item['imdb_id']
+    except KeyError:
+        imdb = 0
+    meta['imdb_id'] = imdb
+
+    # Return the path for processing
+    return queue_item['path']
+
+
+async def save_processed_path(processed_files_log, path):
+    processed_paths = set()
+
+    # Load existing processed paths
+    if os.path.exists(processed_files_log):
+        try:
+            with open(processed_files_log, 'r', encoding='utf-8') as f:
+                processed_paths = set(json.load(f))
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Add the new path
+    processed_paths.add(path)
+
+    # Save back to file
+    try:
+        os.makedirs(os.path.dirname(processed_files_log), exist_ok=True)
+        with open(processed_files_log, 'w', encoding='utf-8') as f:
+            json.dump(list(processed_paths), f, indent=4)
+    except IOError as e:
+        console.print(f"[red]Error saving processed path: {e}[/red]")
+
+
 async def get_log_file(base_dir, queue_name):
     """
     Returns the path to the log file for the given base directory and queue name.
@@ -124,6 +224,27 @@ async def should_include_directory(dir_path, allowed_extensions=None):
         return False
 
 
+async def _resolve_split_path(path):
+    queue = []
+    split_path = path.split()
+    p1 = split_path[0]
+
+    for i, _ in enumerate(split_path):
+        try:
+            if os.path.exists(p1) and not os.path.exists(f"{p1} {split_path[i + 1]}"):
+                queue.append(p1)
+                p1 = split_path[i + 1]
+            else:
+                p1 += f" {split_path[i + 1]}"
+        except IndexError:
+            if os.path.exists(p1):
+                queue.append(p1)
+            else:
+                console.print(f"[red]Path: [bold red]{p1}[/bold red] does not exist")
+
+    return queue
+
+
 async def resolve_queue_with_glob_or_split(path, paths, allowed_extensions=None):
     """
     Handle glob patterns and split path resolution.
@@ -146,7 +267,7 @@ async def resolve_queue_with_glob_or_split(path, paths, allowed_extensions=None)
         await display_queue(queue)
     elif not os.path.exists(os.path.dirname(path)):
         queue = [
-            file for file in resolve_split_path(path)  # noqa F821
+            file for file in await _resolve_split_path(path)
             if os.path.isdir(file) or (os.path.isfile(file) and (allowed_extensions is None or file.lower().endswith(tuple(allowed_extensions))))
         ]
         await display_queue(queue)
@@ -207,8 +328,21 @@ async def handle_queue(path, meta, paths, base_dir):
     allowed_extensions = ['.mkv', '.mp4', '.ts']
     queue = []
 
-    log_file = os.path.join(base_dir, "tmp", f"{meta['queue']}_queue.log")
-    allowed_extensions = ['.mkv', '.mp4', '.ts']
+    if meta.get('site_upload'):
+        console.print(f"[bold yellow]Processing site upload queue for tracker: {meta['site_upload']}[/bold yellow]")
+        site_queue, processed_log = await process_site_upload_queue(meta, base_dir)
+
+        if site_queue:
+            meta['queue'] = f"{meta['site_upload']}_upload"
+            meta['site_upload_queue'] = True
+
+            # Return the structured queue and log file
+            return site_queue, processed_log
+        else:
+            console.print(f"[yellow]No unprocessed items found for {meta['site_upload']} upload[/yellow]")
+            return [], None
+
+    log_file = os.path.join(base_dir, "tmp", f"{meta.get('queue', 'default')}_queue.log")
 
     if path.endswith('.txt') and meta.get('unit3d'):
         console.print(f"[bold yellow]Detected a text file for queue input: {path}[/bold yellow]")
