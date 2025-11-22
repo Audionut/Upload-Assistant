@@ -1,5 +1,7 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import cli_ui
+import pycountry
 import re
 
 from src.console import console
@@ -78,6 +80,57 @@ class IHD(UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, '10')
             return {'resolution_id': resolved_id}
 
+    def _get_language_code(self, track_or_string):
+        """Extract and normalize language to ISO alpha-2 code"""
+        if isinstance(track_or_string, dict):
+            lang = track_or_string.get("Language", "")
+            if isinstance(lang, dict):
+                lang = lang.get("String", "")
+        else:
+            lang = track_or_string
+        if not lang:
+            return ""
+        lang_str = str(lang).lower()
+
+        # Strip country code if present (e.g., "en-US" → "en")
+        if "-" in lang_str:
+            lang_str = lang_str.split("-")[0]
+
+        if len(lang_str) == 2:
+            return lang_str
+        try:
+            lang_obj = (
+                pycountry.languages.get(name=lang_str.title())
+                or pycountry.languages.get(alpha_2=lang_str)
+                or pycountry.languages.get(alpha_3=lang_str)
+            )
+            return lang_obj.alpha_2.lower() if lang_obj else lang_str
+        except (AttributeError, KeyError, LookupError):
+            return lang_str
+
+    def original_language_check(self, meta):
+        if "mediainfo" not in meta:
+            return False
+
+        original_languages = {
+            lang.lower()
+            for lang in meta.get("original_language", [])
+            if isinstance(lang, str) and lang.strip()
+        }
+        if not original_languages:
+            return False
+
+        tracks = meta["mediainfo"].get("media", {}).get("track", [])
+        for track in tracks:
+            if track.get("@type") != "Audio":
+                continue
+            if "commentary" in str(track.get("Title", "")).lower():
+                continue
+            lang_code = self._get_language_code(track)
+            if lang_code and lang_code.lower() in original_languages:
+                return True
+        return False
+
     async def get_name(self, meta):
         ihd_name = meta['name']
         resolution = meta.get('resolution')
@@ -107,9 +160,13 @@ class IHD(UNIT3D):
         if not meta['is_disc'] == "BDMV":
             if not meta.get('language_checked', False):
                 await process_desc_language(meta, desc=None, tracker=self.tracker)
-            if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
+            original_language = self.original_language_check(meta)
+            has_eng_audio = await has_english_language(meta.get('audio_languages'))
+            has_eng_subs = await has_english_language(meta.get('subtitle_languages'))
+            # Require at least one English audio/subtitle track or an original language audio track
+            if not (original_language or has_eng_audio or has_eng_subs):
                 if not meta['unattended'] or meta['debug']:
-                    console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track.')
+                    console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track or an original language audio track.')
                 should_continue = False
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
@@ -117,7 +174,7 @@ class IHD(UNIT3D):
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print(f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.')
-                yes = cli_ui.ask_yes_no(f'Do you have persmission to upload this torrent to {self.tracker}?', default=False)
+                yes = cli_ui.ask_yes_no(f'Do you have permission to upload this torrent to {self.tracker}?', default=False)
                 if yes:
                     should_continue = True
                 else:

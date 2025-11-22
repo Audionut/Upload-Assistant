@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 from src.prep import Prep
 from src.args import Args
 from src.clients import Clients
