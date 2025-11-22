@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import re
 import asyncio
 from data.config import config
@@ -93,7 +94,6 @@ async def all_ids(meta):
     # Process IMDB info
     if isinstance(imdb_info, dict):
         meta['imdb_info'] = imdb_info
-        meta['tv_year'] = imdb_info.get('tv_year', None)
 
     elif isinstance(imdb_info, Exception):
         console.print(f"[red]IMDb API call failed: {imdb_info}[/red]")
@@ -210,7 +210,6 @@ async def imdb_tmdb_tvdb(meta, filename):
         result_index += 1
         if isinstance(imdb_info, dict):
             meta['imdb_info'] = imdb_info
-            meta['tv_year'] = imdb_info.get('tv_year', None)
 
         elif isinstance(imdb_info, Exception):
             console.print(f"[red]IMDb API call failed: {imdb_info}[/red]")
@@ -304,7 +303,6 @@ async def imdb_tvdb(meta, filename):
 
     if isinstance(imdb_info_result, dict):
         meta['imdb_info'] = imdb_info_result
-        meta['tv_year'] = imdb_info_result.get('tv_year', None)
 
     elif isinstance(imdb_info_result, Exception):
         console.print(f"[red]IMDb API call failed: {imdb_info_result}[/red]")
@@ -409,7 +407,6 @@ async def imdb_tmdb(meta, filename):
     # Process IMDb info
     if isinstance(imdb_info_result, dict):
         meta['imdb_info'] = imdb_info_result
-        meta['tv_year'] = imdb_info_result.get('tv_year', None)
 
     elif isinstance(imdb_info_result, Exception):
         console.print(f"[red]IMDb API call failed: {imdb_info_result}[/red]")

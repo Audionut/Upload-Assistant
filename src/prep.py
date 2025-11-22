@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 try:
     import asyncio
@@ -753,7 +754,7 @@ class Prep():
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
             imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
             meta['imdb_info'] = imdb_info
-            meta['tv_year'] = imdb_info.get('tv_year', None)
+
         check_valid_data = meta.get('imdb_info', {}).get('title', "")
         if check_valid_data:
             try:
@@ -855,7 +856,6 @@ class Prep():
                                     meta['imdb_id'] = int(series_imdb)
                                     imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
                                     meta['imdb_info'] = imdb_info
-                                    meta['tv_year'] = imdb_info.get('year', None)
                                     check_valid_data = meta.get('imdb_info', {}).get('title', "")
                                     if check_valid_data:
                                         title = meta.get('title', "").strip()
@@ -899,19 +899,20 @@ class Prep():
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
         if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False) and not meta.get('edit', False) and not meta.get('site_check', False):
-            await get_bluray_releases(meta)
+            releases = await get_bluray_releases(meta)
 
-            # and if we getting bluray/dvd images, we'll rehost them
-            if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
-                from src.rehostimages import check_hosts
-                url_host_mapping = {
-                    "ibb.co": "imgbb",
-                    "pixhost.to": "pixhost",
-                    "imgbox.com": "imgbox",
-                }
+            if releases:
+                # and if we getting bluray/dvd images, we'll rehost them
+                if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
+                    from src.rehostimages import check_hosts
+                    url_host_mapping = {
+                        "ibb.co": "imgbb",
+                        "pixhost.to": "pixhost",
+                        "imgbox.com": "imgbox",
+                    }
 
-                approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
-                await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+                    approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
+                    await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
 
         # user override check that only sets data after metadata setting
         if user_overrides and not meta.get('no_override', False) and not meta.get('emby', False):
@@ -1012,6 +1013,10 @@ class Prep():
                 services = await get_service(get_services_only=True)
                 meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
+            # Parse NFO for scene releases to get service
+            if meta['scene'] and not meta.get('service') and meta['category'] == "TV":
+                await self.parse_scene_nfo(meta)
+
             # Combine genres from TMDB and IMDb
             tmdb_genres = meta.get('genres', '') or ''
             imdb_genres = meta.get('imdb_info', {}).get('genres', '') or ''
@@ -1067,7 +1072,8 @@ class Prep():
             r'(?i)s\d{1,2}',
             r'(?i)\d{1,2}x\d{2}',
             r'(?i)(?:season|series)\s*\d+',
-            r'(?i)e\d{2,3}\s*\-'
+            r'(?i)e\d{2,3}\s*\-',
+            r'(?i)\d{4}\.\d{1,2}\.\d{1,2}'
         ]
 
         path = meta.get('path', '')
@@ -1094,3 +1100,41 @@ class Prep():
         else:
             stream = 0
         return stream
+
+    async def parse_scene_nfo(self, meta):
+        try:
+            nfo_file = meta.get('scene_nfo_file', '')
+
+            if not nfo_file:
+                if meta['debug']:
+                    console.print("[yellow]No NFO file found for scene release[/yellow]")
+                return
+
+            if meta['debug']:
+                console.print(f"[cyan]Parsing NFO file: {nfo_file}[/cyan]")
+
+            with open(nfo_file, 'r', encoding='utf-8', errors='ignore') as f:
+                nfo_content = f.read()
+
+            # Parse Source field
+            source_match = re.search(r'^Source\s*:\s*(.+?)$', nfo_content, re.MULTILINE | re.IGNORECASE)
+            if source_match:
+                nfo_source = source_match.group(1).strip()
+                if meta['debug']:
+                    console.print(f"[cyan]Found source in NFO: {nfo_source}[/cyan]")
+
+                # Check if source matches any service
+                services = await get_service(get_services_only=True)
+
+                # Exact match
+                for service_name, service_code in services.items():
+                    if nfo_source.upper() == service_name.upper() or nfo_source.upper() == service_code.upper():
+                        meta['service'] = service_code
+                        meta['service_longname'] = service_name
+                        if meta['debug']:
+                            console.print(f"[green]Matched service: {service_code} ({service_name})[/green]")
+                        break
+
+        except Exception as e:
+            if meta['debug']:
+                console.print(f"[red]Error parsing NFO file: {e}[/red]")

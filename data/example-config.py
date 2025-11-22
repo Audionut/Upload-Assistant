@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
         # will print a notice if an update is available
@@ -580,6 +581,8 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
+            # Send uploads to LT modq for staff approval
+            "modq": False,
         },
         "MTV": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

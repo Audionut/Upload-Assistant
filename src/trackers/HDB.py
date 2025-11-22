@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import glob
@@ -790,17 +791,19 @@ class HDB():
                             bd_summary = line.split("Disc Title:")[1].strip()
                             break
 
+                if not bd_summary:
+                    bd_summary = meta.get('uuid', '')
+
                 if bd_summary:
                     data = {
                         "username": self.username,
                         "passkey": self.passkey,
                         "limit": 100,
-                        "search": bd_summary  # Using the Disc Title for search
+                        "search": bd_summary  # Using the Disc Title for search with uuid fallback
                     }
-                    console.print(f"[green]Searching HDB for disc title: [bold yellow]{bd_summary}[/bold yellow]")
+                    console.print(f"[green]Searching HDB for title: [bold yellow]{bd_summary}[/bold yellow]")
                     # console.print(f"[yellow]Using this data: {data}")
                 else:
-                    console.print(f"[red]Error: 'Disc Title' not found in {bd_summary_path}[/red]")
                     return hdb_imdb, hdb_tvdb, hdb_name, hdb_torrenthash, hdb_description, hdb_id
 
             except FileNotFoundError:

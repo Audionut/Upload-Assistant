@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import anitopy
 import cli_ui
 import os
