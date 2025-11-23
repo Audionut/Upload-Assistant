@@ -256,9 +256,15 @@ class UNIT3D:
         return {'personal_release': personal_release}
 
     async def get_internal(self, meta):
+        if meta['debug']:
+            console.print(f"[yellow]{self.tracker} Internal status from config: {self.config['TRACKERS'][self.tracker].get('internal', False)}[/yellow]")
+            console.print(f"[yellow]{self.tracker} Upload tag from release: {meta['tag']}[/yellow]")
+            console.print(f"[yellow]{self.tracker} Internal groups from config: {self.config['TRACKERS'][self.tracker].get('internal_groups', [])}[/yellow]")
         internal = 0
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                if meta['debug']:
+                    console.print(f"[green]{self.tracker} Marked as internal based on release group tag: {meta['tag']}[/green]")
                 internal = 1
 
         return {'internal': internal}
@@ -329,6 +335,9 @@ class UNIT3D:
             if not isinstance(r, dict):
                 raise TypeError(f'Expected dict, got {type(r)}: {r}')
             merged.update(r)
+        if meta['debug']:
+            console.print(f"[cyan]{self.tracker} Upload Data Prepared:[/cyan]")
+            console.print(merged)
 
         return merged
 
