@@ -310,7 +310,9 @@ class TVC():
         if meta['category'] == "MOVIE":
             tvc_name = f"{meta['title']} ({meta['year']}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
         elif meta['category'] == "TV":
-            year = meta['year'] if meta['search_year'] != "" else ""
+            # Use safe lookups to avoid KeyError if 'search_year' is missing
+            search_year = meta.get('search_year', '')
+            year = meta.get('year', '') if search_year != '' else ''
             if meta.get('no_year', False):
                 year = ''
             year_str = f" ({year})" if year else ""
