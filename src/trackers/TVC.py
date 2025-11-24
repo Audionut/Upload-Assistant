@@ -5,6 +5,7 @@ import traceback
 import cli_ui
 import os
 import re
+from urllib.parse import urlparse
 import tmdbsimple as tmdb
 from src.bbcode import BBCODE
 import json
@@ -424,7 +425,6 @@ class TVC():
                 if not isinstance(data_str, str):
                     raise ValueError(f"Invalid TVC response: 'data' missing or not a string: {data_str}")
 
-                from urllib.parse import urlparse
                 parsed = urlparse(data_str)
                 segments = [seg for seg in parsed.path.split("/") if seg]
                 if not segments:
