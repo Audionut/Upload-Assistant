@@ -78,8 +78,23 @@ async def get_audio_v2(mi, meta, bdinfo):
                 tracks = mi.get('media', {}).get('track', [])
                 has_commentary = False
                 has_compatibility = False
-                has_coms = [t for t in tracks if "commentary" in (t.get('Title') or '').lower()]
-                has_compat = [t for t in tracks if "compatibility" in (t.get('Title') or '').lower()]
+                has_coms = []
+                has_compat = []
+                audio_tracks = []
+                for track in tracks:
+                    if track.get('@type') != "Audio":
+                        continue
+                    title = (track.get('Title') or '').lower()
+                    track_is_commentary = False
+                    track_is_compatibility = False
+                    if "commentary" in title:
+                        has_coms.append(track)
+                        track_is_commentary = True
+                    if "compatibility" in title:
+                        has_compat.append(track)
+                        track_is_compatibility = True
+                    if not track_is_commentary and not track_is_compatibility:
+                        audio_tracks.append(track)
                 if has_coms:
                     has_commentary = True
                 if has_compat:
@@ -87,10 +102,6 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if meta['debug']:
                     console.print(f"DEBUG: Found {len(has_coms)} commentary tracks, has_commentary = {has_commentary}")
                     console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
-                audio_tracks = [
-                    t for t in tracks
-                    if t.get('@type') == "Audio" and not has_commentary and not has_compatibility
-                ]
                 audio_language = None
                 if meta['debug']:
                     console.print(f"DEBUG: Audio Tracks (not commentary)= {len(audio_tracks)}")
