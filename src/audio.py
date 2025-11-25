@@ -281,6 +281,9 @@ async def get_audio_v2(mi, meta, bdinfo):
                         has_commentary = True
                     if has_compat:
                         has_compatibility = True
+                    if meta['debug']:
+                        console.print(f"DEBUG: Found {len(has_coms)} commentary tracks, has_commentary = {has_commentary}")
+                        console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
                     audio_language = None
                     if meta['debug']:
                         console.print(f"DEBUG: Audio Tracks (not commentary)= {len(audio_tracks)}")
