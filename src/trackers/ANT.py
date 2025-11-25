@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -7,6 +8,7 @@ import httpx
 import json
 import os
 import platform
+import re
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
@@ -99,7 +101,8 @@ class ANT:
             data['censored'] = 1
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        if any(x in genres.lower() for x in ['xxx', 'erotic', 'porn', 'adult', 'orgy']):
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
@@ -115,7 +118,7 @@ class ANT:
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
 
-        if meta.get('is_disc') == 'BDMV' and data['flagchangereason'] is None:
+        if meta.get('is_disc') == 'BDMV' and data.get('flagchangereason') is None:
             data.update({'flagchangereason': "BDMV Uploaded with Upload Assistant"})
 
         headers = {
@@ -239,6 +242,13 @@ class ANT:
                 console.print('[bold red]ANT only ALLOWS Movies.')
             meta['skipping'] = "ANT"
             return []
+
+        if meta.get('bloated', False):
+            if not meta['unattended']:
+                console.print('[bold red]ANT does not allow bloated releases.')
+            meta['skipping'] = "ANT"
+            return []
+
         dupes = []
         params = {
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),

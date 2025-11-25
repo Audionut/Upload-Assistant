@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 from datetime import datetime
 from src.trackers.COMMON import COMMON
@@ -14,6 +15,7 @@ class CZ(AZTrackerBase):
         self.banned_groups = ['']
         self.base_url = 'https://cinemaz.to'
         self.torrent_url = f'{self.base_url}/torrent/'
+        self.requests_url = f'{self.base_url}/requests'
 
     async def rules(self, meta):
         warnings = []

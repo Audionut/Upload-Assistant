@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiohttp
 import cli_ui
 import json
@@ -119,6 +120,39 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
             }
 
         specific_tracker = [tracker_keys[key] for key in tracker_keys if meta.get(key) is not None]
+
+        # Filter out trackers that don't have valid config or api_key/announce_url
+        if specific_tracker:
+            valid_trackers = []
+            for tracker in specific_tracker:
+                if "BTN" in tracker:
+                    valid_trackers.append(tracker)
+                    continue
+                else:
+                    tracker_config = config.get('TRACKERS', {}).get(tracker, {})
+                    api_key = tracker_config.get('api_key', '')
+                    announce_url = tracker_config.get('announce_url', '')
+
+                    if not tracker_config:
+                        if meta.get('debug'):
+                            console.print(f"[yellow]Tracker {tracker} not found in config, skipping[/yellow]")
+                        continue
+
+                    # Accept tracker if it has either a valid api_key or announce_url
+                    has_api_key = api_key and api_key.strip() != ''
+                    has_announce_url = announce_url and announce_url.strip() != ''
+
+                    if not has_api_key and not has_announce_url:
+                        if meta.get('debug'):
+                            console.print(f"[yellow]Tracker {tracker} has no api_key or announce_url set, skipping[/yellow]")
+                        continue
+
+                    valid_trackers.append(tracker)
+
+            specific_tracker = valid_trackers
+
+        if meta['debug']:
+            console.print(f"[blue]Specific trackers to check: {specific_tracker}[/blue]")
 
         if specific_tracker:
             if meta.get('is_disc', False) and "ANT" in specific_tracker:

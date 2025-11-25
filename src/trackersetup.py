@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import cli_ui
@@ -39,6 +40,8 @@ from src.trackers.HDS import HDS
 from src.trackers.HDT import HDT
 from src.trackers.HHD import HHD
 from src.trackers.HUNO import HUNO
+from src.trackers.IHD import IHD
+from src.trackers.IS import IS
 from src.trackers.ITT import ITT
 from src.trackers.LCD import LCD
 from src.trackers.LDU import LDU
@@ -68,8 +71,8 @@ from src.trackers.THR import THR
 from src.trackers.TIK import TIK
 from src.trackers.TL import TL
 from src.trackers.TTG import TTG
+from src.trackers.TTR import TTR
 from src.trackers.TVC import TVC
-from src.trackers.UHD import UHD
 from src.trackers.ULCX import ULCX
 from src.trackers.UTP import UTP
 from src.trackers.YOINK import YOINK
@@ -239,7 +242,7 @@ class TRACKER_SETUP:
         if 'taoe' in group_tags:
             group_tags = 'taoe'
 
-        if tracker.upper() in ("AITHER", "LST"):
+        if tracker.upper() in ("AITHER", "LST", "SPD"):
             file_path = await self.get_banned_groups(meta, tracker)
             if file_path == "empty":
                 console.print(f"[bold red]No banned groups found for '{tracker}'.")
@@ -613,10 +616,16 @@ class TRACKER_SETUP:
             try:
                 url = tracker_instance.requests_url
             except AttributeError:
-                # tracker without requests url not supported
-                return
+                if tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                    pass
+                else:
+                    # tracker without requests url not supported
+                    return
             if tracker.upper() == "BHD":
                 requests = await self.bhd_request_check(meta, tracker, url)
+            elif tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                requests = await tracker_instance.get_requests(meta)
+                return
             else:
                 requests = await self.get_tracker_requests(meta, tracker, url)
                 type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)
@@ -898,14 +907,14 @@ class TRACKER_SETUP:
 tracker_class_map = {
     'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
     'CZ': CZ, 'DC': DC, 'DP': DP, 'EMUW': EMUW, 'FNP': FNP, 'FF': FF, 'FL': FL, 'FRIKI': FRIKI, 'GPW': GPW, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
-    'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
+    'IHD': IHD, 'IS': IS, 'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
-    'TIK': TIK, 'TL': TL, 'TVC': TVC, 'TTG': TTG, 'UHD': UHD, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
+    'TIK': TIK, 'TL': TL, 'TVC': TVC, 'TTG': TTG, 'TTR': TTR, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
 }
 
 api_trackers = {
-    'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
-    'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'UHD', 'ULCX', 'UTP', 'YOINK', 'YUS'
+    'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
+    'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TTR', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 
 other_api_trackers = {
@@ -913,5 +922,5 @@ other_api_trackers = {
 }
 
 http_trackers = {
-    'AR', 'ASC', 'AZ', 'BJS', 'BT', 'CZ', 'FF', 'FL', 'HDB', 'HDS', 'HDT', 'MTV', 'PHD', 'PTER', 'PTS', 'TTG'
+    'AR', 'ASC', 'AZ', 'BJS', 'BT', 'CZ', 'FF', 'FL', 'HDB', 'HDS', 'HDT', 'IS', 'MTV', 'PHD', 'PTER', 'PTS', 'TTG'
 }

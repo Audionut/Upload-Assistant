@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiohttp
 import asyncio
 import click
@@ -311,7 +312,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         if valid_images:
                             meta['image_list'] = valid_images
             else:
-                console.print("[yellow]Skipping PTP as no match found[/yellow]")
+                if meta['debug']:
+                    console.print("[yellow]Skipping PTP as no match found[/yellow]")
                 found_match = False
 
         else:
@@ -379,6 +381,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TMDb ID: {tmdb}[/green]")
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
                     found_match = True
+                    meta['imdb_id'] = int(imdb) if imdb else meta.get('imdb_id', 0)
+                    meta['tmdb_id'] = int(tmdb) if tmdb else meta.get('tmdb_id', 0)
                     if meta.get('description') and meta.get('description') != "":
                         description = meta.get('description')
                         console.print("[bold green]Successfully grabbed description from BHD")
@@ -560,7 +564,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 console.print(f"[yellow]{tracker_name} data not found for ID: {meta[tracker_key]}[/yellow]")
                 found_match = False
         else:
-            console.print("[yellow]No ID found in meta for HDB, searching by file name[/yellow]")
+            if meta['debug']:
+                console.print("[yellow]No ID found in meta for HDB, searching by file name[/yellow]")
 
             # Use search_filename function if ID is not found in meta
             imdb, tvdb_id, hdb_name, meta['ext_torrenthash'], meta['hdb_description'], tracker_id = await tracker_instance.search_filename(search_term, search_file_folder, meta)

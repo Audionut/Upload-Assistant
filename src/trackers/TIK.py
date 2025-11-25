@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -329,9 +330,8 @@ class TIK(UNIT3D):
 
         if meta['is_disc'] == 'BDMV':
             video_info = meta.get('bdinfo', {}).get('video', [])
-            video_codec = video_info[0].get('codec', 'Unknown')
-            video_bitrate = video_info[0].get('bitrate', 'Unknown')
-            desc_text.append(f"  Video Format.......: {video_codec} / {video_bitrate}\n")
+            video_resolution = video_info[0].get('resolution', 'Unknown')
+            desc_text.append(f"  Video Format.......: {video_resolution}\n")
         else:
             desc_text.append(f"  DVD Format.........: {meta.get('source', 'Unknown')}\n")
         desc_text.append("  Film Aspect Ratio..: [color=red]The actual aspect ratio of the content, not including the black bars[/color]\n")

@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import cli_ui
 
@@ -20,14 +21,14 @@ class BLU(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AOC', 'AROMA',
-            'aXXo', 'Brrip', 'CHD', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'ELiTE', 'eSc',
-            'FaNGDiNG0', 'FGT', 'Flights', 'FRDS', 'FUM', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime',
-            'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'Leffe', 'LEGi0N', 'LOAD', 'MeGusta',
-            'mHD', 'mSD', 'NhaNc3', 'nHD', 'nikt0', 'NOIVTC', 'nSD', 'OFT', 'PiRaTeS', 'playBD',
-            'PlaySD', 'playXD', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RDN', 'REsuRRecTioN', 'RetroPeeps',
-            'RMTeam', 'SANTi', 'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'Telly', 'TM', 'TRiToN',
-            'UPiNSMOKE', 'URANiME', 'WAF', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT',
+            '[Oj]', '3LTON', '4yEo', 'ADE', 'AFG', 'AniHLS', 'AnimeRG', 'AniURL', 'AOC', 'AROMA', 'aXXo', 'B3LLUM',
+            'BHDStudio', 'Brrip', 'CHD', 'CM8', 'CrEwSaDe', 'd3g', 'DeadFish', 'DNL', 'DTLegacy', 'ELiTE',
+            'eSc', 'EZTV', 'EZTV.RE', 'F13', 'FaNGDiNG0', 'FGT', 'Flights', 'FRDS', 'FUM', 'HAiKU', 'hallowed',
+            'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'ION10', 'iPlanet', 'JIVE', 'KiNGDOM', 'LAMA', 'Leffe', 'LEGi0N',
+            'LOAD', 'MeGusta', 'mHD', 'mSD', 'NhaNc3', 'nHD', 'nikt0', 'NOIVTC', 'nSD', 'PiRaTeS', 'playBD',
+            'PlaySD', 'playXD', 'PRODJi', 'RAPiDCOWS', 'RARBG', 'RetroPeeps', 'RDN', 'REsuRRecTioN', 'RMTeam', 'SANTi', 'SasukeducK',
+            'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'Telly', 'TheFarm', 'TM', 'TRiToN', 'UPiNSMOKE', 'URANiME', 'WAF',
+            'WKS', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT',
         ]
         pass
 
@@ -46,7 +47,7 @@ class BLU(UNIT3D):
                         meta['tracker_status'][self.tracker]['other'] = True
 
         if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']):
+            if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content[/bold red]')
                     if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
@@ -83,8 +84,8 @@ class BLU(UNIT3D):
         if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             blu_name = blu_name.replace(f"{year}", imdb_year, 1)
 
-        if webdv and webdv.strip():
-            blu_name = blu_name.replace(f"{webdv} ", "", 1)
+        if webdv:
+            blu_name = blu_name.replace("HYBRID ", "", 1)
 
         if meta['tracker_status'][self.tracker].get('other', False):
             blu_name = blu_name.replace(f"{meta['resolution']}", f"{meta['resolution']} DVP5/DVP8", 1)

@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import cli_ui
 import glob
 import json
@@ -231,7 +232,7 @@ async def get_resolution(guess, folder_id, base_dir):
             scan = mi['media']['track'][1]['ScanType']
         except Exception:
             scan = "Progressive"
-        if scan == "Progressive":
+        if not scan or scan == "Progressive":
             scan = "p"
         elif scan == "Interlaced":
             scan = 'i'

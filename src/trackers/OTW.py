@@ -1,5 +1,7 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import cli_ui
+import re
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.trackers.UNIT3D import UNIT3D
@@ -42,8 +44,10 @@ class OTW(UNIT3D):
                     return False
             else:
                 return False
-        disallowed_keywords = {'XXX', 'Erotic', 'Porn', 'Hentai', 'Adult Animation', 'Orgy', 'softcore'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
+
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult animation not allowed at OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
@@ -54,7 +58,7 @@ class OTW(UNIT3D):
                 return False
 
         if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']):
+            if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at OTW[/bold red]')
                     if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):

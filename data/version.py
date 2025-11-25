@@ -1,4 +1,156 @@
-__version__ = "v6.1.1"
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+__version__ = "v6.2.3"
+
+"""
+Release Notes for version v6.2.3 (2025-10-27):
+
+# ## What's Changed
+# 
+# * set torrent_properties by @Audionut in 96d41b8
+# * discparse.py - Use BDInfo on PATH if available (Linux) (#952) by @noobiangodd in bd52996
+# * tvdb improvements by @Audionut in 5891db5
+# * BT: add internal upload support (#953) by @wastaken7 in daeadbe
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.2...v6.2.3
+"""
+
+
+"""
+Release Notes for version v6.2.2 (2025-10-26):
+
+# ## What's Changed
+# 
+# * fix tvdb pagination by @Audionut in 1c4f9b6
+# * S/E overrides by @Audionut in 84787af
+# * tvdb safe settings by @Audionut in d4de654
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.1...v6.2.2
+"""
+
+
+"""
+Release Notes for version v6.2.1 (2025-10-26):
+
+# ## What's Changed
+# 
+# * fix: prevent error with missing config by @Audionut in 1398458
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.0...v6.2.1
+"""
+
+
+"""
+Release Notes for version v6.2.0 (2025-10-26):
+
+# 
+# ## RELEASE NOTES
+#  - New site support - ImmortalSeed, Emuwarez.
+#  - New modules required, update with requirements.txt.
+#  - Linux specific mediainfo binaries for DVD support. Uninstall existing 'pymediainfo' before running requirements.txt.
+#  - Removed oxipng support, using ffmpeg based compression instead.
+#  - TVDB for all.
+#  - Refactored cookie/site validation processing, to speed processing.
+#  - New feature, site checking. Use as 'python3 upload.py path_to_movie_folder --queue a_queue_name -sc -ua'. Append trackers as needed. You can also append '-req' (or config option). This will find all matching content from the input directory, that can be uploaded to each tracker (and list any request). Log files for each tracker will be created in the UA tmp directory.
+#  - Alternatively, you can remove '-sc' from the above example, and let UA just upload content from the input directory instead of logging. You may wish to append '-lq' with a numeric value to limit the amount of successful uploads processed.
+# 
+# ## New config options - see example.py
+#  - Multiple client searching for existing torrent files.
+#  - Specific injection client.
+#  - ffmpeg based compression option.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * Add banned groups to CBR tracker: DragsterPS, DRENAN, S74Ll10n (#885) by @franzopl in 5c7db2b
+# * linux specific mi binaries (#886) by @Audionut in f838eff
+# * force mediainfo by @Audionut in 01fc6c9
+# * fix: args key (#889) by @GizmoBal in 1a94f57
+# * catch exceptions by @Audionut in 1c82a9e
+# * unit3d description handling update by @Audionut in b292887
+# * add prompt for ANT ids by @Audionut in c60328e
+# * Refactor SHRI (#888) by @TheDarkMan in a129a0e
+# * feat(SHRI): improve audio string cleaning in SHRI tracker (#893) by @TheDarkMan in 968d575
+# * OE-OTW rules compliance by @Audionut in ffb3424
+# * fixing imgur issue with TVC and making some improvements (#894) by @swannie-eire in 5b7ebf4
+# * Fix race condition in get_mediainfo_section by removing unnecessary asyncio usage (#895) by @wastaken7 in abdfee7
+# * SHRI: handle bitrate conversion errors in audio track processing (#896) by @TheDarkMan in b783158
+# * feat: add site checking by @Audionut in 83718c0
+# * feat: injection client by @Audionut in 68ca252
+# * wrap child process kill by @Audionut in 28a99f2
+# * PTP: fix missing import by @Audionut in 289e9b4
+# * SHRI: improve encoding detection (#902) by @TheDarkMan in 73deae4
+# * ITT: add naming conventions and request research (#900) by @wastaken7 in 2dedf50
+# * add EMUW tracker support (#898) by @Kaiser in 98ec8ec
+# * fix(ITT): missing mapping_only (#903) by @wastaken7 in 3884b89
+# * always regenerate mi by @Audionut in 04c70a8
+# * SHRI: handle list sources  (#905) by @TheDarkMan in 0014260
+# * distributor from edition only when is_disc by @Audionut in 6283beb
+# * UNIT3D: catch upload permission & incorrect API key (#904) by @wastaken7 in 2b27633
+# * Add Nebula streaming service (#906) by @WOSSFOSS in a2cd15d
+# * rules compliance updates by @Audionut in aafc3b0
+# * update -sc handling to work as only a tracker search by @Audionut in 22e912d
+# * DP: enable request search (#912) by @wastaken7 in b897ff2
+# * better -sc handling by @Audionut in 269d810
+# * YUS: disabled request searching by @Audionut in bad14bc
+# * remove print by @Audionut in 1c0c03c
+# * log requests by @Audionut in 27ee1d5
+# * fix logging only sucessfull trackers by @Audionut in c1f04c3
+# * site_searching: save aither trumpables by @Audionut in d6e487a
+# * site_searching: always request search by @Audionut in d6293c9
+# * fix(SHRI): normalize Blu-ray to BluRay for non-DISC types (#914) by @TheDarkMan in 1faa0a6
+# * AITHER: add request support by @Audionut in 3941841
+# * site_check: cleanup queue printing by @Audionut in 9b82a6c
+# * fix(SHRI): correct WEB-DL vs WEBRip detection logic (#916) by @TheDarkMan in c05bbc9
+# * feat: cache qbit login (#918) by @WOSSFOSS in 25755f5
+# * banned groups update on CBR.py (#920) by @franzopl in 63c3f67
+# * fix(SHRI): improve release group tag extraction (#921) by @TheDarkMan in e37c36e
+# * blu, remove webdv by @Audionut in b1888e6
+# * HHD: no dvdrip by @Audionut in 517247e
+# * BJS, ASC: add missing internal group detection (#923) by @wastaken7 in d516502
+# * fix(SHRI): detect GPU encodes via empty BluRay metadata (#924) by @TheDarkMan in 6dffda3
+# * ANT: adult screens by @Audionut in c039dce
+# * OTW: naming fixes by @Audionut in 8c4c75d
+# * use combined genre check by @Audionut in 6211f21
+# * LT: enhance category detection and add Spanish language checks (#925) by @wastaken7 in e954f12
+# * ULCX: fail safe with adult screens by @Audionut in fb1c61f
+# * BT: add scene flag (#927) by @wastaken7 in a2e6527
+# * HUNO: correct HFR placement by @Audionut in cbb3bef
+# * ANT: flagchange adult screens by @Audionut in d30290b
+# * ANT: useragent by @Audionut in 43a3795
+# * SHRI: improve type detection for DV profile encodes (#929) by @TheDarkMan in f83f0b8
+# * Slice upload of comparison screenshots on HDB. (#930) by @GizmoBal in 58d0793
+# * BHD: remove screensperrow handling by @Audionut in b544769
+# * HUNO: replace dubbed by @Audionut in 58be987
+# * BLU: fix webdv name replacement by @Audionut in 4895d64
+# * TL: Fix wrong syntax (#932) by @WOSSFOSS in 3f54319
+# * TL: fix unbound error in torrent edit (#933) by @WOSSFOSS in c4685da
+# * RF: domain change by @Audionut in e62fd96
+# * adult content handling by @Audionut in 04d8c4a
+# * better matching against adult content by @Audionut in 373bbb4
+# * fix(SHRI): improve hybrid detection logic in SHRI tracker (#937) by @TheDarkMan in a6b8c5f
+# * Center ordinary screens on HDB (#936) by @GizmoBal in df0b521
+# * refactor: centralize cookie validation and upload logic (#883) by @wastaken7 in 76daec4
+# * fix setting BHD id's by @Audionut in 131849b
+# * ASC: Fix anime related issues (#939) by @wastaken7 in fb57fb3
+# * CZ: add client matching (#945) by @FortKnox1337 in 06339ae
+# * Added support for ImmortalSeed (#942) by @wastaken7 in 644e0ad
+# * raise exceptions by @Audionut in 81619c4
+# * Use ffmpeg compression instead of oxipng (#946) by @Audionut in 79130f9
+# * refactor tvdb (#941) by @Audionut in f0b70dc
+# * feat: multiple searching client support (#913) by @Audionut in 06c04a3
+# * release notes by @Audionut in dad66b6
+# * patch qui torrent comments by @Audionut in 0892720
+# * HUNO text size by @Audionut in eac97c6
+# * HUNO: screens per row fix by @Audionut in 624a825
+# * fix args parsing by @Audionut in a21cebc
+# * fix missing key set by @Audionut in ed0f1c4
+# * fix(SHRI): web and remux handling (#947) by @TheDarkMan in 194e4ab
+# * unit3d follow redirects by @Audionut in 8ef665c
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.1.1...v6.2.0
+"""
+
 
 """
 Release Notes for version v6.1.1 (2025-10-11):

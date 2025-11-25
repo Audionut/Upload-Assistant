@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import asyncio
@@ -15,6 +16,7 @@ from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
 from src.bbcode import BBCODE
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
@@ -28,17 +30,18 @@ class BJS:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'BJS'
         self.banned_groups = []
         self.source_flag = 'BJ'
         self.base_url = 'https://bj-share.info'
         self.torrent_url = 'https://bj-share.info/torrents.php?torrentid='
-        self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
+        self.requests_url = f'{self.base_url}/requests.php?'
         self.auth_token = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
-        self.cover = ''
 
     async def get_additional_checks(self, meta):
         should_continue = True
@@ -54,51 +57,15 @@ class BJS:
 
         return should_continue
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
-            return False
-
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload.php'
-            response = await self.session.get(upload_page_url, timeout=30.0)
-            response.raise_for_status()
-
-            if 'login.php' in str(response.url):
-                console.print(f'[bold red]Falha na validação do {self.tracker}. O cookie parece estar expirado (redirecionado para login).[/bold red]')
-                return False
-
-            auth_match = re.search(r'name="auth" value="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f'[bold red]Falha na validação do {self.tracker}. Token Auth não encontrado.[/bold red]')
-                console.print('[yellow]A estrutura do site pode ter mudado ou o login falhou silenciosamente.[/yellow]')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'[yellow]A resposta do servidor foi salva em {failure_path} para análise.[/yellow]')
-                return False
-
-            return str(auth_match.group(1))
-
-        except httpx.TimeoutException:
-            console.print(f'[bold red]Erro no {self.tracker}: Timeout ao tentar validar credenciais.[/bold red]')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]Erro HTTP ao validar credenciais do {self.tracker}: Status {e.response.status_code}.[/bold red]')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}.[/bold red]')
-            return False
-        except Exception as e:
-            console.print(f'{self.tracker}: Erro desconhecido ao validar credenciais do {self.tracker}: {e}[/bold red]')
-            return False
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=f'{self.base_url}/upload.php',
+            error_text='login.php',
+            token_pattern=r'name="auth" value="([^"]+)"'
+        )
 
     async def load_localized_data(self, meta):
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
@@ -139,8 +106,8 @@ class BJS:
                         append_to_response=''
                     )
 
-        self.main_tmdb_data = main_ptbr_data
-        self.episode_tmdb_data = episode_ptbr_data
+        self.main_tmdb_data = main_ptbr_data or {}
+        self.episode_tmdb_data = episode_ptbr_data or {}
 
         return
 
@@ -652,6 +619,9 @@ class BJS:
             return
 
         try:
+            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
+            BJS.already_has_the_info = False
             params = self._extract_upload_params(meta)
 
             soup = await self._fetch_search_page(meta)
@@ -704,6 +674,7 @@ class BJS:
 
             ajax_tasks = self._extract_torrent_ids(rows_to_process)
             found_items = await self._process_ajax_responses(ajax_tasks, params)
+            BJS.already_has_the_info = bool(found_items)
 
             return found_items
 
@@ -816,13 +787,16 @@ class BJS:
             print(f'Exceção no upload de {filename}: {e}')
             return None
 
-    async def get_cover(self, meta, disctype):
+    async def get_cover(self, meta):
         cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
             print('Nenhum poster_path encontrado nos dados do TMDB.')
             return None
 
         cover_tmdb_url = f'https://image.tmdb.org/t/p/w500{cover_path}'
+        if BJS.already_has_the_info:
+            return cover_tmdb_url
+
         try:
             response = await self.session.get(cover_tmdb_url, timeout=120)
             response.raise_for_status()
@@ -988,6 +962,9 @@ class BJS:
         return ' / '.join(ordered_tags)
 
     async def get_credits(self, meta, role):
+        if BJS.already_has_the_info:
+            return 'N/A'
+
         role_map = {
             'director': ('directors', 'tmdb_directors'),
             'creator': ('creators', 'tmdb_creators'),
@@ -1010,23 +987,24 @@ class BJS:
                 return ', '.join(unique_names)
 
             else:
-                if not self.cover:  # Only ask for input if there's no info in the site already
-                    role_display_name = prompt_name_map.get(role, role.capitalize())
-                    prompt_message = (f'{role_display_name} não encontrado(s).\nPor favor, insira manualmente (separados por vírgula): ')
-                    user_input = await self.common.async_input(prompt=prompt_message)
+                role_display_name = prompt_name_map.get(role, role.capitalize())
+                prompt_message = (
+                    f'{role_display_name} não encontrado(s).\n'
+                    'Por favor, insira manualmente (separados por vírgula): '
+                )
+                user_input = await self.common.async_input(prompt=prompt_message)
 
-                    if user_input.strip():
-                        return user_input.strip()
-                    else:
-                        return 'skipped'
+                if user_input.strip():
+                    return user_input.strip()
                 else:
-                    return 'N/A'
+                    return 'skipped'
 
     async def get_requests(self, meta):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
             try:
+                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
                 cat = meta['category']
                 if cat == 'TV':
                     cat = 2
@@ -1037,7 +1015,7 @@ class BJS:
 
                 query = meta['title']
 
-                search_url = f'{self.base_url}/requests.php?submit=true&search={query}&showall=on&filter_cat[{cat}]=1'
+                search_url = f'{self.requests_url}submit=true&search={query}&showall=on&filter_cat[{cat}]=1'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -1093,8 +1071,8 @@ class BJS:
                 console.print(traceback.format_exc())
                 return []
 
-    async def fetch_data(self, meta, disctype):
-        await self.load_cookies(meta)
+    async def get_data(self, meta):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         await self.load_localized_data(meta)
         category = meta['category']
 
@@ -1103,7 +1081,7 @@ class BJS:
         # These fields are common across all upload types
         data.update({
             'audio': await self.get_audio(meta),
-            'auth': meta[f'{self.tracker}_secret_token'],
+            'auth': BJS.secret_token,
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
             'duracaoHR': self.get_runtime(meta).get('hours'),
@@ -1118,7 +1096,7 @@ class BJS:
             'remaster_title': self.build_remaster_title(meta),
             'resolucaoh': self.get_resolution(meta).get('height'),
             'resolucaow': self.get_resolution(meta).get('width'),
-            'sinopse': self.main_tmdb_data.get('overview') or await self.common.async_input(prompt='Digite a sinopse: '),
+            'sinopse': await self.get_overview(),
             'submit': 'true',
             'tags': await self.get_tags(meta),
             'tipolegenda': await self.get_subtitle(meta),
@@ -1204,11 +1182,25 @@ class BJS:
         # Only upload images if not debugging
         if not meta.get('debug', False):
             data.update({
-                'image': await self.get_cover(meta, disctype),
+                'image': await self.get_cover(meta),
                 'screenshots[]': await self.get_screenshots(meta),
             })
 
         return data
+
+    async def get_overview(self):
+        overview = self.main_tmdb_data.get('overview', '')
+        if not overview:
+            if not BJS.already_has_the_info:
+                console.print(
+                    "[bold red]Sinopse não encontrada no TMDB. Por favor, insira manualmente.[/bold red]"
+                )
+                overview = await self.common.async_input(
+                    prompt='[green]Digite a sinopse:[/green]'
+                )
+            else:
+                return 'N/A'
+        return overview
 
     async def check_data(self, meta, data):
         if not meta.get('debug', False):
@@ -1223,49 +1215,23 @@ class BJS:
         return False
 
     async def upload(self, meta, disctype):
-        status_message = ''
-        data = await self.fetch_data(meta, disctype)
-        requests = await self.get_requests(meta)
-        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-        status_message = ''
+        data = await self.get_data(meta)
 
         issue = await self.check_data(meta, data)
         if issue:
-            status_message = f'data error - {issue}'
+            meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
         else:
-            if not meta.get('debug', False):
-                torrent_id = ''
-                upload_url = f"{self.base_url}/upload.php"
-                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            await self.cookie_auth_uploader.handle_upload(
+                meta=meta,
+                tracker=self.tracker,
+                source_flag=self.source_flag,
+                torrent_url=self.torrent_url,
+                data=data,
+                torrent_field_name='file_input',
+                upload_cookies=self.session.cookies,
+                upload_url=f"{self.base_url}/upload.php",
+                id_pattern=r'torrentid=(\d+)',
+                success_text="action=download&id=",
+            )
 
-                with open(torrent_path, 'rb') as torrent_file:
-                    files = {'file_input': (f"{self.tracker}.placeholder.torrent", torrent_file, 'application/x-bittorrent')}
-
-                    response = await self.session.post(upload_url, data=data, files=files, timeout=120)
-
-                    if 'action=download&id=' in response.text:
-                        status_message = 'Enviado com sucesso.'
-
-                        # Find the torrent id
-                        match = re.search(r'torrentid=(\d+)', response.text)
-                        if match:
-                            torrent_id = match.group(1)
-                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                        if requests:
-                            status_message += ' Seu upload pode atender a pedidos existentes, verifique os logs anteriores do console.'
-
-                    else:
-                        status_message = 'data error - O upload pode ter falhado, verifique. '
-                        response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                        with open(response_save_path, 'w', encoding='utf-8') as f:
-                            f.write(response.text)
-                        console.print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
-
-                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-
-            else:
-                console.print(data)
-                status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return

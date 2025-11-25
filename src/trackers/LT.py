@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import re
 from src.console import console
@@ -31,6 +32,7 @@ class LT(UNIT3D):
         overview = meta.get('overview', '').lower()
         genres = meta.get('genres', '').lower()
         soap_keywords = ['telenovela', 'novela', 'soap', 'culebrón', 'culebron']
+        origin_countries = meta.get('origin_country', [])
 
         if meta['category'] == 'TV':
             # Anime
@@ -40,12 +42,12 @@ class LT(UNIT3D):
             elif any(kw in keywords for kw in soap_keywords) or any(kw in overview for kw in soap_keywords):
                 category_id = '8'
             # Turkish & Asian
-            elif 'drama' in genres and meta.get('origin_country', '') in [
+            elif 'drama' in genres and any(c in [
                 'AE', 'AF', 'AM', 'AZ', 'BD', 'BH', 'BN', 'BT', 'CN', 'CY', 'GE', 'HK', 'ID', 'IL', 'IN',
                 'IQ', 'IR', 'JO', 'JP', 'KG', 'KH', 'KP', 'KR', 'KW', 'KZ', 'LA', 'LB', 'LK', 'MM', 'MN',
                 'MO', 'MV', 'MY', 'NP', 'OM', 'PH', 'PK', 'PS', 'QA', 'SA', 'SG', 'SY', 'TH', 'TJ', 'TL',
                 'TM', 'TR', 'TW', 'UZ', 'VN', 'YE'
-            ]:
+            ] for c in origin_countries):
                 category_id = '20'
 
         return {'category_id': category_id}
@@ -108,6 +110,13 @@ class LT(UNIT3D):
             return False
 
         return should_continue
+
+    async def get_additional_data(self, meta):
+        data = {
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+        }
+
+        return data
 
     async def get_distributor_ids(self, meta):
         return {}

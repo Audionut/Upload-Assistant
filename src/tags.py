@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import os
 import re
 import json
@@ -27,6 +28,8 @@ async def get_tag(video, meta):
             if os.path.isdir(video):
                 # If video is a directory, use the directory name as basename
                 basename_stripped = os.path.basename(os.path.normpath(video))
+            elif meta.get('tv_pack', False) or meta.get('keep_folder', False):
+                basename_stripped = meta['uuid']
             else:
                 # If video is a file, use the filename without extension
                 basename_stripped = os.path.splitext(os.path.basename(video))[0]

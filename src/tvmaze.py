@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 from src.console import console
 import httpx
 import json
@@ -10,7 +11,7 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     - Otherwise, only returns `tvmaze_id`.
     """
     if debug:
-        console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year})[/cyan]")
+        console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year}) and returning {return_full_tuple}.[/cyan]")
     # Convert TVDB ID to integer
     try:
         tvdbID = int(tvdbID) if tvdbID not in (None, '', '0') else 0
@@ -109,14 +110,10 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
         if debug:
             console.print(f"[cyan]Automatically selected show: {selected_show.get('name')} (TVmaze ID: {tvmaze_id})[/cyan]")
 
-    if 'externals' in selected_show:
-        if 'thetvdb' in selected_show['externals'] and not tvdbID:
-            tvdbID = selected_show['externals']['thetvdb']
-            if tvdbID:
-                tvdbID = int(tvdbID)
-                return_full_tuple = True
-    if debug:
+    if debug and return_full_tuple:
         console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__}), IMDb ID: {imdbID} (type: {type(imdbID).__name__}), TVDB ID: {tvdbID} (type: {type(tvdbID).__name__})[/cyan]")
+    elif debug:
+        console.print(f"[cyan]Returning TVmaze ID: {tvmaze_id} (type: {type(tvmaze_id).__name__})[/cyan]")
     if tvmaze_id is None:
         tvmaze_id = 0
     if imdbID is None:
@@ -143,7 +140,7 @@ async def _make_tvmaze_request(url, params):
     return {}
 
 
-async def get_tvmaze_episode_data(tvmaze_id, season, episode):
+async def get_tvmaze_episode_data(tvmaze_id, season, episode, meta=None):
     url = f"https://api.tvmaze.com/shows/{tvmaze_id}/episodebynumber"
     params = {
         "season": season,
@@ -196,11 +193,115 @@ async def get_tvmaze_episode_data(tvmaze_id, season, episode):
                 return None
 
     except httpx.HTTPStatusError as e:
-        console.print(f"[red]HTTP error occurred: {e.response.status_code} - {e.response.text}[/red]")
-        return None
+        if e.response.status_code == 404 and meta is not None:
+            console.print("[yellow]Episode not found using season/episode, trying date-based lookup...[/yellow]")
+
+            # Try to get airdate from meta data
+            airdate = None
+
+            # First priority: manual_date
+            if meta and meta.get('manual_date'):
+                airdate = meta['manual_date']
+                if meta.get('debug'):
+                    console.print(f"[cyan]Using manual_date: {airdate}[/cyan]")
+
+            # Second priority: find airdate from tvdb_episode_data using tvdb_episode_id
+            elif meta and meta.get('tvdb_episode_id') and meta.get('tvdb_episode_data'):
+                tvdb_episode_id = meta['tvdb_episode_id']
+                tvdb_data = meta['tvdb_episode_data']
+
+                # Handle both dict and list formats
+                episodes = tvdb_data.get('episodes', []) if isinstance(tvdb_data, dict) else tvdb_data
+
+                for ep in episodes:
+                    if ep.get('id') == tvdb_episode_id:
+                        airdate = ep.get('aired')
+                        if airdate:
+                            if meta.get('debug'):
+                                console.print(f"[cyan]Found airdate from TVDB episode data: {airdate}[/cyan]")
+                            break
+
+                if not airdate:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Could not find airdate for TVDB episode ID {tvdb_episode_id}[/yellow]")
+
+            # Try date-based lookup if we have an airdate
+            if airdate:
+                if meta.get('debug'):
+                    console.print(f"[cyan]Attempting TVMaze lookup by date: {airdate}[/cyan]")
+                return await get_tvmaze_episode_data_by_date(tvmaze_id, airdate)
+            else:
+                if meta.get('debug'):
+                    console.print("[yellow]No airdate available for fallback lookup[/yellow]")
+                return None
+        else:
+            return None
     except httpx.RequestError as e:
-        console.print(f"[red]Request error occurred: {e}[/red]")
+        console.print(f"[red]TVMaze Request error occurred: {e}[/red]")
         return None
     except Exception as e:
-        console.print(f"[red]Error fetching TVMaze episode data: {e}[/red]")
+        console.print(f"[red]TVMaze Error fetching TVMaze episode data: {e}[/red]")
+        return None
+
+
+async def get_tvmaze_episode_data_by_date(tvmaze_id, airdate):
+    url = f"https://api.tvmaze.com/shows/{tvmaze_id}/episodesbydate"
+    params = {"date": airdate}
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(url, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            if data and len(data) > 0:
+                # Take the first episode from the date (in case multiple episodes aired on same date)
+                episode_data = data[0]
+
+                # Get show data for additional information
+                show_data = {}
+                if "show" in episode_data.get("_links", {}) and "href" in episode_data["_links"]["show"]:
+                    show_url = episode_data["_links"]["show"]["href"]
+                    show_name = episode_data["_links"]["show"].get("name", "")
+
+                    show_response = await client.get(show_url, timeout=10.0)
+                    if show_response.status_code == 200:
+                        show_data = show_response.json()
+                    else:
+                        show_data = {"name": show_name}
+
+                # Clean HTML tags from summary
+                summary = episode_data.get("summary", "")
+                if summary:
+                    summary = summary.replace("<p>", "").replace("</p>", "").strip()
+
+                # Format the response in a consistent structure
+                result = {
+                    "episode_name": episode_data.get("name", ""),
+                    "overview": summary,
+                    "season_number": episode_data.get("season", 0),
+                    "episode_number": episode_data.get("number", 0),
+                    "air_date": episode_data.get("airdate", ""),
+                    "runtime": episode_data.get("runtime", 0),
+                    "series_name": show_data.get("name", episode_data.get("_links", {}).get("show", {}).get("name", "")),
+                    "series_overview": show_data.get("summary", "").replace("<p>", "").replace("</p>", "").strip(),
+                    "image": episode_data.get("image", {}).get("original", None) if episode_data.get("image") else None,
+                    "image_medium": episode_data.get("image", {}).get("medium", None) if episode_data.get("image") else None,
+                    "series_image": show_data.get("image", {}).get("original", None) if show_data.get("image") else None,
+                    "series_image_medium": show_data.get("image", {}).get("medium", None) if show_data.get("image") else None,
+                }
+
+                return result
+            else:
+                console.print(f"[yellow]No episode data found for date {airdate}[/yellow]")
+                return None
+
+    except httpx.HTTPStatusError as e:
+        console.print(f"[red]TVMaze HTTP error occurred in episodesbydate: {e.response.status_code} - {e.response.text}[/red]")
+        return None
+    except httpx.RequestError as e:
+        console.print(f"[red]TVMaze Request error occurred in episodesbydate: {e}[/red]")
+        return None
+    except Exception as e:
+        console.print(f"[red]TVMaze Error fetching TVMaze episode data by date: {e}[/red]")
         return None

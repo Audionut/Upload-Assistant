@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -51,7 +52,7 @@ class UNIT3D:
         if meta.get('edition', '') != '':
             params['name'] = params['name'] + f" {meta['edition']}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url=self.search_url, params=params)
                 response.raise_for_status()
                 if response.status_code == 200:
@@ -360,7 +361,7 @@ class UNIT3D:
         if meta['debug'] is False:
             response_data = {}
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
                     response.raise_for_status()
 

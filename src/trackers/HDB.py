@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import glob
@@ -395,29 +396,11 @@ class HDB():
         return dupes
 
     async def validate_credentials(self, meta):
-        vapi = await self.validate_api()
         vcookie = await self.validate_cookies(meta)
-        if vapi is not True:
-            console.print('[red]Failed to validate API. Please confirm that the site is up and your passkey is valid.')
-            return False
         if vcookie is not True:
             console.print('[red]Failed to validate cookies. Please confirm that the site is up and your passkey is valid.')
             return False
         return True
-
-    async def validate_api(self):
-        url = "https://hdbits.org/api/test"
-        data = {
-            'username': self.username,
-            'passkey': self.passkey
-        }
-        try:
-            r = requests.post(url, data=json.dumps(data)).json()
-            if r.get('status', 5) == 0:
-                return True
-            return False
-        except Exception:
-            return False
 
     async def validate_cookies(self, meta):
         common = COMMON(config=self.config)
@@ -533,7 +516,7 @@ class HDB():
                         descfile.write(f"{hdbimg_bbcode}")
                         descfile.write("[/center]")
                     else:
-                        descfile.write(f"{hdbimg_bbcode}")
+                        descfile.write(f"[center]{hdbimg_bbcode}[/center]")
             else:
                 images = meta['image_list']
                 if len(images) > 0:
@@ -592,8 +575,14 @@ class HDB():
             # Interleave images for correct ordering
             all_image_files = []
             sorted_group_indices = sorted(group_images.keys(), key=lambda x: int(x))
-            if len(sorted_group_indices) < 4:
-                thumb_size = 'w250'
+            if len(sorted_group_indices) < 3:
+                thumb_size = 'w350'
+            elif len(sorted_group_indices) == 3:
+                thumb_size = 'w300'
+            elif len(sorted_group_indices) == 4:
+                thumb_size = 'w200'
+            elif len(sorted_group_indices) == 5:
+                thumb_size = 'w150'
             else:
                 thumb_size = 'w100'
 
@@ -802,17 +791,19 @@ class HDB():
                             bd_summary = line.split("Disc Title:")[1].strip()
                             break
 
+                if not bd_summary:
+                    bd_summary = meta.get('uuid', '')
+
                 if bd_summary:
                     data = {
                         "username": self.username,
                         "passkey": self.passkey,
                         "limit": 100,
-                        "search": bd_summary  # Using the Disc Title for search
+                        "search": bd_summary  # Using the Disc Title for search with uuid fallback
                     }
-                    console.print(f"[green]Searching HDB for disc title: [bold yellow]{bd_summary}[/bold yellow]")
+                    console.print(f"[green]Searching HDB for title: [bold yellow]{bd_summary}[/bold yellow]")
                     # console.print(f"[yellow]Using this data: {data}")
                 else:
-                    console.print(f"[red]Error: 'Disc Title' not found in {bd_summary_path}[/red]")
                     return hdb_imdb, hdb_tvdb, hdb_name, hdb_torrenthash, hdb_description, hdb_id
 
             except FileNotFoundError:

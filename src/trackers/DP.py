@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -30,7 +31,7 @@ class DP(UNIT3D):
             'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
             'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
             'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT',
-            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS', ['EVO', 'WEB-DL only']
+            'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
         ]
         pass
 
@@ -42,23 +43,25 @@ class DP(UNIT3D):
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
-                    meta['skipping'] = {self.tracker}
                     return False
             else:
-                meta['skipping'] = {self.tracker}
                 return False
+
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
         nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
         if not any(lang in meta.get('audio_languages', []) for lang in nordic_languages) and not any(lang in meta.get('subtitle_languages', []) for lang in nordic_languages):
             console.print(f'[bold red]{self.tracker} requires at least one Nordic/English audio or subtitle track.')
-            meta['skipping'] = {self.tracker}
             return False
 
-        if meta['type'] == "ENCODE" and meta.get('tag', "") and 'fgt' in meta['tag'].lower():
+        if meta['type'] == "ENCODE" and meta.get('tag', "") in ['FGT']:
             if not meta['unattended']:
                 console.print(f"[bold red]{self.tracker} does not allow FGT encodes, skipping upload.")
-            meta['skipping'] = {self.tracker}
+            return False
+
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") in ['EVO']:
+            if not meta['unattended']:
+                console.print(f"[bold red]{self.tracker} does not allow EVO for non-WEBDL types, skipping upload.")
             return False
 
         return should_continue

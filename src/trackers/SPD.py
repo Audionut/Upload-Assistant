@@ -1,10 +1,9 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
 import base64
-import bencodepy
 import glob
-import hashlib
 import httpx
 import os
 import re
@@ -22,18 +21,11 @@ class SPD:
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'SPD'
-        self.passkey = self.config['TRACKERS'][self.tracker]['passkey']
+        self.source_flag = "speedapp.io"
         self.upload_url = 'https://speedapp.io/api/upload'
         self.torrent_url = 'https://speedapp.io/browse/'
-        self.announce_list = [
-            f"http://ramjet.speedapp.io/{self.passkey}/announce",
-            f"http://ramjet.speedapp.to/{self.passkey}/announce",
-            f"http://ramjet.speedappio.org/{self.passkey}/announce",
-            f"https://ramjet.speedapp.io/{self.passkey}/announce",
-            f"https://ramjet.speedapp.to/{self.passkey}/announce",
-            f"https://ramjet.speedappio.org/{self.passkey}/announce"
-        ]
         self.banned_groups = []
+        self.banned_url = 'https://speedapp.io/api/torrent/release-group/blacklist'
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Upload Assistant",
             'accept': 'application/json',
@@ -233,24 +225,12 @@ class SPD:
     async def edit_name(self, meta):
         torrent_name = meta['name']
 
-        name = torrent_name.replace(':', '-')
+        name = torrent_name.replace(':', ' -')
         name = unicodedata.normalize("NFKD", name)
         name = name.encode("ascii", "ignore").decode("ascii")
         name = re.sub(r'[\\/*?"<>|]', '', name)
 
-        return name
-
-    async def get_source_flag(self, meta):
-        torrent = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-
-        with open(torrent, "rb") as f:
-            torrent_data = bencodepy.decode(f.read())
-            info = bencodepy.encode(torrent_data[b'info'])
-            source_flag = hashlib.sha1(info).hexdigest()
-            self.source_flag = f"speedapp.io-{source_flag}-"
-            await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-
-        return
+        return re.sub(r"\s{2,}", " ", name)
 
     async def encode_to_base64(self, file_path):
         with open(file_path, 'rb') as binary_file:
@@ -269,7 +249,6 @@ class SPD:
         return None
 
     async def fetch_data(self, meta):
-        await self.get_source_flag(meta)
         media_info, bd_info = await self.get_file_info(meta)
 
         data = {
@@ -287,8 +266,11 @@ class SPD:
             'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
         }
 
-        if not meta.get('debug', False):
-            data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
+        data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent")
+        if meta['debug'] is True:
+            data['file'] = data['file'][:50] + '...[DEBUG MODE]'
+            data['nfo'] = data['nfo'][:50] + '...[DEBUG MODE]'
 
         return data
 
@@ -306,30 +288,49 @@ class SPD:
         torrent_id = ''
 
         if meta['debug'] is False:
-            response = await self.session.post(url=self.upload_url, json=data, headers=self.session.headers)
-
-            if response.status_code == 201:
-
+            try:
+                response = await self.session.post(url=self.upload_url, json=data, headers=self.session.headers)
+                response.raise_for_status()
                 response = response.json()
-                status_message = response
+                if response.get('status') is True and response.get('error') is False:
+                    status_message = "Torrent uploaded successfully."
 
-                if 'downloadUrl' in response:
-                    torrent_id = str(response.get('torrent', {}).get('id', ''))
-                    if torrent_id:
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                    if 'downloadUrl' in response:
+                        torrent_id = str(response.get('torrent', {}).get('id', ''))
+                        if torrent_id:
+                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+
+                        download_url = f"{self.url}/api/torrent/{torrent_id}/download"
+                        await self.common.add_tracker_torrent(
+                            meta,
+                            tracker=self.tracker,
+                            source_flag=None,
+                            new_tracker=None,
+                            comment=None,
+                            headers={'Authorization': self.config['TRACKERS'][self.tracker]['api_key']},
+                            downurl=download_url
+                        )
+
+                    else:
+                        console.print("[bold red]No downloadUrl in response.")
+                        console.print("[bold red]Confirm it uploaded correctly and try to download manually")
+                        console.print(response)
 
                 else:
-                    console.print("[bold red]No downloadUrl in response.")
-                    console.print("[bold red]Confirm it uploaded correctly and try to download manually")
-                    console.print(response)
+                    status_message = f'data error: {response}'
 
-            else:
-                console.print(f"[bold red]Failed to upload got status code: {response.status_code}")
+            except httpx.HTTPStatusError as e:
+                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+            except httpx.TimeoutException:
+                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
+            except httpx.RequestError as e:
+                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+            except Exception as e:
+                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
+                return
 
         else:
             console.print(data)
             status_message = "Debug mode enabled, not uploading."
-
-        await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag + channel, self.announce_list, self.torrent_url + torrent_id)
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message

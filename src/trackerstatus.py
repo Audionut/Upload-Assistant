@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import asyncio
 import cli_ui
 import copy
@@ -14,7 +15,7 @@ from src.dupe_checking import filter_dupes
 from src.imdb import get_imdb_info_api
 from src.torrentcreate import create_base_from_existing_torrent
 from src.trackers.PTP import PTP
-from src.trackersetup import TRACKER_SETUP, tracker_class_map, http_trackers
+from src.trackersetup import TRACKER_SETUP, tracker_class_map
 from src.uphelper import UploadHelper
 
 
@@ -46,13 +47,6 @@ async def process_all_trackers(meta):
 
         if tracker_name in tracker_class_map:
             tracker_class = tracker_class_map[tracker_name](config=config)
-            if tracker_name in http_trackers:
-                login = await tracker_class.validate_credentials(meta)
-                if not login:
-                    local_tracker_status['skipped'] = True
-                if isinstance(login, str) and login:
-                    local_meta[f'{tracker_name}_secret_token'] = login
-                    meta[f'{tracker_name}_secret_token'] = login
             if tracker_name in {"THR", "PTP"}:
                 if local_meta.get('imdb_id', 0) == 0:
                     while True:

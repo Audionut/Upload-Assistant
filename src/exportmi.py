@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiofiles
 import json
 import os
@@ -464,6 +465,10 @@ def validate_mediainfo(meta, debug, settings=False):
 
     if "media" in mediainfo_data and "track" in mediainfo_data["media"]:
         tracks = mediainfo_data["media"]["track"]
+        has_audio = any(track.get("@type", "") == "Audio" for track in tracks)
+
+        if not has_audio:
+            raise Exception("Upload Assistant does not support no audio media.")
 
         for track in tracks:
             track_type = track.get("@type", "")

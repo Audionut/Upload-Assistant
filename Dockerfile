@@ -21,11 +21,13 @@ ENV PATH="/venv/bin:$PATH"
 # Install wheel, requests (for DVD MediaInfo download), and other Python dependencies
 RUN pip install --upgrade pip wheel requests
 
-# Set the working directory in the container
+# Install Web UI dependencies (in venv)
+RUN pip install --no-cache-dir flask flask-cors
+
+# Set the working directory FIRST
 WORKDIR /Upload-Assistant
 
 # Copy DVD MediaInfo download script and run it
-# This downloads specialized MediaInfo binaries for DVD processing with language support
 COPY bin/get_dvd_mediainfo_docker.py bin/
 RUN python3 bin/get_dvd_mediainfo_docker.py
 
@@ -40,7 +42,7 @@ RUN chmod +x bin/download_mkbrr_for_docker.py
 # Download only the required mkbrr binary
 RUN python3 bin/download_mkbrr_for_docker.py
 
-# Copy the rest of the application
+# Copy the rest of the application (including web_ui)
 COPY . .
 
 # Ensure mkbrr is executable
@@ -50,5 +52,12 @@ RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
 RUN mkdir -p /Upload-Assistant/tmp && chmod 777 /Upload-Assistant/tmp
 ENV TMPDIR=/Upload-Assistant/tmp
 
+# Add environment variable to enable/disable Web UI
+ENV ENABLE_WEB_UI=false
+
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
+
 # Set the entry point for the container
-ENTRYPOINT ["python", "/Upload-Assistant/upload.py"]
+ENTRYPOINT ["/Upload-Assistant/docker-entrypoint.sh"]
+CMD ["python", "upload.py"]

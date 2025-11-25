@@ -1,0 +1,21 @@
+services:
+  l4g-upload-assistant-cli:
+    image: ghcr.io/audionut/upload-assistant:web-ui
+    container_name: UA
+    restart: unless-stopped
+    networks:
+      - yournetwork #change to the network with ur torrent instance
+    ports: 
+      - "5000:5000" #change left side to your specific port.
+    environment:
+      - ENABLE_WEB_UI=true
+    entrypoint: /bin/bash
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
+    volumes:
+      - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw #map this to config.py exactly
+      - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
+      - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
+networks:
+  "yournetwork": #change this to your network 
+    external: true

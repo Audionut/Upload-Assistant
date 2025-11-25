@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import asyncio
@@ -10,6 +11,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -19,12 +21,14 @@ class ASC:
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'ASC'
         self.source_flag = 'ASC'
         self.banned_groups = []
         self.base_url = 'https://cliente.amigos-share.club'
         self.torrent_url = 'https://cliente.amigos-share.club/torrents-details.php?id='
-        self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
+        self.requests_url = f'{self.base_url}/pedidos.php'
         self.layout = self.config['TRACKERS'][self.tracker].get('custom_layout', '2')
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
@@ -49,40 +53,14 @@ class ASC:
             'ru': '2', 'zh': '9',
         }
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        if not os.path.exists(cookie_file):
-            console.print(f'[bold red]Arquivo de cookie para o {self.tracker} não encontrado: {cookie_file}[/bold red]')
-            return False
-
-        self.session.cookies = await self.common.parseCookieFile(cookie_file)
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            test_url = f'{self.base_url}/gerador.php'
-            response = await self.session.get(test_url, timeout=30.0)
-
-            response.raise_for_status()
-
-            if 'gerador.php' in str(response.url):
-                return True
-            else:
-                console.print(f'[bold red]Falha na validação do {self.tracker}. Cookie provavelmente expirado (redirecionado para a página de login).[/bold red]')
-                return False
-
-        except httpx.TimeoutException:
-            console.print(f'[bold red]Erro no {self.tracker}: Timeout (30s) ao tentar validar credenciais.[/bold red]')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'[bold red]Erro HTTP ao validar credenciais do {self.tracker}: Status {e.response.status_code}. O site pode estar offline.[/bold red]')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'[bold red]Erro de rede ao validar credenciais do {self.tracker}: {e.__class__.__name__}. Verifique sua conexão.[/bold red]')
-            return False
-        except Exception as e:
-            console.print(f'{self.tracker}: Erro desconhecido ao validar credenciais do {self.tracker}: {e}[/bold red]')
-            return False
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=f'{self.base_url}/gerador.php',
+            error_text='Esqueceu sua senha',
+        )
 
     async def load_localized_data(self, meta):
         localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
@@ -94,7 +72,11 @@ class ASC:
         try:
             async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
                 content = await f.read()
-                tmdb_data = json.loads(content)
+                try:
+                    tmdb_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    console.print(f"[red]Warning: JSON decode error in {localized_data_file}: {e}. Continuing with empty data.[/red]")
+                    tmdb_data = {}
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
@@ -132,15 +114,26 @@ class ASC:
         if tasks_to_run:
             data_types, coroutines = zip(*tasks_to_run)
 
-            api_results = await asyncio.gather(*coroutines)
+            try:
+                api_results = await asyncio.gather(*coroutines)
 
-            for data_type, result_data in zip(data_types, api_results):
-                if data_type == 'main':
-                    self.main_tmdb_data = result_data
-                elif data_type == 'season':
-                    self.season_tmdb_data = result_data
-                elif data_type == 'episode':
-                    self.episode_tmdb_data = result_data
+                for data_type, result_data in zip(data_types, api_results, strict=True):
+                    if result_data:  # Only assign if result_data is not None
+                        if data_type == 'main':
+                            self.main_tmdb_data = result_data
+                        elif data_type == 'season':
+                            self.season_tmdb_data = result_data
+                        elif data_type == 'episode':
+                            self.episode_tmdb_data = result_data
+            except Exception as e:
+                console.print(f"[red]Error loading TMDB data: {e}[/red]")
+                # Ensure we have at least empty dicts to prevent KeyErrors
+                if not self.main_tmdb_data:
+                    self.main_tmdb_data = {}
+                if not self.season_tmdb_data:
+                    self.season_tmdb_data = {}
+                if not self.episode_tmdb_data:
+                    self.episode_tmdb_data = {}
 
     async def get_container(self, meta):
         if meta['is_disc'] == 'BDMV':
@@ -203,7 +196,7 @@ class ASC:
 
             anime_language = self.anime_language_map.get(meta.get('original_language', '').lower(), '6')
 
-            if self.get_audio(meta) in ('2', '3', '4'):
+            if await self.get_audio(meta) in ('2', '3', '4'):
                 lang = '8'
             else:
                 lang = self.language_map.get(meta.get('original_language', '').lower(), '11')
@@ -338,14 +331,14 @@ class ASC:
         base_name = name
 
         if meta['category'] == 'TV':
-            tv_title_ptbr = self.main_tmdb_data['name']
+            tv_title_ptbr = self.main_tmdb_data.get('name')
             if tv_title_ptbr and tv_title_ptbr.lower() != name.lower():
                 base_name = f"{tv_title_ptbr} ({name})"
 
             return f"{base_name} - {meta.get('season', '')}{meta.get('episode', '')}"
 
         else:
-            movie_title_ptbr = self.main_tmdb_data['title']
+            movie_title_ptbr = self.main_tmdb_data.get('title')
             if movie_title_ptbr and movie_title_ptbr.lower() != name.lower():
                 base_name = f"{movie_title_ptbr} ({name})"
 
@@ -553,8 +546,11 @@ class ASC:
         }
 
     async def search_existing(self, meta, disctype):
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+
         found_items = []
         if meta.get('anime'):
+            await self.load_localized_data(meta)
             search_name = await self.get_title(meta)
             search_query = search_name.replace(' ', '+')
             search_url = f'{self.base_url}/torrents-search.php?search={search_query}'
@@ -744,6 +740,7 @@ class ASC:
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
+            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
             try:
                 category = meta['category']
                 if meta.get('anime'):
@@ -758,8 +755,7 @@ class ASC:
                         category = 119
 
                 query = meta['title']
-
-                search_url = f'{self.base_url}/pedidos.php?search={query}&category={category}'
+                search_url = f'{self.requests_url}?search={query}&category={category}'
 
                 response = await self.session.get(search_url)
                 response.raise_for_status()
@@ -808,7 +804,7 @@ class ASC:
                 console.print(traceback.format_exc())
                 return []
 
-    async def fetch_data(self, meta):
+    async def get_data(self, meta):
         await self.load_localized_data(meta)
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
@@ -838,18 +834,11 @@ class ASC:
 
         if meta.get('anime'):
             anime_info = await self.get_languages(meta)
-            data.update = {
+            data.update({
                 'idioma': anime_info['idioma'],
                 'lang': anime_info['lang'],
                 'type': anime_info['type'],
-            }
-
-        # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internal': 'yes',
-                })
+            })
 
         # Screenshots
         for i, img in enumerate(meta.get('image_list', [])[:4]):
@@ -858,70 +847,77 @@ class ASC:
         return data
 
     async def upload(self, meta, disctype):
-        await self.load_cookies(meta)
-        data = await self.fetch_data(meta)
-        requests = await self.get_requests(meta)
-        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
-        status_message = ''
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        data = await self.get_data(meta)
+        upload_url = await self.get_upload_url(meta)
 
-        if not meta.get('debug', False):
-            torrent_id = ''
-            upload_url = await self.get_upload_url(meta)
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        await self.cookie_auth_uploader.handle_upload(
+            meta=meta,
+            tracker=self.tracker,
+            source_flag=self.source_flag,
+            torrent_url=self.torrent_url,
+            data=data,
+            torrent_field_name='torrent',
+            upload_cookies=self.session.cookies,
+            upload_url=upload_url,
+            id_pattern=r'torrents-details\.php\?id=(\d+)',
+            success_text="torrents-details.php?id=",
+        )
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'torrent': (f"{self.tracker}.{meta.get('infohash', '')}.placeholder.torrent", torrent_file, 'application/x-bittorrent')}
+        # Approval
+        should_approve = await self.get_approval(meta)
+        if should_approve:
+            await self.auto_approval(meta)
 
-                response = await self.session.post(upload_url, data=data, files=files, timeout=60)
+        # Internal
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                await self.set_internal_flag(meta)
 
-                if 'torrents-details.php?id=' in response.text:
-                    status_message = 'Enviado com sucesso.'
+        return
 
-                    # Find the torrent id
-                    match = re.search(r'torrents-details\.php\?id=(\d+)', response.text)
-                    if match:
-                        torrent_id = match.group(1) if match else None
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                    if requests:
-                        status_message += ' Seu upload pode atender a pedidos existentes, verifique os logs anteriores do console.'
-
-                    # Approval
-                    should_approve = await self.get_approval(meta)
-                    if should_approve:
-                        await self.auto_approval(torrent_id)
-
-                else:
-                    status_message = 'O upload pode ter falhado, verifique. '
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-                    print(f'Falha no upload, a resposta HTML foi salva em: {response_save_path}')
-                    meta['skipping'] = f'{self.tracker}'
-                    return
-
-            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-
+    async def auto_approval(self, meta):
+        if meta.get('debug', False):
+            console.print(
+                f'{self.tracker}: Debug mode, skipping automatic approval.'
+            )
         else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
-
-    async def auto_approval(self, torrent_id):
-        try:
-            approval_url = f'{self.base_url}/uploader_app.php?id={torrent_id}'
-            approval_response = await self.session.get(approval_url, timeout=30)
-            approval_response.raise_for_status()
-        except Exception as e:
-            console.print(f'[bold red]Erro durante a tentativa de aprovação automática: {e}[/bold red]')
+            torrent_id = meta['tracker_status'][self.tracker]['torrent_id']
+            try:
+                approval_url = f'{self.base_url}/uploader_app.php?id={torrent_id}'
+                approval_response = await self.session.get(approval_url, timeout=30)
+                approval_response.raise_for_status()
+            except Exception as e:
+                console.print(f'{self.tracker}: [bold red]Error during automatic approval attempt: {e}[/bold red]')
 
     async def get_approval(self, meta):
         if not self.config['TRACKERS'][self.tracker].get('uploader_status', False):
             return False
 
         if meta.get('modq', False):
-            print('Enviando para a fila de moderação.')
+            console.print(f'{self.tracker}: Sending to the moderation queue.')
             return False
 
         return True
+
+    async def set_internal_flag(self, meta):
+        if meta.get('debug', False):
+            console.print(
+                f'{self.tracker}: [bold yellow]Debug mode, skipping setting internal flag.[/bold yellow]'
+            )
+        else:
+            data = {
+                'id': meta['tracker_status'][self.tracker]['torrent_id'],
+                'internal': 'yes'
+            }
+
+            try:
+                response = await self.session.post(
+                    f"{self.base_url}/torrents-edit.php?action=doedit",
+                    data=data
+                )
+                response.raise_for_status()
+
+            except Exception as e:
+                console.print(f'{self.tracker}: [bold red]Error setting internal flag: {e}[/bold red]')
+                return

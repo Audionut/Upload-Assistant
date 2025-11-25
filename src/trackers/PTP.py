@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import aiofiles
 import aiofiles.os
 import asyncio
@@ -21,6 +22,7 @@ from data.config import config
 from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import *  # noqa F403
+from src.rehostimages import check_hosts
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
@@ -723,6 +725,21 @@ class PTP():
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
         multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
+        if multi_screens < 2:
+            multi_screens = 2
+            console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
+        url_host_mapping = {
+            "ptpimg.me": "ptpimg",
+            "pixhost.to": "pixhost",
+        }
+
+        approved_image_hosts = ['ptpimg', 'pixhost']
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        if 'PTP_images_key' in meta:
+            image_list = meta['PTP_images_key']
+        else:
+            image_list = meta['image_list']
+        images = image_list
 
         # Check for saved pack_image_links.json file
         pack_images_file = os.path.join(meta['base_dir'], "tmp", meta['uuid'], "pack_image_links.json")
@@ -731,14 +748,60 @@ class PTP():
             try:
                 with open(pack_images_file, 'r', encoding='utf-8') as f:
                     pack_images_data = json.load(f)
-                    if meta['debug']:
-                        console.print(f"[green]Loaded previously uploaded images from {pack_images_file}")
-                        console.print(f"[blue]Found {pack_images_data.get('total_count', 0)} previously uploaded images")
+
+                    # Filter out keys with non-approved image hosts
+                    keys_to_remove = []
+                    for key_name, key_data in pack_images_data.get('keys', {}).items():
+                        images_to_keep = []
+                        for img in key_data.get('images', []):
+                            raw_url = img.get('raw_url', '')
+                            # Extract hostname from URL (e.g., ptpimg.me -> ptpimg)
+                            try:
+                                import urllib.parse
+                                parsed_url = urllib.parse.urlparse(raw_url)
+                                hostname = parsed_url.netloc
+                                # Get the main domain name (first part before the dot)
+                                host_key = hostname.split('.')[0] if hostname else ''
+
+                                if host_key in approved_image_hosts:
+                                    images_to_keep.append(img)
+                                elif meta['debug']:
+                                    console.print(f"[yellow]Filtering out image from non-approved host: {hostname}[/yellow]")
+                            except Exception:
+                                # If URL parsing fails, skip this image
+                                if meta['debug']:
+                                    console.print(f"[yellow]Could not parse URL: {raw_url}[/yellow]")
+                                continue
+
+                        if images_to_keep:
+                            # Update the key with only approved images
+                            pack_images_data['keys'][key_name]['images'] = images_to_keep
+                            pack_images_data['keys'][key_name]['count'] = len(images_to_keep)
+                        else:
+                            # Mark key for removal if no approved images
+                            keys_to_remove.append(key_name)
+
+                    # Remove keys with no approved images
+                    for key_name in keys_to_remove:
+                        del pack_images_data['keys'][key_name]
+                        if meta['debug']:
+                            console.print(f"[yellow]Removed key '{key_name}' - no approved image hosts[/yellow]")
+
+                    # Recalculate total count
+                    pack_images_data['total_count'] = sum(key_data['count'] for key_data in pack_images_data.get('keys', {}).values())
+
+                    if pack_images_data.get('total_count', 0) < 3:
+                        pack_images_data = {}  # Invalidate if less than 3 images total
+                        if meta['debug']:
+                            console.print("[yellow]Invalidating pack images - less than 3 approved images total[/yellow]")
+                    else:
+                        if meta['debug']:
+                            console.print(f"[green]Loaded previously uploaded images from {pack_images_file}")
+                            console.print(f"[blue]Found {pack_images_data.get('total_count', 0)} approved images across {len(pack_images_data.get('keys', {}))} keys[/blue]")
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding="utf-8") as desc:
-            images = meta['image_list']
             discs = meta.get('discs', [])
             filelist = meta.get('filelist', [])
 
@@ -767,7 +830,7 @@ class PTP():
                     except Exception as e:
                         console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
                     for img_index in range(len(images[:int(meta['screens'])])):
-                        raw_url = meta['image_list'][img_index]['raw_url']
+                        raw_url = image_list[img_index]['raw_url']
                         desc.write(f"[img]{raw_url}[/img]\n")
                     desc.write("\n")
                 elif each['type'] == "DVD":
@@ -779,7 +842,7 @@ class PTP():
                         desc.write(base2ptp)
                         desc.write("\n\n")
                     for img_index in range(len(images[:int(meta['screens'])])):
-                        raw_url = meta['image_list'][img_index]['raw_url']
+                        raw_url = image_list[img_index]['raw_url']
                         desc.write(f"[img]{raw_url}[/img]\n")
                     desc.write("\n")
                 if len(bdinfo_keys) > 1:
@@ -834,7 +897,7 @@ class PTP():
                                     print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]})
+                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
@@ -856,9 +919,6 @@ class PTP():
             elif len(discs) > 1:
                 if 'retry_count' not in meta:
                     meta['retry_count'] = 0
-                if multi_screens < 2:
-                    multi_screens = 2
-                    console.print("[yellow]PTP requires at least 2 screenshots for multi disc content, overriding config")
                 for i, each in enumerate(discs):
                     new_images_key = f'new_images_disc_{i}'
                     if each['type'] == "BDMV":
@@ -876,8 +936,8 @@ class PTP():
                                     desc.write("\n\n")
                             except Exception as e:
                                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-                            for img_index in range(min(multi_screens, len(meta['image_list']))):
-                                raw_url = meta['image_list'][img_index]['raw_url']
+                            for img_index in range(min(multi_screens, len(image_list))):
+                                raw_url = image_list[img_index]['raw_url']
                                 desc.write(f"[img]{raw_url}[/img]\n")
                             desc.write("\n")
                         else:
@@ -916,7 +976,7 @@ class PTP():
                                         print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]})
+                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -942,8 +1002,8 @@ class PTP():
                             if base2ptp.strip() != "":
                                 desc.write(base2ptp)
                                 desc.write("\n\n")
-                            for img_index in range(min(multi_screens, len(meta['image_list']))):
-                                raw_url = meta['image_list'][img_index]['raw_url']
+                            for img_index in range(min(multi_screens, len(image_list))):
+                                raw_url = image_list[img_index]['raw_url']
                                 desc.write(f"[img]{raw_url}[/img]\n")
                             desc.write("\n")
                         else:
@@ -986,7 +1046,7 @@ class PTP():
                                         print(f"Error during DVD screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]})
+                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -1048,15 +1108,12 @@ class PTP():
                     console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
 
                 for img_index in range(len(images[:int(meta['screens'])])):
-                    raw_url = meta['image_list'][img_index]['raw_url']
+                    raw_url = image_list[img_index]['raw_url']
                     desc.write(f"[img]{raw_url}[/img]\n")
                 desc.write("\n")
 
             # Handle multiple files case
             elif len(filelist) > 1:
-                if multi_screens < 2:
-                    multi_screens = 2
-                    console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
                 for i in range(len(filelist)):
                     file = filelist[i]
                     if i == 0:
@@ -1076,8 +1133,8 @@ class PTP():
                                 desc.write("\n\n")
                         except Exception as e:
                             console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-                        for img_index in range(min(multi_screens, len(meta['image_list']))):
-                            raw_url = meta['image_list'][img_index]['raw_url']
+                        for img_index in range(min(multi_screens, len(image_list))):
+                            raw_url = image_list[img_index]['raw_url']
                             desc.write(f"[img]{raw_url}[/img]\n")
                         desc.write("\n")
                     else:
@@ -1118,7 +1175,7 @@ class PTP():
                                     print(f"Error during generic screenshot capture: {e}")
                             new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]})
+                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
@@ -1411,7 +1468,7 @@ class PTP():
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
-            console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
+            console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
             tracker_url = config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
             meta['max_piece_size'] = '16'
             torrent_create = f"[{self.tracker}]"
@@ -1438,6 +1495,7 @@ class PTP():
                 console.log(redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
+                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
                     with open(cookiefile, 'rb') as cf:
@@ -1453,14 +1511,16 @@ class PTP():
                     if match is not None:
                         errorMessage = match.group(1)
 
-                    raise UploadException(f"Upload to PTP failed: {errorMessage} ({response.status_code}). (We are still on the upload page.)")  # noqa F405
+                    with open(failure_path, 'w', encoding='utf-8') as f:
+                        f.write(responsetext)
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path} | {errorMessage}"
 
                 # URL format in case of successful upload: https://passthepopcorn.me/torrents.php?id=9329&torrentid=91868
                 match = re.match(r".*?passthepopcorn\.me/torrents\.php\?id=(\d+)&torrentid=(\d+)", response.url)
                 if match is None:
-                    console.print(url)
-                    console.print(redact_private_info(data))
-                    raise UploadException(f"Upload to PTP failed: result URL {response.url} ({response.status_code}) is not the expected one.")  # noqa F405
+                    with open(failure_path, 'w', encoding='utf-8') as f:
+                        f.write(responsetext)
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path}"
 
                 # having UA add the torrent link as a comment.
                 if match:

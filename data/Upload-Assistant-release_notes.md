@@ -1,10 +1,16 @@
-v6.1.0
+v6.2.0
 
 ## RELEASE NOTES
- - Some large refactoring of description type handling for some sites, to speed the upload process.
- - The actual ffmpeg process now respects "process_limit" set via config.py.
- - The author has seen some issues with latest ffmpeg versions. August based releases work fine here.
+ - New site support - ImmortalSeed, Emuwarez.
+ - New modules required, update with requirements.txt.
+ - Linux specific mediainfo binaries for DVD support. Uninstall existing 'pymediainfo' before running requirements.txt.
+ - Removed oxipng support, using ffmpeg based compression instead.
+ - TVDB for all.
+ - Refactored cookie/site validation processing, to speed processing.
+ - New feature, site checking. Use as 'python3 upload.py "path_to_movie_folder" --queue a_queue_name -sc -ua'. Append trackers as needed. You can also append '-req' (or config option). This will find all matching content from the input directory, that can be uploaded to each tracker (and list any request). Log files for each tracker will be created in the UA tmp directory.
+ - Alternatively, you can remove '-sc' from the above example, and let UA just upload content from the input directory instead of logging. You may wish to append '-lq' with a numeric value to limit the amount of successful uploads processed.
 
 ## New config options - see example.py
- - "prefer_max_16_torrent" which will choose an 16 MiB torrent or lower when finding a suitable existing torrent file to use.
- - "full_mediainfo" in some tracker sections, to choose whether to use the full mediainfo or not.
+ - Multiple client searching for existing torrent files.
+ - Specific injection client.
+ - ffmpeg based compression option.

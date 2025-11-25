@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import asyncio
 import cli_ui
 import httpx
@@ -807,23 +808,26 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                         console.print("[bold red]Invalid input. Please enter a number or IMDb ID (tt1234567).[/bold red]")
 
         else:
-            try:
-                selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
-            except EOFError:
-                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                await cleanup()
-                reset_terminal()
-                sys.exit(1)
-            if selection.lower().startswith('tt') and len(selection) >= 3:
+            if not unattended:
                 try:
-                    manual_imdb_id = selection.lower().replace('tt', '').strip()
-                    if manual_imdb_id.isdigit():
-                        console.print(f"[green]Using manual IMDb ID: {selection}[/green]")
-                        return int(manual_imdb_id)
-                    else:
-                        console.print("[bold red]Invalid IMDb ID format. Please try again.[/bold red]")
-                except Exception as e:
-                    console.print(f"[bold red]Error parsing IMDb ID: {e}. Please try again.[/bold red]")
+                    selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
+                if selection.lower().startswith('tt') and len(selection) >= 3:
+                    try:
+                        manual_imdb_id = selection.lower().replace('tt', '').strip()
+                        if manual_imdb_id.isdigit():
+                            console.print(f"[green]Using manual IMDb ID: {selection}[/green]")
+                            return int(manual_imdb_id)
+                        else:
+                            console.print("[bold red]Invalid IMDb ID format. Please try again.[/bold red]")
+                    except Exception as e:
+                        console.print(f"[bold red]Error parsing IMDb ID: {e}. Please try again.[/bold red]")
+            else:
+                console.print("[bold red]No IMDb results found in unattended mode. Skipping IMDb.[/bold red]")
 
     return imdbID if imdbID else 0
 

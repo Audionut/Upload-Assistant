@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
         # will print a notice if an update is available
@@ -8,14 +9,6 @@ config = {
         # tmdb api key **REQUIRED**
         # visit "https://www.themoviedb.org/settings/api" copy api key and insert below
         "tmdb_api": "",
-
-        # tvdb api key
-        # visit "https://www.thetvdb.com/dashboard/account/apikey" copy api key and insert below
-        "tvdb_api": "",
-
-        # visit "https://thetvdb.github.io/v4-api/#/Login/post_login" enter api key, generate token and insert token below
-        # the pin in the login form is not needed (don't modify), only enter your api key
-        "tvdb_token": "",
 
         # btn api key used to get details from btn
         "btn_api": "",
@@ -89,6 +82,9 @@ config = {
         # Some systems are slow to compile libtorrent shaders, which will cause the first screenshot to fail
         "ffmpeg_warmup": False,
 
+        # Set ffmpeg compression level for screenshots (0-9)
+        "ffmpeg_compression": "6",
+
         # Tonemap screenshots with the following settings (doesn't apply when using libplacebo)
         # See https://ayosec.github.io/ffmpeg-filters-docs/7.1/Filters/Video/tonemap.html
         "algorithm": "mobius",
@@ -147,14 +143,21 @@ config = {
         # Providing the option to add a header, in bbcode, above the screenshot section where supported
         "screenshot_header": "",
 
-        # Enable lossless PNG Compression (True/False)
-        "optimize_images": True,
-
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
         # Use this client for injection (aka actually adding the torrent for uploading)
         "inject_torrent_client": "",
+
+        # A list of clients to search for torrents.
+        # eg: ['qbittorrent', 'qbittorrent_searching']
+        # will fallback to default_torrent_client if empty
+        "searching_client_list": [''],
+
+        # set true to skip automated client torrent searching
+        # this will search qbittorrent clients for matching torrents
+        # and use found torrent id's for existing hash and site searching
+        'skip_auto_torrent': False,
 
         # Play the bell sound effect when asking for confirmation
         "sfx_on_prompt": True,
@@ -203,11 +206,6 @@ config = {
 
         # set true to use argument overrides from data/templates/user-args.json
         "user_overrides": False,
-
-        # set true to skip automated client torrent searching
-        # this will search qbittorrent clients for matching torrents
-        # and use found torrent id's for existing hash and site searching
-        'skip_auto_torrent': False,
 
         # If there is no region/distributor ids specified, we can use existing torrents to check
         # This will use data from matching torrents in qBitTorrent/RuTorrent to find matching site ids
@@ -289,7 +287,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TVC, UHD, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -424,8 +422,6 @@ config = {
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
-            # You can find your passkey at Settings -> Security -> Passkey
-            "passkey": "",
             # You can find your api key at Settings -> Security -> API Key -> Generate API Key
             "api_key": "",
             "anon": False,
@@ -542,6 +538,14 @@ config = {
             "api_key": "",
             "anon": False,
         },
+        "IS": {
+            # for IS to work you need to export cookies from https://immortalseed.me/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/IS.txt
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "announce_url": "https://immortalseed.me/announce.php?passkey=<PASSKEY>",
+            "anon": False,
+        },
         "ITT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -577,6 +581,8 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
+            # Send uploads to LT modq for staff approval
+            "modq": False,
         },
         "MTV": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -726,8 +732,6 @@ config = {
             "link_dir_name": "",
             # You can create an API key here https://speedapp.io/profile/api-tokens. Required Permission: Upload torrents
             "api_key": "",
-            # You can find your passkey at your profile (https://speedapp.io/profile) -> Passkey
-            "passkey": "",
             # Select the upload channel, if you don't know what this is, leave it empty.
             # You can also set this manually using the args -ch or --channel, without '@'. Example: @spd -> '-ch spd'.
             "channel": "",
@@ -783,6 +787,14 @@ config = {
             "announce_url": "https://totheglory.im/announce/",
             "anon": False,
         },
+        "TTR": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Send to modq for staff approval
+            "modq": False,
+        },
         "TVC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -790,12 +802,6 @@ config = {
             "image_count": 2,
             "api_key": "",
             "announce_url": "https://tvchaosuk.com/announce/<PASSKEY>",
-            "anon": False,
-        },
-        "UHD": {
-            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
-            "link_dir_name": "",
-            "api_key": "",
             "anon": False,
         },
         "ULCX": {
@@ -850,6 +856,11 @@ config = {
             "qbit_port": "8080",
             "qbit_user": "",
             "qbit_pass": "",
+            # List of trackers to activate "super-seed" (or "initial seeding") mode when adding the torrent.
+            # https://www.bittorrent.org/beps/bep_0016.html
+            # Super-seed mode is NOT recommended for general use.
+            # Super-seed mode is only recommended for initial seeding servers where bandwidth management is paramount.
+            "super_seed_trackers": [""],
             # Use the UA tracker acronym as a tag in qBitTorrent
             "use_tracker_as_tag": False,
             "qbit_tag": "",

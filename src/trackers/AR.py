@@ -1,18 +1,18 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
-import aiohttp
+import httpx
 import json
 import os
-import pickle
 import platform
 import re
 import asyncio
-import signal
 from rich.prompt import Prompt
 import urllib.parse
 from src.exceptions import *  # noqa F403
 from bs4 import BeautifulSoup
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
 
@@ -20,7 +20,8 @@ from pymediainfo import MediaInfo
 class AR():
     def __init__(self, config):
         self.config = config
-        self.session = None
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_uploader = CookieAuthUploader(config)
         self.tracker = 'AR'
         self.source_flag = 'AlphaRatio'
         self.username = config['TRACKERS']['AR'].get('username', '').strip()
@@ -29,11 +30,14 @@ class AR():
         self.login_url = f'{self.base_url}/login.php'
         self.upload_url = f'{self.base_url}/upload.php'
         self.search_url = f'{self.base_url}/torrents.php'
+        self.test_url = f'{self.base_url}/torrents.php'
+        self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = []
 
     async def get_type(self, meta):
-
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
             return "14"
 
@@ -81,6 +85,8 @@ class AR():
         if meta['category'] == "MOVIE":
             if meta['sd']:
                 return '7'
+            elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+                return '13'
             else:
                 return {
                     '8640p': '9',
@@ -92,165 +98,28 @@ class AR():
                     '720p': '8',
                 }.get(meta['resolution'], '7')
 
-    async def start_session(self):
-        if self.session is not None:
-            console.print("[dim red]Warning: Previous session was not closed properly. Closing it now.")
-            await self.close_session()
-        self.session = aiohttp.ClientSession()
-
-        self.attach_signal_handlers()
-        return aiohttp
-
-    async def close_session(self):
-        if self.session is not None:
-            await self.session.close()
-            self.session = None
-
-    def attach_signal_handlers(self):
-        loop = asyncio.get_running_loop()
-
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
-                loop.add_signal_handler(sig, lambda: asyncio.create_task(self.handle_shutdown(sig)))
-            except NotImplementedError:
-                pass
-
-    async def handle_shutdown(self, sig):
-        console.print(f"[red]Received shutdown signal {sig}. Closing session...[/red]")
-        await self.close_session()
-
     async def validate_credentials(self, meta):
-        if self.session:
-            console.print("[red dim]Warning: Previous session was not closed properly. Using existing session.")
-        else:
-            try:
-                await self.start_session()
-            except asyncio.CancelledError:
-                console.print("[red]Session startup interrupted! Cleaning up...[/red]")
-                await self.close_session()
-                raise
-
-        if await self.load_session(meta):
-            response = await self.get_initial_response()
-            if await self.validate_login(response):
-                return True
-        else:
-            console.print("[yellow]No session file found. Attempting to log in...")
-            if await self.login():
-                console.print("[green]Login successful, saving session file.")
-                valid = await self.save_session(meta)
-                if valid:
-                    if meta['debug']:
-                        console.print("[blue]Session file saved successfully.")
-                    return True
-                else:
-                    return False
-            else:
-                console.print('[red]Failed to validate credentials. Please confirm that the site is up and your passkey is valid. Exiting')
-
-        await self.close_session()
-        return False
-
-    async def get_initial_response(self):
-        async with self.session.get(self.login_url) as response:
-            return await response.text()
-
-    async def validate_login(self, response_text):
-        if 'login.php?act=recover' in response_text:
-            console.print("[red]Login failed. Check your credentials.")
-            return False
-        return True
-
-    async def login(self):
-        data = {
-            "username": self.username,
-            "password": self.password,
-            "keeplogged": "1",
-            "login": "Login",
-        }
-        async with self.session.post(self.login_url, data=data) as response:
-            if await self.validate_login(await response.text()):
-                return True
-        return False
-
-    async def save_session(self, meta):
-        try:
-            session_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.pkl")
-            os.makedirs(os.path.dirname(session_file), exist_ok=True)
-            cookies = self.session.cookie_jar
-            cookie_dict = {}
-            for cookie in cookies:
-                cookie_dict[cookie.key] = cookie.value
-
-            loop = asyncio.get_running_loop()
-            data = await loop.run_in_executor(None, pickle.dumps, cookie_dict)
-            async with aiofiles.open(session_file, 'wb') as f:
-                await f.write(data)
-        except Exception as e:
-            console.print(f"[red]Error saving session: {e}[/red]")
-            return False
-
-    async def load_session(self, meta):
-        session_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.pkl")
-        retry_count = 0
-        max_retries = 2
-
-        while retry_count < max_retries:
-            try:
-                if not os.path.exists(session_file):
-                    console.print(f"[red]Session file not found: {session_file}[/red]")
-                    return False  # No session file to load
-
-                loop = asyncio.get_running_loop()
-                async with aiofiles.open(session_file, 'rb') as f:
-                    data = await f.read()
-                    try:
-                        cookie_dict = await loop.run_in_executor(None, pickle.loads, data)
-                    except (EOFError, pickle.UnpicklingError) as e:
-                        console.print(f"[red]Error loading session cookies: {e}[/red]")
-                        return False  # Corrupted session file
-
-                if self.session is None:
-                    await self.start_session()
-
-                for name, value in cookie_dict.items():
-                    self.session.cookie_jar.update_cookies({name: value})
-
-                try:
-                    async with self.session.get(f'{self.base_url}/torrents.php', timeout=10) as response:
-                        if response.status == 200:
-                            console.print("[green]Session validated successfully.[/green]")
-                            return True  # Session is valid
-                        else:
-                            console.print(f"[yellow]Session validation failed with status {response.status}, retrying...[/yellow]")
-
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    console.print(f"[yellow]Session might be invalid: {e}. Retrying...[/yellow]")
-
-            except (FileNotFoundError, EOFError, pickle.UnpicklingError) as e:
-                console.print(f"[red]Session loading error: {e}. Closing session and retrying.[/red]")
-
-            await self.close_session()
-            await self.start_session()
-            retry_count += 1
-
-        console.print("[red]Failed to reuse session after retries. Either try again or delete the cookie.[/red]")
-        return False
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=self.test_url,
+            error_text="login.php?act=recover",
+        )
 
     def get_links(self, movie, subheading, heading_end):
         description = ""
         description += "\n" + subheading + "Links" + heading_end + "\n"
         if 'IMAGES' in self.config:
             if movie['imdb_id'] != 0:
-                description += f"[URL={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/URL]"
+                description += f"[url={movie.get('imdb_info', {}).get('imdb_url', '')}][img]{self.config['IMAGES']['imdb_75']}[/img][/url]"
             if movie['tmdb'] != 0:
-                description += f" [URL=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/URL]"
+                description += f" [url=https://www.themoviedb.org/{str(movie['category'].lower())}/{str(movie['tmdb'])}][img]{self.config['IMAGES']['tmdb_75']}[/img][/url]"
             if movie['tvdb_id'] != 0:
-                description += f" [URL=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/URL]"
+                description += f" [url=https://www.thetvdb.com/?id={str(movie['tvdb_id'])}&tab=series][img]{self.config['IMAGES']['tvdb_75']}[/img][/url]"
             if movie['tvmaze_id'] != 0:
-                description += f" [URL=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/URL]"
+                description += f" [url=https://www.tvmaze.com/shows/{str(movie['tvmaze_id'])}][img]{self.config['IMAGES']['tvmaze_75']}[/img][/url]"
             if movie['mal_id'] != 0:
-                description += f" [URL=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/URL]"
+                description += f" [url=https://myanimelist.net/anime/{str(movie['mal_id'])}][img]{self.config['IMAGES']['mal_75']}[/img][/url]"
         else:
             if movie['imdb_id'] != 0:
                 description += f"{movie.get('imdb_info', {}).get('imdb_url', '')}"
@@ -265,9 +134,9 @@ class AR():
         return description
 
     async def edit_desc(self, meta):
-        heading = "[COLOR=GREEN][size=6]"
-        subheading = "[COLOR=RED][size=4]"
-        heading_end = "[/size][/COLOR]"
+        heading = "[color=green][size=6]"
+        subheading = "[color=red][size=4]"
+        heading_end = "[/size][/color]"
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
             base = await f.read()
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
@@ -367,43 +236,47 @@ class AR():
         return os.path.basename(path)
 
     async def search_existing(self, meta, DISCTYPE):
-        dupes = {}
+        dupes = []
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if not cookie_jar:
+            console.print(f"{self.tracker}: Cannot search without valid cookies.")
+            return dupes
 
         # Combine title and year
         title = str(meta.get('title', '')).strip()
         year = str(meta.get('year', '')).strip()
         if not title:
-            await self.close_session()
             console.print("[red]Title is missing.")
             return dupes
 
-        search_query = f"{title} {year}".strip()  # Concatenate title and year
+        search_query = f"{title} {year}".strip()
         search_query_encoded = urllib.parse.quote(search_query)
-
         search_url = f'{self.base_url}/ajax.php?action=browse&searchstr={search_query_encoded}'
 
         if meta.get('debug', False):
             console.print(f"[blue]{search_url}")
 
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
+
         try:
-            async with self.session.get(search_url) as response:
-                if response.status != 200:
-                    await self.close_session()
+            async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=cookie_jar) as client:
+                response = await client.get(search_url)
+
+                if response.status_code != 200:
                     console.print("[bold red]Request failed. Site May be down")
                     return dupes
 
-                json_response = await response.json()
+                json_response = response.json()
                 if json_response.get('status') != 'success':
-                    await self.close_session()
                     console.print("[red]Invalid response status.")
                     return dupes
 
                 results = json_response.get('response', {}).get('results', [])
                 if not results:
-                    await self.close_session()
                     return dupes
 
-                dupes = []
                 for res in results:
                     if 'groupName' in res:
                         dupe = {
@@ -415,190 +288,153 @@ class AR():
                         }
                         dupes.append(dupe)
 
-                await self.close_session()
                 return dupes
 
         except Exception as e:
             console.print(f"[red]Error occurred: {e}")
+            return dupes
 
-        if meta['debug']:
-            console.print(f"[blue]{dupes}")
-        await self.close_session()
-        return dupes
+    async def get_auth_key(self, meta):
+        """Retrieve the saved auth key from cookie_auth.py."""
+        auth_key = await self.cookie_validator.get_ar_auth_key(meta, self.tracker)
+        if auth_key:
+            return auth_key
 
-    def _has_existing_torrents(self, response_text):
-        """Check the response text for existing torrents."""
-        return 'Your search did not match anything.' not in response_text
+        console.print(f"{self.tracker}: [yellow]Auth key not found. This may happen if you're using manually exported cookies.[/yellow]")
+        console.print(f"{self.tracker}: [yellow]Attempting to extract auth key from torrents page...[/yellow]")
 
-    def extract_auth_key(self, response_text):
-        soup = BeautifulSoup(response_text, 'html.parser')
-        logout_link = soup.find('a', href=True, text='Logout')
+        # Fallback: extract from torrents page if not saved
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if not cookie_jar:
+            return None
 
-        if logout_link:
-            href = logout_link['href']
-            match = re.search(r'auth=([^&]+)', href)
-            if match:
-                return match.group(1)
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
+
+        try:
+            async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=cookie_jar) as client:
+                response = await client.get(self.test_url)
+                soup = BeautifulSoup(response.text, 'html.parser')
+                logout_link = soup.find('a', href=True, text='Logout')
+
+                if logout_link:
+                    href = logout_link['href']
+                    match = re.search(r'auth=([^&]+)', href)
+                    if match:
+                        auth_key = match.group(1)
+                        # Save it for next time
+                        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
+                        auth_file = cookie_file.replace('.txt', '_auth.txt')
+                        try:
+                            async with aiofiles.open(auth_file, 'w', encoding='utf-8') as f:
+                                await f.write(auth_key)
+                            console.print(f"{self.tracker}: [green]Auth key saved for future use[/green]")
+                        except Exception:
+                            pass
+                        return auth_key
+        except Exception as e:
+            console.print(f"[red]Error extracting auth key: {e}")
+
         return None
 
     async def upload(self, meta, disctype):
+        """Upload torrent to AR using centralized cookie_upload."""
+        # Prepare the data for the upload
+        common = COMMON(config=self.config)
+        await common.edit_torrent(meta, self.tracker, self.source_flag)
+        await self.edit_desc(meta)
+        type_id = await self.get_type(meta)
+
+        # Read the description
+        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         try:
-            # Prepare the data for the upload
-            common = COMMON(config=self.config)
-            await common.edit_torrent(meta, self.tracker, self.source_flag)
-            await self.edit_desc(meta)
-            type = await self.get_type(meta)
-            # Read the description
-            desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-            try:
-                async with aiofiles.open(desc_path, 'r', encoding='utf-8') as desc_file:
-                    desc = await desc_file.read()
-            except FileNotFoundError:
-                raise Exception(f"Description file not found at {desc_path} ")
-
-            # Handle cover image input
-            cover = meta.get('poster', None) or meta["imdb_info"].get("cover", None)
-            while cover is None and not meta.get("unattended", False):
-                cover = Prompt.ask("No Poster was found. Please input a link to a poster:", default="")
-                if not re.match(r'https?://.*\.(jpg|png|gif)$', cover):
-                    console.print("[red]Invalid image link. Please enter a link that ends with .jpg, .png, or .gif.")
-                    cover = None
-            # Tag Compilation
-            genres = meta.get('genres')
-            if genres:
-                genres = ', '.join(tag.strip('.') for tag in (item.replace(' ', '.') for item in genres.split(',')))
-                genres = re.sub(r'\.{2,}', '.', genres)
-            # adding tags
-            tags = ""
-            if meta['imdb_id'] != 0:
-                tags += f"tt{meta.get('imdb', '')}, "
-            # no special chars can be used in tags. keep to minimum working tags only.
-            tags += f"{genres}, "
-            # Get initial response and extract auth key
-            initial_response = await self.get_initial_response()
-            auth_key = self.extract_auth_key(initial_response)
-            # Access the session cookie
-            cookies = self.session.cookie_jar.filter_cookies(self.upload_url)
-            session_cookie = cookies.get('session')
-            if not session_cookie:
-                raise Exception("Session cookie not found.")
-
-            # must use scene name if scene release
-            KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
-            if meta['scene']:
-                ar_name = meta.get('scene_name')
-            else:
-                ar_name = meta['uuid']
-                base, ext = os.path.splitext(ar_name)
-                if ext.lower() in KNOWN_EXTENSIONS:
-                    ar_name = base
-                ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
-                ar_name = re.sub(r'\.{2,}', '.', ar_name)
-
-            tag_lower = meta['tag'].lower()
-            invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-            if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-                for invalid_tag in invalid_tags:
-                    ar_name = re.sub(f"-{invalid_tag}", "", ar_name, flags=re.IGNORECASE)
-                ar_name = f"{ar_name}-NoGRP"
-
-            data = {
-                "submit": "true",
-                "auth": auth_key,
-                "type": type,
-                "title": ar_name,
-                "tags": tags,
-                "image": cover,
-                "desc": desc,
-            }
-
-            headers = {
-                "User-Agent": self.user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                "Origin": f'{self.base_url}',
-                "Referer": f'{self.base_url}/upload.php',
-                "Cookie": f"session={session_cookie.value}",
-            }
-
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-
-            if meta['debug'] is False:
-                # Use existing session instead of creating a new one if possible
-                upload_session = self.session or None
-                try:
-                    async with aiofiles.open(torrent_path, 'rb') as torrent_file:
-                        torrent_data = await torrent_file.read()
-
-                        # Create a new session only if we don't have one
-                        if upload_session is None:
-                            async with aiohttp.ClientSession() as session:
-                                form = aiohttp.FormData()
-                                for key, value in data.items():
-                                    form.add_field(key, value)
-                                form.add_field('file_input', torrent_data, filename=f"{self.tracker}.torrent")
-
-                                # Perform the upload
-                                try:
-                                    async with session.post(self.upload_url, data=form, headers=headers) as response:
-                                        await asyncio.sleep(1)  # Give some time for the upload to process
-                                        await self._handle_upload_response(response, meta, data)
-                                except Exception:
-                                    await self.close_session()
-                                    meta['tracker_status'][self.tracker]['status_message'] = "data error - AR it may have uploaded, go check"
-                                    return
-                        else:
-                            # Use existing session
-                            form = aiohttp.FormData()
-                            for key, value in data.items():
-                                form.add_field(key, value)
-                            form.add_field('file_input', torrent_data, filename=f"{self.tracker}.torrent")
-                            # Perform the upload
-                            try:
-                                async with upload_session.post(self.upload_url, data=form, headers=headers) as response:
-                                    await asyncio.sleep(1)
-                                    await self._handle_upload_response(response, meta, data)
-                            except Exception:
-                                await self.close_session()
-                                meta['tracker_status'][self.tracker]['status_message'] = "data error - AR it may have uploaded, go check"
-                                return
-                except FileNotFoundError:
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error - AR file not found: {torrent_path}"
-                    await self.close_session()
-                return
-            else:
-                await self.close_session()
-                console.print("[cyan]AR Request Data:")
-                console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        except Exception as e:
-            await self.close_session()
-            meta['tracker_status'][self.tracker]['status_message'] = f"data error - AR Upload failed: {e}"
+            async with aiofiles.open(desc_path, 'r', encoding='utf-8') as desc_file:
+                desc = await desc_file.read()
+        except FileNotFoundError:
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: Description file not found at {desc_path}"
             return
 
-    async def _handle_upload_response(self, response, meta, data):
-        if response.status == 200:
-            # URL format in case of successful upload: https://alpharatio.cc/torrents.php?id=2989202
-            console.print(f"[green]{response.url}")
-            match = re.match(r".*?alpharatio\.cc/torrents\.php\?id=(\d+)", str(response.url))
-            try:
-                if match is None:
-                    await self.close_session()
-                    console.print(response.url)
-                    console.print(data)
-                    raise UploadException(  # noqa F405
-                        f"Upload to {self.tracker} failed: result URL {response.url} ({response.status}) is not the expected one.")  # noqa F405
+        # Handle cover image input
+        cover = meta.get('poster', None) or meta["imdb_info"].get("cover", None)
+        while cover is None and not meta.get("unattended", False):
+            cover = Prompt.ask("No Poster was found. Please input a link to a poster:", default="")
+            if not re.match(r'https?://.*\.(jpg|png|gif)$', cover):
+                console.print("[red]Invalid image link. Please enter a link that ends with .jpg, .png, or .gif.")
+                cover = None
 
-                # having UA add the torrent link as a comment.
-                if match:
-                    await self.close_session()
-                    common = COMMON(config=self.config)
-                    await common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
-            except Exception as e:
-                console.print(f"[red]Error: {e}")
-                await self.close_session()
-                return
+        # Tag Compilation
+        genres = meta.get('genres')
+        if genres:
+            tags = []
+            for item in genres.split(','):
+                for subitem in item.split('&'):
+                    tags.append(subitem.strip())
+            genres = ', '.join(tags)
+
+            genres = re.sub(r'\.{2,}', '.', genres)
+
+        # adding tags
+        tags = ""
+        if meta['imdb_id'] != 0:
+            tags += f"tt{meta.get('imdb', '')}, "
+        tags += f"{genres}, "
+
+        # Get auth key
+        auth_key = await self.get_auth_key(meta)
+        if not auth_key:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: Failed to extract auth key"
+            return
+
+        # must use scene name if scene release
+        KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
+        if meta['scene']:
+            ar_name = meta.get('scene_name')
         else:
-            console.print("[red]Upload failed. Response was not 200.")
+            ar_name = meta['uuid']
+            base, ext = os.path.splitext(ar_name)
+            if ext.lower() in KNOWN_EXTENSIONS:
+                ar_name = base
+            ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
+            ar_name = re.sub(r'\.{2,}', '.', ar_name)
+
+        tag_lower = meta['tag'].lower()
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+            for invalid_tag in invalid_tags:
+                ar_name = re.sub(f"-{invalid_tag}", "", ar_name, flags=re.IGNORECASE)
+            ar_name = f"{ar_name}-NoGRP"
+
+        # Prepare upload data
+        data = {
+            "submit": "true",
+            "auth": auth_key,
+            "type": type_id,
+            "title": ar_name,
+            "tags": tags,
+            "image": cover,
+            "desc": desc,
+        }
+
+        # Load cookies for upload
+        upload_cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if not upload_cookies:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error:Failed to load cookies for upload"
+            return
+
+        # Use centralized handle_upload from CookieAuthUploader
+        await self.cookie_uploader.handle_upload(
+            meta=meta,
+            tracker=self.tracker,
+            data=data,
+            upload_cookies=upload_cookies,
+            upload_url=self.upload_url,
+            torrent_field_name="file_input",
+            source_flag=self.source_flag,
+            torrent_url=self.torrent_url,
+            id_pattern=r'torrents\.php\?id=(\d+)',
+            success_status_code="200",
+        )
 
     async def parse_mediainfo_async(self, video_path, template_path):
         """Parse MediaInfo asynchronously using thread executor"""

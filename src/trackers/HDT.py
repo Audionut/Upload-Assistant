@@ -1,6 +1,7 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
-import http.cookiejar
+import glob
 import httpx
 import os
 import platform
@@ -8,15 +9,16 @@ import re
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
+from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.get_desc import DescriptionBuilder
-from src.trackers.COMMON import COMMON
 from urllib.parse import urlparse
 
 
 class HDT:
     def __init__(self, config):
         self.config = config
-        self.common = COMMON(config)
+        self.cookie_validator = CookieValidator(config)
+        self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'HDT'
         self.source_flag = 'hd-torrents.org'
 
@@ -32,66 +34,15 @@ class HDT:
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
-    async def load_cookies(self, meta):
-        cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
-        self.cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
-
-        try:
-            self.cookie_jar.load(ignore_discard=True, ignore_expires=True)
-        except FileNotFoundError:
-            console.print(f'{self.tracker}: [bold red]Cookie file for {self.tracker} not found: {cookie_file}[/bold red]')
-
-        self.session.cookies = self.cookie_jar
-
-    async def save_cookies(self):
-        if self.cookie_jar is None:
-            console.print(f'{self.tracker}: Cookie jar not initialized, cannot save cookies.')
-            return
-
-        try:
-            self.cookie_jar.save(ignore_discard=True, ignore_expires=True)
-        except Exception as e:
-            console.print(f'{self.tracker}: Failed to update the cookie file: {e}')
-
     async def validate_credentials(self, meta):
-        await self.load_cookies(meta)
-        try:
-            upload_page_url = f'{self.base_url}/upload.php'
-            response = await self.session.get(upload_page_url)
-            response.raise_for_status()
-
-            if 'Create account' in response.text:
-                console.print(f'{self.tracker}: Validation failed. The cookie appears to be expired or invalid.')
-                return False
-
-            auth_match = re.search(r'name="csrfToken" value="([^"]+)"', response.text)
-
-            if not auth_match:
-                console.print(f"{self.tracker}: Validation failed. Could not find 'auth' token on upload page.")
-                console.print('This can happen if the site HTML has changed or if the login failed silently..')
-
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                console.print(f'The server response was saved to {failure_path} for analysis.')
-                return False
-
-            await self.save_cookies()
-            return str(auth_match.group(1))
-
-        except httpx.TimeoutException:
-            console.print(f'{self.tracker}: Error in {self.tracker}: Timeout while trying to validate credentials.')
-            return False
-        except httpx.HTTPStatusError as e:
-            console.print(f'{self.tracker}: HTTP error validating credentials for {self.tracker}: Status {e.response.status_code}.')
-            return False
-        except httpx.RequestError as e:
-            console.print(f'{self.tracker}: Network error while validating credentials for {self.tracker}: {e.__class__.__name__}.')
-            return False
-        except Exception as e:
-            console.print(f'{self.tracker}: Unexpected error validating credentials: {e}')
-            return False
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        return await self.cookie_validator.cookie_validation(
+            meta=meta,
+            tracker=self.tracker,
+            test_url=f'{self.base_url}/upload.php',
+            success_text='usercp.php',
+            token_pattern=r'name="csrfToken" value="([^"]+)"'
+        )
 
     async def get_category_id(self, meta):
         if meta['category'] == 'MOVIE':
@@ -267,7 +218,7 @@ class HDT:
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
             params = {
-                'csrfToken': meta[f'{self.tracker}_secret_token'],
+                'csrfToken': HDT.secret_token,
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -275,7 +226,7 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': meta[f'{self.tracker}_secret_token'],
+                'csrfToken': HDT.secret_token,
                 'search': meta['title'],
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
@@ -328,12 +279,11 @@ class HDT:
         return results
 
     async def get_data(self, meta):
-        await self.load_cookies(meta)
         data = {
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': meta[f'{self.tracker}_secret_token'],
+            'csrfToken': HDT.secret_token,
         }
 
         # 3D
@@ -368,42 +318,33 @@ class HDT:
 
         return data
 
+    async def get_nfo(self, meta):
+        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
+
+        if nfo_files:
+            nfo_path = nfo_files[0]
+            return {'nfos': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+        return {}
+
     async def upload(self, meta, disctype):
-        await self.common.edit_torrent(meta, self.tracker, self.source_flag, announce_url='https://hdts-announce.ru/announce.php')
+        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
-        status_message = ''
+        files = await self.get_nfo(meta)
 
-        if not meta.get('debug', False):
-            torrent_id = ''
-            upload_url = f"{self.base_url}/upload.php"
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        await self.cookie_auth_uploader.handle_upload(
+            meta=meta,
+            tracker=self.tracker,
+            source_flag=self.source_flag,
+            torrent_url=self.torrent_url,
+            data=data,
+            torrent_field_name='torrent',
+            upload_cookies=self.session.cookies,
+            upload_url=f"{self.base_url}/upload.php",
+            hash_is_id=True,
+            success_text="Upload successful!",
+            default_announce='https://hdts-announce.ru/announce.php',
+            additional_files=files,
+        )
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'torrent': ('torrent.torrent', torrent_file, 'application/x-bittorrent')}
-
-                response = await self.session.post(url=upload_url, data=data, files=files)
-
-                if 'Upload successful!' in response.text:
-                    status_message = "Torrent uploaded successfully."
-
-                    # Find the torrent id
-                    match = re.search(r'download\.php\?id=([^&]+)', response.text)
-                    if match:
-                        torrent_id = match.group(1)
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                else:
-                    status_message = 'data error - The upload appears to have failed. It may have uploaded, go check.'
-
-                    response_save_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    with open(response_save_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
-                    console.print(f'Upload failed, HTML response was saved to: {response_save_path}')
-
-            await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_url, self.torrent_url + torrent_id)
-
-        else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return

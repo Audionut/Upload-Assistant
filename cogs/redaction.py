@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import re
 import json
 
@@ -11,6 +12,8 @@ def redact_value(val):
     if isinstance(val, str):
         # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
         val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
+        # Redact content between /proxy/ and /api (e.g. /proxy/<secret>/api)
+        val = re.sub(r'(?<=/proxy/)[^/]+(?=/api)', '[REDACTED]', val)
         # Redact query params like ?passkey=... or &token=...
         val = re.sub(r'([?&](passkey|key|token|auth|info_hash)=)[^&]+', r'\1[REDACTED]', val, flags=re.I)
         # Redact long hex or base64-like strings (common for tokens)
@@ -50,9 +53,6 @@ async def clean_meta_for_export(meta):
 
     if 'torrent_comments' in meta:
         del meta['torrent_comments']
-
-    for key in [k for k in meta.keys() if '_secret_token' in k]:
-        del meta[key]
 
     with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
         json.dump(meta, f, indent=4)

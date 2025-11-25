@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
@@ -15,7 +16,9 @@ import subprocess
 import time
 import traceback
 import transmission_rpc
+import urllib.parse
 import xmlrpc.client
+
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
 from src.console import console
@@ -23,7 +26,7 @@ from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfuly logged into
+qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
 qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
@@ -125,19 +128,10 @@ class Clients():
         return
 
     async def find_existing_torrent(self, meta):
-        if meta.get('client', None) is None:
-            default_torrent_client = self.config['DEFAULT']['default_torrent_client']
-        else:
-            default_torrent_client = meta['client']
-        if meta.get('client', None) == 'none' or default_torrent_client == 'none':
-            return None
-
-        client = self.config['TORRENT_CLIENTS'][default_torrent_client]
-        client_name = client.get('torrent_client', '').lower()
-        torrent_storage_dir = client.get('torrent_storage_dir')
-        torrent_client = client.get('torrent_client', '').lower()
+        # Determine piece size preferences
         mtv_config = self.config['TRACKERS'].get('MTV')
         piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
+        mtv_torrent = False
         if isinstance(mtv_config, dict):
             mtv_torrent = mtv_config.get('prefer_mtv_torrent', False)
             prefer_small_pieces = mtv_torrent
@@ -147,6 +141,64 @@ class Clients():
             else:
                 prefer_small_pieces = False
         best_match = None  # Track the best match for fallback if prefer_small_pieces is enabled
+
+        default_torrent_client = self.config['DEFAULT']['default_torrent_client']
+
+        if meta.get('client') and meta['client'] != 'none':
+            clients_to_search = [meta['client']]
+        else:
+            searching_list = self.config['DEFAULT'].get('searching_client_list', [])
+
+            if isinstance(searching_list, list) and len(searching_list) > 0:
+                clients_to_search = [c for c in searching_list if c and c != 'none']
+            else:
+                clients_to_search = []
+
+            if not clients_to_search:
+                if default_torrent_client and default_torrent_client != 'none':
+                    clients_to_search = [default_torrent_client]
+                    if meta['debug']:
+                        console.print(f"[cyan]DEBUG: Falling back to default_torrent_client: {default_torrent_client}[/cyan]")
+                else:
+                    console.print("[yellow]No clients configured for searching...[/yellow]")
+                    return None
+
+        for client_name in clients_to_search:
+            if client_name not in self.config['TORRENT_CLIENTS']:
+                console.print(f"[yellow]Client '{client_name}' not found in TORRENT_CLIENTS config, skipping...")
+                continue
+
+            result = await self._search_single_client_for_torrent(
+                meta, client_name, prefer_small_pieces, mtv_torrent, piece_limit, best_match
+            )
+
+            if result:
+                if isinstance(result, dict):
+                    # Got a valid torrent but not ideal piece size
+                    best_match = result
+                    # If prefer_small_pieces is False, we don't care about piece size optimization
+                    # so stop searching after finding the first valid torrent
+                    if not prefer_small_pieces:
+                        console.print(f"[green]Found valid torrent in client '{client_name}', stopping search[/green]")
+                        return best_match['torrent_path']
+                else:
+                    # Got a path - this means we found a torrent with ideal piece size
+                    console.print(f"[green]Found valid torrent with preferred piece size in client '{client_name}', stopping search[/green]")
+                    return result
+
+        if prefer_small_pieces and best_match:
+            console.print(f"[yellow]Using best match torrent with hash: [bold yellow]{best_match['torrenthash']}[/bold yellow]")
+            return best_match['torrent_path']
+
+        console.print("[bold yellow]No Valid .torrent found")
+        return None
+
+    async def _search_single_client_for_torrent(self, meta, client_name, prefer_small_pieces, mtv_torrent, piece_limit, best_match):
+        """Search a single client for an existing torrent by hash or via API search (qbit only)."""
+
+        client = self.config['TORRENT_CLIENTS'][client_name]
+        torrent_client = client.get('torrent_client', '').lower()
+        torrent_storage_dir = client.get('torrent_storage_dir')
 
         # Iterate through pre-specified hashes
         for hash_key in ['torrenthash', 'ext_torrenthash']:
@@ -158,11 +210,8 @@ class Clients():
                 if torrent_storage_dir:
                     torrent_path = os.path.join(torrent_storage_dir, f"{hash_value}.torrent")
                 else:
-                    if client_name != 'qbit':
+                    if torrent_client != 'qbit':
                         return None
-
-                    # Fetch from qBittorrent since we don't have torrent_storage_dir
-                    console.print(f"[yellow]Fetching .torrent file from qBittorrent for hash: {hash_value}")
 
                     try:
                         proxy_url = client.get('qui_proxy_url')
@@ -215,7 +264,6 @@ class Clients():
                 valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client, print_err=True)
 
                 if valid:
-                    console.print(f"[green]Found a valid torrent: [bold yellow]{hash_value}")
                     return resolved_path
 
         # Search the client if no pre-specified hash matches
@@ -252,11 +300,82 @@ class Clients():
                     await qbt_session.close()
             if found_hash:
                 extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
-                found_torrent_path = os.path.join(torrent_storage_dir, f"{found_hash}.torrent") if torrent_storage_dir else os.path.join(extracted_torrent_dir, f"{found_hash}.torrent")
 
-                valid, resolved_path = await self.is_valid_torrent(
-                    meta, found_torrent_path, found_hash, torrent_client, client, print_err=False
-                )
+                if torrent_storage_dir:
+                    found_torrent_path = os.path.join(torrent_storage_dir, f"{found_hash}.torrent")
+                else:
+                    found_torrent_path = os.path.join(extracted_torrent_dir, f"{found_hash}.torrent")
+
+                    if not os.path.exists(found_torrent_path):
+                        console.print(f"[yellow]Exporting .torrent file from qBittorrent for hash: {found_hash}[/yellow]")
+
+                        try:
+                            proxy_url = client.get('qui_proxy_url')
+                            if proxy_url:
+                                qbt_proxy_url = proxy_url.rstrip('/')
+                                async with aiohttp.ClientSession() as session:
+                                    try:
+                                        async with session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                data={'hash': found_hash}) as response:
+                                            if response.status == 200:
+                                                torrent_file_content = await response.read()
+                                            else:
+                                                console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                                found_hash = None
+                                    except Exception as e:
+                                        console.print(f"[red]Error exporting torrent via proxy: {e}")
+                                        found_hash = None
+                            else:
+                                # Reuse or create qbt_client if needed
+                                if qbt_client is None:
+                                    qbt_client = qbittorrentapi.Client(
+                                        host=client['qbit_url'],
+                                        port=client['qbit_port'],
+                                        username=client['qbit_user'],
+                                        password=client['qbit_pass'],
+                                        VERIFY_WEBUI_CERTIFICATE=client.get('VERIFY_WEBUI_CERTIFICATE', True)
+                                    )
+                                    try:
+                                        await self.retry_qbt_operation(
+                                            lambda: asyncio.to_thread(qbt_client.auth_log_in),
+                                            "qBittorrent login"
+                                        )
+                                    except (asyncio.TimeoutError, qbittorrentapi.LoginFailed, qbittorrentapi.APIConnectionError) as e:
+                                        console.print(f"[bold red]Failed to connect to qBittorrent for export: {e}")
+                                        found_hash = None
+
+                                if found_hash:  # Only proceed if we still have a hash
+                                    try:
+                                        torrent_file_content = await self.retry_qbt_operation(
+                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=found_hash),
+                                            f"Export torrent {found_hash}"
+                                        )
+                                    except (asyncio.TimeoutError, qbittorrentapi.APIError) as e:
+                                        console.print(f"[red]Error exporting torrent: {e}")
+
+                            if found_hash:  # Only proceed if export succeeded
+                                if not torrent_file_content:
+                                    found_hash = None
+                                else:
+                                    os.makedirs(extracted_torrent_dir, exist_ok=True)
+                                    with open(found_torrent_path, "wb") as f:
+                                        f.write(torrent_file_content)
+                                    console.print(f"[green]Successfully saved .torrent file: {found_torrent_path}")
+                        except Exception as e:
+                            console.print(f"[bold red]Unexpected error fetching .torrent from qBittorrent: {e}")
+                            console.print("[cyan]DEBUG: Skipping found_hash due to unexpected error[/cyan]")
+                            found_hash = None
+                    else:
+                        console.print(f"[cyan]DEBUG: .torrent file already exists at {found_torrent_path}[/cyan]")
+
+                # Only validate if we still have a hash (export succeeded or file already existed)
+                if found_hash:
+                    valid, resolved_path = await self.is_valid_torrent(
+                        meta, found_torrent_path, found_hash, torrent_client, client, print_err=False
+                    )
+                else:
+                    valid = False
+                    console.print("[cyan]DEBUG: Skipping validation because found_hash is None[/cyan]")
 
                 if valid:
                     torrent = Torrent.read(resolved_path)
@@ -280,13 +399,7 @@ class Clients():
                         best_match = {'torrenthash': found_hash, 'torrent_path': resolved_path, 'piece_size': piece_size}
                         console.print(f"[yellow]Storing valid torrent from client search as best match: [bold yellow]{found_hash}")
 
-        # Use best match if no preferred torrent found
-        if prefer_small_pieces and best_match:
-            console.print(f"[yellow]Using best match torrent with hash: [bold yellow]{best_match['torrenthash']}[/bold yellow]")
-            return best_match['torrent_path']
-
-        console.print("[bold yellow]No Valid .torrent found")
-        return None
+        return best_match
 
     async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client, print_err=False):
         valid = False
@@ -456,12 +569,17 @@ class Clients():
                             def __init__(self, data):
                                 for key, value in data.items():
                                     setattr(self, key, value)
-                                if not hasattr(self, 'files'):
-                                    self.files = []
+                                # For proxy API, we need to fetch files separately or use num_files from torrents/info
+                                # The torrents/info endpoint doesn't include files array but has 'num_files' field
                                 if not hasattr(self, 'tracker'):
                                     self.tracker = ''
                                 if not hasattr(self, 'comment'):
                                     self.comment = ''
+                                # Create a files list based on num_files to make len() work
+                                if hasattr(self, 'num_files'):
+                                    self.files = [None] * self.num_files  # Dummy list with correct length
+                                elif not hasattr(self, 'files'):
+                                    self.files = []
                         torrents = [MockTorrent(torrent) for torrent in torrents_data]
                     else:
                         console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
@@ -479,17 +597,15 @@ class Clients():
             console.print(f"[bold red]Error getting torrents list: {e}")
             return None
 
+        torrent_count = 0
         for torrent in torrents:
             try:
                 torrent_path = torrent.name
+                torrent_count += 1
             except AttributeError:
                 continue  # Ignore torrents with missing attributes
 
-            if meta['is_disc'] in ("", None) and len(meta['filelist']) == 1:
-                if torrent_path != meta['uuid'] or len(torrent.files) != len(meta['filelist']):
-                    continue
-
-            elif meta['uuid'] != torrent_path:
+            if meta['uuid'].lower() != torrent_path.lower():
                 continue
 
             if meta['debug']:
@@ -500,6 +616,7 @@ class Clients():
 
             matching_torrents.append({'hash': torrent.hash, 'name': torrent.name})
 
+        console.print(f"[cyan]DEBUG: Checked {torrent_count} total torrents in qBittorrent[/cyan]")
         if not matching_torrents:
             console.print("[yellow]No matching torrents found in qBittorrent.")
             return None
@@ -1216,6 +1333,26 @@ class Clients():
             except Exception as e:
                 console.print(f"[yellow]Error adding tracker tag: {e}")
 
+        if tracker in client.get("super_seed_trackers", []):
+            try:
+                if meta['debug']:
+                    console.print(f"{tracker}: Setting super-seed mode.")
+                if proxy_url:
+                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/setSuperSeeding",
+                                                data={'hashes': torrent.infohash, "value": "true"}) as response:
+                        if response.status != 200:
+                            console.print(f"{tracker}: Failed to set super-seed via proxy: {response.status}")
+                else:
+                    await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_set_super_seeding, torrent_hashes=torrent.infohash),
+                        "Set super-seed mode",
+                        initial_timeout=10.0
+                    )
+            except asyncio.TimeoutError:
+                console.print(f"{tracker}: Super-seed request timed out")
+            except Exception as e:
+                console.print(f"{tracker}: Super-seed error: {e}")
+
         if client.get('qbit_tag'):
             try:
                 if proxy_url:
@@ -1444,34 +1581,45 @@ class Clients():
             info_hash_v1 = meta.get('infohash')
             if meta['debug']:
                 console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
+
+            class TorrentInfo:
+                def __init__(self, properties_data):
+                    self.hash = properties_data.get('hash', info_hash_v1)
+                    self.infohash_v1 = properties_data.get('infohash_v1', info_hash_v1)
+                    self.name = properties_data.get('name', '')
+                    self.comment = properties_data.get('comment', '')
+                    self.tracker = ''
+                    self.files = []
+
             try:
                 if proxy_url:
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
+                                               params={'hash': info_hash_v1}) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            torrent_properties = await response.json()
+                            if meta['debug']:
+                                console.print(f"[cyan]Retrieved torrent properties via proxy for hash: {info_hash_v1}")
 
-                            class MockTorrent:
-                                def __init__(self, data):
-                                    for key, value in data.items():
-                                        setattr(self, key, value)
-                                    if not hasattr(self, 'files'):
-                                        self.files = []
-                                    if not hasattr(self, 'tracker'):
-                                        self.tracker = ''
-                                    if not hasattr(self, 'comment'):
-                                        self.comment = ''
-                            torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                            torrents = [TorrentInfo(torrent_properties)]
                         else:
-                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            console.print(f"[bold red]Failed to get torrent properties via proxy: {response.status}")
                             if qbt_session:
                                 await qbt_session.close()
                             return meta
                 else:
-                    torrents = await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_info),
-                        "Get torrents list",
-                        initial_timeout=14.0
-                    )
+                    try:
+                        torrent_properties = await self.retry_qbt_operation(
+                            lambda: asyncio.to_thread(qbt_client.torrents_properties, torrent_hash=info_hash_v1),
+                            f"Get torrent properties for hash {info_hash_v1}",
+                            initial_timeout=14.0
+                        )
+                        if meta['debug']:
+                            console.print(f"[cyan]Retrieved torrent properties via client for hash: {info_hash_v1}")
+
+                        torrents = [TorrentInfo(torrent_properties)]
+                    except Exception as e:
+                        console.print(f"[yellow]Failed to get properties: {e}")
+                        return meta
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
                 if qbt_session:
@@ -1492,112 +1640,121 @@ class Clients():
             os.makedirs(extracted_torrent_dir, exist_ok=True)
 
             for torrent in torrents:
-                if torrent.get('infohash_v1') == info_hash_v1:
-                    comment = torrent.get('comment', "")
-                    match = None
+                try:
+                    if getattr(torrent, 'infohash_v1', '') == info_hash_v1:
+                        comment = getattr(torrent, 'comment', "")
+                        match = None
 
-                    if 'torrent_comments' not in meta:
-                        meta['torrent_comments'] = []
+                        if 'torrent_comments' not in meta:
+                            meta['torrent_comments'] = []
 
-                    comment_data = {
-                        'hash': torrent.get('infohash_v1', ''),
-                        'name': torrent.get('name', ''),
-                        'comment': comment,
-                    }
-                    meta['torrent_comments'].append(comment_data)
+                        comment_data = {
+                            'hash': getattr(torrent, 'infohash_v1', ''),
+                            'name': getattr(torrent, 'name', ''),
+                            'comment': comment,
+                        }
+                        meta['torrent_comments'].append(comment_data)
 
+                        if meta.get('debug', False):
+                            console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
+
+                        if "passthepopcorn.me" in comment:
+                            match = re.search(r'torrentid=(\d+)', comment)
+                            if match:
+                                meta['ptp'] = match.group(1)
+                        elif "https://aither.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['aither'] = match.group(1)
+                        elif "https://lst.gg" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['lst'] = match.group(1)
+                        elif "https://onlyencodes.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['oe'] = match.group(1)
+                        elif "https://blutopia.cc" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['blu'] = match.group(1)
+                        elif "https://upload.cx" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['ulcx'] = match.group(1)
+                        elif "https://hdbits.org" in comment:
+                            match = re.search(r'id=(\d+)', comment)
+                            if match:
+                                meta['hdb'] = match.group(1)
+                        elif "https://broadcasthe.net" in comment:
+                            match = re.search(r'id=(\d+)', comment)
+                            if match:
+                                meta['btn'] = match.group(1)
+                        elif "https://beyond-hd.me" in comment:
+                            match = re.search(r'details/(\d+)', comment)
+                            if match:
+                                meta['bhd'] = match.group(1)
+                        elif "/torrents/" in comment:
+                            match = re.search(r'/(\d+)$', comment)
+                            if match:
+                                meta['huno'] = match.group(1)
+
+                        if match:
+                            for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
+                                if meta.get(tracker):
+                                    console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
+
+                        if meta.get('torrent_comments') and meta['debug']:
+                            console.print(f"[green]Stored {len(meta['torrent_comments'])} torrent comments for later use")
+
+                        if not pathed:
+                            torrent_storage_dir = client.get('torrent_storage_dir')
+                            if not torrent_storage_dir:
+                                # Export .torrent file
+                                torrent_hash = getattr(torrent, 'infohash_v1', '')
+                                if meta.get('debug', False):
+                                    console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
+
+                                try:
+                                    if proxy_url:
+                                        async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                    data={'hash': torrent_hash}) as response:
+                                            if response.status == 200:
+                                                torrent_file_content = await response.read()
+                                            else:
+                                                console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                                continue
+                                    else:
+                                        torrent_file_content = await self.retry_qbt_operation(
+                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                            f"Export torrent {torrent_hash}"
+                                        )
+                                    torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+
+                                    with open(torrent_file_path, "wb") as f:
+                                        f.write(torrent_file_content)
+
+                                    # Validate the .torrent file before saving as BASE.torrent
+                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                                    if not valid:
+                                        if meta['debug']:
+                                            console.print(f"[bold red]Validation failed for {torrent_file_path}")
+                                        os.remove(torrent_file_path)  # Remove invalid file
+                                    else:
+                                        await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                                except asyncio.TimeoutError:
+                                    console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
+
+                            found = True
+                            break
+                except Exception as e:
+                    if qbt_session:
+                        await qbt_session.close()
+                    console.print(f"[bold red]Error processing torrent {getattr(torrent, 'name', 'Unknown')}: {e}")
                     if meta.get('debug', False):
-                        console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
-
-                    if "passthepopcorn.me" in comment:
-                        match = re.search(r'torrentid=(\d+)', comment)
-                        if match:
-                            meta['ptp'] = match.group(1)
-                    elif "https://aither.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['aither'] = match.group(1)
-                    elif "https://lst.gg" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['lst'] = match.group(1)
-                    elif "https://onlyencodes.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['oe'] = match.group(1)
-                    elif "https://blutopia.cc" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['blu'] = match.group(1)
-                    elif "https://upload.cx" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['ulcx'] = match.group(1)
-                    elif "https://hdbits.org" in comment:
-                        match = re.search(r'id=(\d+)', comment)
-                        if match:
-                            meta['hdb'] = match.group(1)
-                    elif "https://broadcasthe.net" in comment:
-                        match = re.search(r'id=(\d+)', comment)
-                        if match:
-                            meta['btn'] = match.group(1)
-                    elif "https://beyond-hd.me" in comment:
-                        match = re.search(r'details/(\d+)', comment)
-                        if match:
-                            meta['bhd'] = match.group(1)
-                    elif "/torrents/" in comment:
-                        match = re.search(r'/(\d+)$', comment)
-                        if match:
-                            meta['huno'] = match.group(1)
-
-                    if match:
-                        for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
-                            if meta.get(tracker):
-                                console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
-
-                    if meta.get('torrent_comments') and meta['debug']:
-                        console.print(f"[green]Stored {len(meta['torrent_comments'])} torrent comments for later use")
-
-                    if not pathed:
-                        torrent_storage_dir = client.get('torrent_storage_dir')
-                        if not torrent_storage_dir:
-                            # Export .torrent file
-                            torrent_hash = torrent.get('infohash_v1')
-                            if meta.get('debug', False):
-                                console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
-
-                            try:
-                                if proxy_url:
-                                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
-                                                                data={'hash': torrent_hash}) as response:
-                                        if response.status == 200:
-                                            torrent_file_content = await response.read()
-                                        else:
-                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
-                                            continue
-                                else:
-                                    torrent_file_content = await self.retry_qbt_operation(
-                                        lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
-                                        f"Export torrent {torrent_hash}"
-                                    )
-                                torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
-
-                                with open(torrent_file_path, "wb") as f:
-                                    f.write(torrent_file_content)
-
-                                # Validate the .torrent file before saving as BASE.torrent
-                                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
-                                if not valid:
-                                    if meta['debug']:
-                                        console.print(f"[bold red]Validation failed for {torrent_file_path}")
-                                    os.remove(torrent_file_path)  # Remove invalid file
-                                else:
-                                    await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
-                            except asyncio.TimeoutError:
-                                console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
-
-                    found = True
-                    break
+                        import traceback
+                        console.print(f"[bold red]Traceback: {traceback.format_exc()}")
+                    continue
 
             if not found:
                 console.print("[bold red]Matching site torrent with the specified infohash_v1 not found.")
@@ -1769,20 +1926,132 @@ class Clients():
         if meta.get('debug'):
             console.print(f"[yellow]Searching for torrents in qBittorrent for path: {content_path}[/yellow]")
         try:
-            if meta.get('client', None) is None:
-                default_torrent_client = self.config['DEFAULT']['default_torrent_client']
+            mtv_config = self.config['TRACKERS'].get('MTV')
+            piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
+            mtv_torrent = False
+            if isinstance(mtv_config, dict):
+                mtv_torrent = mtv_config.get('prefer_mtv_torrent', False)
+                # MTV preference takes priority as it's more restrictive (8 MiB vs 16 MiB)
+                if mtv_torrent:
+                    piece_size_constraints_enabled = 'MTV'
+                elif piece_limit:
+                    piece_size_constraints_enabled = '16MiB'
+                else:
+                    piece_size_constraints_enabled = False
             else:
-                default_torrent_client = meta['client']
-            if meta.get('client', None) == 'none':
-                return
-            if default_torrent_client == "none":
-                return
-            client_config = self.config['TORRENT_CLIENTS'][default_torrent_client]
-            torrent_client = client_config['torrent_client']
+                piece_size_constraints_enabled = '16MiB' if piece_limit else False
 
-            if torrent_client != 'qbit':
+            meta['piece_size_constraints_enabled'] = piece_size_constraints_enabled
+
+            # Determine which clients to search
+            clients_to_search = []
+
+            if meta.get('client') and meta['client'] != 'none':
+                # Only search the explicitly requested client
+                clients_to_search = [meta['client']]
+            else:
+                # Use searching_client_list if available, otherwise default client
+                searching_list = self.config['DEFAULT'].get('searching_client_list', [])
+                if searching_list and isinstance(searching_list, list) and len(searching_list) > 0:
+                    # Filter out empty strings and 'none' values
+                    clients_to_search = [c for c in searching_list if c and c != 'none']
+
+                if not clients_to_search:
+                    default_client = self.config['DEFAULT'].get('default_torrent_client')
+                    if default_client and default_client != 'none':
+                        clients_to_search = [default_client]
+
+            if not clients_to_search:
+                if meta.get('debug'):
+                    console.print("[yellow]No clients configured for searching")
                 return []
 
+            all_matching_torrents = []
+            for client_name in clients_to_search:
+                client_config = self.config['TORRENT_CLIENTS'].get(client_name)
+                if not client_config:
+                    if meta['debug']:
+                        console.print(f"[yellow]Client '{client_name}' not found in TORRENT_CLIENTS config")
+                    continue
+
+                torrent_client_type = client_config.get('torrent_client')
+
+                if torrent_client_type != 'qbit':
+                    if meta['debug']:
+                        console.print(f"[yellow]Skipping non-qBit client: {client_name}")
+                    continue
+
+                if meta['debug']:
+                    console.print(f"[cyan]Searching qBittorrent client: {client_name}")
+
+                torrents = await self._search_single_qbit_client(client_config, content_path, meta, client_name)
+
+                if torrents:
+                    # Found matching torrents in this client
+                    all_matching_torrents.extend(torrents)
+
+                    # Check if we should stop searching additional clients
+                    found_piece_size = meta.get('found_preferred_piece_size', False)
+                    constraints_enabled = meta.get('piece_size_constraints_enabled', False)
+
+                    should_stop = False
+
+                    if not constraints_enabled:
+                        # No constraints, stop after finding any torrent
+                        should_stop = True
+                        if meta['debug']:
+                            console.print(f"[green]Found {len(torrents)} matching torrent(s) in client '{client_name}' (no piece size constraints), stopping search[/green]")
+                    elif found_piece_size == 'no_constraints':
+                        # Found valid torrent and no constraints were set
+                        should_stop = True
+                        if meta['debug']:
+                            console.print(f"[green]Found {len(torrents)} matching torrent(s) in client '{client_name}', stopping search[/green]")
+                    elif found_piece_size == 'MTV':
+                        # MTV constraint is always satisfied since it's most restrictive
+                        should_stop = True
+                        if meta['debug']:
+                            console.print(f"[green]Found torrent with MTV preferred piece size (≤8 MiB) in client '{client_name}', stopping search[/green]")
+                    elif found_piece_size == '16MiB' and constraints_enabled == '16MiB':
+                        # 16MiB constraint satisfied (and MTV not required)
+                        should_stop = True
+                        if meta['debug']:
+                            console.print(f"[green]Found torrent with 16 MiB piece size in client '{client_name}', stopping search[/green]")
+                    else:
+                        # Constraints enabled but not met, continue searching
+                        if meta['debug']:
+                            constraint_name = "MTV (≤8 MiB)" if constraints_enabled == 'MTV' else "16 MiB"
+                            console.print(f"[yellow]Found {len(torrents)} torrent(s) in client '{client_name}' but no {constraint_name} piece size match, continuing search[/yellow]")
+
+                    if should_stop:
+                        break
+                else:
+                    if meta['debug']:
+                        console.print(f"[yellow]No matching torrents found in client '{client_name}', continuing to next client[/yellow]")
+
+            # Deduplicate by hash (in case same torrent exists in multiple clients)
+            seen_hashes = set()
+            unique_torrents = []
+            for torrent in all_matching_torrents:
+                if torrent['hash'] not in seen_hashes:
+                    seen_hashes.add(torrent['hash'])
+                    unique_torrents.append(torrent)
+
+            if meta['debug'] and len(all_matching_torrents) != len(unique_torrents):
+                console.print(f"[cyan]Deduplicated {len(all_matching_torrents)} torrents to {len(unique_torrents)} unique torrents")
+
+            return unique_torrents
+
+        except asyncio.TimeoutError:
+            raise
+        except Exception as e:
+            console.print(f"[bold red]Error finding torrents: {str(e)}")
+            if meta['debug']:
+                console.print(traceback.format_exc())
+            return []
+
+    async def _search_single_qbit_client(self, client_config, content_path, meta, client_name):
+        """Search a single qBittorrent client for matching torrents."""
+        try:
             tracker_patterns = {
                 'ptp': {"url": "passthepopcorn.me", "pattern": r'torrentid=(\d+)'},
                 'aither': {"url": "https://aither.cc", "pattern": r'/(\d+)$'},
@@ -1805,9 +2074,6 @@ class Clients():
 
             proxy_url = client_config.get('qui_proxy_url', '').strip()
             if proxy_url:
-                if meta['debug']:
-                    console.print(f"[cyan]Using proxy URL for qBittorrent: {proxy_url[:25]}")
-
                 try:
                     session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
@@ -1830,11 +2096,64 @@ class Clients():
                 else:
                     qbt_client = potential_qbt_client
 
+            search_term = meta['uuid']
             try:
                 if proxy_url:
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    # Build qui's enhanced filter options with expression support
+                    qui_filters = {
+                        "status": [],  # Empty = all statuses, or specify like ["downloading","seeding"]
+                        "excludeStatus": ["unregistered", "tracker_down"],
+                        "categories": [],
+                        "excludeCategories": [],
+                        "tags": [],
+                        "excludeTags": [],
+                        "trackers": [],
+                        "excludeTrackers": [],
+                    }
+
+                    # Build URL query string with standard qBittorrent API parameters
+                    query_parts = [
+                        f"search={urllib.parse.quote(search_term)}",
+                        "sort=added_on",
+                        "reverse=true",
+                        "limit=100"
+                    ]
+
+                    # Add filter parameters if they exist
+                    if qui_filters.get('status'):
+                        # Join multiple status filters with comma (qBittorrent style)
+                        filter_value = ','.join(qui_filters['status'])
+                        query_parts.append(f"filter={urllib.parse.quote(filter_value)}")
+
+                    if qui_filters.get('categories'):
+                        # Join multiple categories with comma
+                        category_value = ','.join(qui_filters['categories'])
+                        query_parts.append(f"category={urllib.parse.quote(category_value)}")
+
+                    if qui_filters.get('tags'):
+                        # Join multiple tags with comma
+                        tag_value = ','.join(qui_filters['tags'])
+                        query_parts.append(f"tag={urllib.parse.quote(tag_value)}")
+
+                    query_string = "&".join(query_parts)
+                    url = f"{qbt_proxy_url}/api/v2/torrents/search?{query_string}"
+
+                    if meta['debug']:
+                        console.print(f"[cyan]Searching qBittorrent via proxy: {redact_private_info(url)}...")
+
+                    async with qbt_session.get(url) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            response_data = await response.json()
+                            has_working_tracker = True
+
+                            # The qui proxy returns {'torrents': [...]} while standard API returns [...]
+                            if isinstance(response_data, dict) and 'torrents' in response_data:
+                                torrents_data = response_data['torrents']
+                            else:
+                                torrents_data = response_data
+
+                            if meta['debug']:
+                                console.print(f"[cyan]Retrieved {len(torrents_data)} torrents via proxy search for '{search_term}'")
                             # Convert to objects that match qbittorrentapi structure
 
                             class MockTorrent:
@@ -1864,9 +2183,6 @@ class Clients():
                 console.print(f"[bold red]Error getting torrents list: {e}")
                 return []
 
-            if meta['debug']:
-                console.print(f"[cyan]Found {len(torrents)} torrents in qBittorrent")
-
             matching_torrents = []
 
             # First collect exact path matches
@@ -1886,7 +2202,7 @@ class Clients():
 
                     if is_disc in ("", None) and len(meta.get('filelist', [])) == 1:
                         file_name = os.path.basename(meta['filelist'][0])
-                        if (torrent_name == file_name) and len(torrent.files) == 1:
+                        if torrent_name == file_name:
                             is_match = True
                         elif torrent_name == meta['uuid']:
                             is_match = True
@@ -1898,19 +2214,24 @@ class Clients():
                         continue
 
                     has_working_tracker = False
+                    torrent_properties = []
 
                     if is_match:
+                        url = torrent.tracker if torrent.tracker else []
                         try:
-                            if proxy_url:
-                                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/trackers",
+                            if proxy_url and not torrent.comment:
+                                if meta['debug']:
+                                    console.print(f"[cyan]Fetching torrent properties via proxy for torrent: {torrent.name}")
+                                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
                                                            params={'hash': torrent.hash}) as response:
                                     if response.status == 200:
-                                        torrent_trackers = await response.json()
+                                        torrent_properties = await response.json()
+                                        torrent.comment = torrent_properties.get('comment', '')
                                     else:
                                         if meta['debug']:
-                                            console.print(f"[yellow]Failed to get trackers for torrent {torrent.name} via proxy: {response.status}")
+                                            console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {response.status}")
                                         continue
-                            else:
+                            elif not proxy_url:
                                 torrent_trackers = await self.retry_qbt_operation(
                                     lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
                                     f"Get trackers for torrent {torrent.name}"
@@ -1924,12 +2245,14 @@ class Clients():
                                 console.print(f"[yellow]Error getting trackers for torrent {torrent.name}: {e}")
                             continue
 
+                        if proxy_url:
+                            torrent_trackers = getattr(torrent, 'trackers', [])
                         try:
                             display_trackers = []
 
                             # Filter out DHT, PEX, LSD "trackers"
                             for tracker in torrent_trackers:
-                                if tracker.get('url', []).startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
+                                if tracker.get('url', '').startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
                                     continue
                                 display_trackers.append(tracker)
 
@@ -1950,6 +2273,7 @@ class Clients():
                                             console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
 
                                     elif meta['debug']:
+                                        has_working_tracker = False
                                         msg = tracker.get('msg', '')
                                         console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
 
@@ -2318,19 +2642,34 @@ class Clients():
                                 meta['base_torrent_created'] = True
                                 meta['hash_used'] = piece_size_best_match['hash']
                                 found_valid_torrent = True
+
+                                # Check if the best match actually meets the piece size constraint
+                                piece_size = piece_size_best_match['piece_size']
+                                if prefer_small_pieces and piece_size <= 8388608:  # 8 MiB
+                                    meta['found_preferred_piece_size'] = 'MTV'
+                                elif piece_limit and piece_size <= 16777216:  # 16 MiB
+                                    meta['found_preferred_piece_size'] = '16MiB'
+                                else:
+                                    # Found a torrent but it doesn't meet the constraint
+                                    meta['found_preferred_piece_size'] = False
                             except Exception as e:
                                 console.print(f"[bold red]Error creating BASE.torrent from best match: {e}")
                         elif use_piece_preference and not piece_size_best_match:
                             console.print("[yellow]No preferred torrents found matching piece size preferences.")
                             meta['we_checked_them_all'] = True
+                            meta['found_preferred_piece_size'] = False
+
+                        # If piece preference is not enabled, set flag to indicate we can stop searching
+                        if not use_piece_preference and found_valid_torrent:
+                            meta['found_preferred_piece_size'] = 'no_constraints'
 
             # Display results summary
             if meta['debug']:
                 if matching_torrents:
-                    console.print(f"[green]Found {len(matching_torrents)} matching torrents")
+                    console.print(f"[green]Found {len(matching_torrents)} matching torrents in {client_name}")
                     console.print(f"[green]Torrents with working trackers: {sum(1 for t in matching_torrents if t.get('has_working_tracker', False))}")
                 else:
-                    console.print(f"[yellow]No matching torrents found for {torrent_name}")
+                    console.print(f"[yellow]No matching torrents found in {client_name}")
 
             if proxy_url and 'qbt_session' in locals():
                 await qbt_session.close()
@@ -2342,7 +2681,7 @@ class Clients():
                 await qbt_session.close()
             raise
         except Exception as e:
-            console.print(f"[bold red]Error finding torrents: {str(e)}")
+            console.print(f"[bold red]Error finding torrents in {client_name}: {str(e)}")
             if meta['debug']:
                 console.print(traceback.format_exc())
             if proxy_url and 'qbt_session' in locals():
@@ -2443,6 +2782,7 @@ async def async_link_directory(src, dst, use_hardlink=True, debug=False):
 
 async def match_tracker_url(tracker_urls, meta):
     tracker_url_patterns = {
+        'acm': ["https://eiga.moi"],
         'aither': ["https://aither.cc"],
         'ant': ["tracker.anthelion.me"],
         'ar': ["tracker.alpharatio"],
@@ -2454,31 +2794,43 @@ async def match_tracker_url(tracker_urls, meta):
         'bt': ["t.brasiltracker.org"],
         'btn': ["https://broadcasthe.net"],
         'cbr': ["capybarabr.com"],
+        'cz': ["tracker.cinemaz.to"],
         'dc': ["tracker.digitalcore.club", "trackerprxy.digitalcore.club"],
         'dp': ["https://darkpeers.org"],
         'ff': ["tracker.funfile.org"],
         'fl': ["reactor.filelist"],
         'fnp': ["https://fearnopeer.com"],
+        'gpw': ["https://tracker.greatposterwall.com"],
         'hdb': ["https://hdbits.org"],
         'hds': ["hd-space.pw"],
         'hdt': ["https://hdts-announce.ru"],
         'hhd': ["https://homiehelpdesk.net"],
         'huno': ["https://hawke.uno"],
+        'is': ["https://immortalseed.me"],
+        'itt': ["https://itatorrents.xyz"],
         'lcd': ["locadora.cc"],
         'ldu': ["theldu.to"],
         'lst': ["https://lst.gg"],
+        'lt': ["https://lat-team.com"],
         'mtv': ["tracker.morethantv"],
         'nbl': ["tracker.nebulance"],
         'oe': ["https://onlyencodes.cc"],
         'otw': ["https://oldtoons.world"],
         'phd': ["tracker.privatehd"],
+        'pt': ["https://portugas.org"],
         'ptp': ["passthepopcorn.me"],
-        'rf': ["https://reelflix.xyz"],
+        'pts': ["https://tracker.ptskit.com"],
+        'ras': ["https://rastastugan.org"],
+        'rf': ["https://reelflix.xyz", "https://reelflix.cc"],
         'rtf': ["peer.retroflix"],
+        'sam': ["https://samaritano.cc"],
         'sp': ["https://seedpool.org"],
         'spd': ["ramjet.speedapp.io", "ramjet.speedapp.to", "ramjet.speedappio.org"],
+        'stc': ["https://skipthecommercials.xyz"],
         'thr': ["torrenthr"],
         'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'ttr': ["https://torrenteros.org"],
+        'tvc': ["https://tvchaosuk.com"],
         'ulcx': ["https://upload.cx"],
         'yoink': ["yoinked.org"],
         'yus': ["https://yu-scene.net"],

@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
@@ -105,21 +106,27 @@ class RTF():
 
         else:
             console.print("[cyan]RTF Request Data:")
-            console.print(json_data)
+            debug_data = json_data.copy()
+            if 'file' in debug_data and debug_data['file']:
+                debug_data['file'] = debug_data['file'][:10] + '...'
+            console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
     async def search_existing(self, meta, disctype):
-        disallowed_keywords = {'XXX', 'Erotic', 'softcore'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])):
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             console.print('[bold red]Erotic not allowed at RTF.')
             meta['skipping'] = "RTF"
             return []
 
-        if meta.get('category') == "TV" and meta.get('tv_year') is not None:
-            if datetime.date.today().year - meta['tv_year'] <= 9:
-                console.print("[red]Content must be older than 10 Years to upload at RTF")
-                meta['skipping'] = "RTF"
-                return []
+        year = meta.get('year')
+        if meta.get('category') == "TV" and meta.get('tvdb_episode_year') is not None:
+            year = int(meta['tvdb_episode_year'])
+        if datetime.date.today().year - year <= 9:
+            console.print("[red]Content must be older than 10 Years to upload at RTF")
+            meta['skipping'] = "RTF"
+            return []
 
         dupes = []
         headers = {
@@ -175,7 +182,7 @@ class RTF():
                     console.print('[bold red]Your API key is incorrect SO generating a new one')
                     await self.generate_new_api(meta)
                 else:
-                    return
+                    return True
         except httpx.RequestError as e:
             console.print(f'[bold red]Error testing API: {str(e)}')
             await self.generate_new_api(meta)
@@ -225,6 +232,7 @@ class RTF():
                         file.write(new_config_data)
 
                     console.print(f'[bold green]API Key successfully saved to {config_path}')
+                    return True
                 else:
                     console.print('[bold red]API response does not contain a token.')
             else:

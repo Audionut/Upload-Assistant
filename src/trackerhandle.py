@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import asyncio
 import cli_ui
 import sys
@@ -17,7 +18,8 @@ async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
         'AITHER': {'mod_q': True, 'draft': False},
         'BHD': {'draft_live': True},
         'BLU': {'mod_q': True, 'draft': False},
-        'LST': {'mod_q': True, 'draft': True}
+        'LST': {'mod_q': True, 'draft': True},
+        'LT': {'mod_q': True, 'draft': False}
     }
 
     modq, draft = None, None
@@ -83,8 +85,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
-                    if tracker == "RTF":
-                        await tracker_class.api_test(meta)
                     try:
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:
@@ -105,8 +105,6 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
-                    if tracker == "AR":
-                        await tracker_class.validate_credentials(meta) is True
                     try:
                         await tracker_class.upload(meta, disctype)
                     except Exception as e:

@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import os
 import re
 import glob
@@ -7,11 +8,8 @@ import random
 import json
 import platform
 import asyncio
-import oxipng
 import psutil
 import sys
-import concurrent.futures
-import signal
 import gc
 import traceback
 from pymediainfo import MediaInfo
@@ -31,7 +29,7 @@ try:
 except ValueError:
     task_limit = 1
 tone_map = config['DEFAULT'].get('tone_map', False)
-optimize_images = config['DEFAULT'].get('optimize_images', True)
+ffmpeg_compression = str(config['DEFAULT'].get('ffmpeg_compression', '6'))
 algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
 desat = float(config['DEFAULT'].get('desat', 10.0))
 
@@ -212,63 +210,9 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         if not force_screenshots and meta['debug']:
             console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
-        optimized_results = []
-        valid_images = [image for image in capture_results if os.path.exists(image)]
-
-        if not valid_images:
-            console.print("[red]No valid images found for optimization.[/red]")
-            return []
-
-        # Dynamically determine the number of processes
-        if optimize_images:
-            if meta['debug']:
-                console.print("[yellow]Now optimizing images...[/yellow]")
-
-            loop = asyncio.get_running_loop()
-            stop_event = asyncio.Event()
-
-            def handle_sigint(sig, frame):
-                console.print("\n[red]CTRL+C detected. Cancelling optimization...[/red]")
-                executor.shutdown(wait=False)
-                stop_event.set()
-                for task in asyncio.all_tasks(loop):
-                    task.cancel()
-
-            signal.signal(signal.SIGINT, handle_sigint)
-
-            try:
-                with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-                    tasks = [asyncio.create_task(worker_wrapper(image, optimize_image_task, executor)) for image in valid_images]
-
-                    optimized_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            except KeyboardInterrupt:
-                console.print("\n[red]CTRL+C detected. Cancelling tasks...[/red]")
-                executor.shutdown(wait=False)
-                await kill_all_child_processes()
-                console.print("[red]All tasks cancelled. Exiting.[/red]")
-                sys.exit(1)
-
-            finally:
-                if meta['debug']:
-                    console.print("[yellow]Shutting down optimization workers...[/yellow]")
-                executor.shutdown(wait=False)
-                await asyncio.sleep(0.1)
-                await kill_all_child_processes()
-                gc.collect()
-
-            optimized_results = [res for res in optimized_results if not isinstance(res, str) or not res.startswith("Error")]
-            if meta['debug']:
-                console.print("Optimized results:", optimized_results)
-
-            if not force_screenshots and meta['debug']:
-                console.print(f"[green]Successfully optimized {len(optimized_results)} images.[/green]")
-        else:
-            optimized_results = valid_images
-
         valid_results = []
         remaining_retakes = []
-        for image_path in optimized_results:
+        for image_path in capture_results:
             if "Error" in image_path:
                 console.print(f"[red]{image_path}")
                 continue
@@ -315,8 +259,6 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         screenshot_response = await capture_disc_task(
                             index, file, random_time, image_path, keyframe, loglevel, hdr_tonemap, meta
                         )
-                        if optimize_images:
-                            optimize_image_task(screenshot_response)
                         new_size = os.path.getsize(screenshot_response)
                         valid_image = False
 
@@ -370,15 +312,16 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
 
 async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel, hdr_tonemap, meta):
     try:
-        ff = ffmpeg.input(file, ss=ss_time, skip_frame=keyframe)
+        # Build filter chain
+        vf_filters = []
+
         if hdr_tonemap:
-            ff = (
-                ff
-                .filter('zscale', transfer='linear')
-                .filter('tonemap', tonemap=algorithm, desat=desat)
-                .filter('zscale', transfer='bt709')
-                .filter('format', 'rgb24')
-            )
+            vf_filters.extend([
+                "zscale=transfer=linear",
+                f"tonemap=tonemap={algorithm}:desat={desat}",
+                "zscale=transfer=bt709",
+                "format=rgb24"
+            ])
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
@@ -409,54 +352,63 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
             y_type = y_number + line_spacing
             y_hdr = y_type + line_spacing
 
-            # Use the filtered output with frame info
-            base_text = ff
-
             # Frame number
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Number: {frame_number}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_number,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Number\\: {frame_number}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_number}:box=1:boxcolor=black@0.5"
+            )
 
             # Frame type
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Type: {frame_type}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_type,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Type\\: {frame_type}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_type}:box=1:boxcolor=black@0.5"
+            )
 
             # HDR status
             if hdr_tonemap:
-                base_text = base_text.filter('drawtext',
-                                             text="Tonemapped HDR",
-                                             fontcolor='white',
-                                             fontsize=font_size,
-                                             x=x_all,
-                                             y=y_hdr,
-                                             box=1,
-                                             boxcolor='black@0.5'
-                                             )
+                vf_filters.append(
+                    f"drawtext=text='Tonemapped HDR':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_hdr}:box=1:boxcolor=black@0.5"
+                )
 
-            # Use the filtered output with frame info
-            ff = base_text
+        # Build command
+        # Always ensure at least format filter is present for PNG compression to work
+        if not vf_filters:
+            vf_filters.append("format=rgb24")
+        vf_chain = ",".join(vf_filters)
 
-        command = (
-            ff
-            .output(image_path, vframes=1, pix_fmt="rgb24")
-            .overwrite_output()
-            .global_args('-loglevel', loglevel)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loglevel", loglevel,
+            "-hide_banner",
+            "-ss", str(ss_time),
+            "-skip_frame", keyframe,
+            "-i", file,
+            "-vframes", "1",
+            "-vf", vf_chain,
+            "-compression_level", ffmpeg_compression,
+            "-pred", "mixed",
+            image_path
+        ]
+
+        # Print the command for debugging
+        if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
+
+        # Run command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
+        stdout, stderr = await process.communicate()
+        returncode = process.returncode
 
-        returncode, stdout, stderr = await run_ffmpeg(command)
+        # Print stdout and stderr if in verbose mode
+        if loglevel == 'verbose':
+            if stdout:
+                console.print(f"[blue]FFmpeg stdout:[/blue]\n{stdout.decode('utf-8', errors='replace')}")
+            if stderr:
+                console.print(f"[yellow]FFmpeg stderr:[/yellow]\n{stderr.decode('utf-8', errors='replace')}")
+
         if returncode == 0:
             return (index, image_path)
         else:
@@ -646,71 +598,12 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                 if meta['debug']:
                     console.print(f"[yellow]Removing smallest image: {smallest} ({smallest_size} bytes)[/yellow]")
                 os.remove(smallest)
-
-        optimized_results = []
-
-        # Filter out non-existent files first
-        valid_images = [image for image in capture_results if os.path.exists(image)]
-
-        # Dynamically determine the number of processes
-        num_tasks = len(valid_images)
-        num_workers = min(num_tasks, task_limit)
-
-        if optimize_images:
-            if num_workers == 0:
-                console.print("[red]No valid images found for optimization.[/red]")
-                return
-            if meta['debug']:
-                console.print("[yellow]Now optimizing images...[/yellow]")
-
-            loop = asyncio.get_running_loop()
-            stop_event = asyncio.Event()
-
-            def handle_sigint(sig, frame):
-                console.print("\n[red]CTRL+C detected. Cancelling optimization...[/red]")
-                executor.shutdown(wait=False)
-                stop_event.set()
-                for task in asyncio.all_tasks(loop):
-                    task.cancel()
-
-            signal.signal(signal.SIGINT, handle_sigint)
-
-            try:
-                with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-                    # Start all tasks in parallel using worker_wrapper()
-                    tasks = [asyncio.create_task(worker_wrapper(image, optimize_image_task, executor)) for image in valid_images]
-
-                    # Wait for all tasks to complete
-                    optimized_results = await asyncio.gather(*tasks, return_exceptions=True)
-            except KeyboardInterrupt:
-                console.print("\n[red]CTRL+C detected. Cancelling tasks...[/red]")
-                executor.shutdown(wait=False)
-                await kill_all_child_processes()
-                console.print("[red]All tasks cancelled. Exiting.[/red]")
-                sys.exit(1)
-            finally:
-                if meta['debug']:
-                    console.print("[yellow]Shutting down optimization workers...[/yellow]")
-                await asyncio.sleep(0.1)
-                await kill_all_child_processes()
-                executor.shutdown(wait=False)
-                gc.collect()
-
-            optimized_results = [res for res in optimized_results if not isinstance(res, str) or not res.startswith("Error")]
-
-            if meta['debug']:
-                console.print("Optimized results:", optimized_results)
-            if not retry_cap and meta['debug']:
-                console.print(f"[green]Successfully optimized {len(optimized_results)} images.")
-
-            executor.shutdown(wait=True)  # Ensure cleanup
-        else:
-            optimized_results = valid_images
+                capture_results.remove(smallest)
 
         valid_results = []
         remaining_retakes = []
 
-        for image in optimized_results:
+        for image in capture_results:
             if "Error" in image:
                 console.print(f"[red]{image}")
                 continue
@@ -753,9 +646,6 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                         if screenshot_result is None:
                             console.print(f"[red]Failed to capture screenshot for {image}. Retrying...[/red]")
                             continue
-
-                        if optimize_images:
-                            optimize_image_task(screenshot_result)
 
                         retaken_size = os.path.getsize(screenshot_result)
                         if retaken_size > 75000:
@@ -801,10 +691,12 @@ async def capture_dvd_screenshot(task):
         if video_duration and seek_time > video_duration:
             seek_time = max(0, video_duration - 1)
 
-        # Construct ffmpeg command
-        ff = ffmpeg.input(input_file, ss=seek_time)
+        # Build filter chain
+        vf_filters = []
         if w_sar != 1 or h_sar != 1:
-            ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
+            scaled_w = int(round(width * w_sar))
+            scaled_h = int(round(height * h_sar))
+            vf_filters.append(f"scale={scaled_w}:{scaled_h}")
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
@@ -834,35 +726,50 @@ async def capture_dvd_screenshot(task):
             y_number = x_all
             y_type = y_number + line_spacing
 
-            # Use the filtered output with frame info
-            base_text = ff
-
             # Frame number
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Number: {frame_number}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_number,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Number\\: {frame_number}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_number}:box=1:boxcolor=black@0.5"
+            )
 
             # Frame type
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Type: {frame_type}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_type,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Type\\: {frame_type}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_type}:box=1:boxcolor=black@0.5"
+            )
 
-            # Use the filtered output with frame info
-            ff = base_text
+        # Build command
+        # Always ensure at least format filter is present for PNG compression to work
+        if not vf_filters:
+            vf_filters.append("format=rgb24")
+        vf_chain = ",".join(vf_filters)
 
-        returncode, _, stderr = await run_ffmpeg(ff.output(image, vframes=1, pix_fmt="rgb24").overwrite_output().global_args('-loglevel', loglevel, '-accurate_seek'))
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loglevel", loglevel,
+            "-hide_banner",
+            "-ss", str(seek_time),
+            "-accurate_seek",
+            "-i", input_file,
+            "-vframes", "1",
+            "-vf", vf_chain,
+            "-compression_level", ffmpeg_compression,
+            "-pred", "mixed",
+            image
+        ]
+
+        # Print the command for debugging
+        if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
+
+        # Run command
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        returncode = process.returncode
+
         if returncode != 0:
             console.print(f"[red]Error capturing screenshot for {input_file} at {seek_time}s:[/red]\n{stderr.decode()}")
             return (index, None)
@@ -1107,59 +1014,9 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if not force_screenshots and meta['debug']:
         console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
-    optimized_results = []
-    valid_images = [image for image in capture_results if os.path.exists(image)]
-    num_workers = min(task_limit, len(valid_images))
-    if optimize_images:
-        if meta['debug']:
-            console.print("[yellow]Now optimizing images...[/yellow]")
-            console.print(f"Using {num_workers} worker(s) for {len(valid_images)} image(s)")
-
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_workers)
-        try:
-            with executor:
-                # Start all tasks in parallel using worker_wrapper()
-                tasks = [asyncio.create_task(worker_wrapper(image, optimize_image_task, executor)) for image in valid_images]
-
-                # Wait for all tasks to complete
-                optimized_results = await asyncio.gather(*tasks, return_exceptions=True)
-        except KeyboardInterrupt:
-            console.print("\n[red]CTRL+C detected. Cancelling optimization tasks...[/red]")
-            await asyncio.sleep(0.1)
-            executor.shutdown(wait=True, cancel_futures=True)
-            await kill_all_child_processes()
-            console.print("[red]All tasks cancelled. Exiting.[/red]")
-            gc.collect()
-            reset_terminal()
-            sys.exit(1)
-        except Exception as e:
-            console.print(f"[red]Error during image optimization: {e}[/red]")
-            await asyncio.sleep(0.1)
-            executor.shutdown(wait=True, cancel_futures=True)
-            await kill_all_child_processes()
-            gc.collect()
-            reset_terminal()
-            sys.exit(1)
-        finally:
-            if meta['debug']:
-                console.print("[yellow]Shutting down optimization workers...[/yellow]")
-            await asyncio.sleep(0.1)
-            executor.shutdown(wait=True, cancel_futures=True)
-            for task in tasks:
-                task.cancel()
-            await kill_all_child_processes()
-            gc.collect()
-
-        # Filter out failed results
-        optimized_results = [res for res in optimized_results if isinstance(res, str) and "Error" not in res]
-        if not force_screenshots and meta['debug']:
-            console.print(f"[green]Successfully optimized {len(optimized_results)} images.[/green]")
-    else:
-        optimized_results = valid_images
-
     valid_results = []
     remaining_retakes = []
-    for image_path in optimized_results:
+    for image_path in capture_results:
         if "Error" in image_path:
             console.print(f"[red]{image_path}")
             continue
@@ -1222,8 +1079,6 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             if not screenshot_path or not os.path.exists(screenshot_path):
                                 continue
 
-                            if optimize_images:
-                                optimize_image_task(screenshot_path)
                             new_size = os.path.getsize(screenshot_path)
                             valid_image = False
 
@@ -1268,8 +1123,6 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                         if not screenshot_path or not os.path.exists(screenshot_path):
                             continue
 
-                        if optimize_images:
-                            optimize_image_task(screenshot_path)
                         new_size = os.path.getsize(screenshot_path)
                         valid_image = False
 
@@ -1411,6 +1264,7 @@ async def capture_screenshot(args):
             def build_cmd(use_libplacebo=True):
                 cmd_local = [
                     "ffmpeg",
+                    "-y",
                     "-ss", str(ss_time),
                     "-i", path,
                     "-map", "0:v:0",
@@ -1420,10 +1274,10 @@ async def capture_screenshot(args):
                 if use_libplacebo and meta.get('libplacebo', False):
                     cmd_local += ["-init_hw_device", "vulkan"]
                 cmd_local += [
-                    "-vf", vf_chain,
                     "-vframes", "1",
-                    "-pix_fmt", "rgb24",
-                    "-y",
+                    "-vf", vf_chain,
+                    "-compression_level", ffmpeg_compression,
+                    "-pred", "mixed",
                     "-loglevel", loglevel,
                 ]
                 if ffmpeg_limit:
@@ -1503,25 +1357,22 @@ async def capture_screenshot(args):
         # Proceed with screenshot capture
         threads_value = set_ffmpeg_threads()
         threads_val = threads_value[1]
-        if ffmpeg_limit:
-            ff = (
-                ffmpeg
-                .input(path, ss=ss_time, threads=threads_val)
-            )
-        else:
-            ff = ffmpeg.input(path, ss=ss_time)
-        ff = ff['v:0']
+
+        # Build filter chain
+        vf_filters = []
+
         if w_sar != 1 or h_sar != 1:
-            ff = ff.filter('scale', int(round(width * w_sar)), int(round(height * h_sar)))
+            scaled_w = int(round(width * w_sar))
+            scaled_h = int(round(height * h_sar))
+            vf_filters.append(f"scale={scaled_w}:{scaled_h}")
 
         if hdr_tonemap:
-            ff = (
-                ff
-                .filter('zscale', transfer='linear')
-                .filter('tonemap', tonemap=algorithm, desat=desat)
-                .filter('zscale', transfer='bt709')
-                .filter('format', 'rgb24')
-            )
+            vf_filters.extend([
+                "zscale=transfer=linear",
+                f"tonemap=tonemap={algorithm}:desat={desat}",
+                "zscale=transfer=bt709",
+                "format=rgb24"
+            ])
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
@@ -1552,68 +1403,60 @@ async def capture_screenshot(args):
             y_type = y_number + line_spacing
             y_hdr = y_type + line_spacing
 
-            # Use the filtered output with frame info
-            base_text = ff
-
             # Frame number
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Number: {frame_number}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_number,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Number\\: {frame_number}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_number}:box=1:boxcolor=black@0.5"
+            )
 
             # Frame type
-            base_text = base_text.filter('drawtext',
-                                         text=f"Frame Type: {frame_type}",
-                                         fontcolor='white',
-                                         fontsize=font_size,
-                                         x=x_all,
-                                         y=y_type,
-                                         box=1,
-                                         boxcolor='black@0.5'
-                                         )
+            vf_filters.append(
+                f"drawtext=text='Frame Type\\: {frame_type}':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_type}:box=1:boxcolor=black@0.5"
+            )
 
             # HDR status
             if hdr_tonemap:
-                base_text = base_text.filter('drawtext',
-                                             text="Tonemapped HDR",
-                                             fontcolor='white',
-                                             fontsize=font_size,
-                                             x=x_all,
-                                             y=y_hdr,
-                                             box=1,
-                                             boxcolor='black@0.5'
-                                             )
+                vf_filters.append(
+                    f"drawtext=text='Tonemapped HDR':fontcolor=white:fontsize={font_size}:x={x_all}:y={y_hdr}:box=1:boxcolor=black@0.5"
+                )
 
-            # Use the filtered output with frame info
-            ff = base_text
+        # Build command
+        # Always ensure at least format filter is present for PNG compression to work
+        if not vf_filters:
+            vf_filters.append("format=rgb24")
+        vf_chain = ",".join(vf_filters)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loglevel", loglevel,
+            "-hide_banner",
+            "-ss", str(ss_time),
+            "-i", path,
+            "-vframes", "1",
+            "-vf", vf_chain,
+            "-compression_level", ffmpeg_compression,
+            "-pred", "mixed",
+            image_path
+        ]
 
         if ffmpeg_limit:
-            command = (
-                ff
-                .output(image_path, vframes=1, pix_fmt="rgb24", **{'threads': threads_val})
-                .overwrite_output()
-                .global_args('-loglevel', loglevel)
-            )
-        else:
-            command = (
-                ff
-                .output(image_path, vframes=1, pix_fmt="rgb24")
-                .overwrite_output()
-                .global_args('-loglevel', loglevel)
-            )
+            # Insert threads before compression options
+            cmd.insert(-3, "-threads")
+            cmd.insert(-3, threads_val)
 
         # Print the command for debugging
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            cmd = command.compile()
             console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
 
         try:
-            returncode, stdout, stderr = await run_ffmpeg(command)
+            # Run command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            returncode = process.returncode
 
             # Print stdout and stderr if in verbose mode
             if loglevel == 'verbose':
@@ -1699,25 +1542,8 @@ async def valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake=
     return result_times
 
 
-async def worker_wrapper(image, optimize_image_task, executor):
-    """ Async wrapper to run optimize_image_task in a separate process """
-    loop = asyncio.get_running_loop()
-    try:
-        return await loop.run_in_executor(executor, optimize_image_task, image)
-    except KeyboardInterrupt:
-        console.print(f"[red][{time.strftime('%X')}] Worker interrupted while processing {image}[/red]")
-        gc.collect()
-        return None
-    except Exception as e:
-        console.print(f"[red][{time.strftime('%X')}] Worker error on {image}: {e}[/red]")
-        gc.collect()
-        return f"Error: {e}"
-    finally:
-        gc.collect()
-
-
 async def kill_all_child_processes():
-    """Ensures all child processes (e.g., ProcessPoolExecutor workers) are terminated."""
+    """Ensures all child processes are terminated."""
     try:
         current_process = psutil.Process()
         children = current_process.children(recursive=True)  # Get child processes once
@@ -1737,34 +1563,6 @@ async def kill_all_child_processes():
         console.print(f"[yellow]Warning: Error during child process cleanup: {e}[/yellow]")
 
 
-def optimize_image_task(image):
-    """Optimizes an image using oxipng in a separate process."""
-    try:
-        if optimize_images:
-            os.environ['RAYON_NUM_THREADS'] = threads
-            if not os.path.exists(image):
-                error_msg = f"ERROR: File not found - {image}"
-                console.print(f"[red]{error_msg}[/red]")
-                return error_msg
-
-            pyver = platform.python_version_tuple()
-            if int(pyver[0]) == 3 and int(pyver[1]) >= 7:
-                level = 6 if os.path.getsize(image) >= 16000000 else 2
-
-                # Run optimization directly in the process
-                oxipng.optimize(image, level=level)
-
-            return image
-        else:
-            return image
-
-    except Exception as e:
-        error_message = f"ERROR optimizing {image}: {e}"
-        console.print(f"[red]{error_message}[/red]")
-        console.print(traceback.format_exc())  # Print detailed traceback
-        return None
-
-
 async def get_frame_info(path, ss_time, meta):
     """Get frame information (type, exact timestamp) for a specific frame"""
     try:
@@ -1780,7 +1578,7 @@ async def get_frame_info(path, ss_time, meta):
         # Print the actual FFmpeg command for debugging
         cmd = info_command.compile()
         if meta.get('debug', False):
-            console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]")
+            console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         returncode, _, stderr = await run_ffmpeg(info_command)
         assert returncode is not None

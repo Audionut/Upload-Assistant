@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 try:
     import asyncio
@@ -30,12 +31,13 @@ try:
     from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
-    from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvdb_series, get_tvmaze_tvdb
+    from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvmaze_tvdb
     from src.radarr import get_radarr_data
     from src.region import get_region, get_distributor, get_service
     from src.sonarr import get_sonarr_data
     from src.tags import get_tag, tag_override
     from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
+    from src.tvdb import tvdb_data
     from src.tvmaze import search_tvmaze
     from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
@@ -61,6 +63,7 @@ class Prep():
         self.screens = screens
         self.config = config
         self.img_host = img_host.lower()
+        self.tvdb_handler = tvdb_data(config)
 
     async def gather_prep(self, meta, mode):
         # set a timer to check speed
@@ -68,16 +71,7 @@ class Prep():
             meta_start_time = time.time()
         # set some details we'll need
         meta['cutoff'] = int(self.config['DEFAULT'].get('cutoff_screens', 1))
-        tvdb_api_get = str(self.config['DEFAULT'].get('tvdb_api', None))
-        if tvdb_api_get is None or len(tvdb_api_get) < 20:
-            tvdb_api = None
-        else:
-            tvdb_api = tvdb_api_get
-        tvdb_token_get = str(self.config['DEFAULT'].get('tvdb_token', None))
-        if tvdb_token_get is None or len(tvdb_token_get) < 20:
-            tvdb_token = None
-        else:
-            tvdb_token = tvdb_token_get
+
         meta['mode'] = mode
         meta['isdir'] = os.path.isdir(meta['path'])
         base_dir = meta['base_dir']
@@ -272,56 +266,69 @@ class Prep():
 
             video, meta['scene'], meta['imdb_id'] = await is_scene(videopath, meta, meta.get('imdb_id', 0))
 
-            title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
-            if meta['debug']:
-                console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
-            if secondary_title:
-                meta['secondary_title'] = secondary_title
-            if extracted_year and not meta.get('year'):
-                meta['year'] = extracted_year
+            try:
+                title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                if meta['debug']:
+                    console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
+                if secondary_title:
+                    meta['secondary_title'] = secondary_title
+                if extracted_year and not meta.get('year'):
+                    meta['year'] = extracted_year
 
-            if meta.get('isdir', False):
-                guess_name = os.path.basename(meta['path']).replace("_", "").replace("-", "") if meta['path'] else ""
-            else:
-                guess_name = ntpath.basename(video).replace('-', ' ')
+                if meta.get('isdir', False):
+                    guess_name = os.path.basename(meta['path']).replace("_", "").replace("-", "") if meta['path'] else ""
+                else:
+                    guess_name = ntpath.basename(video).replace('-', ' ')
+            except Exception as e:
+                console.print(f"[red]Error extracting title and year: {e}[/red]")
+                raise Exception(f"Error extracting title and year: {e}")
 
-            if title:
-                filename = title
-                meta['regex_title'] = title
-                meta['regex_secondary_title'] = secondary_title
-                meta['regex_year'] = extracted_year
-            else:
-                try:
-                    filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
-                except Exception:
+            try:
+                if title:
+                    filename = title
+                    meta['regex_title'] = title
+                    meta['regex_secondary_title'] = secondary_title
+                    meta['regex_year'] = extracted_year
+                else:
                     try:
-                        guess_name = ntpath.basename(video).replace('-', ' ')
                         filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
                     except Exception:
-                        console.print("[red]Error extracting title from video name.")
-                        sys.exit(0)
-            untouched_filename = os.path.basename(video)
+                        try:
+                            guess_name = ntpath.basename(video).replace('-', ' ')
+                            filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
+                        except Exception as e:
+                            console.print(f"[red]Error extracting title from video name: {e}[/red]")
+                            raise Exception(f"Error extracting title from video name: {e}")
 
-            if not meta.get('emby', False):
-                # rely only on guessit for search_year for tv matching
-                try:
-                    meta['search_year'] = guessit(video)['year']
-                except Exception:
-                    meta['search_year'] = ""
+                untouched_filename = os.path.basename(video)
+            except Exception as e:
+                console.print(f"[red]Error processing filename: {e}[/red]")
+                raise Exception(f"Error processing filename: {e}")
 
-                if not meta.get('edit', False):
-                    mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, export_text=True)
-                    meta['mediainfo'] = mi
+            try:
+                if not meta.get('emby', False):
+                    # rely only on guessit for search_year for tv matching
+                    try:
+                        meta['search_year'] = guessit(video)['year']
+                    except Exception:
+                        meta['search_year'] = ""
+
+                    if not meta.get('edit', False):
+                        mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, export_text=True)
+                        meta['mediainfo'] = mi
+                    else:
+                        mi = meta['mediainfo']
+
+                    if meta.get('resolution', None) is None:
+                        meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
+
+                    meta['sd'] = await is_sd(meta['resolution'])
                 else:
-                    mi = meta['mediainfo']
-
-                if meta.get('resolution', None) is None:
-                    meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
-
-                meta['sd'] = await is_sd(meta['resolution'])
-            else:
-                meta['resolution'] = "1080p"
-                meta['search_year'] = ""
+                    meta['resolution'] = "1080p"
+                    meta['search_year'] = ""
+            except Exception as e:
+                console.print(f"[red]Error processing Mediainfo: {e}[/red]")
+                raise Exception(f"Error processing Mediainfo: {e}")
 
         if " AKA " in filename.replace('.', ' '):
             filename = filename.split('AKA')[0]
@@ -353,12 +360,16 @@ class Prep():
                                 console.print(f"[yellow]Removed temporary metadata file: {file_path}[/yellow]")
                     except Exception as e:
                         console.print(f"[red]Error cleaning up temporary metadata files: {e}[/red]", highlight=False)
-                # Exit with error code for automation
-                sys.exit(1)
+                console.print("[red]Not uploading due to conformance errors.[/red]")
+                raise Exception("Conformance errors found in mediainfo")
 
         meta['valid_mi'] = True
         if not meta['is_disc'] and not meta.get('emby', False):
-            valid_mi = validate_mediainfo(meta, debug=meta['debug'])
+            try:
+                valid_mi = validate_mediainfo(meta, debug=meta['debug'])
+            except Exception as e:
+                console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
+                raise Exception(f"Upload Assistant does not support no audio media. Details: {str(e)}")
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
@@ -380,8 +391,8 @@ class Prep():
                     console.print(f"[red] None of the required languages ({meta['has_languages']}) is available on the file {audio_languages}")
                     raise Exception("No matching languages")
             except Exception as e:
-                console.print(f"[red]{e}")
-                return Exception("Language check failed")
+                console.print(f"[red]{e}[/red]")
+                raise Exception("Language check failed")
 
         if not meta.get('emby', False):
             if 'description' not in meta or meta.get('description') is None:
@@ -608,6 +619,10 @@ class Prep():
             console.print(f"Raw TVMAZE ID: {meta['tvmaze_id']} (type: {type(meta['tvmaze_id']).__name__})")
             console.print(f"Raw MAL ID: {meta['mal_id']} (type: {type(meta['mal_id']).__name__})")
 
+        if meta.get('mal_id', 0) != 0:
+            meta['anime'] = True
+            meta['not_anime'] = True
+
         console.print("[yellow]Building meta data.....")
 
         # set a timer to check speed
@@ -683,15 +698,15 @@ class Prep():
 
         # if we have all of the ids, search everything all at once
         if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
-            meta = await all_ids(meta, tvdb_api, tvdb_token)
+            meta = await all_ids(meta)
 
         # Check if IMDb, TMDb, and TVDb IDs are all present
         elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
-            meta = await imdb_tmdb_tvdb(meta, filename, tvdb_api, tvdb_token)
+            meta = await imdb_tmdb_tvdb(meta, filename)
 
         # Check if both IMDb and TVDB IDs are present
         elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and not meta.get('quickie_search', False):
-            meta = await imdb_tvdb(meta, filename, tvdb_api, tvdb_token)
+            meta = await imdb_tvdb(meta, filename)
 
         # Check if both IMDb and TMDb IDs are present
         elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
@@ -711,7 +726,7 @@ class Prep():
 
         # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:
-            meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=meta.get('debug', False))
+            meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
 
         # user might have skipped tmdb earlier, lets double check
         if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
@@ -739,7 +754,7 @@ class Prep():
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
             imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
             meta['imdb_info'] = imdb_info
-            meta['tv_year'] = imdb_info.get('tv_year', None)
+
         check_valid_data = meta.get('imdb_info', {}).get('title', "")
         if check_valid_data:
             try:
@@ -779,30 +794,55 @@ class Prep():
         if meta.get('aka', None) is None:
             meta['aka'] = ""
 
+        # if it was skipped earlier, make sure we have the season/episode data
+        if not meta.get('not_anime', False) and meta.get('category') == "TV":
+            meta = await get_season_episode(video, meta)
+
         if meta['category'] == "TV":
+            both_ids_searched = False
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
-                await get_tvmaze_tvdb(meta, filename, tvdb_api, tvdb_token)
-            elif meta.get('tvmaze_id', 0) == 0:
-                meta['tvmaze_id'], meta['imdb_id'], meta['tvdb_id'] = await search_tvmaze(
+                tvmaze, tvdb, tvdb_data = await get_tvmaze_tvdb(filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tmdb_id', 0), meta.get('manual_data'), meta.get('tvmaze_manual', 0), year=meta.get('year', ''), debug=meta.get('debug', False))
+                both_ids_searched = True
+                if tvmaze:
+                    meta['tvmaze_id'] = tvmaze
+                    if meta['debug']:
+                        console.print(f"[blue]Found TVMAZE ID from search: {tvmaze}[/blue]")
+                if tvdb:
+                    meta['tvdb_id'] = tvdb
+                    if meta['debug']:
+                        console.print(f"[blue]Found TVDB ID from search: {tvdb}[/blue]")
+                if tvdb_data:
+                    meta['tvdb_search_results'] = tvdb_data
+                    if meta['debug']:
+                        console.print("[blue]Found TVDB search results from search.[/blue]")
+            if meta.get('tvmaze_id', 0) == 0 and not both_ids_searched:
+                if meta['debug']:
+                    console.print("[yellow]No TVMAZE ID found, attempting to fetch...[/yellow]")
+                meta['tvmaze_id'] = await search_tvmaze(
                     filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
                     manual_date=meta.get('manual_date'),
                     tvmaze_manual=meta.get('tvmaze_manual'),
                     debug=meta.get('debug', False),
-                    return_full_tuple=True
+                    return_full_tuple=False
                 )
-            else:
-                meta.setdefault('tvmaze_id', 0)
-            if meta.get('tvdb_id', 0) == 0 and tvdb_api and tvdb_token:
-                meta['tvdb_id'] = await get_tvdb_series(base_dir, filename, year=meta.get('year', ''), apikey=tvdb_api, token=tvdb_token, debug=meta.get('debug', False))
+            if meta.get('tvdb_id', 0) == 0:
+                if meta['debug']:
+                    console.print("[yellow]No TVDB ID found, attempting to fetch...[/yellow]")
+                try:
+                    series_results, series_id = await self.tvdb_handler.search_tvdb_series(filename=filename, year=meta.get('year', ''), debug=meta.get('debug', False))
+                    if series_id:
+                        meta['tvdb_id'] = series_id
+                        console.print(f"[blue]Found TVDB series ID from search: {series_id}[/blue]")
+                    if series_results:
+                        meta['tvdb_search_results'] = series_results
+                except Exception as e:
+                    console.print(f"[red]Error searching TVDB: {e}[/red]")
 
-            # if it was skipped earlier, make sure we have the season/episode data
-            if not meta.get('not_anime', False):
-                meta = await get_season_episode(video, meta)
             # all your episode data belongs to us
-            meta = await get_tv_data(meta, base_dir, tvdb_api, tvdb_token)
+            meta = await get_tv_data(meta)
 
-            if meta.get('tvdb_episode_data', None) and meta.get('tvdb_episode_data').get('imdb_id', None):
-                imdb = meta.get('tvdb_episode_data').get('imdb_id', 0).replace('tt', '')
+            if meta.get('tvdb_imdb_id', None):
+                imdb = meta['tvdb_imdb_id'].replace('tt', '')
                 if imdb.isdigit():
                     if imdb != meta.get('imdb_id', 0):
                         episode_info = await get_imdb_from_episode(imdb, debug=True)
@@ -816,7 +856,6 @@ class Prep():
                                     meta['imdb_id'] = int(series_imdb)
                                     imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
                                     meta['imdb_info'] = imdb_info
-                                    meta['tv_year'] = imdb_info.get('year', None)
                                     check_valid_data = meta.get('imdb_info', {}).get('title', "")
                                     if check_valid_data:
                                         title = meta.get('title', "").strip()
@@ -840,35 +879,19 @@ class Prep():
                                         else:
                                             meta['aka'] = ""
 
-            # if we're using tvdb, lets use it's series name if it applies
-            # language check since tvdb returns original language names
-            if tvdb_api and tvdb_token and meta.get('original_language', "") == "en":
-                if meta.get('tvdb_episode_data'):
-                    series_name = meta['tvdb_episode_data'].get('series_name', '')
-                    if series_name and meta.get('title') != series_name:
-                        if meta['debug']:
-                            console.print(f"[yellow]tvdb series name: {series_name}")
-                        year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                        if year_match:
-                            extracted_year = year_match.group(0)
-                            meta['search_year'] = extracted_year
-                            series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                        series_name = series_name.replace('(', '').replace(')', '').strip()
-                        if series_name:  # Only set if not empty
-                            meta['title'] = series_name
-                elif meta.get('tvdb_series_name'):
-                    series_name = meta.get('tvdb_series_name')
-                    if series_name and meta.get('title') != series_name:
-                        if meta['debug']:
-                            console.print(f"[yellow]tvdb series name: {series_name}")
-                        year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
-                        if year_match:
-                            extracted_year = year_match.group(0)
-                            meta['search_year'] = extracted_year
-                            series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
-                        series_name = series_name.replace('(', '').replace(')', '').strip()
-                        if series_name:  # Only set if not empty
-                            meta['title'] = series_name
+            if meta.get('tvdb_series_name'):
+                series_name = meta.get('tvdb_series_name')
+                if series_name and meta.get('title') != series_name:
+                    if meta['debug']:
+                        console.print(f"[yellow]tvdb series name: {series_name}")
+                    year_match = re.search(r'\b(19|20)\d{2}\b', series_name)
+                    if year_match:
+                        extracted_year = year_match.group(0)
+                        meta['search_year'] = extracted_year
+                        series_name = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', series_name).strip()
+                    series_name = series_name.replace('(', '').replace(')', '').strip()
+                    if series_name and year_match:  # Only set if not empty and year was found
+                        meta['title'] = series_name
 
         # bluray.com data if config
         get_bluray_info = self.config['DEFAULT'].get('get_bluray_info', False)
@@ -876,19 +899,20 @@ class Prep():
         meta['bluray_single_score'] = int(float(self.config['DEFAULT'].get('bluray_single_score', 100)))
         meta['use_bluray_images'] = self.config['DEFAULT'].get('use_bluray_images', False)
         if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False) and not meta.get('edit', False) and not meta.get('site_check', False):
-            await get_bluray_releases(meta)
+            releases = await get_bluray_releases(meta)
 
-            # and if we getting bluray/dvd images, we'll rehost them
-            if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
-                from src.rehostimages import check_hosts
-                url_host_mapping = {
-                    "ibb.co": "imgbb",
-                    "pixhost.to": "pixhost",
-                    "imgbox.com": "imgbox",
-                }
+            if releases:
+                # and if we getting bluray/dvd images, we'll rehost them
+                if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
+                    from src.rehostimages import check_hosts
+                    url_host_mapping = {
+                        "ibb.co": "imgbb",
+                        "pixhost.to": "pixhost",
+                        "imgbox.com": "imgbox",
+                    }
 
-                approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
-                await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+                    approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
+                    await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
 
         # user override check that only sets data after metadata setting
         if user_overrides and not meta.get('no_override', False) and not meta.get('emby', False):
@@ -989,6 +1013,10 @@ class Prep():
                 services = await get_service(get_services_only=True)
                 meta['service_longname'] = max((k for k, v in services.items() if v == meta['service']), key=len, default=meta['service'])
 
+            # Parse NFO for scene releases to get service
+            if meta['scene'] and not meta.get('service') and meta['category'] == "TV":
+                await self.parse_scene_nfo(meta)
+
             # Combine genres from TMDB and IMDb
             tmdb_genres = meta.get('genres', '') or ''
             imdb_genres = meta.get('imdb_info', {}).get('genres', '') or ''
@@ -1044,7 +1072,8 @@ class Prep():
             r'(?i)s\d{1,2}',
             r'(?i)\d{1,2}x\d{2}',
             r'(?i)(?:season|series)\s*\d+',
-            r'(?i)e\d{2,3}\s*\-'
+            r'(?i)e\d{2,3}\s*\-',
+            r'(?i)\d{4}\.\d{1,2}\.\d{1,2}'
         ]
 
         path = meta.get('path', '')
@@ -1071,3 +1100,41 @@ class Prep():
         else:
             stream = 0
         return stream
+
+    async def parse_scene_nfo(self, meta):
+        try:
+            nfo_file = meta.get('scene_nfo_file', '')
+
+            if not nfo_file:
+                if meta['debug']:
+                    console.print("[yellow]No NFO file found for scene release[/yellow]")
+                return
+
+            if meta['debug']:
+                console.print(f"[cyan]Parsing NFO file: {nfo_file}[/cyan]")
+
+            with open(nfo_file, 'r', encoding='utf-8', errors='ignore') as f:
+                nfo_content = f.read()
+
+            # Parse Source field
+            source_match = re.search(r'^Source\s*:\s*(.+?)$', nfo_content, re.MULTILINE | re.IGNORECASE)
+            if source_match:
+                nfo_source = source_match.group(1).strip()
+                if meta['debug']:
+                    console.print(f"[cyan]Found source in NFO: {nfo_source}[/cyan]")
+
+                # Check if source matches any service
+                services = await get_service(get_services_only=True)
+
+                # Exact match
+                for service_name, service_code in services.items():
+                    if nfo_source.upper() == service_name.upper() or nfo_source.upper() == service_code.upper():
+                        meta['service'] = service_code
+                        meta['service_longname'] = service_name
+                        if meta['debug']:
+                            console.print(f"[green]Matched service: {service_code} ({service_name})[/green]")
+                        break
+
+        except Exception as e:
+            if meta['debug']:
+                console.print(f"[red]Error parsing NFO file: {e}[/red]")

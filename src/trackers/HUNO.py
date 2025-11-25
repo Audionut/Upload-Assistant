@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import os
@@ -100,7 +101,7 @@ class HUNO(UNIT3D):
         else:
             image_list = meta['image_list']
         signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, image_list=image_list)
+        await self.common.unit3d_edit_desc(meta, self.tracker, signature, image_list=image_list, approved_image_hosts=approved_image_hosts)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
             desc = await f.read()
 
