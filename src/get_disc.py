@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 import os
 import itertools
 from bin.MI.get_linux_mi import download_dvd_mediainfo
