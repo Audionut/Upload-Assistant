@@ -97,6 +97,8 @@ class TVC():
         """
         # Note sections are based on Genre not type, source, resolution etc..
         # Uses tv_type_map dict for genre → category ID mapping
+        if not genres:
+            return self.tv_type_map["holding bin"]
         for g in genres.split(', '):
             g = g.lower().replace(",", "").strip()
             if g and g in self.tv_type_map:
@@ -648,8 +650,10 @@ class TVC():
         Returns:
             str: The final BBCode description string (also written to file).
         """
-        base = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt")
-
+        try:
+            base = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt")
+        except FileNotFoundError:
+            base = ""
         # Ensure tmp/<uuid> directory exists
         desc_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         os.makedirs(desc_dir, exist_ok=True)
@@ -696,7 +700,8 @@ class TVC():
                 desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
                 desc += f"{meta['logo']}[/img]\n\n"
 
-            desc += f"[b]Season Title:[/b] {meta.get('season_name', 'Unknown Season')}\n\n"
+            # UK terminology: Series not Season
+            desc += f"[b]Series Title:[/b] {meta.get('season_name', 'Unknown Series')}\n\n"
             desc += f"[b]This series premiered on:[/b] {channel} on {airdate}\n"
 
             # Episode list
