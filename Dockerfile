@@ -1,9 +1,16 @@
 FROM python:3.12
 
+ARG FFMPEG_RELEASE=autobuild-2025-08-31-13-00
+ARG FFMPEG_FLAVOR=ffmpeg-n7.1.1-57-g1b48158a23-linux64-gpl-7.1
+ARG FFMPEG_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/${FFMPEG_RELEASE}/${FFMPEG_FLAVOR}.tar.xz
+ARG FFMPEG_SHA256=7a4dcf07bc7c89a33970c5c0f524fc1662ea4e2f342c9d10a6a9f307cdc03f6c
+
 # Update the package list and install system dependencies including mono
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ca-certificates \
+    curl \
+    xz-utils \
     git \
     g++ \
     cargo \
@@ -13,6 +20,15 @@ RUN apt-get update && \
     mono-complete \
     nano && \
     rm -rf /var/lib/apt/lists/*
+
+# Install specific ffmpeg build
+RUN curl -L "$FFMPEG_URL" -o /tmp/ffmpeg.tar.xz && \
+    echo "${FFMPEG_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - && \
+    tar -xJf /tmp/ffmpeg.tar.xz -C /tmp && \
+    cp /tmp/${FFMPEG_FLAVOR}/bin/ffmpeg /usr/local/bin/ && \
+    cp /tmp/${FFMPEG_FLAVOR}/bin/ffprobe /usr/local/bin/ && \
+    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
+    rm -rf /tmp/ffmpeg.tar.xz /tmp/${FFMPEG_FLAVOR}
 
 # Set up a virtual environment to isolate our Python dependencies
 RUN python -m venv /venv
