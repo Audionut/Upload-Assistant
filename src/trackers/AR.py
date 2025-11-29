@@ -235,7 +235,7 @@ class AR():
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
 
-    async def search_existing(self, meta, DISCTYPE):
+    async def search_existing(self, meta, disctype):
         dupes = []
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not cookie_jar:

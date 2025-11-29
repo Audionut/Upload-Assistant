@@ -7,11 +7,12 @@ import click
 import glob
 import httpx
 import json
+import pickle  # nosec B403 - Only used for legacy cookie migration
 import platform
-import pickle
 import os
 import re
 import requests
+import stat
 
 from pathlib import Path
 from pymediainfo import MediaInfo
@@ -95,6 +96,118 @@ class PTP():
     def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
 
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}[/red]")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
+            raise
+
+    def _load_cookies_secure(self, session, cookiefile):
+        """Securely load session cookies from JSON instead of pickle"""
+
+        # Check for legacy pickle file and migrate if needed
+        pickle_file = cookiefile.replace('.json', '.pickle')
+        legacy_pickle_file = f"{os.path.dirname(cookiefile)}/PTP"  # Legacy filename without extension
+
+        # Try to migrate from pickle files
+        for potential_pickle in [pickle_file, legacy_pickle_file]:
+            if os.path.exists(potential_pickle) and not os.path.exists(cookiefile):
+                try:
+                    console.print(f"[yellow]Migrating legacy cookie file from {potential_pickle} to {cookiefile}[/yellow]")
+
+                    # Load the pickle file
+                    with open(potential_pickle, 'rb') as f:
+                        session_cookies = pickle.load(f)  # nosec B301 - Legacy migration only
+
+                    # Convert to JSON format
+                    cookie_dict = {}
+                    for cookie in session_cookies:
+                        cookie_dict[cookie.name] = {
+                            'value': cookie.value,
+                            'domain': cookie.domain,
+                            'path': cookie.path,
+                            'secure': cookie.secure,
+                            'expires': getattr(cookie, 'expires', None)
+                        }
+
+                    # Save as JSON
+                    with open(cookiefile, 'w', encoding='utf-8') as f:
+                        json.dump(cookie_dict, f, indent=2)
+
+                    # Set restrictive permissions
+                    os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+                    # Verify the migration was successful by loading the JSON
+                    try:
+                        with open(cookiefile, 'r', encoding='utf-8') as f:
+                            json.load(f)  # Just verify it can be loaded
+
+                        # Migration verified successful - delete the old pickle file
+                        os.remove(potential_pickle)
+                        console.print(f"[green]Successfully migrated cookies to JSON format and removed legacy file {potential_pickle}[/green]")
+
+                    except (OSError, json.JSONDecodeError) as verify_error:
+                        console.print(f"[red]Migration verification failed: {verify_error}. Keeping original file {potential_pickle}[/red]")
+                        # Remove the potentially corrupted JSON file
+                        if os.path.exists(cookiefile):
+                            os.remove(cookiefile)
+                        raise
+
+                    break
+
+                except Exception as e:
+                    console.print(f"[red]Error migrating cookie file {potential_pickle}: {e}[/red]")
+                    # Continue to try next potential file or load JSON normally
+                    continue
+
+        # Load cookies from JSON file
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                # Prevent None domain values
+                domain = cookie_data.get('domain')
+                if domain is None:
+                    domain = ''  # Use empty string instead of None
+
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=domain,
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
+            raise
+
     async def get_ptp_id_imdb(self, search_term, search_file_folder, meta):
         imdb_id = ptp_torrent_id = None
         filename = str(os.path.basename(search_term))
@@ -107,7 +220,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         console.print(f"[green]Searching PTP for: [bold yellow]{filename}[/bold yellow]")
 
@@ -178,7 +291,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         try:
             if response.status_code == 200:
@@ -212,7 +325,7 @@ class PTP():
         }
         url = 'https://passthepopcorn.me/torrents.php'
         console.print(f"[yellow]Requesting description from {url} with ID {ptp_torrent_id}")
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
 
         ptp_desc = response.text
@@ -265,7 +378,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url=url, headers=headers, params=params)
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
         await asyncio.sleep(1)
         try:
             response = response.json()
@@ -337,7 +450,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = "https://passthepopcorn.me/ajax.php"
-        response = requests.get(url=url, params=params, headers=headers)
+        response = requests.get(url=url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         tinfo = {}
         try:
@@ -442,7 +555,7 @@ class PTP():
         headers = {'referer': 'https://ptpimg.me/index.php'}
         url = "https://ptpimg.me/upload.php"
 
-        response = requests.post(url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=payload, timeout=60)
         try:
             response = response.json()
             ptpimg_code = response[0]['code']
@@ -892,7 +1005,7 @@ class PTP():
                             if not new_screens:
                                 use_vs = meta.get('vapoursynth', False)
                                 try:
-                                    await disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                    await disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], multi_screens, True)
                                 except Exception as e:
                                     print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
@@ -971,7 +1084,7 @@ class PTP():
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                 if not new_screens:
                                     try:
-                                        await disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
+                                        await disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
@@ -1254,13 +1367,12 @@ class PTP():
     async def get_AntiCsrfToken(self, meta):
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
-        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"  # Changed from .pickle to .json
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                uploadresponse = session.get("https://passthepopcorn.me/upload.php")
+                self._load_cookies_secure(session, cookiefile)
+                uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
                 loggedIn = await self.validate_login(uploadresponse)
             else:
                 console.print("[yellow]PTP Cookies not found. Creating new session.")
@@ -1275,22 +1387,21 @@ class PTP():
                     "keeplogged": "1",
                 }
                 headers = {"User-Agent": self.user_agent}
-                loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
+                loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers, timeout=30)
                 await asyncio.sleep(2)
                 try:
                     resp = loginresponse.json()
                     if resp['Result'] == "TfaRequired":
                         data['TfaType'] = "normal"
                         data['TfaCode'] = cli_ui.ask_string("2FA Required: Please enter 2FA code")
-                        loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
+                        loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers, timeout=30)
                         await asyncio.sleep(2)
                         resp = loginresponse.json()
                     try:
                         if resp["Result"] != "Ok":
                             raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
                         AntiCsrfToken = resp["AntiCsrfToken"]
-                        with open(cookiefile, 'wb') as cf:
-                            pickle.dump(session.cookies, cf)
+                        self._save_cookies_secure(session.cookies, cookiefile)
                     except Exception:
                         raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
                 except Exception:
@@ -1497,10 +1608,9 @@ class PTP():
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    response = session.post(url=url, data=data, headers=headers, files=files)
+                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"  # Changed from .pickle to .json
+                    self._load_cookies_secure(session, cookiefile)
+                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=60)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text
                 # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.

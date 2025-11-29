@@ -110,7 +110,7 @@ class COMMON():
             torrent_hash = None
             if hash_is_id:
                 info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
-                torrent_hash = hashlib.sha1(info_bytes).hexdigest()
+                torrent_hash = hashlib.sha1(info_bytes, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
 
             new_torrent.metainfo['comment'] = comment + torrent_hash if hash_is_id else comment
 
@@ -126,7 +126,7 @@ class COMMON():
             torrent_content = await torrent_file.read()
             torrent_data = bencodepy.decode(torrent_content)
             info = bencodepy.encode(torrent_data[b'info'])
-            info_hash = hashlib.sha1(info).hexdigest()
+            info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
     async def unit3d_edit_desc(self, meta, tracker, signature, comparison=False, desc_header="", image_list=None, approved_image_hosts=None):
@@ -409,7 +409,7 @@ class COMMON():
                                 if not new_screens:
                                     use_vs = meta.get('vapoursynth', False)
                                     try:
-                                        await disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                        await disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during BDMV screenshot capture: {e}")
                                     new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
@@ -538,7 +538,7 @@ class COMMON():
                                     if each['type'] == "BDMV":
                                         use_vs = meta.get('vapoursynth', False)
                                         try:
-                                            await disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                            await disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], use_vs, [], multi_screens, True)
                                         except Exception as e:
                                             print(f"Error during BDMV screenshot capture: {e}")
                                         new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
@@ -954,7 +954,7 @@ class COMMON():
         """Get region and distributor information from API response"""
         params = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
         url = f"{torrent_url}{id}"
-        response = requests.get(url=url, params=params)
+        response = requests.get(url=url, params=params, timeout=30)
         try:
             json_response = response.json()
         except ValueError:
@@ -1043,7 +1043,7 @@ class COMMON():
             return None, None, None, None, None, None, None, None, None
 
         # Make the GET request with proper encoding handled by 'params'
-        response = requests.get(url=url, params=params)
+        response = requests.get(url=url, params=params, timeout=30)
         # console.print(f"[blue]Raw API Response: {response}[/blue]")
 
         try:
@@ -1175,12 +1175,24 @@ class COMMON():
         compatible with requests."""
 
         cookies = {}
-        with open(cookiefile, 'r') as fp:
-            for line in fp:
-                if not line.startswith(("# ", "\n", "#\n")):
-                    lineFields = re.split(' |\t', line.strip())
-                    lineFields = [x for x in lineFields if x != ""]
-                    cookies[lineFields[5]] = lineFields[6]
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as fp:
+                for line in fp:
+                    if not line.startswith(("# ", "\n", "#\n")):
+                        lineFields = re.split(' |\t', line.strip())
+                        lineFields = [x for x in lineFields if x != ""]
+                        if len(lineFields) >= 7:  # Ensure we have enough fields
+                            cookies[lineFields[5]] = lineFields[6]
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file {cookiefile}: {e}")
+            raise
+        except IndexError as e:
+            console.print(f"[red]Error parsing cookie file format {cookiefile}: {e}")
+            raise
+        except Exception as e:
+            console.print(f"[red]Unexpected error parsing cookie file {cookiefile}: {e}")
+            raise
+
         return cookies
 
     async def ptgen(self, meta, ptgen_site="", ptgen_retry=3):
@@ -1193,11 +1205,11 @@ class COMMON():
         # get douban url
         if int(meta.get('imdb_id')) != 0:
             data['search'] = f"tt{meta['imdb_id']}"
-            ptgen = requests.get(url, params=data)
+            ptgen = requests.get(url, params=data, timeout=30)
             if ptgen.json()["error"] is not None:
                 for retry in range(ptgen_retry):
                     try:
-                        ptgen = requests.get(url, params=params)
+                        ptgen = requests.get(url, params=params, timeout=30)
                         if ptgen.json()["error"] is None:
                             break
                     except requests.exceptions.JSONDecodeError:
@@ -1211,10 +1223,10 @@ class COMMON():
             console.print("[red]No IMDb id was found.")
             params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
         try:
-            ptgen = requests.get(url, params=params)
+            ptgen = requests.get(url, params=params, timeout=30)
             if ptgen.json()["error"] is not None:
                 for retry in range(ptgen_retry):
-                    ptgen = requests.get(url, params=params)
+                    ptgen = requests.get(url, params=params, timeout=30)
                     if ptgen.json()["error"] is None:
                         break
             ptgen = ptgen.json()
@@ -1499,7 +1511,6 @@ class COMMON():
                     False,
                     meta['uuid'],
                     meta['base_dir'],
-                    export_text=True,
                     is_dvd=False,
                     debug=meta.get('debug', False)
                 )

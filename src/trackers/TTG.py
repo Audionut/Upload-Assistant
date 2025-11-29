@@ -1,10 +1,11 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
-import pickle
+import json
 from bs4 import BeautifulSoup
 import requests
 import asyncio
 import re
 import os
+import stat
 import cli_ui
 import httpx
 from unidecode import unidecode
@@ -29,6 +30,69 @@ class TTG():
 
         self.signature = None
         self.banned_groups = [""]
+
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}")
+            raise
+
+    def _load_cookies_secure(self, session, cookiefile):
+        """Securely load session cookies from JSON instead of pickle"""
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=cookie_data.get('domain'),
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
+            raise
+
+    def _load_cookies_dict_secure(self, cookiefile):
+        """Securely load cookies as dictionary from JSON instead of pickle"""
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+            return cookie_dict
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
+            raise
 
     async def edit_name(self, meta):
         ttg_name = meta['name']
@@ -159,10 +223,9 @@ class TTG():
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             else:
                 with requests.Session() as session:
-                    cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files)
+                    cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")  # Changed from .pkl to .json
+                    self._load_cookies_secure(session, cookiefile)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
                     mi_dump.close()
 
@@ -178,12 +241,11 @@ class TTG():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")  # Changed from .pkl to .json
         if not os.path.exists(cookiefile):
-            console.print("[bold red]Cookie file not found: TTG.pkl")
+            console.print("[bold red]Cookie file not found: TTG.json")
             return []
-        with open(cookiefile, 'rb') as cf:
-            cookies = pickle.load(cf)
+        cookies = self._load_cookies_dict_secure(cookiefile)
 
         if int(meta['imdb_id']) != 0:
             imdb = f"imdb{meta['imdb']}"
@@ -246,9 +308,8 @@ class TTG():
         url = "https://totheglory.im"
         if os.path.exists(cookiefile):
             with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                self._load_cookies_secure(session, cookiefile)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
@@ -268,7 +329,7 @@ class TTG():
             'passan': self.passan
         }
         with requests.Session() as session:
-            response = session.post(url, data=data)
+            response = session.post(url, data=data, timeout=30)
             await asyncio.sleep(0.5)
             if response.url.endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -279,12 +340,11 @@ class TTG():
                     'uid': self.uid
                 }
                 two_factor_url = "https://totheglory.im/take2fa.php"
-                response = session.post(two_factor_url, data=two_factor_data)
+                response = session.post(two_factor_url, data=two_factor_data, timeout=30)
                 await asyncio.sleep(0.5)
             if response.url.endswith('my.php'):
                 console.print('[green]Successfully logged into TTG')
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                self._save_cookies_secure(session.cookies, cookiefile)
             else:
                 console.print('[bold red]Something went wrong')
                 await asyncio.sleep(1)
@@ -344,7 +404,7 @@ class TTG():
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://totheglory.im/dl/{id}/{self.passkey}"
-        r = requests.get(url=download_url)
+        r = requests.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)

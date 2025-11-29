@@ -1,4 +1,9 @@
 [![Create and publish a Docker image](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/docker-image.yml)
+[![Python Code Analysis](https://github.com/Audionut/Upload-Assistant/actions/workflows/python-code-analysis.yml/badge.svg?branch=master)](https://github.com/Audionut/Upload-Assistant/actions/workflows/python-code-analysis.yml)
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![Security: Bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
+[![Security: Safety](https://img.shields.io/badge/security-safety-green.svg)](https://github.com/pyupio/safety)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 Discord support https://discord.gg/QHHAZu7e2A
 
