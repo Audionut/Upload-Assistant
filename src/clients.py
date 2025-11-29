@@ -2806,6 +2806,7 @@ async def match_tracker_url(tracker_urls, meta):
         'hdt': ["https://hdts-announce.ru"],
         'hhd': ["https://homiehelpdesk.net"],
         'huno': ["https://hawke.uno"],
+        'ihd': ["https://infinityhd.net"],
         'is': ["https://immortalseed.me"],
         'itt': ["https://itatorrents.xyz"],
         'lcd': ["locadora.cc"],
