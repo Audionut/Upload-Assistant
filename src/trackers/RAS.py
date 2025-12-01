@@ -1,3 +1,4 @@
+# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 from data.config import config
 from src.console import console
