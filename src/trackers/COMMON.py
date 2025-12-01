@@ -82,6 +82,9 @@ class COMMON():
                             async for chunk in r.aiter_bytes():
                                 await f.write(chunk)
 
+                if cross:
+                    return None
+
                 if hash_is_id:
                     torrent_hash = await self.get_torrent_hash(meta, tracker)
                     return torrent_hash

@@ -176,28 +176,36 @@ async def filter_dupes(dupes, meta, tracker_name):
                             meta['file_count_match'] = file_count
                             remember_match('file_count')
                             return False
-                    if entry.get('size') and meta.get('source_size'):
-                        if int(entry.get('size')) == int(meta.get('source_size')):
+                    entry_size = entry.get('size')
+                    source_size = meta.get('source_size')
+                    if entry_size and source_size:
+                        if int(entry_size) == int(source_size):
                             meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                             remember_match('size')
                             return False
                 else:
-                    console.log(f"[debug] Comparing file: {file} against dupe files list.")
-                    console.log(f"[debug] Dupe files list: {files}")
+                    if meta['debug']:
+                        console.log(f"[debug] Comparing file: {file} against dupe files list.")
+                        console.log(f"[debug] Dupe files list: {files}")
                     if any(file.lower() == f.lower() for f in files):
                         meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
-                        console.log(f"[debug] Filename match found: {meta['filename_match']}")
+                        if meta['debug']:
+                            console.log(f"[debug] Filename match found: {meta['filename_match']}")
                         remember_match('filename')
                         if file_count and file_count > 0 and file_count == len(meta.get('filelist', [])):
                             meta['file_count_match'] = file_count
-                            console.log(f"[debug] File count match found: {meta['file_count_match']}")
+                            if meta['debug']:
+                                console.log(f"[debug] File count match found: {meta['file_count_match']}")
                             remember_match('file_count')
                             return False
 
         else:
-            if entry.get('size') and meta.get('source_size'):
-                console.log(f"[debug] Comparing sizes: Entry size {entry.get('size')} vs Source size {meta.get('source_size')}")
-                if int(entry.get('size')) == int(meta.get('source_size')):
+            entry_size = entry.get('size')
+            source_size = meta.get('source_size')
+            if entry_size and source_size:
+                if meta['debug']:
+                    console.log(f"[debug] Comparing sizes: Entry size {entry_size} vs Source size {source_size}")
+                if int(entry_size) == int(source_size):
                     meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                     remember_match('size')
                     return False

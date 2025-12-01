@@ -330,11 +330,11 @@ class Prep():
                 console.print(f"[red]Error processing Mediainfo: {e}[/red]")
                 raise Exception(f"Error processing Mediainfo: {e}")
 
+        source_size = 0
         if not meta['is_disc']:
             # Sum every non-disc file so downstream steps know the total payload size
             filelist = meta.get('filelist') or []
             files_to_measure = filelist if filelist else [videopath]
-            source_size = 0
             for file_path in files_to_measure:
                 if not os.path.isfile(file_path):
                     if meta.get('debug'):
@@ -345,13 +345,10 @@ class Prep():
                 except OSError as exc:
                     if meta.get('debug'):
                         console.print(f"[yellow]Unable to stat {file_path}: {exc}")
-            meta['source_size'] = source_size
-            if meta['debug']:
-                console.print(f"[cyan]Calculated source size: {meta['source_size']} bytes")
+
         else:
             # Disc structures can span many files; walk the tree rooted at meta['path']
             disc_root = meta.get('path')
-            source_size = 0
             if disc_root and os.path.exists(disc_root):
                 for root, _, files in os.walk(disc_root):
                     for filename in files:
@@ -365,9 +362,10 @@ class Prep():
             else:
                 if meta.get('debug'):
                     console.print(f"[yellow]Disc path missing, source size set to 0: {disc_root}")
-            meta['source_size'] = source_size
-            if meta['debug']:
-                console.print(f"[cyan]Calculated disc source size: {meta['source_size']} bytes")
+
+        meta['source_size'] = source_size
+        if meta['debug']:
+            console.print(f"[cyan]Calculated disc source size: {meta['source_size']} bytes")
 
         if " AKA " in filename.replace('.', ' '):
             filename = filename.split('AKA')[0]
