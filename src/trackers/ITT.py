@@ -164,7 +164,7 @@ class ITT(UNIT3D):
         # From rules:
         # "Non sono ammessi film e serie tv che non comprendono il doppiaggio in italiano."
         # Translates to "Films and TV series that do not include Italian dubbing are not permitted."
-        italian_languages = ["Italian", "Italiano"]
+        italian_languages = ["italian", "italiano"]
         if not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=italian_languages, check_audio=True
         ):

@@ -927,5 +927,6 @@ class COMMON():
                 return audio_ok or subtitle_ok
 
         except Exception as e:
+            console.print_exception()
             console.print(f"[red]Error checking language requirements: {e}[/red]")
             return False

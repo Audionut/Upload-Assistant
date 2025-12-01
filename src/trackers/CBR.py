@@ -126,5 +126,5 @@ class CBR(UNIT3D):
 
     async def get_additional_checks(self, meta):
         return await self.common.check_language_requirements(
-            meta, self.tracker, languages_to_check=["Portuguese", "Português"], check_audio=True, check_subtitle=True
+            meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
         )

@@ -89,9 +89,7 @@ class LT(UNIT3D):
         return {"name": re.sub(r"\s{2,}", " ", lt_name)}
 
     async def get_additional_checks(self, meta):
-        spanish_languages = [
-            "Spanish", "Spanish (Latin America)", "spanish", "spanish (latin america)"
-        ]
+        spanish_languages = ["spanish", "spanish (latin america)"]
         if not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True
         ):

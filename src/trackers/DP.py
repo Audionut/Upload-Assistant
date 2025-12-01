@@ -44,7 +44,7 @@ class DP(UNIT3D):
             else:
                 return False
 
-        nordic_languages = ['Danish', 'Swedish', 'Norwegian', 'Icelandic', 'Finnish', 'English']
+        nordic_languages = ['danish', 'swedish', 'norwegian', 'icelandic', 'finnish', 'english']
         if not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=nordic_languages, check_audio=True, check_subtitle=True
         ):
