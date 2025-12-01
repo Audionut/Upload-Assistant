@@ -960,6 +960,7 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
+                await process_cross_seeds(meta)
                 if not meta.get('site_check', False):
                     if not meta.get('emby', False):
                         console.print("we are not uploading.......")
@@ -983,6 +984,9 @@ async def do_the_thing(base_dir):
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
+
+                await process_cross_seeds(meta)
+
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
                     if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
@@ -1105,6 +1109,92 @@ async def do_the_thing(base_dir):
                 pass
         if not sys.stdin.closed:
             reset_terminal()
+
+
+async def process_cross_seeds(meta):
+    all_trackers = api_trackers | http_trackers | other_api_trackers
+
+    # Filter to only trackers with cross-seed data and valid config
+    specific_trackers = [tracker for tracker in all_trackers if meta.get(f'{tracker}_cross_seed', None) is not None]
+    valid_trackers = []
+
+    for tracker in specific_trackers:
+        tracker_config = config.get('TRACKERS', {}).get(tracker, {})
+        api_key = tracker_config.get('api_key', '')
+        announce_url = tracker_config.get('announce_url', '')
+
+        if not tracker_config:
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} not found in config, skipping[/yellow]")
+            continue
+
+        # Accept tracker if it has either a valid api_key or announce_url
+        has_api_key = api_key and api_key.strip() != ''
+        has_announce_url = announce_url and announce_url.strip() != ''
+
+        if not has_api_key and not has_announce_url:
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} has no api_key or announce_url set, skipping[/yellow]")
+            continue
+
+        valid_trackers.append(tracker)
+
+    if not valid_trackers:
+        if meta.get('debug'):
+            console.print("[yellow]No trackers found with cross-seed data[/yellow]")
+        return
+
+    console.print(f"[cyan]Valid trackers for cross-seed check: {valid_trackers}[/cyan]")
+
+    common = COMMON(config)
+    try:
+        concurrency_limit = int(config.get('DEFAULT', {}).get('cross_seed_concurrency', 8))
+    except (TypeError, ValueError):
+        concurrency_limit = 8
+    semaphore = asyncio.Semaphore(max(1, concurrency_limit))
+
+    async def handle_cross_seed(tracker):
+        async with semaphore:
+            cross_seed_key = f'{tracker}_cross_seed'
+            cross_seed_value = meta.get(cross_seed_key, False)
+
+            if meta.get('debug', False):
+                console.print(f"[cyan]Debug: {tracker} - cross_seed: {redact_private_info(cross_seed_value)}")
+
+            if not cross_seed_value:
+                return
+
+            if meta.get('debug'):
+                console.print(f"[green]Found cross-seed for {tracker}!")
+
+            download_url = None
+            if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
+                download_url = cross_seed_value
+
+            headers = None
+            if tracker == "RTF":
+                headers = {
+                    'accept': 'application/json',
+                    'Authorization': config['TRACKERS'][tracker]['api_key'].strip(),
+                }
+
+            await common.download_tracker_torrent(
+                meta,
+                tracker,
+                headers=headers,
+                params=None,
+                downurl=download_url,
+                hash_is_id=False,
+                cross=True
+            )
+            await client.add_to_client(meta, tracker, cross=True)
+
+    tasks = [(tracker, asyncio.create_task(handle_cross_seed(tracker))) for tracker in valid_trackers]
+
+    results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+    for (tracker, _), result in zip(tasks, results):
+        if isinstance(result, Exception):
+            console.print(f"[red]Cross-seed handling failed for {tracker}: {result}[/red]")
 
 
 async def get_mkbrr_path(meta, base_dir=None):

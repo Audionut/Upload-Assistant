@@ -119,6 +119,9 @@ async def process_all_trackers(meta):
                     if tracker_name == "AITHER" and 'aither_trumpable' in local_meta:
                         meta['aither_trumpable'] = local_meta['aither_trumpable']
 
+                    if f'{tracker_name}_cross_seed' in local_meta:
+                        meta[f'{tracker_name}_cross_seed'] = local_meta[f'{tracker_name}_cross_seed']
+
                 elif 'skipping' in local_meta:
                     local_tracker_status['skipped'] = True
 

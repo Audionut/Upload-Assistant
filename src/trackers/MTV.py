@@ -184,7 +184,10 @@ class MTV():
                 return
         else:
             console.print("[cyan]MTV Request Data:")
-            console.print(data)
+            debug_data = data.copy()
+            if 'auth' in debug_data:
+                debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
+            console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
 
@@ -706,7 +709,8 @@ class MTV():
                                 'files': each.find('title').text,
                                 'file_count': each.find('files').text,
                                 'size': each.find('size').text,
-                                'link': each.find('guid').text
+                                'link': each.find('guid').text,
+                                'download': each.find('link').text
                             }
                             dupes.append(result)
                     except ET.ParseError:

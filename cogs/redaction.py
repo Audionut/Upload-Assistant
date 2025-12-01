@@ -3,7 +3,7 @@ import re
 import json
 
 SENSITIVE_KEYS = {
-    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken"
+    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass"
 }
 
 
@@ -15,7 +15,7 @@ def redact_value(val):
         # Redact content between /proxy/ and /api (e.g. /proxy/<secret>/api)
         val = re.sub(r'(?<=/proxy/)[^/]+(?=/api)', '[REDACTED]', val)
         # Redact query params like ?passkey=... or &token=...
-        val = re.sub(r'([?&](passkey|key|token|auth|info_hash)=)[^&]+', r'\1[REDACTED]', val, flags=re.I)
+        val = re.sub(r'([?&](passkey|key|token|auth|info_hash|torrent_pass)=)[^&]+', r'\1[REDACTED]', val, flags=re.I)
         # Redact long hex or base64-like strings (common for tokens)
         val = re.sub(r'\b[a-fA-F0-9]{32,}\b', '[REDACTED]', val)
     return val
