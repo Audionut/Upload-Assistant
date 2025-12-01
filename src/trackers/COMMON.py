@@ -921,7 +921,10 @@ class COMMON():
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
                     )
 
-            return (audio_ok and subtitle_ok) if require_both else (audio_ok or subtitle_ok)
+            if require_both:
+                return audio_ok and subtitle_ok
+            else:
+                return audio_ok or subtitle_ok
 
         except Exception as e:
             console.print(f"[red]Error checking language requirements: {e}[/red]")

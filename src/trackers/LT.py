@@ -92,7 +92,7 @@ class LT(UNIT3D):
         spanish_languages = [
             "Spanish", "Spanish (Latin America)", "spanish", "spanish (latin america)"
         ]
-        if await self.common.check_language_requirements(
+        if not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True
         ):
             return False
