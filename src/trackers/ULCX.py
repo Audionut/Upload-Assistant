@@ -1,13 +1,11 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-# import discord
 import aiofiles
 import cli_ui
 import re
-
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language, has_english_language
-from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -15,7 +13,6 @@ class ULCX(UNIT3D):
     def __init__(self, config):
         super().__init__(config, tracker_name='ULCX')
         self.config = config
-        self.common = COMMON(config)
         self.tracker = 'ULCX'
         self.source_flag = 'ULCX'
         self.base_url = 'https://upload.cx'
@@ -82,10 +79,7 @@ class ULCX(UNIT3D):
         return data
 
     async def get_description(self, meta):
-        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
-            desc = await f.read()
+        desc = await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']

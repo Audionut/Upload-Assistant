@@ -6,8 +6,8 @@ import traceback
 
 from cogs.redaction import redact_private_info
 from src.cleanup import cleanup, reset_terminal
+from src.get_desc import DescriptionBuilder
 from src.manualpackage import package
-from src.trackers.COMMON import COMMON
 from src.trackers.PTP import PTP
 from src.trackers.THR import THR
 from src.trackersetup import TRACKER_SETUP
@@ -40,7 +40,6 @@ async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
 
 
 async def process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers):
-    common = COMMON(config=config)
     tracker_setup = TRACKER_SETUP(config=config)
     enabled_trackers = tracker_setup.trackers_enabled(meta)
 
@@ -136,7 +135,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         manual_tracker = manual_tracker.replace(" ", "").upper().strip()
                         tracker_class = tracker_class_map[manual_tracker](config=config)
                         if manual_tracker in api_trackers:
-                            await common.unit3d_edit_desc(meta, tracker_class.tracker, tracker_class.signature)
+                            await DescriptionBuilder(config).unit3d_edit_desc(meta, tracker_class.tracker, tracker_class.signature)
                         else:
                             await tracker_class.edit_desc(meta)
                 url = await package(meta)

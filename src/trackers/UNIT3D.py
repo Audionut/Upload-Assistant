@@ -9,6 +9,7 @@ import os
 import platform
 import re
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
 
@@ -99,11 +100,7 @@ class UNIT3D:
         return {'name': meta['name']}
 
     async def get_description(self, meta):
-        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
-            desc = await f.read()
-        return {'description': desc}
+        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:

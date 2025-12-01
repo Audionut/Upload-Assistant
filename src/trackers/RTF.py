@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
+import aiofiles
 import asyncio
 import base64
-import re
 import datetime
 import httpx
-import aiofiles
-
-from src.trackers.COMMON import COMMON
+import re
 from src.console import console
+from src.get_desc import DescriptionBuilder
+from src.trackers.COMMON import COMMON
 
 
 class RTF():
@@ -35,7 +35,7 @@ class RTF():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await common.edit_torrent(meta, self.tracker, self.source_flag)
-        await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
+        await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:

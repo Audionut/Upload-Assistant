@@ -652,22 +652,23 @@ class Prep():
         meta['video_duration'] = await get_video_duration(meta)
         duration = meta.get('video_duration', None)
 
+        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+            unattended = False
+        else:
+            unattended = True
+        if meta.get('emby_debug', False) or meta['debug']:
+            debug = True
+        else:
+            debug = False
+
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                unattended = False
-            else:
-                unattended = True
             if meta.get('category') == "TV":
                 year = meta.get('manual_year', '') or meta.get('search_year', '') or meta.get('year', '')
             elif meta.get('emby_debug', False):
                 year = ""
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
-            if meta.get('emby_debug', False) or meta['debug']:
-                debug = True
-            else:
-                debug = False
             tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
             imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
@@ -726,7 +727,11 @@ class Prep():
 
         # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:
-            meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
+            try:
+                meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, attempted=0, duration=duration, unattended=unattended)
+            except Exception as e:
+                console.print(f"[red]Error searching IMDb: {e}[/red]")
+                raise Exception(f"Error searching IMDb: {e}")
 
         # user might have skipped tmdb earlier, lets double check
         if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:

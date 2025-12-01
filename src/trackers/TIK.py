@@ -7,7 +7,7 @@ import os
 import re
 import urllib.request
 from src.console import console
-from src.trackers.COMMON import COMMON
+from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
 from src.uploadscreens import upload_screens
 
@@ -16,7 +16,6 @@ class TIK(UNIT3D):
     def __init__(self, config):
         super().__init__(config, tracker_name='TIK')
         self.config = config
-        self.common = COMMON(config)
         self.tracker = 'TIK'
         self.source_flag = 'TIK'
         self.base_url = 'https://cinematik.net'
@@ -167,11 +166,8 @@ class TIK(UNIT3D):
         return {'resolution_id': resolution_id}
 
     async def get_description(self, meta):
-        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
         if meta.get('description_link') or meta.get('description_file'):
-            async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'r', encoding='utf-8') as f:
-                desc = await f.read()
+            desc = await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)
 
             print(f'Custom Description Link/File Path: {desc}')
             return {'description': desc}
