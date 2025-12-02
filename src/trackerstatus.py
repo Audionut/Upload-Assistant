@@ -145,7 +145,7 @@ async def process_all_trackers(meta):
 
                 we_already_asked = local_meta.get('we_asked', False)
 
-            if local_meta['debug']:
+            if not local_meta['debug']:
                 if not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
                     if not local_meta.get('unattended', False):
                         console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")

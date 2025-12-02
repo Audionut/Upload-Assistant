@@ -900,8 +900,8 @@ async def upload_prompt(meta, tracker_name, dupe_checking=False):
     if edit_choice == "y":
         return True
 
-    if edit_choice == "e":
-        current_name = tracker_renames.get(tracker_name) or meta.get("name", "")
+    if edit_choice == "e" and tracker_renames.get(tracker_name):
+        current_name = tracker_renames.get(tracker_name)
 
         console.print(f"Current name: {current_name}")
         new_name = input("Enter new name: ").strip()
