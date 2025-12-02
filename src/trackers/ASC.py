@@ -331,9 +331,7 @@ class ASC:
         Edits the name according to ASC's naming conventions.
         """
         # Loads the TMDB data so that the upload prompt works
-        try:
-            self.main_tmdb_data
-        except AttributeError:
+        if not hasattr(self, 'main_tmdb_data'):
             await self.load_localized_data(meta)
 
         rename = meta.get("tracker_renames", {}).get(self.tracker)

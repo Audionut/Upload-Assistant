@@ -34,6 +34,8 @@ class UploadHelper:
                     display_name = tracker_rename
 
             if display_name:
+                if 'tracker_renames' not in meta:
+                    meta['tracker_renames'] = {}
                 meta['tracker_renames'][tracker_name] = display_name
 
             if display_name is not None and display_name != "" and display_name != local_meta['name']:

@@ -907,6 +907,8 @@ async def upload_prompt(meta, tracker_name, dupe_checking=False):
         new_name = input("Enter new name: ").strip()
 
         if new_name and new_name != current_name:
+            if "tracker_renames" not in meta:
+                meta["tracker_renames"] = {}
             meta["tracker_renames"][tracker_name] = new_name
             console.print(f"[bold green]Name updated to: {new_name}[/bold green]")
         else:

@@ -169,17 +169,23 @@ async def process_all_trackers(meta):
                                 display_name = tracker_rename
 
                         if display_name:
+                            if 'tracker_renames' not in meta:
+                                meta['tracker_renames'] = {}
                             meta['tracker_renames'][tracker_name] = display_name
 
                         if display_name is not None and display_name != "" and display_name != meta['name']:
                             console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
                         try:
-                            manual_upload_confirmation = await upload_prompt(meta=meta, tracker_name=tracker_name)
-                            if local_meta['unattended'] or manual_upload_confirmation:
+                            if local_meta['unattended']:
                                 local_tracker_status['upload'] = True
                                 successful_trackers += 1
                             else:
-                                local_tracker_status['upload'] = False
+                                manual_upload_confirmation = await upload_prompt(meta=meta, tracker_name=tracker_name)
+                                if manual_upload_confirmation:
+                                    local_tracker_status['upload'] = True
+                                    successful_trackers += 1
+                                else:
+                                    local_tracker_status['upload'] = False
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
