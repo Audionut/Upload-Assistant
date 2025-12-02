@@ -873,3 +873,45 @@ class COMMON():
                 mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo
+
+
+async def upload_prompt(meta, tracker_name, dupe_checking=False):
+    """
+    Prompts the user whether to upload the torrent, skip, or edit the name before uploading.
+    Modifies 'meta["tracker_renames"]' in place if a new name is provided.
+    """
+    tracker_renames = meta.get("tracker_renames", {})
+
+    prompt_parts = ["[bold green]'y'[/bold green] to upload"]
+    if tracker_renames.get(tracker_name):
+        prompt_parts.append("[bold yellow]'e'[/bold yellow] to edit name")
+    prompt_parts.append("[bold red]'Enter'[/bold red] to skip")
+    upload_prompt_text = " / ".join(prompt_parts) + ":"
+
+    if dupe_checking:
+        # Custom message for duplicate scenario
+        console.print(f"Upload to {tracker_name} anyway? {upload_prompt_text}")
+    else:
+        # Standard upload prompt
+        console.print(upload_prompt_text)
+
+    edit_choice = input().lower()
+
+    if edit_choice == "y":
+        return True
+
+    if edit_choice == "e":
+        current_name = tracker_renames.get(tracker_name) or meta.get("name", "")
+
+        console.print(f"Current name: {current_name}")
+        new_name = input("Enter new name: ").strip()
+
+        if new_name and new_name != current_name:
+            meta["tracker_renames"][tracker_name] = new_name
+            console.print(f"[bold green]Name updated to: {new_name}[/bold green]")
+        else:
+            console.print("[bold yellow]No name change requested or entered name is the same.[/bold yellow]")
+
+        return True
+
+    return False

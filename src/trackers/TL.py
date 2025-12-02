@@ -206,14 +206,18 @@ class TL:
 
         return screenshot_urls
 
-    def get_name(self, meta):
-        is_scene = bool(meta.get('scene_name'))
-        if is_scene:
-            name = meta['scene_name']
-        else:
-            name = meta['name'].replace(meta['aka'], '')
+    async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
 
-        return name
+        if meta.get('scene_name'):
+            return meta.get('scene_name')
+        else:
+            tl_name = meta.get('name').replace(meta['aka'], '')
+            tl_name = re.sub(r"\s{2,}", " ", tl_name)
+            tl_name = tl_name.replace(' ', '.')
+        return tl_name
 
     async def search_existing(self, meta, disctype):
         login = await self.login(meta, force=True)
@@ -308,14 +312,14 @@ class TL:
 
         with open(torrent_path, 'rb') as open_torrent:
             files = {
-                'torrent': (self.get_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
+                'torrent': (await self.edit_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
             }
 
             data = {
                 'announcekey': self.passkey,
                 'category': self.get_category(meta),
                 'description': await self.generate_description(meta),
-                'name': self.get_name(meta),
+                'name': await self.edit_name(meta),
                 'nonscene': 'on' if not meta.get('scene') else 'off',
             }
 
@@ -364,7 +368,7 @@ class TL:
             tvMazeURL = f"https://www.tvmaze.com/shows/{meta.get('tvmaze_id')}"
 
         data = {
-            'name': self.get_name(meta),
+            'name': await self.edit_name(meta),
             'category': self.get_category(meta),
             'nonscene': 'on' if not meta.get("scene") else 'off',
             'imdbURL': str(meta.get('imdb_info', {}).get('imdb_url', '')),

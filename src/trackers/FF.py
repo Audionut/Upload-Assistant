@@ -435,6 +435,10 @@ class FF:
             return 'x264'
 
     async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         if meta.get("scene", False):
             if meta.get("scene_name", ""):
                 ff_name = meta.get("scene_name")

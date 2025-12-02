@@ -14,8 +14,7 @@ from src.exceptions import *  # noqa #F405
 from src.console import console
 
 
-class TTG():
-
+class TTG:
     def __init__(self, config):
         self.config = config
         self.tracker = 'TTG'
@@ -31,8 +30,11 @@ class TTG():
         self.banned_groups = [""]
 
     async def edit_name(self, meta):
-        ttg_name = meta['name']
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
 
+        ttg_name = meta['name']
         remove_list = ['Dubbed', 'Dual-Audio']
         for each in remove_list:
             ttg_name = ttg_name.replace(each, '')

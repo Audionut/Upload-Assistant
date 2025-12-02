@@ -223,8 +223,11 @@ class SPD:
         return description
 
     async def edit_name(self, meta):
-        torrent_name = meta['name']
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
 
+        torrent_name = meta['name']
         name = torrent_name.replace(':', ' -')
         name = unicodedata.normalize("NFKD", name)
         name = name.encode("ascii", "ignore").decode("ascii")

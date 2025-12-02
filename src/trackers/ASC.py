@@ -326,7 +326,20 @@ class ASC:
 
         return '20'
 
-    async def get_title(self, meta):
+    async def edit_name(self, meta):
+        """
+        Edits the name according to ASC's naming conventions.
+        """
+        # Loads the TMDB data so that the upload prompt works
+        try:
+            self.main_tmdb_data
+        except AttributeError:
+            await self.load_localized_data(meta)
+
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         name = meta['title']
         base_name = name
 
@@ -363,7 +376,7 @@ class ASC:
         for i in range(1, 4):
             description_parts.append(await self.format_image(layout_image.get(f'BARRINHA_CUSTOM_T_{i}')))
         description_parts.append(f"\n{await self.format_image(layout_image.get('BARRINHA_APRESENTA'))}\n")
-        description_parts.append(f"\n[size=3]{await self.get_title(meta)}[/size]\n")
+        description_parts.append(f"\n[size=3]{await self.edit_name(meta)}[/size]\n")
 
         # Poster
         poster_path = (self.season_tmdb_data or {}).get('poster_path') or (self.main_tmdb_data or {}).get('poster_path') or meta.get('tmdb_poster')
@@ -551,7 +564,7 @@ class ASC:
         found_items = []
         if meta.get('anime'):
             await self.load_localized_data(meta)
-            search_name = await self.get_title(meta)
+            search_name = await self.edit_name(meta)
             search_query = search_name.replace(' ', '+')
             search_url = f'{self.base_url}/torrents-search.php?search={search_query}'
 
@@ -825,7 +838,7 @@ class ASC:
             'lang': self.language_map.get(meta.get('original_language', '').lower(), '11'),
             'layout': self.layout,
             'legenda': await self.get_subtitle(meta),
-            'name': await self.get_title(meta),
+            'name': await self.edit_name(meta),
             'qualidade': await self.get_type(meta),
             'takeupload': 'yes',
             'tresd': '1' if meta.get('3d') else '2',

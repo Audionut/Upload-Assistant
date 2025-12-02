@@ -15,8 +15,7 @@ from src.exceptions import *  # noqa E403
 from src.console import console
 
 
-class PTER():
-
+class PTER:
     def __init__(self, config):
         self.config = config
         self.tracker = 'PTER'
@@ -289,8 +288,11 @@ class PTER():
         return image_list
 
     async def edit_name(self, meta):
-        pter_name = meta['name']
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
 
+        pter_name = meta['name']
         remove_list = ['Dubbed', 'Dual-Audio']
         for each in remove_list:
             pter_name = pter_name.replace(each, '')

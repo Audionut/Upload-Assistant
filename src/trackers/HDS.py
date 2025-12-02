@@ -274,10 +274,18 @@ class HDS:
                 print(f'An error occurred while fetching requests: {e}')
                 return []
 
+    async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
+        name = meta['name']
+        return name
+
     async def get_data(self, meta):
         data = {
             'category': await self.get_category_id(meta),
-            'filename': meta['name'],
+            'filename': await self.edit_name(meta),
             'genre': meta.get('genres', ''),
             'imdb': meta.get('imdb', ''),
             'info': await self.generate_description(meta),

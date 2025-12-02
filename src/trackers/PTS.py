@@ -181,9 +181,17 @@ class PTS:
 
         return found_items
 
+    async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
+        name = meta['name']
+        return name
+
     async def get_data(self, meta):
         data = {
-            'name': meta['name'],
+            'name': await self.edit_name(meta),
             'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
             'descr': await self.generate_description(meta),
             'type': await self.get_type(meta),

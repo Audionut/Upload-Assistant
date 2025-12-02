@@ -110,6 +110,10 @@ class HDT:
         return cat_id
 
     async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         hdt_name = meta['name']
         if meta.get('type') in ('WEBDL', 'WEBRIP', 'ENCODE'):
             hdt_name = hdt_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1))

@@ -8,21 +8,22 @@ from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackersetup import tracker_class_map
+from src.trackers.COMMON import upload_prompt
 
 
 class UploadHelper:
-    async def dupe_check(self, dupes, meta, tracker_name):
+    async def dupe_check(self, dupes, meta, local_meta, tracker_name):
         if not dupes:
-            if meta['debug']:
+            if local_meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
             return False
         else:
             tracker_class = tracker_class_map[tracker_name](config=config)
             try:
-                tracker_rename = await tracker_class.get_name(meta)
+                tracker_rename = await tracker_class.get_name(local_meta)
             except Exception:
                 try:
-                    tracker_rename = await tracker_class.edit_name(meta)
+                    tracker_rename = await tracker_class.edit_name(local_meta)
                 except Exception:
                     tracker_rename = None
             display_name = None
@@ -32,10 +33,13 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
-            if display_name is not None and display_name != "" and display_name != meta['name']:
+            if display_name:
+                meta['tracker_renames'][tracker_name] = display_name
+
+            if display_name is not None and display_name != "" and display_name != local_meta['name']:
                 console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
 
-            if meta.get('trumpable', False):
+            if local_meta.get('trumpable', False):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
                 if trumpable_dupes:
                     trumpable_text = "\n".join([
@@ -45,24 +49,24 @@ class UploadHelper:
                     console.print("[bold red]Trumpable found![/bold red]")
                     console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
 
-                    meta['aither_trumpable'] = [
+                    local_meta['aither_trumpable'] = [
                         {'name': d.get('name'), 'link': d.get('link')}
                         for d in trumpable_dupes
                     ]
 
                 # Remove trumpable dupes from the main list
                 dupes = [d for d in dupes if not (isinstance(d, dict) and d.get('trumpable'))]
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
+            if (not local_meta['unattended'] or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))) and not local_meta.get('ask_dupe', False):
                 dupe_text = "\n".join([
                     f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d and d['link'] is not None else (d['name'] if isinstance(d, dict) else d)
                     for d in dupes
                 ])
-                if not dupe_text and meta.get('trumpable', False):
+                if not dupe_text and local_meta.get('trumpable', False):
                     console.print("[yellow]Please check the trumpable entries above to see if you want to upload, and report the trumpable torrent if you upload.[/yellow]")
-                    if meta.get('dupe', False) is False:
+                    if local_meta.get('dupe', False) is False:
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            upload = await upload_prompt(meta=meta, tracker_name=tracker_name, dupe_checking=True)
+                            local_meta['we_asked'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
@@ -70,13 +74,13 @@ class UploadHelper:
                             sys.exit(1)
                     else:
                         upload = True
-                        meta['we_asked'] = False
+                        local_meta['we_asked'] = False
                 else:
-                    if meta.get('filename_match', False) and meta.get('file_count_match', False):
-                        console.print(f'[bold red]Exact filename matches found! - {meta["filename_match"]}[/bold red]')
+                    if local_meta.get('filename_match', False) and local_meta.get('file_count_match', False):
+                        console.print(f'[bold red]Exact filename matches found! - {local_meta["filename_match"]}[/bold red]')
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            upload = await upload_prompt(meta=meta, tracker_name=tracker_name, dupe_checking=True)
+                            local_meta['we_asked'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
@@ -86,10 +90,10 @@ class UploadHelper:
                         console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
                         console.print()
                         console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
-                        if meta.get('dupe', False) is False:
+                        if local_meta.get('dupe', False) is False:
                             try:
-                                upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                                meta['we_asked'] = True
+                                upload = await upload_prompt(meta=meta, tracker_name=tracker_name, dupe_checking=True)
+                                local_meta['we_asked'] = True
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                                 await cleanup()
@@ -98,7 +102,7 @@ class UploadHelper:
                         else:
                             upload = True
             else:
-                if meta.get('dupe', False) is False:
+                if local_meta.get('dupe', False) is False:
                     upload = False
                 else:
                     upload = True
@@ -108,8 +112,8 @@ class UploadHelper:
             else:
                 for each in dupes:
                     each_name = each['name'] if isinstance(each, dict) else each
-                    if each_name == meta['name']:
-                        meta['name'] = f"{meta['name']} DUPE?"
+                    if each_name == local_meta['name']:
+                        local_meta['name'] = f"{local_meta['name']} DUPE?"
 
                 return False
 

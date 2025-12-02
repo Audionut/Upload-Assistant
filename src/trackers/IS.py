@@ -240,7 +240,11 @@ class IS:
             nfo_filename = f"{meta.get('scene_name', meta['uuid'])}.nfo"
             return {'nfofile': (nfo_filename, nfo_bytes, "application/octet-stream")}
 
-    def get_name(self, meta):
+    async def get_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         if meta.get('scene_name'):
             return meta.get('scene_name')
         else:
@@ -254,7 +258,7 @@ class IS:
             'UseNFOasDescr': 'no',
             'message': f"{meta.get('overview', '')}\n\n[youtube]{meta.get('youtube', '')}[/youtube]",
             'category': await self.get_category_id(meta),
-            'subject': self.get_name(meta),
+            'subject': await self.get_name(meta),
             'nothingtopost': "1",
             't_image_url': meta.get('poster'),
             'submit': 'Upload Torrent',

@@ -17,6 +17,7 @@ from src.torrentcreate import create_base_from_existing_torrent
 from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP, tracker_class_map
 from src.uphelper import UploadHelper
+from src.trackers.COMMON import upload_prompt
 
 
 async def process_all_trackers(meta):
@@ -112,7 +113,7 @@ async def process_all_trackers(meta):
                 if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                     dupes = await filter_dupes(dupes, local_meta, tracker_name)
                     meta['we_asked'] = False
-                    is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
+                    is_dupe = await helper.dupe_check(dupes, meta, local_meta, tracker_name)
                     if is_dupe:
                         local_tracker_status['dupe'] = True
 
@@ -144,7 +145,7 @@ async def process_all_trackers(meta):
 
                 we_already_asked = local_meta.get('we_asked', False)
 
-            if not local_meta['debug']:
+            if local_meta['debug']:
                 if not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
                     if not local_meta.get('unattended', False):
                         console.print(f"[bold yellow]Tracker '{tracker_name}' passed all checks.")
@@ -167,11 +168,14 @@ async def process_all_trackers(meta):
                             elif isinstance(tracker_rename, str):
                                 display_name = tracker_rename
 
+                        if display_name:
+                            meta['tracker_renames'][tracker_name] = display_name
+
                         if display_name is not None and display_name != "" and display_name != meta['name']:
                             console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
                         try:
-                            edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
-                            if edit_choice.lower() == 'y':
+                            manual_upload_confirmation = await upload_prompt(meta=meta, tracker_name=tracker_name)
+                            if local_meta['unattended'] or manual_upload_confirmation:
                                 local_tracker_status['upload'] = True
                                 successful_trackers += 1
                             else:

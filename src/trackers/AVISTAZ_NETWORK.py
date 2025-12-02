@@ -720,10 +720,14 @@ class AZTrackerBase:
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
-    def edit_name(self, meta):
+    async def edit_name(self, meta):
         # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
         # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
         # https://privatehd.to/rules/upload-rules
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         upload_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
 
         if self.tracker == 'PHD':
@@ -844,7 +848,7 @@ class AZTrackerBase:
             '_token': self.az_class.secret_token,
             'torrent_id': '',
             'type_id': await self.get_cat_id(meta['category']),
-            'file_name': self.edit_name(meta),
+            'file_name': await self.edit_name(meta),
             'anon_upload': '',
             'description': await self.edit_desc(meta),
             'qqfile': '',

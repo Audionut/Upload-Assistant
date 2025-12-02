@@ -19,7 +19,7 @@ from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
 
 
-class HDB():
+class HDB:
 
     def __init__(self, config):
         self.config = config
@@ -176,6 +176,10 @@ class HDB():
         return tags
 
     async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         hdb_name = meta['name']
         hdb_name = hdb_name.replace('H.265', 'HEVC')
         if meta.get('source', '').upper() == 'WEB' and meta.get('service', '').strip() != '':

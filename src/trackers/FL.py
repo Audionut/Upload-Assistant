@@ -15,7 +15,7 @@ from src.exceptions import *  # noqa F403
 from src.console import console
 
 
-class FL():
+class FL:
 
     def __init__(self, config):
         self.config = config
@@ -73,6 +73,10 @@ class FL():
         return cat_id
 
     async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         fl_name = meta['name']
         if 'DV' in meta.get('hdr', ''):
             fl_name = fl_name.replace(' DV ', ' DoVi ')

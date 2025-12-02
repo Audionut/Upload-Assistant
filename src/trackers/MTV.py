@@ -20,15 +20,7 @@ from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
 
 
-class MTV():
-    """
-    Edit for Tracker:
-        Edit BASE.torrent with announce and source
-        Check for duplicates
-        Set type/category IDs
-        Upload
-    """
-
+class MTV:
     def __init__(self, config):
         self.config = config
         self.tracker = 'MTV'
@@ -254,6 +246,10 @@ class MTV():
         return description
 
     async def edit_name(self, meta):
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename:
+            return rename
+
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
         if meta['scene'] is True:
             if meta.get('scene_name') != "":

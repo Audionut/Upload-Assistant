@@ -327,6 +327,10 @@ class UNIT3D:
                 raise TypeError(f'Expected dict, got {type(r)}: {r}')
             merged.update(r)
 
+        rename = meta.get("tracker_renames", {}).get(self.tracker)
+        if rename and rename != merged["name"]:
+            merged["name"] = rename
+
         return merged
 
     async def get_additional_files(self, meta):
