@@ -352,8 +352,7 @@ class TL:
                     torrent_id = str(response.text)
                     meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
 
             else:
                 console.print(data)
