@@ -121,8 +121,37 @@ class RTF():
             return []
 
         year = meta.get('year')
-        if meta.get('category') == "TV" and meta.get('tvdb_episode_year') is not None:
-            year = int(meta['tvdb_episode_year'])
+        # Collect all possible years from different sources
+        years = []
+
+        # IMDB end year
+        imdb_end_year = meta.get('imdb_info', {}).get('end_year')
+        if imdb_end_year:
+            years.append(int(imdb_end_year))
+
+        # TVDB episode year
+        tvdb_episode_year = meta.get('tvdb_episode_year')
+        if tvdb_episode_year:
+            years.append(int(tvdb_episode_year))
+
+        # Get most recent aired date from all TVDB episodes
+        tvdb_episodes = meta.get('tvdb_episode_data', {}).get('episodes', [])
+        if tvdb_episodes:
+            for episode in tvdb_episodes:
+                aired_date = episode.get('aired', '')
+                if aired_date and '-' in aired_date:
+                    try:
+                        episode_year = int(aired_date.split('-')[0])
+                        years.append(episode_year)
+                    except (ValueError, IndexError):
+                        continue
+
+        # Use the most recent year found, fallback to meta year
+        most_recent_year = max(years) if years else year
+
+        # Update year with the most recent year for TV shows
+        if meta.get('category') == "TV":
+            year = most_recent_year
         if datetime.date.today().year - year <= 9:
             console.print("[red]Content must be older than 10 Years to upload at RTF")
             meta['skipping'] = "RTF"
