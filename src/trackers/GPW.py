@@ -36,6 +36,15 @@ class GPW():
             'SM737', 'SonyHD', 'STUTTERSHIT', 'TAGWEB', 'ViSION', 'VXT', 'WAF', 'x0r', 'Xiaomi', 'YIFY',
             ['EVO', 'web-dl Only']
         ]
+        self.approved_image_hosts = ['kshare', 'pixhost', 'ptpimg', 'pterclub', 'ilikeshots', 'imgbox']
+        self.url_host_mapping = {
+            'kshare.club': 'kshare',
+            'pixhost.to': 'pixhost',
+            'imgbox.com': 'imgbox',
+            'ptpimg.me': 'ptpimg',
+            'img.pterclub.com': 'pterclub',
+            'yes.ilikeshots.club': 'ilikeshots',
+        }
 
     async def load_cookies(self, meta):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
@@ -173,17 +182,8 @@ class GPW():
         return title if title and title != meta.get('title') else ''
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['kshare', 'pixhost', 'ptpimg', 'pterclub', 'ilikeshots', 'imgbox']
-        url_host_mapping = {
-            'kshare.club': 'kshare',
-            'pixhost.to': 'pixhost',
-            'imgbox.com': 'imgbox',
-            'ptpimg.me': 'ptpimg',
-            'img.pterclub.com': 'pterclub',
-            'yes.ilikeshots.club': 'ilikeshots',
-        }
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def get_release_desc(self, meta):
