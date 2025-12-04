@@ -236,6 +236,9 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
                 language {{
                     text
                 }}
+                attributes {{
+                    text
+                }}
                 }}
             }}
             }}
@@ -359,6 +362,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             "title": await safe_get(edge, ['node', 'text']),
             "country": await safe_get(edge, ['node', 'country', 'text']),
             "language": await safe_get(edge, ['node', 'language', 'text']),
+            "attributes": await safe_get(edge, ['node', 'attributes'], []),
         }
         for edge in akas_edges
     ]
