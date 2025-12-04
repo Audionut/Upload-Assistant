@@ -30,6 +30,7 @@ class HUNO(UNIT3D):
             'MRN', 'Musafirboy', 'OEPlus', 'Pahe.in', 'PHOCiS', 'PSA', 'RARBG', 'RMTeam',
             'ShieldBearer', 'SiQ', 'TBD', 'Telly', 'TSP', 'VXT', 'WKS', 'YAWNiX', 'YIFY', 'YTS'
         ]
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
         pass
 
     async def get_additional_checks(self, meta):
@@ -87,7 +88,7 @@ class HUNO(UNIT3D):
     async def get_stream(self, meta):
         return {'stream': await self.is_plex_friendly(meta)}
 
-    async def get_description(self, meta):
+    async def check_image_hosts(self, meta):
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -95,14 +96,15 @@ class HUNO(UNIT3D):
             "imgbox.com": "imgbox",
             "imagebam.com": "bam",
         }
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+
+    async def get_description(self, meta):
         if 'HUNO_images_key' in meta:
             image_list = meta['HUNO_images_key']
         else:
             image_list = meta['image_list']
 
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=approved_image_hosts)}
+        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
