@@ -290,7 +290,8 @@ class ANT:
                                 'size': int(each.get('size', 0)),
                                 'link': each.get('guid', ''),
                                 'flags': each.get('flags', []),
-                                'file_count': each.get('fileCount', 0)
+                                'file_count': each.get('fileCount', 0),
+                                'download': each.get('link', '').replace('&amp;', '&'),
                             }
                             dupes.append(result)
 

@@ -67,14 +67,16 @@ class UNIT3D:
                                 'files': [file['name'] for file in attributes.get('files', []) if isinstance(file, dict) and 'name' in file],
                                 'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
                                 'trumpable': attributes.get('trumpable', False),
-                                'link': attributes.get('details_link', None)
+                                'link': attributes.get('details_link', None),
+                                'download': attributes.get('download_link', None)
                             }
                         else:
                             result = {
                                 'name': attributes['name'],
                                 'size': attributes['size'],
                                 'trumpable': attributes.get('trumpable', False),
-                                'link': attributes.get('details_link', None)
+                                'link': attributes.get('details_link', None),
+                                'download': attributes.get('download_link', None)
                             }
                         dupes.append(result)
                 else:
