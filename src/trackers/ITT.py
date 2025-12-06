@@ -161,20 +161,15 @@ class ITT(UNIT3D):
         return dubs
 
     async def get_additional_checks(self, meta):
-        should_continue = True
         # From rules:
         # "Non sono ammessi film e serie tv che non comprendono il doppiaggio in italiano."
         # Translates to "Films and TV series that do not include Italian dubbing are not permitted."
-        if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        italian_languages = ["Italian", "Italiano"]
-        if not any(
-            lang in meta.get("audio_languages", []) for lang in italian_languages
+        italian_languages = ["italian", "italiano"]
+        if not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=italian_languages, check_audio=True
         ):
             console.print(
-                "[bold red]Films and TV series that do not include Italian dubbing are not permitted.[/bold red]\n"
                 "Upload Rules: https://itatorrents.xyz/wikis/5"
             )
             return False
-
-        return should_continue
+        return True
