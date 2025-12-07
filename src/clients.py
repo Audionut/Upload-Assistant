@@ -297,7 +297,10 @@ class Clients():
                 proxy_url = client.get('qui_proxy_url')
 
                 if proxy_url:
-                    qbt_session = aiohttp.ClientSession()
+                    qbt_session = aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                    )
                 else:
                     qbt_client = await self.init_qbittorrent_client(client)
 
@@ -565,7 +568,10 @@ class Clients():
                     return None
                 qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
-                qbt_session = aiohttp.ClientSession()
+                qbt_session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                )
 
         except qbittorrentapi.LoginFailed:
             console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
@@ -1181,7 +1187,10 @@ class Clients():
         qbt_session = None
 
         if proxy_url:
-            qbt_session = aiohttp.ClientSession()
+            qbt_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+            )
             qbt_proxy_url = proxy_url.rstrip('/')
         else:
             potential_qbt_client = await self.init_qbittorrent_client(client)
@@ -1594,7 +1603,10 @@ class Clients():
             qbt_session = None
 
             if proxy_url:
-                qbt_session = aiohttp.ClientSession()
+                qbt_session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                )
                 qbt_proxy_url = proxy_url.rstrip('/')
             else:
                 potential_qbt_client = await self.init_qbittorrent_client(client)
