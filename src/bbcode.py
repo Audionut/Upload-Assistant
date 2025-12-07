@@ -632,6 +632,13 @@ class BBCODE:
         desc = desc.replace('[sub]', '').replace('[/sub]', '')
         return desc
 
+    def remove_list(self, desc):
+        '''
+        Removes [list] tags
+        '''
+        desc = desc.replace('[list]', '').replace('[/list]', '')
+        return desc
+
     def convert_comparison_to_collapse(self, desc, max_width):
         comparisons = re.findall(r"\[comparison=[\s\S]*?\[\/comparison\]", desc)
         for comp in comparisons:
