@@ -284,7 +284,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client, print_err=True)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name, print_err=True)
 
                 if valid:
                     return resolved_path
@@ -397,7 +397,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client, print_err=False
+                        meta, found_torrent_path, found_hash, torrent_client, client_name, print_err=False
                     )
                 else:
                     valid = False
