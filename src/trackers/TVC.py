@@ -212,6 +212,31 @@ class TVC():
                 return f.read()
         return await asyncio.to_thread(_read)
 
+    async def check_image_hosts(self, meta):
+        """
+        Wrapper for image host validation.
+
+        Ensures screenshots are uploaded to approved hosts and rewrites
+        meta['image_list'] accordingly. Called externally by upload.py.
+        """
+        url_host_mapping = {
+            "ibb.co": "imgbb",
+            "ptpimg.me": "ptpimg",
+            "imgbox.com": "imgbox",
+            "pixhost.to": "pixhost",
+            "imagebam.com": "bam",
+            "onlyimage.org": "onlyimage",
+        }
+
+        approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
+        await check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=approved_image_hosts
+        )
+
     async def upload(self, meta, disctype):
         """
         Perform upload of torrent metadata to TVC.
@@ -228,18 +253,8 @@ class TVC():
             RuntimeError: If upload fails with non-200 HTTP status.
         """
         common = COMMON(config=self.config)
-        url_host_mapping = {
-            "ibb.co": "imgbb",
-            "ptpimg.me": "ptpimg",
-            "imgbox.com": "imgbox",
-            "pixhost.to": "pixhost",
-            "imagebam.com": "bam",
-            "onlyimage.org": "onlyimage",
-        }
-
-        approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping,
-                          img_host_index=1, approved_image_hosts=approved_image_hosts)
+        # validate image hosts via wrapper
+        await self.check_image_hosts(meta)
 
         image_list = meta.get('TVC_images_key', meta.get('image_list', []))
         if not isinstance(image_list, (list, tuple)):
