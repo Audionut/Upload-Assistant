@@ -1560,12 +1560,16 @@ class Clients():
         return metainfo
 
     async def remote_path_map(self, meta, torrent_client_name=None):
-        if torrent_client_name:
-            torrent_client = torrent_client_name
+        if isinstance(torrent_client_name, dict):
+            client_config = torrent_client_name
+        elif isinstance(torrent_client_name, str) and torrent_client_name:
+            try:
+                client_config = self.config['TORRENT_CLIENTS'][torrent_client_name]
+            except KeyError as exc:
+                raise KeyError(f"Torrent client '{torrent_client_name}' not found in TORRENT_CLIENTS") from exc
         else:
-            raise ValueError("torrent_client_name must be provided for remote_path_map")
+            raise ValueError("torrent_client_name must be a client name or client config dict")
 
-        client_config = self.config['TORRENT_CLIENTS'][torrent_client]
         local_paths = client_config.get('local_path', ['/LocalPath'])
         remote_paths = client_config.get('remote_path', ['/RemotePath'])
 
