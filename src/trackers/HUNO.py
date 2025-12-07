@@ -3,10 +3,11 @@
 import aiofiles
 import os
 import re
-from src.trackers.COMMON import COMMON
 from src.console import console
-from src.rehostimages import check_hosts
+from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
+from src.rehostimages import check_hosts
+from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -29,6 +30,7 @@ class HUNO(UNIT3D):
             'MRN', 'Musafirboy', 'OEPlus', 'Pahe.in', 'PHOCiS', 'PSA', 'RARBG', 'RMTeam',
             'ShieldBearer', 'SiQ', 'TBD', 'Telly', 'TSP', 'VXT', 'WKS', 'YAWNiX', 'YIFY', 'YTS'
         ]
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
         pass
 
     async def get_additional_checks(self, meta):
@@ -86,7 +88,7 @@ class HUNO(UNIT3D):
     async def get_stream(self, meta):
         return {'stream': await self.is_plex_friendly(meta)}
 
-    async def get_description(self, meta):
+    async def check_image_hosts(self, meta):
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -94,18 +96,15 @@ class HUNO(UNIT3D):
             "imgbox.com": "imgbox",
             "imagebam.com": "bam",
         }
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+
+    async def get_description(self, meta):
         if 'HUNO_images_key' in meta:
             image_list = meta['HUNO_images_key']
         else:
             image_list = meta['image_list']
-        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, image_list=image_list, approved_image_hosts=approved_image_hosts)
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
-            desc = await f.read()
 
-        return {'description': desc}
+        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:

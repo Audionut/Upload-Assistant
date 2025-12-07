@@ -593,10 +593,10 @@ class SHRI(UNIT3D):
 
         for aka in imdb_info.get("akas", []):
             if isinstance(aka, dict):
-                if aka.get("country") == "Italy":
+                if aka.get("country") == "Italy" and not aka.get("attributes"):
                     country_match = aka.get("title")
                     break  # Country match takes priority
-                elif aka.get("language") == "Italy" and not language_match:
+                elif aka.get("language") == "Italy" and not language_match and not aka.get("attributes"):
                     language_match = aka.get("title")
 
         return country_match or language_match

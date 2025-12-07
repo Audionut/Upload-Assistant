@@ -58,6 +58,17 @@ class MTV():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, pickle.dumps, obj)
 
+    async def check_image_hosts(self, meta):
+        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
+        url_host_mapping = {
+            "ibb.co": "imgbb",
+            "ptpimg.me": "ptpimg",
+            "imgbox.com": "imgbox",
+        }
+
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        return
+
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
@@ -83,14 +94,6 @@ class MTV():
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
 
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
-        url_host_mapping = {
-            "ibb.co": "imgbb",
-            "ptpimg.me": "ptpimg",
-            "imgbox.com": "imgbox",
-        }
-
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         cat_id = await self.get_cat_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])
         source_id = await self.get_source_id(meta)

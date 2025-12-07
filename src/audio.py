@@ -271,7 +271,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                         console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
                     audio_tracks = [
                         t for t in tracks
-                        if t.get('@type') == "Audio" and not has_commentary and not has_compatibility
+                        if t.get('@type') == "Audio" and "commentary" not in (t.get('Title') or '').lower() and "compatibility" not in (t.get('Title') or '').lower()
                     ]
                     audio_language = None
                     if meta['debug']:

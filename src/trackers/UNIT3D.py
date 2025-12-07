@@ -9,6 +9,7 @@ import os
 import platform
 import re
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
 
@@ -99,11 +100,7 @@ class UNIT3D:
         return {'name': meta['name']}
 
     async def get_description(self, meta):
-        signature = f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-        await self.common.unit3d_edit_desc(meta, self.tracker, signature, comparison=True)
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
-            desc = await f.read()
-        return {'description': desc}
+        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -256,15 +253,9 @@ class UNIT3D:
         return {'personal_release': personal_release}
 
     async def get_internal(self, meta):
-        if meta['debug']:
-            console.print(f"[yellow]{self.tracker} Internal status from config: {self.config['TRACKERS'][self.tracker].get('internal', False)}[/yellow]")
-            console.print(f"[yellow]{self.tracker} Upload tag from release: {meta['tag']}[/yellow]")
-            console.print(f"[yellow]{self.tracker} Internal groups from config: {self.config['TRACKERS'][self.tracker].get('internal_groups', [])}[/yellow]")
         internal = 0
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                if meta['debug']:
-                    console.print(f"[green]{self.tracker} Marked as internal based on release group tag: {meta['tag']}[/green]")
                 internal = 1
 
         return {'internal': internal}
@@ -335,9 +326,6 @@ class UNIT3D:
             if not isinstance(r, dict):
                 raise TypeError(f'Expected dict, got {type(r)}: {r}')
             merged.update(r)
-        if meta['debug']:
-            console.print(f"[cyan]{self.tracker} Upload Data Prepared:[/cyan]")
-            console.print(merged)
 
         return merged
 

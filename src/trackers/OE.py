@@ -60,7 +60,7 @@ class OE(UNIT3D):
 
         return should_continue
 
-    async def get_description(self, meta):
+    async def check_image_hosts(self, meta):
         approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
@@ -73,7 +73,9 @@ class OE(UNIT3D):
         }
 
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        return
 
+    async def get_description(self, meta):
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
             base = await f.read()
 
