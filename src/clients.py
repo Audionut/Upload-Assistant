@@ -473,7 +473,7 @@ class Clients():
             elif len(torrent.files) == len(meta['filelist']):
                 torrent_filepath = os.path.commonpath(torrent.files)
                 actual_filepath = os.path.commonpath(meta['filelist'])
-                local_path, remote_path = await self.remote_path_map(meta)
+                local_path, remote_path = await self.remote_path_map(meta, client)
 
                 if local_path.lower() in meta['path'].lower() and local_path.lower() != remote_path.lower():
                     actual_filepath = actual_filepath.replace(local_path, remote_path).replace(os.sep, '/')
@@ -1553,16 +1553,8 @@ class Clients():
     async def remote_path_map(self, meta, torrent_client_name=None):
         if torrent_client_name:
             torrent_client = torrent_client_name
-        elif meta.get('client', None) is not None:
-            torrent_client = meta.get('client')
         else:
-            torrent_client = self.config['DEFAULT']['default_torrent_client']
-
-        if not torrent_client or torrent_client == 'none' or torrent_client not in self.config['TORRENT_CLIENTS']:
-            torrent_client = self.config['DEFAULT']['default_torrent_client']
-            if not torrent_client or torrent_client == 'none' or torrent_client not in self.config['TORRENT_CLIENTS']:
-                # Fallback to avoid crashing if no valid client is found
-                return os.path.normpath('/LocalPath'), os.path.normpath('/RemotePath')
+            raise ValueError("torrent_client_name must be provided for remote_path_map")
 
         client_config = self.config['TORRENT_CLIENTS'][torrent_client]
         local_paths = client_config.get('local_path', ['/LocalPath'])
@@ -2437,10 +2429,7 @@ class Clients():
                                     console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
 
                     if not meta.get('base_torrent_created'):
-                        default_torrent_client = self.config['DEFAULT']['default_torrent_client']
-                        client = self.config['TORRENT_CLIENTS'][default_torrent_client]
-                        torrent_client = client['torrent_client']
-                        torrent_storage_dir = client.get('torrent_storage_dir')
+                        torrent_storage_dir = client_config.get('torrent_storage_dir')
 
                         extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
                         os.makedirs(extracted_torrent_dir, exist_ok=True)
@@ -2499,7 +2488,7 @@ class Clients():
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
                         if torrent_file_path:
-                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config, print_err=False)
                             if valid:
                                 if use_piece_preference:
                                     # **Track best match based on piece size**
@@ -2606,7 +2595,7 @@ class Clients():
                                 # Validate the alternative torrent
                                 if alt_torrent_file_path:
                                     alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client, print_err=False
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config, print_err=False
                                     )
 
                                     if alt_valid:
