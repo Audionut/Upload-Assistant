@@ -285,7 +285,6 @@ class TVC():
                     cat_id = self.tv_type_map["foreign"]
 
         resolution_id = await self.get_res_id(meta.get('tv_pack', 0), meta['resolution'])
-        await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
 
         anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
@@ -296,10 +295,9 @@ class TVC():
             mi_dump = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt")
             bd_dump = None
 
-        descfile_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"[{self.tracker}]DESCRIPTION.txt")
         # build description and capture return instead of reopening file
-        desc = await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
         descfile_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"[{self.tracker}]DESCRIPTION.txt")
+        desc = await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
         if not desc:
             console.print(f"[yellow]Warning: DESCRIPTION file not found at {descfile_path}")
             desc = ""
@@ -857,7 +855,7 @@ class TVC():
     # get subs function
     # used in naming conventions
 
-    def get_subs_info(self, meta, mi):
+    def get_subs_info(self, meta, mi) -> None:
         subs = ""
         subs_num = 0
         media = mi.get("media") or {}
@@ -887,5 +885,3 @@ class TVC():
                 # crude SDH detection
                 if "sdh" in str(s).lower():
                     meta['sdh_subs'] = 1
-
-        return subs.strip(", ")
