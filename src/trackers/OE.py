@@ -41,26 +41,22 @@ class OE(UNIT3D):
         pass
 
     async def get_additional_checks(self, meta):
-        should_continue = True
-
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended']:
                 console.print('[bold red]Erotic not allowed at OE.')
-            should_continue = False
+            return False
 
         if not meta['is_disc'] == "BDMV":
-            if not meta.get('language_checked', False):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
-            if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
-                if not meta['unattended']:
-                    console.print('[bold red]OE requires at least one English audio or subtitle track.')
-                should_continue = False
+            if not await self.common.check_language_requirements(
+                meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
+            ):
+                return False
 
-        return should_continue
+        return True
 
-    async def get_description(self, meta):
+    async def check_image_hosts(self, meta):
         approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'onlyimage', 'ptscreens', "passtheimage"]
         url_host_mapping = {
             "ibb.co": "imgbb",
@@ -73,7 +69,9 @@ class OE(UNIT3D):
         }
 
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        return
 
+    async def get_description(self, meta):
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
             base = await f.read()
 

@@ -633,6 +633,12 @@ async def process_meta(meta, base_dir, bot=None):
             except asyncio.CancelledError:
                 pass
 
+        # check for valid image hosts for trackers that require it
+        for tracker_name in meta['trackers']:
+            if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'TVC']:
+                tracker_class = tracker_class_map[tracker_name](config=config)
+                await tracker_class.check_image_hosts(meta)
+
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         if not os.path.exists(torrent_path):
             reuse_torrent = None

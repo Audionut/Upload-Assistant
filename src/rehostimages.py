@@ -332,6 +332,8 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
             else:
                 # Use a more generic pattern to find any PNG files that aren't already in all_screenshots
                 new_screens = await asyncio.to_thread(glob.glob, os.path.join(screenshots_dir, "*.png"))
+                indexed_pattern = re.compile(r".*-\d+\.png$")
+                new_screens = [s for s in new_screens if indexed_pattern.match(os.path.basename(s))]
 
                 # Filter out files we already have
                 new_screens = [screen for screen in new_screens if screen not in all_screenshots]

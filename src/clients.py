@@ -95,36 +95,59 @@ class Clients():
             torrent = Torrent.read(torrent_path)
         else:
             return
-        if meta.get('client', None) is None:
-            if self.config['DEFAULT'].get('inject_torrent_client', "") != "":
-                default_torrent_client = self.config['DEFAULT']['inject_torrent_client']
-            else:
-                default_torrent_client = self.config['DEFAULT']['default_torrent_client']
+
+        inject_clients = []
+        if meta.get('client') and meta.get('client') != 'none':
+            inject_clients = [meta['client']]
+        elif meta.get('client') == 'none':
+            return
         else:
-            default_torrent_client = meta['client']
-        if meta.get('client', None) == 'none':
-            return
-        if default_torrent_client == "none":
-            return
-        client = self.config['TORRENT_CLIENTS'][default_torrent_client]
-        torrent_client = client['torrent_client']
+            inject_clients_config = self.config['DEFAULT'].get('injecting_client_list')
+            if isinstance(inject_clients_config, str) and inject_clients_config:
+                inject_clients = [inject_clients_config]
+            elif isinstance(inject_clients_config, list) and inject_clients_config:
+                inject_clients = inject_clients_config
 
-        local_path, remote_path = await self.remote_path_map(meta)
+            if not inject_clients:
+                default_client = self.config['DEFAULT'].get('default_torrent_client')
+                if default_client and default_client != 'none':
+                    inject_clients = [default_client]
 
-        if meta['debug']:
-            console.print(f"[bold green]Adding to {torrent_client}")
-        if torrent_client.lower() == "rtorrent":
-            self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client, tracker)
-        elif torrent_client == "qbit":
-            await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker)
-        elif torrent_client.lower() == "deluge":
-            if meta['type'] == "DISC":
-                path = os.path.dirname(meta['path'])  # noqa F841
-            self.deluge(meta['path'], torrent_path, torrent, local_path, remote_path, client, meta)
-        elif torrent_client.lower() == "transmission":
-            self.transmission(meta['path'], torrent, local_path, remote_path, client, meta)
-        elif torrent_client.lower() == "watch":
-            shutil.copy(torrent_path, client['watch_folder'])
+        if not inject_clients:
+            return
+
+        for client_name in inject_clients:
+            if client_name == "none" or not client_name:
+                continue
+
+            if client_name not in self.config['TORRENT_CLIENTS']:
+                console.print(f"[bold red]Torrent client '{client_name}' not found in config.")
+                continue
+
+            client = self.config['TORRENT_CLIENTS'][client_name]
+            torrent_client = client['torrent_client']
+
+            # Must pass client_name to remote_path_map
+            local_path, remote_path = await self.remote_path_map(meta, client_name)
+
+            if meta['debug']:
+                console.print(f"[bold green]Adding to {client_name} ({torrent_client})")
+
+            try:
+                if torrent_client.lower() == "rtorrent":
+                    self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client, tracker)
+                elif torrent_client == "qbit":
+                    await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker)
+                elif torrent_client.lower() == "deluge":
+                    if meta['type'] == "DISC":
+                        path = os.path.dirname(meta['path'])  # noqa F841
+                    self.deluge(meta['path'], torrent_path, torrent, local_path, remote_path, client, meta)
+                elif torrent_client.lower() == "transmission":
+                    self.transmission(meta['path'], torrent, local_path, remote_path, client, meta)
+                elif torrent_client.lower() == "watch":
+                    shutil.copy(torrent_path, client['watch_folder'])
+            except Exception as e:
+                console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
         return
 
     async def find_existing_torrent(self, meta):
@@ -261,7 +284,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client, print_err=True)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name, print_err=True)
 
                 if valid:
                     return resolved_path
@@ -274,7 +297,10 @@ class Clients():
                 proxy_url = client.get('qui_proxy_url')
 
                 if proxy_url:
-                    qbt_session = aiohttp.ClientSession()
+                    qbt_session = aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                    )
                 else:
                     qbt_client = await self.init_qbittorrent_client(client)
 
@@ -371,7 +397,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client, print_err=False
+                        meta, found_torrent_path, found_hash, torrent_client, client_name, print_err=False
                     )
                 else:
                     valid = False
@@ -450,7 +476,7 @@ class Clients():
             elif len(torrent.files) == len(meta['filelist']):
                 torrent_filepath = os.path.commonpath(torrent.files)
                 actual_filepath = os.path.commonpath(meta['filelist'])
-                local_path, remote_path = await self.remote_path_map(meta)
+                local_path, remote_path = await self.remote_path_map(meta, client)
 
                 if local_path.lower() in meta['path'].lower() and local_path.lower() != remote_path.lower():
                     actual_filepath = actual_filepath.replace(local_path, remote_path).replace(os.sep, '/')
@@ -542,7 +568,10 @@ class Clients():
                     return None
                 qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
-                qbt_session = aiohttp.ClientSession()
+                qbt_session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                )
 
         except qbittorrentapi.LoginFailed:
             console.print("[bold red]INCORRECT QBIT LOGIN CREDENTIALS")
@@ -1158,7 +1187,10 @@ class Clients():
         qbt_session = None
 
         if proxy_url:
-            qbt_session = aiohttp.ClientSession()
+            qbt_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+            )
             qbt_proxy_url = proxy_url.rstrip('/')
         else:
             potential_qbt_client = await self.init_qbittorrent_client(client)
@@ -1527,13 +1559,19 @@ class Clients():
 
         return metainfo
 
-    async def remote_path_map(self, meta):
-        if meta.get('client', None) is None:
-            torrent_client = self.config['DEFAULT']['default_torrent_client']
+    async def remote_path_map(self, meta, torrent_client_name=None):
+        if isinstance(torrent_client_name, dict):
+            client_config = torrent_client_name
+        elif isinstance(torrent_client_name, str) and torrent_client_name:
+            try:
+                client_config = self.config['TORRENT_CLIENTS'][torrent_client_name]
+            except KeyError as exc:
+                raise KeyError(f"Torrent client '{torrent_client_name}' not found in TORRENT_CLIENTS") from exc
         else:
-            torrent_client = meta['client']
-        local_paths = self.config['TORRENT_CLIENTS'][torrent_client].get('local_path', ['/LocalPath'])
-        remote_paths = self.config['TORRENT_CLIENTS'][torrent_client].get('remote_path', ['/RemotePath'])
+            raise ValueError("torrent_client_name must be a client name or client config dict")
+
+        local_paths = client_config.get('local_path', ['/LocalPath'])
+        remote_paths = client_config.get('remote_path', ['/RemotePath'])
 
         if not isinstance(local_paths, list):
             local_paths = [local_paths]
@@ -1569,7 +1607,10 @@ class Clients():
             qbt_session = None
 
             if proxy_url:
-                qbt_session = aiohttp.ClientSession()
+                qbt_session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                )
                 qbt_proxy_url = proxy_url.rstrip('/')
             else:
                 potential_qbt_client = await self.init_qbittorrent_client(client)
@@ -2404,10 +2445,7 @@ class Clients():
                                     console.print(f"[bold cyan]Found {tracker['id'].upper()} ID: {tracker['tracker_id']} in torrent comment")
 
                     if not meta.get('base_torrent_created'):
-                        default_torrent_client = self.config['DEFAULT']['default_torrent_client']
-                        client = self.config['TORRENT_CLIENTS'][default_torrent_client]
-                        torrent_client = client['torrent_client']
-                        torrent_storage_dir = client.get('torrent_storage_dir')
+                        torrent_storage_dir = client_config.get('torrent_storage_dir')
 
                         extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
                         os.makedirs(extracted_torrent_dir, exist_ok=True)
@@ -2466,7 +2504,7 @@ class Clients():
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
                         if torrent_file_path:
-                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config, print_err=False)
                             if valid:
                                 if use_piece_preference:
                                     # **Track best match based on piece size**
@@ -2573,7 +2611,7 @@ class Clients():
                                 # Validate the alternative torrent
                                 if alt_torrent_file_path:
                                     alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client, print_err=False
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config, print_err=False
                                     )
 
                                     if alt_valid:

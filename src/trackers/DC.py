@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import aiofiles
 import httpx
+import os
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
@@ -96,8 +97,10 @@ class DC:
         description = description.replace('[h3]', '[u][b]').replace('[/h3]', '[/b][/u]')
         description = description.replace('[ul]', '').replace('[/ul]', '')
         description = description.replace('[ol]', '').replace('[/ol]', '')
+        description = description.replace('[*] ', '• ').replace('[*]', '• ')
         description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
+        description = bbcode.remove_list(description)
         description = description.strip()
         description = bbcode.remove_extra_lines(description)
 
@@ -156,12 +159,6 @@ class DC:
             if response.text and response.text != '[]':
                 search_results = response.json()
                 if search_results and isinstance(search_results, list):
-                    should_continue = await self.get_title(meta, search_results)
-                    if not should_continue:
-                        print('An UNRAR duplicate of this specific release already exists on site.')
-                        meta['skipping'] = f'{self.tracker}'
-                        return
-
                     for each in search_results:
                         name = each.get('name')
                         torrent_id = each.get('id')
@@ -181,50 +178,24 @@ class DC:
 
         return []
 
-    async def get_title(self, meta, search_results):
-        is_scene = bool(meta.get('scene_name'))
-        base_name = meta['scene_name'] if is_scene else meta['uuid']
-
-        needs_unrar_tag = False
-
-        if search_results:
-            upload_title = {meta['uuid']}
-            if is_scene:
-                upload_title.add(meta['scene_name'])
-
-            matching_titles = [
-                t for t in search_results
-                if t.get('name') in upload_title
-            ]
-
-            if matching_titles:
-                unrar_version_exists = any(t.get('unrar', 0) != 0 for t in matching_titles)
-
-                if unrar_version_exists:
-                    return False
-                else:
-                    console.print(f'[bold yellow]Found a RAR version of this release on {self.tracker}. Appending [UNRAR] to filename.[/bold yellow]')
-                    needs_unrar_tag = True
-
-        if needs_unrar_tag:
-            upload_base_name = meta['scene_name'] if is_scene else meta['uuid']
-            title = f'{upload_base_name} [UNRAR]'
+    async def edit_name(self, meta):
+        """
+        Edits the name according to DC's naming conventions.
+        Scene uploads should use the scene name.
+        Scene uploads should also have "[UNRAR]" in the name, as the UA only uploads unzipped files, which are considered "altered".
+        https://digitalcore.club/forum/17/topic/1051/uploading-for-beginners
+        """
+        if meta.get("scene_name", ""):
+            dc_name = f"{meta.get('scene_name')} [UNRAR]"
         else:
-            title = f'{base_name}'
+            dc_name = meta["uuid"]
+            base, ext = os.path.splitext(dc_name)
+            if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
+                dc_name = base
 
-        container = '.' + meta.get('container', 'mkv')
-        title = title.replace(container, '').replace(container.upper(), '')
+        return dc_name
 
-        if title is not None and title != "" and title != meta['name']:
-            console.print(
-                f"[bold yellow]{self.tracker} applies a naming change for this release: [green]{title}[/green][/bold yellow]"
-            )
-
-        DC.torrent_title = title
-
-        return title
-
-    async def fetch_data(self, meta):
+    async def check_image_hosts(self, meta):
         approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'digitalcore']
         url_host_mapping = {
             'ibb.co': 'imgbb',
@@ -235,7 +206,9 @@ class DC:
             'digitalcore.club': 'digitalcore'
         }
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        return
 
+    async def fetch_data(self, meta):
         anon = '1' if meta['anon'] or self.config['TRACKERS'][self.tracker].get('anon', False) else '0'
 
         data = {
@@ -255,6 +228,7 @@ class DC:
 
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
+        torrent_title = await self.edit_name(meta)
         status_message = ''
         response = None
 
@@ -264,7 +238,7 @@ class DC:
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
 
                 with open(torrent_path, 'rb') as torrent_file:
-                    files = {'file': (DC.torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
+                    files = {'file': (torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
 
                     response = await self.session.post(upload_url, data=data, files=files, headers=self.session.headers, timeout=90)
                     response.raise_for_status()
