@@ -300,7 +300,7 @@ class BHD():
                     else:
                         await desc.write(f"[url={web_url}][img width=350]{img_url}[/img][/url] ")
                 await desc.write("[/align]")
-            await desc.write(f"\n[align=right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/align]")
+            await desc.write(f"\n[align=right][url=https://github.com/Audionut/Upload-Assistant][size=10]{meta['ua_signature']}[/size][/url][/align]")
             await desc.close()
         return
 

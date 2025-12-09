@@ -8,12 +8,13 @@ from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
-from src.languages import process_desc_language
+from src.trackers.COMMON import COMMON
 
 
 class PTS:
     def __init__(self, config):
         self.config = config
+        self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = "PTS"
@@ -138,11 +139,9 @@ class PTS:
         return desc
 
     async def search_existing(self, meta, disctype):
-        if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-
-        langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
-        mandarin = 'mandarin' in langs or 'chinese' in langs
+        mandarin = await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=['mandarin', 'chinese'], check_audio=True, check_subtitle=True
+        )
 
         if not mandarin:
             response = input("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway? (y/n): ")

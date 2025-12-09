@@ -152,8 +152,9 @@ config = {
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
-        # Use this client for injection (aka actually adding the torrent for uploading)
-        "inject_torrent_client": "",
+        # A list of clients to use for injection (aka actually adding the torrent for uploading)
+        # eg: ['qbittorrent', 'rtorrent']
+        "injecting_client_list": [''],
 
         # A list of clients to search for torrents.
         # eg: ['qbittorrent', 'qbittorrent_searching']

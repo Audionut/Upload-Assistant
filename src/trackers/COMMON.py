@@ -14,6 +14,7 @@ import sys
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
+from src.languages import process_desc_language
 from torf import Torrent
 
 
@@ -873,3 +874,59 @@ class COMMON():
                 mediainfo = ''.join(lines) if remove else lines
 
         return mediainfo
+
+    async def check_language_requirements(
+        self,
+        meta,
+        tracker,
+        languages_to_check,
+        check_audio=False,
+        check_subtitle=False,
+        require_both=False,
+    ):
+        """Check if the given media meets language requirements."""
+        try:
+            if not meta.get("language_checked", False):
+                await process_desc_language(meta, desc=None, tracker=tracker)
+
+            languages_to_check = [lang.lower() for lang in languages_to_check]
+            audio_languages = [lang.lower() for lang in meta.get("audio_languages", [])]
+            subtitle_languages = [lang.lower() for lang in meta.get("subtitle_languages", [])]
+
+            audio_ok = (
+                not check_audio
+                or any(lang in audio_languages for lang in languages_to_check)
+            )
+            subtitle_ok = (
+                not check_subtitle
+                or any(lang in subtitle_languages for lang in languages_to_check)
+            )
+
+            if require_both:
+                if not (audio_ok and subtitle_ok):
+                    console.print(
+                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                        f"[yellow]Required both audio and subtitles in one of the following:[/yellow] "
+                        f"{', '.join(languages_to_check)}\n"
+                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
+                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
+                    )
+            else:
+                if not (audio_ok or subtitle_ok):
+                    console.print(
+                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                        f"[yellow]Required at least one of the following:[/yellow] "
+                        f"{', '.join(languages_to_check)}\n"
+                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
+                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
+                    )
+
+            if require_both:
+                return audio_ok and subtitle_ok
+            else:
+                return audio_ok or subtitle_ok
+
+        except Exception as e:
+            console.print_exception()
+            console.print(f"[red]Error checking language requirements: {e}[/red]")
+            return False
