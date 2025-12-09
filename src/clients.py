@@ -2160,11 +2160,11 @@ class Clients():
                         "limit=100"
                     ]
 
-                    # Add filter parameters if they exist
-                    if qui_filters.get('status'):
-                        # Join multiple status filters with comma (qBittorrent style)
-                        filter_value = ','.join(qui_filters['status'])
-                        query_parts.append(f"filter={urllib.parse.quote(filter_value)}")
+                    # Add status parameters if they exist
+                    if qui_filters.get('excludeStatus'):
+                        # Join multiple excludeStatus filters with comma (qBittorrent style)
+                        filter_value = ','.join(qui_filters['excludeStatus'])
+                        query_parts.append(f"status={urllib.parse.quote(filter_value)}")
 
                     if qui_filters.get('categories'):
                         # Join multiple categories with comma
@@ -2185,7 +2185,6 @@ class Clients():
                     async with qbt_session.get(url) as response:
                         if response.status == 200:
                             response_data = await response.json()
-                            has_working_tracker = True
 
                             # The qui proxy returns {'torrents': [...]} while standard API returns [...]
                             if isinstance(response_data, dict) and 'torrents' in response_data:
@@ -2209,7 +2208,14 @@ class Clients():
                                         self.comment = ''
                             torrents = [MockTorrent(torrent) for torrent in torrents_data]
                         else:
-                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            if response.status == 404:
+                                if meta['debug']:
+                                    console.print(f"[yellow]No torrents found via proxy search for '[green]{search_term}' [yellow]Maybe tracker errors?")
+                            else:
+                                if meta['debug']:
+                                    console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            if proxy_url and 'qbt_session' in locals():
+                                await qbt_session.close()
                             return []
                 else:
                     torrents = await self.retry_qbt_operation(
@@ -2219,9 +2225,13 @@ class Clients():
                     )
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
+                if proxy_url and 'qbt_session' in locals():
+                    await qbt_session.close()
                 return []
             except Exception as e:
                 console.print(f"[bold red]Error getting torrents list: {e}")
+                if proxy_url and 'qbt_session' in locals():
+                    await qbt_session.close()
                 return []
 
             matching_torrents = []
@@ -2287,12 +2297,13 @@ class Clients():
                             continue
 
                         if proxy_url:
-                            torrent_trackers = getattr(torrent, 'trackers', [])
+                            torrent_trackers = getattr(torrent, 'trackers', []) or []
+                            has_working_tracker = True
                         try:
                             display_trackers = []
 
                             # Filter out DHT, PEX, LSD "trackers"
-                            for tracker in torrent_trackers:
+                            for tracker in torrent_trackers or []:
                                 if tracker.get('url', '').startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
                                     continue
                                 display_trackers.append(tracker)
