@@ -50,7 +50,6 @@ class TVC():
         self.torrent_url = 'https://tvchaosuk.com/torrents/'
         self.signature = ""
         self.banned_groups = []
-        self.approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
 
         # TV type mapping as a dict for clarity and maintainability
@@ -156,51 +155,37 @@ class TVC():
         Returns:
             str: Release name with appended country code (e.g. "Show Title [IRL]").
         """
+        country_map = {
+            "AT": "AUT",
+            "AU": "AUS",
+            "BE": "BEL",
+            "CA": "CAN",
+            "CH": "CHE",
+            "CZ": "CZE",
+            "DE": "GER",
+            "DK": "DNK",
+            "EE": "EST",
+            "ES": "SPA",
+            "FI": "FIN",
+            "FR": "FRA",
+            "IE": "IRL",
+            "IS": "ISL",
+            "IT": "ITA",
+            "NL": "NLD",
+            "NO": "NOR",
+            "NZ": "NZL",
+            "PL": "POL",
+            "PT": "POR",
+            "RU": "RUS",
+            "SE": "SWE",
+        }
+
         if 'origin_country_code' in meta:
-            if "IE" in meta['origin_country_code']:
-                name += " [IRL]"
-            elif "AU" in meta['origin_country_code']:
-                name += " [AUS]"
-            elif "NZ" in meta['origin_country_code']:
-                name += " [NZL]"
-            elif "CA" in meta['origin_country_code']:
-                name += " [CAN]"
-            elif "IT" in meta['origin_country_code']:
-                name += " [ITA]"
-            elif "FR" in meta['origin_country_code']:
-                name += " [FRA]"
-            elif "DE" in meta['origin_country_code']:
-                name += " [GER]"
-            elif "ES" in meta['origin_country_code']:
-                name += " [SPA]"
-            elif "PT" in meta['origin_country_code']:
-                name += " [POR]"
-            elif "BE" in meta['origin_country_code']:
-                name += " [BEL]"
-            elif "DK" in meta['origin_country_code']:
-                name += " [DNK]"
-            elif "NL" in meta['origin_country_code']:
-                name += " [NLD]"
-            elif "SE" in meta['origin_country_code']:
-                name += " [SWE]"
-            elif "NO" in meta['origin_country_code']:
-                name += " [NOR]"
-            elif "FI" in meta['origin_country_code']:
-                name += " [FIN]"
-            elif "IS" in meta['origin_country_code']:
-                name += " [ISL]"
-            elif "PL" in meta['origin_country_code']:
-                name += " [POL]"
-            elif "RU" in meta['origin_country_code']:
-                name += " [RUS]"
-            elif "AT" in meta['origin_country_code']:
-                name += " [AUT]"
-            elif "CZ" in meta['origin_country_code']:
-                name += " [CZE]"
-            elif "EE" in meta['origin_country_code']:
-                name += " [EST]"
-            elif "CH" in meta['origin_country_code']:
-                name += " [CHE]"
+            for code in meta['origin_country_code']:
+                if code in country_map:
+                    name += f" [{country_map[code]}]"
+                    break
+
         return name
 
     async def read_file(self, path: str, encoding: str = "utf-8") -> str:
@@ -312,9 +297,10 @@ class TVC():
             bd_dump = None
 
         descfile_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"[{self.tracker}]DESCRIPTION.txt")
-        try:
-            desc = await self.read_file(descfile_path)
-        except FileNotFoundError:
+        # build description and capture return instead of reopening file
+        desc = await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
+        descfile_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"[{self.tracker}]DESCRIPTION.txt")
+        if not desc:
             console.print(f"[yellow]Warning: DESCRIPTION file not found at {descfile_path}")
             desc = ""
 
@@ -532,12 +518,6 @@ class TVC():
             meta['original_language'] = response.get('original_language', 'en')
 
             # TVC-specific extras
-            try:
-                if hasattr(tv, 'release_dates'):
-                    meta['release_dates'] = tv.release_dates()
-            except (requests.exceptions.RequestException, KeyError) as e:
-                console.print(f"[yellow]Warning: Could not fetch TV release dates: {e}")
-
             if hasattr(tv, 'networks') and len(tv.networks) != 0 and 'name' in tv.networks[0]:
                 meta['networks'] = tv.networks[0]['name']
 
@@ -846,7 +826,7 @@ class TVC():
         except Exception as e:
             console.print(f"[bold red]Failed to write DESCRIPTION file: {e}")
 
-        return
+        return desc
 
     def get_links(self, meta):
         """
