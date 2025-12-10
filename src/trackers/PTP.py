@@ -47,6 +47,7 @@ class PTP():
         self.banned_groups = ['aXXo', 'BMDru', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'd3g', 'DNL', 'FaNGDiNG0', 'HD2DVD', 'HDTime', 'ION10', 'iPlanet',
                               'KiNGDOM', 'mHD', 'mSD', 'nHD', 'nikt0', 'nSD', 'NhaNc3', 'OFT', 'PRODJi', 'SANTi', 'SPiRiT', 'STUTTERSHIT', 'ViSION', 'VXT',
                               'WAF', 'x0r', 'YIFY', 'LAMA', 'WORLD']
+        self.approved_image_hosts = ['ptpimg', 'pixhost']
 
         self.sub_lang_map = {
             ("Arabic", "ara", "ar"): 22,
@@ -722,19 +723,22 @@ class PTP():
         desc = re.sub(r"\[img=[^\]]+\]", "[img]", desc)
         return desc
 
+    async def check_image_hosts(self, meta):
+        url_host_mapping = {
+            "ptpimg.me": "ptpimg",
+            "pixhost.to": "pixhost",
+        }
+
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        return
+
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
         multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
         if multi_screens < 2:
             multi_screens = 2
             console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
-        url_host_mapping = {
-            "ptpimg.me": "ptpimg",
-            "pixhost.to": "pixhost",
-        }
 
-        approved_image_hosts = ['ptpimg', 'pixhost']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         if 'PTP_images_key' in meta:
             image_list = meta['PTP_images_key']
         else:
@@ -763,7 +767,7 @@ class PTP():
                                 # Get the main domain name (first part before the dot)
                                 host_key = hostname.split('.')[0] if hostname else ''
 
-                                if host_key in approved_image_hosts:
+                                if host_key in self.approved_image_hosts:
                                     images_to_keep.append(img)
                                 elif meta['debug']:
                                     console.print(f"[yellow]Filtering out image from non-approved host: {hostname}[/yellow]")
@@ -897,7 +901,7 @@ class PTP():
                                     print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
+                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
@@ -976,7 +980,7 @@ class PTP():
                                         print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
+                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -1046,7 +1050,7 @@ class PTP():
                                         print(f"Error during DVD screenshot capture: {e}")
                                 new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
+                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -1175,7 +1179,7 @@ class PTP():
                                     print(f"Error during generic screenshot capture: {e}")
                             new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=approved_image_hosts)
+                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:

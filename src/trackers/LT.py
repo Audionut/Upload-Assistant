@@ -1,8 +1,6 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import re
-from src.console import console
-from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -61,12 +59,6 @@ class LT(UNIT3D):
         )
 
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
-            # Check if is HYBRID (Copied from BLU.py)
-            if 'hybrid' in meta.get('uuid').lower():
-                if "repack" in meta.get('uuid').lower():
-                    lt_name = lt_name.replace('REPACK', 'Hybrid REPACK')
-                else:
-                    lt_name = lt_name.replace(meta['resolution'], f"Hybrid {meta['resolution']}")
             # Check if original language is "es" if true replace title for AKA if available
             if meta.get('original_language') == 'es' and meta.get('aka') != "":
                 lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()
@@ -91,25 +83,12 @@ class LT(UNIT3D):
         return {"name": re.sub(r"\s{2,}", " ", lt_name)}
 
     async def get_additional_checks(self, meta):
-        should_continue = True
-        if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        spanish_languages = [
-            "Spanish", "Spanish (Latin America)", "spanish", "spanish (latin america)"
-        ]
-        if not any(
-            lang in meta.get("audio_languages", []) for lang in spanish_languages
-        ) and not any(
-            lang in meta.get("subtitle_languages", []) for lang in spanish_languages
+        spanish_languages = ["spanish", "spanish (latin america)"]
+        if not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True
         ):
-            # https://lat-team.com/wikis/5
-            # 11.- All contributions must include the original Spanish language or its respective dubbing. If there is no dubbing, Spanish subtitles must be included.
-            console.print(
-                "[bold red]LT requires at least one Spanish audio or subtitle track."
-            )
             return False
-
-        return should_continue
+        return True
 
     async def get_additional_data(self, meta):
         data = {

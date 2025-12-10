@@ -1,8 +1,6 @@
 # Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import re
-from src.console import console
-from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -90,18 +88,6 @@ class SAM(UNIT3D):
         return data
 
     async def get_additional_checks(self, meta):
-        should_continue = True
-        if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        portuguese_languages = ["Portuguese", "Português"]
-        if not any(
-            lang in meta.get("audio_languages", []) for lang in portuguese_languages
-        ) and not any(
-            lang in meta.get("subtitle_languages", []) for lang in portuguese_languages
-        ):
-            console.print(
-                "[bold red]SAM requires at least one Portuguese audio or subtitle track."
-            )
-            should_continue = False
-
-        return should_continue
+        return await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
+        )

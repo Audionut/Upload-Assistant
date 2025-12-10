@@ -10,6 +10,7 @@ import sys
 from PIL import Image
 
 from data.config import config
+from src.bbcode import BBCODE
 from src.btnid import get_bhd_torrents
 from src.console import console
 from src.trackers.COMMON import COMMON
@@ -527,7 +528,6 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             found_match = False
 
     elif tracker_name == "HDB":
-        from src.bbcode import BBCODE
         bbcode = BBCODE()
         if meta.get('hdb') is not None:
             meta[manual_key] = meta[tracker_key]
@@ -536,23 +536,20 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             # Use get_info_from_torrent_id function if ID is found in meta
             imdb, tvdb_id, hdb_name, meta['ext_torrenthash'], meta['hdb_description'] = await tracker_instance.get_info_from_torrent_id(meta[tracker_key])
 
-            if imdb or tvdb_id:
+            if imdb or tvdb_id or meta['hdb_description']:
                 meta['imdb_id'] = imdb if imdb else meta.get('imdb_id', 0)
                 meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id', 0)
                 meta['hdb_name'] = hdb_name
                 found_match = True
-                result = bbcode.clean_hdb_description(meta['hdb_description'])
-                if meta['hdb_description'] and len(meta['hdb_description']) > 0 and not only_id:
-                    if result is None:
-                        console.print("[yellow]Failed to clean HDB description, it might be empty or malformed[/yellow]")
-                        meta['description'] = ""
-                        meta['image_list'] = []
-                    else:
-                        meta['description'], meta['image_list'] = result
-                        meta['saved_description'] = True
-
-                if meta.get('image_list') and meta.get('keep_images'):
-                    valid_images = await check_images_concurrently(meta.get('image_list'), meta)
+                description, image_list = bbcode.clean_hdb_description(meta['hdb_description'])
+                if description and len(description) > 0 and not only_id:
+                    console.print(f"Description content:\n{description[:500]}...", markup=False)
+                    meta['description'] = description
+                    meta['saved_description'] = True
+                else:
+                    console.print("[yellow]HDB description empty[/yellow]")
+                if image_list and meta.get('keep_images'):
+                    valid_images = await check_images_concurrently(image_list, meta)
                     if valid_images:
                         meta['image_list'] = valid_images
                         await handle_image_list(meta, tracker_name, valid_images)
@@ -573,7 +570,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             if tracker_id:
                 meta[tracker_key] = tracker_id
 
-            if imdb or tvdb_id:
+            if imdb or tvdb_id or meta['hdb_description']:
                 if not meta['unattended']:
                     console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {meta['hdb_name']}[/green]")
                     if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
@@ -581,50 +578,61 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         meta['imdb_id'] = imdb if imdb else meta.get('imdb_id')
                         meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id')
                         found_match = True
-                        if meta['hdb_description'] and len(meta['hdb_description']) > 0 and not only_id:
-                            result = bbcode.clean_hdb_description(meta['hdb_description'])
-                            if result is None:
-                                console.print("[yellow]Failed to clean HDB description, it might be empty or malformed[/yellow]")
-                                meta['description'] = ""
-                                meta['image_list'] = []
-                            else:
-                                desc, meta['image_list'] = result
-                                console.print("[bold green]Successfully grabbed description from HDB")
-                                console.print(f"Description content:\n{desc[:1000]}...", markup=False)
-                                console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                                edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                        description, image_list = bbcode.clean_hdb_description(meta['hdb_description'])
+                        if description and len(description) > 0 and not only_id:
+                            console.print("[bold green]Successfully grabbed description from HDB")
+                            console.print(f"HDB Description content:\n{description[:1000]}.....", markup=False)
+                            console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
+                            edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
 
-                                if edit_choice.lower() == 'e':
-                                    edited_description = click.edit(desc)
-                                    if edited_description:
-                                        desc = edited_description.strip()
-                                        meta['description'] = desc
-                                        meta['saved_description'] = True
-                                    console.print(f"[green]Final description after editing:[/green] {desc}", markup=False)
-                                elif edit_choice.lower() == 'd':
-                                    meta['description'] = ""
-                                    meta['hdb_description'] = ""
-                                    console.print("[yellow]Description discarded.[/yellow]")
-                                else:
-                                    console.print("[green]Keeping the original description.[/green]")
-                                    meta['description'] = desc
+                            if edit_choice.lower() == 'e':
+                                edited_description = click.edit(description)
+                                if edited_description:
+                                    description = edited_description.strip()
+                                    meta['description'] = description
                                     meta['saved_description'] = True
-                                if meta.get('image_list') and meta.get('keep_images'):
-                                    valid_images = await check_images_concurrently(meta.get('image_list'), meta)
-                                    if valid_images:
-                                        meta['image_list'] = valid_images
-                                        await handle_image_list(meta, tracker_name, valid_images)
+                                console.print(f"[green]Final description after editing:[/green] {description}", markup=False)
+                            elif edit_choice.lower() == 'd':
+                                meta['hdb_description'] = ""
+                                console.print("[yellow]Description discarded.[/yellow]")
+                            else:
+                                console.print("[green]Keeping the original description.[/green]")
+                                meta['description'] = description
+                                meta['saved_description'] = True
+                        else:
+                            console.print("[yellow]HDB description empty[/yellow]")
+                        if image_list and meta.get('keep_images'):
+                            valid_images = await check_images_concurrently(image_list, meta)
+                            if valid_images:
+                                meta['image_list'] = valid_images
+                                await handle_image_list(meta, tracker_name, valid_images)
                     else:
                         console.print(f"[yellow]{tracker_name} data discarded.[/yellow]")
                         meta[tracker_key] = None
                         meta['tvdb_id'] = meta.get('tvdb_id') if meta.get('tvdb_id') else 0
                         meta['imdb_id'] = meta.get('imdb_id') if meta.get('imdb_id') else 0
                         meta['hdb_name'] = None
+                        meta['hdb_description'] = ""
                         found_match = False
                 else:
+                    meta['imdb_id'] = imdb if imdb else meta.get('imdb_id')
+                    meta['tvdb_id'] = tvdb_id if tvdb_id else meta.get('tvdb_id')
+                    description, image_list = bbcode.clean_hdb_description(meta['hdb_description'])
+                    if description and len(description) > 0 and not only_id:
+                        console.print(f"HDB Description content:\n{description[:500]}.....", markup=False)
+                        meta['description'] = description
+                        meta['saved_description'] = True
+                    if image_list and meta.get('keep_images'):
+                        valid_images = await check_images_concurrently(image_list, meta)
+                        if valid_images:
+                            meta['image_list'] = valid_images
+                            await handle_image_list(meta, tracker_name, valid_images)
                     console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TVDb ID: {meta['tvdb_id']}, HDB Name: {hdb_name}[/green]")
                     found_match = True
             else:
+                meta['hdb_name'] = None
+                meta['hdb_description'] = ""
+                meta[tracker_key] = None
                 found_match = False
 
     return meta, found_match

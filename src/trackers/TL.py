@@ -130,10 +130,11 @@ class TL:
         bbcode = BBCODE()
         description = description.replace("[center]", "<center>").replace("[/center]", "</center>")
         description = re.sub(r'\[\*\]', '\n[*]', description, flags=re.IGNORECASE)
-        description = re.sub(r'\[list=.*?\]', '[list]', description, flags=re.IGNORECASE)
         description = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', description, flags=re.IGNORECASE | re.DOTALL)
         description = re.sub(r'\[hr\]', '---', description, flags=re.IGNORECASE)
         description = re.sub(r'\[img=[\d"x]+\]', '[img]', description, flags=re.IGNORECASE)
+        description = description.replace('[*] ', '• ').replace('[*]', '• ')
+        description = bbcode.remove_list(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
         description = bbcode.remove_spoiler(description)
         description = re.sub(r'\n{3,}', '\n\n', description)
@@ -352,8 +353,7 @@ class TL:
                     torrent_id = str(response.text)
                     meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-
-                await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
+                    await self.common.add_tracker_torrent(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
 
             else:
                 console.print(data)

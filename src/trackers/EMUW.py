@@ -18,7 +18,7 @@ class EMUW(UNIT3D):
     def __init__(self, config):
         super().__init__(config, tracker_name='EMUW')
         self.source_flag = 'Emuwarez'
-        self.base_url = 'https://emuwarez.it'
+        self.base_url = 'https://emuwarez.com'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'

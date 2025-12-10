@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.uploadscreens import upload_screens
 from data.config import config
+from aiofiles import os as aio_os
 
 
 async def match_host(hostname, approved_hosts):
@@ -194,7 +195,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
     # First check if there are any saved screenshots matching those in the image_list
     if meta.get('image_list') and isinstance(meta['image_list'], list):
         # Get all PNG files in the screenshots directory
-        all_png_files = await asyncio.to_thread(glob.glob, os.path.join(screenshots_dir, "*.png"))
+        all_png_files = [file for file in await aio_os.listdir(screenshots_dir) if file.endswith('.png')]
         if all_png_files and meta.get('debug'):
             console.print(f"[cyan]Found {len(all_png_files)} PNG files in screenshots directory")
 
@@ -332,6 +333,8 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
             else:
                 # Use a more generic pattern to find any PNG files that aren't already in all_screenshots
                 new_screens = await asyncio.to_thread(glob.glob, os.path.join(screenshots_dir, "*.png"))
+                indexed_pattern = re.compile(r".*-\d+\.png$")
+                new_screens = [s for s in new_screens if indexed_pattern.match(os.path.basename(s))]
 
                 # Filter out files we already have
                 new_screens = [screen for screen in new_screens if screen not in all_screenshots]
