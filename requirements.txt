@@ -14,7 +14,7 @@ ffmpeg-python
 guessit
 httpx
 Jinja2
-langcodes
+langcodes[data]
 lxml
 nest_asyncio
 packaging
