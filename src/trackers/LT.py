@@ -59,12 +59,6 @@ class LT(UNIT3D):
         )
 
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
-            # Check if is HYBRID (Copied from BLU.py)
-            if 'hybrid' in meta.get('uuid').lower():
-                if "repack" in meta.get('uuid').lower():
-                    lt_name = lt_name.replace('REPACK', 'Hybrid REPACK')
-                else:
-                    lt_name = lt_name.replace(meta['resolution'], f"Hybrid {meta['resolution']}")
             # Check if original language is "es" if true replace title for AKA if available
             if meta.get('original_language') == 'es' and meta.get('aka') != "":
                 lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()

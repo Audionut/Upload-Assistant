@@ -1145,7 +1145,7 @@ async def get_anime(response, meta):
             animation = True
     if response['original_language'] == 'ja' and animation is True:
         romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id', None), meta)
-        alt_name = f" AKA {romaji}"
+        alt_name = f"AKA {romaji}"
 
         anime = True
         # mal = AnimeSearch(romaji)
