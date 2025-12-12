@@ -135,6 +135,7 @@ class NBL():
                                     'size': int(each.get('size', 0)),
                                     'link': f'https://nebulance.io/torrents.php?id={each.get("group_id", "")}',
                                     'file_count': len(file_list) if isinstance(file_list, list) else 1,
+                                    'download': each.get('download', ''),
                                 }
                                 dupes.append(result)
                     except json.JSONDecodeError:
