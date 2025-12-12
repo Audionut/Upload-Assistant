@@ -103,10 +103,13 @@ class Clients():
             return
         else:
             inject_clients_config = self.config['DEFAULT'].get('injecting_client_list')
-            if isinstance(inject_clients_config, str) and inject_clients_config:
+            if isinstance(inject_clients_config, str) and inject_clients_config.strip():
                 inject_clients = [inject_clients_config]
-            elif isinstance(inject_clients_config, list) and inject_clients_config:
-                inject_clients = inject_clients_config
+            elif isinstance(inject_clients_config, list):
+                # Filter out empty strings and whitespace-only strings
+                inject_clients = [c for c in inject_clients_config if c and str(c).strip()]
+            else:
+                inject_clients = []
 
             if not inject_clients:
                 default_client = self.config['DEFAULT'].get('default_torrent_client')
@@ -2164,7 +2167,7 @@ class Clients():
                     if qui_filters.get('excludeStatus'):
                         # Join multiple excludeStatus filters with comma (qBittorrent style)
                         filter_value = ','.join(qui_filters['excludeStatus'])
-                        query_parts.append(f"status={urllib.parse.quote(filter_value)}")
+                        query_parts.append(f"filter={urllib.parse.quote(filter_value)}")
 
                     if qui_filters.get('categories'):
                         # Join multiple categories with comma

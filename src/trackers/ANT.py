@@ -58,6 +58,56 @@ class ANT:
             flags.append('Remux')
         return flags
 
+    async def get_type(self, meta):
+        antType = None
+        imdb_info = meta.get('imdb_info', {})
+        if imdb_info['type'] is not None:
+            imdbType = imdb_info.get('type', 'movie').lower()
+            if imdbType in ("movie", "tv movie", 'tvmovie'):
+                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
+                    antType = 0
+                else:
+                    antType = 1
+            if imdbType == "short":
+                antType = 1
+            elif imdbType == "tv mini series":
+                antType = 2
+            elif imdbType == "comedy":
+                antType = 3
+        else:
+            keywords = meta.get("keywords", "").lower()
+            tmdb_type = meta.get("tmdb_type", "movie").lower()
+            if tmdb_type == "movie":
+                if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0:
+                    antType = 0
+                else:
+                    antType = 1
+            if tmdb_type == "miniseries" or "miniseries" in keywords:
+                antType = 2
+            if "short" in keywords or "short film" in keywords:
+                antType = 1
+            elif "stand-up comedy" in keywords:
+                antType = 3
+
+        if antType is None:
+            if not meta['unattended']:
+                antTypeList = ["Feature Film", "Short Film", "Miniseries", "Other"]
+                choice = cli_ui.ask_choice("Select the proper type for ANT", choices=antTypeList)
+                # Map the choice back to the integer
+                type_map = {
+                    "Feature Film": 0,
+                    "Short Film": 1,
+                    "Miniseries": 2,
+                    "Other": 3
+                }
+                antType = type_map.get(choice)
+            else:
+                if meta['debug']:
+                    console.print(f"[bold red]{self.tracker} type could not be determined automatically in unattended mode.")
+                antType = 0  # Default to Feature Film in unattended mode
+
+        return antType
+
     async def upload(self, meta, disctype):
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
@@ -82,7 +132,7 @@ class ANT:
             torrent_bytes = await f.read()
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data = {
-            'type': 0,
+            'type': await self.get_type(meta),
             'audioformat': await self.get_audio(meta),
             'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'action': 'upload',
