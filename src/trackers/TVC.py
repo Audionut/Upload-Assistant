@@ -380,14 +380,24 @@ class TVC():
                     f"https://tvchaosuk.com/torrents/{t_id}"
                 )
 
-            except Exception:
-                # Always show the high‑level warning
-                console.print("[yellow]It may have uploaded, go check")
-                # Only show detailed diagnostics when debug is enabled
-                if meta.get('debug', False):
-                    console.print(traceback.format_exc())
-                    if response is not None:
-                        console.print(response.text.removeprefix('application/x-bittorrent\n'))
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 403:
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        "data error: Forbidden (403). This may indicate that you do not have upload permission."
+                    )
+                elif e.response.status_code == 302:
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
+                    )
+                else:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+            except httpx.TimeoutException:
+                meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 30 seconds'
+            except httpx.RequestError as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response.text.removeprefix("application/x-bittorrent\n") if response else "No response"}'
+            except Exception as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response.text.removeprefix("application/x-bittorrent\n") if response else "No response"}'
+                return
 
         else:
             console.print("[cyan]TVC Request Data:")
