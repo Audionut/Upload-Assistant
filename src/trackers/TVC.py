@@ -18,30 +18,7 @@ from datetime import datetime
 
 
 class TVC():
-    """
-    Tracker handler for TVChaosUK (TVC).
-
-    Provides methods to prepare metadata, generate description text,
-    and upload torrents to TVChaosUK via its API.
-    """
-
     def __init__(self, config):
-        """
-        Initialize the TVC tracker handler.
-
-        Args:
-            config (dict): Global configuration dictionary containing tracker settings.
-
-        Attributes:
-            tracker (str): Tracker name ("TVC").
-            source_flag (str): Source flag string used in uploads.
-            upload_url (str): API endpoint for torrent uploads.
-            search_url (str): API endpoint for torrent searches.
-            torrent_url (str): Base URL for torrent pages.
-            signature (str): Optional signature appended to descriptions.
-            banned_groups (list): List of release groups not allowed.
-            tv_type_map (dict): Mapping of genre keywords to TVC category IDs.
-        """
         self.config = config
         self.tracker = 'TVC'
         self.source_flag = 'TVCHAOS'
@@ -108,16 +85,6 @@ class TVC():
         return self.tv_type_map["holding bin"]
 
     async def get_res_id(self, tv_pack, resolution):
-        """
-        Map resolution and pack flag to TVC resolution type label.
-
-        Args:
-            tv_pack (bool): True if this is a season pack, False otherwise.
-            resolution (str): Resolution string (e.g. "1080p", "720p").
-
-        Returns:
-            str: Resolution type label used by TVC (e.g. "HD1080p Pack", "SD").
-        """
         if tv_pack:
             resolution_id = {
                 '1080p': 'HD1080p Pack',
@@ -199,12 +166,6 @@ class TVC():
         return await asyncio.to_thread(_read)
 
     async def check_image_hosts(self, meta):
-        """
-        Wrapper for image host validation.
-
-        Ensures screenshots are uploaded to approved hosts and rewrites
-        meta['image_list'] accordingly. Called externally by upload.py.
-        """
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -222,22 +183,9 @@ class TVC():
             img_host_index=1,
             approved_image_hosts=approved_image_hosts
         )
+        return
 
     async def upload(self, meta, disctype):
-        """
-        Perform upload of torrent metadata to TVC.
-
-        Prepares description, category, resolution, and sends POST request
-        to TVC API with torrent file and metadata.
-
-        Args:
-            meta (dict): Metadata dictionary for the release.
-            disctype (str): Disc type indicator (e.g. "DVD", "BDMV").
-
-        Raises:
-            ValueError: If category is unsupported.
-            RuntimeError: If upload fails with non-200 HTTP status.
-        """
         common = COMMON(config=self.config)
 
         image_list = meta.get('TVC_images_key', meta.get('image_list', []))
@@ -385,9 +333,6 @@ class TVC():
         if 'upload_to_tvc' in locals() and upload_to_tvc is False:
             return
 
-        # explicit empty return for clarity
-        return
-
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         if meta['debug'] is False:
@@ -424,7 +369,8 @@ class TVC():
                 t_id = segments[-1]
                 meta['tracker_status'][self.tracker]['torrent_id'] = t_id
 
-                console.print(f"[cyan]Extracted torrent ID {t_id} from {data_str}")
+                if meta['debug']:
+                    console.print(f"[cyan]Extracted torrent ID {t_id} from {data_str}")
 
                 await common.add_tracker_torrent(
                     meta,
@@ -444,7 +390,7 @@ class TVC():
                         console.print(response.text.removeprefix('application/x-bittorrent\n'))
 
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]TVC Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
 
@@ -561,22 +507,7 @@ class TVC():
             meta['origin_country_code'].append(response['production_companies'][0].get('origin_country', ''))
 
     async def search_existing(self, meta, _disctype=None):
-        """
-        Search TVC for existing torrents to avoid duplicates.
-
-        Args:
-            meta (dict): Metadata dictionary for the release.
-            _disctype (str, optional): Disc type indicator.
-
-        Returns:
-            list[str]: Names of duplicate torrents found. Empty if none or search disabled.
-        """
-        # Search on TVCUK has been DISABLED due to issues
-        # leaving code here for future use when it is re-enabled
-        console.print("[red]Cannot search for dupes as search api is not working...")
-        console.print("[red]Please make sure you are not uploading duplicates.")
-        # https://tvchaosuk.com/api/torrents/filter?api_token=<API_key>&tmdb=138108
-
+        # Search on TVCUK has been DISABLED due to issues, but we can still skip uploads based on criteria
         dupes = []
 
         # UHD, Discs, remux and non-1080p HEVC are not allowed on TVC.
@@ -585,34 +516,8 @@ class TVC():
             meta['skipping'] = "TVC"
             return []
 
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'tmdb': meta['tmdb'],
-            'name': ""
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url=self.search_url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    # 404 catch when their api is down
-                    if data['data'] != '404':
-                        for each in data['data']:
-                            print(each[0]['attributes']['name'])
-                            result = each[0]['attributes']['name']
-                            dupes.append(result)
-                    else:
-                        console.print("Search API is down, please check manually")
-                else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
-        except httpx.TimeoutException:
-            console.print("[bold red]Request timed out after 5 seconds")
-        except httpx.RequestError as e:
-            console.print(f"[bold red]Unable to search for existing torrents: {e}")
-        except Exception as e:
-            console.print(f"[bold red]Unexpected error: {e}")
-            await asyncio.sleep(5)
+        console.print("[red]Cannot search for dupes on TVC at this time.[/red]")
+        console.print("[red]Please make sure you are not uploading duplicates.")
 
         return dupes
 
@@ -810,7 +715,8 @@ class TVC():
 
         try:
             await asyncio.to_thread(_write)
-            console.print(f"[cyan]Wrote DESCRIPTION file to {descfile_path} ({len(desc)} chars)")
+            if meta['debug']:
+                console.print(f"[cyan]Wrote DESCRIPTION file to {descfile_path} ({len(desc)} chars)")
         except Exception as e:
             console.print(f"[bold red]Failed to write DESCRIPTION file: {e}")
 
