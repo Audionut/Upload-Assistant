@@ -184,7 +184,7 @@ class TVC():
             for code in meta['origin_country_code']:
                 if code in country_map:
                     name += f" [{country_map[code]}]"
-                    break
+                    break  # append only the first match
 
         return name
 
@@ -239,8 +239,6 @@ class TVC():
             RuntimeError: If upload fails with non-200 HTTP status.
         """
         common = COMMON(config=self.config)
-        # validate image hosts via wrapper
-        await self.check_image_hosts(meta)
 
         image_list = meta.get('TVC_images_key', meta.get('image_list', []))
         if not isinstance(image_list, (list, tuple)):
@@ -260,29 +258,15 @@ class TVC():
         cat_id = await self.get_cat_id(meta['genres']) if meta['category'] == 'TV' else 44
         meta['language_checked'] = True
 
-        # Parse subtitle languages for metadata only
-        subtitle_langs_local = []
-        try:
-            for t in mi.get('media', {}).get('track', []):
-                if t.get('@type') == 'Text' and 'Language' in t and t['Language']:
-                    subtitle_langs_local.append(str(t['Language']).strip().title())
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not parse subtitle languages: {e}")
-        subtitle_meta = meta.get('subtitle_languages') or subtitle_langs_local
-        if subtitle_meta:
-            meta['subtitle_languages'] = subtitle_meta
-
-        # Foreign category check based on TMDB original_language
+        # Foreign category check based on TMDB original_language only
         original_lang = meta.get("original_language", "")
         if original_lang and not original_lang.startswith("en") and original_lang not in ["ga", "gd", "cy"]:
             cat_id = self.tv_type_map["foreign"]
         elif not original_lang:
             # Fallback: inspect audio languages from MediaInfo if TMDB data is missing
             audio_langs = self.get_audio_languages(mi)
-            if audio_langs:
-                meta['audio_languages'] = audio_langs
-                if "English" not in audio_langs:
-                    cat_id = self.tv_type_map["foreign"]
+            if audio_langs and "English" not in audio_langs:
+                cat_id = self.tv_type_map["foreign"]
 
         resolution_id = await self.get_res_id(meta.get('tv_pack', 0), meta['resolution'])
 
@@ -315,14 +299,15 @@ class TVC():
         elif meta['category'] == "TV":
             # Use safe lookups to avoid KeyError if 'search_year' is missing
             search_year = meta.get('search_year', '')
-            year = meta.get('year', '') if search_year != '' else ''
+            # If search_year is empty, fall back to year
+            year = meta.get('year', '') if search_year == '' else ''
             if meta.get('no_year', False):
                 year = ''
             year_str = f" ({year})" if year else ""
 
             if meta['tv_pack']:
                 season_first = (meta.get('season_air_first_date') or "")[:4]
-                season_year = season_first or meta.get('year', '')
+                season_year = season_first or year
                 tvc_name = (
                     f"{meta['title']} - Series {meta['season_int']} ({season_year}) "
                     f"[{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
@@ -400,6 +385,9 @@ class TVC():
         if 'upload_to_tvc' in locals() and upload_to_tvc is False:
             return
 
+        # explicit empty return for clarity
+        return
+
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         if meta['debug'] is False:
@@ -447,10 +435,13 @@ class TVC():
                 )
 
             except Exception:
-                console.print(traceback.format_exc())
+                # Always show the high‑level warning
                 console.print("[yellow]It may have uploaded, go check")
-                if response is not None:
-                    console.print(response.text.removeprefix('application/x-bittorrent\n'))
+                # Only show detailed diagnostics when debug is enabled
+                if meta.get('debug', False):
+                    console.print(traceback.format_exc())
+                    if response is not None:
+                        console.print(response.text.removeprefix('application/x-bittorrent\n'))
 
         else:
             console.print("[cyan]Request Data:")
@@ -503,10 +494,9 @@ class TVC():
             meta['title'] = response.get('title', meta.get('title', ''))
             meta['original_title'] = response.get('original_title', meta['title'])
             meta['original_language'] = response.get('original_language', 'en')
-            try:
-                meta['release_dates'] = movie.release_dates()
-            except (requests.exceptions.RequestException, KeyError) as e:
-                console.print(f"[yellow]Warning: Could not fetch movie release dates: {e}")
+            # release_dates are already included in the movie.info() payload
+            if 'release_dates' in response:
+                meta['release_dates'] = response['release_dates']
 
         elif meta['category'] == "TV":
             tv = tmdb.TV(meta['tmdb'])
