@@ -203,7 +203,7 @@ class TVC():
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-        cat_id = await self.get_cat_id(meta.get('genres', [])) if meta.get('category', '') == 'TV' else 44
+        cat_id = await self.get_cat_id(meta.get('genres', '')) if meta.get('category', '') == 'TV' else 44
         meta['language_checked'] = True
 
         # Foreign category check based on TMDB original_language only
@@ -453,6 +453,11 @@ class TVC():
 
         if meta['category'] == "MOVIE":
             # Everything movie-specific is already handled
+            if meta['debug']:
+                console.print("[yellow]Fetching TMDb movie details[/yellow]")
+                movie = tmdb.Movies(meta['tmdb'])
+                response = movie.info()
+                console.print(f"[cyan]DEBUG: Movie data: {response}[/cyan]")
             return
 
         elif meta['category'] == "TV":
@@ -528,6 +533,7 @@ class TVC():
 
         console.print("[red]Cannot search for dupes on TVC at this time.[/red]")
         console.print("[red]Please make sure you are not uploading duplicates.")
+        await asyncio.sleep(2)
 
         return dupes
 
@@ -577,17 +583,20 @@ class TVC():
 
         # Release info for movies
         rd_info = ""
-        if meta['category'] == "MOVIE" and 'release_date' in meta:
-            for cc in meta['release_date']['results']:
-                for rd in cc['release_date']:
-                    if rd['type'] == 6:
-                        channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
-                        rd_info += (
-                            f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n"
-                            f"{str(rd['release_date'])[:10]} on {channel}\n"
-                        )
-        if rd_info:
-            desc += f"[center]{rd_info}[/center]\n\n"
+        if meta['category'] == "MOVIE":
+            if 'release_dates' in meta:
+                for cc in meta['release_dates']['results']:
+                    for rd in cc['release_dates']:
+                        if rd['type'] == 6:
+                            channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
+                            rd_info += (
+                                f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n"
+                                f"{str(rd['release_date'])[:10]} on {channel}\n"
+                            )
+            else:
+                rd_info = meta.get('release_date', '')
+            if rd_info:
+                desc += f"[center]{rd_info}[/center]\n\n"
 
         # TV pack layout
         if meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
