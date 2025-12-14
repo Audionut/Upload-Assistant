@@ -32,6 +32,7 @@ class TVC():
         # TV type mapping as a dict for clarity and maintainability
         self.tv_type_map = {
             "comedy": "29",
+            "current affairs": "45"
             "documentary": "5",
             "drama": "11",
             "entertainment": "14",
@@ -39,7 +40,7 @@ class TVC():
             "foreign": "43",
             "kids": "32",
             "movies": "44",
-            "news": "45",
+            "news": "54",
             "reality": "52",
             "soaps": "30",
             "sci-fi": "33",
