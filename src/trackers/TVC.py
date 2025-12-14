@@ -203,7 +203,7 @@ class TVC():
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-        cat_id = await self.get_cat_id(meta['genres']) if meta['category'] == 'TV' else 44
+        cat_id = await self.get_cat_id(meta.get('genres', [])) if meta.get('category', '') == 'TV' else 44
         meta['language_checked'] = True
 
         # Foreign category check based on TMDB original_language only
@@ -452,19 +452,13 @@ class TVC():
             meta['origin_country_code'].append(meta['production_companies'][0].get('origin_country', ''))
 
         if meta['category'] == "MOVIE":
-            # Eerything movie-specific is already handled
+            # Everything movie-specific is already handled
             return
 
         elif meta['category'] == "TV":
-            tv = tmdb.TV(meta['tmdb'])
-            response = tv.info()
-            meta['title'] = response.get('name', meta.get('title', ''))
-            meta['original_title'] = response.get('original_name', meta['title'])
-            meta['original_language'] = response.get('original_language', 'en')
-
             # TVC-specific extras
-            if hasattr(tv, 'networks') and len(tv.networks) != 0 and 'name' in tv.networks[0]:
-                meta['networks'] = tv.networks[0]['name']
+            if meta.get('networks') and len(meta['networks']) != 0 and 'name' in meta['networks'][0]:
+                meta['networks'] = meta['networks'][0]['name']
 
             try:
                 if not meta['tv_pack']:
@@ -486,8 +480,6 @@ class TVC():
                             "airdate": ep.get("air_date") or "",
                             "overview": (ep.get("overview") or "").strip()
                         })
-                    if hasattr(tv, 'first_air_date'):
-                        meta['first_air_date'] = tv.first_air_date
 
             except (requests.exceptions.RequestException, KeyError, TypeError) as e:
                 console.print(f"[yellow]Expected error while fetching TV episode/season info: {e}")
@@ -564,9 +556,9 @@ class TVC():
 
         # Release info for movies
         rd_info = ""
-        if meta['category'] == "MOVIE" and 'release_dates' in meta:
-            for cc in meta['release_dates']['results']:
-                for rd in cc['release_dates']:
+        if meta['category'] == "MOVIE" and 'release_date' in meta:
+            for cc in meta['release_date']['results']:
+                for rd in cc['release_date']:
                     if rd['type'] == 6:
                         channel = str(rd['note']) if str(rd['note']) != "" else "N/A Channel"
                         rd_info += (

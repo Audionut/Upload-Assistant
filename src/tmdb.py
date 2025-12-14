@@ -749,7 +749,10 @@ async def tmdb_other_meta(
     tmdb_type = ""
     year = None
     release_date = None
+    first_air_date = None
+    last_air_date = None
     youtube = None
+    networks = []
 
     if tmdb_id == 0:
         try:
@@ -801,6 +804,7 @@ async def tmdb_other_meta(
         try:
             response.raise_for_status()
             media_data = response.json()
+            console.print(f"media_data: {media_data}")
         except Exception:
             console.print(f"[bold red]Failed to fetch media data: {response.status_code}[/bold red]")
             return {}
@@ -838,9 +842,12 @@ async def tmdb_other_meta(
                     year = int(year_match.group(0))
             if not year:
                 year = datetime.strptime(media_data['last_air_date'], '%Y-%m-%d').year if media_data['last_air_date'] else 0
+            first_air_date = media_data.get('first_air_date', None)
+            last_air_date = media_data.get('last_air_date', None)
             runtime_list = media_data.get('episode_run_time', [60])
             runtime = runtime_list[0] if runtime_list else 60
             tmdb_type = media_data.get('type', 'Scripted')
+            networks = media_data.get('networks', [])
 
         production_companies = media_data.get('production_companies', [])
         production_countries = media_data.get('production_countries', [])
@@ -1031,7 +1038,9 @@ async def tmdb_other_meta(
     tmdb_metadata = {
         'title': title,
         'year': year,
-        'release_date': release_date if category == "MOVIE" else None,
+        'release_date': release_date,
+        'first_air_date': first_air_date,
+        'last_air_date': last_air_date,
         'imdb_id': imdb_id,
         'tvdb_id': tvdb_id,
         'origin_country': origin_country,
@@ -1059,6 +1068,7 @@ async def tmdb_other_meta(
         'certification': certification,
         'production_companies': production_companies,
         'production_countries': production_countries,
+        'networks': networks,
         'imdb_mismatch': imdb_mismatch,
         'mismatched_imdb_id': mismatched_imdb_id
     }
