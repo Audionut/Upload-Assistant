@@ -748,6 +748,7 @@ async def tmdb_other_meta(
     title = None
     tmdb_type = ""
     year = None
+    release_date = None
     youtube = None
 
     if tmdb_id == 0:

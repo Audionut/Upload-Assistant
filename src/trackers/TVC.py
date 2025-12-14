@@ -248,7 +248,7 @@ class TVC():
             # Use safe lookups to avoid KeyError if 'search_year' is missing
             search_year = meta.get('search_year', '')
             # If search_year is empty, fall back to year
-            year = meta.get('year', '') if search_year == '' else ''
+            year = search_year if search_year else meta.get('year', '')
             if meta.get('no_year', False):
                 year = ''
             year_str = f" ({year})" if year else ""
@@ -350,7 +350,20 @@ class TVC():
                         )
 
                 if response.status_code != 200:
-                    raise RuntimeError(f"TVC upload failed with HTTP {response.status_code}")
+                    body = response.text.removeprefix("application/x-bittorrent\n")
+                    if response.status_code == 403:
+                        meta['tracker_status'][self.tracker]['status_message'] = (
+                            "data error: Forbidden (403). This may indicate that you do not have upload permission."
+                        )
+                    elif response.status_code in (301, 302, 303, 307, 308):
+                        meta['tracker_status'][self.tracker]['status_message'] = (
+                            f"data error: Redirect ({response.status_code}). Please verify that your API key is valid."
+                        )
+                    else:
+                        meta['tracker_status'][self.tracker]['status_message'] = (
+                            f"data error: HTTP {response.status_code} - {body}"
+                        )
+                    return
                 # TVC returns "application/x-bittorrent\n{json}" so strip the prefix
                 json_data = json.loads(response.text.removeprefix('application/x-bittorrent\n'))
                 meta['tracker_status'][self.tracker]['status_message'] = json_data
@@ -380,17 +393,6 @@ class TVC():
                     f"https://tvchaosuk.com/torrents/{t_id}"
                 )
 
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 403:
-                    meta['tracker_status'][self.tracker]['status_message'] = (
-                        "data error: Forbidden (403). This may indicate that you do not have upload permission."
-                    )
-                elif e.response.status_code == 302:
-                    meta['tracker_status'][self.tracker]['status_message'] = (
-                        "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
-                    )
-                else:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 30 seconds'
             except httpx.RequestError as e:
