@@ -804,7 +804,6 @@ async def tmdb_other_meta(
         try:
             response.raise_for_status()
             media_data = response.json()
-            console.print(f"media_data: {media_data}")
         except Exception:
             console.print(f"[bold red]Failed to fetch media data: {response.status_code}[/bold red]")
             return {}
@@ -1391,6 +1390,8 @@ async def daily_to_tmdb_season_episode(tmdbid, date):
 
 
 async def get_episode_details(tmdb_id, season_number, episode_number, debug=False):
+    if debug:
+        console.print(f"[cyan]Fetching episode details for TMDb ID: {tmdb_id}, Season: {season_number}, Episode: {episode_number}[/cyan]")
     async with httpx.AsyncClient() as client:
         try:
             # Get episode details
@@ -1456,6 +1457,77 @@ async def get_episode_details(tmdb_id, season_number, episode_number, debug=Fals
         except Exception:
             console.print(f"[red]Error fetching episode details for {tmdb_id}[/red]")
             console.print(f"[red]Season: {season_number}, Episode: {episode_number}[/red]")
+            return {}
+
+
+async def get_season_details(tmdb_id, season_number, debug=False):
+    if debug:
+        console.print(f"[cyan]Fetching season details for TMDb ID: {tmdb_id}, Season: {season_number}[/cyan]")
+    async with httpx.AsyncClient() as client:
+        try:
+            # Get season details
+            response = await client.get(
+                f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}",
+                params={"api_key": TMDB_API_KEY, "append_to_response": "images,credits"}
+            )
+            try:
+                response.raise_for_status()
+                season_data = response.json()
+
+                # Extract only relevant information
+                season_info = {
+                    '_id': season_data.get('_id'),
+                    'air_date': season_data.get('air_date'),
+                    'name': season_data.get('name'),
+                    'overview': season_data.get('overview'),
+                    'id': season_data.get('id'),
+                    'poster_path': season_data.get('poster_path'),
+                    'season_number': season_data.get('season_number'),
+                    'vote_average': season_data.get('vote_average'),
+                    'vote_count': season_data.get('vote_count'),
+                    'episodes': []
+                }
+
+                # Extract minimal episode information
+                for episode in season_data.get('episodes', []):
+                    season_info['episodes'].append({
+                        'air_date': episode.get('air_date'),
+                        'episode_number': episode.get('episode_number'),
+                        'episode_type': episode.get('episode_type'),
+                        'id': episode.get('id'),
+                        'name': episode.get('name'),
+                        'overview': episode.get('overview'),
+                        'runtime': episode.get('runtime'),
+                        'season_number': episode.get('season_number'),
+                        'still_path': episode.get('still_path'),
+                        'vote_average': episode.get('vote_average'),
+                        'vote_count': episode.get('vote_count')
+                    })
+
+                # Include poster images if available
+                if 'images' in season_data and 'posters' in season_data['images']:
+                    season_info['images'] = {
+                        'posters': season_data['images']['posters']
+                    }
+
+                # Include main cast/crew if available (top-level only, not per-episode)
+                if 'credits' in season_data:
+                    if 'cast' in season_data['credits']:
+                        season_info['credits'] = {
+                            'cast': season_data['credits']['cast']
+                        }
+
+                if debug:
+                    console.print(f"[cyan]Extracted season data: {json.dumps(season_info, indent=2)[:600]}...[/cyan]")
+                return season_info
+
+            except Exception:
+                console.print(f"[bold red]Failed to fetch season data: {response.status_code}[/bold red]")
+                return {}
+
+        except Exception:
+            console.print(f"[red]Error fetching season details for {tmdb_id}[/red]")
+            console.print(f"[red]Season: {season_number}[/red]")
             return {}
 
 

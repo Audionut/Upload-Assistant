@@ -462,24 +462,45 @@ class TVC():
 
             try:
                 if not meta['tv_pack']:
-                    episode_info = tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int']).info()
-                    meta['episode_airdate'] = episode_info.get('air_date', '')
-                    meta['episode_name'] = episode_info.get('name', '')
-                    meta['episode_overview'] = episode_info.get('overview', '')
+                    if 'tmdb_episode_data' not in meta or not meta['tmdb_episode_data']:
+                        episode_info = tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int']).info()
+                        meta['episode_airdate'] = episode_info.get('air_date', '')
+                        meta['episode_name'] = episode_info.get('name', '')
+                        meta['episode_overview'] = episode_info.get('overview', '')
+                    else:
+                        episode_info = meta['tmdb_episode_data']
+                        meta['episode_airdate'] = episode_info.get('air_date', '')
+                        meta['episode_name'] = episode_info.get('name', '')
+                        meta['episode_overview'] = episode_info.get('overview', '')
                 else:
-                    season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
-                    air_date = season_info.get('air_date') or ""
-                    meta['season_air_first_date'] = air_date
-                    meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
-                    meta['episodes'] = []
-                    for ep in season_info.get('episodes', []):
-                        code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
-                        meta['episodes'].append({
-                            "code": code,
-                            "title": (ep.get("name") or "").strip(),
-                            "airdate": ep.get("air_date") or "",
-                            "overview": (ep.get("overview") or "").strip()
-                        })
+                    if 'tmdb_season_data' not in meta or not meta['tmdb_season_data']:
+                        season_info = tmdb.TV_Seasons(meta['tmdb'], meta['season_int']).info()
+                        air_date = season_info.get('air_date') or ""
+                        meta['season_air_first_date'] = air_date
+                        meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
+                        meta['episodes'] = []
+                        for ep in season_info.get('episodes', []):
+                            code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
+                            meta['episodes'].append({
+                                "code": code,
+                                "title": (ep.get("name") or "").strip(),
+                                "airdate": ep.get("air_date") or "",
+                                "overview": (ep.get("overview") or "").strip()
+                            })
+                    else:
+                        season_info = meta['tmdb_season_data']
+                        air_date = season_info.get('air_date') or ""
+                        meta['season_air_first_date'] = air_date
+                        meta['season_name'] = season_info.get('name', f"Season {meta['season_int']}")
+                        meta['episodes'] = []
+                        for ep in season_info.get('episodes', []):
+                            code = f"S{str(ep.get('season_number', 0)).zfill(2)}E{str(ep.get('episode_number', 0)).zfill(2)}"
+                            meta['episodes'].append({
+                                "code": code,
+                                "title": (ep.get("name") or "").strip(),
+                                "airdate": ep.get("air_date") or "",
+                                "overview": (ep.get("overview") or "").strip()
+                            })
 
             except (requests.exceptions.RequestException, KeyError, TypeError) as e:
                 console.print(f"[yellow]Expected error while fetching TV episode/season info: {e}")

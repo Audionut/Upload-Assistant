@@ -5,7 +5,7 @@ from data.config import config
 from src.console import console
 from src.tvmaze import search_tvmaze, get_tvmaze_episode_data
 from src.imdb import get_imdb_info_api
-from src.tmdb import tmdb_other_meta, get_tmdb_from_imdb, get_episode_details
+from src.tmdb import tmdb_other_meta, get_tmdb_from_imdb, get_episode_details, get_season_details
 from src.tvdb import tvdb_data
 
 tvdb_handler = tvdb_data(config)
@@ -66,6 +66,15 @@ async def all_ids(meta):
                 meta.get('tmdb_id'),
                 meta.get('season_int'),
                 meta.get('episode_int'),
+                debug=meta.get('debug', False)
+            )
+        )
+    elif meta['category'] == 'TV' and meta.get('tv_pack', False):
+        # For TV packs, we might want to get season details instead
+        all_tasks.append(
+            get_season_details(
+                meta.get('tmdb_id'),
+                meta.get('season_int'),
                 debug=meta.get('debug', False)
             )
         )
@@ -141,6 +150,17 @@ async def all_ids(meta):
         elif isinstance(tmdb_episode_data, Exception):
             console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}")
 
+    elif meta['category'] == 'TV' and meta.get('tv_pack', False):
+        # Process TMDb season data for TV packs
+        tmdb_season_data = results[result_index]
+        result_index += 1
+
+        if not isinstance(tmdb_season_data, Exception) and tmdb_season_data:
+            meta['tmdb_season_data'] = tmdb_season_data
+            meta['we_checked_tmdb'] = True
+        elif isinstance(tmdb_season_data, Exception):
+            console.print(f"[yellow]TMDb season data retrieval failed: {tmdb_season_data}[/yellow]")
+
     return meta
 
 
@@ -185,12 +205,30 @@ async def imdb_tmdb_tvdb(meta, filename):
     tasks = [task for task in tasks if task is not None]
 
     if meta.get('category') == 'TV':
-
         tvdb_task = tvdb_handler.get_tvdb_episodes(
             meta['tvdb_id'],
             meta.get('debug', False)
         )
         tasks.append(tvdb_task)
+
+        if not meta.get('tv_pack', False) and 'season_int' in meta and 'episode_int' in meta and meta.get('episode_int') != 0:
+            # Add TMDb episode details task
+            tmdb_episode_task = get_episode_details(
+                meta.get('tmdb_id'),
+                meta.get('season_int'),
+                meta.get('episode_int'),
+                debug=meta.get('debug', False)
+            )
+            tasks.append(tmdb_episode_task)
+
+        if meta.get('tv_pack'):
+            # For TV packs, we might want to get season details instead
+            tmdb_season_task = get_season_details(
+                meta.get('tmdb_id'),
+                meta.get('season_int'),
+                debug=meta.get('debug', False)
+            )
+            tasks.append(tmdb_season_task)
 
     # Execute all tasks in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -246,7 +284,9 @@ async def imdb_tmdb_tvdb(meta, filename):
             elif isinstance(tvdb_episode_data, Exception):
                 console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episode_data}[/yellow]")
 
-        if len(results) > result_index:
+        # Process TMDb episode data only if we added that task
+        if (not meta.get('tv_pack', False) and 'season_int' in meta and
+                'episode_int' in meta and meta.get('episode_int') != 0 and len(results) > result_index):
             tmdb_episode_data = results[result_index]
             result_index += 1
 
@@ -257,10 +297,22 @@ async def imdb_tmdb_tvdb(meta, filename):
             elif isinstance(tmdb_episode_data, Exception):
                 console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
 
+        # Process TMDb season data for TV packs
+        elif (meta.get('tv_pack', False) and len(results) > result_index):
+            tmdb_season_data = results[result_index]
+            result_index += 1
+
+            if not isinstance(tmdb_season_data, Exception) and tmdb_season_data:
+                meta['tmdb_season_data'] = tmdb_season_data
+                meta['we_checked_tmdb'] = True
+
+            elif isinstance(tmdb_season_data, Exception):
+                console.print(f"[yellow]TMDb season data retrieval failed: {tmdb_season_data}[/yellow]")
+
     return meta
 
 
-async def imdb_tvdb(meta, filename, tvdb_api=None, tvdb_token=None):
+async def imdb_tvdb(meta, filename):
     if meta['debug']:
         console.print("[yellow]Both IMDb and TVDB IDs are present[/yellow]")
     tasks = [
@@ -381,6 +433,14 @@ async def imdb_tmdb(meta, filename):
                     debug=meta.get('debug', False)
                 )
             )
+        elif meta.get('tv_pack', False):
+            coroutines.append(
+                get_season_details(
+                    meta.get('tmdb_id'),
+                    meta.get('season_int'),
+                    debug=meta.get('debug', False)
+                )
+            )
 
     # Gather results
     results = await asyncio.gather(*coroutines, return_exceptions=True)
@@ -440,14 +500,24 @@ async def imdb_tmdb(meta, filename):
                 meta['tvmaze_id'] = 0
 
         # Process TMDb episode details if they were included
-        if len(results) > 3:
-            episode_details_result = results[3]
-            if isinstance(episode_details_result, dict):
-                meta['tmdb_episode_data'] = episode_details_result
-                meta['we_checked_tmdb'] = True
+        if not meta.get('tv_pack', False):
+            if len(results) > 3:
+                episode_details_result = results[3]
+                if isinstance(episode_details_result, dict):
+                    meta['tmdb_episode_data'] = episode_details_result
+                    meta['we_checked_tmdb'] = True
 
-            elif isinstance(episode_details_result, Exception):
-                console.print(f"[red]TMDb episode details API call failed: {episode_details_result}[/red]")
+                elif isinstance(episode_details_result, Exception):
+                    console.print(f"[red]TMDb episode details API call failed: {episode_details_result}[/red]")
+        else:
+            if len(results) > 3:
+                season_details_result = results[3]
+                if isinstance(season_details_result, dict):
+                    meta['tmdb_season_data'] = season_details_result
+                    meta['we_checked_tmdb'] = True
+
+                elif isinstance(season_details_result, Exception):
+                    console.print(f"[red]TMDb season details API call failed: {season_details_result}[/red]")
 
     return meta
 
@@ -526,7 +596,7 @@ async def get_tv_data(meta):
     meta['tvdb_series_name'] = None
     if not meta.get('tv_pack', False) and meta.get('episode_int') != 0:
         if (not meta.get('we_checked_tvdb', False) and not meta.get('we_asked_tvmaze', False)) and meta.get('tvmaze_id') != 0 and meta['tvmaze_id'] != 0 and not meta.get('anime', False):
-            meta = await get_tvdb_tvmaze_episode_data(meta)
+            meta = await get_tvdb_tvmaze_tmdb_episode_data(meta)
         elif meta.get('tvdb_id', 0) and not meta.get('we_checked_tvdb', False):
             tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(meta['tvdb_id'])
             if tvdb_episode_data:
@@ -626,7 +696,7 @@ async def get_tv_data(meta):
     return meta
 
 
-async def get_tvdb_tvmaze_episode_data(meta):
+async def get_tvdb_tvmaze_tmdb_episode_data(meta):
     if meta['debug']:
         console.print("[yellow]Gathering TVDb and TVMaze episode data[/yellow]")
 
@@ -657,6 +727,19 @@ async def get_tvdb_tvmaze_episode_data(meta):
             )
         )
         task_map['tvdb'] = len(tasks) - 1
+
+    if meta.get('tmdb_id'):
+        if meta['debug']:
+            console.print("[yellow]Fetching TMDb episode data...[/yellow]")
+        tasks.append(
+            get_episode_details(
+                meta.get('tmdb_id'),
+                meta.get('season_int'),
+                meta.get('episode_int'),
+                debug=meta.get('debug', False)
+            )
+        )
+        task_map['tmdb'] = len(tasks) - 1
 
     if not tasks:
         return meta
@@ -694,5 +777,16 @@ async def get_tvdb_tvmaze_episode_data(meta):
                 console.print(f"[yellow]Unexpected TVDb episodes result format: {tvdb_episodes_result}[/yellow]")
         elif isinstance(tvdb_episodes_result, Exception):
             console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episodes_result}[/yellow]")
+
+    # Process TMDb episode details results
+    if 'tmdb' in task_map:
+        tmdb_episode_data = results[task_map['tmdb']]
+        if not isinstance(tmdb_episode_data, Exception) and tmdb_episode_data:
+            meta['tmdb_episode_data'] = tmdb_episode_data
+            meta['we_checked_tmdb'] = True
+            if meta['debug']:
+                console.print("[green]TMDb episode data retrieved successfully.[/green]")
+        elif isinstance(tmdb_episode_data, Exception):
+            console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
 
     return meta
