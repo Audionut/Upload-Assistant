@@ -69,7 +69,7 @@ async def all_ids(meta):
                 debug=meta.get('debug', False)
             )
         )
-    elif meta['category'] == 'TV' and meta.get('tv_pack', False):
+    elif meta['category'] == 'TV' and meta.get('tv_pack', False) and 'season_int' in meta:
         # For TV packs, we might want to get season details instead
         all_tasks.append(
             get_season_details(
@@ -150,7 +150,7 @@ async def all_ids(meta):
         elif isinstance(tmdb_episode_data, Exception):
             console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}")
 
-    elif meta['category'] == 'TV' and meta.get('tv_pack', False):
+    elif meta['category'] == 'TV' and meta.get('tv_pack', False) and 'season_int' in meta:
         # Process TMDb season data for TV packs
         tmdb_season_data = results[result_index]
         result_index += 1
@@ -221,7 +221,7 @@ async def imdb_tmdb_tvdb(meta, filename):
             )
             tasks.append(tmdb_episode_task)
 
-        if meta.get('tv_pack'):
+        if meta.get('tv_pack') and 'season_int' in meta:
             # For TV packs, we might want to get season details instead
             tmdb_season_task = get_season_details(
                 meta.get('tmdb_id'),
@@ -298,7 +298,7 @@ async def imdb_tmdb_tvdb(meta, filename):
                 console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
 
         # Process TMDb season data for TV packs
-        elif (meta.get('tv_pack', False) and len(results) > result_index):
+        elif (meta.get('tv_pack', False) and 'season_int' in meta and len(results) > result_index):
             tmdb_season_data = results[result_index]
             result_index += 1
 
@@ -433,7 +433,7 @@ async def imdb_tmdb(meta, filename):
                     debug=meta.get('debug', False)
                 )
             )
-        elif meta.get('tv_pack', False):
+        elif meta.get('tv_pack', False) and 'season_int' in meta:
             coroutines.append(
                 get_season_details(
                     meta.get('tmdb_id'),
@@ -510,7 +510,7 @@ async def imdb_tmdb(meta, filename):
                 elif isinstance(episode_details_result, Exception):
                     console.print(f"[red]TMDb episode details API call failed: {episode_details_result}[/red]")
         else:
-            if len(results) > 3:
+            if 'season_int' in meta and len(results) > 3:
                 season_details_result = results[3]
                 if isinstance(season_details_result, dict):
                     meta['tmdb_season_data'] = season_details_result
