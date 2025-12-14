@@ -50,8 +50,7 @@ class UNIT3D:
         }
         if meta['category'] == 'TV':
             params['name'] = params['name'] + f" {meta.get('season', '')}"
-        if meta.get('edition', '') != '':
-            params['name'] = params['name'] + f" {meta['edition']}"
+
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url=self.search_url, params=params)
