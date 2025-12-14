@@ -435,24 +435,23 @@ class TVC():
         return sorted(audio_langs) if audio_langs else []
 
     async def get_tmdb_data(self, meta):
-        """
-        Fetch TMDB metadata for movies or TV shows.
+        # Origin country codes (shared for both movies and TV)
+        meta['origin_country_code'] = []
+        if meta.get('origin_country'):
+            if isinstance(meta['origin_country'], list):
+                meta['origin_country_code'].extend(meta['origin_country'])
+            else:
+                meta['origin_country_code'].append(meta['origin_country'])
+        elif len(meta.get('production_countries', [])):
+            for i in meta['production_countries']:
+                if 'iso_3166_1' in i:
+                    meta['origin_country_code'].append(i['iso_3166_1'])
+        elif len(meta.get('production_companies', [])):
+            meta['origin_country_code'].append(meta['production_companies'][0].get('origin_country', ''))
 
-        TMDB’s API is inconsistent: movies expose release dates directly,
-        but TV shows require separate calls to TV, TV_Seasons, and TV_Episodes.
-        This helper unifies those calls into a single meta dict so the rest
-        of the upload logic doesn’t have to care about TMDB’s quirks.
-        ...
-        """
         if meta['category'] == "MOVIE":
-            movie = tmdb.Movies(meta['tmdb'])
-            response = movie.info()
-            meta['title'] = response.get('title', meta.get('title', ''))
-            meta['original_title'] = response.get('original_title', meta['title'])
-            meta['original_language'] = response.get('original_language', 'en')
-            # release_dates are already included in the movie.info() payload
-            if 'release_dates' in response:
-                meta['release_dates'] = response['release_dates']
+            # Eerything movie-specific is already handled
+            return
 
         elif meta['category'] == "TV":
             tv = tmdb.TV(meta['tmdb'])
@@ -501,20 +500,6 @@ class TVC():
 
         else:
             raise ValueError(f"Unsupported category for TVC: {meta.get('category')}")
-
-        # Origin country codes (shared for both movies and TV)
-        meta['origin_country_code'] = []
-        if 'origin_country' in response:
-            if isinstance(response['origin_country'], list):
-                meta['origin_country_code'].extend(response['origin_country'])
-            else:
-                meta['origin_country_code'].append(response['origin_country'])
-        elif len(response.get('production_countries', [])):
-            for i in response['production_countries']:
-                if 'iso_3166_1' in i:
-                    meta['origin_country_code'].append(i['iso_3166_1'])
-        elif len(response.get('production_companies', [])):
-            meta['origin_country_code'].append(response['production_companies'][0].get('origin_country', ''))
 
     async def search_existing(self, meta, _disctype=None):
         # Search on TVCUK has been DISABLED due to issues, but we can still skip uploads based on criteria

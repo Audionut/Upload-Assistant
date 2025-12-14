@@ -813,6 +813,8 @@ async def tmdb_other_meta(
             original_title = media_data.get('original_title', title)
             year = datetime.strptime(media_data['release_date'], '%Y-%m-%d').year if media_data['release_date'] else search_year
             runtime = media_data.get('runtime', 60)
+            if media_data.get('release_date'):
+                release_date = media_data['release_date']
             if quickie_search or not imdb_id:
                 imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
                 if imdb_id_str and imdb_id_str.isdigit():
@@ -838,6 +840,9 @@ async def tmdb_other_meta(
             runtime_list = media_data.get('episode_run_time', [60])
             runtime = runtime_list[0] if runtime_list else 60
             tmdb_type = media_data.get('type', 'Scripted')
+
+        production_companies = media_data.get('production_companies', [])
+        production_countries = media_data.get('production_countries', [])
 
         overview = media_data['overview']
         original_language_from_tmdb = media_data['original_language']
@@ -1025,6 +1030,7 @@ async def tmdb_other_meta(
     tmdb_metadata = {
         'title': title,
         'year': year,
+        'release_date': release_date if category == "MOVIE" else None,
         'imdb_id': imdb_id,
         'tvdb_id': tvdb_id,
         'origin_country': origin_country,
@@ -1050,6 +1056,8 @@ async def tmdb_other_meta(
         'runtime': runtime,
         'youtube': youtube,
         'certification': certification,
+        'production_companies': production_companies,
+        'production_countries': production_countries,
         'imdb_mismatch': imdb_mismatch,
         'mismatched_imdb_id': mismatched_imdb_id
     }
