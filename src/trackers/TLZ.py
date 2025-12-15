@@ -30,7 +30,6 @@ class TLZ(UNIT3D):
     async def get_type_id(self, meta):
         type_id = {
             'FILM': '1',
-            'CAM': '2',
             'EPISODE': '3',
             'PACK': '4',
         }.get(meta.get('type'), '0')
