@@ -112,13 +112,13 @@ async def get_video_encode(mi, type, bdinfo):
     except Exception:
         format = bdinfo['video'][0]['codec']
         format_profile = bdinfo['video'][0]['profile']
-    if type in ("ENCODE", "WEBRIP", "DVDRIP"):  # ENCODE or WEBRIP or DVDRIP
+    if format in ('AV1', 'VP9', 'VC-1'):
+        codec = format
+    elif type in ("ENCODE", "WEBRIP", "DVDRIP"):  # ENCODE or WEBRIP or DVDRIP
         if format == 'AVC':
             codec = 'x264'
         elif format == 'HEVC':
             codec = 'x265'
-        elif format == 'AV1':
-            codec = 'AV1'
         elif format == 'MPEG-4 Visual':
             if encoded_library_name:
                 if 'xvid' in encoded_library_name.lower():
@@ -130,15 +130,9 @@ async def get_video_encode(mi, type, bdinfo):
             codec = 'H.264'
         elif format == 'HEVC':
             codec = 'H.265'
-        elif format == 'AV1':
-            codec = 'AV1'
 
         if type == 'HDTV' and has_encode_settings is True:
             codec = codec.replace('H.', 'x')
-    elif format == "VP9":
-        codec = "VP9"
-    elif format == "VC-1":
-        codec = "VC-1"
     if format_profile == 'High 10':
         profile = "Hi10P"
     else:
