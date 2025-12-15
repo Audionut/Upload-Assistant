@@ -478,12 +478,17 @@ class AZTrackerBase:
 
         # Upload menu images
         for url in disc_menu_links:
-            result = await upload_remote_file(url)
-            if result:
-                results.append(result)
+            if not url.lower().endswith('.png'):
+                console.print(f"{self.tracker}: Skipping non-PNG menu image: {url}")
+            else:
+                result = await upload_remote_file(url)
+                if result:
+                    results.append(result)
 
-        if local_files:
-            paths = local_files[:limit - len(disc_menu_links)]
+        remaining_slots = max(0, limit - len(results))
+
+        if local_files and remaining_slots > 0:
+            paths = local_files[:remaining_slots]
 
             for path in tqdm(
                 paths,
@@ -496,7 +501,8 @@ class AZTrackerBase:
 
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-            links = image_links[:limit - len(disc_menu_links)]
+            remaining_slots = max(0, limit - len(results))
+            links = image_links[:remaining_slots]
 
             for url in tqdm(
                 links,

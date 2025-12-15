@@ -61,7 +61,7 @@ class DiscMenus:
             console.print("[yellow]No menu images found.[/yellow]")
             return
 
-        image_list = {
+        menu_images = {
             "menu_images": image_list
         }
 
@@ -69,7 +69,7 @@ class DiscMenus:
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
 
         with open(json_path, 'w') as f:
-            json.dump(image_list, f, indent=4)
+            json.dump(menu_images, f, indent=4)
 
         console.print(f"[green]Saved {len(image_list)} menu images to {json_path}[/green]")
 
