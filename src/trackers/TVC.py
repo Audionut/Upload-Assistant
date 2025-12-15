@@ -204,7 +204,7 @@ class TVC():
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-        cat_id = await self.get_cat_id(meta.get('genres', '')) if meta.get('category', '') == 'TV' else 44
+        cat_id = await self.get_cat_id(meta.get('genres', '')) if meta.get('category', '') == 'TV' else '44'
         meta['language_checked'] = True
 
         # Foreign category check based on TMDB original_language only
