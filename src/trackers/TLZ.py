@@ -19,7 +19,7 @@ class TLZ(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
         pass
-        
+
     async def get_category_id(self, meta):
         category_id = {
             'MOVIE': '1',
@@ -34,13 +34,13 @@ class TLZ(UNIT3D):
             'EPISODE': '3',
             'PACK': '4',
         }.get(meta.get('type'), '0')
-        
+
         if meta.get('tv_pack'):
             type_id = '4'
         elif type_id != '4':
             type_id = '3'
-            
+
         if meta['category'] == 'MOVIE':
             type_id = '1'
-        
+
         return {'type_id': type_id}
