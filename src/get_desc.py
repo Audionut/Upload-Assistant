@@ -348,6 +348,20 @@ class DescriptionBuilder:
 
         return ""
 
+    async def menu_screenshot_header(self, meta, tracker):
+        """Returns the screenshot header for menus if applicable."""
+        try:
+            if meta.get("is_disc", ""):
+                disc_menu_header = self.config["TRACKERS"][tracker].get(
+                    "disc_menu_header", self.config["DEFAULT"].get("disc_menu_header", None)
+                )
+                if disc_menu_header:
+                    return disc_menu_header
+        except Exception as e:
+            console.print(f"[yellow]Warning: Error getting menus screenshot header: {str(e)}[/yellow]")
+
+        return ""
+
     async def get_user_description(self, meta):
         """Returns the user-provided description (file or link)"""
         try:
@@ -647,6 +661,11 @@ class DescriptionBuilder:
         except Exception:
             screenheader = None
 
+        try:
+            disc_menu_header = await self.menu_screenshot_header(meta, tracker)
+        except Exception:
+            disc_menu_header = None
+
         # Check for saved pack_image_links.json file
         pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
 
@@ -667,6 +686,8 @@ class DescriptionBuilder:
             screensPerRow = 2
 
         desc_parts = []
+
+        desc_parts.append(self.menu_section(meta, disc_menu_header, screensPerRow))
 
         discs = meta.get("discs", [])
         if len(discs) == 1:
@@ -1248,3 +1269,25 @@ class DescriptionBuilder:
         description = "".join(part for part in desc_parts if part.strip())
 
         return description
+
+    def menu_section(self, meta, disc_menu_header, screensPerRow):
+        menu_image_section = ""
+        if meta.get("is_disc"):
+            menu_parts = []
+            menu_images = meta.get("menu_images", [])
+            if disc_menu_header and menu_images:
+                menu_parts.append(disc_menu_header + "\n")
+            if menu_images:
+                menu_parts.append("[center]")
+                for img_index in range(len(meta["menu_images"])):
+                    web_url = meta["menu_images"][img_index]["web_url"]
+                    raw_url = meta["menu_images"][img_index]["raw_url"]
+                    menu_parts.append(
+                        f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] "
+                    )
+                    if screensPerRow and (img_index + 1) % screensPerRow == 0:
+                        menu_parts.append("\n")
+                menu_parts.append("[/center]\n\n")
+                menu_image_section = "".join(menu_parts)
+
+        return menu_image_section

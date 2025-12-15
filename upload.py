@@ -26,6 +26,7 @@ from src.args import Args
 from src.cleanup import cleanup, reset_terminal
 from src.clients import Clients
 from src.console import console
+from src.disc_menus import process_disc_menus
 from src.get_name import get_name
 from src.get_desc import gen_desc
 from src.get_tracker_data import get_tracker_data
@@ -479,8 +480,26 @@ async def process_meta(meta, base_dir, bot=None):
                                 meta['tonemapped'] = image_data['tonemapped']
                                 if meta.get('debug'):
                                     console.print("[cyan]Loaded previously saved tonemapped status[/cyan]")
+
                     except Exception as e:
                         console.print(f"[yellow]Could not load saved image data: {str(e)}")
+
+            if meta.get('is_disc', ""):
+                menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
+                if os.path.exists(menus_data_file):
+                    try:
+                        with open(menus_data_file, 'r') as menus_file:
+                            menu_image_file = json.load(menus_file)
+
+                            if 'menu_images' in menu_image_file and not meta.get('menu_images'):
+                                meta['menu_images'] = menu_image_file['menu_images']
+                                if meta.get('debug'):
+                                    console.print(f"[cyan]Loaded {len(menu_image_file['menu_images'])} previously saved disc menus")
+
+                    except Exception as e:
+                        console.print(f"[yellow]Could not load saved menu image data: {str(e)}")
+                elif meta.get('path_to_menu_screenshots', ""):
+                    await process_disc_menus(meta, config)
 
                 # Take Screenshots
                 try:

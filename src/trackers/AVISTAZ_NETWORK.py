@@ -454,13 +454,36 @@ class AZTrackerBase:
 
         limit = 3 if meta.get('tv_pack', '') == 0 else 15
 
-        if local_files:
-            async def upload_local_file(path):
-                with open(path, 'rb') as f:
-                    image_bytes = f.read()
-                return await self.img_host(meta, self.tracker, image_bytes, path.name)
+        disc_menu_links = [
+            img.get('raw_url')
+            for img in meta.get('menu_images', [])
+            if img.get('raw_url')
+        ][:12]  # minimum number of screenshots is 3, so we can allow up to 12 menu images
 
-            paths = local_files[:limit] if limit else local_files
+        async def upload_local_file(path):
+            with open(path, 'rb') as f:
+                image_bytes = f.read()
+            return await self.img_host(meta, self.tracker, image_bytes, path.name)
+
+        async def upload_remote_file(url):
+            try:
+                response = await self.session.get(url)
+                response.raise_for_status()
+                image_bytes = response.content
+                filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
+                return await self.img_host(meta, self.tracker, image_bytes, filename)
+            except Exception as e:
+                print(f'Failed to process screenshot from URL {url}: {e}')
+                return None
+
+        # Upload menu images
+        for url in disc_menu_links:
+            result = await upload_remote_file(url)
+            if result:
+                results.append(result)
+
+        if local_files:
+            paths = local_files[:limit - len(disc_menu_links)]
 
             for path in tqdm(
                 paths,
@@ -473,19 +496,7 @@ class AZTrackerBase:
 
         else:
             image_links = [img.get('raw_url') for img in meta.get('image_list', []) if img.get('raw_url')]
-
-            async def upload_remote_file(url):
-                try:
-                    response = await self.session.get(url)
-                    response.raise_for_status()
-                    image_bytes = response.content
-                    filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
-                    return await self.img_host(meta, self.tracker, image_bytes, filename)
-                except Exception as e:
-                    print(f'Failed to process screenshot from URL {url}: {e}')
-                    return None
-
-            links = image_links[:limit] if limit else image_links
+            links = image_links[:limit - len(disc_menu_links)]
 
             for url in tqdm(
                 links,
