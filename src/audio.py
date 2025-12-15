@@ -210,20 +210,26 @@ async def get_audio_v2(mi, meta, bdinfo):
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
         first_audio_track = None
         if audio_tracks:
-            tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder')]
+            tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder') and not isinstance(t.get('StreamOrder'), dict)]
             if tracks_with_order:
-                first_audio_track = min(tracks_with_order, key=lambda x: int(x.get('StreamOrder', '999')))
+                try:
+                    first_audio_track = min(tracks_with_order, key=lambda x: int(str(x.get('StreamOrder', '999'))))
+                except (ValueError, TypeError):
+                    first_audio_track = tracks_with_order[0]
             else:
-                tracks_with_id = [t for t in audio_tracks if t.get('ID')]
+                tracks_with_id = [t for t in audio_tracks if t.get('ID') and not isinstance(t.get('ID'), dict)]
                 if tracks_with_id:
-                    first_audio_track = min(tracks_with_id, key=lambda x: int(x.get('ID', '999')))
+                    try:
+                        # Extract numeric part from ID (e.g., "128 (0x80)" -> 128)
+                        first_audio_track = min(tracks_with_id, key=lambda x: int(re.search(r'\d+', str(x.get('ID', '999'))).group()))
+                    except (ValueError, TypeError, AttributeError):
+                        first_audio_track = tracks_with_id[0]
                 else:
                     first_audio_track = audio_tracks[0]
 
         track = first_audio_track if first_audio_track else {}
         format = track.get('Format', '')
         commercial = track.get('Format_Commercial', '') or track.get('Format_Commercial_IfAny', '')
-
         if track.get('Language', '') == "zxx":
             meta['silent'] = True
 
