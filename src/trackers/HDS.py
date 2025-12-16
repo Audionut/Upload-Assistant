@@ -82,9 +82,9 @@ class HDS:
                 menu_img_url = image.get("img_url")
                 if menu_web_url and menu_img_url:
                     menu_screenshots_block += f"[url={menu_web_url}][img]{menu_img_url}[/img][/url]"
-                # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                if "imgbox" not in image["web_url"]:
-                    menu_screenshots_block += "\n"
+                    # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                    if "imgbox" not in menu_web_url:
+                        menu_screenshots_block += "\n"
             desc_parts.append("[center]\n" + menu_screenshots_block + "[/center]")
 
         # Screenshot Header
@@ -98,10 +98,10 @@ class HDS:
                 web_url = image.get("web_url")
                 img_url = image.get("img_url")
                 if web_url and img_url:
-                    screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
-                # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                if "imgbox" not in image["web_url"]:
-                    screenshots_block += "\n"
+                    screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url]"
+                    # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                    if "imgbox" not in web_url:
+                        screenshots_block += "\n"
             desc_parts.append("[center]\n" + screenshots_block + "[/center]")
 
         # Tonemapped Header
