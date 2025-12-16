@@ -87,29 +87,20 @@ class LT(UNIT3D):
                 lang = audio.get("Language", "").lower()
                 title = str(audio.get("Title", "")).lower()
 
+                if "commentary" in title:
+                    continue
+
                 # Check if title contains keywords
                 is_latino_title = any(kw in title for kw in latino_keywords)
                 is_castilian_title = any(kw in title for kw in castilian_keywords)
 
-                if "commentary" in title:
-                    continue
-                # 1. Check strict Latino language codes
-                if lang in audio_latino_check:
+                # 1. Check strict Latino language codes or Edge Case: Language is 'es' but Title contains Latino keywords
+                if lang in audio_latino_check or lang == 'es' and is_latino_title:
                     has_latino = True
                     audios.append(audio)
 
-                # 2. Edge Case: Language is 'es' but Title contains Latino keywords
-                elif lang == "es" and is_latino_title:
-                    has_latino = True
-                    audios.append(audio)
-
-                # 3. Edge Case: Language is 'es' and Title contains Castilian keywords
-                elif lang == "es" and is_castilian_title:
-                    has_castilian = True
-                    audios.append(audio)
-
-                # 4. Fallback: Check strict Castilian codes (includes 'es' as default)
-                elif lang in audio_castilian_check:
+                # 2. Edge Case: Language is 'es' and Title contains Castilian keywords or Fallback: Check strict Castilian codes (includes 'es' as default)
+                elif lang == 'es' and is_castilian_title or lang in audio_castilian_check:
                     has_castilian = True
                     audios.append(audio)
 
