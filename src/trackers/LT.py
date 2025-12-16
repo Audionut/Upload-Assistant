@@ -95,12 +95,12 @@ class LT(UNIT3D):
                 is_castilian_title = any(kw in title for kw in castilian_keywords)
 
                 # 1. Check strict Latino language codes or Edge Case: Language is 'es' but Title contains Latino keywords
-                if lang in audio_latino_check or lang == 'es' and is_latino_title:
+                if lang in audio_latino_check or (lang == 'es' and is_latino_title):
                     has_latino = True
                     audios.append(audio)
 
                 # 2. Edge Case: Language is 'es' and Title contains Castilian keywords or Fallback: Check strict Castilian codes (includes 'es' as default)
-                elif lang == 'es' and is_castilian_title or lang in audio_castilian_check:
+                elif (lang == 'es' and is_castilian_title) or lang in audio_castilian_check:
                     has_castilian = True
                     audios.append(audio)
 
