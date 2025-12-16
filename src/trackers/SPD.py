@@ -85,12 +85,12 @@ class SPD:
             return media_info, None
 
     async def get_screenshots(self, meta):
-        screenshots = []
-        if len(meta['image_list']) != 0:
-            for image in meta['image_list']:
-                screenshots.append(image['raw_url'])
+        urls = []
+        for image in meta.get('menu_images', []) + meta.get('image_list', []):
+            if image.get('raw_url'):
+                urls.append(image['raw_url'])
 
-        return screenshots
+        return urls
 
     async def search_existing(self, meta, disctype):
         results = []

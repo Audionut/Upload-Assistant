@@ -70,6 +70,20 @@ class HDS:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
+        # Disc menus screenshots header
+        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+
+        # Disc menus screenshots
+        menu_images = meta.get('menu_images', [])
+        if menu_images:
+            menu_screenshots_block = ''
+            for image in menu_images:
+                menu_screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
+                # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                if 'imgbox' not in image['web_url']:
+                    menu_screenshots_block += '\n'
+            desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
+
         # Screenshot Header
         desc_parts.append(await builder.screenshot_header(self.tracker))
 

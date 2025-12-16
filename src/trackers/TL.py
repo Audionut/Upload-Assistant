@@ -102,20 +102,35 @@ class TL:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
-        # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
-
-        # Screenshots
+        # Screenshots Section
         if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
-            images = meta.get('image_list', [])
-            screenshots_block = ''
-            for i, image in enumerate(images):
+            # Disc menus screenshots header
+            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+
+            # Disc menus screenshots
+            menu_screenshots_block = ''
+            for i, image in enumerate(meta.get('menu_images', [])):
                 img_url = image['img_url']
                 web_url = image['web_url']
-                screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                menu_screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
                 if (i + 1) % 2 == 0:
-                    screenshots_block += '<br><br>'
-            desc_parts.append('<center>' + screenshots_block + '</center>')
+                    menu_screenshots_block += '<br><br>'
+            desc_parts.append('<center>' + menu_screenshots_block + '</center>')
+
+            # Screenshot Header
+            desc_parts.append(await builder.screenshot_header(self.tracker))
+
+            # Screenshots
+            if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
+                images = meta.get('image_list', [])
+                screenshots_block = ''
+                for i, image in enumerate(images):
+                    img_url = image['img_url']
+                    web_url = image['web_url']
+                    screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                    if (i + 1) % 2 == 0:
+                        screenshots_block += '<br><br>'
+                desc_parts.append('<center>' + screenshots_block + '</center>')
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
@@ -199,13 +214,12 @@ class TL:
         raise NotImplementedError('Failed to determine TL category!')
 
     def get_screens(self, meta):
-        screenshot_urls = [
-            image.get('raw_url')
-            for image in meta.get('image_list', [])
-            if image.get('raw_url')
-        ]
+        urls = []
+        for image in meta.get('menu_images', []) + meta.get('image_list', []):
+            if image.get('raw_url'):
+                urls.append(image['raw_url'])
 
-        return screenshot_urls
+        return urls
 
     def get_name(self, meta):
         is_scene = bool(meta.get('scene_name'))

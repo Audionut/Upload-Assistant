@@ -200,6 +200,21 @@ class FF:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
+        # Disc menus screenshots header
+        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+
+        # Disc menus screenshots
+        menu_images = meta.get('menu_images', [])
+        if menu_images:
+            menu_screenshots_block = "[center]"
+            for image in menu_images:
+                img_url = image['img_url']
+                web_url = image['web_url']
+                menu_screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+            menu_screenshots_block += "[/center]"
+
+            desc_parts.append(menu_screenshots_block)
+
         # Screenshot Header
         desc_parts.append(await builder.screenshot_header(self.tracker))
 

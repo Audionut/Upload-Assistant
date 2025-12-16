@@ -351,7 +351,7 @@ class DescriptionBuilder:
     async def menu_screenshot_header(self, meta, tracker):
         """Returns the screenshot header for menus if applicable."""
         try:
-            if meta.get("is_disc", ""):
+            if meta.get("is_disc", "") and meta.get('menu_images', []):
                 disc_menu_header = self.config["TRACKERS"][tracker].get(
                     "disc_menu_header", self.config["DEFAULT"].get("disc_menu_header", None)
                 )
