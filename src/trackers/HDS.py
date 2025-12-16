@@ -71,11 +71,11 @@ class HDS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Disc menus screenshots header
-        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
-
-        # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
         if menu_images:
+            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+
+            # Disc menus screenshots
             menu_screenshots_block = ""
             for image in menu_images:
                 menu_web_url = image.get("web_url")
@@ -85,24 +85,27 @@ class HDS:
                     # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
                     if "imgbox" not in menu_web_url:
                         menu_screenshots_block += "\n"
-            desc_parts.append("[center]\n" + menu_screenshots_block + "[/center]")
+            if menu_screenshots_block:
+                desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
-
-        # Screenshots
         images = meta.get("image_list", [])
         if images:
-            screenshots_block = ""
-            for image in images:
-                web_url = image.get("web_url")
-                img_url = image.get("img_url")
-                if web_url and img_url:
-                    screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url]"
-                    # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                    if "imgbox" not in web_url:
-                        screenshots_block += "\n"
-            desc_parts.append("[center]\n" + screenshots_block + "[/center]")
+            desc_parts.append(await builder.screenshot_header(self.tracker))
+
+            # Screenshots
+            if images:
+                screenshots_block = ""
+                for image in images:
+                    web_url = image.get("web_url")
+                    img_url = image.get("img_url")
+                    if web_url and img_url:
+                        screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url]"
+                        # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                        if "imgbox" not in web_url:
+                            screenshots_block += "\n"
+                if screenshots_block:
+                    desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))

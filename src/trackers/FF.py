@@ -206,23 +206,22 @@ class FF:
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
         if menu_images:
-            menu_screenshots_block = "[center]"
+            menu_screenshots_block = ""
             for image in menu_images:
                 menu_img_url = image.get("img_url")
                 menu_web_url = image.get("web_url")
                 if menu_img_url and menu_web_url:
                     menu_screenshots_block += f'<a href="{menu_web_url}" target="_blank"><img src="{menu_img_url}" width="220"></a> '
-            menu_screenshots_block += "[/center]"
-
-            desc_parts.append(menu_screenshots_block)
+            if menu_screenshots_block:
+                desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
-
-        # Screenshots
         images = meta.get("image_list", [])
         if images:
-            screenshots_block = "[center]"
+            desc_parts.append(await builder.screenshot_header(self.tracker))
+
+            # Screenshots
+            screenshots_block = ""
             for image in images:
                 img_url = image.get("img_url")
                 web_url = image.get("web_url")
@@ -230,9 +229,8 @@ class FF:
                     screenshots_block += (
                         f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
                     )
-            screenshots_block += "[/center]"
-
-            desc_parts.append(screenshots_block)
+            if screenshots_block:
+                desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))

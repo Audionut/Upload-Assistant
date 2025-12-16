@@ -118,7 +118,8 @@ class TL:
                         menu_screenshots_block += f"""<a href="{menu_web_url}"><img src="{menu_img_url}" style="max-width: 350px;"></a>  """
                     if (i + 1) % 2 == 0:
                         menu_screenshots_block += "<br><br>"
-                desc_parts.append("<center>" + menu_screenshots_block + "</center>")
+                if menu_screenshots_block:
+                    desc_parts.append("<center>" + menu_screenshots_block + "</center>")
 
             # Screenshot Header
             images = meta.get("image_list", [])
@@ -136,7 +137,8 @@ class TL:
                         )
                     if (i + 1) % 2 == 0:
                         screenshots_block += "<br><br>"
-                desc_parts.append("<center>" + screenshots_block + "</center>")
+                if screenshots_block:
+                    desc_parts.append("<center>" + screenshots_block + "</center>")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
