@@ -72,16 +72,13 @@ class DC:
 
         if all_images:
             screenshots_block = ""
-            for i, image in enumerate(all_images, start=1):
+            for image in all_images:
                 web_url = image.get("web_url")
                 raw_url = image.get("raw_url")
                 if web_url and raw_url:
                     screenshots_block += f"[url={web_url}][img=350]{raw_url}[/img][/url] "
-                # limits to 2 screens per line, as the description box is small
-                if i % 2 == 0:
-                    screenshots_block += "\n"
             if screenshots_block:
-                desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
+                desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
