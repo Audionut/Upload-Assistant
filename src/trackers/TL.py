@@ -105,24 +105,26 @@ class TL:
         # Screenshots Section
         if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
             # Disc menus screenshots header
-            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+            menu_images = meta.get('menu_images', [])
+            if menu_images:
+                desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
-            # Disc menus screenshots
-            menu_screenshots_block = ''
-            for i, image in enumerate(meta.get('menu_images', [])):
-                img_url = image['img_url']
-                web_url = image['web_url']
-                menu_screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
-                if (i + 1) % 2 == 0:
-                    menu_screenshots_block += '<br><br>'
-            desc_parts.append('<center>' + menu_screenshots_block + '</center>')
+                # Disc menus screenshots
+                menu_screenshots_block = ''
+                for i, image in enumerate(menu_images):
+                    img_url = image['img_url']
+                    web_url = image['web_url']
+                    menu_screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                    if (i + 1) % 2 == 0:
+                        menu_screenshots_block += '<br><br>'
+                desc_parts.append('<center>' + menu_screenshots_block + '</center>')
 
             # Screenshot Header
-            desc_parts.append(await builder.screenshot_header(self.tracker))
+            images = meta.get('image_list', [])
+            if images:
+                desc_parts.append(await builder.screenshot_header(self.tracker))
 
-            # Screenshots
-            if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
-                images = meta.get('image_list', [])
+                # Screenshots
                 screenshots_block = ''
                 for i, image in enumerate(images):
                     img_url = image['img_url']

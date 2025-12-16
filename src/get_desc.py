@@ -1279,9 +1279,11 @@ class DescriptionBuilder:
                 menu_parts.append(disc_menu_header + "\n")
             if menu_images:
                 menu_parts.append("[center]")
-                for img_index in range(len(meta["menu_images"])):
-                    web_url = meta["menu_images"][img_index]["web_url"]
-                    raw_url = meta["menu_images"][img_index]["raw_url"]
+                for img_index, image in enumerate(menu_images):
+                    web_url = image.get("web_url")
+                    raw_url = image.get("raw_url")
+                    if not web_url or not raw_url:
+                        continue
                     menu_parts.append(
                         f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] "
                     )

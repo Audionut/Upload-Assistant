@@ -74,29 +74,35 @@ class HDS:
         desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
         # Disc menus screenshots
-        menu_images = meta.get('menu_images', [])
+        menu_images = meta.get("menu_images", [])
         if menu_images:
-            menu_screenshots_block = ''
+            menu_screenshots_block = ""
             for image in menu_images:
-                menu_screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
+                menu_web_url = image.get("web_url")
+                menu_img_url = image.get("img_url")
+                if menu_web_url and menu_img_url:
+                    menu_screenshots_block += f"[url={menu_web_url}][img]{menu_img_url}[/img][/url]"
                 # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                if 'imgbox' not in image['web_url']:
-                    menu_screenshots_block += '\n'
-            desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
+                if "imgbox" not in image["web_url"]:
+                    menu_screenshots_block += "\n"
+            desc_parts.append("[center]\n" + menu_screenshots_block + "[/center]")
 
         # Screenshot Header
         desc_parts.append(await builder.screenshot_header(self.tracker))
 
         # Screenshots
-        images = meta.get('image_list', [])
+        images = meta.get("image_list", [])
         if images:
-            screenshots_block = ''
+            screenshots_block = ""
             for image in images:
-                screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
+                web_url = image.get("web_url")
+                img_url = image.get("img_url")
+                if web_url and img_url:
+                    screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
                 # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                if 'imgbox' not in image['web_url']:
-                    screenshots_block += '\n'
-            desc_parts.append('[center]\n' + screenshots_block + '[/center]')
+                if "imgbox" not in image["web_url"]:
+                    screenshots_block += "\n"
+            desc_parts.append("[center]\n" + screenshots_block + "[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))

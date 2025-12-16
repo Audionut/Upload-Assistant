@@ -204,13 +204,14 @@ class FF:
         desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
         # Disc menus screenshots
-        menu_images = meta.get('menu_images', [])
+        menu_images = meta.get("menu_images", [])
         if menu_images:
             menu_screenshots_block = "[center]"
             for image in menu_images:
-                img_url = image['img_url']
-                web_url = image['web_url']
-                menu_screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+                menu_img_url = image.get("img_url")
+                menu_web_url = image.get("web_url")
+                if menu_img_url and menu_web_url:
+                    menu_screenshots_block += f'<a href="{menu_web_url}" target="_blank"><img src="{menu_img_url}" width="220"></a> '
             menu_screenshots_block += "[/center]"
 
             desc_parts.append(menu_screenshots_block)
@@ -219,13 +220,16 @@ class FF:
         desc_parts.append(await builder.screenshot_header(self.tracker))
 
         # Screenshots
-        images = meta.get('image_list', [])
+        images = meta.get("image_list", [])
         if images:
             screenshots_block = "[center]"
             for image in images:
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+                img_url = image.get("img_url")
+                web_url = image.get("web_url")
+                if img_url and web_url:
+                    screenshots_block += (
+                        f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+                    )
             screenshots_block += "[/center]"
 
             desc_parts.append(screenshots_block)
