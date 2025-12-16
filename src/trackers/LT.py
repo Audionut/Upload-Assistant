@@ -64,11 +64,11 @@ class LT(UNIT3D):
                 lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()
             # Check if audio Spanish exists
 
-            audio_latino_check = [
+            audio_latino_check = {
                 "es-419", "es-mx", "es-ar", "es-cl", "es-ve",
                 "es-bo",  "es-co", "es-cr", "es-do", "es-ec",
                 "es-sv",  "es-gt", "es-hn", "es-ni", "es-pa",
-                "es-py",  "es-pe", "es-pr", "es-uy"]
+                "es-py",  "es-pe", "es-pr", "es-uy"}
 
             audio_castilian_check = ["es", "es-es"]
             # Use keywords instead of massive exact-match lists
@@ -116,8 +116,7 @@ class LT(UNIT3D):
             if len(audios) > 0:  # If there is at least 1 audio spanish
                 if not has_latino and has_castilian:
                     lt_name = lt_name.replace(meta['tag'], f" [CAST]{meta['tag']}")
-                else:
-                    lt_name = lt_name
+                # else: no special tag needed for Latino-only or mixed audio
             # if not audio Spanish exists, add "[SUBS]"
             elif not meta.get('tag'):
                 lt_name = lt_name + " [SUBS]"
