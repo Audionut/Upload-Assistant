@@ -103,36 +103,40 @@ class TL:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Screenshots Section
-        if not self.tracker_config.get('img_rehost', True) or self.tracker_config.get('api_upload', True):
+        if not self.tracker_config.get("img_rehost", True) or self.tracker_config.get("api_upload", True):
             # Disc menus screenshots header
-            menu_images = meta.get('menu_images', [])
+            menu_images = meta.get("menu_images", [])
             if menu_images:
                 desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
                 # Disc menus screenshots
-                menu_screenshots_block = ''
+                menu_screenshots_block = ""
                 for i, image in enumerate(menu_images):
-                    img_url = image['img_url']
-                    web_url = image['web_url']
-                    menu_screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                    menu_img_url = image.get("img_url")
+                    menu_web_url = image.get("web_url")
+                    if menu_img_url and menu_web_url:
+                        menu_screenshots_block += f"""<a href="{menu_web_url}"><img src="{menu_img_url}" style="max-width: 350px;"></a>  """
                     if (i + 1) % 2 == 0:
-                        menu_screenshots_block += '<br><br>'
-                desc_parts.append('<center>' + menu_screenshots_block + '</center>')
+                        menu_screenshots_block += "<br><br>"
+                desc_parts.append("<center>" + menu_screenshots_block + "</center>")
 
             # Screenshot Header
-            images = meta.get('image_list', [])
+            images = meta.get("image_list", [])
             if images:
                 desc_parts.append(await builder.screenshot_header(self.tracker))
 
                 # Screenshots
-                screenshots_block = ''
+                screenshots_block = ""
                 for i, image in enumerate(images):
-                    img_url = image['img_url']
-                    web_url = image['web_url']
-                    screenshots_block += f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                    img_url = image.get("img_url")
+                    web_url = image.get("web_url")
+                    if img_url and web_url:
+                        screenshots_block += (
+                            f"""<a href="{web_url}"><img src="{img_url}" style="max-width: 350px;"></a>  """
+                        )
                     if (i + 1) % 2 == 0:
-                        screenshots_block += '<br><br>'
-                desc_parts.append('<center>' + screenshots_block + '</center>')
+                        screenshots_block += "<br><br>"
+                desc_parts.append("<center>" + screenshots_block + "</center>")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
