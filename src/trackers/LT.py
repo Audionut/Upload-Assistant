@@ -68,7 +68,7 @@ class LT(UNIT3D):
                 "es-419", "es-mx", "es-ar", "es-cl", "es-ve",
                 "es-bo",  "es-co", "es-cr", "es-do", "es-ec",
                 "es-sv",  "es-gt", "es-hn", "es-ni", "es-pa",
-                "es-py",  "es-pe", "es-pr", "es-uy" ]
+                "es-py",  "es-pe", "es-pr", "es-uy"]
 
             audio_castilian_check = ["es", "es-es"]
             # Use keywords instead of massive exact-match lists
