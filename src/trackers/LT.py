@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import re
-import unicodedata
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -86,9 +85,8 @@ class LT(UNIT3D):
                 if audio.get("@type") != "Audio":
                     continue
                 lang = audio.get("Language", "").lower()
-                # --- Normalize title to NFC immediately ---
-                raw_title = str(audio.get("Title", "")).lower()
-                title = unicodedata.normalize("NFC", raw_title)
+                title = str(audio.get("Title", "")).lower()
+
                 # Check if title contains keywords
                 is_latino_title = any(kw in title for kw in latino_keywords)
                 is_castilian_title = any(kw in title for kw in castilian_keywords)
