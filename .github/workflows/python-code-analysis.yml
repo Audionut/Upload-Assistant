@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - security
   pull_request:
     branches:
       - master
+      - security
   workflow_dispatch:
 
 jobs:
