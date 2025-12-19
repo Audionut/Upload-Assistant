@@ -540,6 +540,9 @@ class DescriptionBuilder:
         # Description from file/pastebin link
         desc_parts.append(await self.get_user_description(meta))
 
+        # Menu Screenshots
+        desc_parts.append(await self.menu_section(meta, tracker))
+
         # Tonemapped Header
         desc_parts.append(await self.get_tonemapped_header(meta, tracker))
 
@@ -661,11 +664,6 @@ class DescriptionBuilder:
         except Exception:
             screenheader = None
 
-        try:
-            disc_menu_header = await self.menu_screenshot_header(meta, tracker)
-        except Exception:
-            disc_menu_header = None
-
         # Check for saved pack_image_links.json file
         pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
 
@@ -674,20 +672,9 @@ class DescriptionBuilder:
         thumb_size = int(self.config["DEFAULT"].get("pack_thumb_size", "300"))
         process_limit = int(self.config["DEFAULT"].get("processLimit", 10))
 
-        try:
-            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
-            screensPerRow = int(self.config["DEFAULT"].get("screens_per_row", 2))
-            if tracker == "HUNO":
-                width = int(self.config["DEFAULT"].get("thumbnail_size", "350"))
-                # Adjust screensPerRow to keep total width below 1100
-                while screensPerRow * width > 1100 and screensPerRow > 1:
-                    screensPerRow -= 1
-        except Exception:
-            screensPerRow = 2
+        screensPerRow = await self.get_screens_per_row(tracker)
 
         desc_parts = []
-
-        desc_parts.append(self.menu_section(meta, disc_menu_header, screensPerRow))
 
         discs = meta.get("discs", [])
         if len(discs) == 1:
@@ -1270,8 +1257,23 @@ class DescriptionBuilder:
 
         return description
 
-    def menu_section(self, meta, disc_menu_header, screensPerRow):
+    async def get_screens_per_row(self, tracker):
+        try:
+            # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
+            screensPerRow = int(self.config["DEFAULT"].get("screens_per_row", 2))
+            if tracker == "HUNO":
+                width = int(self.config["DEFAULT"].get("thumbnail_size", "350"))
+                # Adjust screensPerRow to keep total width below 1100
+                while screensPerRow * width > 1100 and screensPerRow > 1:
+                    screensPerRow -= 1
+        except Exception:
+            screensPerRow = 2
+        return screensPerRow
+
+    async def menu_section(self, meta, tracker):
         menu_image_section = ""
+        disc_menu_header = await self.menu_screenshot_header(meta, tracker)
+        screensPerRow = await self.get_screens_per_row(tracker)
         if meta.get("is_disc"):
             menu_parts = []
             menu_images = meta.get("menu_images", [])
