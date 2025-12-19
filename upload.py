@@ -26,6 +26,7 @@ from src.args import Args
 from src.cleanup import cleanup, reset_terminal
 from src.clients import Clients
 from src.console import console
+from src.dupe_checking import filter_dupes
 from src.get_name import get_name
 from src.get_desc import gen_desc
 from src.get_tracker_data import get_tracker_data
@@ -38,6 +39,7 @@ from src.trackerhandle import process_trackers
 from src.trackerstatus import process_all_trackers
 from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
 from src.trackers.COMMON import COMMON
+from src.trackers.PTP import PTP
 from src.uphelper import UploadHelper
 from src.uploadscreens import upload_screens
 
@@ -1120,30 +1122,94 @@ async def do_the_thing(base_dir):
 async def process_cross_seeds(meta):
     all_trackers = api_trackers | http_trackers | other_api_trackers
 
-    # Filter to only trackers with cross-seed data and valid config
-    specific_trackers = [tracker for tracker in all_trackers if meta.get(f'{tracker}_cross_seed', None) is not None]
-    valid_trackers = []
+    # Get list of trackers to exclude (already in client)
+    remove_list = []
+    if meta.get('remove_trackers', False):
+        if isinstance(meta['remove_trackers'], str):
+            remove_list = [t.strip().upper() for t in meta['remove_trackers'].split(',')]
+        elif isinstance(meta['remove_trackers'], list):
+            remove_list = [t.strip().upper() for t in meta['remove_trackers'] if isinstance(t, str)]
 
-    for tracker in specific_trackers:
+    # Check for trackers that haven't been dupe-checked yet
+    dupe_checked_trackers = meta.get('dupe_checked_trackers', [])
+
+    # Validate tracker configs and build list of valid unchecked trackers
+    valid_unchecked_trackers = []
+    for tracker in all_trackers:
+        if tracker in dupe_checked_trackers or meta.get(f'{tracker}_cross_seed', None) is not None or tracker in remove_list:
+            continue
+
         tracker_config = config.get('TRACKERS', {}).get(tracker, {})
-        api_key = tracker_config.get('api_key', '')
-        announce_url = tracker_config.get('announce_url', '')
-
         if not tracker_config:
             if meta.get('debug'):
                 console.print(f"[yellow]Tracker {tracker} not found in config, skipping[/yellow]")
             continue
 
-        # Accept tracker if it has either a valid api_key or announce_url
-        has_api_key = api_key and api_key.strip() != ''
-        has_announce_url = announce_url and announce_url.strip() != ''
+        api_key = tracker_config.get('api_key', '')
+        announce_url = tracker_config.get('announce_url', '')
 
-        if not has_api_key and not has_announce_url:
+        # Ensure both values are strings and strip whitespace
+        api_key = str(api_key).strip() if api_key else ''
+        announce_url = str(announce_url).strip() if announce_url else ''
+
+        # Skip if both api_key and announce_url are empty
+        if not api_key and not announce_url:
             if meta.get('debug'):
                 console.print(f"[yellow]Tracker {tracker} has no api_key or announce_url set, skipping[/yellow]")
             continue
 
-        valid_trackers.append(tracker)
+        # Skip trackers with placeholder announce URLs
+        placeholder_patterns = ['<PASSKEY>', 'customannounceurl', 'get from upload page', 'Custom_Announce_URL', 'PASS_KEY', 'insertyourpasskeyhere']
+        announce_url_lower = announce_url.lower()
+        if any(pattern.lower() in announce_url_lower for pattern in placeholder_patterns):
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} has placeholder announce_url, skipping[/yellow]")
+            continue
+
+        valid_unchecked_trackers.append(tracker)
+
+    # Search for cross-seeds on unchecked trackers
+    if valid_unchecked_trackers:
+        if meta.get('debug'):
+            console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
+
+        # Store original unattended value
+        original_unattended = meta.get('unattended', False)
+        meta['unattended'] = True
+
+        helper = UploadHelper()
+
+        async def check_tracker_for_dupes(tracker):
+            try:
+                tracker_class = tracker_class_map[tracker](config=config)
+                disctype = meta.get('disctype', '')
+
+                # Search for existing torrents
+                if not tracker == "PTP":
+                    dupes = await tracker_class.search_existing(meta, disctype)
+                else:
+                    ptp = PTP(config=config)
+                    groupID = await ptp.get_group_by_imdb(meta['imdb'])
+                    meta['ptp_groupID'] = groupID
+                    dupes = await ptp.search_existing(groupID, meta, disctype)
+
+                if dupes:
+                    # Filter and check dupes using existing logic
+                    dupes = await filter_dupes(dupes, meta, tracker)
+                    await helper.dupe_check(dupes, meta, tracker)
+
+            except Exception as e:
+                if meta.get('debug'):
+                    console.print(f"[yellow]Error checking {tracker} for cross-seeds: {e}[/yellow]")
+
+        # Run all dupe checks concurrently
+        await asyncio.gather(*[check_tracker_for_dupes(tracker) for tracker in valid_unchecked_trackers], return_exceptions=True)
+
+        # Restore original unattended value
+        meta['unattended'] = original_unattended
+
+    # Filter to only trackers with cross-seed data
+    valid_trackers = [tracker for tracker in all_trackers if meta.get(f'{tracker}_cross_seed', None) is not None]
 
     if not valid_trackers:
         if meta.get('debug'):

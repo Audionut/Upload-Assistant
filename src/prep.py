@@ -365,7 +365,7 @@ class Prep():
 
         meta['source_size'] = source_size
         if meta['debug']:
-            console.print(f"[cyan]Calculated disc source size: {meta['source_size']} bytes")
+            console.print(f"[cyan]Calculated source size: {meta['source_size']} bytes")
 
         if " AKA " in filename.replace('.', ' '):
             filename = filename.split('AKA')[0]
