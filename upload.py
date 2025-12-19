@@ -968,7 +968,8 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
-                await process_cross_seeds(meta)
+                if meta.get('cross_seeding', False):
+                    await process_cross_seeds(meta)
                 if not meta.get('site_check', False):
                     if not meta.get('emby', False):
                         console.print("we are not uploading.......")
@@ -993,7 +994,8 @@ async def do_the_thing(base_dir):
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
 
-                await process_cross_seeds(meta)
+                if meta.get('cross_seeding', False):
+                    await process_cross_seeds(meta)
 
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
@@ -1169,7 +1171,7 @@ async def process_cross_seeds(meta):
         valid_unchecked_trackers.append(tracker)
 
     # Search for cross-seeds on unchecked trackers
-    if valid_unchecked_trackers:
+    if valid_unchecked_trackers and meta.get('cross_seed_check_everything', True):
         if meta.get('debug'):
             console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
 
