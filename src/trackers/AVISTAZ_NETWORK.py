@@ -642,6 +642,9 @@ class AZTrackerBase:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
         if not description:

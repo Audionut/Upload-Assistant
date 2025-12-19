@@ -157,6 +157,9 @@ class HDT:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Screenshot Header
         desc_parts.append(await builder.screenshot_header(self.tracker))
 
@@ -167,9 +170,6 @@ class HDT:
             for image in images:
                 screenshots_block += f"<a href='{image['raw_url']}'><img src='{image['img_url']}' height=137></a> "
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
-
-        # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
         # Signature
         desc_parts.append(f"[right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/right]")

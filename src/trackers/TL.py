@@ -72,6 +72,7 @@ class TL:
     async def generate_description(self, meta):
         builder = DescriptionBuilder(self.config)
         desc_parts = []
+        process_screenshot = not self.tracker_config.get("img_rehost", True) or self.tracker_config.get("api_upload", True)
 
         # Custom Header
         desc_parts.append(await builder.get_custom_header(self.tracker))
@@ -102,8 +103,8 @@ class TL:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
-        # Screenshots Section
-        if not self.tracker_config.get("img_rehost", True) or self.tracker_config.get("api_upload", True):
+        # Menus Screenshots
+        if process_screenshot:
             # Disc menus screenshots header
             menu_images = meta.get("menu_images", [])
             if menu_images:
@@ -121,11 +122,15 @@ class TL:
                 if menu_screenshots_block:
                     desc_parts.append("<center>" + menu_screenshots_block + "</center>")
 
-            # Screenshot Header
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        # Screenshots Section
+        if process_screenshot:
             images = meta.get("image_list", [])
             if images:
+                # Screenshot Header
                 desc_parts.append(await builder.screenshot_header(self.tracker))
-
                 # Screenshots
                 screenshots_block = ""
                 for i, image in enumerate(images):
@@ -139,9 +144,6 @@ class TL:
                         screenshots_block += "<br><br>"
                 if screenshots_block:
                     desc_parts.append("<center>" + screenshots_block + "</center>")
-
-        # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
         # Signature
         desc_parts.append(

@@ -215,6 +215,9 @@ class FF:
             if menu_screenshots_block:
                 desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
 
+        # Tonemapped Header
+        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
         # Screenshot Header
         images = meta.get("image_list", [])
         if images:
@@ -231,9 +234,6 @@ class FF:
                     )
             if screenshots_block:
                 desc_parts.append(f"[center]{screenshots_block}[/center]")
-
-        # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
 
         # Signature
         desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant][center][size=1]{meta['ua_signature']}[/size][/center][/url]")
