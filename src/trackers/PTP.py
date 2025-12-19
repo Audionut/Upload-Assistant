@@ -1408,6 +1408,8 @@ class PTP():
         }
         if data["remaster_year"] != "" or data["remaster_title"] != "":
             data["remaster"] = "on"
+        if meta.get('scene', False) is True:
+            data["scene"] = "on"
         if resolution == "Other":
             data["other_resolution"] = other_resolution
         if meta.get('personalrelease', False) is True:
