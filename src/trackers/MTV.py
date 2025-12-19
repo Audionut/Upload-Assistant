@@ -710,8 +710,8 @@ class MTV():
                             result = {
                                 'name': each.find('title').text,
                                 'files': each.find('title').text,
-                                'file_count': each.find('files').text,
-                                'size': each.find('size').text,
+                                'file_count': int(each.find('files').text),
+                                'size': int(each.find('size').text),
                                 'link': each.find('guid').text,
                                 'download': each.find('link').text
                             }

@@ -56,7 +56,10 @@ async def filter_dupes(dupes, meta, tracker_name):
                     entry['files'] = [d['files']]
                 entry['file_count'] = len(entry['files'])
             if 'file_count' in d:
-                entry['file_count'] = d['file_count']
+                try:
+                    entry['file_count'] = int(d['file_count'])
+                except (ValueError, TypeError):
+                    entry['file_count'] = 0
 
             processed_dupes.append(entry)
 
@@ -178,11 +181,15 @@ async def filter_dupes(dupes, meta, tracker_name):
                             return False
                     entry_size = entry.get('size')
                     source_size = meta.get('source_size')
-                    if entry_size and source_size:
-                        if int(entry_size) == int(source_size):
-                            meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
-                            remember_match('size')
-                            return False
+                    if entry_size is not None and source_size is not None:
+                        try:
+                            if int(entry_size) == int(source_size):
+                                meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                                remember_match('size')
+                                return False
+                        except ValueError:
+                            if meta['debug']:
+                                console.log(f"[debug] Size comparison failed due to ValueError: entry_size={entry_size}, source_size={source_size}")
                 else:
                     if meta['debug']:
                         console.log(f"[debug] Comparing file: {file} against dupe files list.")
@@ -202,13 +209,17 @@ async def filter_dupes(dupes, meta, tracker_name):
         else:
             entry_size = entry.get('size')
             source_size = meta.get('source_size')
-            if entry_size and source_size:
+            if entry_size is not None and source_size is not None:
                 if meta['debug']:
                     console.log(f"[debug] Comparing sizes: Entry size {entry_size} vs Source size {source_size}")
-                if int(entry_size) == int(source_size):
-                    meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
-                    remember_match('size')
+                try:
+                    if int(entry_size) == int(source_size):
+                        meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                        remember_match('size')
                     return False
+                except ValueError:
+                    if meta['debug']:
+                        console.log(f"[debug] Size comparison failed due to ValueError: entry_size={entry_size}, source_size={source_size}")
 
         if meta['is_disc'] and file_count and file_count < 2:
             await log_exclusion("file count less than 2 for disc upload", each)

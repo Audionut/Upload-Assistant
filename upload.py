@@ -40,6 +40,7 @@ from src.trackerstatus import process_all_trackers
 from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
 from src.trackers.COMMON import COMMON
 from src.trackers.PTP import PTP
+from src.trackers.AR import AR
 from src.uphelper import UploadHelper
 from src.uploadscreens import upload_screens
 
@@ -968,7 +969,7 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
-                if meta.get('cross_seeding', False):
+                if config['DEFAULT'].get('cross_seeding', True):
                     await process_cross_seeds(meta)
                 if not meta.get('site_check', False):
                     if not meta.get('emby', False):
@@ -994,7 +995,7 @@ async def do_the_thing(base_dir):
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
 
-                if meta.get('cross_seeding', False):
+                if config['DEFAULT'].get('cross_seeding', True):
                     await process_cross_seeds(meta)
 
                 if 'queue' in meta and meta.get('queue') is not None:
@@ -1171,7 +1172,7 @@ async def process_cross_seeds(meta):
         valid_unchecked_trackers.append(tracker)
 
     # Search for cross-seeds on unchecked trackers
-    if valid_unchecked_trackers and meta.get('cross_seed_check_everything', True):
+    if valid_unchecked_trackers and config['DEFAULT'].get('cross_seed_check_everything', False):
         if meta.get('debug'):
             console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
 
@@ -1191,9 +1192,10 @@ async def process_cross_seeds(meta):
                     dupes = await tracker_class.search_existing(meta, disctype)
                 else:
                     ptp = PTP(config=config)
-                    groupID = await ptp.get_group_by_imdb(meta['imdb'])
-                    meta['ptp_groupID'] = groupID
-                    dupes = await ptp.search_existing(groupID, meta, disctype)
+                    if not meta.get('ptp_groupID'):
+                        groupID = await ptp.get_group_by_imdb(meta['imdb'])
+                        meta['ptp_groupID'] = groupID
+                    dupes = await ptp.search_existing(meta['ptp_groupID'], meta, disctype)
 
                 if dupes:
                     # Filter and check dupes using existing logic
@@ -1251,6 +1253,27 @@ async def process_cross_seeds(meta):
                     'accept': 'application/json',
                     'Authorization': config['TRACKERS'][tracker]['api_key'].strip(),
                 }
+
+            if tracker == "AR" and download_url:
+                try:
+                    ar = AR(config=config)
+                    auth_key = await ar.get_auth_key(meta)
+
+                    # Extract torrent_pass from announce_url
+                    announce_url = config['TRACKERS']['AR'].get('announce_url', '')
+                    # Pattern: http://tracker.alpharatio.cc:2710/PASSKEY/announce
+                    match = re.search(r':\d+/([^/]+)/announce', announce_url)
+                    torrent_pass = match.group(1) if match else None
+
+                    if auth_key and torrent_pass:
+                        # Append auth_key and torrent_pass to download_url
+                        separator = '&' if '?' in download_url else '?'
+                        download_url += f"{separator}authkey={auth_key}&torrent_pass={torrent_pass}"
+                        if meta.get('debug'):
+                            console.print("[cyan]Added AR auth_key and torrent_pass to download URL[/cyan]")
+                except Exception as e:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Error getting AR auth credentials: {e}[/yellow]")
 
             await common.download_tracker_torrent(
                 meta,

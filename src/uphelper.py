@@ -115,11 +115,12 @@ class UploadHelper:
                 display_name = display_name.replace(f"{meta.get('edition', '')} ", "") if meta.get('edition', '') in display_name else display_name
                 display_name = display_name.replace(f"{meta.get('region', '')} ", "") if meta.get('region', '') in display_name else display_name
                 for d in dupes:
-                    similarity = SequenceMatcher(None, d['name'].lower(), display_name.lower().strip()).ratio()
-                    if similarity > 0.9 and meta.get('size_match', False):
-                        if isinstance(d, dict) and d.get('download'):
-                            tracker_download_link = d.get('download')
-                            break
+                    if isinstance(d, dict):
+                        similarity = SequenceMatcher(None, d.get('name', '').lower(), display_name.lower().strip()).ratio()
+                        if similarity > 0.9 and meta.get('size_match', False):
+                            if d.get('download'):
+                                tracker_download_link = d.get('download')
+                                break
                 meta[f'{tracker_name}_cross_seed'] = tracker_download_link
                 if meta['debug']:
                     console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
@@ -141,13 +142,14 @@ class UploadHelper:
                     console.print(f"[yellow]{tracker_name} size cross seeding check[/yellow]")
                 tracker_download_link = meta.get(f'{tracker_name}_matched_download')
                 for d in dupes:
-                    similarity = SequenceMatcher(None, d['name'].lower(), display_name.lower().strip()).ratio()
-                    if meta['debug']:
-                        console.print(f"[debug] Comparing sizes with similarity {similarity:.4f}")
-                    if similarity > 0.9:
-                        if isinstance(d, dict) and d.get('download'):
-                            tracker_download_link = d.get('download')
-                            break
+                    if isinstance(d, dict):
+                        similarity = SequenceMatcher(None, d.get('name', '').lower(), display_name.lower().strip()).ratio()
+                        if meta['debug']:
+                            console.print(f"[debug] Comparing sizes with similarity {similarity:.4f}")
+                        if similarity > 0.9:
+                            if d.get('download'):
+                                tracker_download_link = d.get('download')
+                                break
                 meta[f'{tracker_name}_cross_seed'] = tracker_download_link
                 if meta['debug']:
                     console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')

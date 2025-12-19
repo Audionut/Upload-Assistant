@@ -285,6 +285,7 @@ class AR():
                             'files': res['groupName'],
                             'file_count': res['fileCount'],
                             'link': f'{self.search_url}?id={res["groupId"]}&torrentid={res["torrentId"]}',
+                            'download': f'{self.base_url}/torrents.php?action=download&id={res["torrentId"]}',
                         }
                         dupes.append(dupe)
 
