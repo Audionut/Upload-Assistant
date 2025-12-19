@@ -1306,7 +1306,7 @@ class Clients():
                     data.add_field('tags', tag)
                 data.add_field('torrents', torrent.dump(), filename='torrent.torrent', content_type='application/x-bittorrent')
                 if meta['debug']:
-                    console.print(f"[cyan]POSTing to {qbt_proxy_url}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}")
+                    console.print(f"[cyan]POSTing to {redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}")
 
                 async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add",
                                             data=data) as response:
