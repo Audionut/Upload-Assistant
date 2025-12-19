@@ -413,6 +413,64 @@ async def upload_image_task(args):
                 console.print(f"[red]Unexpected error with passtheimage: {str(e)}")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
 
+        elif img_host == "seedpool_cdn":
+            url = config['DEFAULT'].get('seedpool_cdn_url', 'https://i.seedpool.org/upload')
+            api_key = config['DEFAULT'].get('seedpool_cdn_api')
+
+            if not api_key:
+                console.print("[red]Seedpool CDN API key not found in config.")
+                return {'status': 'failed', 'reason': 'Missing Seedpool CDN API key'}
+
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with aiofiles.open(image, 'rb') as img_file:
+                        files = {'files[]': (os.path.basename(image), await img_file.read())}
+                        data = {'key': api_key}
+
+                        response = await client.post(url, data=data, files=files, timeout=timeout)
+
+                        if response.status_code != 200:
+                            console.print(f"[yellow]Seedpool CDN failed with status code {response.status_code}, trying next image host")
+                            return {'status': 'failed', 'reason': f'Seedpool CDN upload failed with status code {response.status_code}'}
+
+                        response_data = response.json()
+
+                        if 'files' in response_data and len(response_data['files']) > 0:
+                            file_data = response_data['files'][0]
+
+                            # Use medium variant as primary, fallback to base URL
+                            img_url = file_data.get('variants', {}).get('medium', file_data['url'])
+                            raw_url = file_data['url']
+                            web_url = file_data['url']
+
+                            # Use thumbnail_url if available, otherwise use thumb variant
+                            if 'thumbnail_url' in file_data:
+                                img_url = file_data['thumbnail_url']
+                            elif 'thumb' in file_data.get('variants', {}):
+                                img_url = file_data['variants']['thumb']
+
+                            if meta['debug']:
+                                console.print(f"[green]Seedpool CDN upload successful: {file_data['cdn_id']}")
+                                console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+
+                            return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
+                        else:
+                            console.print("[yellow]Seedpool CDN returned empty files array")
+                            return {'status': 'failed', 'reason': 'No files in Seedpool CDN response'}
+
+            except httpx.TimeoutException:
+                console.print("[red]Request to Seedpool CDN timed out.")
+                return {'status': 'failed', 'reason': 'Request timed out'}
+            except httpx.RequestError as e:
+                console.print(f"[red]Seedpool CDN request failed: {e}")
+                return {'status': 'failed', 'reason': str(e)}
+            except ValueError as e:
+                console.print(f"[red]Invalid JSON response from Seedpool CDN: {e}")
+                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+            except Exception as e:
+                console.print(f"[red]Unexpected error with Seedpool CDN: {e}")
+                return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
+
         if img_url and raw_url and web_url:
             return {
                 'status': 'success',
