@@ -32,9 +32,8 @@ config = {
         # custom zipline url
         "zipline_url": "",
         "zipline_api_key": "",
-        # Seedpool CDN settings
+        # Seedpool CDN API key
         "seedpool_cdn_api": "",
-        "seedpool_cdn_url": "https://i.seedpool.org/upload",
 
         # Whether to add a logo for the show/movie from TMDB to the top of the description
         "add_logo": False,

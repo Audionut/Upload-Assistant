@@ -414,7 +414,7 @@ async def upload_image_task(args):
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
 
         elif img_host == "seedpool_cdn":
-            url = config['DEFAULT'].get('seedpool_cdn_url', 'https://i.seedpool.org/upload')
+            url = "https://i.seedpool.org/upload"
             api_key = config['DEFAULT'].get('seedpool_cdn_api')
 
             if not api_key:
