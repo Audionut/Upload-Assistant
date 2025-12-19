@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import cli_ui
@@ -343,7 +343,7 @@ async def process_meta(meta, base_dir, bot=None):
         trackers = meta['trackers']
 
         audio_prompted = False
-        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "ULCX"]:
+        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
             if tracker in trackers:
                 if not audio_prompted:
                     await process_desc_language(meta, desc=None, tracker=tracker)

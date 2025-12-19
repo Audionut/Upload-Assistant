@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 try:
     import asyncio
@@ -229,7 +229,7 @@ class Prep():
                 except Exception:
                     meta['search_year'] = ""
                 if not meta.get('edit', False):
-                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_1.VOB", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta.get('debug', False))
+                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_0.IFO", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta.get('debug', False))
                     meta['mediainfo'] = mi
                 else:
                     mi = meta['mediainfo']

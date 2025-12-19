@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 class LoginException(Exception):
     def __init__(self, *args, **kwargs):
         default_message = 'An error occured while logging in'

@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import itertools
 from bin.MI.get_linux_mi import download_dvd_mediainfo
@@ -57,12 +57,6 @@ async def get_disc(meta):
     elif is_disc == "DVD" and not meta.get('emby', False):
         download_dvd_mediainfo(meta['base_dir'], debug=meta['debug'])
         discs = await parse.get_dvdinfo(discs, base_dir=meta['base_dir'], debug=meta['debug'])
-        export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')
-        export.write(discs[0]['ifo_mi'])
-        export.close()
-        export_clean = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'w', newline="", encoding='utf-8')
-        export_clean.write(discs[0]['ifo_mi'])
-        export_clean.close()
     elif is_disc == "HDDVD":
         discs = await parse.get_hddvd_info(discs, meta)
         export = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8')

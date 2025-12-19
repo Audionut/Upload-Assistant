@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
 import json
@@ -32,7 +32,13 @@ async def get_tag(video, meta):
                 basename_stripped = meta['uuid']
             else:
                 # If video is a file, use the filename without extension
-                basename_stripped = os.path.splitext(os.path.basename(video))[0]
+                basename_no_path = os.path.basename(video)
+                name, ext = os.path.splitext(basename_no_path)
+                # If the extension contains a hyphen, it's not a real extension
+                if ext and '-' in ext:
+                    basename_stripped = basename_no_path
+                else:
+                    basename_stripped = name
             non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
             if non_anime_match:
                 release_group = non_anime_match.group(1).strip()

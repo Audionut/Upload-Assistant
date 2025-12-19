@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import aiofiles.os
 import asyncio
@@ -525,7 +525,7 @@ class PTP():
     def get_resolution(self, meta):
         other_res = None
         res = meta.get('resolution', "OTHER")
-        if (res == "OTHER" and meta['is_disc'] != "BDMV") or (meta['sd'] == 1 and meta['type'] == "WEBDL"):
+        if (res == "OTHER" and meta['is_disc'] != "BDMV") or (meta['sd'] == 1 and meta['type'] == "WEBDL") or (meta['sd'] == 1 and meta['type'] == "DVDRIP"):
             video_mi = meta['mediainfo']['media']['track'][1]
             other_res = f"{video_mi['Width']}x{video_mi['Height']}"
             res = "Other"
@@ -734,15 +734,27 @@ class PTP():
 
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
+        if meta.get('scene_nfo_file', None):
+            # Remove NFO from description
+            meta_description = re.sub(
+                r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]",
+                "",
+                base,
+                flags=re.DOTALL,
+            )
+            base = meta_description
         multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
         if multi_screens < 2:
             multi_screens = 2
             console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
 
-        if 'PTP_images_key' in meta:
-            image_list = meta['PTP_images_key']
+        if not meta.get('skip_imghost_upload', False):
+            if 'PTP_images_key' in meta:
+                image_list = meta['PTP_images_key']
+            else:
+                image_list = meta['image_list']
         else:
-            image_list = meta['image_list']
+            image_list = []
         images = image_list
 
         # Check for saved pack_image_links.json file
@@ -1285,7 +1297,7 @@ class PTP():
                     resp = loginresponse.json()
                     if resp['Result'] == "TfaRequired":
                         data['TfaType'] = "normal"
-                        data['TfaCode'] = cli_ui.ask_string("2FA Required: Please enter 2FA code")
+                        data['TfaCode'] = cli_ui.ask_string("2FA Required: Please enter PTP 2FA code")
                         loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
                         await asyncio.sleep(2)
                         resp = loginresponse.json()
@@ -1408,6 +1420,8 @@ class PTP():
         }
         if data["remaster_year"] != "" or data["remaster_title"] != "":
             data["remaster"] = "on"
+        if meta.get('scene', False) is True:
+            data["scene"] = "on"
         if resolution == "Other":
             data["other_resolution"] = other_resolution
         if meta.get('personalrelease', False) is True:

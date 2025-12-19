@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
@@ -2152,7 +2152,7 @@ class Clients():
                     if qui_filters.get('excludeStatus'):
                         # Join multiple excludeStatus filters with comma (qBittorrent style)
                         filter_value = ','.join(qui_filters['excludeStatus'])
-                        query_parts.append(f"status={urllib.parse.quote(filter_value)}")
+                        query_parts.append(f"filter={urllib.parse.quote(filter_value)}")
 
                     if qui_filters.get('categories'):
                         # Join multiple categories with comma
@@ -3036,6 +3036,7 @@ async def match_tracker_url(tracker_urls, meta):
         'stc': ["https://skipthecommercials.xyz"],
         'thr': ["torrenthr"],
         'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'tlz': ["https://tlzdigital.com/"],
         'ttr': ["https://torrenteros.org"],
         'tvc': ["https://tvchaosuk.com"],
         'ulcx': ["https://upload.cx"],

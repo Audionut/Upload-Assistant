@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
 
@@ -254,6 +254,10 @@ async def filter_dupes(dupes, meta, tracker_name):
         if tracker_name == "AITHER" and entry.get('trumpable', False):
             meta['trumpable'] = entry.get('link', None)
 
+        if tracker_name in ["BHD", "MTV", "RTF", "AR"]:
+            if ('2160p' in target_resolution and '2160p' in each) and ('framestor' in each.lower() or 'framestor' in meta['uuid'].lower()):
+                return False
+
         if has_is_disc and each.lower().endswith(".m2ts"):
             return False
 
@@ -312,9 +316,10 @@ async def filter_dupes(dupes, meta, tracker_name):
                     if tag and tag in normalized:
                         await log_exclusion("missing 'repack'", each)
                         return True
-            elif check["uuid_flag"] != check["condition"](each):
-                await log_exclusion(f"{check['key']} mismatch", each)
-                return True
+            elif check["key"] == "remux":
+                if check["uuid_flag"] and not check["condition"](normalized):
+                    await log_exclusion("missing 'remux'", each)
+                    return True
 
         if meta.get('category') == "TV":
             season_episode_match = await is_season_episode_match(normalized, target_season, target_episode)

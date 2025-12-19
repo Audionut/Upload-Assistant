@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiohttp
 import cli_ui
 import json
@@ -79,7 +79,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
         if not meta.get('emby', False):
             tracker_keys = {
                 # preference some unit3d based trackers first
-                # since they can return tdb/imdb/tvdb ids
+                # since they can return tmdb/imdb/tvdb ids
                 'aither': 'AITHER',
                 'blu': 'BLU',
                 'lst': 'LST',

@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -370,9 +370,9 @@ class TL:
             'imdbURL': str(meta.get('imdb_info', {}).get('imdb_url', '')),
             'tvMazeURL': tvMazeURL,
             'igdbURL': '',
-            'torrentNFO': '1',
+            'torrentNFO': '0',
             'torrentDesc': '1',
-            'nfotextbox': await self.generate_description(meta),
+            'nfotextbox': '',
             'torrentComment': '0',
             'uploaderComments': '',
             'is_anonymous_upload': 'off',
@@ -386,6 +386,9 @@ class TL:
         return data
 
     async def cookie_upload(self, meta):
+        await self.generate_description(meta)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+            description_content = await f.read()
         login = await self.login(meta)
         if not login:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: Login with cookies failed."
@@ -401,7 +404,10 @@ class TL:
 
                 async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as f:
                     torrent_bytes = await f.read()
-                files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
+                files = {
+                    'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent'),
+                    'nfo': ('description.txt', description_content, 'text/plain'),
+                }
 
                 response = await self.session.post(url=self.http_upload_url, files=files, data=data)
 

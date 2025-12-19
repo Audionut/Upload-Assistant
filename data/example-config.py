@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
         # will print a notice if an update is available
@@ -294,7 +294,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -788,6 +788,12 @@ config = {
             "img_rehost": True,
             # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
             "full_mediainfo": False,
+        },
+        "TLZ": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

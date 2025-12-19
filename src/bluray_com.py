@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import httpx
 import random
 import asyncio
@@ -203,12 +203,11 @@ async def extract_bluray_release_info(html_content, meta):
         soup = BeautifulSoup(html_content, 'lxml')
         if is_dvd:
             dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
-        else:
-            bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
-        if dvd_sections:
             selected_sections = dvd_sections
         else:
+            bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
             selected_sections = bluray_sections
+
         if meta['debug']:
             release_type_debug = "DVD" if is_dvd else "Blu-ray"
             console.print(f"[blue]Found {len(selected_sections)} {release_type_debug} section(s)[/blue]")

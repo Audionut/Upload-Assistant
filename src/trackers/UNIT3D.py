@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -50,8 +50,7 @@ class UNIT3D:
         }
         if meta['category'] == 'TV':
             params['name'] = params['name'] + f" {meta.get('season', '')}"
-        if meta.get('edition', '') != '':
-            params['name'] = params['name'] + f" {meta['edition']}"
+
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url=self.search_url, params=params)

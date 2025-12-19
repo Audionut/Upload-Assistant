@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import sys
 import asyncio
@@ -228,18 +228,12 @@ class DiscParse():
 
                             if bdinfo_executable:
                                 proc = await asyncio.create_subprocess_exec(
-                                    *bdinfo_executable,
-                                    stdout=asyncio.subprocess.PIPE,
-                                    stderr=asyncio.subprocess.PIPE
+                                    *bdinfo_executable
                                 )
-                                stdout, stderr = await proc.communicate()
+                                await proc.wait()
 
                                 if proc.returncode != 0:
                                     console.print(f"[bold red]BDInfo failed with return code {proc.returncode}[/bold red]")
-                                    if stderr:
-                                        console.print(f"[red]BDInfo stderr: {stderr.decode().strip()}[/red]")
-                                    if stdout:
-                                        console.print(f"[yellow]BDInfo stdout: {stdout.decode().strip()}[/yellow]")
                                     continue
 
                                 # Rename the output to playlist_report_path
@@ -496,6 +490,8 @@ class DiscParse():
     """
 
     async def get_dvdinfo(self, discs, base_dir=None, debug=False):
+        mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=debug)
+
         for each in discs:
             path = each.get('path')
             os.chdir(path)
@@ -509,7 +505,6 @@ class DiscParse():
                     filesdict[trimmed[:2]] = []
                 filesdict[trimmed[:2]].append(trimmed)
             main_set_duration = 0
-            mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=debug)
 
             for vob_set in filesdict.values():
                 try:
@@ -568,98 +563,73 @@ class DiscParse():
             each['vob'] = vob = f"{path}/VTS_{set}_1.VOB"
             each['ifo'] = ifo = f"{path}/VTS_{set}_0.IFO"
 
-            try:
-                mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=True)
+            # Use basenames for mediainfo processing to avoid full paths in output
+            vob_basename = os.path.basename(vob)
+            ifo_basename = os.path.basename(ifo)
 
+            try:
+                # Process VOB file
                 try:
                     if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
-                            mediainfo_binary, os.path.basename(vob),
+                            mediainfo_binary, vob_basename,
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
                         stdout, stderr = await process.communicate()
 
                         if process.returncode == 0 and stdout:
-                            each['vob_mi'] = stdout.decode().replace('\r\n', '\n')
+                            vob_mi_output = stdout.decode().replace('\r\n', '\n')
                         else:
                             console.print("[yellow]Specialized MediaInfo failed for VOB, falling back[/yellow]")
                             if stderr:
                                 console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
-                            each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
+                            vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
+                        vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for VOB: {str(e)}")
-                    each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
+                    vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
 
+                # Store VOB mediainfo (same output for both keys)
+                each['vob_mi'] = vob_mi_output
+                each['vob_mi_full'] = vob_mi_output
+
+                # Process IFO file
                 try:
                     if mediainfo_binary:
                         process = await asyncio.create_subprocess_exec(
-                            mediainfo_binary, os.path.basename(ifo),
+                            mediainfo_binary, ifo_basename,
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE
                         )
                         stdout, stderr = await process.communicate()
 
                         if process.returncode == 0 and stdout:
-                            each['ifo_mi'] = stdout.decode().replace('\r\n', '\n')
+                            ifo_mi_output = stdout.decode().replace('\r\n', '\n')
                         else:
                             console.print("[yellow]Specialized MediaInfo failed for IFO, falling back[/yellow]")
                             if stderr:
                                 console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
-                            each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
+                            ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
                     else:
-                        each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
+                        ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for IFO: {str(e)}")
-                    each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
+                    ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
 
-                try:
-                    if mediainfo_binary:
-                        process = await asyncio.create_subprocess_exec(
-                            mediainfo_binary, vob,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                        stdout, stderr = await process.communicate()
-
-                        if process and process.returncode == 0:
-                            each['vob_mi_full'] = stdout.decode().replace('\r\n', '\n')
-                        else:
-                            each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
-                    else:
-                        each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
-                except Exception as e:
-                    console.print(f"[yellow]Error with DVD MediaInfo binary for full VOB: {str(e)}")
-                    each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
-
-                try:
-                    if mediainfo_binary:
-                        process = await asyncio.create_subprocess_exec(
-                            mediainfo_binary, ifo,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE
-                        )
-                        stdout, stderr = await process.communicate()
-
-                        if process and process.returncode == 0:
-                            each['ifo_mi_full'] = stdout.decode().replace('\r\n', '\n')
-                        else:
-                            each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
-                    else:
-                        each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
-                except Exception as e:
-                    console.print(f"[yellow]Error with DVD MediaInfo binary for full IFO: {str(e)}")
-                    each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
+                each['ifo_mi'] = ifo_mi_output
+                each['ifo_mi_full'] = ifo_mi_output
 
             except Exception as e:
                 console.print(f"[yellow]Error using DVD MediaInfo binary, falling back to standard: {e}")
-                # Fallback to standard MediaInfo
-                each['vob_mi'] = MediaInfo.parse(os.path.basename(vob), output='STRING', full=False).replace('\r\n', '\n')
-                each['ifo_mi'] = MediaInfo.parse(os.path.basename(ifo), output='STRING', full=False).replace('\r\n', '\n')
-                each['vob_mi_full'] = MediaInfo.parse(vob, output='STRING', full=False).replace('\r\n', '\n')
-                each['ifo_mi_full'] = MediaInfo.parse(ifo, output='STRING', full=False).replace('\r\n', '\n')
+                # Fallback to standard MediaInfo using basenames
+                vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
+                ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
+                each['vob_mi'] = vob_mi_output
+                each['ifo_mi'] = ifo_mi_output
+                each['vob_mi_full'] = vob_mi_output
+                each['ifo_mi_full'] = ifo_mi_output
 
             size = sum(os.path.getsize(f) for f in os.listdir('.') if os.path.isfile(f)) / float(1 << 30)
             each['disc_size'] = round(size, 2)
