@@ -734,15 +734,27 @@ class PTP():
 
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
+        if meta.get('scene_nfo_file', None):
+            # Remove NFO from description
+            meta_description = re.sub(
+                r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]",
+                "",
+                base,
+                flags=re.DOTALL,
+            )
+            base = meta_description
         multi_screens = int(self.config['DEFAULT'].get('multiScreens', 2))
         if multi_screens < 2:
             multi_screens = 2
             console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
 
-        if 'PTP_images_key' in meta:
-            image_list = meta['PTP_images_key']
+        if not meta.get('skip_imghost_upload', False):
+            if 'PTP_images_key' in meta:
+                image_list = meta['PTP_images_key']
+            else:
+                image_list = meta['image_list']
         else:
-            image_list = meta['image_list']
+            image_list = []
         images = image_list
 
         # Check for saved pack_image_links.json file
