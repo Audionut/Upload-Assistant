@@ -1272,26 +1272,29 @@ class DescriptionBuilder:
 
     async def menu_section(self, meta, tracker):
         menu_image_section = ""
-        disc_menu_header = await self.menu_screenshot_header(meta, tracker)
-        screensPerRow = await self.get_screens_per_row(tracker)
-        if meta.get("is_disc"):
-            menu_parts = []
-            menu_images = meta.get("menu_images", [])
-            if disc_menu_header and menu_images:
-                menu_parts.append(disc_menu_header + "\n")
-            if menu_images:
-                menu_parts.append("[center]")
-                for img_index, image in enumerate(menu_images):
-                    web_url = image.get("web_url")
-                    raw_url = image.get("raw_url")
-                    if not web_url or not raw_url:
-                        continue
-                    menu_parts.append(
-                        f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] "
-                    )
-                    if screensPerRow and (img_index + 1) % screensPerRow == 0:
-                        menu_parts.append("\n")
-                menu_parts.append("[/center]\n\n")
-                menu_image_section = "".join(menu_parts)
+        try:
+            disc_menu_header = await self.menu_screenshot_header(meta, tracker)
+            screensPerRow = await self.get_screens_per_row(tracker)
+            if meta.get("is_disc"):
+                menu_parts = []
+                menu_images = meta.get("menu_images", [])
+                if disc_menu_header and menu_images:
+                    menu_parts.append(disc_menu_header + "\n")
+                if menu_images:
+                    menu_parts.append("[center]")
+                    for img_index, image in enumerate(menu_images):
+                        web_url = image.get("web_url")
+                        raw_url = image.get("raw_url")
+                        if not web_url or not raw_url:
+                            continue
+                        menu_parts.append(
+                            f"[url={web_url}][img={self.config['DEFAULT'].get('thumbnail_size', '350')}]{raw_url}[/img][/url] "
+                        )
+                        if screensPerRow and (img_index + 1) % screensPerRow == 0:
+                            menu_parts.append("\n")
+                    menu_parts.append("[/center]\n\n")
+                    menu_image_section = "".join(menu_parts)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Error processing disc menu section: {str(e)}[/yellow]")
 
         return menu_image_section
