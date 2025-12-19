@@ -422,14 +422,15 @@ async def upload_image_task(args):
                 return {'status': 'failed', 'reason': 'Missing Seedpool CDN API key'}
 
             try:
+                headers = {'Authorization': f'Bearer {api_key}'}
+
                 async with httpx.AsyncClient() as client:
                     async with aiofiles.open(image, 'rb') as img_file:
                         files = {'files[]': (os.path.basename(image), await img_file.read())}
-                        data = {'key': api_key}
 
-                        response = await client.post(url, data=data, files=files, timeout=timeout)
+                        response = await client.post(url, headers=headers, files=files, timeout=timeout)
 
-                        if response.status_code != 200:
+                        if response.status_code not in (200, 201):
                             console.print(f"[yellow]Seedpool CDN failed with status code {response.status_code}, trying next image host")
                             return {'status': 'failed', 'reason': f'Seedpool CDN upload failed with status code {response.status_code}'}
 

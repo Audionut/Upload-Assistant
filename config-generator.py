@@ -369,6 +369,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
         "dalexni": "dalexni_api",
         "ziplinestudio": ["zipline_url", "zipline_api_key"],
         "passtheimage": "passtheima_ge_api",
+        "seedpool_cdn": "seedpool_cdn_api",
         "imgbox": None,
         "pixhost": None
     }
