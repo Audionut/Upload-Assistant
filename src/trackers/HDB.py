@@ -352,7 +352,14 @@ class HDB():
                         results = response_data.get('data', [])
                         if results:
                             for each in results:
-                                result = each['name']
+                                result = {
+                                    'name': each['name'],
+                                    'size': each['size'],
+                                    'files': each['filename'][:-8] if each['filename'].endswith('.torrent') else each['filename'],
+                                    'filecount': each['numfiles'],
+                                    'link': f"https://hdbits.org/details.php?id={each['id']}",
+                                    'download': f"https://hdbits.org/download.php/{quote(each['filename'])}?id={each['id']}&passkey={self.passkey}"
+                                }
                                 dupes.append(result)
                     else:
                         console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
@@ -379,9 +386,15 @@ class HDB():
                         results = response_data.get('data', [])
                         if results:
                             for each in results:
-                                result = each['name']
+                                result = {
+                                    'name': each['name'],
+                                    'size': each['size'],
+                                    'files': each['filename'][:-8] if each['filename'].endswith('.torrent') else each['filename'],
+                                    'filecount': each['numfiles'],
+                                    'link': f"https://hdbits.org/details.php?id={each['id']}",
+                                    'download': f"https://hdbits.org/download.php/{quote(each['filename'])}?id={each['id']}&passkey={self.passkey}"
+                                }
                                 dupes.append(result)
-                            break  # We found results, no need to try other search terms
                     else:
                         console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
             except httpx.TimeoutException:

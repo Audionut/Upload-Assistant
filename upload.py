@@ -1194,6 +1194,12 @@ async def process_cross_seeds(meta):
     if valid_unchecked_trackers and config['DEFAULT'].get('cross_seed_check_everything', False):
         console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
 
+        try:
+            await validate_tracker_logins(meta, valid_unchecked_trackers)
+            await asyncio.sleep(0.2)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
+
         # Store original unattended value
         original_unattended = meta.get('unattended', False)
         meta['unattended'] = True
