@@ -70,22 +70,45 @@ class HDS:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
-        # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
+        # Disc menus screenshots header
+        menu_images = meta.get("menu_images", [])
+        if menu_images:
+            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
-        # Screenshots
-        images = meta.get('image_list', [])
-        if images:
-            screenshots_block = ''
-            for image in images:
-                screenshots_block += f"[url={image['web_url']}][img]{image['img_url']}[/img][/url]"
-                # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
-                if 'imgbox' not in image['web_url']:
-                    screenshots_block += '\n'
-            desc_parts.append('[center]\n' + screenshots_block + '[/center]')
+            # Disc menus screenshots
+            menu_screenshots_block = ""
+            for image in menu_images:
+                menu_web_url = image.get("web_url")
+                menu_img_url = image.get("img_url")
+                if menu_web_url and menu_img_url:
+                    menu_screenshots_block += f"[url={menu_web_url}][img]{menu_img_url}[/img][/url]"
+                    # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                    if "imgbox" not in menu_web_url:
+                        menu_screenshots_block += "\n"
+            if menu_screenshots_block:
+                desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        # Screenshot Header
+        images = meta.get("image_list", [])
+        if images:
+            desc_parts.append(await builder.screenshot_header(self.tracker))
+
+            # Screenshots
+            if images:
+                screenshots_block = ""
+                for image in images:
+                    web_url = image.get("web_url")
+                    img_url = image.get("img_url")
+                    if web_url and img_url:
+                        screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url]"
+                        # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
+                        if "imgbox" not in web_url:
+                            screenshots_block += "\n"
+                if screenshots_block:
+                    desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
 
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant][size=2]{meta['ua_signature']}[/size][/url][/center]")

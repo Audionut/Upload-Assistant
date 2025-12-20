@@ -57,21 +57,28 @@ class DC:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Screenshots
-        if f'{self.tracker}_images_key' in meta:
-            images = meta[f'{self.tracker}_images_key']
+        all_images = []
+
+        menu_images = meta.get("menu_images", [])
+        if menu_images:
+            all_images.extend(menu_images)
+
+        if f"{self.tracker}_images_key" in meta:
+            images = meta.get(f"{self.tracker}_images_key")
         else:
-            images = meta['image_list']
+            images = meta.get("image_list")
         if images:
-            screenshots_block = '[center]\n'
-            for i, image in enumerate(images, start=1):
-                screenshots_block += (
-                    f"[url={image['web_url']}][img=350]{image['raw_url']}[/img][/url] "
-                )
-                # limits to 2 screens per line, as the description box is small
-                if i % 2 == 0:
-                    screenshots_block += '\n'
-            screenshots_block += '\n[/center]'
-            desc_parts.append(screenshots_block)
+            all_images.extend(images)
+
+        if all_images:
+            screenshots_block = ""
+            for image in all_images:
+                web_url = image.get("web_url")
+                raw_url = image.get("raw_url")
+                if web_url and raw_url:
+                    screenshots_block += f"[url={web_url}][img=350]{raw_url}[/img][/url] "
+            if screenshots_block:
+                desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
@@ -100,7 +107,6 @@ class DC:
         description = description.replace('[*] ', '• ').replace('[*]', '• ')
         description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
-        description = bbcode.remove_list(description)
         description = description.strip()
         description = bbcode.remove_extra_lines(description)
 

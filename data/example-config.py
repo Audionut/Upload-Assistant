@@ -145,6 +145,11 @@ config = {
         # Can be overridden in a per-tracker setting by adding this same config
         "screenshot_header": "",
 
+        # Applicable only to raw discs (Blu-ray/DVD).
+        # Providing the option to add a header, in bbcode, above the section featuring screenshots of the Disc menus, where supported
+        # Can be overridden in a per-tracker setting by adding this same config
+        "disc_menu_header": "",
+
         # Allows adding a custom signature, in BBCode, at the bottom of the description section
         # Can be overridden in a per-tracker setting by adding this same config
         "custom_signature": "",

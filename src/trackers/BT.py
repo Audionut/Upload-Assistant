@@ -568,13 +568,12 @@ class BT:
         return keyword_map.get(source_type.lower(), 'Outro')
 
     async def get_screens(self, meta):
-        screenshot_urls = [
-            image.get('raw_url')
-            for image in meta.get('image_list', [])
-            if image.get('raw_url')
-        ]
+        urls = []
+        for image in meta.get('menu_images', []) + meta.get('image_list', []):
+            if image.get('raw_url'):
+                urls.append(image['raw_url'])
 
-        return screenshot_urls
+        return urls
 
     async def get_credits(self, meta):
         director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])

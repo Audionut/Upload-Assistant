@@ -200,23 +200,40 @@ class FF:
         # User description
         desc_parts.append(await builder.get_user_description(meta))
 
-        # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
+        # Disc menus screenshots header
+        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
 
-        # Screenshots
-        images = meta.get('image_list', [])
-        if images:
-            screenshots_block = "[center]"
-            for image in images:
-                img_url = image['img_url']
-                web_url = image['web_url']
-                screenshots_block += f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
-            screenshots_block += "[/center]"
-
-            desc_parts.append(screenshots_block)
+        # Disc menus screenshots
+        menu_images = meta.get("menu_images", [])
+        if menu_images:
+            menu_screenshots_block = ""
+            for image in menu_images:
+                menu_img_url = image.get("img_url")
+                menu_web_url = image.get("web_url")
+                if menu_img_url and menu_web_url:
+                    menu_screenshots_block += f'<a href="{menu_web_url}" target="_blank"><img src="{menu_img_url}" width="220"></a> '
+            if menu_screenshots_block:
+                desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
 
         # Tonemapped Header
         desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+
+        # Screenshot Header
+        images = meta.get("image_list", [])
+        if images:
+            desc_parts.append(await builder.screenshot_header(self.tracker))
+
+            # Screenshots
+            screenshots_block = ""
+            for image in images:
+                img_url = image.get("img_url")
+                web_url = image.get("web_url")
+                if img_url and web_url:
+                    screenshots_block += (
+                        f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
+                    )
+            if screenshots_block:
+                desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Signature
         desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant][center][size=1]{meta['ua_signature']}[/size][/center][/url]")

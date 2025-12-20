@@ -286,7 +286,7 @@ class DiscParse():
                             with open(extended_summary_file, 'w', encoding="utf-8", errors="replace") as f:
                                 f.write(ext_bd_summary_cleaned)
 
-                            bdinfo = self.parse_bdinfo(bd_summary, files[1], path)
+                            bdinfo = self.parse_bdinfo(bd_summary_cleaned, files[1], path)
 
                             # Prompt user for custom edition if conditions are met
                             if len(selected_playlists) > 1:
@@ -305,7 +305,7 @@ class DiscParse():
 
                             # Save to discs array
                             if idx == 0:
-                                discs[i]['summary'] = bd_summary.strip()
+                                discs[i]['summary'] = bd_summary_cleaned
                                 discs[i]['bdinfo'] = bdinfo
                                 discs[i]['playlists'] = selected_playlists
                                 if valid_playlists and meta['unattended'] and not meta.get('unattended_confirm', False):
@@ -330,7 +330,7 @@ class DiscParse():
                                     if meta['debug']:
                                         console.print(f"[cyan]Stored {len(simplified_playlists)} unique playlists by duration (from {len(valid_playlists)} total)")
                             else:
-                                discs[i][f'summary_{idx}'] = bd_summary.strip()
+                                discs[i][f'summary_{idx}'] = bd_summary_cleaned
                                 discs[i][f'bdinfo_{idx}'] = bdinfo
 
                         except Exception:
