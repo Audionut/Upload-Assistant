@@ -205,6 +205,21 @@ async def filter_dupes(dupes, meta, tracker_name):
                                 console.log(f"[debug] File count match found: {meta['file_count_match']}")
                             remember_match('file_count')
                             return False
+            if tracker_name in ["BHD"]:
+                # BHD: compare sizes
+                entry_size = entry.get('size')
+                source_size = meta.get('source_size')
+                if entry_size is not None and source_size is not None:
+                    if meta['debug']:
+                        console.log(f"[debug] Comparing sizes: Entry size {entry_size} vs Source size {source_size}")
+                    try:
+                        if int(entry_size) == int(source_size):
+                            meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
+                            remember_match('size')
+                            return False
+                    except ValueError:
+                        if meta['debug']:
+                            console.log(f"[debug] Size comparison failed due to ValueError: entry_size={entry_size}, source_size={source_size}")
 
         else:
             entry_size = entry.get('size')
