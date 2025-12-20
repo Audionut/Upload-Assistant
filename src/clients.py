@@ -1188,7 +1188,7 @@ class Clients():
                     debug=meta.get('debug', False)
                 )
 
-            allow_fallback = self.config['TRACKERS'].get('allow_fallback', True)
+            allow_fallback = client.get('allow_fallback', True)
             if not linking_success and allow_fallback:
                 console.print(f"[yellow]Using original path without linking: {src}")
                 use_hardlink = False
