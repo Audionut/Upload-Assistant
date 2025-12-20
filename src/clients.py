@@ -2252,7 +2252,6 @@ class Clients():
                     if not is_match:
                         continue
 
-                    has_working_tracker = False
                     torrent_properties = []
 
                     if is_match:
@@ -2297,26 +2296,26 @@ class Clients():
                                         continue
                                     display_trackers.append(tracker)
 
-                                    for tracker in display_trackers:
-                                        url = tracker.get('url', 'Unknown URL')
-                                        status_code = tracker.get('status', 0)
-                                        status_text = {
-                                            0: "Disabled",
-                                            1: "Not contacted",
-                                            2: "Working",
-                                            3: "Updating",
-                                            4: "Error"
-                                        }.get(status_code, f"Unknown ({status_code})")
+                                # Now process the filtered trackers
+                                has_working_tracker = False
+                                for display_tracker in display_trackers:
+                                    url = display_tracker.get('url', 'Unknown URL')
+                                    status_code = display_tracker.get('status', 0)
+                                    status_text = {
+                                        0: "Disabled",
+                                        1: "Not contacted",
+                                        2: "Working",
+                                        3: "Updating",
+                                        4: "Error"
+                                    }.get(status_code, f"Unknown ({status_code})")
 
-                                        if status_code == 2:
-                                            has_working_tracker = True
-                                            if meta['debug']:
-                                                console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
-
-                                        else:
-                                            has_working_tracker = False
-                                            msg = tracker.get('msg', '')
-                                            console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
+                                    if status_code == 2:
+                                        has_working_tracker = True
+                                        if meta['debug']:
+                                            console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
+                                    else:
+                                        msg = display_tracker.get('msg', '')
+                                        console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
 
                             except qbittorrentapi.APIError as e:
                                 if meta['debug']:
