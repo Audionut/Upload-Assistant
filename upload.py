@@ -380,7 +380,7 @@ async def process_meta(meta, base_dir, bot=None):
             meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
 
     if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
-        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). EXITING........[/red]")
+        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
 
     else:
         meta['we_are_uploading'] = True
@@ -1173,8 +1173,7 @@ async def process_cross_seeds(meta):
 
     # Search for cross-seeds on unchecked trackers
     if valid_unchecked_trackers and config['DEFAULT'].get('cross_seed_check_everything', False):
-        if meta.get('debug'):
-            console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
+        console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
 
         # Store original unattended value
         original_unattended = meta.get('unattended', False)
@@ -1188,7 +1187,7 @@ async def process_cross_seeds(meta):
                 disctype = meta.get('disctype', '')
 
                 # Search for existing torrents
-                if not tracker == "PTP":
+                if tracker != "PTP":
                     dupes = await tracker_class.search_existing(meta, disctype)
                 else:
                     ptp = PTP(config=config)
@@ -1198,7 +1197,6 @@ async def process_cross_seeds(meta):
                     dupes = await ptp.search_existing(meta['ptp_groupID'], meta, disctype)
 
                 if dupes:
-                    # Filter and check dupes using existing logic
                     dupes = await filter_dupes(dupes, meta, tracker)
                     await helper.dupe_check(dupes, meta, tracker)
 

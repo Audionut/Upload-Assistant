@@ -193,7 +193,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                 else:
                     if meta['debug']:
                         console.log(f"[debug] Comparing file: {file} against dupe files list.")
-                        console.log(f"[debug] Dupe files list: {files}")
+                        console.log(f"[debug] Dupe files list: {files[:10]}{'...' if len(files) > 10 else files}")
                     if any(file.lower() == f.lower() for f in files):
                         meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                         if meta['debug']:
@@ -216,7 +216,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                     if int(entry_size) == int(source_size):
                         meta['size_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                         remember_match('size')
-                    return False
+                        return False
                 except ValueError:
                     if meta['debug']:
                         console.log(f"[debug] Size comparison failed due to ValueError: entry_size={entry_size}, source_size={source_size}")
@@ -328,8 +328,19 @@ async def filter_dupes(dupes, meta, tracker_name):
                         await log_exclusion("missing 'repack'", each)
                         return True
             elif check["key"] == "remux":
-                if check["uuid_flag"] and not check["condition"](normalized):
+                # Bidirectional check: if your upload is a REMUX, dupe must be REMUX
+                # If your upload is NOT a REMUX (i.e., an encode), dupe must NOT be a REMUX
+                uuid_has_remux = check["uuid_flag"]
+                dupe_has_remux = check["condition"](normalized)
+
+                if meta['debug']:
+                    console.log(f"[debug] Remux check: uuid_has_remux={uuid_has_remux}, dupe_has_remux={dupe_has_remux}")
+
+                if uuid_has_remux and not dupe_has_remux:
                     await log_exclusion("missing 'remux'", each)
+                    return True
+                elif not uuid_has_remux and dupe_has_remux:
+                    await log_exclusion("dupe is remux but upload is not", each)
                     return True
 
         if meta.get('category') == "TV":

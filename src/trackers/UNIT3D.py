@@ -73,6 +73,8 @@ class UNIT3D:
                             result = {
                                 'name': attributes['name'],
                                 'size': attributes['size'],
+                                'files': [],
+                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
                                 'trumpable': attributes.get('trumpable', False),
                                 'link': attributes.get('details_link', None),
                                 'download': attributes.get('download_link', None)
