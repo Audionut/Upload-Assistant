@@ -1251,53 +1251,54 @@ async def process_cross_seeds(meta):
     except (TypeError, ValueError):
         concurrency_limit = 8
     semaphore = asyncio.Semaphore(max(1, concurrency_limit))
+    debug = meta.get('debug', False)
 
     async def handle_cross_seed(tracker):
+        cross_seed_key = f'{tracker}_cross_seed'
+        cross_seed_value = meta.get(cross_seed_key, False)
+
+        if debug:
+            console.print(f"[cyan]Debug: {tracker} - cross_seed: {redact_private_info(cross_seed_value)}")
+
+        if not cross_seed_value:
+            return
+
+        if debug:
+            console.print(f"[green]Found cross-seed for {tracker}!")
+
+        download_url = None
+        if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
+            download_url = cross_seed_value
+
+        headers = None
+        if tracker == "RTF":
+            headers = {
+                'accept': 'application/json',
+                'Authorization': config['TRACKERS'][tracker]['api_key'].strip(),
+            }
+
+        if tracker == "AR" and download_url:
+            try:
+                ar = AR(config=config)
+                auth_key = await ar.get_auth_key(meta)
+
+                # Extract torrent_pass from announce_url
+                announce_url = config['TRACKERS']['AR'].get('announce_url', '')
+                # Pattern: http://tracker.alpharatio.cc:2710/PASSKEY/announce
+                match = re.search(r':\d+/([^/]+)/announce', announce_url)
+                torrent_pass = match.group(1) if match else None
+
+                if auth_key and torrent_pass:
+                    # Append auth_key and torrent_pass to download_url
+                    separator = '&' if '?' in download_url else '?'
+                    download_url += f"{separator}authkey={auth_key}&torrent_pass={torrent_pass}"
+                    if debug:
+                        console.print("[cyan]Added AR auth_key and torrent_pass to download URL[/cyan]")
+            except Exception as e:
+                if debug:
+                    console.print(f"[yellow]Error getting AR auth credentials: {e}[/yellow]")
+
         async with semaphore:
-            cross_seed_key = f'{tracker}_cross_seed'
-            cross_seed_value = meta.get(cross_seed_key, False)
-
-            if meta.get('debug', False):
-                console.print(f"[cyan]Debug: {tracker} - cross_seed: {redact_private_info(cross_seed_value)}")
-
-            if not cross_seed_value:
-                return
-
-            if meta.get('debug'):
-                console.print(f"[green]Found cross-seed for {tracker}!")
-
-            download_url = None
-            if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
-                download_url = cross_seed_value
-
-            headers = None
-            if tracker == "RTF":
-                headers = {
-                    'accept': 'application/json',
-                    'Authorization': config['TRACKERS'][tracker]['api_key'].strip(),
-                }
-
-            if tracker == "AR" and download_url:
-                try:
-                    ar = AR(config=config)
-                    auth_key = await ar.get_auth_key(meta)
-
-                    # Extract torrent_pass from announce_url
-                    announce_url = config['TRACKERS']['AR'].get('announce_url', '')
-                    # Pattern: http://tracker.alpharatio.cc:2710/PASSKEY/announce
-                    match = re.search(r':\d+/([^/]+)/announce', announce_url)
-                    torrent_pass = match.group(1) if match else None
-
-                    if auth_key and torrent_pass:
-                        # Append auth_key and torrent_pass to download_url
-                        separator = '&' if '?' in download_url else '?'
-                        download_url += f"{separator}authkey={auth_key}&torrent_pass={torrent_pass}"
-                        if meta.get('debug'):
-                            console.print("[cyan]Added AR auth_key and torrent_pass to download URL[/cyan]")
-                except Exception as e:
-                    if meta.get('debug'):
-                        console.print(f"[yellow]Error getting AR auth credentials: {e}[/yellow]")
-
             await common.download_tracker_torrent(
                 meta,
                 tracker,
