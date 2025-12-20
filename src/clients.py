@@ -1267,7 +1267,10 @@ class Clients():
                 if os.path.normpath(am_config).lower() in os.path.normpath(path).lower() and am_config.strip() != "":
                     auto_management = True
 
-        qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
+        if cross and client.get('qbit_cross_cat'):
+            qbt_category = client['qbit_cross_cat']
+        else:
+            qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
         content_layout = client.get('content_layout', 'Original')
         if meta['debug']:
             console.print("qbt_category:", qbt_category)

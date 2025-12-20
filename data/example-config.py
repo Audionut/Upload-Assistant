@@ -894,9 +894,10 @@ config = {
             # Use the UA tracker acronym as a tag in qBitTorrent
             "use_tracker_as_tag": False,
             "qbit_tag": "",
-            # If using cross seeding, add cross seed tag here
-            "qbit_cross_tag": "",
             "qbit_cat": "",
+            # If using cross seeding, add cross seed tag/category here
+            "qbit_cross_tag": "",
+            "qbit_cross_cat": "",
             "content_layout": "Original",
             # here you can chose to use either symbolic or hard links, or None to use original path
             # this will disable any automatic torrent management if set
