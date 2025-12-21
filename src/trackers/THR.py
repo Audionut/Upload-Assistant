@@ -144,7 +144,12 @@ class THR():
             return False
 
     async def get_cat_id(self, meta):
-        if meta['category'] == "MOVIE":
+        genres = meta.get('genres', '').lower()
+        keywords = meta.get('keywords', '').lower()
+
+        if 'documentary' in genres or 'documentary' in keywords:
+            cat = '12'
+        elif meta['category'] == "MOVIE":
             if meta.get('is_disc') == "BMDV":
                 cat = '40'
             elif meta.get('is_disc') == "DVD" or meta.get('is_disc') == "HDDVD":
