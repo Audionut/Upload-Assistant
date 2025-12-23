@@ -610,12 +610,13 @@ class HDB():
                     console.print(f"[cyan]{i}: {os.path.basename(path)}")
         else:
             thumb_size = 'w300'
-            os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
+            screenshot_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
             # similar to uploadscreens.py L546
             image_patterns = ["*.png", ".[!.]*.png"]
             image_glob = []
             for pattern in image_patterns:
-                glob_results = await asyncio.to_thread(glob.glob, pattern)
+                full_pattern = os.path.join(glob.escape(screenshot_dir), pattern)
+                glob_results = await asyncio.to_thread(glob.glob, full_pattern)
                 image_glob.extend(glob_results)
             unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
             unwanted_files = set()
