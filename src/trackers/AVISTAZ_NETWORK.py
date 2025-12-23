@@ -870,7 +870,7 @@ class AZTrackerBase:
         html_label = ""
 
         if source_type == 'disc':
-            if source == "blu-ray":
+            if is_disc == "bdmv":
                 html_label = "BluRay Raw"
             elif is_disc in ("dvd", "hddvd"):
                 html_label = "DVD"
