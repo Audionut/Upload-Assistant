@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
 import subprocess

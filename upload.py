@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import cli_ui
@@ -26,6 +26,8 @@ from src.args import Args
 from src.cleanup import cleanup, reset_terminal
 from src.clients import Clients
 from src.console import console
+from src.disc_menus import process_disc_menus
+from src.dupe_checking import filter_dupes
 from src.get_name import get_name
 from src.get_desc import gen_desc
 from src.get_tracker_data import get_tracker_data
@@ -38,6 +40,8 @@ from src.trackerhandle import process_trackers
 from src.trackerstatus import process_all_trackers
 from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
 from src.trackers.COMMON import COMMON
+from src.trackers.PTP import PTP
+from src.trackers.AR import AR
 from src.uphelper import UploadHelper
 from src.uploadscreens import upload_screens
 
@@ -343,7 +347,7 @@ async def process_meta(meta, base_dir, bot=None):
         trackers = meta['trackers']
 
         audio_prompted = False
-        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "ULCX"]:
+        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
             if tracker in trackers:
                 if not audio_prompted:
                     await process_desc_language(meta, desc=None, tracker=tracker)
@@ -377,7 +381,7 @@ async def process_meta(meta, base_dir, bot=None):
             meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
 
     if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
-        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). EXITING........[/red]")
+        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
 
     else:
         meta['we_are_uploading'] = True
@@ -479,8 +483,26 @@ async def process_meta(meta, base_dir, bot=None):
                                 meta['tonemapped'] = image_data['tonemapped']
                                 if meta.get('debug'):
                                     console.print("[cyan]Loaded previously saved tonemapped status[/cyan]")
+
                     except Exception as e:
                         console.print(f"[yellow]Could not load saved image data: {str(e)}")
+
+                if meta.get('is_disc', ""):
+                    menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
+                    if os.path.exists(menus_data_file):
+                        try:
+                            with open(menus_data_file, 'r') as menus_file:
+                                menu_image_file = json.load(menus_file)
+
+                                if 'menu_images' in menu_image_file and not meta.get('menu_images'):
+                                    meta['menu_images'] = menu_image_file['menu_images']
+                                    if meta.get('debug'):
+                                        console.print(f"[cyan]Loaded {len(menu_image_file['menu_images'])} previously saved disc menus")
+
+                        except Exception as e:
+                            console.print(f"[yellow]Could not load saved menu image data: {str(e)}")
+                    elif meta.get('path_to_menu_screenshots', ""):
+                        await process_disc_menus(meta, config)
 
                 # Take Screenshots
                 try:
@@ -966,6 +988,8 @@ async def do_the_thing(base_dir):
             await process_meta(meta, base_dir, bot=bot)
 
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
+                if config['DEFAULT'].get('cross_seeding', True):
+                    await process_cross_seeds(meta)
                 if not meta.get('site_check', False):
                     if not meta.get('emby', False):
                         console.print("we are not uploading.......")
@@ -989,6 +1013,10 @@ async def do_the_thing(base_dir):
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
+
+                if config['DEFAULT'].get('cross_seeding', True):
+                    await process_cross_seeds(meta)
+
                 if 'queue' in meta and meta.get('queue') is not None:
                     processed_files_count += 1
                     if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
@@ -1111,6 +1139,183 @@ async def do_the_thing(base_dir):
                 pass
         if not sys.stdin.closed:
             reset_terminal()
+
+
+async def process_cross_seeds(meta):
+    all_trackers = api_trackers | http_trackers | other_api_trackers
+
+    # Get list of trackers to exclude (already in client)
+    remove_list = []
+    if meta.get('remove_trackers', False):
+        if isinstance(meta['remove_trackers'], str):
+            remove_list = [t.strip().upper() for t in meta['remove_trackers'].split(',')]
+        elif isinstance(meta['remove_trackers'], list):
+            remove_list = [t.strip().upper() for t in meta['remove_trackers'] if isinstance(t, str)]
+
+    # Check for trackers that haven't been dupe-checked yet
+    dupe_checked_trackers = meta.get('dupe_checked_trackers', [])
+
+    # Validate tracker configs and build list of valid unchecked trackers
+    valid_unchecked_trackers = []
+    for tracker in all_trackers:
+        if tracker in dupe_checked_trackers or meta.get(f'{tracker}_cross_seed', None) is not None or tracker in remove_list:
+            continue
+
+        tracker_config = config.get('TRACKERS', {}).get(tracker, {})
+        if not tracker_config:
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} not found in config, skipping[/yellow]")
+            continue
+
+        api_key = tracker_config.get('api_key', '')
+        announce_url = tracker_config.get('announce_url', '')
+
+        # Ensure both values are strings and strip whitespace
+        api_key = str(api_key).strip() if api_key else ''
+        announce_url = str(announce_url).strip() if announce_url else ''
+
+        # Skip if both api_key and announce_url are empty
+        if not api_key and not announce_url:
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} has no api_key or announce_url set, skipping[/yellow]")
+            continue
+
+        # Skip trackers with placeholder announce URLs
+        placeholder_patterns = ['<PASSKEY>', 'customannounceurl', 'get from upload page', 'Custom_Announce_URL', 'PASS_KEY', 'insertyourpasskeyhere']
+        announce_url_lower = announce_url.lower()
+        if any(pattern.lower() in announce_url_lower for pattern in placeholder_patterns):
+            if meta.get('debug'):
+                console.print(f"[yellow]Tracker {tracker} has placeholder announce_url, skipping[/yellow]")
+            continue
+
+        valid_unchecked_trackers.append(tracker)
+
+    # Search for cross-seeds on unchecked trackers
+    if valid_unchecked_trackers and config['DEFAULT'].get('cross_seed_check_everything', False):
+        console.print(f"[cyan]Checking for cross-seeds on unchecked trackers: {valid_unchecked_trackers}[/cyan]")
+
+        try:
+            await validate_tracker_logins(meta, valid_unchecked_trackers)
+            await asyncio.sleep(0.2)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
+
+        # Store original unattended value
+        original_unattended = meta.get('unattended', False)
+        meta['unattended'] = True
+
+        helper = UploadHelper()
+
+        async def check_tracker_for_dupes(tracker):
+            try:
+                tracker_class = tracker_class_map[tracker](config=config)
+                disctype = meta.get('disctype', '')
+
+                # Search for existing torrents
+                if tracker != "PTP":
+                    dupes = await tracker_class.search_existing(meta, disctype)
+                else:
+                    ptp = PTP(config=config)
+                    if not meta.get('ptp_groupID'):
+                        groupID = await ptp.get_group_by_imdb(meta['imdb'])
+                        meta['ptp_groupID'] = groupID
+                    dupes = await ptp.search_existing(meta['ptp_groupID'], meta, disctype)
+
+                if dupes:
+                    dupes = await filter_dupes(dupes, meta, tracker)
+                    await helper.dupe_check(dupes, meta, tracker)
+
+            except Exception as e:
+                if meta.get('debug'):
+                    console.print(f"[yellow]Error checking {tracker} for cross-seeds: {e}[/yellow]")
+
+        # Run all dupe checks concurrently
+        await asyncio.gather(*[check_tracker_for_dupes(tracker) for tracker in valid_unchecked_trackers], return_exceptions=True)
+
+        # Restore original unattended value
+        meta['unattended'] = original_unattended
+
+    # Filter to only trackers with cross-seed data
+    valid_trackers = [tracker for tracker in all_trackers if meta.get(f'{tracker}_cross_seed', None) is not None]
+
+    if not valid_trackers:
+        if meta.get('debug'):
+            console.print("[yellow]No trackers found with cross-seed data[/yellow]")
+        return
+
+    console.print(f"[cyan]Valid trackers for cross-seed check: {valid_trackers}[/cyan]")
+
+    common = COMMON(config)
+    try:
+        concurrency_limit = int(config.get('DEFAULT', {}).get('cross_seed_concurrency', 8))
+    except (TypeError, ValueError):
+        concurrency_limit = 8
+    semaphore = asyncio.Semaphore(max(1, concurrency_limit))
+    debug = meta.get('debug', False)
+
+    async def handle_cross_seed(tracker):
+        cross_seed_key = f'{tracker}_cross_seed'
+        cross_seed_value = meta.get(cross_seed_key, False)
+
+        if debug:
+            console.print(f"[cyan]Debug: {tracker} - cross_seed: {redact_private_info(cross_seed_value)}")
+
+        if not cross_seed_value:
+            return
+
+        if debug:
+            console.print(f"[green]Found cross-seed for {tracker}!")
+
+        download_url = None
+        if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
+            download_url = cross_seed_value
+
+        headers = None
+        if tracker == "RTF":
+            headers = {
+                'accept': 'application/json',
+                'Authorization': config['TRACKERS'][tracker]['api_key'].strip(),
+            }
+
+        if tracker == "AR" and download_url:
+            try:
+                ar = AR(config=config)
+                auth_key = await ar.get_auth_key(meta)
+
+                # Extract torrent_pass from announce_url
+                announce_url = config['TRACKERS']['AR'].get('announce_url', '')
+                # Pattern: http://tracker.alpharatio.cc:2710/PASSKEY/announce
+                match = re.search(r':\d+/([^/]+)/announce', announce_url)
+                torrent_pass = match.group(1) if match else None
+
+                if auth_key and torrent_pass:
+                    # Append auth_key and torrent_pass to download_url
+                    separator = '&' if '?' in download_url else '?'
+                    download_url += f"{separator}authkey={auth_key}&torrent_pass={torrent_pass}"
+                    if debug:
+                        console.print("[cyan]Added AR auth_key and torrent_pass to download URL[/cyan]")
+            except Exception as e:
+                if debug:
+                    console.print(f"[yellow]Error getting AR auth credentials: {e}[/yellow]")
+
+        async with semaphore:
+            await common.download_tracker_torrent(
+                meta,
+                tracker,
+                headers=headers,
+                params=None,
+                downurl=download_url,
+                hash_is_id=False,
+                cross=True
+            )
+            await client.add_to_client(meta, tracker, cross=True)
+
+    tasks = [(tracker, asyncio.create_task(handle_cross_seed(tracker))) for tracker in valid_trackers]
+
+    results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+    for (tracker, _), result in zip(tasks, results):
+        if isinstance(result, Exception):
+            console.print(f"[red]Cross-seed handling failed for {tracker}: {result}[/red]")
 
 
 async def get_mkbrr_path(meta, base_dir=None):

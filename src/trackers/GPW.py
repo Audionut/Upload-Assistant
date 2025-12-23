@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import httpx
@@ -204,6 +204,20 @@ class GPW():
 
         # User description
         desc_parts.append(await builder.get_user_description(meta))
+
+        # Disc menus screenshots header
+        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+
+        # Disc menus screenshots
+        if f'{self.tracker}_menu_images_key' in meta:
+            menu_images = meta.get(f'{self.tracker}_menu_images_key', [])
+        else:
+            menu_images = meta.get('menu_images', [])
+        if menu_images:
+            menu_screenshots_block = ''
+            for image in menu_images:
+                menu_screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
 
         # Screenshot Header
         desc_parts.append(await builder.screenshot_header(self.tracker))

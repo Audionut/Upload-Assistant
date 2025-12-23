@@ -1,13 +1,12 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
 import asyncio
-import bencodepy
 import httpx
 import os
+import platform
 import re
-import requests
 
 from src.bbcode import BBCODE
 from src.console import console
@@ -34,6 +33,7 @@ class ACM(UNIT3D):
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
+            bd_size = 100  # Default to largest size
             for each in bd_sizes:
                 if bdinfo['size'] < each:
                     bd_size = each
@@ -49,12 +49,14 @@ class ACM(UNIT3D):
                 type_string = "DVD 5"
             elif "DVD9" in meta['dvd_size']:
                 type_string = "DVD 9"
+            else:
+                type_string = "Other"
         else:
             if meta['type'] == "REMUX":
-                if meta['source'] == "BluRay":
-                    type_string = "REMUX"
                 if meta['uhd'] == "UHD":
                     type_string = "UHD REMUX"
+                else:
+                    type_string = "REMUX"
             else:
                 type_string = meta['type']
             # else:
@@ -80,7 +82,14 @@ class ACM(UNIT3D):
         }
         type_id = type_id_map.get(type_string, '0')
 
-        return {'type_id': type_id}
+        return type_id
+
+    async def get_cat_id(self, category_name):
+        category_id = {
+            'MOVIE': '1',
+            'TV': '2',
+        }.get(category_name, '0')
+        return category_id
 
     async def get_resolution_id(self, meta):
         resolution_id = {
@@ -93,16 +102,16 @@ class ACM(UNIT3D):
             '480p': '5',
             '480i': '5'
         }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        return resolution_id
 
     # ACM rejects uploads with more that 10 keywords
     async def get_keywords(self, meta):
         keywords = meta.get('keywords', '')
         if keywords != '':
             keywords_list = keywords.split(',')
-            keywords_list = [keyword for keyword in keywords_list if " " not in keyword][:10]
+            keywords_list = [keyword.strip() for keyword in keywords_list if " " not in keyword.strip()][:10]
             keywords = ', '.join(keywords_list)
-        return {'keywords': keywords}
+        return keywords
 
     async def get_additional_files(self, meta):
         return {}
@@ -186,13 +195,110 @@ class ACM(UNIT3D):
             return ' [No Eng subs]'
         return f" [{subs[0]} subs only]"
 
+    async def upload(self, meta, disctype):
+        await self.common.edit_torrent(meta, self.tracker, self.source_flag)
+        cat_id = await self.get_cat_id(meta['category'])
+        type_id = await self.get_type_id(meta)
+        resolution_id = await self.get_resolution_id(meta)
+        desc = await self.get_description(meta)
+        region_id = await self.common.unit3d_region_ids(meta.get('region'))
+        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
+        acm_name = await self.get_name(meta)
+        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+            anon = 0
+        else:
+            anon = 1
+
+        if meta['bdinfo'] is not None:
+            # bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            mi_dump = None
+            bd_dump = ""
+            for each in meta['discs']:
+                bd_dump = bd_dump + each['summary'].strip() + "\n\n"
+        else:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                mi_dump = await f.read()
+            bd_dump = None
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
+            torrent_bytes = await f.read()
+        files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
+        data = {
+            'name': acm_name,
+            'description': desc,
+            'mediainfo': mi_dump,
+            'bdinfo': bd_dump,
+            'category_id': cat_id,
+            'type_id': type_id,
+            'resolution_id': resolution_id,
+            'tmdb': meta['tmdb'],
+            'imdb': meta['imdb'],
+            'tvdb': meta['tvdb_id'],
+            'mal': meta['mal_id'],
+            'igdb': 0,
+            'anonymous': anon,
+            'stream': meta['stream'],
+            'sd': meta['sd'],
+            'keywords': await self.get_keywords(meta),
+            'personal_release': int(meta.get('personalrelease', False)),
+            'internal': 0,
+            'featured': 0,
+            'free': 0,
+            'doubleup': 0,
+            'sticky': 0,
+        }
+        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
+            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
+                data['internal'] = 1
+        if region_id != 0:
+            data['region_id'] = region_id
+        if distributor_id != 0:
+            data['distributor_id'] = distributor_id
+        if meta.get('category') == "TV":
+            data['season_number'] = meta.get('season_int', '0')
+            data['episode_number'] = meta.get('episode_int', '0')
+        headers = {'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})'}
+        params = {
+            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()
+        }
+
+        if meta['debug'] is False:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                try:
+                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
+                    # adding torrent link to comment of torrent file
+                    t_id = response.json()['data'].split('.')[1].split('/')[3]
+                    meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+                    await self.common.add_tracker_torrent(
+                        meta,
+                        self.tracker,
+                        self.source_flag,
+                        self.announce_url,
+                        self.torrent_url + t_id,
+                        headers=headers,
+                        params=params,
+                        downurl=response.json()['data']
+                    )
+                except httpx.TimeoutException:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
+                except httpx.RequestError as e:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
+                except Exception:
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
+                    return
+        else:
+            console.print("[cyan]Request Data:")
+            console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+
     async def search_existing(self, meta, disctype):
         dupes = []
         params = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],
-            'categories[]': (await self.get_category_id(meta))['category_id'],
-            'types[]': (await self.get_type_id(meta))['type_id'],
+            'categories[]': (await self.get_category_id(meta)),
+            'types[]': (await self.get_type_id(meta)),
             # A majority of the ACM library doesn't contain resolution information
             # 'resolutions[]' : await self.get_res_id(meta['resolution']),
             # 'name' : ""
@@ -218,18 +324,10 @@ class ACM(UNIT3D):
 
         return dupes
 
-    # async def fix_rtl(self, meta):
-    #     original_title = meta.get('original_title')
-    #     right_to_left_languages: ["Arabic", "Aramaic", "Azeri", "Divehi", "Fula", "Hebrew", "Kurdish", "N'ko", "Persian", "Rohingya", "Syriac", "Urdu"]
-    #     if meta.get('original_language') in right_to_left_languages:
-    #         return f' / {original_title} {chr(int("202A", 16))}'
-    #     return original_title
-
     async def get_name(self, meta):
         name = meta.get('name')
         aka = meta.get('aka')
         original_title = meta.get('original_title')
-        year = str(meta.get('year'))  # noqa F841
         audio = meta.get('audio')
         source = meta.get('source')
         is_disc = meta.get('is_disc')
@@ -249,6 +347,7 @@ class ACM(UNIT3D):
         name = name.replace("UHD BluRay REMUX", "Remux")
         name = name.replace("BluRay REMUX", "Remux")
         name = name.replace("H.265", "HEVC")
+        name = name.replace(" Atmos", "")
         if is_disc == 'DVD':
             name = name.replace(f'{source} DVD5', f'{resolution} DVD {source}')
             name = name.replace(f'{source} DVD9', f'{resolution} DVD {source}')
@@ -256,7 +355,7 @@ class ACM(UNIT3D):
                 name = name.replace(f'{audio}', f'MPEG {audio}')
 
         name = name + self.get_subs_tag(subs)
-        return {'name': name}
+        return name
 
     async def get_description(self, meta):
         async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
@@ -317,43 +416,4 @@ class ACM(UNIT3D):
         async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
             final_desc = await f.read()
 
-        return {'description': final_desc}
-
-    async def search_torrent_page(self, meta, disctype):
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        Name = meta['name']
-        quoted_name = f'"{Name}"'
-
-        params = {
-            'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'name': quoted_name
-        }
-
-        try:
-            response = requests.get(url=self.search_url, params=params)
-            response.raise_for_status()
-            response_data = response.json()
-
-            if response_data['data'] and isinstance(response_data['data'], list):
-                details_link = response_data['data'][0]['attributes'].get('details_link')
-
-                if details_link:
-                    with open(torrent_file_path, 'rb') as open_torrent:
-                        torrent_data = open_torrent.read()
-
-                    torrent = bencodepy.decode(torrent_data)
-                    torrent[b'comment'] = details_link.encode('utf-8')
-                    updated_torrent_data = bencodepy.encode(torrent)
-
-                    with open(torrent_file_path, 'wb') as updated_torrent_file:
-                        updated_torrent_file.write(updated_torrent_data)
-
-                    return details_link
-                else:
-                    return None
-            else:
-                return None
-
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred during the request: {e}")
-            return None
+        return final_desc

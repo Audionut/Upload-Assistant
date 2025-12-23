@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 
 import os
 import re
@@ -369,6 +369,7 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
         "dalexni": "dalexni_api",
         "ziplinestudio": ["zipline_url", "zipline_api_key"],
         "passtheimage": "passtheima_ge_api",
+        "seedpool_cdn": "seedpool_cdn_api",
         "imgbox": None,
         "pixhost": None
     }

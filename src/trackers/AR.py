@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import httpx
@@ -285,6 +285,7 @@ class AR():
                             'files': res['groupName'],
                             'file_count': res['fileCount'],
                             'link': f'{self.search_url}?id={res["groupId"]}&torrentid={res["torrentId"]}',
+                            'download': f'{self.base_url}/torrents.php?action=download&id={res["torrentId"]}',
                         }
                         dupes.append(dupe)
 

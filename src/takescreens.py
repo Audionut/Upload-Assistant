@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
 import glob
@@ -239,7 +239,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                         retake = True
-                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
                     if meta['debug']:
                         console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                 else:
@@ -270,7 +270,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                             if new_size > 75000 and new_size <= 10000000:
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
-                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
                             if new_size > 75000:
                                 console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                 valid_image = True
@@ -1050,7 +1050,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                         retake = True
-                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
                     if meta['debug']:
                         console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                 else:
@@ -1096,7 +1096,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                                 if 75000 < new_size <= 10000000:
                                     console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                     valid_image = True
-                            elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                            elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
                                 if new_size > 75000:
                                     console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
                                     valid_image = True
@@ -1138,7 +1138,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                         elif img_host in ["imgbox", "pixhost"]:
                             if 75000 < new_size <= 10000000:
                                 valid_image = True
-                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage"]:
+                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
                             if new_size > 75000:
                                 valid_image = True
 

@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiofiles
 import asyncio
@@ -810,50 +810,59 @@ class BJS:
             return None
 
     async def get_screenshots(self, meta):
-        screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
-        local_files = sorted(screenshot_dir.glob('*.png'))
+        screenshot_dir = Path(meta["base_dir"]) / "tmp" / meta["uuid"]
+        local_files = sorted(screenshot_dir.glob("*.png"))
+
+        disc_menu_links = [img.get("raw_url") for img in meta.get("menu_images", []) if img.get("raw_url")][
+            :3
+        ]
+
+        async def upload_local_file(path):
+            with open(path, "rb") as f:
+                image_bytes = f.read()
+            return await self.img_host(image_bytes, os.path.basename(path))
+
+        async def upload_remote_file(url):
+            try:
+                response = await self.session.get(url, timeout=120)
+                response.raise_for_status()
+                image_bytes = response.content
+                filename = os.path.basename(urlparse(url).path) or "screenshot.png"
+                return await self.img_host(image_bytes, filename)
+            except Exception as e:
+                print(f"Failed to process screenshot from URL {url}: {e}")
+                return None
+
         results = []
+
+        # Upload menu images
+        for url in disc_menu_links:
+            result = await upload_remote_file(url)
+            if result:
+                results.append(result)
 
         # Use existing files
         if local_files:
-            async def upload_local_file(path):
-                with open(path, 'rb') as f:
-                    image_bytes = f.read()
-                return await self.img_host(image_bytes, os.path.basename(path))
-
-            paths = local_files[:6]
+            paths = local_files[: 6 - len(results)]
 
             for coro in tqdm(
                 asyncio.as_completed([upload_local_file(p) for p in paths]),
                 total=len(paths),
-                desc=f'Uploading screenshots to {self.tracker}',
+                desc=f"Uploading screenshots to {self.tracker}",
             ):
                 result = await coro
                 if result:
                     results.append(result)
 
         else:
-            image_links = [
-                img.get('raw_url')
-                for img in meta.get('image_list', [])
-                if img.get('raw_url')
-            ][:6]
-
-            async def upload_remote_file(url):
-                try:
-                    response = await self.session.get(url, timeout=120)
-                    response.raise_for_status()
-                    image_bytes = response.content
-                    filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
-                    return await self.img_host(image_bytes, filename)
-                except Exception as e:
-                    print(f'Falha ao processar screenshot da URL {url}: {e}')
-                    return None
+            image_links = [img.get("raw_url") for img in meta.get("image_list", []) if img.get("raw_url")][
+                : 6 - len(results)
+            ]
 
             for coro in tqdm(
                 asyncio.as_completed([upload_remote_file(url) for url in image_links]),
                 total=len(image_links),
-                desc=f'Uploading screenshots to {self.tracker}',
+                desc=f"Uploading screenshots to {self.tracker}",
             ):
                 result = await coro
                 if result:

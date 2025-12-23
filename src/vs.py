@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import vapoursynth as vs
 from awsmfunc import ScreenGen, DynamicTonemap, zresize
 import random

@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import re
 from src.trackers.COMMON import COMMON
@@ -59,27 +59,55 @@ class LT(UNIT3D):
         )
 
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
-            # Check if is HYBRID (Copied from BLU.py)
-            if 'hybrid' in meta.get('uuid').lower():
-                if "repack" in meta.get('uuid').lower():
-                    lt_name = lt_name.replace('REPACK', 'Hybrid REPACK')
-                else:
-                    lt_name = lt_name.replace(meta['resolution'], f"Hybrid {meta['resolution']}")
             # Check if original language is "es" if true replace title for AKA if available
             if meta.get('original_language') == 'es' and meta.get('aka') != "":
                 lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()
             # Check if audio Spanish exists
-            audios = [
-                audio for audio in meta['mediainfo']['media']['track'][2:]
-                if audio.get('@type') == 'Audio'
-                and isinstance(audio.get('Language'), str)
-                and audio.get('Language').lower() in {'es-419', 'es', 'es-mx', 'es-ar', 'es-cl', 'es-ve', 'es-bo', 'es-co',
-                                                      'es-cr', 'es-do', 'es-ec', 'es-sv', 'es-gt', 'es-hn', 'es-ni', 'es-pa',
-                                                      'es-py', 'es-pe', 'es-pr', 'es-uy'}
-                and "commentary" not in str(audio.get('Title', '')).lower()
-            ]
+
+            audio_latino_check = {
+                "es-419", "es-mx", "es-ar", "es-cl", "es-ve",
+                "es-bo",  "es-co", "es-cr", "es-do", "es-ec",
+                "es-sv",  "es-gt", "es-hn", "es-ni", "es-pa",
+                "es-py",  "es-pe", "es-pr", "es-uy"}
+
+            audio_castilian_check = ["es", "es-es"]
+            # Use keywords instead of massive exact-match lists
+            # "latino" matches: "latino", "latinoamérica", "latinoamericano", etc.
+            latino_keywords = ["latino", "latin america"]
+            # "castellano" matches any title explicitly labeled as such.
+            castilian_keywords = ["castellano"]
+
+            audios = []
+            has_latino = False
+            has_castilian = False
+
+            for audio in meta['mediainfo']['media']['track'][2:]:
+                if audio.get("@type") != "Audio":
+                    continue
+                lang = audio.get("Language", "").lower()
+                title = str(audio.get("Title", "")).lower()
+
+                if "commentary" in title:
+                    continue
+
+                # Check if title contains keywords
+                is_latino_title = any(kw in title for kw in latino_keywords)
+                is_castilian_title = any(kw in title for kw in castilian_keywords)
+
+                # 1. Check strict Latino language codes or Edge Case: Language is 'es' but Title contains Latino keywords
+                if lang in audio_latino_check or (lang == 'es' and is_latino_title):
+                    has_latino = True
+                    audios.append(audio)
+
+                # 2. Edge Case: Language is 'es' and Title contains Castilian keywords or Fallback: Check strict Castilian codes (includes 'es' as default)
+                elif (lang == 'es' and is_castilian_title) or lang in audio_castilian_check:
+                    has_castilian = True
+                    audios.append(audio)
+
             if len(audios) > 0:  # If there is at least 1 audio spanish
-                lt_name = lt_name
+                if not has_latino and has_castilian:
+                    lt_name = lt_name.replace(meta['tag'], f" [CAST]{meta['tag']}")
+                # else: no special tag needed for Latino-only or mixed audio
             # if not audio Spanish exists, add "[SUBS]"
             elif not meta.get('tag'):
                 lt_name = lt_name + " [SUBS]"

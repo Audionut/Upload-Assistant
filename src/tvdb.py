@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # Restricted-use credential — permitted only under UAPL v1.0 and associated service provider terms
 import asyncio
 import base64
@@ -174,7 +174,7 @@ class tvdb_data:
             console.print(f"[red]Error getting episodes: {e}[/red]")
             return None, None
 
-    async def get_tvdb_by_external_id(self, imdb, tmdb, debug=False):
+    async def get_tvdb_by_external_id(self, imdb, tmdb, debug=False, tv_movie=False):
         # Try IMDB first if available
         if imdb:
             try:
@@ -197,7 +197,7 @@ class tvdb_data:
                     if debug:
                         console.print(f"[blue]results: {results}[/blue]")
 
-                    # Look for series results only (ignore movies)
+                    # Look for series results first
                     for result in results:
                         if 'series' in result:
                             series_id = result['series']['id']
@@ -205,8 +205,27 @@ class tvdb_data:
                                 console.print(f"[blue]TVDB series ID from IMDB: {series_id}[/blue]")
                             return series_id
 
+                    # If tv_movie is True, check for episode with seriesId first, then movie
+                    if tv_movie:
+                        # Check if any result has an episode with a seriesId
+                        for result in results:
+                            if 'episode' in result and result['episode'].get('seriesId'):
+                                series_id = result['episode']['seriesId']
+                                if debug:
+                                    console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
+                                return series_id
+
+                        # If no episode with seriesId, accept movie results
+                        for result in results:
+                            if 'movie' in result:
+                                movie_id = result['movie']['id']
+                                if debug:
+                                    console.print(f"[blue]TVDB movie ID from IMDB (tv_movie): {movie_id}[/blue]")
+                                return movie_id
+
                     if debug:
-                        console.print("[yellow]IMDB search returned results but no series found[/yellow]")
+                        result_types = [list(result.keys())[0] for result in results if result]
+                        console.print(f"[yellow]IMDB search returned results but no {'series or movie' if tv_movie else 'series'} found (got: {result_types})[/yellow]")
                 else:
                     if debug:
                         console.print("[yellow]No TVDB series found for IMDB ID[/yellow]")
@@ -228,6 +247,7 @@ class tvdb_data:
                     if debug:
                         console.print(f"[blue]results: {results}[/blue]")
 
+                    # Look for series results first
                     for result in results:
                         if 'series' in result:
                             series_id = result['series']['id']
@@ -235,8 +255,27 @@ class tvdb_data:
                                 console.print(f"[blue]TVDB series ID from TMDB: {series_id}[/blue]")
                             return series_id
 
+                    # If tv_movie is True, check for episode with seriesId first, then movie
+                    if tv_movie:
+                        # Check if any result has an episode with a seriesId
+                        for result in results:
+                            if 'episode' in result and result['episode'].get('seriesId'):
+                                series_id = result['episode']['seriesId']
+                                if debug:
+                                    console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
+                                return series_id
+
+                        # If no episode with seriesId, accept movie results
+                        for result in results:
+                            if 'movie' in result:
+                                movie_id = result['movie']['id']
+                                if debug:
+                                    console.print(f"[blue]TVDB movie ID from TMDB (tv_movie): {movie_id}[/blue]")
+                                return movie_id
+
                     if debug:
-                        console.print("[yellow]TMDB search returned results but no series found[/yellow]")
+                        result_types = [list(result.keys())[0] for result in results if result]
+                        console.print(f"[yellow]TMDB search returned results but no {'series or movie' if tv_movie else 'series'} found (got: {result_types})[/yellow]")
                 else:
                     if debug:
                         console.print("[yellow]No TVDB series found for TMDB ID[/yellow]")
@@ -244,7 +283,8 @@ class tvdb_data:
                 if debug:
                     console.print(f"[red]Error getting TVDB by TMDB ID: {e}[/red]")
 
-        console.print("[yellow]No TVDB series found for any available external ID[/yellow]")
+        result_type_str = "series or movie" if tv_movie else "series"
+        console.print(f"[yellow]No TVDB {result_type_str} found for any available external ID[/yellow]")
         return None
 
     async def get_imdb_id_from_tvdb_episode_id(self, episode_id, debug=False):

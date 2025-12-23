@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import asyncio
 import bencodepy
@@ -69,28 +69,38 @@ class COMMON():
             out_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
-    # used to add tracker url, comment and source flag to torrent file
-    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None, hash_is_id=False):
-        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+    async def download_tracker_torrent(self, meta, tracker, headers=None, params=None, downurl=None, hash_is_id=False, cross=False):
+        if cross:
+            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
+        else:
+            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl is not None:
-            session = httpx.AsyncClient(headers=headers, params=params, timeout=30.0)
             try:
-                async with session.stream("GET", downurl) as r:
-                    r.raise_for_status()
-                    with open(path, "wb") as f:
-                        async for chunk in r.aiter_bytes():
-                            f.write(chunk)
+                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session:
+                    async with session.stream("GET", downurl) as r:
+                        r.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in r.aiter_bytes():
+                                await f.write(chunk)
 
-                    # Calculate hash after download
-                    if hash_is_id:
-                        torrent_hash = await self.get_torrent_hash(meta, tracker)
-                        return torrent_hash
-                    else:
-                        return None
+                if cross:
+                    return None
+
+                if hash_is_id:
+                    torrent_hash = await self.get_torrent_hash(meta, tracker)
+                    return torrent_hash
+                return None
+
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
+
+    # used to add tracker url, comment and source flag to torrent file
+    async def add_tracker_torrent(self, meta, tracker, source_flag, new_tracker, comment, headers=None, params=None, downurl=None, hash_is_id=False):
+        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        if downurl is not None:
+            await self.download_tracker_torrent(meta, tracker, headers=headers, params=params, downurl=downurl, hash_is_id=hash_is_id)
 
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()

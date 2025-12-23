@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
 
@@ -39,9 +39,11 @@ config = {
         # custom zipline url
         "zipline_url": "",
         "zipline_api_key": "",
+        # Seedpool CDN API key
+        "seedpool_cdn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, oeimg, dalexni, zipline, passtheimage
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, oeimg, dalexni, zipline, passtheimage, seedpool_cdn
         "img_host_1": "imgbb",
         "img_host_2": "imgbox",
 

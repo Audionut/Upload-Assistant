@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
@@ -85,8 +85,11 @@ class Clients():
                 qbittorrent_cached_clients[client_key] = qbt_client
                 return qbt_client
 
-    async def add_to_client(self, meta, tracker):
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+    async def add_to_client(self, meta, tracker, cross=False):
+        if cross:
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
+        else:
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if meta.get('no_seed', False) is True:
             console.print("[bold red]--no-seed was passed, so the torrent will not be added to the client")
             console.print("[bold yellow]Add torrent manually to the client")
@@ -103,10 +106,13 @@ class Clients():
             return
         else:
             inject_clients_config = self.config['DEFAULT'].get('injecting_client_list')
-            if isinstance(inject_clients_config, str) and inject_clients_config:
+            if isinstance(inject_clients_config, str) and inject_clients_config.strip():
                 inject_clients = [inject_clients_config]
-            elif isinstance(inject_clients_config, list) and inject_clients_config:
-                inject_clients = inject_clients_config
+            elif isinstance(inject_clients_config, list):
+                # Filter out empty strings and whitespace-only strings
+                inject_clients = [c for c in inject_clients_config if c and str(c).strip()]
+            else:
+                inject_clients = []
 
             if not inject_clients:
                 default_client = self.config['DEFAULT'].get('default_torrent_client')
@@ -137,7 +143,7 @@ class Clients():
                 if torrent_client.lower() == "rtorrent":
                     self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client, tracker)
                 elif torrent_client == "qbit":
-                    await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker)
+                    await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker, cross)
                 elif torrent_client.lower() == "deluge":
                     if meta['type'] == "DISC":
                         path = os.path.dirname(meta['path'])  # noqa F841
@@ -1021,7 +1027,7 @@ class Clients():
             console.print(f"[cyan]Path: {path}")
         return
 
-    async def qbittorrent(self, path, torrent, local_path, remote_path, client, is_disc, filelist, meta, tracker):
+    async def qbittorrent(self, path, torrent, local_path, remote_path, client, is_disc, filelist, meta, tracker, cross=False):
         if meta.get('keep_folder'):
             path = os.path.dirname(path)
         else:
@@ -1158,29 +1164,40 @@ class Clients():
             console.print(f"[bold red]{error_msg}")
             raise ValueError(error_msg)
 
-        # Create tracker-specific directory inside linked folder
+        tracker_dir = None
         if use_symlink or use_hardlink:
-            # allow overridden folder name with link_dir_name config var
             tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
             link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
             tracker_dir = os.path.join(link_target, link_dir_name or tracker)
             await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
-            src_name = os.path.basename(src.rstrip(os.sep))
-            dst = os.path.join(tracker_dir, src_name)
+            if cross:
+                linking_success = await create_cross_seed_links(
+                    meta=meta,
+                    torrent=torrent,
+                    tracker_dir=tracker_dir,
+                    use_hardlink=use_hardlink
+                )
+            else:
+                src_name = os.path.basename(src.rstrip(os.sep))
+                dst = os.path.join(tracker_dir, src_name)
+                linking_success = await async_link_directory(
+                    src=src,
+                    dst=dst,
+                    use_hardlink=use_hardlink,
+                    debug=meta.get('debug', False)
+                )
 
-            linking_success = await async_link_directory(
-                src=src,
-                dst=dst,
-                use_hardlink=use_hardlink,
-                debug=meta.get('debug', False)
-            )
-            allow_fallback = self.config['TRACKERS'].get('allow_fallback', True)
+            allow_fallback = client.get('allow_fallback', True)
             if not linking_success and allow_fallback:
                 console.print(f"[yellow]Using original path without linking: {src}")
-                # Reset linking settings for fallback
                 use_hardlink = False
                 use_symlink = False
+            elif not linking_success:
+                console.print("[bold red]Linking failed and fallback is disabled; aborting qBittorrent add")
+                return
+        elif cross:
+            console.print("[yellow]Cross seed requested, but no linking method is configured. Proceeding with original path naming.")
 
         proxy_url = client.get('qui_proxy_url')
         qbt_client = None
@@ -1250,12 +1267,32 @@ class Clients():
                 if os.path.normpath(am_config).lower() in os.path.normpath(path).lower() and am_config.strip() != "":
                     auto_management = True
 
-        qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
+        if cross and client.get('qbit_cross_cat'):
+            qbt_category = client['qbit_cross_cat']
+        else:
+            qbt_category = client.get("qbit_cat") if not meta.get("qbit_cat") else meta.get('qbit_cat')
         content_layout = client.get('content_layout', 'Original')
         if meta['debug']:
             console.print("qbt_category:", qbt_category)
             console.print(f"Content Layout: {content_layout}")
             console.print(f"[bold yellow]qBittorrent save path: {save_path}")
+
+        if cross:
+            skip_checking = True
+            paused_on_add = True
+        else:
+            skip_checking = True
+            paused_on_add = False
+        tag = None
+        if cross and client.get('qbit_cross_tag'):
+            tag = client['qbit_cross_tag']
+        else:
+            if meta.get('qbit_tag'):
+                tag = meta['qbit_tag']
+            elif client.get("use_tracker_as_tag", False) and tracker:
+                tag = tracker
+            elif client.get('qbit_tag'):
+                tag = client['qbit_tag']
 
         try:
             if proxy_url:
@@ -1263,11 +1300,16 @@ class Clients():
                 data = aiohttp.FormData()
                 data.add_field('savepath', save_path)
                 data.add_field('autoTMM', str(auto_management).lower())
-                data.add_field('skip_checking', 'true')
+                data.add_field('skip_checking', str(skip_checking).lower())
+                data.add_field('paused', str(paused_on_add).lower())
                 data.add_field('contentLayout', content_layout)
                 if qbt_category:
                     data.add_field('category', qbt_category)
+                if tag:
+                    data.add_field('tags', tag)
                 data.add_field('torrents', torrent.dump(), filename='torrent.torrent', content_type='application/x-bittorrent')
+                if meta['debug']:
+                    console.print(f"[cyan]POSTing to {redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}")
 
                 async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add",
                                             data=data) as response:
@@ -1280,9 +1322,11 @@ class Clients():
                                               torrent_files=torrent.dump(),
                                               save_path=save_path,
                                               use_auto_torrent_management=auto_management,
-                                              is_skip_checking=True,
+                                              is_skip_checking=skip_checking,
+                                              paused=paused_on_add,
                                               content_layout=content_layout,
-                                              category=qbt_category),
+                                              category=qbt_category,
+                                              tags=tag),
                     "Add torrent to qBittorrent",
                     initial_timeout=14.0
                 )
@@ -1330,42 +1374,25 @@ class Clients():
                 await qbt_session.close()
             return
 
-        try:
-            if proxy_url:
-                console.print("[yellow]No qui proxy resume support....")
-                # async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
-                #                            data={'hashes': torrent.infohash}) as response:
-                #    if response.status != 200:
-                #        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
-            else:
-                await self.retry_qbt_operation(
-                    lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
-                    "Resume torrent"
-                )
-        except asyncio.TimeoutError:
-            console.print("[yellow]Failed to resume torrent after retries")
-        except Exception as e:
-            console.print(f"[yellow]Error resuming torrent: {e}")
-
-        if client.get("use_tracker_as_tag", False) and tracker:
+        if not cross:
             try:
                 if proxy_url:
-                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
-                                                data={'hashes': torrent.infohash, 'tags': tracker}) as response:
-                        if response.status != 200:
-                            console.print(f"[yellow]Failed to add tracker tag via proxy: {response.status}")
+                    console.print("[yellow]No qui proxy resume support....")
+                    # async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
+                    #                            data={'hashes': torrent.infohash}) as response:
+                    #    if response.status != 200:
+                    #        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
                 else:
                     await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=tracker, torrent_hashes=torrent.infohash),
-                        "Add tracker tag",
-                        initial_timeout=10.0
+                        lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
+                        "Resume torrent"
                     )
             except asyncio.TimeoutError:
-                console.print("[yellow]Failed to add tracker tag after retries")
+                console.print("[yellow]Failed to resume torrent after retries")
             except Exception as e:
-                console.print(f"[yellow]Error adding tracker tag: {e}")
+                console.print(f"[yellow]Error resuming torrent: {e}")
 
-        if tracker in client.get("super_seed_trackers", []):
+        if tracker in client.get("super_seed_trackers", []) and not cross:
             try:
                 if meta['debug']:
                     console.print(f"{tracker}: Setting super-seed mode.")
@@ -1384,42 +1411,6 @@ class Clients():
                 console.print(f"{tracker}: Super-seed request timed out")
             except Exception as e:
                 console.print(f"{tracker}: Super-seed error: {e}")
-
-        if client.get('qbit_tag'):
-            try:
-                if proxy_url:
-                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
-                                                data={'hashes': torrent.infohash, 'tags': client['qbit_tag']}) as response:
-                        if response.status != 200:
-                            console.print(f"[yellow]Failed to add client tag via proxy: {response.status}")
-                else:
-                    await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=client['qbit_tag'], torrent_hashes=torrent.infohash),
-                        "Add client tag",
-                        initial_timeout=10.0
-                    )
-            except asyncio.TimeoutError:
-                console.print("[yellow]Failed to add client tag after retries")
-            except Exception as e:
-                console.print(f"[yellow]Error adding client tag: {e}")
-
-        if meta and meta.get('qbit_tag'):
-            try:
-                if proxy_url:
-                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/addTags",
-                                                data={'hashes': torrent.infohash, 'tags': meta['qbit_tag']}) as response:
-                        if response.status != 200:
-                            console.print(f"[yellow]Failed to add meta tag via proxy: {response.status}")
-                else:
-                    await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_add_tags, tags=meta['qbit_tag'], torrent_hashes=torrent.infohash),
-                        "Add meta tag",
-                        initial_timeout=10.0
-                    )
-            except asyncio.TimeoutError:
-                console.print("[yellow]Failed to add meta tag after retries")
-            except Exception as e:
-                console.print(f"[yellow]Error adding meta tag: {e}")
 
         if meta['debug']:
             try:
@@ -2164,7 +2155,7 @@ class Clients():
                     if qui_filters.get('excludeStatus'):
                         # Join multiple excludeStatus filters with comma (qBittorrent style)
                         filter_value = ','.join(qui_filters['excludeStatus'])
-                        query_parts.append(f"status={urllib.parse.quote(filter_value)}")
+                        query_parts.append(f"filter={urllib.parse.quote(filter_value)}")
 
                     if qui_filters.get('categories'):
                         # Join multiple categories with comma
@@ -2264,7 +2255,6 @@ class Clients():
                     if not is_match:
                         continue
 
-                    has_working_tracker = False
                     torrent_properties = []
 
                     if is_match:
@@ -2299,18 +2289,21 @@ class Clients():
                         if proxy_url:
                             torrent_trackers = getattr(torrent, 'trackers', []) or []
                             has_working_tracker = True
-                        try:
-                            display_trackers = []
+                        else:
+                            try:
+                                display_trackers = []
 
-                            # Filter out DHT, PEX, LSD "trackers"
-                            for tracker in torrent_trackers or []:
-                                if tracker.get('url', '').startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
-                                    continue
-                                display_trackers.append(tracker)
+                                # Filter out DHT, PEX, LSD "trackers"
+                                for tracker in torrent_trackers or []:
+                                    if tracker.get('url', '').startswith(('** [DHT]', '** [PeX]', '** [LSD]')):
+                                        continue
+                                    display_trackers.append(tracker)
 
-                                for tracker in display_trackers:
-                                    url = tracker.get('url', 'Unknown URL')
-                                    status_code = tracker.get('status', 0)
+                                # Now process the filtered trackers
+                                has_working_tracker = False
+                                for display_tracker in display_trackers:
+                                    url = display_tracker.get('url', 'Unknown URL')
+                                    status_code = display_tracker.get('status', 0)
                                     status_text = {
                                         0: "Disabled",
                                         1: "Not contacted",
@@ -2323,16 +2316,14 @@ class Clients():
                                         has_working_tracker = True
                                         if meta['debug']:
                                             console.print(f"[green]Tracker working: {url[:15]} - {status_text}")
-
-                                    elif meta['debug']:
-                                        has_working_tracker = False
-                                        msg = tracker.get('msg', '')
+                                    else:
+                                        msg = display_tracker.get('msg', '')
                                         console.print(f"[yellow]Tracker not working: {url[:15]} - {status_text}{f' - {msg}' if msg else ''}")
 
-                        except qbittorrentapi.APIError as e:
-                            if meta['debug']:
-                                console.print(f"[red]Error fetching trackers for torrent {torrent.name}: {e}")
-                            continue
+                            except qbittorrentapi.APIError as e:
+                                if meta['debug']:
+                                    console.print(f"[red]Error fetching trackers for torrent {torrent.name}: {e}")
+                                continue
 
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
@@ -2738,6 +2729,175 @@ class Clients():
             return []
 
 
+async def create_cross_seed_links(meta, torrent, tracker_dir, use_hardlink):
+    debug = meta.get('debug', False)
+    metainfo = getattr(torrent, 'metainfo', {})
+    if not isinstance(metainfo, dict):
+        metainfo = {}
+    info_raw = metainfo.get('info')
+    info = info_raw if isinstance(info_raw, dict) else {}
+    torrent_name = info.get('name.utf-8') or info.get('name') or getattr(torrent, 'name', None)
+    if not torrent_name:
+        console.print("[bold red]Cross-seed torrent is missing an info name; cannot build link structure")
+        return False
+
+    multi_file = bool(info.get('files'))
+    torrent_files = []
+
+    def decode_component(value):
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='ignore')
+        return str(value)
+
+    if multi_file:
+        for file_entry in info.get('files', []):
+            raw_path = file_entry.get('path.utf-8') or file_entry.get('path') or []
+            if isinstance(raw_path, (list, tuple)):
+                components = [decode_component(part) for part in raw_path]
+                rel_path = os.path.join(*components) if components else ''
+            else:
+                rel_path = decode_component(raw_path)
+            rel_path = rel_path.replace('/', os.sep)
+            rel_path = rel_path.replace('\\', os.sep)
+            rel_path = os.path.normpath(rel_path)
+            if rel_path.startswith('..'):
+                rel_path = rel_path.lstrip('.\\/')
+            torrent_files.append({
+                'relative_path': rel_path,
+                'length': file_entry.get('length')
+            })
+    else:
+        torrent_files.append({
+            'relative_path': torrent_name,
+            'length': info.get('length')
+        })
+
+    destination_root = os.path.join(tracker_dir, torrent_name) if multi_file else tracker_dir
+    if multi_file:
+        await asyncio.to_thread(os.makedirs, destination_root, exist_ok=True)
+    else:
+        await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
+
+    release_root = meta.get('path')
+    candidate_paths = []
+    if release_root and os.path.isdir(release_root):
+        for root, _, files in os.walk(release_root):
+            for file in files:
+                candidate_paths.append(os.path.join(root, file))
+    else:
+        candidate_paths.extend(meta.get('filelist', []))
+        parent_guess = os.path.dirname(meta['filelist'][0]) if meta.get('filelist') else os.path.dirname(release_root or '')
+        if parent_guess and os.path.isdir(parent_guess):
+            for root, _, files in os.walk(parent_guess):
+                for file in files:
+                    candidate_paths.append(os.path.join(root, file))
+
+    unique_candidates = []
+    seen = set()
+    tracker_abs = os.path.abspath(tracker_dir) if tracker_dir else None
+    for candidate in candidate_paths:
+        if not candidate:
+            continue
+        abs_candidate = os.path.abspath(candidate)
+        if abs_candidate in seen:
+            continue
+        seen.add(abs_candidate)
+        if not os.path.isfile(abs_candidate):
+            continue
+        if tracker_abs:
+            try:
+                if os.path.commonpath([abs_candidate, tracker_abs]) == tracker_abs:
+                    continue
+            except ValueError:
+                pass
+        try:
+            size = os.path.getsize(abs_candidate)
+        except OSError:
+            size = None
+        unique_candidates.append({
+            'path': abs_candidate,
+            'name': os.path.basename(abs_candidate).lower(),
+            'size': size,
+            'used': False
+        })
+
+    if not unique_candidates:
+        console.print("[bold red]Unable to find source files for cross-seed linking")
+        return False
+
+    def pick_candidate(filename, length):
+        lower_name = (filename or '').lower()
+
+        if lower_name:
+            for entry in unique_candidates:
+                if entry['used']:
+                    continue
+                if entry['name'] == lower_name and length is not None and entry['size'] == length:
+                    entry['used'] = True
+                    return entry['path'], 'name_size'
+
+        if lower_name:
+            for entry in unique_candidates:
+                if entry['used']:
+                    continue
+                if entry['name'] == lower_name:
+                    entry['used'] = True
+                    return entry['path'], 'name_only'
+
+        if length is not None:
+            for entry in unique_candidates:
+                if entry['used']:
+                    continue
+                if entry['size'] == length:
+                    entry['used'] = True
+                    return entry['path'], 'size_only'
+
+        for entry in unique_candidates:
+            if entry['used']:
+                continue
+            entry['used'] = True
+            return entry['path'], 'fallback'
+
+        return None, None
+
+    for torrent_file in torrent_files:
+        relative_path = torrent_file['relative_path']
+        dest_file_path = os.path.join(tracker_dir, torrent_name, relative_path) if multi_file else os.path.join(tracker_dir, torrent_name)
+        dest_file_path = os.path.normpath(dest_file_path)
+        tracker_root = os.path.abspath(tracker_dir)
+        try:
+            if os.path.commonpath([tracker_root, os.path.abspath(dest_file_path)]) != tracker_root:
+                console.print(f"[bold red]Refusing to create link outside tracker directory: {dest_file_path}")
+                return False
+        except ValueError:
+            console.print(f"[bold red]Refusing to create link outside tracker directory: {dest_file_path}")
+            return False
+
+        source_file, match_reason = pick_candidate(os.path.basename(relative_path), torrent_file.get('length'))
+        if not source_file:
+            console.print(f"[bold red]Failed to map cross-seed file: {relative_path}")
+            return False
+        if match_reason == 'fallback' and debug:
+            console.print(f"[yellow]Cross-seed mapping fallback used for: {relative_path}")
+
+        dest_parent = os.path.dirname(dest_file_path)
+        if dest_parent:
+            await asyncio.to_thread(os.makedirs, dest_parent, exist_ok=True)
+        if await asyncio.to_thread(os.path.exists, dest_file_path):
+            if debug:
+                console.print(f"[yellow]Cross-seed link already exists, keeping: {dest_file_path}")
+            continue
+
+        linked = await async_link_directory(source_file, dest_file_path, use_hardlink=use_hardlink, debug=debug)
+        if not linked:
+            console.print(f"[bold red]Linking failed for cross-seed file: {relative_path}")
+            return False
+
+    if debug:
+        console.print(f"[green]Prepared cross-seed link tree at {os.path.join(tracker_dir, torrent_name) if multi_file else tracker_dir}")
+    return True
+
+
 async def async_link_directory(src, dst, use_hardlink=True, debug=False):
     try:
         # Create destination directory
@@ -2847,10 +3007,10 @@ async def match_tracker_url(tracker_urls, meta):
         'dc': ["tracker.digitalcore.club", "trackerprxy.digitalcore.club"],
         'dp': ["https://darkpeers.org"],
         'ff': ["tracker.funfile.org"],
-        'fl': ["reactor.filelist"],
+        'fl': ["reactor.filelist", "reactor.thefl.org"],
         'fnp': ["https://fearnopeer.com"],
         'gpw': ["https://tracker.greatposterwall.com"],
-        'hdb': ["https://hdbits.org"],
+        'hdb': ["https://tracker.hdbits.org"],
         'hds': ["hd-space.pw"],
         'hdt': ["https://hdts-announce.ru"],
         'hhd': ["https://homiehelpdesk.net"],
@@ -2879,6 +3039,7 @@ async def match_tracker_url(tracker_urls, meta):
         'stc': ["https://skipthecommercials.xyz"],
         'thr': ["torrenthr"],
         'tl': ["tracker.tleechreload", "tracker.torrentleech"],
+        'tlz': ["https://tlzdigital.com/"],
         'ttr': ["https://torrenteros.org"],
         'tvc': ["https://tvchaosuk.com"],
         'ulcx': ["https://upload.cx"],

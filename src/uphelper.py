@@ -1,9 +1,11 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import cli_ui
 import os
 import json
 import sys
+from difflib import SequenceMatcher
 
+from cogs.redaction import redact_private_info
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -12,6 +14,9 @@ from src.trackersetup import tracker_class_map
 
 class UploadHelper:
     async def dupe_check(self, dupes, meta, tracker_name):
+        # set trackers here so that they are not double checked later with cross seeding
+        meta.setdefault('dupe_checked_trackers', []).append(tracker_name)
+
         if not dupes:
             if meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
@@ -31,9 +36,6 @@ class UploadHelper:
                     display_name = tracker_rename['name']
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
-
-            if display_name is not None and display_name != "" and display_name != meta['name']:
-                console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
 
             if meta.get('trumpable', False):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
@@ -73,7 +75,7 @@ class UploadHelper:
                         meta['we_asked'] = False
                 else:
                     if meta.get('filename_match', False) and meta.get('file_count_match', False):
-                        console.print(f'[bold red]Exact filename matches found! - {meta["filename_match"]}[/bold red]')
+                        console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
                             upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                             meta['we_asked'] = True
@@ -102,6 +104,55 @@ class UploadHelper:
                     upload = False
                 else:
                     upload = True
+
+            display_name = display_name if display_name is not None else meta.get('name', '')
+
+            if tracker_name in ["BHD"]:
+                if meta['debug']:
+                    console.print("[yellow]BHD cross seeding check[/yellow]")
+                tracker_download_link = meta.get(f'{tracker_name}_matched_download')
+                # Ensure display_name is a string before using 'in' operator
+                if display_name:
+                    edition = meta.get('edition', '')
+                    region = meta.get('region', '')
+                    if edition and edition in display_name:
+                        display_name = display_name.replace(f"{edition} ", "")
+                    if region and region in display_name:
+                        display_name = display_name.replace(f"{region} ", "")
+                for d in dupes:
+                    if isinstance(d, dict):
+                        similarity = SequenceMatcher(None, d.get('name', '').lower(), display_name.lower().strip()).ratio()
+                        if similarity > 0.9 and meta.get('size_match', False) and tracker_download_link:
+                            meta[f'{tracker_name}_cross_seed'] = tracker_download_link
+                            if meta['debug']:
+                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                            break
+
+            elif meta.get('filename_match', False) and meta.get('file_count_match', False):
+                if meta['debug']:
+                    console.print(f"[yellow]{tracker_name} filename and file count cross seeding check[/yellow]")
+                tracker_download_link = meta.get(f'{tracker_name}_matched_download')
+                for d in dupes:
+                    if isinstance(d, dict) and tracker_download_link:
+                        meta[f'{tracker_name}_cross_seed'] = tracker_download_link
+                        if meta['debug']:
+                            console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                        break
+
+            elif meta.get('size_match', False):
+                if meta['debug']:
+                    console.print(f"[yellow]{tracker_name} size cross seeding check[/yellow]")
+                tracker_download_link = meta.get(f'{tracker_name}_matched_download')
+                for d in dupes:
+                    if isinstance(d, dict):
+                        similarity = SequenceMatcher(None, d.get('name', '').lower(), display_name.lower().strip()).ratio()
+                        if meta['debug']:
+                            console.print(f"[debug] Comparing sizes with similarity {similarity:.4f}")
+                        if similarity > 0.9 and tracker_download_link:
+                            meta[f'{tracker_name}_cross_seed'] = tracker_download_link
+                            if meta['debug']:
+                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                            break
 
             if upload is False:
                 return True

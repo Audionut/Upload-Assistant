@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from src.console import console
 from guessit import guessit
 import anitopy
@@ -217,7 +217,12 @@ async def get_season_episode(video, meta):
                         console.print(f"[bold yellow]If [green]{season}[/green] is incorrect, use --season to correct")
                         await asyncio.sleep(3)
             else:
-                return meta
+                console.print("[bold red]Error determining if TV show is anime or not[/bold red]")
+                console.print("[bold yellow]Set manual season and episode[/bold yellow]")
+                season_int = 1
+                season = "S01"
+                episode_int = 1
+                episode = "E01"
 
         if meta.get('manual_season', None) is None:
             meta['season'] = season

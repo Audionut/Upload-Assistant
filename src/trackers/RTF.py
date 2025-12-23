@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import aiofiles
@@ -169,17 +169,32 @@ class RTF():
         else:
             params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
 
+        def build_download_url(entry):
+            torrent_id = entry.get('id')
+            torrent_url = entry.get('url', '')
+            if not torrent_id and isinstance(torrent_url, str):
+                match = re.search(r"/browse/t/(\d+)", torrent_url)
+                if match:
+                    torrent_id = match.group(1)
+
+            if torrent_id:
+                return f"https://retroflix.club/api/torrent/{torrent_id}/download"
+
+            return torrent_url
+
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(self.search_url, params=params, headers=headers)
                 if response.status_code == 200:
                     data = response.json()
                     for each in data:
+                        download_url = build_download_url(each)
                         result = {
                             'name': each['name'],
                             'size': each['size'],
                             'files': each['name'],
                             'link': each['url'],
+                            'download': download_url,
                         }
                         dupes.append(result)
                 else:

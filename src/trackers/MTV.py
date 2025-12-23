@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import aiofiles.os
 import asyncio
@@ -187,7 +187,10 @@ class MTV():
                 return
         else:
             console.print("[cyan]MTV Request Data:")
-            console.print(data)
+            debug_data = data.copy()
+            if 'auth' in debug_data:
+                debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
+            console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
         return
 
@@ -707,9 +710,10 @@ class MTV():
                             result = {
                                 'name': each.find('title').text,
                                 'files': each.find('title').text,
-                                'file_count': each.find('files').text,
-                                'size': each.find('size').text,
-                                'link': each.find('guid').text
+                                'file_count': int(each.find('files').text),
+                                'size': int(each.find('size').text),
+                                'link': each.find('guid').text,
+                                'download': each.find('link').text
                             }
                             dupes.append(result)
                     except ET.ParseError:

@@ -14,5 +14,13 @@ if [ "$ENABLE_WEB_UI" = "true" ]; then
     echo "Access at: http://localhost:5000"
 fi
 
+# If no command is provided, or the first argument is not an executable,
+# default to running upload.py with the supplied arguments.
+if [ $# -eq 0 ]; then
+    set -- python upload.py
+elif ! command -v "$1" >/dev/null 2>&1 && [ ! -x "$1" ]; then
+    set -- python upload.py "$@"
+fi
+
 # Execute the main command
 exec "$@"

@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
         # will print a notice if an update is available
@@ -14,7 +14,7 @@ config = {
         "btn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -32,6 +32,8 @@ config = {
         # custom zipline url
         "zipline_url": "",
         "zipline_api_key": "",
+        # Seedpool CDN API key
+        "seedpool_cdn_api": "",
 
         # Whether to add a logo for the show/movie from TMDB to the top of the description
         "add_logo": False,
@@ -144,6 +146,11 @@ config = {
         # Providing the option to add a header, in bbcode, above the screenshot section where supported
         # Can be overridden in a per-tracker setting by adding this same config
         "screenshot_header": "",
+
+        # Applicable only to raw discs (Blu-ray/DVD).
+        # Providing the option to add a header, in bbcode, above the section featuring screenshots of the Disc menus, where supported
+        # Can be overridden in a per-tracker setting by adding this same config
+        "disc_menu_header": "",
 
         # Allows adding a custom signature, in BBCode, at the bottom of the description section
         # Can be overridden in a per-tracker setting by adding this same config
@@ -281,6 +288,12 @@ config = {
         # Does not override MTV preference for small pieces
         "prefer_max_16_torrent": False,
 
+        # Set false to disable adding cross-seed suitable torrents found during existing search (dupe) checking
+        "cross_seeding": True,
+        # Set true to cross-seed check every valid tracker defined in your config
+        # regardless of whether the tracker was selected for upload or not (needs cross-seeding above to be True)
+        "cross_seed_check_everything": False,
+
     },
 
     # these are used for DB links on AR
@@ -294,7 +307,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -789,6 +802,12 @@ config = {
             # Set to True if you want to include the full MediaInfo in your upload description or False to include only the most relevant parts.
             "full_mediainfo": False,
         },
+        "TLZ": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+        },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -878,6 +897,9 @@ config = {
             "use_tracker_as_tag": False,
             "qbit_tag": "",
             "qbit_cat": "",
+            # If using cross seeding, add cross seed tag/category here
+            "qbit_cross_tag": "",
+            "qbit_cross_cat": "",
             "content_layout": "Original",
             # here you can chose to use either symbolic or hard links, or None to use original path
             # this will disable any automatic torrent management if set
@@ -922,9 +944,19 @@ config = {
             # path/to/session folder
             "torrent_storage_dir": "",
             "rtorrent_label": "",
-            # here you can chose to use either symbolic or hard links, or leave uncommented to use original path
+            # here you can chose to use either symbolic or hard links, or None to use original path
+            # this will disable any automatic torrent management if set
             # use either "symlink" or "hardlink"
+            # on windows, symlinks needs admin privs, both link types need ntfs/refs filesytem (and same drive)
             "linking": "",
+            # Allow fallback to inject torrent into qBitTorrent using the original path
+            # when linking error. eg: unsupported file system.
+            "allow_fallback": True,
+            # A folder or list of folders that will contain the linked content
+            # if using hardlinking, the linked folder must be on the same drive/volume as the original content,
+            # with UA mapping the correct location if multiple paths are specified.
+            # Use local paths, remote path mapping will be handled.
+            # only single \ on windows, path will be handled by UA
             "linked_folder": [""],
             # Remote path mapping (docker/etc.) CASE SENSITIVE
             "local_path": [""],

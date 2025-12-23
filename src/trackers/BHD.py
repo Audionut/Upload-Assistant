@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
 import asyncio
@@ -380,6 +380,9 @@ class BHD():
             data['types'] = None
         if meta['category'] == 'TV':
             data['search'] = f"{meta.get('season', '')}"
+        rss_key = self.config['TRACKERS']['BHD'].get('bhd_rss_key', "") != ""
+        if rss_key:
+            data['rsskey'] = self.config['TRACKERS']['BHD']['bhd_rss_key'].strip()
 
         url = f"https://beyond-hd.me/api/torrents/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
         try:
@@ -394,6 +397,8 @@ class BHD():
                                 'link': each['url'],
                                 'size': each['size'],
                             }
+                            if rss_key:
+                                result['download'] = each.get('download_url', None)
                             dupes.append(result)
                     else:
                         console.print(f"[bold red]BHD failed to search torrents. API Error: {data.get('message', 'Unknown Error')}")

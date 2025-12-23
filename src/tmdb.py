@@ -1,4 +1,4 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import aiofiles
 import anitopy
 import asyncio
@@ -748,7 +748,11 @@ async def tmdb_other_meta(
     title = None
     tmdb_type = ""
     year = None
+    release_date = None
+    first_air_date = None
+    last_air_date = None
     youtube = None
+    networks = []
 
     if tmdb_id == 0:
         try:
@@ -813,6 +817,8 @@ async def tmdb_other_meta(
             original_title = media_data.get('original_title', title)
             year = datetime.strptime(media_data['release_date'], '%Y-%m-%d').year if media_data['release_date'] else search_year
             runtime = media_data.get('runtime', 60)
+            if media_data.get('release_date'):
+                release_date = media_data['release_date']
             if quickie_search or not imdb_id:
                 imdb_id_str = str(media_data.get('imdb_id', '')).replace('tt', '')
                 if imdb_id_str and imdb_id_str.isdigit():
@@ -835,9 +841,15 @@ async def tmdb_other_meta(
                     year = int(year_match.group(0))
             if not year:
                 year = datetime.strptime(media_data['last_air_date'], '%Y-%m-%d').year if media_data['last_air_date'] else 0
+            first_air_date = media_data.get('first_air_date', None)
+            last_air_date = media_data.get('last_air_date', None)
             runtime_list = media_data.get('episode_run_time', [60])
             runtime = runtime_list[0] if runtime_list else 60
             tmdb_type = media_data.get('type', 'Scripted')
+            networks = media_data.get('networks', [])
+
+        production_companies = media_data.get('production_companies', [])
+        production_countries = media_data.get('production_countries', [])
 
         overview = media_data['overview']
         original_language_from_tmdb = media_data['original_language']
@@ -1025,6 +1037,9 @@ async def tmdb_other_meta(
     tmdb_metadata = {
         'title': title,
         'year': year,
+        'release_date': release_date,
+        'first_air_date': first_air_date,
+        'last_air_date': last_air_date,
         'imdb_id': imdb_id,
         'tvdb_id': tvdb_id,
         'origin_country': origin_country,
@@ -1050,6 +1065,9 @@ async def tmdb_other_meta(
         'runtime': runtime,
         'youtube': youtube,
         'certification': certification,
+        'production_companies': production_companies,
+        'production_countries': production_countries,
+        'networks': networks,
         'imdb_mismatch': imdb_mismatch,
         'mismatched_imdb_id': mismatched_imdb_id
     }
@@ -1145,7 +1163,7 @@ async def get_anime(response, meta):
             animation = True
     if response['original_language'] == 'ja' and animation is True:
         romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id', None), meta)
-        alt_name = f" AKA {romaji}"
+        alt_name = f"AKA {romaji}"
 
         anime = True
         # mal = AnimeSearch(romaji)
@@ -1245,17 +1263,69 @@ async def get_romaji(tmdb_name, mal, meta):
         search_name = meta['filename'].lower()
     else:
         search_name = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
+
+    # Extract expected season number from various sources
+    expected_season = None
+
+    # Try manual_season first
+    if meta.get('manual_season'):
+        season_match = re.search(r'S?(\d+)', str(meta['manual_season']), re.IGNORECASE)
+        if season_match:
+            expected_season = int(season_match.group(1))
+
+    # Try parsing the filename with anitopy
+    if expected_season is None and meta.get('filename'):
+        try:
+            parsed = anitopy.parse(meta['filename'])
+            if parsed.get('anime_season'):
+                expected_season = int(parsed['anime_season'])
+        except Exception:
+            pass
+
+    # Fall back to meta['season'] if available
+    if expected_season is None and meta.get('season'):
+        season_match = re.search(r'S?(\d+)', str(meta['season']), re.IGNORECASE)
+        if season_match:
+            expected_season = int(season_match.group(1))
+
     if media not in (None, []):
         result = {'title': {}}
         difference = 0
+        best_match_with_season = None
+        best_season_diff = float('inf')
+
         for anime in media:
+            # Extract season number from AniList title if present
+            anime_season = None
+            for title_value in anime['title'].values():
+                if title_value:
+                    season_match = re.search(r'Season (\d+)', title_value, re.IGNORECASE)
+                    if season_match:
+                        anime_season = int(season_match.group(1))
+                        break
+
+            # Calculate title similarity
             for title in anime['title'].values():
                 if title is not None:
-                    title = re.sub(u'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)
-                    diff = SequenceMatcher(None, title, search_name).ratio()
-                    if diff >= difference:
+                    title_clean = re.sub(u'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)
+                    diff = SequenceMatcher(None, title_clean, search_name).ratio()
+
+                    # Prioritize season match if expected_season is set
+                    if expected_season is not None and anime_season is not None:
+                        if anime_season == expected_season and diff > difference * 0.8:
+                            # If season matches and title similarity is reasonable, prefer this
+                            if best_match_with_season is None or diff > best_season_diff:
+                                best_match_with_season = anime
+                                best_season_diff = diff
+
+                    # Keep track of best overall match
+                    if diff > difference:
                         result = anime
                         difference = diff
+
+        # Use season-matched result if found, otherwise use best title match
+        if best_match_with_season is not None:
+            result = best_match_with_season
 
         romaji = result['title'].get('romaji', result['title'].get('english', ""))
         mal_id = result.get('idMal', 0)
@@ -1265,7 +1335,9 @@ async def get_romaji(tmdb_name, mal, meta):
     else:
         romaji = eng_title = season_year = ""
         episodes = mal_id = 0
-    if mal_id in [None, 0]:
+    if mal in [None, 0]:
+        mal_id = mal_id
+    else:
         mal_id = mal
     if not episodes:
         episodes = 0
@@ -1372,6 +1444,8 @@ async def daily_to_tmdb_season_episode(tmdbid, date):
 
 
 async def get_episode_details(tmdb_id, season_number, episode_number, debug=False):
+    if debug:
+        console.print(f"[cyan]Fetching episode details for TMDb ID: {tmdb_id}, Season: {season_number}, Episode: {episode_number}[/cyan]")
     async with httpx.AsyncClient() as client:
         try:
             # Get episode details
@@ -1437,6 +1511,77 @@ async def get_episode_details(tmdb_id, season_number, episode_number, debug=Fals
         except Exception:
             console.print(f"[red]Error fetching episode details for {tmdb_id}[/red]")
             console.print(f"[red]Season: {season_number}, Episode: {episode_number}[/red]")
+            return {}
+
+
+async def get_season_details(tmdb_id, season_number, debug=False):
+    if debug:
+        console.print(f"[cyan]Fetching season details for TMDb ID: {tmdb_id}, Season: {season_number}[/cyan]")
+    async with httpx.AsyncClient() as client:
+        try:
+            # Get season details
+            response = await client.get(
+                f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}",
+                params={"api_key": TMDB_API_KEY, "append_to_response": "images,credits"}
+            )
+            try:
+                response.raise_for_status()
+                season_data = response.json()
+
+                # Extract only relevant information
+                season_info = {
+                    '_id': season_data.get('_id'),
+                    'air_date': season_data.get('air_date'),
+                    'name': season_data.get('name'),
+                    'overview': season_data.get('overview'),
+                    'id': season_data.get('id'),
+                    'poster_path': season_data.get('poster_path'),
+                    'season_number': season_data.get('season_number'),
+                    'vote_average': season_data.get('vote_average'),
+                    'vote_count': season_data.get('vote_count'),
+                    'episodes': []
+                }
+
+                # Extract minimal episode information
+                for episode in season_data.get('episodes', []):
+                    season_info['episodes'].append({
+                        'air_date': episode.get('air_date'),
+                        'episode_number': episode.get('episode_number'),
+                        'episode_type': episode.get('episode_type'),
+                        'id': episode.get('id'),
+                        'name': episode.get('name'),
+                        'overview': episode.get('overview'),
+                        'runtime': episode.get('runtime'),
+                        'season_number': episode.get('season_number'),
+                        'still_path': episode.get('still_path'),
+                        'vote_average': episode.get('vote_average'),
+                        'vote_count': episode.get('vote_count')
+                    })
+
+                # Include poster images if available
+                if 'images' in season_data and 'posters' in season_data['images']:
+                    season_info['images'] = {
+                        'posters': season_data['images']['posters']
+                    }
+
+                # Include main cast/crew if available (top-level only, not per-episode)
+                if 'credits' in season_data:
+                    if 'cast' in season_data['credits']:
+                        season_info['credits'] = {
+                            'cast': season_data['credits']['cast']
+                        }
+
+                if debug:
+                    console.print(f"[cyan]Extracted season data: {json.dumps(season_info, indent=2)[:600]}...[/cyan]")
+                return season_info
+
+            except Exception:
+                console.print(f"[bold red]Failed to fetch season data: {response.status_code}[/bold red]")
+                return {}
+
+        except Exception:
+            console.print(f"[red]Error fetching season details for {tmdb_id}[/red]")
+            console.print(f"[red]Season: {season_number}[/red]")
             return {}
 
 

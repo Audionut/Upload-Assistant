@@ -1,4 +1,147 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+__version__ = "v6.3.0"
+
+"""
+Release Notes for version v6.3.0 (2025-12-15):
+
+# 
+# ## RELEASE NOTES
+#  - This release was slower than usual. Some notable changes....
+#  - Added TLZ, IHD, TTR
+#  - Added support for multiple client injecting.
+#  - Improved the image host handling for sites that have banned hosts.
+#  - Improved the year detection for RTF when uploading TV content.
+#  - Fixed a bug with DVD mediainfo handling.
+#  - Fixed audio track handling that could cause missed dual-audio type handling.
+#  - Fixed image compression when using image overlay.
+#  - Fixed some mal id handling.
+#  - Added support for detecting ATMOS height channels.
+#  - Fixed auto torrent searching to only search valid trackers in config.
+#  - Added a webui for docker.
+#  - wastaken7 done a bunch of further refactoring.
+# 
+# ## New config options - see example.py
+#  - Multiple injecion clients can be added.
+#  - Removed the need for passkey from SPD and DC.
+#  - Added modq support for LT.
+# 
+# ## Special shout out
+# - blueberry, who is banned from UA github, and from a bunch of sites, due to invite begging/trading, and begging for internal status. It takes a special kind of stupid to modify a handful of lines and claim something as your own.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * docker pr building by @Audionut in 4a56b81
+# * build from fork by @Audionut in d10bff9
+# * fix some args parse quirks by @Audionut in fa05ca5
+# * prints behind debug by @Audionut in c1050f2
+# * BT: fix internal (#955) by @wastaken7 in d852726
+# * fix: don't sanitize meta early by @Audionut in 46346cd
+# * add new tracker URLs to match_tracker_url function (#957) by @wastaken7 in f45b9af
+# * refactor: remove UHD tracker (#958) by @wastaken7 in 339ba64
+# * feat: add support for super-seed mode (#956) by @wastaken7 in 0db8ed8
+# * PTP: upload error handling by @Audionut in 2c04770
+# * handle domain changes in unit3d descriptions by @Audionut in fb12db1
+# * TIK: videoformat update by @Audionut in 569740f
+# * image host validation updates by @Audionut in 3ab8bc5
+# * refactor(ASC): move internal flag setting to a separate method (#959) by @wastaken7 in 058b4cb
+# * fix uploaded images success check by @Audionut in 089f127
+# * feat: Docker GUI for front end.  (#954) by @IPGPrometheus in ca87495
+# * AR: Improve genre tag compilation logic (#965) by @cza in 6271ded
+# * refactor(SPD): remove passkey usage, update upload logic, add banned groups API (#963) by @wastaken7 in b019965
+# * HDB - Refine granulometry of thumbnail size in comps (#968) by @GizmoBal in c342712
+# * webui example args by @Audionut in 93330c2
+# * UHD: Remove from available trackers list in example-config.py (#970) by @FortKnox1337 in 03c2fda
+# * Add Torrenteros support (#971) by @wastaken7 in 170a43a
+# * TVDB/TVMaze improvements (#978) by @Audionut in bdd164f
+# * README: Add CinemaZ to the list of supported sites. (#974) by @FortKnox1337 in 1718e3c
+# * refactor(DC): remove passkey handling, update API endpoint usage, and improve upload logic (#976) by @wastaken7 in 7a8cb9c
+# * reverse linux bdinfo checking by @Audionut in 10eca14
+# * unattended no imdb by @Audionut in 5224894
+# * fix imdb search params by @Audionut in e51421a
+# * SHRI: BBCode description generation (#980) by @TheDarkMan in 80fe158
+# * feat(SHRI): add customization and conditional sections (#983) by @TheDarkMan in 7c9ced7
+# * Scan type detection for empty ScanType value (#982) by @TheDarkMan in ed49e65
+# * Minor THR improvements (#987) by @cucaracha7126378 in 13ba722
+# * fix(SHRI): handle MediaInfo Language dict and improve logo extraction (#988) by @TheDarkMan in 27d2143
+# * Improve qui searching (#967) by @Audionut in 7eb838e
+# * validate specific trackers by @Audionut in a4b5af3
+# * improve existing torrent search by @Audionut in 5598e24
+# * RTF: fix year check by @Audionut in 1f729ae
+# * BLU: Update banned release groups list (#990) by @FortKnox1337 in a5c6ecf
+# * fix(THR): replace unsupported bbcode tags and fix NFO content alignment (#993) by @cucaracha7126378 in 06c7e86
+# * fix(SHRI): improve REMUX detection and codec identification (#992) by @TheDarkMan in 7f45b58
+# * print error when no audio by @Audionut in c169279
+# * ANT: prohibit bloated by @Audionut in d3c5528
+# * handle height channels (#985) by @Audionut in df76e53
+# * fix(CZ): change BDinfo summary file (#996) by @wastaken7 in df4a4cb
+# * ASC: fix localized data (#994) by @Audionut in f2a6513
+# * catch bdinfo errors by @Audionut in 614bbc0
+# * Fix empty status_message after upload failure (#1000) by @wastaken7 in 1120f4a
+# * fix(LT.py): fix origin_country check, modQ option added (#1002) by @Caleb Contreras in 752072d
+# * fix getting BTN ids by @Audionut in d244af5
+# * parse scene nfo for service by @Audionut in 751253c
+# * PHD: Add banned release groups (#1004) by @FortKnox1337 in b22a07e
+# * fix group checking for banned groups by @Audionut in 7060e34
+# * fix double screens print by @Audionut in fe5ee82
+# * refactor infohash by @Audionut in d758027
+# * fix(FF): follow the site's naming conventions (#1006) by @wastaken7 in 1e6b27a
+# * RTV: refactor tv year handling by @Audionut in a325fb3
+# * cleanup bluray com handling by @Audionut in da2fff2
+# * ULCX: refactor aka handling by @Audionut in 9b38b2d
+# * fixed mal handling by @Audionut in e7e4e48
+# * refactor(DC): remove logo and screenshot header from description (#1018) by @wastaken7 in dc6f057
+# * fix(SHRI): improve language handling for Italian and English (#1013) by @TheDarkMan in f5d4a42
+# * add site uploading from site check log (#995) by @Audionut in 4f166d4
+# * always attempt mal by @Audionut in 3915ed9
+# * Add IHD support by @Audionut in a4d1df4
+# * licensing (#1022) by @Audionut in e2d2531
+# * IHD: fix language checking by @Audionut in a259e3d
+# * add extra tags catch by @Audionut in 458f48f
+# * unit3d internal flag debugging by @Audionut in a08b887
+# * Revert "unit3d internal flag debugging" by @Audionut in 23e1b08
+# * fix: screens compression when image overlay by @Audionut in 66dcc2b
+# * Add further support for IHD tracker (#1027) by @FortKnox1337 in f0a13f4
+# * Refactor UNIT3D description handling (#1007) by @wastaken7 in 9949c1e
+# * description fixes by @Audionut in 1d13584
+# * mps support 1 MiB by @Audionut in 8d328b5
+# * fix audio track counting by @Audionut in ce4529a
+# * allow override scene imdb by @Audionut in f988749
+# * fix search_imdb by @Audionut in bfbc68f
+# * cleanup HDB description handling by @Audionut in a9b20a5
+# * RTF: get all the years by @Audionut in 37836f7
+# * fix(SHRI) ignores akas titles with "attributes" (alternative titles) (#1032) by @braingremlin in 0823f78
+# * TL: fix unbound variable 'torrent_id' (#1034) by @wastaken7 in a533425
+# * check image hosts before async upload (#1033) by @Audionut in 4fc63d8
+# * refactor(DC): streamline torrent naming convention and remove duplicate title check (#1036) by @wastaken7 in ebb0d78
+# * Fix list formatting on different websites (#1038) by @wastaken7 in 3295781
+# * add support for multi-client injection (#1037) by @wastaken7 in 02865c7
+# * BHD: adjust size bbcode for new site fix by @Audionut in 5c69c2b
+# * Update eMuwarez base url (#1040) by @Jesús José Maldonado Arroyo in bf6ecaa
+# * refactor language checks to use common method across trackers (#1030) by @wastaken7 in 66d7a05
+# * rehosting: Use listdir instead of glob for PNG files (#1035) by @WOSSFOSS in e382ed9
+# * fix qui searching by @Audionut in d6757cc
+# * filter empty injection clients by @Audionut in 9f1f616
+# * Update LT.py (#1044) by @Hielito in a4ecf7e
+# * fix: remove space before 'AKA' in anime title formatting (#1042) by @wastaken7 in dc3397d
+# * fix qui url by @Audionut in 4e7c4b2
+# * ANT: all type ids by @Audionut in a2471d0
+# * remove debugger by @Audionut in a237d6a
+# * Add language-data optional to langcodes (#1046) by @WOSSFOSS in 2d82858
+# * BHD: exclude 2160p by default when framestor and hdr release by @Audionut in 2066f68
+# * dupe checking: fix remux check by @Audionut in f47307e
+# * unit3d: fix existing search when edition by @Audionut in 70cc612
+# * fix DVD mediainfo use ifo by @Audionut in a795bc8
+# * fix bdinfo progress output by @Audionut in 55ca8cf
+# * Add TLZ support (#1048) by @FortKnox1337 in a98eb50
+# * ACM: fix multi-disc bdinfo by @Audionut in 25647d4
+# * TL: fix NFO upload with cookie method (#1049) by @wastaken7 in 9faaf47
+# * Refactor TVC tracker with enhanced metadata handling and description generation (#1025) by @Lusephur in e2ba3a7
+# * 6.3 release notes by @Audionut in 65f2f55
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.3...v6.3.0
+"""
+
 __version__ = "v6.2.3"
 
 """

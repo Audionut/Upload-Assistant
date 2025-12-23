@@ -1,8 +1,9 @@
-# Upload Assistant © 2025 Audionut — Licensed under UAPL v1.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-import json
 import aiofiles
+import cli_ui
 import httpx
+import json
 
 from src.trackers.COMMON import COMMON
 from src.console import console
@@ -91,10 +92,22 @@ class NBL():
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':
-            if not meta['unattended']:
-                console.print("[red]Only TV Is allowed at NBL")
-            meta['skipping'] = "NBL"
-            return []
+            if meta['tvmaze_id'] != 0:
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                    console.print("[red]Only TV or TV Movies are allowed at NBL, this has a tvmaze ID[/red]")
+                    if cli_ui.ask_yes_no("Do you want to upload it?", default=False):
+                        pass
+                    else:
+                        meta['skipping'] = "NBL"
+                        return []
+                else:
+                    meta['skipping'] = "NBL"
+                    return []
+            else:
+                if not meta['unattended']:
+                    console.print("[red]Only TV Is allowed at NBL")
+                meta['skipping'] = "NBL"
+                return []
 
         if meta.get('is_disc') is not None:
             if not meta['unattended']:
@@ -135,6 +148,7 @@ class NBL():
                                     'size': int(each.get('size', 0)),
                                     'link': f'https://nebulance.io/torrents.php?id={each.get("group_id", "")}',
                                     'file_count': len(file_list) if isinstance(file_list, list) else 1,
+                                    'download': each.get('download', ''),
                                 }
                                 dupes.append(result)
                     except json.JSONDecodeError:
