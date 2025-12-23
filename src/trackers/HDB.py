@@ -621,7 +621,7 @@ class HDB():
             unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
             unwanted_files = set()
             for pattern in unwanted_patterns:
-                glob_results = await asyncio.to_thread(glob.glob, pattern)
+                glob_results = await asyncio.to_thread(glob.glob, full_pattern)
                 unwanted_files.update(glob_results)
                 hidden_pattern = "." + pattern
                 hidden_glob_results = await asyncio.to_thread(glob.glob, hidden_pattern)
