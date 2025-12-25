@@ -2,6 +2,7 @@
 import os
 import itertools
 from bin.MI.get_linux_mi import download_dvd_mediainfo
+from data.config import config
 from src.discparse import DiscParse
 
 
@@ -47,8 +48,9 @@ async def get_disc(meta):
                 }
                 discs.append(disc)
     if is_disc == "BDMV":
-        if meta.get('site_check', False):
+        if meta.get('site_check', False) or config['DEFAULT'].get('cross_seeding', True):
             print('BDMV disc checking is not supported in site_check mode, yet.')
+            meta['is_disc'] = "BDMV"
             return Exception
         if meta.get('edit', False) is False:
             discs, bdinfo = await parse.get_bdinfo(meta, discs, meta['uuid'], meta['base_dir'], meta.get('discs', []))

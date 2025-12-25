@@ -2244,12 +2244,12 @@ class Clients():
 
                     if is_disc in ("", None) and len(meta.get('filelist', [])) == 1:
                         file_name = os.path.basename(meta['filelist'][0])
-                        if torrent_name == file_name:
+                        if torrent_name.lower() == file_name.lower():
                             is_match = True
-                        elif torrent_name == meta['uuid']:
+                        elif torrent_name.lower() == meta['uuid'].lower():
                             is_match = True
                     else:
-                        if torrent_name == meta['uuid']:
+                        if torrent_name.lower() == meta['uuid'].lower():
                             is_match = True
 
                     if not is_match:

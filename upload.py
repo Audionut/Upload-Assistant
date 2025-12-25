@@ -67,6 +67,7 @@ use_discord = False
 discord_config = config.get('DISCORD')
 if discord_config:
     use_discord = discord_config.get('use_discord', False)
+cross_seeding = config['DEFAULT'].get('cross_seeding', True)
 
 
 async def merge_meta(meta, saved_meta, path):
@@ -385,303 +386,304 @@ async def process_meta(meta, base_dir, bot=None):
 
     else:
         meta['we_are_uploading'] = True
-        common = COMMON(config)
-        if meta.get('site_check', False):
-            for tracker in meta['trackers']:
-                upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
-                if not upload_status:
-                    if tracker == "AITHER" and meta.get('aither_trumpable') and len(meta.get('aither_trumpable', [])) > 0:
-                        pass
-                    else:
+        if not cross_seeding:
+            common = COMMON(config)
+            if meta.get('site_check', False):
+                for tracker in meta['trackers']:
+                    upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+                    if not upload_status:
+                        if tracker == "AITHER" and meta.get('aither_trumpable') and len(meta.get('aither_trumpable', [])) > 0:
+                            pass
+                        else:
+                            continue
+                    if tracker not in meta['tracker_status']:
                         continue
-                if tracker not in meta['tracker_status']:
-                    continue
 
-                log_path = f"{base_dir}/tmp/{tracker}_search_results.json"
-                if not await common.path_exists(log_path):
-                    await common.makedirs(os.path.dirname(log_path))
+                    log_path = f"{base_dir}/tmp/{tracker}_search_results.json"
+                    if not await common.path_exists(log_path):
+                        await common.makedirs(os.path.dirname(log_path))
 
-                search_data = []
-                if os.path.exists(log_path):
-                    try:
-                        async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
-                            content = await f.read()
-                            search_data = json.loads(content) if content.strip() else []
-                    except Exception:
-                        search_data = []
-
-                existing_uuids = {entry.get('uuid') for entry in search_data if isinstance(entry, dict)}
-
-                if meta['uuid'] not in existing_uuids:
-                    search_entry = {
-                        'uuid': meta['uuid'],
-                        'path': meta.get('path', ''),
-                        'imdb_id': meta.get('imdb_id', 0),
-                        'tmdb_id': meta.get('tmdb_id', 0),
-                        'tvdb_id': meta.get('tvdb_id', 0),
-                        'mal_id': meta.get('mal_id', 0),
-                        'tvmaze_id': meta.get('tvmaze_id', 0),
-                    }
-                    if tracker == "AITHER":
-                        search_entry['trumpable'] = meta.get('aither_trumpable', '')
-                    search_data.append(search_entry)
-
-                    async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
-                        await f.write(json.dumps(search_data, indent=4))
-            meta['we_are_uploading'] = False
-            return
-
-        filename = meta.get('title', None)
-        bdmv_filename = meta.get('filename', None)
-        bdinfo = meta.get('bdinfo', None)
-        videopath = meta.get('filelist', [None])
-        videopath = videopath[0] if videopath else None
-        console.print(f"Processing {filename} for upload.....")
-
-        meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
-        for tracker in ['AZ', 'CZ', 'PHD']:
-            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
-            if tracker in meta['trackers'] and meta['frame_overlay'] and upload_status is True:
-                meta['frame_overlay'] = False
-                console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
-
-        bdmv_mi_created = False
-        for tracker in ["ANT", "DC", "HUNO", "LCD"]:
-            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
-            if tracker in trackers and upload_status is True:
-                if not bdmv_mi_created:
-                    await common.get_bdmv_mediainfo(meta)
-                    bdmv_mi_created = True
-
-        progress_task = asyncio.create_task(print_progress("[yellow]Still processing, please wait...", interval=10))
-        try:
-            if 'manual_frames' not in meta:
-                meta['manual_frames'] = {}
-            manual_frames = meta['manual_frames']
-
-            if meta.get('comparison', False):
-                await add_comparison(meta)
-
-            else:
-                image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
-                if os.path.exists(image_data_file) and not meta.get('image_list'):
-                    try:
-                        with open(image_data_file, 'r') as img_file:
-                            image_data = json.load(img_file)
-
-                            if 'image_list' in image_data and not meta.get('image_list'):
-                                meta['image_list'] = image_data['image_list']
-                                if meta.get('debug'):
-                                    console.print(f"[cyan]Loaded {len(image_data['image_list'])} previously saved image links")
-
-                            if 'image_sizes' in image_data and not meta.get('image_sizes'):
-                                meta['image_sizes'] = image_data['image_sizes']
-                                if meta.get('debug'):
-                                    console.print("[cyan]Loaded previously saved image sizes")
-
-                            if 'tonemapped' in image_data and not meta.get('tonemapped'):
-                                meta['tonemapped'] = image_data['tonemapped']
-                                if meta.get('debug'):
-                                    console.print("[cyan]Loaded previously saved tonemapped status[/cyan]")
-
-                    except Exception as e:
-                        console.print(f"[yellow]Could not load saved image data: {str(e)}")
-
-                if meta.get('is_disc', ""):
-                    menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
-                    if os.path.exists(menus_data_file):
+                    search_data = []
+                    if os.path.exists(log_path):
                         try:
-                            with open(menus_data_file, 'r') as menus_file:
-                                menu_image_file = json.load(menus_file)
+                            async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+                                content = await f.read()
+                                search_data = json.loads(content) if content.strip() else []
+                        except Exception:
+                            search_data = []
 
-                                if 'menu_images' in menu_image_file and not meta.get('menu_images'):
-                                    meta['menu_images'] = menu_image_file['menu_images']
-                                    if meta.get('debug'):
-                                        console.print(f"[cyan]Loaded {len(menu_image_file['menu_images'])} previously saved disc menus")
+                    existing_uuids = {entry.get('uuid') for entry in search_data if isinstance(entry, dict)}
 
-                        except Exception as e:
-                            console.print(f"[yellow]Could not load saved menu image data: {str(e)}")
-                    elif meta.get('path_to_menu_screenshots', ""):
-                        await process_disc_menus(meta, config)
-
-                # Take Screenshots
-                try:
-                    if meta['is_disc'] == "BDMV":
-                        use_vs = meta.get('vapoursynth', False)
-                        try:
-                            await disc_screenshots(
-                                meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
-                                meta.get('image_list', []), meta.get('ffdebug', False), None
-                            )
-                        except asyncio.CancelledError:
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            raise Exception("Error during screenshot capture")
-                        except Exception as e:
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}")
-
-                    elif meta['is_disc'] == "DVD":
-                        try:
-                            await dvd_screenshots(
-                                meta, 0, None, None
-                            )
-                        except asyncio.CancelledError:
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            raise Exception("Error during screenshot capture")
-                        except Exception as e:
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}")
-
-                    else:
-                        try:
-                            if meta['debug']:
-                                console.print(f"videopath: {videopath}, filename: {filename}, meta: {meta['uuid']}, base_dir: {base_dir}, manual_frames: {manual_frames}")
-
-                            await screenshots(
-                                videopath, filename, meta['uuid'], base_dir, meta,
-                                manual_frames=manual_frames  # Pass additional kwargs directly
-                            )
-                        except asyncio.CancelledError:
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            raise Exception("Error during screenshot capture")
-                        except Exception as e:
-                            console.print(traceback.format_exc())
-                            await cleanup_screenshot_temp_files(meta)
-                            await asyncio.sleep(0.1)
-                            await cleanup()
-                            gc.collect()
-                            reset_terminal()
-                            try:
-                                raise Exception(f"Error during screenshot capture: {e}")
-                            except Exception as e2:
-                                if "workers" in str(e2):
-                                    console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
-                                raise e2
-
-                except asyncio.CancelledError:
-                    await cleanup_screenshot_temp_files(meta)
-                    await asyncio.sleep(0.1)
-                    await cleanup()
-                    gc.collect()
-                    reset_terminal()
-                    raise Exception("Error during screenshot capture")
-                except Exception:
-                    await cleanup_screenshot_temp_files(meta)
-                    await asyncio.sleep(0.1)
-                    await cleanup()
-                    gc.collect()
-                    reset_terminal()
-                    raise Exception
-                finally:
-                    await asyncio.sleep(0.1)
-                    await cleanup()
-                    gc.collect()
-                    reset_terminal()
-
-                if 'image_list' not in meta:
-                    meta['image_list'] = []
-                manual_frames_str = meta.get('manual_frames', '')
-                if isinstance(manual_frames_str, str):
-                    manual_frames_list = [f.strip() for f in manual_frames_str.split(',') if f.strip()]
-                    manual_frames_count = len(manual_frames_list)
-                    if meta['debug']:
-                        console.print(f"Manual frames entered: {manual_frames_count}")
-                else:
-                    manual_frames_count = 0
-                if manual_frames_count > 0:
-                    meta['screens'] = manual_frames_count
-                if len(meta.get('image_list', [])) < meta.get('cutoff') and meta.get('skip_imghost_upload', False) is False:
-                    return_dict = {}
-                    try:
-                        new_images, dummy_var = await upload_screens(
-                            meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict
-                        )
-                    except asyncio.CancelledError:
-                        console.print("\n[red]Upload process interrupted! Cancelling tasks...[/red]")
-                        return
-                    except Exception as e:
-                        raise e
-                    finally:
-                        reset_terminal()
-                        if meta['debug']:
-                            console.print("[yellow]Cleaning up resources...[/yellow]")
-                        gc.collect()
-
-                elif meta.get('skip_imghost_upload', False) is True and meta.get('image_list', False) is False:
-                    meta['image_list'] = []
-
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-                    json.dump(meta, f, indent=4)
-
-                if 'image_list' in meta and meta['image_list']:
-                    try:
-                        image_data = {
-                            "image_list": meta.get('image_list', []),
-                            "image_sizes": meta.get('image_sizes', {}),
-                            "tonemapped": meta.get('tonemapped', False)
+                    if meta['uuid'] not in existing_uuids:
+                        search_entry = {
+                            'uuid': meta['uuid'],
+                            'path': meta.get('path', ''),
+                            'imdb_id': meta.get('imdb_id', 0),
+                            'tmdb_id': meta.get('tmdb_id', 0),
+                            'tvdb_id': meta.get('tvdb_id', 0),
+                            'mal_id': meta.get('mal_id', 0),
+                            'tvmaze_id': meta.get('tvmaze_id', 0),
                         }
+                        if tracker == "AITHER":
+                            search_entry['trumpable'] = meta.get('aither_trumpable', '')
+                        search_data.append(search_entry)
 
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json", 'w') as img_file:
-                            json.dump(image_data, img_file, indent=4)
+                        async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
+                            await f.write(json.dumps(search_data, indent=4))
+                meta['we_are_uploading'] = False
+                return
 
-                        if meta.get('debug'):
-                            console.print(f"[cyan]Saved {len(meta['image_list'])} images to image_data.json")
-                    except Exception as e:
-                        console.print(f"[yellow]Failed to save image data: {str(e)}")
-        finally:
-            progress_task.cancel()
+            filename = meta.get('title', None)
+            bdmv_filename = meta.get('filename', None)
+            bdinfo = meta.get('bdinfo', None)
+            videopath = meta.get('filelist', [None])
+            videopath = videopath[0] if videopath else None
+            console.print(f"Processing {filename} for upload.....")
+
+            meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
+            for tracker in ['AZ', 'CZ', 'PHD']:
+                upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+                if tracker in meta['trackers'] and meta['frame_overlay'] and upload_status is True:
+                    meta['frame_overlay'] = False
+                    console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
+
+            bdmv_mi_created = False
+            for tracker in ["ANT", "DC", "HUNO", "LCD"]:
+                upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+                if tracker in trackers and upload_status is True:
+                    if not bdmv_mi_created:
+                        await common.get_bdmv_mediainfo(meta)
+                        bdmv_mi_created = True
+
+            progress_task = asyncio.create_task(print_progress("[yellow]Still processing, please wait...", interval=10))
             try:
-                await progress_task
-            except asyncio.CancelledError:
-                pass
+                if 'manual_frames' not in meta:
+                    meta['manual_frames'] = {}
+                manual_frames = meta['manual_frames']
 
-        # check for valid image hosts for trackers that require it
-        for tracker_name in meta['trackers']:
-            if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'TVC']:
-                tracker_class = tracker_class_map[tracker_name](config=config)
-                await tracker_class.check_image_hosts(meta)
+                if meta.get('comparison', False):
+                    await add_comparison(meta)
 
-        torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
-        if not os.path.exists(torrent_path):
-            reuse_torrent = None
-            if meta.get('rehash', False) is False and not meta['base_torrent_created'] and not meta['we_checked_them_all']:
-                reuse_torrent = await client.find_existing_torrent(meta)
-                if reuse_torrent is not None:
-                    await create_base_from_existing_torrent(reuse_torrent, meta['base_dir'], meta['uuid'])
+                else:
+                    image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
+                    if os.path.exists(image_data_file) and not meta.get('image_list'):
+                        try:
+                            with open(image_data_file, 'r') as img_file:
+                                image_data = json.load(img_file)
 
-            if meta['nohash'] is False and reuse_torrent is None:
+                                if 'image_list' in image_data and not meta.get('image_list'):
+                                    meta['image_list'] = image_data['image_list']
+                                    if meta.get('debug'):
+                                        console.print(f"[cyan]Loaded {len(image_data['image_list'])} previously saved image links")
+
+                                if 'image_sizes' in image_data and not meta.get('image_sizes'):
+                                    meta['image_sizes'] = image_data['image_sizes']
+                                    if meta.get('debug'):
+                                        console.print("[cyan]Loaded previously saved image sizes")
+
+                                if 'tonemapped' in image_data and not meta.get('tonemapped'):
+                                    meta['tonemapped'] = image_data['tonemapped']
+                                    if meta.get('debug'):
+                                        console.print("[cyan]Loaded previously saved tonemapped status[/cyan]")
+
+                        except Exception as e:
+                            console.print(f"[yellow]Could not load saved image data: {str(e)}")
+
+                    if meta.get('is_disc', ""):
+                        menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
+                        if os.path.exists(menus_data_file):
+                            try:
+                                with open(menus_data_file, 'r') as menus_file:
+                                    menu_image_file = json.load(menus_file)
+
+                                    if 'menu_images' in menu_image_file and not meta.get('menu_images'):
+                                        meta['menu_images'] = menu_image_file['menu_images']
+                                        if meta.get('debug'):
+                                            console.print(f"[cyan]Loaded {len(menu_image_file['menu_images'])} previously saved disc menus")
+
+                            except Exception as e:
+                                console.print(f"[yellow]Could not load saved menu image data: {str(e)}")
+                        elif meta.get('path_to_menu_screenshots', ""):
+                            await process_disc_menus(meta, config)
+
+                    # Take Screenshots
+                    try:
+                        if meta['is_disc'] == "BDMV":
+                            use_vs = meta.get('vapoursynth', False)
+                            try:
+                                await disc_screenshots(
+                                    meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
+                                    meta.get('image_list', []), meta.get('ffdebug', False), None
+                                )
+                            except asyncio.CancelledError:
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                raise Exception("Error during screenshot capture")
+                            except Exception as e:
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                raise Exception(f"Error during screenshot capture: {e}")
+
+                        elif meta['is_disc'] == "DVD":
+                            try:
+                                await dvd_screenshots(
+                                    meta, 0, None, None
+                                )
+                            except asyncio.CancelledError:
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                raise Exception("Error during screenshot capture")
+                            except Exception as e:
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                raise Exception(f"Error during screenshot capture: {e}")
+
+                        else:
+                            try:
+                                if meta['debug']:
+                                    console.print(f"videopath: {videopath}, filename: {filename}, meta: {meta['uuid']}, base_dir: {base_dir}, manual_frames: {manual_frames}")
+
+                                await screenshots(
+                                    videopath, filename, meta['uuid'], base_dir, meta,
+                                    manual_frames=manual_frames  # Pass additional kwargs directly
+                                )
+                            except asyncio.CancelledError:
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                raise Exception("Error during screenshot capture")
+                            except Exception as e:
+                                console.print(traceback.format_exc())
+                                await cleanup_screenshot_temp_files(meta)
+                                await asyncio.sleep(0.1)
+                                await cleanup()
+                                gc.collect()
+                                reset_terminal()
+                                try:
+                                    raise Exception(f"Error during screenshot capture: {e}")
+                                except Exception as e2:
+                                    if "workers" in str(e2):
+                                        console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
+                                    raise e2
+
+                    except asyncio.CancelledError:
+                        await cleanup_screenshot_temp_files(meta)
+                        await asyncio.sleep(0.1)
+                        await cleanup()
+                        gc.collect()
+                        reset_terminal()
+                        raise Exception("Error during screenshot capture")
+                    except Exception:
+                        await cleanup_screenshot_temp_files(meta)
+                        await asyncio.sleep(0.1)
+                        await cleanup()
+                        gc.collect()
+                        reset_terminal()
+                        raise Exception
+                    finally:
+                        await asyncio.sleep(0.1)
+                        await cleanup()
+                        gc.collect()
+                        reset_terminal()
+
+                    if 'image_list' not in meta:
+                        meta['image_list'] = []
+                    manual_frames_str = meta.get('manual_frames', '')
+                    if isinstance(manual_frames_str, str):
+                        manual_frames_list = [f.strip() for f in manual_frames_str.split(',') if f.strip()]
+                        manual_frames_count = len(manual_frames_list)
+                        if meta['debug']:
+                            console.print(f"Manual frames entered: {manual_frames_count}")
+                    else:
+                        manual_frames_count = 0
+                    if manual_frames_count > 0:
+                        meta['screens'] = manual_frames_count
+                    if len(meta.get('image_list', [])) < meta.get('cutoff') and meta.get('skip_imghost_upload', False) is False:
+                        return_dict = {}
+                        try:
+                            new_images, dummy_var = await upload_screens(
+                                meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict
+                            )
+                        except asyncio.CancelledError:
+                            console.print("\n[red]Upload process interrupted! Cancelling tasks...[/red]")
+                            return
+                        except Exception as e:
+                            raise e
+                        finally:
+                            reset_terminal()
+                            if meta['debug']:
+                                console.print("[yellow]Cleaning up resources...[/yellow]")
+                            gc.collect()
+
+                    elif meta.get('skip_imghost_upload', False) is True and meta.get('image_list', False) is False:
+                        meta['image_list'] = []
+
+                    with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+                        json.dump(meta, f, indent=4)
+
+                    if 'image_list' in meta and meta['image_list']:
+                        try:
+                            image_data = {
+                                "image_list": meta.get('image_list', []),
+                                "image_sizes": meta.get('image_sizes', {}),
+                                "tonemapped": meta.get('tonemapped', False)
+                            }
+
+                            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json", 'w') as img_file:
+                                json.dump(image_data, img_file, indent=4)
+
+                            if meta.get('debug'):
+                                console.print(f"[cyan]Saved {len(meta['image_list'])} images to image_data.json")
+                        except Exception as e:
+                            console.print(f"[yellow]Failed to save image data: {str(e)}")
+            finally:
+                progress_task.cancel()
+                try:
+                    await progress_task
+                except asyncio.CancelledError:
+                    pass
+
+            # check for valid image hosts for trackers that require it
+            for tracker_name in meta['trackers']:
+                if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'TVC']:
+                    tracker_class = tracker_class_map[tracker_name](config=config)
+                    await tracker_class.check_image_hosts(meta)
+
+            torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+            if not os.path.exists(torrent_path):
+                reuse_torrent = None
+                if meta.get('rehash', False) is False and not meta['base_torrent_created'] and not meta['we_checked_them_all']:
+                    reuse_torrent = await client.find_existing_torrent(meta)
+                    if reuse_torrent is not None:
+                        await create_base_from_existing_torrent(reuse_torrent, meta['base_dir'], meta['uuid'])
+
+                if meta['nohash'] is False and reuse_torrent is None:
+                    create_torrent(meta, Path(meta['path']), "BASE")
+                if meta['nohash']:
+                    meta['client'] = "none"
+
+            elif os.path.exists(torrent_path) and meta.get('rehash', False) is True and meta['nohash'] is False:
                 create_torrent(meta, Path(meta['path']), "BASE")
-            if meta['nohash']:
-                meta['client'] = "none"
 
-        elif os.path.exists(torrent_path) and meta.get('rehash', False) is True and meta['nohash'] is False:
-            create_torrent(meta, Path(meta['path']), "BASE")
+            if int(meta.get('randomized', 0)) >= 1:
+                if not meta['mkbrr']:
+                    create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
-        if int(meta.get('randomized', 0)) >= 1:
-            if not meta['mkbrr']:
-                create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
-
-        meta = await gen_desc(meta)
+            meta = await gen_desc(meta)
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
@@ -1010,7 +1012,8 @@ async def do_the_thing(base_dir):
             else:
                 console.print()
                 console.print("[yellow]Processing uploads to trackers.....")
-                await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
+                if not cross_seeding:
+                    await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
 
@@ -1098,6 +1101,24 @@ async def do_the_thing(base_dir):
                 except Exception as e:
                     console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 
+            if cross_seeding:
+                timestamps = await get_cross_timestamps(base_dir)
+                last_cross_time = timestamps.get("cross_seed", 0)
+                current_time = time.time()
+                elapsed = current_time - last_cross_time
+                delay_needed = max(0, 60 - int(elapsed))
+
+                if delay_needed > 0:
+                    for remaining in range(delay_needed, 0, -1):
+                        msg = f"[green]Cross seed processing delay... {remaining}s remaining"
+                        console.print(msg, end='\r')
+                        await asyncio.sleep(1)
+                    console.print()
+                elif meta.get('debug'):
+                    console.print(f"[yellow]Skipping cross seed delay ({int(elapsed)}s already elapsed since last cross seed)[/yellow]")
+
+                await save_cross_timestamp(base_dir, meta.get('debug', False))
+
             if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
                 if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
                     if sanitize_meta and not meta.get('emby', False):
@@ -1141,7 +1162,42 @@ async def do_the_thing(base_dir):
             reset_terminal()
 
 
+async def get_cross_timestamps(base_dir=None):
+    """Get cross seed timestamps from the log file"""
+    timestamp_file = os.path.join(f"{base_dir}", "data", "banned", "cross_timestamps.json")
+    try:
+        if os.path.exists(timestamp_file):
+            with open(timestamp_file, 'r') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not load cross timestamps: {e}[/yellow]")
+        return {}
+
+
+async def save_cross_timestamp(base_dir=None, debug=False):
+    """Save timestamp for when cross seed was processed"""
+    timestamp_file = os.path.join(f"{base_dir}", "data", "banned", "cross_timestamps.json")
+    try:
+        os.makedirs(f"{base_dir}/data/banned", exist_ok=True)
+
+        timestamps = await get_cross_timestamps(base_dir)
+        timestamps["cross_seed"] = time.time()
+
+        with open(timestamp_file, 'w') as f:
+            json.dump(timestamps, f, indent=2)
+
+        if debug:
+            console.print("[yellow]Saved timestamp for cross seed[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error saving cross timestamp: {e}[/red]")
+
+
 async def process_cross_seeds(meta):
+    if meta.get('is_disc', False) == "BDMV":
+        console.print("[yellow]Skipping cross-seed check for BDMV disc rips[/yellow]")
+        return
     all_trackers = api_trackers | http_trackers | other_api_trackers
 
     # Get list of trackers to exclude (already in client)
@@ -1158,7 +1214,7 @@ async def process_cross_seeds(meta):
     # Validate tracker configs and build list of valid unchecked trackers
     valid_unchecked_trackers = []
     for tracker in all_trackers:
-        if tracker in dupe_checked_trackers or meta.get(f'{tracker}_cross_seed', None) is not None or tracker in remove_list:
+        if tracker in dupe_checked_trackers or meta.get(f'{tracker}_cross_seed', None) is not None or tracker in remove_list or tracker == "PTP":
             continue
 
         tracker_config = config.get('TRACKERS', {}).get(tracker, {})
@@ -1214,6 +1270,8 @@ async def process_cross_seeds(meta):
                 # Search for existing torrents
                 if tracker != "PTP":
                     dupes = await tracker_class.search_existing(meta, disctype)
+                    if meta['debug']:
+                        console.print(f"[cyan]Found {len(dupes)} potential dupes on {tracker} before filtering[/cyan]")
                 else:
                     ptp = PTP(config=config)
                     if not meta.get('ptp_groupID'):
