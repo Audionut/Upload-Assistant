@@ -192,13 +192,9 @@ async def upload_image_task(args):
                         response = await client.post(url, headers=headers, files=files, timeout=timeout)
                         response_data = response.json()
 
-                        if response.status_code == 400:
-                            console.print("[yellow]ptscreens upload failed: Duplicate upload (400)")
-                            return {'status': 'failed', 'reason': 'ptscreens duplicate'}
-
-                        if response_data.get('status_code') != 200:
-                            console.print("[yellow]ptscreens failed")
-                            return {'status': 'failed', 'reason': 'ptscreens upload failed'}
+                        if response.status_code != 200:
+                            console.print(f'[yellow]ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")} {(response.status_code)}')
+                            return {'status': 'failed', 'reason': f'ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")}'}
 
                         img_url = response_data['image']['medium']['url']
                         raw_url = response_data['image']['url']
