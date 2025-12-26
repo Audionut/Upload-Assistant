@@ -16,11 +16,11 @@ import glob
 from src.console import console
 
 
-def calculate_piece_size(total_size, min_size, max_size, files, meta):
+def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
     # Set max_size
-    if 'max_piece_size' in meta and meta['max_piece_size']:
+    if piece_size:
         try:
-            max_size = min(int(meta['max_piece_size']) * 1024 * 1024, torf.Torrent.piece_size_max)
+            max_size = min(int(piece_size) * 1024 * 1024, torf.Torrent.piece_size_max)
         except ValueError:
             max_size = 134217728  # Fallback to default if conversion fails
     else:
@@ -129,7 +129,12 @@ def build_mkbrr_exclude_string(root_folder, filelist):
     return exclude_str
 
 
-def create_torrent(meta, path, output_filename, tracker_url=None):
+def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=None):
+    if piece_size is None:
+        try:
+            piece_size = meta.get('max_piece_size', None)
+        except Exception:
+            piece_size = None
     if meta['isdir']:
         if meta['keep_folder']:
             cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')
@@ -250,9 +255,9 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
             if int(meta.get('randomized', 0)) >= 1:
                 cmd.extend(["-e"])
 
-            if meta.get('max_piece_size') and tracker_url is None:
+            if piece_size and tracker_url is None:
                 try:
-                    max_size_bytes = int(meta['max_piece_size']) * 1024 * 1024
+                    max_size_bytes = int(piece_size) * 1024 * 1024
 
                     # Calculate the appropriate power of 2 (log2)
                     # We want the largest power of 2 that's less than or equal to max_size_bytes
@@ -264,7 +269,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
 
-            if not meta.get('max_piece_size') and tracker_url is None and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
+            if not piece_size and tracker_url is None and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
                 cmd.extend(['-m', '27'])
 
             if meta.get('mkbrr_threads') != '0':
@@ -344,7 +349,7 @@ def create_torrent(meta, path, output_filename, tracker_url=None):
         for root, dirs, files in os.walk(path):
             initial_size += sum(os.path.getsize(os.path.join(root, f)) for f in files if os.path.isfile(os.path.join(root, f)))
 
-    piece_size = calculate_piece_size(initial_size, 32768, 134217728, [], meta)
+    piece_size = calculate_piece_size(initial_size, 32768, 134217728, meta, piece_size=piece_size)
 
     # Fallback to CustomTorrent if mkbrr is not used
     torrent = CustomTorrent(
