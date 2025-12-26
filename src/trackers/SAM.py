@@ -66,7 +66,17 @@ class SAM(UNIT3D):
             if audio_tag:
                 if "-" in sam_name:
                     parts = sam_name.rsplit("-", 1)
-                    sam_name = f"{parts[0]}{audio_tag}-{parts[1]}"
+
+                    custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
+                    if custom_tag and custom_tag in name:
+                        match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
+                        if match and match != meta["tag"]:
+                            original_group_tag = match.group(1)
+                            sam_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
+                        else:
+                            sam_name = f"{parts[0]}{audio_tag}-{parts[1]}"
+                    else:
+                        sam_name = f"{parts[0]}{audio_tag}-{parts[1]}"
                 else:
                     sam_name += audio_tag
 
