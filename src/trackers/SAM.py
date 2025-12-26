@@ -70,7 +70,7 @@ class SAM(UNIT3D):
                     custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
                     if custom_tag and custom_tag in name:
                         match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
-                        if match and match != meta["tag"]:
+                        if match and match.group(1) != meta["tag"]:
                             original_group_tag = match.group(1)
                             sam_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
                         else:
