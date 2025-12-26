@@ -78,7 +78,7 @@ class CBR(UNIT3D):
         if meta.get("category") in ["TV", "ANIMES"]:
             year = str(meta.get("year", ""))
             if year and year in name:
-                name = name.replace(year, "").replace(f"({year})", "").strip()
+                name = name.replace(f"({year})", "").replace(year, "").strip()
 
         # Remove the AKA title, unless it is Brazilian
         if meta.get("original_language") != "pt":
@@ -112,13 +112,12 @@ class CBR(UNIT3D):
 
                     custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
                     if custom_tag and custom_tag in name:
-                        if audio_tag:
-                            match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
-                            if match:
-                                original_group_tag = match.group(1)
-                                cbr_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
-                            else:
-                                cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
+                        match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
+                        if match and match != meta["tag"]:
+                            original_group_tag = match.group(1)
+                            cbr_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
+                        else:
+                            cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
                     else:
                         cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
                 else:

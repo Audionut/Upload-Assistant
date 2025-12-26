@@ -737,6 +737,10 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
+            # The tag that identifies you or your group when modifying an existing release.
+            # If set, the script will try to preserve the original group's name.
+            # Example: If set to "MyTag", a release might become: Movie 2003 1080p WEB-DL DDP5.1 H.264-OriginalGroup DUAL-MyTag
+            "tag_for_custom_release": "",
         },
         "SHRI": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

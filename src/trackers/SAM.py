@@ -35,7 +35,7 @@ class SAM(UNIT3D):
         if meta.get("category") in ["TV", "ANIMES"]:
             year = str(meta.get("year", ""))
             if year and year in name:
-                name = name.replace(year, "").replace(f"({year})", "").strip()
+                name = name.replace(f"({year})", "").replace(year, "").strip()
 
         # Remove the AKA title, unless it is Brazilian
         if meta.get("original_language") != "pt":
