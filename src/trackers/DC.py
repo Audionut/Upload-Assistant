@@ -243,7 +243,8 @@ class DC:
         if not meta.get('debug', False):
             try:
                 upload_url = f'{self.api_base_url}/upload'
-                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+                await self.common.create_torrent_for_upload(meta, self.tracker, 'DigitalCore.club')
+                torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
                 with open(torrent_path, 'rb') as torrent_file:
                     files = {'file': (torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
