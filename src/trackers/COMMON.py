@@ -867,7 +867,7 @@ class COMMON():
             # 1. Generate/Load initial MediaInfo (Playlist) if not exists
             if not os.path.isfile(mi_path):
                 if meta.get('debug'):
-                    print("[blue]Generating MediaInfo for BDMV...[/blue]")
+                    console.print("[blue]Generating MediaInfo for BDMV...[/blue]")
 
                 path = meta['discs'][0]['playlists'][0]['path']
                 await exportInfo(
@@ -906,7 +906,7 @@ class COMMON():
             # 2. Check char_limit and fallback to largest M2TS if necessary
             if char_limit and len(mediainfo) > char_limit:
                 if meta.get('debug'):
-                    print(f"[yellow]MediaInfo length ({len(mediainfo)}) exceeds limit ({char_limit}). Falling back to largest M2TS...[/yellow]")
+                    console.print(f"[yellow]MediaInfo length ({len(mediainfo)}) exceeds limit ({char_limit}). Falling back to largest M2TS...[/yellow]")
 
                 items = meta['discs'][0]['playlists'][0].get('items', [])
 
@@ -916,7 +916,7 @@ class COMMON():
 
                     if largest_m2ts:
                         if meta.get('debug'):
-                            print(f"[blue]Selected largest M2TS from meta: {os.path.basename(largest_m2ts)}[/blue]")
+                            console.print(f"[blue]Selected largest M2TS from meta: {os.path.basename(largest_m2ts)}[/blue]")
 
                         await exportInfo(
                             largest_m2ts,
