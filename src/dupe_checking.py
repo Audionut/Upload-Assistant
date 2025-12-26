@@ -317,7 +317,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             if "hdtv" in normalized and not any(web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]):
                 await log_exclusion("source mismatch: WEB-DL vs HDTV", each)
                 return True
-            if ['blu-ray', 'blu ray', 'bluray', 'blu -ray'] in normalized and not any(web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]):
+            if any(term in normalized for term in ['blu-ray', 'blu ray', 'bluray', 'blu -ray']) and not any(web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]):
                 await log_exclusion("source mismatch: WEB-DL vs BluRay", each)
                 return True
         if not web_dl:
