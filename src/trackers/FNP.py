@@ -13,6 +13,7 @@ class FNP(UNIT3D):
         self.base_url = 'https://fearnopeer.com'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
@@ -21,7 +22,7 @@ class FNP(UNIT3D):
         ]
         pass
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -32,8 +33,17 @@ class FNP(UNIT3D):
             '576i': '15',
             '480p': '8',
             '480i': '14'
-        }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        }
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution is not None:
+            return {'resolution_id': resolution_id.get(resolution, '10')}
+        else:
+            meta_resolution = meta.get('resolution', '')
+            resolved_id = resolution_id.get(meta_resolution, '10')
+            return {'resolution_id': resolved_id}
 
     async def get_additional_data(self, meta):
         data = {
