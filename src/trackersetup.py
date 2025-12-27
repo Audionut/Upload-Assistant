@@ -272,12 +272,10 @@ class TRACKER_SETUP:
                 if group_tags == tag[0].lower():
                     console.print(f"[bold yellow]{meta['tag'][1:]}[/bold yellow][bold red] was found on [bold yellow]{tracker}'s[/bold yellow] list of banned groups.")
                     console.print(f"[bold red]NOTE: [bold yellow]{tag[1]}")
-                    await asyncio.sleep(5)
                     result = True
             else:
                 if group_tags == tag.lower():
                     console.print(f"[bold yellow]{meta['tag'][1:]}[/bold yellow][bold red] was found on [bold yellow]{tracker}'s[/bold yellow] list of banned groups.")
-                    await asyncio.sleep(5)
                     result = True
 
         if result:
