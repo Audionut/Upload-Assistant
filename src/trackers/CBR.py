@@ -98,7 +98,7 @@ class CBR(UNIT3D):
         if meta.get("audio_languages"):
             audio_languages = set(meta["audio_languages"])
 
-            if "Portuguese" in audio_languages:
+            if any(lang.lower() == "portuguese" or lang == "português" for lang in audio_languages):
                 if len(audio_languages) >= 3:
                     audio_tag = " MULTI"
                 elif len(audio_languages) == 2:
