@@ -280,6 +280,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                         if t.get('@type') == "Audio" and "commentary" not in (t.get('Title') or '').lower() and "compatibility" not in (t.get('Title') or '').lower()
                     ]
                     audio_language = None
+                    language_allowed = True
                     if meta['debug']:
                         console.print(f"DEBUG: Audio Tracks (not commentary)= {len(audio_tracks)}")
                     for t in audio_tracks:
@@ -308,17 +309,17 @@ async def get_audio_v2(mi, meta, bdinfo):
                             audio_language = audio_language.strip().lower()
                             if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
                                 non_en_non_commentary = True
-                                console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
-                                time.sleep(5)
+                                language_allowed = language_allowed and bloated_check(meta, audio_language)
 
                     if (
                         orig_lang == "en"
                         and eng
                         and non_en_non_commentary
                     ):
-                        console.print("[bold red]This release is English original, has English audio, but also has other non-English audio tracks (not commentary). This may be considered bloated.[/bold red]")
-                        meta['bloated'] = True
-                        time.sleep(5)
+                        if not language_allowed:
+                            console.print("[bold red]This release is English original, has English audio, but also has other non-English audio tracks (not commentary). This may be considered bloated.[/bold red]")
+                            meta['bloated'] = True
+                            time.sleep(5)
 
                     if ((eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary)) and len(audio_tracks) > 1 and not meta.get('no_dual', False):
                         dual = "Dual-Audio"
@@ -420,3 +421,35 @@ async def get_audio_v2(mi, meta, bdinfo):
     audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
     audio = ' '.join(audio.split())
     return audio, chan, has_commentary
+
+
+def bloated_check(meta, audio_language):
+    bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SP", "TL"]
+    tracker_allowed_bloat_language = {
+        "AITHER": "en",
+        "ANT": "en",
+        "BLU": "en",
+        "ITT": "it",
+        "LT": "es",
+        "PT": "pt",
+        "SPD": "ro",
+        "TTR": "es",
+    }
+    trackers_to_warn = []
+
+    for tracker in meta.get("trackers", []):
+        if tracker in tracker_allowed_bloat_language:
+            if audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
+                continue
+        if tracker not in bloat_is_allowed:
+            trackers_to_warn.append(tracker)
+
+    if trackers_to_warn:
+        trackers = ", ".join(trackers_to_warn)
+        console.print(
+            f"[bold red]This release has a(n) [bold yellow]{audio_language}[/bold yellow] audio track, and may be considered bloated on {trackers}[/bold red]"
+        )
+        time.sleep(5)
+        return False
+
+    return True
