@@ -303,6 +303,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                             if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
                                 non_en_non_commentary = True
                                 console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
+                                time.sleep(5)
 
                     if (
                         orig_lang == "en"
