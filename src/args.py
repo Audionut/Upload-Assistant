@@ -162,6 +162,7 @@ class Args():
         parser.add_argument('-sda', '--skip-dupe-asking', action='store_true', required=False, help="Don't prompt about dupes, just treat dupes as actual dupes", dest="ask_dupe")
         parser.add_argument('-debug', '--debug', action='store_true', required=False, help="Debug Mode, will run through all the motions providing extra info, but will not upload to trackers.")
         parser.add_argument('-ffdebug', '--ffdebug', action='store_true', required=False, help="Will show info from ffmpeg while taking screenshots.")
+        parser.add_argument('-uptimer', '--upload-timer', action='store_true', required=False, help="Prints the time it takes to upload to each individual site.", dest="upload_timer")
         parser.add_argument('-mps', '--max-piece-size', nargs=1, required=False, help="Set max piece size allowed in MiB for default torrent creation (default 128 MiB)", choices=['1', '2', '4', '8', '16', '32', '64', '128'])
         parser.add_argument('-nh', '--nohash', action='store_true', required=False, help="Don't hash .torrent")
         parser.add_argument('-rh', '--rehash', action='store_true', required=False, help="DO hash .torrent")
