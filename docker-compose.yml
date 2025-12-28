@@ -1,6 +1,6 @@
 services:
   l4g-upload-assistant-cli:
-    image: ghcr.io/audionut/upload-assistant:web-ui
+    image: ghcr.io/audionut/upload-assistant:latest-webui
     container_name: UA
     restart: unless-stopped
     networks:
