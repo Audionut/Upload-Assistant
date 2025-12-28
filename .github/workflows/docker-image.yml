@@ -101,8 +101,8 @@ jobs:
             echo "VERSION=${BRANCH_NAME}" >> $GITHUB_ENV
           fi
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
+      - name: Extract metadata (tags, labels) for Docker - Standard
+        id: meta-standard
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -111,22 +111,47 @@ jobs:
             type=ref,event=tag
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
-      - name: Build and push Docker image
+      - name: Extract metadata (tags, labels) for Docker - WebUI
+        id: meta-webui
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-webui
+            type=ref,event=tag,suffix=-webui
+            type=raw,value=webui,enable=${{ github.event_name == 'release' }}
+
+      - name: Build and push Docker image - Standard
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile.standard
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta-standard.outputs.tags }}
+          labels: ${{ steps.meta-standard.outputs.labels }}
+          cache-from: type=gha,scope=standard
+          cache-to: type=gha,mode=max,scope=standard
+
+      - name: Build and push Docker image - WebUI
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-webui.outputs.tags }}
+          labels: ${{ steps.meta-webui.outputs.labels }}
+          cache-from: type=gha,scope=webui
+          cache-to: type=gha,mode=max,scope=webui
 
       - name: Output build information
         run: |
           echo "✅ Docker images built and pushed successfully!"
-          echo "🐋 Images:"
-          echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+          echo "🐋 Standard Images:"
+          echo "${{ steps.meta-standard.outputs.tags }}" | sed 's/^/  - /'
+          echo "🐋 WebUI Images:"
+          echo "${{ steps.meta-webui.outputs.tags }}" | sed 's/^/  - /'
           echo "📝 Event: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "📝 Triggered by release: ${{ github.event.release.tag_name }}"
