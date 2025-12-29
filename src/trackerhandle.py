@@ -233,12 +233,13 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         try:
             for tracker, status in meta.get('tracker_status', {}).items():
                 try:
+                    message = None
                     if tracker == "MTV" and 'status_message' in status and "data error" not in str(status['status_message']):
-                        console.print(f"[green]{str(status['status_message'])}[/green]")
+                        message = f"[green]{str(status['status_message'])}[/green]"
                     if 'torrent_id' in status:
                         tracker_class = tracker_class_map[tracker](config=config)
                         torrent_url = tracker_class.torrent_url
-                        console.print(f"[green]{torrent_url}{status['torrent_id']}[/green]")
+                        message = f"[green]{torrent_url}{status['torrent_id']}[/green]"
                     else:
                         if (
                             'status_message' in status
@@ -246,12 +247,19 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                             and "data error" not in str(status['status_message'])
                             and tracker != "MTV"
                         ):
-                            print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                            message = f"{tracker}: {redact_private_info(status['status_message'])}"
                         elif 'status_message' in status and "data error" in str(status['status_message']):
                             console.print(f"[red]{tracker}: {str(status['status_message'])}[/red]")
                         else:
                             if 'skipping' in status and not status['skipping']:
                                 console.print(f"[red]{tracker} gave no useful message.")
+                    if message is not None:
+                        if config["DEFAULT"].get("show_upload_duration", False) or meta.get('upload_timer', False):
+                            duration = meta.get(f'{tracker}_upload_duration')
+                            if duration and isinstance(duration, (int, float)):
+                                color = "#21ff00" if duration < 5 else "#9fd600" if duration < 10 else "#cfaa00" if duration < 15 else "#f17100" if duration < 20 else "#ff0000"
+                                message += f" [[{color}]{duration:.2f}s[/{color}]]"
+                        console.print(message)
                 except Exception as e:
                     console.print(f"[red]Error printing {tracker} data: {e}[/red]")
             console.print("[green]All tracker uploads processed.[/green]")
