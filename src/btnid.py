@@ -181,7 +181,10 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
         meta["description"] = ""
         meta["image_list"] = imagelist
 
-    console.print(f"[green]Found BHD IDs: IMDb={imdb}, TMDb={tmdb}")
+    if (imdb and int(imdb) != 0) or (tmdb and int(tmdb) != 0):
+        console.print(f"[green]Found BHD IDs: IMDb={imdb}, TMDb={tmdb}")
+    elif meta.get('debug'):
+        console.print(f"[yellow]BHD search returned no valid IDs (IMDb={imdb}, TMDb={tmdb})[/yellow]")
 
     return imdb, tmdb
 

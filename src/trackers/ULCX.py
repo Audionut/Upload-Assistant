@@ -5,7 +5,6 @@ import cli_ui
 import re
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language, has_english_language
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -57,11 +56,9 @@ class ULCX(UNIT3D):
             return False
 
         if not meta['is_disc'] == "BDMV":
-            if not meta.get('language_checked', False):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
-            if not await has_english_language(meta.get('audio_languages')) and not await has_english_language(meta.get('subtitle_languages')):
-                if not meta['unattended']:
-                    console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track.')
+            if not await self.common.check_language_requirements(
+                meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
+            ):
                 return False
 
         if not meta['valid_mi_settings']:

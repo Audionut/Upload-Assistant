@@ -392,10 +392,18 @@ class BHD():
                     data = response.json()
                     if data.get('status_code') == 1:
                         for each in data['results']:
+                            # Extract HDR flags from BHD data
+                            flags = []
+                            if each.get('dv') == 1:
+                                flags.append('DV')
+                            if each.get('hdr10') == 1 or each.get('hdr10+') == 1:
+                                flags.append('HDR')
+
                             result = {
                                 'name': each['name'],
                                 'link': each['url'],
                                 'size': each['size'],
+                                'flags': flags,
                             }
                             if rss_key:
                                 result['download'] = each.get('download_url', None)

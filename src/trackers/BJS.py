@@ -21,7 +21,6 @@ from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from tqdm import tqdm
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -783,7 +782,14 @@ class BJS:
             )
             response.raise_for_status()
             data = response.json()
-            return data.get('url', '').replace('\\/', '/')
+
+            img_url = None
+            if data.get('url') and data.get('url').startswith('http'):
+                img_url = data.get('url').replace('\\/', '/')
+            else:
+                console.print(f'{self.tracker}: [bold red]The image host appears to be down.[/bold red]')
+
+            return img_url
         except Exception as e:
             print(f'Exceção no upload de {filename}: {e}')
             return None
@@ -845,11 +851,7 @@ class BJS:
         if local_files:
             paths = local_files[: 6 - len(results)]
 
-            for coro in tqdm(
-                asyncio.as_completed([upload_local_file(p) for p in paths]),
-                total=len(paths),
-                desc=f"Uploading screenshots to {self.tracker}",
-            ):
+            for coro in asyncio.as_completed([upload_local_file(p) for p in paths]):
                 result = await coro
                 if result:
                     results.append(result)
@@ -859,11 +861,7 @@ class BJS:
                 : 6 - len(results)
             ]
 
-            for coro in tqdm(
-                asyncio.as_completed([upload_remote_file(url) for url in image_links]),
-                total=len(image_links),
-                desc=f"Uploading screenshots to {self.tracker}",
-            ):
+            for coro in asyncio.as_completed([upload_remote_file(url) for url in image_links]):
                 result = await coro
                 if result:
                     results.append(result)

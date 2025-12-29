@@ -3,6 +3,7 @@ import asyncio
 import cli_ui
 import sys
 import traceback
+import time
 
 from cogs.redaction import redact_private_info
 from src.cleanup import cleanup, reset_terminal
@@ -67,7 +68,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     if draft == "Yes":
                         console.print(f"(draft: {draft})")
                     try:
+                        upload_start_time = time.time()
                         await tracker_class.upload(meta, disctype)
+                        upload_duration = time.time() - upload_start_time
+                        meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -85,7 +89,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             if upload_status:
                 try:
                     try:
+                        upload_start_time = time.time()
                         await tracker_class.upload(meta, disctype)
+                        upload_duration = time.time() - upload_start_time
+                        meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -105,7 +112,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             if upload_status:
                 try:
                     try:
+                        upload_start_time = time.time()
                         await tracker_class.upload(meta, disctype)
+                        upload_duration = time.time() - upload_start_time
+                        meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -151,7 +161,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             if upload_status:
                 thr = THR(config=config)
                 try:
+                    upload_start_time = time.time()
                     await thr.upload(meta, disctype)
+                    upload_duration = time.time() - upload_start_time
+                    meta[f'{tracker}_upload_duration'] = upload_duration
                 except Exception as e:
                     console.print(f"[red]Upload failed: {e}")
                     console.print(traceback.format_exc())
@@ -167,7 +180,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     groupID = meta.get('ptp_groupID', None)
                     ptpUrl, ptpData = await ptp.fill_upload_form(groupID, meta)
                     try:
+                        upload_start_time = time.time()
                         await ptp.upload(meta, ptpUrl, ptpData, disctype)
+                        upload_duration = time.time() - upload_start_time
+                        meta[f'{tracker}_upload_duration'] = upload_duration
                         await asyncio.sleep(5)
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
@@ -187,8 +203,21 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        # Run all tracker tasks concurrently
-        await asyncio.gather(*(process_single_tracker(tracker) for tracker in enabled_trackers))
+        # Run all tracker tasks concurrently with individual error handling
+        tasks = []
+        for tracker in enabled_trackers:
+            task = asyncio.create_task(process_single_tracker(tracker))
+            tasks.append((tracker, task))
+
+        # Wait for all tasks to complete, but don't let one tracker's failure stop others
+        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+
+        # Log any exceptions that occurred
+        for (tracker, _), result in zip(tasks, results):
+            if isinstance(result, Exception):
+                console.print(f"[red]{tracker} encountered an error: {result}[/red]")
+                if meta.get('debug'):
+                    console.print(traceback.format_exception(type(result), result, result.__traceback__))
     else:
         # Process each tracker sequentially
         for tracker in enabled_trackers:
@@ -199,7 +228,13 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             for tracker, status in meta.get('tracker_status', {}).items():
                 try:
                     if 'status_message' in status:
-                        print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                        message = f"{tracker}: {redact_private_info(status['status_message'])}"
+                        if config["DEFAULT"].get("show_upload_duration", False) or meta.get('upload_timer', False):
+                            duration = meta.get(f'{tracker}_upload_duration')
+                            if duration and isinstance(duration, (int, float)):
+                                color = "#21ff00" if duration < 5 else "#9fd600" if duration < 10 else "#cfaa00" if duration < 15 else "#f17100" if duration < 20 else "#ff0000"
+                                message += f" [[{color}]{duration:.2f}s[/{color}]]"
+                        console.print(message)
                 except Exception as e:
                     console.print(f"[red]Error printing {tracker} status message: {e}[/red]")
         elif not meta.get('print_tracker_links', True):
@@ -211,12 +246,13 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
         try:
             for tracker, status in meta.get('tracker_status', {}).items():
                 try:
+                    message = None
                     if tracker == "MTV" and 'status_message' in status and "data error" not in str(status['status_message']):
-                        console.print(f"[green]{str(status['status_message'])}[/green]")
+                        message = f"[green]{str(status['status_message'])}[/green]"
                     if 'torrent_id' in status:
                         tracker_class = tracker_class_map[tracker](config=config)
                         torrent_url = tracker_class.torrent_url
-                        console.print(f"[green]{torrent_url}{status['torrent_id']}[/green]")
+                        message = f"[green]{torrent_url}{status['torrent_id']}[/green]"
                     else:
                         if (
                             'status_message' in status
@@ -224,12 +260,19 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                             and "data error" not in str(status['status_message'])
                             and tracker != "MTV"
                         ):
-                            print(f"{tracker}: {redact_private_info(status['status_message'])}")
+                            message = f"{tracker}: {redact_private_info(status['status_message'])}"
                         elif 'status_message' in status and "data error" in str(status['status_message']):
                             console.print(f"[red]{tracker}: {str(status['status_message'])}[/red]")
                         else:
                             if 'skipping' in status and not status['skipping']:
                                 console.print(f"[red]{tracker} gave no useful message.")
+                    if message is not None:
+                        if config["DEFAULT"].get("show_upload_duration", False) or meta.get('upload_timer', False):
+                            duration = meta.get(f'{tracker}_upload_duration')
+                            if duration and isinstance(duration, (int, float)):
+                                color = "#21ff00" if duration < 5 else "#9fd600" if duration < 10 else "#cfaa00" if duration < 15 else "#f17100" if duration < 20 else "#ff0000"
+                                message += f" [[{color}]{duration:.2f}s[/{color}]]"
+                        console.print(message)
                 except Exception as e:
                     console.print(f"[red]Error printing {tracker} data: {e}[/red]")
             console.print("[green]All tracker uploads processed.[/green]")

@@ -262,6 +262,10 @@ config = {
         # set true to not delete existing meta.json file before running
         "keep_meta": False,
 
+        # Whether or not to print how long the upload process took for each tracker
+        # Useful for knowing which trackers are slowing down the overall upload process
+        "show_upload_duration": True,
+
         # Set true to print the tracker api messages from uploads
         "print_tracker_messages": False,
 

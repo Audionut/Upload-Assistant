@@ -94,34 +94,35 @@ class CBR(UNIT3D):
         tag_lower = meta["tag"].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
-        audio_tag = ""
-        if meta.get("audio_languages"):
-            audio_languages = set(meta["audio_languages"])
+        if not meta.get('is_disc'):
+            audio_tag = ""
+            if meta.get("audio_languages"):
+                audio_languages = set(meta["audio_languages"])
 
-            if any(lang.lower() == "portuguese" or lang == "português" for lang in audio_languages):
-                if len(audio_languages) >= 3:
-                    audio_tag = " MULTI"
-                elif len(audio_languages) == 2:
-                    audio_tag = " DUAL"
-                else:
-                    audio_tag = ""
+                if any(lang.lower() == "portuguese" or lang == "português" for lang in audio_languages):
+                    if len(audio_languages) >= 3:
+                        audio_tag = " MULTI"
+                    elif len(audio_languages) == 2:
+                        audio_tag = " DUAL"
+                    else:
+                        audio_tag = ""
 
-            if audio_tag:
-                if "-" in cbr_name:
-                    parts = cbr_name.rsplit("-", 1)
+                if audio_tag:
+                    if "-" in cbr_name:
+                        parts = cbr_name.rsplit("-", 1)
 
-                    custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
-                    if custom_tag and custom_tag in name:
-                        match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
-                        if match and match.group(1) != meta["tag"]:
-                            original_group_tag = match.group(1)
-                            cbr_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
+                        custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
+                        if custom_tag and custom_tag in name:
+                            match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
+                            if match and match.group(1) != meta["tag"]:
+                                original_group_tag = match.group(1)
+                                cbr_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
+                            else:
+                                cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
                         else:
                             cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
                     else:
-                        cbr_name = f"{parts[0]}{audio_tag}-{parts[1]}"
-                else:
-                    cbr_name += audio_tag
+                        cbr_name += audio_tag
 
         if meta["tag"] == "" or any(
             invalid_tag in tag_lower for invalid_tag in invalid_tags

@@ -85,7 +85,7 @@ class MTV():
                 tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
                 torrent_create = f"[{self.tracker}]"
 
-                create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+                await create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
             else:

@@ -58,6 +58,27 @@ class ANT:
             flags.append('Remux')
         return flags
 
+    async def get_tags(self, meta):
+        tags = []
+        if meta.get('genres', []):
+            genres = meta['genres']
+            # Handle both string and list formats
+            if isinstance(genres, str):
+                tags.append(genres)
+            else:
+                for genre in genres:
+                    tags.append(genre)
+        elif meta.get('imdb_info', {}):
+            imdb_genres = meta['imdb_info'].get('genres', [])
+            # Handle both string and list formats
+            if isinstance(imdb_genres, str):
+                tags.append(imdb_genres)
+            else:
+                for genre in imdb_genres:
+                    tags.append(genre)
+
+        return tags
+
     async def get_type(self, meta):
         antType = None
         imdb_info = meta.get('imdb_info', {})
@@ -121,7 +142,7 @@ class ANT:
         if torrent_file_size_kib > 250:  # 250 KiB
             console.print("[yellow]Existing .torrent exceeds 250 KiB and will be regenerated to fit constraints.")
             meta['max_piece_size'] = '128'  # 128 MiB
-            create_torrent(meta, Path(meta['path']), "ANT", tracker_url=tracker_url)
+            await create_torrent(meta, Path(meta['path']), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
@@ -149,6 +170,10 @@ class ANT:
         if meta['scene']:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
+
+        tags = await self.get_tags(meta)
+        if tags:
+            data.update({'tags[]': tags})
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
@@ -415,10 +440,39 @@ class ANT:
                         data = response.json()
                         imdb_tmdb_list = []
                         items = data.get('item', [])
+
+                        matched_item = None
                         if len(items) == 1:
-                            each = items[0]
-                            imdb_id = each.get('imdb')
-                            tmdb_id = each.get('tmdb')
+                            matched_item = items[0]
+                        elif len(items) > 1:
+                            # Try to match filename from the files in each result
+                            for item in items:
+                                files = item.get('files', [])
+                                for file in files:
+                                    file_name = file.get('name', '')
+
+                                    # Try exact match first (with extension)
+                                    if filename.lower() == file_name.lower():
+                                        matched_item = item
+                                        break
+
+                                    # Try base filename match (without extension)
+                                    base_filename = os.path.splitext(filename)[0]
+                                    base_file_name = os.path.splitext(file_name)[0]
+                                    if base_filename.lower() == base_file_name.lower():
+                                        matched_item = item
+                                        break
+                                if matched_item:
+                                    break
+
+                            if not matched_item:
+                                if meta['debug']:
+                                    console.print("[yellow]Could not match filename, returning empty list")
+                                imdb_tmdb_list = []
+
+                        if matched_item:
+                            imdb_id = matched_item.get('imdb')
+                            tmdb_id = matched_item.get('tmdb')
                             if imdb_id and imdb_id.startswith('tt'):
                                 imdb_num = int(imdb_id[2:])
                                 imdb_tmdb_list.append({'imdb_id': imdb_num})

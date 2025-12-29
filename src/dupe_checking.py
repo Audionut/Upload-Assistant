@@ -35,7 +35,7 @@ async def filter_dupes(dupes, meta, tracker_name):
     for d in dupes:
         if isinstance(d, str):
             # Case 1: Simple string (just name)
-            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None, 'download': None})
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None, 'download': None, 'flags': []})
         elif isinstance(d, dict):
             # Create a base entry with default values
             entry = {
@@ -45,7 +45,8 @@ async def filter_dupes(dupes, meta, tracker_name):
                 'file_count': 0,
                 'trumpable': d.get('trumpable', False),
                 'link': d.get('link', None),
-                'download': d.get('download', None)
+                'download': d.get('download', None),
+                'flags': d.get('flags', [])
             }
 
             # Case 3: Dict with files and file_count
@@ -130,7 +131,23 @@ async def filter_dupes(dupes, meta, tracker_name):
             files = [f.strip() for f in str(files[0]).split(',')]
         file_count = entry.get('file_count', 0)
         normalized = await normalize_filename(each)
-        file_hdr = await refine_hdr_terms(normalized)
+
+        # Use flags field if available for more accurate HDR detection
+        flags = entry.get('flags', [])
+        if flags:
+            # If flags are provided, use them directly for HDR information
+            file_hdr = set()
+            for flag in flags:
+                flag_upper = str(flag).upper()
+                if flag_upper == 'DV':
+                    file_hdr.add('DV')
+                elif flag_upper in ['HDR', 'HDR10', 'HDR10+']:
+                    file_hdr.add('HDR')
+            if meta['debug']:
+                console.log(f"[debug] Using flags for HDR detection: {flags} -> {file_hdr}")
+        else:
+            # Fall back to parsing filename for HDR terms
+            file_hdr = await refine_hdr_terms(normalized)
 
         if meta['debug']:
             console.log(f"[debug] Evaluating dupe: {each}")
@@ -138,6 +155,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(f"[debug] Target resolution: {target_resolution}")
             console.log(f"[debug] Target source: {target_source}")
             console.log(f"[debug] File HDR terms: {file_hdr}")
+            console.log(f"[debug] Flags: {flags}")
             console.log(f"[debug] Target HDR terms: {target_hdr}")
             console.log(f"[debug] Target Season: {target_season}")
             console.log(f"[debug] Target Episode: {target_episode}")

@@ -272,8 +272,8 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 elif tracker_to_process == "ANT":
                     imdb_tmdb_list = await tracker_class_map['ANT'](config=config).get_data_from_files(meta)
                     if imdb_tmdb_list:
+                        console.print(f"[green]Found ANT IDs: {imdb_tmdb_list}[/green]")
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                            console.print(f"[green]Found ANT IDs: {imdb_tmdb_list}[/green]")
                             try:
                                 if cli_ui.ask_yes_no("Do you want to use these ids?", default=True):
                                     for d in imdb_tmdb_list:
@@ -285,6 +285,11 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                                 await cleanup()
                                 reset_terminal()
                                 sys.exit(1)
+                        else:
+                            for d in imdb_tmdb_list:
+                                meta.update(d)
+                            found_match = True
+                            meta['matched_tracker'] = "ANT"
                     await save_tracker_timestamp("ANT", base_dir=base_dir)
                 else:
                     meta = await process_tracker(tracker_to_process, meta, only_id)

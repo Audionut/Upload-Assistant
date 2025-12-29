@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from datetime import datetime
+import asyncio
 import torf
 from torf import Torrent
 import random
@@ -129,7 +130,7 @@ def build_mkbrr_exclude_string(root_folder, filelist):
     return exclude_str
 
 
-def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=None):
+async def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=None):
     if piece_size is None:
         try:
             piece_size = meta.get('max_piece_size', None)
@@ -283,44 +284,48 @@ def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=Non
             if meta['debug']:
                 console.print(f"[cyan]mkbrr cmd: {cmd}")
 
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            # Run mkbrr subprocess in thread to avoid blocking
+            def run_mkbrr():
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
-            total_pieces = 100  # Default to 100% for scaling progress
-            pieces_done = 0
-            mkbrr_start_time = time.time()
+                total_pieces = 100  # Default to 100% for scaling progress
+                pieces_done = 0
+                mkbrr_start_time = time.time()
 
-            for line in process.stdout:
-                line = line.strip()
+                for line in process.stdout:
+                    line = line.strip()
 
-                # Detect hashing progress, speed, and percentage
-                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
-                if match:
-                    speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
-                    pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
+                    # Detect hashing progress, speed, and percentage
+                    match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
+                    if match:
+                        speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
+                        pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
 
-                    # Try to extract the ETA directly if it's in the format [elapsed:remaining]
-                    eta_match = re.search(r'\[(\d+)s:(\d+)s\]', line)
-                    if eta_match:
-                        eta_seconds = int(eta_match.group(2))
-                        eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
-                    else:
-                        # Fallback to calculating ETA if not directly available
-                        elapsed_time = time.time() - mkbrr_start_time
-                        if pieces_done > 0:
-                            estimated_total_time = elapsed_time / (pieces_done / 100)
-                            eta_seconds = max(0, estimated_total_time - elapsed_time)
+                        # Try to extract the ETA directly if it's in the format [elapsed:remaining]
+                        eta_match = re.search(r'\[(\d+)s:(\d+)s\]', line)
+                        if eta_match:
+                            eta_seconds = int(eta_match.group(2))
                             eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
                         else:
-                            eta = "--:--"  # Placeholder if we can't estimate yet
+                            # Fallback to calculating ETA if not directly available
+                            elapsed_time = time.time() - mkbrr_start_time
+                            if pieces_done > 0:
+                                estimated_total_time = elapsed_time / (pieces_done / 100)
+                                eta_seconds = max(0, estimated_total_time - elapsed_time)
+                                eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
+                            else:
+                                eta = "--:--"  # Placeholder if we can't estimate yet
 
-                    cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
+                        cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
 
-                # Detect final output line
-                if "Wrote" in line and ".torrent" in line and meta['debug']:
-                    console.print(f"[bold cyan]{line}")  # Print the final torrent file creation message
+                    # Detect final output line
+                    if "Wrote" in line and ".torrent" in line and meta['debug']:
+                        console.print(f"[bold cyan]{line}")  # Print the final torrent file creation message
 
-            # Wait for the process to finish
-            result = process.wait()
+                # Wait for the process to finish
+                return process.wait()
+
+            result = await asyncio.to_thread(run_mkbrr)
 
             # Verify the torrent was actually created
             if result != 0:
@@ -342,12 +347,18 @@ def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=Non
             raise sys.exit(1)
 
     overall_start_time = time.time()
-    initial_size = 0
-    if os.path.isfile(path):
-        initial_size = os.path.getsize(path)
-    elif os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            initial_size += sum(os.path.getsize(os.path.join(root, f)) for f in files if os.path.isfile(os.path.join(root, f)))
+
+    # Calculate initial size
+    def calculate_size():
+        size = 0
+        if os.path.isfile(path):
+            size = os.path.getsize(path)
+        elif os.path.isdir(path):
+            for root, dirs, files in os.walk(path):
+                size += sum(os.path.getsize(os.path.join(root, f)) for f in files if os.path.isfile(os.path.join(root, f)))
+        return size
+
+    initial_size = await asyncio.to_thread(calculate_size)
 
     piece_size = calculate_piece_size(initial_size, 32768, 134217728, meta, piece_size=piece_size)
 
@@ -366,9 +377,13 @@ def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=Non
         piece_size=piece_size
     )
 
-    torrent.generate(callback=torf_cb, interval=5)
-    torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent", overwrite=True)
-    torrent.verify_filesize(path)
+    # Run torrent generation in thread to avoid blocking the event loop
+    def generate_torrent():
+        torrent.generate(callback=torf_cb, interval=5)
+        torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent", overwrite=True)
+        torrent.verify_filesize(path)
+
+    await asyncio.to_thread(generate_torrent)
 
     total_elapsed_time = time.time() - overall_start_time
     formatted_time = time.strftime("%H:%M:%S", time.gmtime(total_elapsed_time))

@@ -97,6 +97,8 @@ async def process_all_trackers(meta):
 
                 if tracker_name not in {"PTP"} and not local_tracker_status['skipped']:
                     dupes = await tracker_class.search_existing(local_meta, disctype)
+                    # set trackers here so that they are not double checked later with cross seeding
+                    meta.setdefault('dupe_checked_trackers', []).append(tracker_name)
                     if local_meta['tracker_status'][tracker_name].get('other', False):
                         local_tracker_status['other'] = True
                 elif tracker_name == "PTP":

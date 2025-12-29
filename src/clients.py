@@ -1352,6 +1352,7 @@ class Clients():
                             torrents_info = await response.json()
                             if len(torrents_info) > 0:
                                 break
+                            console.print(f"[green]Added {tracker} torrent via qui.")
                         else:
                             pass  # Continue waiting
                 else:
@@ -1377,7 +1378,8 @@ class Clients():
         if not cross:
             try:
                 if proxy_url:
-                    console.print("[yellow]No qui proxy resume support....")
+                    if meta['debug']:
+                        console.print("[yellow]No qui proxy resume support....")
                     # async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/resume",
                     #                            data={'hashes': torrent.infohash}) as response:
                     #    if response.status != 200:

@@ -1485,7 +1485,7 @@ class PTP():
             piece_size = '16'
             torrent_create = f"[{self.tracker}]"
 
-            create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+            await create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
         # Proceed with the upload process

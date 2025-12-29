@@ -16,7 +16,6 @@ from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
-from tqdm.asyncio import tqdm
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -497,11 +496,7 @@ class AZTrackerBase:
         if local_files and remaining_slots > 0:
             paths = local_files[:remaining_slots]
 
-            for path in tqdm(
-                paths,
-                total=len(paths),
-                desc=f'{self.tracker}: Uploading screenshots'
-            ):
+            for path in paths:
                 result = await upload_local_file(path)
                 if result:
                     results.append(result)
@@ -511,11 +506,7 @@ class AZTrackerBase:
             remaining_slots = max(0, limit - len(results))
             links = image_links[:remaining_slots]
 
-            for url in tqdm(
-                links,
-                total=len(links),
-                desc=f'{self.tracker}: Uploading screenshots'
-            ):
+            for url in links:
                 result = await upload_remote_file(url)
                 if result:
                     results.append(result)

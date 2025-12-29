@@ -377,7 +377,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             filename = os.path.basename(meta['filelist'][0]) if meta.get('filelist') else None
             imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, filename=filename)
 
-        if imdb or tmdb:
+        if (imdb and int(imdb) != 0) or (tmdb and int(tmdb) != 0):
             if not meta['unattended']:
                 console.print(f"[green]{tracker_name} data found: IMDb ID: {imdb}, TMDb ID: {tmdb}[/green]")
                 if await prompt_user_for_confirmation(f"Do you want to use the ID's found on {tracker_name}?"):
@@ -479,15 +479,25 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                             console.print(f"[red]Failed to delete BHD NFO file: {e}[/red]")
                     found_match = False
             else:
-                console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
-                found_match = True
-                if meta.get('image_list'):
-                    valid_images = await check_images_concurrently(meta.get('image_list'), meta)
-                    if valid_images:
-                        meta['image_list'] = valid_images
-                    else:
-                        meta['image_list'] = []
+                # Only treat as match if we actually got valid IDs
+                meta['imdb_id'] = int(imdb) if imdb else meta.get('imdb_id', 0)
+                meta['tmdb_id'] = int(tmdb) if tmdb else meta.get('tmdb_id', 0)
+                if (meta.get('imdb_id') and int(meta.get('imdb_id')) != 0) or (meta.get('tmdb_id') and int(meta.get('tmdb_id')) != 0):
+                    console.print(f"[green]{tracker_name} data found: IMDb ID: {meta.get('imdb_id')}, TMDb ID: {meta.get('tmdb_id')}[/green]")
+                    found_match = True
+                    if meta.get('image_list'):
+                        valid_images = await check_images_concurrently(meta.get('image_list'), meta)
+                        if valid_images:
+                            meta['image_list'] = valid_images
+                        else:
+                            meta['image_list'] = []
+                else:
+                    if meta['debug']:
+                        console.print(f"[yellow]{tracker_name} returned invalid IDs (both 0), not using as match[/yellow]")
+                    found_match = False
         else:
+            if meta['debug']:
+                console.print(f"[yellow]{tracker_name} returned invalid IDs (both 0)[/yellow]")
             found_match = False
 
     elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX", "RF", "OTW", "YUS", "DP", "SP"]:

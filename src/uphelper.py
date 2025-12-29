@@ -14,9 +14,6 @@ from src.trackersetup import tracker_class_map
 
 class UploadHelper:
     async def dupe_check(self, dupes, meta, tracker_name):
-        # set trackers here so that they are not double checked later with cross seeding
-        meta.setdefault('dupe_checked_trackers', []).append(tracker_name)
-
         if not dupes:
             if meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
