@@ -154,7 +154,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
 
                     if int(response_json.get('resultsCount', 0)) > 0:
                         first_result = response_json['results'][0]
-                        imdb_str = first_result['imdbId']
+                        imdb_str = first_result.get('imdbId')
                         if imdb_str and imdb_str == str(meta.get('imdb_id')).zfill(7) and meta.get('imdb_id') != 0:
                             meta['scene'] = True
                             release_name = first_result['release']
@@ -184,10 +184,18 @@ async def is_scene(video, meta, imdb=None, lower=False):
                                         console.print("[yellow]Failed to download NFO file:", e)
 
                         return release_name
+                    else:
+                        if meta['debug']:
+                            console.print("[yellow]SRRDB: No match found with lower/tag search")
+                        return None
 
                 except Exception as e:
                     console.print(f"[yellow]SRRDB search failed: {e}")
                     return None
+            else:
+                if meta['debug']:
+                    console.print("[yellow]SRRDB: Missing name or tag for lower/tag search")
+                return None
 
     check_predb = config['DEFAULT'].get('check_predb', False)
     if not scene and check_predb and not meta.get('emby_debug', False):
