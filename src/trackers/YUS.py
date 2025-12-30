@@ -19,8 +19,8 @@ class YUS(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            'KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus',
-            'NhaNc3', 'nHD', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'SANTi', 'VXT', 'Will1869', 'x0r',
+            'KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus', 'NhaNc3',
+            'nHD', 'PANDEMONiUM', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'SANTi', 'VXT', 'Will1869', 'x0r',
             'XS', 'YIFY', 'YTS', 'ZKBL', 'ZmN', 'ZMNT', 'D3US', 'B3LLUM', 'FGT', 'd3g']
         pass
 
