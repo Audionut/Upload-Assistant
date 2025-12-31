@@ -23,7 +23,7 @@ class YUS(UNIT3D):
 +           'KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus', 'NhaNc3', 'nHD',
 +           'NorTekst', 'NORViNE', 'PANDEMONiUM', 'PiTBULL', 'RAPiDCOWS', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'ROCKETRACCOON',
 +           'SANTi', 'SHOWTiME', 'SOOSi', 'SUXWIC', 'TOXVIO', 'TWA', 'VXT', 'Will1869', 'x0r', 'XS',
-+           'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT]
++           'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
         pass
 
     async def get_additional_checks(self, meta):
