@@ -20,10 +20,12 @@ class YUS(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             'ADDICTION', 'B3LLUM', 'BANDOLEROS', 'BigEasy', 'CINEMAXIS', 'D3US', 'd3g', 'DUMMESCHWEDEN', 'FGT', 'GRANiTEN',
-+           'KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus', 'NhaNc3', 'nHD',
-+           'NorTekst', 'NORViNE', 'PANDEMONiUM', 'PiTBULL', 'RAPiDCOWS', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'ROCKETRACCOON',
-+           'SANTi', 'SHOWTiME', 'SOOSi', 'SUXWIC', 'TOXVIO', 'TWA', 'VXT', 'Will1869', 'x0r', 'XS',
-+           'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
+        self.banned_groups = [
+            'ADDICTION', 'B3LLUM', 'BANDOLEROS', 'BigEasy', 'CINEMAXIS', 'D3US', 'd3g', 'DUMMESCHWEDEN', 'FGT', 'GRANiTEN',
+            'KiNGDOM', 'Lama', 'MeGusta', 'MezRips', 'mHD', 'mRS', 'msd', 'NeXus', 'NhaNc3', 'nHD',
+            'NorTekst', 'NORViNE', 'PANDEMONiUM', 'PiTBULL', 'RAPiDCOWS', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'ROCKETRACCOON',
+            'SANTi', 'SHOWTiME', 'SOOSi', 'SUXWIC', 'TOXVIO', 'TWA', 'VXT', 'Will1869', 'x0r', 'XS',
+            'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
         pass
 
     async def get_additional_checks(self, meta):
