@@ -920,7 +920,7 @@ class TRACKER_SETUP:
             try:
                 url = tracker_instance.trumping_url
             except AttributeError:
-                return  # tracker without trumping url not supported
+                return False  # tracker without trumping url not supported
             reported_torrent_id = f"{meta.get('trumpable_id', '')}"
             if not reported_torrent_id and meta.get('trumpable', ''):
                 reported_torrent_id = f"{meta['trumpable'].get('id', '')}"
@@ -946,11 +946,23 @@ class TRACKER_SETUP:
                     return False
                 else:
                     console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
-                    return True
             else:
                 if meta['debug']:
                     console.print(f"[bold green]Will make a trumpable report for this upload at {trackers}[/bold green]")
+
+        if not meta.get('tv_pack'):
+            console.print("Aither requires comparisons to be provided for trump reports. In description or adding links?")
+            where_compare = input("Enter 'd' if in description, 'l' if you want to paste links, or press anything else to skip trumping:")
+            if where_compare.lower() == 'd':
                 return True
+            elif where_compare.lower() == 'l':
+                compare_links = input("Paste comparison links separated by commas:")
+                meta['compare_links'] = [link.strip() for link in compare_links.split(',') if link.strip()]
+                return True
+            else:
+                console.print("[yellow]Skipping trump report creation as no comparison method provided.[/yellow]")
+                return False
+        return False
 
     async def get_tracker_trumps(self, meta, tracker, url, reported_torrent_id):
         if meta['debug']:
@@ -1090,6 +1102,14 @@ class TRACKER_SETUP:
             message = "Upload Assistant trumpable release trump"
         else:
             message = "Upload Assistant is trumping this torrent for reasons Audionut has not correctly caught. User selected yes at a prompt."
+
+        if not meta['tv_pack']:
+            if 'compare_links' in meta and isinstance(meta['compare_links'], list) and meta['compare_links']:
+                message += "\n\nComparison links:\n"
+                for link in meta['compare_links']:
+                    message += f"{link}\n"
+            else:
+                message += " - User says comparison links are in the description."
 
         payload = {
             'reported_torrent_id': reported_torrent_id,
