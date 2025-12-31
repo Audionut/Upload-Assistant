@@ -902,6 +902,227 @@ class TRACKER_SETUP:
 
         return match_found
 
+    async def process_trumpables(self, meta, trackers):
+        if isinstance(trackers, str):
+            trackers = [trackers.strip().upper()]
+        elif isinstance(trackers, list):
+            trackers = [s.upper() for s in trackers]
+        else:
+            console.print("[red]Invalid trackers input format.[/red]")
+            return False
+        for tracker in trackers:
+            tracker_class = tracker_class_map.get(tracker)
+            if not tracker_class:
+                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+                return False
+
+            tracker_instance = tracker_class(self.config)
+            try:
+                url = tracker_instance.trumping_url
+            except AttributeError:
+                return  # tracker without trumping url not supported
+            reported_torrent_id = f"{meta.get('trumpable_id', '')}"
+            if not reported_torrent_id and meta.get('trumpable', ''):
+                reported_torrent_id = f"{meta['trumpable'].get('id', '')}"
+            if not reported_torrent_id and meta.get('matched_episode_ids', []):
+                reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
+            if not reported_torrent_id:
+                console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
+                return False
+            else:
+                meta['reported_torrent_id'] = reported_torrent_id
+
+            trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
+            if status != 200:
+                console.print(f"[bold red]Failed to retrieve trumping reports from {tracker}. HTTP Status: {status}[/bold red]")
+                return False
+            if trumping_reports:
+                console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping reports on {tracker} for this release[/bold yellow]")
+                upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default="no")
+                if not upload:
+                    console.print(f"[bold red]Removing {tracker} from upload list[/bold red]")
+                    for tracker in trackers:
+                        meta['trackers'].remove(tracker)
+                    return False
+                else:
+                    console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
+                    return True
+            else:
+                if meta['debug']:
+                    console.print(f"[bold green]Will make a trumpable report for this upload at {trackers}[/bold green]")
+                return True
+
+    async def get_tracker_trumps(self, meta, tracker, url, reported_torrent_id):
+        if meta['debug']:
+            console.print(f"[bold green]Searching for trumps on {tracker}[/bold green]")
+        requests = []
+        status_code = None
+        headers = {
+            'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
+            'Accept': 'application/json'
+        }
+
+        params = {
+            'reported_torrent_id': f"{reported_torrent_id}",
+        }
+
+        all_data = []
+        next_cursor = None
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                while True:
+                    try:
+                        # Add query parameters for pagination
+
+                        response = await client.get(url=url, headers=headers, params=params)
+                        status_code = response.status_code
+                        console.print(f"url: {response.url}")
+                        console.print(f"status: {response.status_code}")
+                        console.print(f"headers: {response.headers}")
+                        console.print(f"params: {params}")
+                        console.print(f"response text: {response.text}")
+                        console.print(f"headers: {headers}")
+
+                        if response.status_code == 200:
+                            data = response.json()
+                            console.print(f"response json: {data}")
+
+                            if 'data' in data and isinstance(data['data'], list):
+                                page_data = data['data']
+                            elif 'results' in data and isinstance(data['results'], list):
+                                page_data = data['results']
+                            else:
+                                console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
+                                return requests, status_code
+
+                            all_data.extend(page_data)
+
+                            # Check for pagination
+                            meta_info = data.get('meta', {})
+                            if not isinstance(meta_info, dict):
+                                console.print(f"[bold red]Unexpected 'meta' format: {type(meta_info)}[/bold red]")
+                                break
+
+                            next_cursor = meta_info.get('next_cursor')
+                            if not next_cursor:
+                                break  # Exit loop if there are no more pages
+                            else:
+                                # Rest between page fetches
+                                console.print(f"[cyan]Fetched {len(page_data)} trumping reports, waiting 0.2 seconds before next page...[/cyan]")
+                                await asyncio.sleep(0.2)
+                        else:
+                            console.print(f"[bold red]Failed to search trumps on {tracker}. HTTP Status: {response.status_code} - {response.text}[/bold red]")
+                            break
+
+                    except httpx.RequestError as e:
+                        console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
+                        break
+
+                # Process all collected data
+                try:
+                    for each in all_data:
+                        result = {
+                            'id': each.get('id'),
+                            'type': each.get('type'),
+                            'title': each.get('title'),
+                            'solved': each.get('solved'),
+                            'reported_torrents': each.get('reported_torrents', []),
+                            'trumping_torrent': each.get('trumping_torrent', {}),
+                        }
+                        requests.append(result)
+
+                except Exception as e:
+                    console.print(f"[bold red]Error processing response data: {e}[/bold red]")
+                    return requests, status_code
+
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 10 seconds")
+            status_code = None
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            status_code = None
+
+        if meta['debug']:
+            console.print(f"Total trumping reports retrieved: {len(requests)}")
+
+        return requests, status_code
+
+    async def make_trumpable_report(self, meta, tracker):
+        """Create a trump report by POSTing to the /create endpoint"""
+        if meta['debug']:
+            console.print(f"[bold green]Creating trump report on {tracker}[/bold green]")
+
+        tracker_class = tracker_class_map.get(tracker)
+        if not tracker_class:
+            console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+            return False
+
+        tracker_instance = tracker_class(self.config)
+        try:
+            base_url = tracker_instance.trumping_url
+        except AttributeError:
+            console.print(f"[red]No trumping URL found for {tracker}[/red]")
+            return False
+
+        # Replace /filter with /create
+        create_url = base_url.replace('/filter', '/create')
+
+        headers = {
+            'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        reported_torrent_id = meta['reported_torrent_id']
+        try:
+            trumping_torrent_id = meta['tracker_status'][tracker]['torrent_id']
+        except KeyError:
+            console.print(f"[red]No torrent ID found in meta for trumping torrent on {tracker}[/red]")
+            console.print("[red]Either the upload failed, or you're in debug[/red]")
+            return False
+
+        if meta['tv_pack']:
+            message = "Upload Assistant season pack trump"
+        elif meta.get('exact_trump_match', False):
+            message = "Upload Assistant exact filename trump"
+        elif meta.get('trumpable_release', False):
+            message = "Upload Assistant trumpable release trump"
+        else:
+            message = "Upload Assistant is trumping this torrent for reasons Audionut has not correctly caught. User selected yes at a prompt."
+
+        payload = {
+            'reported_torrent_id': reported_torrent_id,
+            'trumping_torrent_id': trumping_torrent_id,
+            'message': message
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url=create_url, headers=headers, json=payload)
+
+                console.print(f"[cyan]POST URL: {create_url}[/cyan]")
+                console.print(f"[cyan]Payload: {payload}[/cyan]")
+                console.print(f"[cyan]Status: {response.status_code}[/cyan]")
+                console.print(f"[cyan]Response: {response.text}[/cyan]")
+
+                if response.status_code in (200, 201):
+                    console.print(f"[bold green]Successfully created trump report on {tracker}[/bold green]")
+                    return True
+                else:
+                    console.print(f"[bold red]Failed to create trump report. HTTP Status: {response.status_code}[/bold red]")
+                    return False
+
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 10 seconds[/bold red]")
+            return False
+        except httpx.RequestError as e:
+            console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
+            return False
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}[/bold red]")
+            return False
+
 
 tracker_class_map = {
     'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,

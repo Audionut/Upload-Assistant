@@ -79,6 +79,7 @@ class UNIT3D:
                 if response.status_code == 200:
                     data = response.json()
                     for each in data['data']:
+                        torrent_id = each.get('id', None)
                         attributes = each.get('attributes', {})
                         if not meta['is_disc']:
                             result = {
@@ -88,7 +89,11 @@ class UNIT3D:
                                 'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
                                 'trumpable': attributes.get('trumpable', False),
                                 'link': attributes.get('details_link', None),
-                                'download': attributes.get('download_link', None)
+                                'download': attributes.get('download_link', None),
+                                'id': torrent_id,
+                                'type': attributes.get('type', None),
+                                'res': attributes.get('resolution', None),
+                                'internal': attributes.get('internal', False)
                             }
                         else:
                             result = {
@@ -98,7 +103,11 @@ class UNIT3D:
                                 'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
                                 'trumpable': attributes.get('trumpable', False),
                                 'link': attributes.get('details_link', None),
-                                'download': attributes.get('download_link', None)
+                                'download': attributes.get('download_link', None),
+                                'id': torrent_id,
+                                'type': attributes.get('type', None),
+                                'res': attributes.get('resolution', None),
+                                'internal': attributes.get('internal', False)
                             }
                         dupes.append(result)
                 else:

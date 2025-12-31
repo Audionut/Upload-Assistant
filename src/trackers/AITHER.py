@@ -21,6 +21,7 @@ class AITHER(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.requests_url = f'{self.base_url}/api/requests/filter'
+        self.trumping_url = f'{self.base_url}/api/trumping-reports/filter'
         self.banned_groups = []
         pass
 
@@ -67,5 +68,8 @@ class AITHER(UNIT3D):
         elif meta['is_disc'] == "DVD" or (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             aither_name = aither_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
             aither_name = aither_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
+
+        if meta.get('exact_trump_match', False):
+            aither_name = aither_name + " - TRUMP"
 
         return {'name': aither_name}

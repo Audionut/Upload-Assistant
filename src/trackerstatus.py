@@ -113,13 +113,25 @@ async def process_all_trackers(meta):
 
                 if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                     dupes = await filter_dupes(dupes, local_meta, tracker_name)
-                    meta['we_asked'] = False
-                    is_dupe = await helper.dupe_check(dupes, local_meta, tracker_name)
+                    if local_meta.get('matched_episode_ids', []):
+                        meta['matched_episode_ids'] = local_meta['matched_episode_ids']
+                    if local_meta.get('trumpable', []):
+                        meta['trumpable'] = local_meta['trumpable']
+                    is_dupe, local_meta = await helper.dupe_check(dupes, local_meta, tracker_name)
                     if is_dupe:
                         local_tracker_status['dupe'] = True
 
-                    if tracker_name == "AITHER" and 'aither_trumpable' in local_meta:
-                        meta['aither_trumpable'] = local_meta['aither_trumpable']
+                    if tracker_name == "AITHER":
+                        if local_meta.get('aither_trumpable', []):
+                            meta['aither_trumpable'] = local_meta['aither_trumpable']
+                        if local_meta.get('trumpable', []):
+                            meta['trumpable'] = local_meta['trumpable']
+                        if local_meta.get('were_trumping', False):
+                            meta['were_trumping'] = local_meta['were_trumping']
+                        if local_meta.get('trumpable_release', False):
+                            meta['trumpable_release'] = local_meta['trumpable_release']
+                        if local_meta.get('exact_trump_match', False):
+                            meta['exact_trump_match'] = local_meta['exact_trump_match']
 
                     if f'{tracker_name}_cross_seed' in local_meta:
                         meta[f'{tracker_name}_cross_seed'] = local_meta[f'{tracker_name}_cross_seed']
@@ -192,7 +204,6 @@ async def process_all_trackers(meta):
             else:
                 local_tracker_status['upload'] = True
                 successful_trackers += 1
-            meta['we_asked'] = False
 
         return tracker_name, local_tracker_status
 

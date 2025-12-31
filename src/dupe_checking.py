@@ -35,7 +35,7 @@ async def filter_dupes(dupes, meta, tracker_name):
     for d in dupes:
         if isinstance(d, str):
             # Case 1: Simple string (just name)
-            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None, 'download': None, 'flags': []})
+            processed_dupes.append({'name': d, 'size': None, 'files': [], 'file_count': 0, 'trumpable': False, 'link': None, 'download': None, 'flags': [], 'id': None, 'type': None, 'res': None, 'internal': 0})
         elif isinstance(d, dict):
             # Create a base entry with default values
             entry = {
@@ -46,7 +46,11 @@ async def filter_dupes(dupes, meta, tracker_name):
                 'trumpable': d.get('trumpable', False),
                 'link': d.get('link', None),
                 'download': d.get('download', None),
-                'flags': d.get('flags', [])
+                'flags': d.get('flags', []),
+                'id': d.get('id', None),
+                'type': d.get('type', None),
+                'res': d.get('res', None),
+                'internal': d.get('internal', 0),
             }
 
             # Case 3: Dict with files and file_count
@@ -131,6 +135,8 @@ async def filter_dupes(dupes, meta, tracker_name):
             files = [f.strip() for f in str(files[0]).split(',')]
         file_count = entry.get('file_count', 0)
         normalized = await normalize_filename(each)
+        type_id = entry.get('type', None)
+        res_id = entry.get('res', None)
 
         # Use flags field if available for more accurate HDR detection
         flags = entry.get('flags', [])
@@ -165,6 +171,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(f"  'repack' in each.lower(): {'repack' in each.lower()}")
             console.log(f"[debug] meta['uuid']: {meta.get('uuid', '')}")
             console.log(f"[debug] normalized encoder: {normalized_encoder}")
+            console.log(f"[debug] type_id: {type_id}, res_id: {res_id}")
             console.log(f"[debug] link: {entry.get('link', None)}")
             console.log(f"[debug] files: {files[:10]}{'...' if len(files) > 10 else ''}")
             console.log(f"[debug] file_count: {file_count}")
@@ -185,6 +192,16 @@ async def filter_dupes(dupes, meta, tracker_name):
             meta[matched_reason_key] = reason
             if file_count:
                 meta[matched_count_key] = file_count
+
+        # Aither-specific trumping logic - no internal checking, if it's marked trumpable, it's trumpable
+        if tracker_name == "AITHER" and entry.get('trumpable', False) and res_id and target_resolution == res_id:
+            meta['trumpable'].append({
+                'id': entry.get('id'),
+                'name': each,
+                'link': entry.get('link'),
+                'tracker': tracker_name,
+                'internal': entry.get('internal', 0)
+            })
 
         if not meta.get('is_disc'):
             for file in filenames:
@@ -295,9 +312,6 @@ async def filter_dupes(dupes, meta, tracker_name):
                 meta['filename_match'] = f"{entry.get('name')} = {entry.get('link', None)}"
                 return False
 
-        if tracker_name == "AITHER" and entry.get('trumpable', False):
-            meta['trumpable'] = entry.get('link', None)
-
         if tracker_name in ["BHD", "MTV", "RTF", "AR"]:
             if ('2160p' in target_resolution and '2160p' in each) and ('framestor' in each.lower() or 'framestor' in meta['uuid'].lower()):
                 return False
@@ -384,9 +398,44 @@ async def filter_dupes(dupes, meta, tracker_name):
                     return True
 
         if meta.get('category') == "TV":
-            season_episode_match = await is_season_episode_match(normalized, target_season, target_episode)
+            season_episode_match, is_season = await is_season_episode_match(normalized, target_season, target_episode)
             if meta['debug']:
                 console.log(f"[debug] Season/Episode match result: {season_episode_match}")
+                console.log(f"[debug] is_season: {is_season}")
+            # Aither episode trumping logic
+            if is_season and tracker_name == "AITHER":
+                if type_id and res_id:
+                    if meta['debug']:
+                        console.log(f"[debug] Checking trumping: target_source='{target_source.lower()}', type_id='{type_id.lower() if type_id else None}', target_res='{target_resolution}', res_id='{res_id}'")
+                    if target_source.lower() in type_id.lower() and target_resolution == res_id:
+                        if meta['debug']:
+                            console.log(f"[debug] Episode with matching source and resolution found for trumping: {each}")
+
+                        is_internal = False
+                        if entry.get('internal', 0) == 1:
+                            if config['TRACKERS']['AITHER'].get('internal', False) is True:
+                                if meta['tag'][1:] in config['TRACKERS']['AITHER'].get('internal_groups', []) and meta['tag'][1:].lower() in normalized:
+                                    is_internal = True
+                            if not is_internal:
+                                if meta['debug']:
+                                    console.log("[debug] Skipping internal episode for trumping since you're not the internal uploader.")
+
+                        if not entry.get('internal', False) or is_internal:
+                            # Store the matched episode ID/s for later use
+                            if 'matched_episode_ids' not in meta:
+                                meta['matched_episode_ids'] = []
+                            if entry.get('id'):
+                                meta['matched_episode_ids'].append({
+                                    'id': entry.get('id'),
+                                    'name': each,
+                                    'link': entry.get('link'),
+                                    'tracker': tracker_name,
+                                    'internal': entry.get('internal', 0)
+                                })
+                                if meta['debug']:
+                                    console.log(f"[debug] Added episode ID {entry.get('id')} to matched list")
+
+            # Normal season/episode matching
             if not season_episode_match:
                 await log_exclusion("season/episode mismatch", each)
                 return True
@@ -471,18 +520,19 @@ async def is_season_episode_match(filename, target_season, target_episode):
 
     # If `target_episode` is empty, match only season packs
     if not target_episodes:
-        return bool(season_pattern and re.search(season_pattern, filename, re.IGNORECASE)) and is_season_pack
+        season_matches = bool(season_pattern and re.search(season_pattern, filename, re.IGNORECASE))
+        return (season_matches and is_season_pack, season_matches)
 
     # If `target_episode` is provided, match both season packs and episode files
     if season_pattern:
         if is_season_pack:
-            return bool(re.search(season_pattern, filename, re.IGNORECASE))  # Match season pack
+            return (bool(re.search(season_pattern, filename, re.IGNORECASE)), True)  # Match season pack
         if episode_patterns:
-            return bool(re.search(season_pattern, filename, re.IGNORECASE)) and any(
+            return (bool(re.search(season_pattern, filename, re.IGNORECASE)) and any(
                 re.search(ep, filename, re.IGNORECASE) for ep in episode_patterns
-            )  # Match episode file
+            ), False)  # Match episode file
 
-    return False  # No match
+    return (False, False)  # No match
 
 
 async def refine_hdr_terms(hdr):

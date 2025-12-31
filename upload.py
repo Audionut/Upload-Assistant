@@ -990,7 +990,7 @@ async def do_the_thing(base_dir):
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
             await process_meta(meta, base_dir, bot=bot)
-
+            tracker_setup = TRACKER_SETUP(config=config)
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 if config['DEFAULT'].get('cross_seeding', True):
                     await process_cross_seeds(meta)
@@ -1014,6 +1014,12 @@ async def do_the_thing(base_dir):
             else:
                 console.print()
                 console.print("[yellow]Processing uploads to trackers.....")
+                meta['are_we_trump_reporting'] = False
+                if meta.get('were_trumping', False):
+                    console.print("[yellow]Checking for existing trump reports on Aither.....")
+                    is_trumping = await tracker_setup.process_trumpables(meta, trackers=meta['trackers'])
+                    if is_trumping:
+                        meta['are_we_trump_reporting'] = True
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
@@ -1072,10 +1078,14 @@ async def do_the_thing(base_dir):
                 else:
                     await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta)
 
+            if meta.get('are_we_trump_reporting', False):
+                console.print()
+                console.print("[yellow]Submitting trumpable report to Aither.....")
+                await tracker_setup.make_trumpable_report(meta, "AITHER")
+
             find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
             if find_requests and meta['trackers'] not in ([], None, "") and not (meta.get('site_check', False) and not meta['is_disc']):
                 console.print("[green]Searching for requests on supported trackers.....")
-                tracker_setup = TRACKER_SETUP(config=config)
                 if meta.get('site_check', False):
                     trackers = meta['requested_trackers']
                     if meta['debug']:

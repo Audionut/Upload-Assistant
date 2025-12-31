@@ -11,17 +11,9 @@ import re
 import gc
 import json
 from concurrent.futures import ThreadPoolExecutor
-import traceback
 import httpx
 import aiofiles
-
-try:
-    from data.config import config
-except Exception:
-    print("[red]Error: Unable to import config. Ensure the config file is in the correct location.[/red]")
-    print("[red]Follow the setup instructions: https://github.com/Audionut/Upload-Assistant")
-    traceback.print_exc()
-    exit(1)
+from data.config import config
 
 
 async def upload_image_task(args):

@@ -14,10 +14,11 @@ from src.trackersetup import tracker_class_map
 
 class UploadHelper:
     async def dupe_check(self, dupes, meta, tracker_name):
+        meta['were_trumping'] = False
         if not dupes:
             if meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
-            return False
+            return False,  meta
         else:
             tracker_class = tracker_class_map[tracker_name](config=config)
             try:
@@ -34,7 +35,7 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
-            if meta.get('trumpable', False):
+            if meta.get('trumpable', []) or meta.get('matched_episode_ids', []):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
                 if trumpable_dupes:
                     trumpable_text = "\n".join([
@@ -42,40 +43,51 @@ class UploadHelper:
                         for d in trumpable_dupes
                     ])
                     console.print("[bold red]Trumpable found![/bold red]")
-                    console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+                elif meta.get('matched_episode_ids', []):
+                    # Only display the first matched episode
+                    first_match = meta['matched_episode_ids'][0]
+                    trumpable_text = f"{first_match['name']} - {first_match['link']}" if 'link' in first_match else first_match['name']
+                    console.print("[bold red]Trumpable found based on episode matching![/bold red]")
 
-                    meta['aither_trumpable'] = [
-                        {'name': d.get('name'), 'link': d.get('link')}
-                        for d in trumpable_dupes
-                    ]
-
-                # Remove trumpable dupes from the main list
-                dupes = [d for d in dupes if not (isinstance(d, dict) and d.get('trumpable'))]
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join([
                     f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d and d['link'] is not None else (d['name'] if isinstance(d, dict) else d)
                     for d in dupes
                 ])
-                if not dupe_text and meta.get('trumpable', False):
-                    console.print("[yellow]Please check the trumpable entries above to see if you want to upload, and report the trumpable torrent if you upload.[/yellow]")
+
+                if meta.get('trumpable', []) or meta.get('matched_episode_ids', []):
+                    console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+                    console.print("[yellow]Please check the trumpable entries above to see if you want to upload[/yellow]")
+                    console.print("[yellow]You will have the option to report the trumpable torrent if you upload.[/yellow]")
                     if meta.get('dupe', False) is False:
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            upload = cli_ui.ask_yes_no("Are you trumping this release?", default=False)
+                            if upload:
+                                meta['we_asked'] = True
+                                meta['were_trumping'] = True
+                                meta['trumpable_release'] = True
+                                if meta.get('filename_match', False) and meta.get('file_count_match', False):
+                                    meta['exact_trump_match'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
                             reset_terminal()
                             sys.exit(1)
-                    else:
-                        upload = True
-                        meta['we_asked'] = False
-                else:
+
+                if not meta.get('were_trumping', False):
                     if meta.get('filename_match', False) and meta.get('file_count_match', False):
                         console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            if tracker_name == "AITHER":
+                                upload = cli_ui.ask_yes_no("Are you trumping this exact match?", default=False)
+                                if upload:
+                                    meta['we_asked'] = True
+                                    meta['were_trumping'] = True
+                                    meta['trumpable'] = [d for d in dupes if isinstance(d, dict) and meta.get('filename_match', False)]
+                                    meta['exact_trump_match'] = True
+                            else:
+                                upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                                meta['we_asked'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
@@ -152,14 +164,14 @@ class UploadHelper:
                             break
 
             if upload is False:
-                return True
+                return True, meta
             else:
                 for each in dupes:
                     each_name = each['name'] if isinstance(each, dict) else each
                     if each_name == meta['name']:
                         meta['name'] = f"{meta['name']} DUPE?"
 
-                return False
+                return False, meta
 
     async def get_confirmation(self, meta):
         if meta['debug'] is True:
