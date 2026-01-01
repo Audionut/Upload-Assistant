@@ -278,17 +278,21 @@ class ACM(UNIT3D):
                         params=params,
                         downurl=response_data['data']
                     )
+                    return True
                 except httpx.TimeoutException:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
+                    return False
                 except httpx.RequestError as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
+                    return False
                 except Exception:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
-                    return
+                    return False
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]ACM Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            return True
 
     async def search_existing(self, meta, disctype):
         dupes = []

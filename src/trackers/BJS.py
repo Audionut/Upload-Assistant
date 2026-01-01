@@ -1242,4 +1242,4 @@ class BJS:
                 success_text="action=download&id=",
             )
 
-        return
+        return True

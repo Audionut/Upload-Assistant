@@ -1511,6 +1511,7 @@ class PTP():
                 console.log(url)
                 console.log(redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True  # Debug mode - simulated success
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
@@ -1538,8 +1539,10 @@ class PTP():
                     with open(failure_path, 'w', encoding='utf-8') as f:
                         f.write(responsetext)
                     meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path}"
+                    return False
 
                 # having UA add the torrent link as a comment.
                 if match:
                     meta['tracker_status'][self.tracker]['status_message'] = response.url
                     await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_url, response.url)
+                    return True

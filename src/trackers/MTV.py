@@ -160,10 +160,12 @@ class MTV():
                         if "torrents.php" in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = response.url
                             await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+                            return True
                         elif 'https://www.morethantv.me/upload.php' in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = "data error - Still on upload page - upload may have failed"
                             if "error" in response.text.lower() or "failed" in response.text.lower():
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Upload failed - check form data"
+                            return False
                         elif str(response.url) == "https://www.morethantv.me/" or str(response.url) == "https://www.morethantv.me/index.php":
                             if "Project Luminance" in response.text:
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Not logged in - session may have expired"
@@ -171,18 +173,21 @@ class MTV():
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?"
                             elif "Integrity constraint violation" in response.text:
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Proper site bug"
+                            return False
                         else:
                             if "authkey.php" in str(response.url):
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - No DL link in response, It may have uploaded, check manually."
                             else:
                                 console.print(f"response URL: {response.url}")
                                 console.print(f"response status: {response.status_code}")
+                            return False
                     except Exception:
                         meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
                         print(traceback.print_exc())
+                        return False
             except (httpx.RequestError, Exception) as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
-                return
+                return False
         else:
             console.print("[cyan]MTV Request Data:")
             debug_data = data.copy()
@@ -190,7 +195,8 @@ class MTV():
                 debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        return
+            return True  # Debug mode - simulated success
+        return False
 
     async def edit_desc(self, meta):
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8') as f:

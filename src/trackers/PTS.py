@@ -207,4 +207,4 @@ class PTS:
             success_status_code="302, 303",
         )
 
-        return
+        return True

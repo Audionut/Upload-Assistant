@@ -209,13 +209,16 @@ class ANT:
                             response_data = response.json()
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
-                            return
+                            return False
                         if "Success" not in response_data:
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data}"
+                            return False
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
                             meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
+                            return True
                         else:
                             meta['tracker_status'][self.tracker]['status_message'] = response_data
+                            return True
                     elif response.status_code == 400:
                         if "exact same" in response.text.lower():
                             folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"
@@ -224,30 +227,36 @@ class ANT:
                                 f"Use the files from {folder} to assist with manual upload.\n"
                                 "raw_url image links from the image_data.json file"
                             )
+                            return False
                         else:
                             response_data = {
                                 "error": f"Unexpected status code: {response.status_code}",
                                 "response_content": response.text
                             }
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                            return False
                     elif response.status_code == 502:
                         response_data = {
                             "error": "Bad Gateway",
                             "site seems down": "https://ant.trackerstatus.info/"
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",
                             "response_content": response.text
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
             else:
                 console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
+            return False
 
     async def get_audio(self, meta):
         '''

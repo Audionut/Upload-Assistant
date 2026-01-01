@@ -684,4 +684,4 @@ class BT:
             success_status_code="200, 302, 303",
         )
 
-        return
+        return True
