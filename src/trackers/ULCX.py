@@ -92,9 +92,11 @@ class ULCX(UNIT3D):
             for track_one in audio_tracks:
                 # This is technically O(n^2) but the number of audio tracks is usually very small
                 for track_two in audio_tracks:
-                    if (track_one["Format_Commercial_IfAny"] == "DTS-HD Master Audio" and track_two["Format_Commercial_IfAny"] != "DTS-HD Master Audio" and track_two["Format"] == "DTS") and (
-                        (track_one["Duration"], track_one["FrameRate"], track_one["FrameCount"], track_one["Language"]) ==
-                        (track_two["Duration"], track_two["FrameRate"], track_two["FrameCount"], track_two["Language"])
+                    if (track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio" and track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two["Format"] == "DTS") and (
+                            (track_one.get("Duration"), track_one.get("FrameRate"), track_one.get("FrameCount"),
+                             track_one.get("Language")) ==
+                            (track_two.get("Duration"), track_two.get("FrameRate"), track_two.get("FrameCount"),
+                             track_two.get("Language"))
                     ):
                         if not warned_once:
                             warned_once = True
