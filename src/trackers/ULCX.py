@@ -65,11 +65,11 @@ class ULCX(UNIT3D):
             return False
 
         mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
-        if len([track for track in mediainfo_tracks if track["@type"] == "Audio"]) > 1:
+        if len([track for track in mediainfo_tracks if track["@type"] == "Audio" and track["Default"] == "Yes"]) > 1:
             console.print(f"[bold red]Multiple default audio tracks detected, skipping {self.tracker} upload.[/bold red]")
             return False
 
-        if len([track for track in mediainfo_tracks if track["@type"] == "Text"]) > 1:
+        if len([track for track in mediainfo_tracks if track["@type"] == "Text" and track["Default"] == "Yes"]) > 1:
             console.print(f"[bold red]Multiple default subtitle tracks detected, skipping {self.tracker} upload.[/bold red]")
             return False
 
