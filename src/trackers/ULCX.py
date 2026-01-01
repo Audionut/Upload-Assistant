@@ -100,7 +100,7 @@ class ULCX(UNIT3D):
                     ):
                         if not warned_once:
                             warned_once = True
-                            console.print(f"[bold red]DTS audio track appears to be a lossy duplicate of DTS-HD MA track.[/bold red]")
+                            console.print("[bold red]DTS audio track appears to be a lossy duplicate of DTS-HD MA track.[/bold red]")
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                                     pass
