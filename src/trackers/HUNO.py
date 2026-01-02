@@ -96,6 +96,7 @@ class HUNO(UNIT3D):
             "imagebam.com": "bam",
         }
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        return
 
     async def get_description(self, meta):
         if 'HUNO_images_key' in meta:
