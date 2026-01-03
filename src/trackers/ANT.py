@@ -210,7 +210,7 @@ class ANT:
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
                             return False
-                        if "Success" not in response_data:
+                        if "success" not in response_data:
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data}"
                             return False
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
