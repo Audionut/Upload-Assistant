@@ -74,21 +74,26 @@ class NBL():
                     if response.status_code in [200, 201]:
                         try:
                             response_data = response.json()
+                            meta['tracker_status'][self.tracker]['status_message'] = response_data
+                            return True
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: NBL json decode error, the API is probably down"
-                            return
+                            return False
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",
                             "response_content": response.text
                         }
-                    meta['tracker_status'][self.tracker]['status_message'] = response_data
+                        meta['tracker_status'][self.tracker]['status_message'] = response_data
+                    return False
             else:
                 console.print("[cyan]NBL Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True  # Debug mode - simulated success
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
+            return False
 
     async def search_existing(self, meta, disctype):
         if meta['category'] != 'TV':

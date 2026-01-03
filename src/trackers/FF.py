@@ -635,4 +635,4 @@ class FF:
             additional_files=files
         )
 
-        return
+        return True

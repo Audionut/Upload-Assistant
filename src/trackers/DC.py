@@ -237,7 +237,6 @@ class DC:
     async def upload(self, meta, disctype):
         data = await self.fetch_data(meta)
         torrent_title = await self.edit_name(meta)
-        status_message = ''
         response = None
 
         if not meta.get('debug', False):
@@ -256,7 +255,7 @@ class DC:
                     if response.status_code == 200 and response_data.get('id'):
                         torrent_id = str(response_data['id'])
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
-                        status_message = response_data.get('message')
+                        meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
 
                         await self.common.download_tracker_torrent(
                             meta,
@@ -264,24 +263,29 @@ class DC:
                             headers=self.session.headers,
                             downurl=f'{self.api_base_url}/download/{torrent_id}'
                         )
+                        return True
 
                     else:
-                        status_message = f"data error: {response_data.get('message', 'Unknown API error.')}"
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data.get('message', 'Unknown API error.')}"
+                        return False
 
             except httpx.HTTPStatusError as e:
-                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                return False
             except httpx.TimeoutException:
-                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                return False
             except httpx.RequestError as e:
                 resp_text = getattr(getattr(e, 'response', None), 'text', 'No response received')
-                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {resp_text}'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {resp_text}'
+                return False
             except Exception as e:
                 resp_text = response.text if response is not None else 'No response received'
-                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {resp_text}'
-                return
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {resp_text}'
+                return False
 
         else:
+            console.print("[cyan]DC Request Data:")
             console.print(data)
-            status_message = 'Debug mode enabled, not uploading'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+            meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading'
+            return True  # Debug mode - simulated success

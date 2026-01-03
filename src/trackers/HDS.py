@@ -354,4 +354,4 @@ class HDS:
             additional_files=files,
         )
 
-        return
+        return True

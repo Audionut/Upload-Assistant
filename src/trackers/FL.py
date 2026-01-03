@@ -118,7 +118,7 @@ class FL():
                 if fl_name_manually == "":
                     console.print('No proper name given')
                     console.print("Aborting...")
-                    return
+                    return False
                 else:
                     fl_name = fl_name_manually
 
@@ -172,6 +172,7 @@ class FL():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True  # Debug mode - simulated success
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
@@ -186,12 +187,13 @@ class FL():
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(session, id, torrent_path)
+                        return True
                     else:
                         console.print(data)
                         console.print("\n\n")
                         console.print(up.text)
                         raise UploadException(f"Upload to FL Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
-        return
+        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []

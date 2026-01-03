@@ -97,17 +97,18 @@ class BHDTV():
                 pprint(data)
                 console.print(traceback.print_exc())
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]BHDTV Request Data:")
             pprint(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+
         # # adding my anounce url to torrent.
-        if 'view' in response.json()['data']:
+        if response and 'view' in response.json()['data']:
             await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), response.json()['data']['view'])
+            open_torrent.close()
+            return True
         else:
-            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag,
-                                                      self.config['TRACKERS']['BHDTV'].get('my_announce_url'),
-                                                      "Torrent Did not upload")
-        open_torrent.close()
+            open_torrent.close()
+            return False
 
     async def get_cat_id(self, meta):
         category_id = '0'

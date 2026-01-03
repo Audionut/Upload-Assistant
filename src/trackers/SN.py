@@ -108,20 +108,24 @@ class SN():
                     meta['tracker_status'][self.tracker]['status_message'] = response.json()['link']
                     if 'link' in response.json():
                         await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.json()['link']))
+                        return True
                     else:
                         console.print("[red]No Link in Response")
+                        return False
                 else:
                     console.print("[red]Did not upload successfully")
                     console.print(response.json())
+                    return False
             except Exception:
                 console.print("[red]Error! It may have uploaded, go check")
                 console.print(data)
                 console.print_exception()
-                return
+                return False
         else:
             console.print("[cyan]Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()

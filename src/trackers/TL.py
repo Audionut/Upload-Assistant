@@ -335,9 +335,17 @@ class TL:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         if self.api_upload:
-            await self.upload_api(meta)
+            is_uploaded = await self.upload_api(meta)
+            if not is_uploaded:
+                return False
+            else:
+                return True
         else:
-            await self.cookie_upload(meta)
+            is_uploaded = await self.cookie_upload(meta)
+            if not is_uploaded:
+                return False
+            else:
+                return True
 
     async def upload_api(self, meta):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -389,9 +397,13 @@ class TL:
                     meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                     await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
+                    return True
 
             else:
                 console.print(data)
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                return True  # Debug mode - simulated success
+        return False
 
     async def get_cookie_upload_data(self, meta):
         tvMazeURL = ''
@@ -433,10 +445,10 @@ class TL:
 
         if meta['debug']:
             console.print(data)
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
         else:
             try:
-                status_message = ''
-
                 async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as f:
                     torrent_bytes = await f.read()
                 files = {
@@ -449,21 +461,22 @@ class TL:
                 if response.status_code == 302 and 'location' in response.headers:
                     torrent_id = response.headers['location'].replace('/successfulupload?torrentID=', '')
                     torrent_url = f"{self.base_url}/torrent/{torrent_id}"
-                    status_message = 'Torrent uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
 
                     await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_list, torrent_url)
+                    return True
 
                 else:
-                    status_message = 'data error - Upload failed: No success redirect found.'
+                    meta['tracker_status'][self.tracker]['status_message'] = 'data error - Upload failed: No success redirect found.'
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
                     async with aiofiles.open(failure_path, "w", encoding="utf-8") as failure_file:
                         await failure_file.write(f"Status Code: {response.status_code}\n")
                         await failure_file.write(f"Headers: {response.headers}\n")
                         await failure_file.write(response.text)
                     console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
+                    return False
 
             except httpx.RequestError as e:
-                status_message = f'data error - {str(e)}'
-
-            meta['tracker_status'][self.tracker]['status_message'] = status_message
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error - {str(e)}'
+                return False

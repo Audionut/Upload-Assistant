@@ -401,7 +401,7 @@ class UNIT3D:
                             params=params,
                             downurl=response_data['data']
                         )
-                        break  # Success, exit retry loop
+                        return True  # Success
 
                 except httpx.HTTPStatusError as e:
                     # Check if upload already exists (can happen after timeout)
@@ -424,7 +424,7 @@ class UNIT3D:
                                     params=params,
                                     downurl=download_url
                                 )
-                                break  # Success, exit retry loop
+                                return True  # Success - found existing upload
                             else:
                                 console.print(f'[yellow]{self.tracker}: Could not extract existing torrent info from error response[/yellow]')
                         except Exception as parse_error:
@@ -440,7 +440,7 @@ class UNIT3D:
                             meta['tracker_status'][self.tracker]['status_message'] = (
                                 "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
                             )
-                        break  # Don't retry
+                        return False  # Auth/permission error
                     else:
                         # Retry other HTTP errors
                         if attempt < max_retries - 1:
@@ -455,6 +455,7 @@ class UNIT3D:
                                 )
                             else:
                                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                            return False  # HTTP error after all retries
                 except httpx.TimeoutException:
                     if attempt < max_retries - 1:
                         timeout = timeout * 2.00  # Increase timeout by 100% for next retry
@@ -463,6 +464,7 @@ class UNIT3D:
                         continue
                     else:
                         meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after multiple attempts'
+                        return False  # Timeout after all retries
                 except httpx.RequestError as e:
                     if attempt < max_retries - 1:
                         console.print(f'[yellow]{self.tracker}: Request error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]')
@@ -470,13 +472,16 @@ class UNIT3D:
                         continue
                     else:
                         meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                        return False  # Request error after all retries
                 except Exception as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
-                    return
+                    return False  # Generic error
         else:
             console.print(f'[cyan]{self.tracker} Request Data:')
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
 
     async def get_torrent_id(self, response_data):
         """Matches /12345.abcde and returns 12345"""

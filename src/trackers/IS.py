@@ -296,4 +296,4 @@ class IS:
             success_text="Thank you",
         )
 
-        return
+        return True

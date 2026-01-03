@@ -285,6 +285,7 @@ class HDB():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True  # Debug mode - simulated success
             else:
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
@@ -298,12 +299,13 @@ class HDB():
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(id, torrent_file_path)
+                        return True
                     else:
                         console.print(data)
                         console.print("\n\n")
                         console.print(up.text)
                         raise UploadException(f"Upload to HDB Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
-        return
+        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []

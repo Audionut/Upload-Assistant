@@ -143,23 +143,32 @@ class BHD():
                             torrent_id = match.group(1)
                             meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             details_link = f"https://beyond-hd.me/details/{torrent_id}"
+                            meta['tracker_status'][self.tracker]['status_message'] = response.json()
                         else:
-                            console.print("[yellow]No valid details link found in status_message.")
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: No valid details link found in status_message."
+                            return False
+                    else:
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: No status_message in response."
+                        return False
 
-                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f"Error: {e}"
-                return
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
+                return False
         else:
             console.print("[cyan]BHD Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            return True
 
         if details_link:
             try:
                 await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), details_link)
+                return True
             except Exception as e:
                 console.print(f"Error while editing the torrent file: {e}")
+                return False
+        else:
+            return False
 
     async def get_cat_id(self, category_name):
         category_id = {

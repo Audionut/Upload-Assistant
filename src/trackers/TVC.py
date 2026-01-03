@@ -392,19 +392,23 @@ class TVC():
                     self.config['TRACKERS'][self.tracker].get('announce_url'),
                     f"https://tvchaosuk.com/torrents/{t_id}"
                 )
+                return True
 
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 30 seconds'
+                return False
             except httpx.RequestError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {(response.text) if response else "No response"}'
+                return False
             except Exception as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {(response.text) if response else "No response"}'
-                return
+                return False
 
         else:
             console.print("[cyan]TVC Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            return True  # Debug mode - simulated success
 
     def get_audio_languages(self, mi):
         """

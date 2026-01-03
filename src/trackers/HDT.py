@@ -348,4 +348,4 @@ class HDT:
             additional_files=files,
         )
 
-        return
+        return True

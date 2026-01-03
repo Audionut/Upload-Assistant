@@ -420,8 +420,8 @@ class AR():
         # Load cookies for upload
         upload_cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not upload_cookies:
-            meta['tracker_status'][self.tracker]['status_message'] = "data error:Failed to load cookies for upload"
-            return
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: Failed to load cookies for upload"
+            return False
 
         # Use centralized handle_upload from CookieAuthUploader
         await self.cookie_uploader.handle_upload(
@@ -436,6 +436,7 @@ class AR():
             id_pattern=r'torrents\.php\?id=(\d+)',
             success_status_code="200",
         )
+        return True
 
     async def parse_mediainfo_async(self, video_path, template_path):
         """Parse MediaInfo asynchronously using thread executor"""
