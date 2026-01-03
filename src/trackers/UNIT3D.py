@@ -21,6 +21,7 @@ class UNIT3D:
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url', '')
         self.api_key = tracker_config.get('api_key', '')
+        self.signature = ""
         pass
 
     async def get_additional_checks(self, meta):
