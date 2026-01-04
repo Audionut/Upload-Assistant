@@ -88,7 +88,7 @@ class BHDTV():
             }
 
             if meta['debug'] is False:
-                response = requests.post(url=self.upload_url, data=data, files=files)
+                response = requests.post(url=self.upload_url, data=data, files=files, timeout=30)
                 parsed = None
                 if response:
                     try:
@@ -101,6 +101,8 @@ class BHDTV():
                         console.print(redact_private_info(data))
                         console.print(traceback.print_exc())
 
+                open_torrent.close()
+
                 # # adding my anounce url to torrent.
                 data = parsed.get('data') if isinstance(parsed, dict) else None
                 if data and 'view' in data:
@@ -112,6 +114,7 @@ class BHDTV():
                 console.print("[cyan]BHDTV Request Data:")
                 console.print(redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                return True
         finally:
             open_torrent.close()
 
