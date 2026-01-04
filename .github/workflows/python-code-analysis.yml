@@ -134,7 +134,7 @@ jobs:
       run: |
         echo "Running dependency security check with Safety..."
         pip install safety
-        safety check --output safety-results.txt || echo "Safety scan completed with results saved"
+        safety check > safety-results.txt 2>&1 || echo "Safety scan completed with results saved"
         
         # Display results
         cat safety-results.txt

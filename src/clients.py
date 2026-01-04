@@ -1800,7 +1800,7 @@ class Clients():
                                         f.write(torrent_file_content)
 
                                     # Validate the .torrent file before saving as BASE.torrent
-                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
+                                    valid, _ = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
                                     if not valid:
                                         if meta['debug']:
                                             console.print(f"[bold red]Validation failed for {torrent_file_path}")

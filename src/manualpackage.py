@@ -91,4 +91,3 @@ async def package(meta):
         return url
     except Exception:
         return False
-    return
