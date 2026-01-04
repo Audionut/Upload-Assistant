@@ -12,7 +12,7 @@ deluge-client==1.10.2
 discord.py==2.6.4
 ffmpeg-python==0.2.0
 flask==3.1.2
-flask-cors>=4.0.0
+flask-cors>=6.0.0
 guessit==3.8.0
 httpx==0.28.1
 Jinja2==3.1.6
