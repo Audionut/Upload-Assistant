@@ -204,14 +204,15 @@ class DC:
         return dc_name
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'digitalcore']
+        approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'sharex']
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
             'beyondhd.co': 'bhd',
             'imgur.com': 'imgur',
             'postimg.cc': 'postimg',
-            'digitalcore.club': 'digitalcore'
+            'digitalcore.club': 'sharex',
+            'img.digitalcore.club': 'sharex'
         }
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
         return
