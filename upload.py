@@ -763,7 +763,7 @@ def get_local_version(version_file):
 def get_remote_version(url):
     """Fetches the latest version information from the remote repository."""
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         if response.status_code == 200:
             content = response.text
             match = re.search(r'__version__\s*=\s*"([^"]+)"', content)

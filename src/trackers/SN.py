@@ -101,7 +101,7 @@ class SN():
         }
 
         if meta['debug'] is False:
-            response = requests.request("POST", url=self.upload_url, data=data, files=files)
+            response = requests.request("POST", url=self.upload_url, data=data, files=files, timeout=30)
 
             try:
                 if response.json().get('success'):

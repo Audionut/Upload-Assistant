@@ -291,7 +291,7 @@ class HDB():
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
                     session.cookies.update(await common.parseCookieFile(cookiefile))
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=30)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -422,7 +422,7 @@ class HDB():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if resp.text.find("""<a href="/logout.php">Logout</a>""") != -1:
                     return True
                 else:
@@ -439,7 +439,7 @@ class HDB():
             'passkey': self.passkey,
             'id': id
         }
-        r = requests.get(url=api_url, data=json.dumps(data))
+        r = requests.get(url=api_url, data=json.dumps(data), timeout=30)
         filename = r.json()['data'][0]['filename']
 
         # Download new .torrent
@@ -449,7 +449,7 @@ class HDB():
             'id': id
         }
 
-        r = requests.get(url=download_url, params=params)
+        r = requests.get(url=download_url, params=params, timeout=30)
         with open(torrent_path, "wb") as tor:
             tor.write(r.content)
         return
@@ -716,7 +716,7 @@ class HDB():
                         chunk_size_mb = sum(os.path.getsize(all_image_files[int(key.split('[')[1].split(']')[0])]) for key, _ in chunk) / (1024 * 1024)
                         console.print(f"[cyan]Uploading chunk {chunk_idx + 1}/{len(chunks)} ({len(fileList)} images, {chunk_size_mb:.2f} MiB)")
 
-                    response = requests.post(url, data=data, files=fileList)
+                    response = requests.post(url, data=data, files=fileList, timeout=30)
                     if response.status_code == 200:
                         console.print(f"[green]Chunk {chunk_idx + 1}/{len(chunks)} upload successful!")
                         bbcode += response.text
@@ -725,7 +725,7 @@ class HDB():
                         uploadSuccess = False
                         break
             else:
-                response = requests.post(url, data=data, files=files)
+                response = requests.post(url, data=data, files=files, timeout=30)
                 if response.status_code == 200:
                     console.print("[green]Upload successful!")
                     bbcode = response.text
@@ -772,7 +772,7 @@ class HDB():
         }
 
         try:
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=30)
             if response.ok:
                 response_json = response.json()
 
@@ -845,7 +845,7 @@ class HDB():
             # console.print(f"[yellow]Using this data: {data}")
 
         try:
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=30)
             if response.ok:
                 try:
                     response_json = response.json()

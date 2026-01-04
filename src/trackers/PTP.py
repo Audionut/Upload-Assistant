@@ -111,7 +111,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         console.print(f"[green]Searching PTP for: [bold yellow]{filename}[/bold yellow]")
 
@@ -182,7 +182,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         try:
             if response.status_code == 200:
@@ -216,7 +216,7 @@ class PTP():
         }
         url = 'https://passthepopcorn.me/torrents.php'
         console.print(f"[yellow]Requesting description from {url} with ID {ptp_torrent_id}")
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
 
         ptp_desc = response.text
@@ -269,7 +269,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url=url, headers=headers, params=params)
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
         await asyncio.sleep(1)
         try:
             response = response.json()
@@ -341,7 +341,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = "https://passthepopcorn.me/ajax.php"
-        response = requests.get(url=url, params=params, headers=headers)
+        response = requests.get(url=url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         tinfo = {}
         try:
@@ -446,7 +446,7 @@ class PTP():
         headers = {'referer': 'https://ptpimg.me/index.php'}
         url = "https://ptpimg.me/upload.php"
 
-        response = requests.post(url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=payload, timeout=30)
         try:
             response = response.json()
             ptpimg_code = response[0]['code']
@@ -1279,7 +1279,7 @@ class PTP():
             if os.path.exists(cookiefile):
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                uploadresponse = session.get("https://passthepopcorn.me/upload.php")
+                uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
                 loggedIn = await self.validate_login(uploadresponse)
             else:
                 console.print("[yellow]PTP Cookies not found. Creating new session.")
@@ -1518,7 +1518,7 @@ class PTP():
                     cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
                     with open(cookiefile, 'rb') as cf:
                         session.cookies.update(pickle.load(cf))
-                    response = session.post(url=url, data=data, headers=headers, files=files)
+                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=30)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text
                 # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.

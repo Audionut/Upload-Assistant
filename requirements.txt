@@ -8,6 +8,7 @@ bencode.py==4.0.0
 cli-ui==0.19.0
 click==8.1.8
 cloudscraper==1.2.71
+defusedxml==0.7.1
 deluge-client==1.10.2
 discord.py==2.6.4
 ffmpeg-python==0.2.0

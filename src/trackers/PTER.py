@@ -45,7 +45,7 @@ class PTER():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
 
                 if resp.text.find("""<a href="#" data-url="logout.php" id="logout-confirm">""") != -1:
                     return True
@@ -225,7 +225,7 @@ class PTER():
             if os.path.exists(cookiefile):
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                r = session.get("https://s3.pterclub.com")
+                r = session.get("https://s3.pterclub.com", timeout=30)
                 loggedIn = await self.validate_login(r)
             else:
                 console.print("[yellow]Pterimg Cookies not found. Creating new session.")
@@ -273,7 +273,7 @@ class PTER():
                     files = {}
                     for i in range(len(images)):
                         files = {'source': open(images[i], 'rb')}
-                        req = session.post(f'{url}/json', data=data, files=files)
+                        req = session.post(f'{url}/json', data=data, files=files, timeout=30)
                         try:
                             res = req.json()
                         except json.decoder.JSONDecodeError:
@@ -385,7 +385,7 @@ class PTER():
                 if os.path.exists(cookiefile):
                     with requests.Session() as session:
                         session.cookies.update(await common.parseCookieFile(cookiefile))
-                        up = session.post(url=url, data=data, files=files)
+                        up = session.post(url=url, data=data, files=files, timeout=30)
                         torrentFile.close()
                         mi_dump.close()
 
@@ -401,7 +401,7 @@ class PTER():
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://pterclub.com/download.php?id={id}&passkey={self.passkey}"
-        r = requests.get(url=download_url)
+        r = requests.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)

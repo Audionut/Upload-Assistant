@@ -163,7 +163,7 @@ class TTG():
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
                     with open(cookiefile, 'rb') as cf:
                         session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=30)
                     torrentFile.close()
                     mi_dump.close()
 
@@ -250,7 +250,7 @@ class TTG():
             with requests.Session() as session:
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
@@ -270,7 +270,7 @@ class TTG():
             'passan': self.passan
         }
         with requests.Session() as session:
-            response = session.post(url, data=data)
+            response = session.post(url, data=data, timeout=30)
             await asyncio.sleep(0.5)
             if response.url.endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -346,7 +346,7 @@ class TTG():
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://totheglory.im/dl/{id}/{self.passkey}"
-        r = requests.get(url=download_url)
+        r = requests.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)

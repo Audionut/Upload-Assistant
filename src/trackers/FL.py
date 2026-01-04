@@ -178,7 +178,7 @@ class FL():
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
                     with open(cookiefile, 'rb') as cf:
                         session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=30)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -264,7 +264,7 @@ class FL():
             with requests.Session() as session:
                 with open(cookiefile, 'rb') as cf:
                     session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print(resp.url)
                 if resp.text.find("Logout") != -1:
@@ -276,7 +276,7 @@ class FL():
 
     async def login(self, cookiefile):
         with requests.Session() as session:
-            r = session.get("https://filelist.io/login.php")
+            r = session.get("https://filelist.io/login.php", timeout=30)
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
             validator = soup.find('input', {'name': 'validator'}).get('value')
@@ -286,7 +286,7 @@ class FL():
                 'password': self.password,
                 'unlock': '1',
             }
-            response = session.post('https://filelist.io/takelogin.php', data=data)
+            response = session.post('https://filelist.io/takelogin.php', data=data, timeout=30)
             await asyncio.sleep(0.5)
             index = 'https://filelist.io/index.php'
             response = session.get(index)
@@ -334,7 +334,7 @@ class FL():
                 files = []
                 for screen in screen_glob:
                     files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
                 final_desc = response.text.replace('\r\n', '\n')
             else:
                 # BD Description Generator
@@ -349,7 +349,7 @@ class FL():
                     files = []
                     for screen in screen_glob:
                         files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
                     final_desc += response.text.replace('\r\n', '\n')
             descfile.write(final_desc)
 

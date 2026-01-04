@@ -266,7 +266,7 @@ class THR():
                     # 'source' : base64.b64encode(open(image, "rb").read()).decode('utf8')
                 }
                 files = {'source': open(image, 'rb')}
-                response = requests.post(url, data=data, files=files)
+                response = requests.post(url, data=data, files=files, timeout=30)
                 try:
                     response = response.json()
                     # med_url = response['image']['medium']['url']
@@ -292,7 +292,7 @@ class THR():
                     'theme': self.config['TRACKERS']['THR'].get('pronfo_theme', 'gray'),
                     'rapi': self.config['TRACKERS']['THR'].get('pronfo_rapi_id')
                 }
-                response = requests.post(pronfo_url, data=data)
+                response = requests.post(pronfo_url, data=data, timeout=30)
                 try:
                     response = response.json()
                     if response.get('error', True) is False:
