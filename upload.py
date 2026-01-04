@@ -834,6 +834,21 @@ async def update_notification(base_dir):
 
 async def do_the_thing(base_dir):
     await asyncio.sleep(0.1)  # Ensure it's not racing
+
+    tmp_dir = os.path.join(base_dir, "tmp")
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
+    else:
+        # Ensure existing directory has secure permissions
+        os.chmod(tmp_dir, 0o700)
+
+    def ensure_secure_tmp_subdir(subdir_path):
+        """Ensure tmp subdirectories are created with secure permissions (0o700)"""
+        if not os.path.exists(subdir_path):
+            os.makedirs(subdir_path, mode=0o700, exist_ok=True)
+        else:
+            os.chmod(subdir_path, 0o700)
+
     bot = None
     meta = dict()
     paths = []
@@ -922,10 +937,13 @@ async def do_the_thing(base_dir):
 
                 tmp_path = os.path.join(base_dir, "tmp", os.path.basename(path))
 
+                # Ensure tmp subdirectory exists with secure permissions
+                ensure_secure_tmp_subdir(tmp_path)
+
                 if meta.get('delete_tmp', False) and os.path.exists(tmp_path):
                     try:
                         shutil.rmtree(tmp_path)
-                        os.makedirs(tmp_path, exist_ok=True)
+                        os.makedirs(tmp_path, mode=0o700, exist_ok=True)
                         if meta['debug']:
                             console.print(f"[yellow]Successfully cleaned temp directory for {os.path.basename(path)}[/yellow]")
                             console.print()

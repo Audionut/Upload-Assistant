@@ -9,7 +9,7 @@ from pymediainfo import MediaInfo
 from collections import OrderedDict
 import json
 from pyparsebluray import mpls
-from xml.etree import ElementTree as ET
+import defusedxml.ElementTree as ET
 import re
 from langcodes import Language
 from collections import defaultdict

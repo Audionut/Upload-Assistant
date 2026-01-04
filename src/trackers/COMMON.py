@@ -115,7 +115,7 @@ class COMMON():
             torrent_hash = None
             if hash_is_id:
                 info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
-                torrent_hash = hashlib.sha1(info_bytes).hexdigest()
+                torrent_hash = hashlib.sha1(info_bytes, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
 
             new_torrent.metainfo['comment'] = comment + torrent_hash if hash_is_id else comment
 
@@ -131,7 +131,7 @@ class COMMON():
             torrent_content = await torrent_file.read()
             torrent_data = bencodepy.decode(torrent_content)
             info = bencodepy.encode(torrent_data[b'info'])
-            info_hash = hashlib.sha1(info).hexdigest()
+            info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
     async def save_image_links(self, meta, image_key, image_list=None):

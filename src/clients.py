@@ -5,6 +5,7 @@ import asyncio
 import base64
 import bencode
 import collections
+import defusedxml.xmlrpc
 import errno
 import os
 import platform
@@ -17,7 +18,8 @@ import time
 import traceback
 import transmission_rpc
 import urllib.parse
-import xmlrpc.client
+import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
+from typing import Dict, DefaultDict, Tuple
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -25,9 +27,12 @@ from src.console import console
 from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
+# Secure XML-RPC client using defusedxml to prevent XML attacks
+defusedxml.xmlrpc.monkey_patch()
+
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
-qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+qbittorrent_cached_clients: Dict[Tuple[str, int, str], qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
+qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
 class Clients():
