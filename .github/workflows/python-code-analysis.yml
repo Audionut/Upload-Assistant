@@ -175,6 +175,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: write
     
     steps:
     - name: Checkout code
@@ -192,13 +193,30 @@ jobs:
       with:
         script: |
           const fs = require('fs');
-          let results = '';
-          try {
-            results = fs.readFileSync('bandit-results.txt', 'utf8');
-          } catch (error) {
+          const path = require('path');
+          
+          // Find all bandit result files
+          const resultFiles = fs.readdirSync('.').filter(file => file.startsWith('bandit-results-') && file.endsWith('.txt'));
+          
+          if (resultFiles.length === 0) {
             console.log('No Bandit results found.');
             return;
           }
+          
+          // Combine all results
+          let combinedResults = '';
+          for (const file of resultFiles) {
+            try {
+              const content = fs.readFileSync(file, 'utf8');
+              if (content.trim()) {
+                combinedResults += content + '\n\n';
+              }
+            } catch (error) {
+              console.log(`Error reading ${file}: ${error.message}`);
+            }
+          }
+          
+          const results = combinedResults.trim();
           
           // Only post comment if issues were found
           if (results.includes('Issue: [')) {
