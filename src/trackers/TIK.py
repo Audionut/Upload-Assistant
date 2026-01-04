@@ -210,7 +210,7 @@ class TIK(UNIT3D):
                 parsed_url = urlparse(poster_url)
                 if parsed_url.scheme not in ('http', 'https'):
                     raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
-                urllib.request.urlretrieve(poster_url, poster_path)
+                urllib.request.urlretrieve(poster_url, poster_path)  # nosec B310
                 console.print(f"[green]Poster downloaded to {poster_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Error downloading poster: {e}[/red]")
