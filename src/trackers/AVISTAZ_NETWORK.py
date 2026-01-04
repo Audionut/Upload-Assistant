@@ -11,13 +11,15 @@ import re
 import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
+from typing import Optional
+from urllib.parse import urlparse
+
+from cogs.redaction import redact_private_info
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
-from typing import Optional
-from urllib.parse import urlparse
 
 
 class AZTrackerBase:
@@ -961,21 +963,21 @@ class AZTrackerBase:
                     download_url = torrent_url.replace('/torrent/', '/download/torrent/')
                     register_download = await self.session.get(download_url)
                     if register_download.status_code != 200:
-                        status_message = (
+                        meta['tracker_status'][self.tracker]['status_message'] = (
                             f'data error - Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}\n'
                             f'Error: {register_download.status_code}'
                         )
-                        meta['tracker_status'][self.tracker]['status_message'] = status_message
-                        return
+                        return False
 
                     await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
 
-                    status_message = 'Torrent uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['status_message'] = f'{self.tracker} torrent uploaded successfully.'
 
                     match = re.search(r'/torrent/(\d+)', torrent_url)
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                    return True
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
@@ -990,13 +992,15 @@ class AZTrackerBase:
                         f"The HTML response has been saved to '{failure_path}' for analysis."
                     )
                     meta['tracker_status'][self.tracker]['status_message'] = status_message
-                    return
+                    return False
 
             else:
-                console.print(data)
-                status_message = 'Debug mode enabled, not uploading.'
+                console.print(f"[cyan]{self.tracker} Request Data:")
+                console.print(redact_private_info(data))
+                meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+                return True
 
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return False
 
     def language_map(self):
         all_lang_map = {

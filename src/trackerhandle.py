@@ -130,6 +130,9 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+                # ugly catch incase I missed a return
+                if is_uploaded is None:
+                    is_uploaded = True
                 status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
                 if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
                     await client.add_to_client(meta, tracker_class.tracker)

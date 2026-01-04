@@ -874,7 +874,7 @@ class ASC:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 await self.set_internal_flag(meta)
 
-        return
+        return True
 
     async def auto_approval(self, meta):
         if meta.get('debug', False):
