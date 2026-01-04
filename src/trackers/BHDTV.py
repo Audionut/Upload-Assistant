@@ -1,13 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-# import discord
-import requests
-from src.console import console
-from pprint import pprint
 import os
-import traceback
-from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
+import requests
+import traceback
+
+from cogs.redaction import redact_private_info
+from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 class BHDTV():
@@ -62,53 +62,58 @@ class BHDTV():
         open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
         files = {'file': open_torrent}
 
-        if meta['is_disc'] != 'BDMV':
-            # Beautify MediaInfo for HDT using custom template
-            video = meta['filelist'][0]
-            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
-            if os.path.exists(mi_template):
-                media_info = MediaInfo.parse(video, output="STRING", full=False,
-                                             mediainfo_options={"inform": f"file://{mi_template}"})
+        try:
+            if meta['is_disc'] != 'BDMV':
+                # Beautify MediaInfo for HDT using custom template
+                video = meta['filelist'][0]
+                mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
+                if os.path.exists(mi_template):
+                    media_info = MediaInfo.parse(video, output="STRING", full=False,
+                                                 mediainfo_options={"inform": f"file://{mi_template}"})
 
-        data = {
-            'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'name': meta['name'].replace(' ', '.').replace(':.', '.').replace(':', '.').replace('DD+', 'DDP'),
-            'mediainfo': mi_dump if bd_dump is None else bd_dump,
-            'cat': cat_id,
-            'subcat': sub_cat_id,
-            'resolution': resolution_id,
-            # 'anon': anon,
-            # admins asked to remove short description.
-            'sdescr': " ",
-            'descr': media_info if bd_dump is None else "Disc so Check Mediainfo dump ",
-            'screen': desc,
-            'url': f"https://www.tvmaze.com/shows/{meta['tvmaze_id']}" if meta['category'] == 'TV' else str(meta.get('imdb_info', {}).get('imdb_url', '')),
-            'format': 'json'
-        }
+            data = {
+                'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+                'name': meta['name'].replace(' ', '.').replace(':.', '.').replace(':', '.').replace('DD+', 'DDP'),
+                'mediainfo': mi_dump if bd_dump is None else bd_dump,
+                'cat': cat_id,
+                'subcat': sub_cat_id,
+                'resolution': resolution_id,
+                # 'anon': anon,
+                # admins asked to remove short description.
+                'sdescr': " ",
+                'descr': media_info if bd_dump is None else "Disc so Check Mediainfo dump ",
+                'screen': desc,
+                'url': f"https://www.tvmaze.com/shows/{meta['tvmaze_id']}" if meta['category'] == 'TV' else str(meta.get('imdb_info', {}).get('imdb_url', '')),
+                'format': 'json'
+            }
 
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, data=data, files=files)
-            try:
-                # pprint(data)
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-            except Exception:
-                console.print("[cyan]It may have uploaded, go check")
-                # cprint(f"Request Data:", 'cyan')
-                pprint(data)
-                console.print(traceback.print_exc())
-        else:
-            console.print("[cyan]BHDTV Request Data:")
-            pprint(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            if meta['debug'] is False:
+                response = requests.post(url=self.upload_url, data=data, files=files)
+                parsed = None
+                if response:
+                    try:
+                        parsed = response.json()
+                        # pprint(data)
+                        meta['tracker_status'][self.tracker]['status_message'] = parsed
+                    except Exception:
+                        console.print("[cyan]It may have uploaded, go check")
+                        # cprint(f"Request Data:", 'cyan')
+                        console.print(redact_private_info(data))
+                        console.print(traceback.print_exc())
 
-        # # adding my anounce url to torrent.
-        if response and 'view' in response.json()['data']:
-            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), response.json()['data']['view'])
+                # # adding my anounce url to torrent.
+                data = parsed.get('data') if isinstance(parsed, dict) else None
+                if data and 'view' in data:
+                    await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), data['view'])
+                    return True
+                return False
+
+            else:
+                console.print("[cyan]BHDTV Request Data:")
+                console.print(redact_private_info(data))
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+        finally:
             open_torrent.close()
-            return True
-        else:
-            open_torrent.close()
-            return False
 
     async def get_cat_id(self, meta):
         category_id = '0'

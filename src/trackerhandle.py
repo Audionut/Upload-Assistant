@@ -202,6 +202,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
                         return
+                    status = meta.get('tracker_status', {}).get(ptp.tracker, {})
                     if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
                         await client.add_to_client(meta, "PTP")
                     else:
