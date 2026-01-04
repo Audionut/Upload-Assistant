@@ -18,7 +18,7 @@ class STC(UNIT3D):
         self.banned_groups = [""]
         pass
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',

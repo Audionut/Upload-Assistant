@@ -84,7 +84,7 @@ jobs:
       continue-on-error: true
       run: |
         echo "Running type checking..."
-        mypy --ignore-missing-imports --follow-imports=skip --strict-optional src/ || true
+        mypy --config-file mypy.ini src/ || true
 
     - name: Security Analysis with Bandit
       continue-on-error: false

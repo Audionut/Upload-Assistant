@@ -32,7 +32,7 @@ class AL(UNIT3D):
 
         return should_continue
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -43,7 +43,7 @@ class AL(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'BDMV': '1',
             'DISC': '1',
@@ -61,7 +61,7 @@ class AL(UNIT3D):
         }.get(meta['type'], '1')
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution = meta['resolution']
         bit_depth = meta.get('bit_depth', '')
         resolution_to_compare = resolution

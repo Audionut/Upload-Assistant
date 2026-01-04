@@ -7,6 +7,8 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class TTR(UNIT3D):
+    ttr_name: str = ''
+
     def __init__(self, config):
         super().__init__(config, tracker_name='TTR')
         self.config = config

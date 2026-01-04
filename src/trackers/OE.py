@@ -179,7 +179,7 @@ class OE(UNIT3D):
 
         return {'name': oe_name}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         video_codec = meta.get('video_codec', 'N/A')
 
         meta_type = meta['type']

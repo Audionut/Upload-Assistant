@@ -19,7 +19,7 @@ class LT(UNIT3D):
         self.banned_groups = ["EVO"]
         pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',

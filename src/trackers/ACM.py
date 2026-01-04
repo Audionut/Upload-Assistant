@@ -29,7 +29,7 @@ class ACM(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -91,7 +91,7 @@ class ACM(UNIT3D):
         }.get(category_name, '0')
         return category_id
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '2160p': '1',
             '1080p': '2',

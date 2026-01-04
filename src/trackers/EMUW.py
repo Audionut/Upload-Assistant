@@ -388,7 +388,7 @@ class EMUW(UNIT3D):
         }
         return category_map.get(category_name, '1')
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         """Types: Full Disc(1), Remux(2), Encode(3), WEB-DL(4), WEBRIP(5), HDTV(6), SD(7)"""
         type_map = {
             'DISC': '1', 'REMUX': '2', 'ENCODE': '3',

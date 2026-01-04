@@ -26,6 +26,9 @@ from urllib.parse import urlparse
 
 
 class BJS:
+    secret_token: str = ''
+    already_has_the_info: bool = False
+
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -578,10 +581,11 @@ class BJS:
 
         found_items = []
         for result in ajax_results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
                 continue
 
+            # At this point `result` is expected to be the dict returned by `_fetch_torrent_content`.
             if not result['success']:
                 continue
 

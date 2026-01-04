@@ -23,7 +23,7 @@ class SP(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         if not isinstance(meta, dict):
             raise TypeError('meta must be a dict when passed to Seedpool get_cat_id')
 
@@ -61,7 +61,7 @@ class SP(UNIT3D):
                 return True
         return False
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',

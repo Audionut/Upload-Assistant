@@ -20,6 +20,8 @@ from src.trackers.COMMON import COMMON
 
 
 class BT:
+    secret_token: str = ''
+
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -210,7 +212,7 @@ class BT:
 
         found_language_strings = meta.get('subtitle_languages', [])
 
-        subtitle_ids = set()
+        subtitle_ids: set[str] = set()
         for lang_str in found_language_strings:
             target_id = self.ultimate_lang_map.get(lang_str.lower())
             if target_id:
@@ -218,12 +220,12 @@ class BT:
 
         has_pt_subtitles = 'Sim' if '49' in subtitle_ids else 'Nao'
 
-        subtitle_ids = sorted(list(subtitle_ids))
+        subtitle_id_list = sorted(subtitle_ids)
 
-        if not subtitle_ids:
-            subtitle_ids.append('44')
+        if not subtitle_id_list:
+            subtitle_id_list.append('44')
 
-        return has_pt_subtitles, subtitle_ids
+        return has_pt_subtitles, subtitle_id_list
 
     async def get_resolution(self, meta):
         if meta.get('is_disc') == 'BDMV':

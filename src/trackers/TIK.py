@@ -90,7 +90,7 @@ class TIK(UNIT3D):
 
         return {'name': name}
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_name = meta['category']
         foreign = meta.get('foreign', False)
         opera = meta.get('opera', False)
@@ -123,7 +123,7 @@ class TIK(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         disctype = meta.get('disctype', None)
         type_id_map = {
             'Custom': '1',
@@ -148,7 +148,7 @@ class TIK(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             'Other': '10',
             '4320p': '1',
