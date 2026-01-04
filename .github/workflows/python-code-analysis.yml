@@ -186,7 +186,6 @@ jobs:
       with:
         pattern: bandit-results-*
         merge-multiple: true
-        if-no-files-found: warn
         
     - name: Post Bandit Results to PR
       uses: actions/github-script@v7
@@ -195,28 +194,55 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           
-          // Find all bandit result files
-          const resultFiles = fs.readdirSync('.').filter(file => file.startsWith('bandit-results-') && file.endsWith('.txt'));
+          // Check for merged bandit-results.txt file
+          const mergedFile = 'bandit-results.txt';
+          let results = '';
           
-          if (resultFiles.length === 0) {
-            console.log('No Bandit results found.');
-            return;
-          }
-          
-          // Combine all results
-          let combinedResults = '';
-          for (const file of resultFiles) {
+          if (fs.existsSync(mergedFile)) {
             try {
-              const content = fs.readFileSync(file, 'utf8');
-              if (content.trim()) {
-                combinedResults += content + '\n\n';
-              }
+              results = fs.readFileSync(mergedFile, 'utf8');
+              console.log('Found merged Bandit results file');
             } catch (error) {
-              console.log(`Error reading ${file}: ${error.message}`);
+              console.log(`Error reading merged file: ${error.message}`);
+            }
+          } else {
+            // Fallback: look for individual result directories
+            console.log('Merged file not found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('bandit-results-'));
+            
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+                
+                if (stat.isDirectory()) {
+                  const filePath = path.join(itemPath, 'bandit-results.txt');
+                  if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    if (content.trim()) {
+                      results += content + '\n\n';
+                      console.log(`Found results in ${item}`);
+                    }
+                  }
+                } else if (stat.isFile() && item.endsWith('.txt')) {
+                  const content = fs.readFileSync(itemPath, 'utf8');
+                  if (content.trim()) {
+                    results += content + '\n\n';
+                    console.log(`Found results in ${item}`);
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading ${item}: ${error.message}`);
+              }
             }
           }
           
-          const results = combinedResults.trim();
+          results = results.trim();
+          
+          if (!results) {
+            console.log('No Bandit results found.');
+            return;
+          }
           
           // Only post comment if issues were found
           if (results.includes('Issue: [')) {
