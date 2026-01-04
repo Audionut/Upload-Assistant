@@ -1,0 +1,265 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "upload-assistant.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "upload-assistant.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "upload-assistant.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if and .Values.config.enabled .Values.config.copyToVolume }}
+      initContainers:
+        - name: config-init
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              src="/config-template/{{ .Values.config.key }}"
+              dst="{{ .Values.config.mountPath }}"
+              mkdir -p "$(dirname "$dst")"
+              overwrite="{{ .Values.config.overwrite }}"
+              if [ "$overwrite" = "true" ]; then
+                cp -f "$src" "$dst"
+              else
+                if [ ! -f "$dst" ]; then
+                  cp "$src" "$dst"
+                fi
+              fi
+              chown {{ .Values.securityContext.runAsUser | default 0 }}:{{ .Values.securityContext.runAsGroup | default 0 }} "$dst" || true
+          volumeMounts:
+            - name: ua-data
+              mountPath: {{ .Values.persistence.uaData.mountPath }}
+            - name: config-template
+              mountPath: /config-template
+              readOnly: true
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: ua-data
+              mountPath: {{ .Values.persistence.uaData.mountPath }}
+              {{- with .Values.persistence.uaData.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
+            - name: tmp
+              mountPath: {{ .Values.persistence.tmp.mountPath }}
+              {{- with .Values.persistence.tmp.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
+            {{- if .Values.persistence.files.enabled }}
+            - name: files
+              mountPath: {{ .Values.persistence.files.mountPath }}
+              {{- with .Values.persistence.files.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
+              {{- if .Values.persistence.files.readOnly }}
+              readOnly: true
+              {{- end }}
+            {{- end }}
+            {{- if .Values.persistence.torrentStorage.enabled }}
+            - name: torrent-storage
+              mountPath: {{ .Values.persistence.torrentStorage.mountPath }}
+              {{- with .Values.persistence.torrentStorage.subPath }}
+              subPath: {{ . | quote }}
+              {{- end }}
+              {{- if .Values.persistence.torrentStorage.readOnly }}
+              readOnly: true
+              {{- end }}
+            {{- end }}
+            {{- if and .Values.config.enabled (not .Values.config.copyToVolume) }}
+            - name: config-template
+              mountPath: {{ .Values.config.mountPath }}
+              subPath: {{ .Values.config.key }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: ua-data
+          {{- if .Values.persistence.uaData.enabled }}
+          {{- if eq .Values.persistence.uaData.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.uaData.existingClaim | default (printf "%s-ua-data" (include "upload-assistant.fullname" .)) }}
+          {{- else if eq .Values.persistence.uaData.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.uaData.hostPath.path | quote }}
+            {{- with .Values.persistence.uaData.hostPath.type }}
+            type: {{ . | quote }}
+            {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          {{- if .Values.persistence.tmp.enabled }}
+          {{- if eq .Values.persistence.tmp.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.tmp.existingClaim | default (printf "%s-tmp" (include "upload-assistant.fullname" .)) }}
+          {{- else if eq .Values.persistence.tmp.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.tmp.hostPath.path | quote }}
+            {{- with .Values.persistence.tmp.hostPath.type }}
+            type: {{ . | quote }}
+            {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.persistence.files.enabled }}
+        - name: files
+          {{- if eq .Values.persistence.files.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.files.existingClaim | default (printf "%s-files" (include "upload-assistant.fullname" .)) }}
+          {{- else if eq .Values.persistence.files.type "nfs" }}
+          nfs:
+            server: {{ .Values.persistence.files.nfs.server | quote }}
+            path: {{ .Values.persistence.files.nfs.path | quote }}
+          {{- else if eq .Values.persistence.files.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.files.hostPath.path | quote }}
+            {{- with .Values.persistence.files.hostPath.type }}
+            type: {{ . | quote }}
+            {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.persistence.torrentStorage.enabled }}
+        - name: torrent-storage
+          {{- if eq .Values.persistence.torrentStorage.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.torrentStorage.existingClaim | default (printf "%s-torrent-storage" (include "upload-assistant.fullname" .)) }}
+          {{- else if eq .Values.persistence.torrentStorage.type "nfs" }}
+          nfs:
+            server: {{ .Values.persistence.torrentStorage.nfs.server | quote }}
+            path: {{ .Values.persistence.torrentStorage.nfs.path | quote }}
+          {{- else if eq .Values.persistence.torrentStorage.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.torrentStorage.hostPath.path | quote }}
+            {{- with .Values.persistence.torrentStorage.hostPath.type }}
+            type: {{ . | quote }}
+            {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- if .Values.config.enabled }}
+        - name: config-template
+          {{- if .Values.config.existingSecret }}
+          secret:
+            secretName: {{ .Values.config.existingSecret }}
+            items:
+              - key: {{ .Values.config.key }}
+                path: {{ .Values.config.key }}
+          {{- else if .Values.config.existingConfigMap }}
+          configMap:
+            name: {{ .Values.config.existingConfigMap }}
+            items:
+              - key: {{ .Values.config.key }}
+                path: {{ .Values.config.key }}
+          {{- else if eq .Values.config.kind "configMap" }}
+          configMap:
+            name: {{ printf "%s-config" (include "upload-assistant.fullname" .) }}
+            items:
+              - key: {{ .Values.config.key }}
+                path: {{ .Values.config.key }}
+          {{- else }}
+          secret:
+            secretName: {{ printf "%s-config" (include "upload-assistant.fullname" .) }}
+            items:
+              - key: {{ .Values.config.key }}
+                path: {{ .Values.config.key }}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

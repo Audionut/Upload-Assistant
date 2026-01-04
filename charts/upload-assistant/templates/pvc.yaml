@@ -1,0 +1,91 @@
+{{- if and .Values.persistence.uaData.enabled (eq .Values.persistence.uaData.type "pvc") (not .Values.persistence.uaData.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-ua-data
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+  {{- with .Values.persistence.uaData.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.uaData.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.uaData.size | quote }}
+  {{- with .Values.persistence.uaData.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if and .Values.persistence.tmp.enabled (eq .Values.persistence.tmp.type "pvc") (not .Values.persistence.tmp.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-tmp
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+  {{- with .Values.persistence.tmp.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.tmp.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.tmp.size | quote }}
+  {{- with .Values.persistence.tmp.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if and .Values.persistence.files.enabled (eq .Values.persistence.files.type "pvc") (not .Values.persistence.files.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-files
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+  {{- with .Values.persistence.files.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.files.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.files.size | quote }}
+  {{- with .Values.persistence.files.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if and .Values.persistence.torrentStorage.enabled (eq .Values.persistence.torrentStorage.type "pvc") (not .Values.persistence.torrentStorage.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-torrent-storage
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+  {{- with .Values.persistence.torrentStorage.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.torrentStorage.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.torrentStorage.size | quote }}
+  {{- with .Values.persistence.torrentStorage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+

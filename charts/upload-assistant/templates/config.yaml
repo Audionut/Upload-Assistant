@@ -1,0 +1,25 @@
+{{- if and .Values.config.enabled (not .Values.config.existingSecret) (not .Values.config.existingConfigMap) }}
+{{- if eq .Values.config.kind "configMap" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-config
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+data:
+  {{ .Values.config.key }}: |-
+{{ .Values.config.configPy | indent 4 }}
+{{- else }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "upload-assistant.fullname" . }}-config
+  labels:
+    {{- include "upload-assistant.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{ .Values.config.key }}: |-
+{{ .Values.config.configPy | indent 4 }}
+{{- end }}
+{{- end }}
+
