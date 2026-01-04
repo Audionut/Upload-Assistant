@@ -412,16 +412,11 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
     else:
         media_info = MediaInfo.parse(video, output="STRING", full=False)
 
-    if isinstance(media_info, str):
-        filtered_media_info = "\n".join(
-            line for line in media_info.splitlines()
-            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-        )
-    else:
-        filtered_media_info = "\n".join(
-            line for line in media_info.splitlines()
-            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-        )
+    # Filter out unwanted lines from media info regardless of type
+    filtered_media_info = "\n".join(
+        line for line in media_info.splitlines()
+        if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+    )
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
         await export.write(filtered_media_info.replace(video, os.path.basename(video)))
