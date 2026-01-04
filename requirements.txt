@@ -37,4 +37,4 @@ tqdm==4.67.1
 transmission_rpc==7.0.11
 tvdb-v4-official==1.1.0
 unidecode==1.4.0
-urllib3==2.5.0
+urllib3==2.6.2
