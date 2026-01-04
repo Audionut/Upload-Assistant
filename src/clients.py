@@ -321,7 +321,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name, print_err=True)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name)
 
                 if valid:
                     return resolved_path
@@ -434,7 +434,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client_name, print_err=False
+                        meta, found_torrent_path, found_hash, torrent_client, client_name
                     )
                 else:
                     valid = False
@@ -464,7 +464,7 @@ class Clients():
 
         return best_match
 
-    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client, print_err=False):
+    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client):
         valid = False
         wrong_file = False
 
@@ -746,7 +746,7 @@ class Clients():
 
             # **Validate the .torrent file**
             try:
-                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
             except Exception as e:
                 console.print(f"[bold red]Error validating torrent {torrent_hash}: {e}")
                 valid = False
@@ -1800,7 +1800,7 @@ class Clients():
                                         f.write(torrent_file_content)
 
                                     # Validate the .torrent file before saving as BASE.torrent
-                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
                                     if not valid:
                                         if meta['debug']:
                                             console.print(f"[bold red]Validation failed for {torrent_file_path}")
@@ -1941,7 +1941,7 @@ class Clients():
 
             if not pathed:
                 valid, resolved_path = await self.is_valid_torrent(
-                    meta, torrent_path, info_hash_v1, 'rtorrent', client, print_err=False
+                    meta, torrent_path, info_hash_v1, 'rtorrent', client
                 )
 
                 if valid:
@@ -2539,7 +2539,7 @@ class Clients():
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
                         if torrent_file_path:
-                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config, print_err=False)
+                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config)
                             if valid:
                                 if use_piece_preference:
                                     # **Track best match based on piece size**
@@ -2646,7 +2646,7 @@ class Clients():
                                 # Validate the alternative torrent
                                 if alt_torrent_file_path:
                                     alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config, print_err=False
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config
                                     )
 
                                     if alt_valid:

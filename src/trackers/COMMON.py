@@ -875,7 +875,6 @@ class COMMON():
                     False,
                     meta['uuid'],
                     meta['base_dir'],
-                    export_text=True,
                     is_dvd=False,
                     debug=meta.get('debug', False)
                 )
@@ -923,7 +922,6 @@ class COMMON():
                             False,
                             meta['uuid'],
                             meta['base_dir'],
-                            export_text=True,
                             is_dvd=False,
                             debug=meta.get('debug', False)
                         )

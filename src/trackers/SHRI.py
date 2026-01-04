@@ -257,7 +257,7 @@ class SHRI(UNIT3D):
 
         return {"name": name}
 
-    def _extract_clean_release_group(self, meta, current_name):
+    def _extract_clean_release_group(self, meta):
         """Extract release group - only accepts VU/UNTOUCHED markers from filename"""
         tag = meta.get("tag", "").strip().lstrip("-")
         if tag and " " not in tag and not self.INVALID_TAG_PATTERN.search(tag):

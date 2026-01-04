@@ -159,7 +159,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False, debug=False):
+async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=False):
 
     def filter_mediainfo(data):
         filtered = {

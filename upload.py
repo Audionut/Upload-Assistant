@@ -780,7 +780,7 @@ def get_remote_version(url):
         return None, None
 
 
-def extract_changelog(content, from_version, to_version):
+def extract_changelog(content, to_version):
     """Extracts the changelog entries between the specified versions."""
     # Try to find the to_version with 'v' prefix first (current format)
     patterns_to_try = [
@@ -822,7 +822,7 @@ async def update_notification(base_dir):
         console.print(f"[red][NOTICE] [green]Current version: v[/green][yellow]{local_version}")
         asyncio.create_task(asyncio.sleep(1))
         if verbose and remote_content:
-            changelog = extract_changelog(remote_content, local_version, remote_version)
+            changelog = extract_changelog(remote_content, remote_version)
             if changelog:
                 asyncio.create_task(asyncio.sleep(1))
                 console.print(f"{changelog}")
