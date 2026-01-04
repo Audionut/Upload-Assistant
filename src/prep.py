@@ -42,7 +42,7 @@ try:
     from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
 except ModuleNotFoundError:
-    console.print(traceback.print_exc())
+    console.print(traceback.format_exc())
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
     console.print('[yellow]pip3 install --user -U -r requirements.txt')
     exit()
@@ -994,7 +994,9 @@ class Prep():
             if meta.get('no_edition') is False:
                 meta['edition'], meta['repack'], meta['webdv'] = await get_edition(meta['uuid'], bdinfo, meta['filelist'], meta.get('manual_edition'), meta)
                 if "REPACK" in meta.get('edition', ""):
-                    meta['repack'] = re.search(r"REPACK[\d]?", meta['edition'])[0]
+                    repack_match = re.search(r"REPACK[\d]?", meta['edition'])
+                    if repack_match:
+                        meta['repack'] = repack_match.group(0)
                     meta['edition'] = re.sub(r"REPACK[\d]?", "", meta['edition']).strip().replace('  ', ' ')
             else:
                 meta['edition'] = ""
@@ -1028,7 +1030,7 @@ class Prep():
                                 if release_name is not None:
                                     try:
                                         meta['scene_name'] = release_name
-                                        meta['tag'] = await self.get_tag(release_name, meta)
+                                        meta['tag'] = await get_tag(release_name, meta)
                                     except Exception:
                                         console.print("[red]Error getting tag from scene name, check group tag.[/red]")
 

@@ -143,9 +143,10 @@ def execute_command():
                     import shlex
                     command.extend(shlex.split(args))
 
-                print(f"Running: {' '.join(command)}")
+                command_str = ' '.join(command)
+                print(f"Running: {command_str}")
 
-                yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {' '.join(command)}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
 
                 # Set environment to unbuffered and force line buffering
                 env = os.environ.copy()

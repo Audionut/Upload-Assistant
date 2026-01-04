@@ -11,7 +11,7 @@ cloudscraper==1.2.71
 deluge-client==1.10.2
 discord.py==2.6.4
 ffmpeg-python==0.2.0
-flask==2.3.0
+flask==3.1.2
 flask-cors>=4.0.0
 guessit==3.8.0
 httpx==0.28.1
@@ -39,4 +39,3 @@ transmission_rpc==7.0.11
 tvdb-v4-official==1.1.0
 unidecode==1.4.0
 urllib3==2.5.0
-werkzeug==3.1.3
