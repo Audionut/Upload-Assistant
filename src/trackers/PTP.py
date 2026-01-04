@@ -5,11 +5,12 @@ import click
 import glob
 import httpx
 import json
+import pickle  # nosec B403 - Only used for legacy cookie migration
 import platform
-import pickle
 import os
 import re
 import requests
+import stat
 
 from pathlib import Path
 from pymediainfo import MediaInfo
@@ -95,6 +96,118 @@ class PTP():
             ("Ukrainian", "ukr", "uk"): 34,
             ("Vietnamese", "vie", "vi"): 25,
         }
+
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}[/red]")
+            raise
+        except json.JSONEncodeError as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
+            raise
+
+    def _load_cookies_secure(self, session, cookiefile):
+        """Securely load session cookies from JSON instead of pickle"""
+
+        # Check for legacy pickle file and migrate if needed
+        pickle_file = cookiefile.replace('.json', '.pickle')
+        legacy_pickle_file = f"{os.path.dirname(cookiefile)}/PTP"  # Legacy filename without extension
+
+        # Try to migrate from pickle files
+        for potential_pickle in [pickle_file, legacy_pickle_file]:
+            if os.path.exists(potential_pickle) and not os.path.exists(cookiefile):
+                try:
+                    console.print(f"[yellow]Migrating legacy cookie file from {potential_pickle} to {cookiefile}[/yellow]")
+
+                    # Load the pickle file
+                    with open(potential_pickle, 'rb') as f:
+                        session_cookies = pickle.load(f)  # nosec B301 - Legacy migration only
+
+                    # Convert to JSON format
+                    cookie_dict = {}
+                    for cookie in session_cookies:
+                        cookie_dict[cookie.name] = {
+                            'value': cookie.value,
+                            'domain': cookie.domain,
+                            'path': cookie.path,
+                            'secure': cookie.secure,
+                            'expires': getattr(cookie, 'expires', None)
+                        }
+
+                    # Save as JSON
+                    with open(cookiefile, 'w', encoding='utf-8') as f:
+                        json.dump(cookie_dict, f, indent=2)
+
+                    # Set restrictive permissions
+                    os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+                    # Verify the migration was successful by loading the JSON
+                    try:
+                        with open(cookiefile, 'r', encoding='utf-8') as f:
+                            json.load(f)  # Just verify it can be loaded
+
+                        # Migration verified successful - delete the old pickle file
+                        os.remove(potential_pickle)
+                        console.print(f"[green]Successfully migrated cookies to JSON format and removed legacy file {potential_pickle}[/green]")
+
+                    except (OSError, json.JSONDecodeError) as verify_error:
+                        console.print(f"[red]Migration verification failed: {verify_error}. Keeping original file {potential_pickle}[/red]")
+                        # Remove the potentially corrupted JSON file
+                        if os.path.exists(cookiefile):
+                            os.remove(cookiefile)
+                        raise
+
+                    break
+
+                except Exception as e:
+                    console.print(f"[red]Error migrating cookie file {potential_pickle}: {e}[/red]")
+                    # Continue to try next potential file or load JSON normally
+                    continue
+
+        # Load cookies from JSON file
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                # Prevent None domain values
+                domain = cookie_data.get('domain')
+                if domain is None:
+                    domain = ''  # Use empty string instead of None
+
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=domain,
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
+            raise
 
     def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
@@ -1273,12 +1386,11 @@ class PTP():
     async def get_AntiCsrfToken(self, meta):
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
-        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
+                self._load_cookies_secure(session, cookiefile)
                 uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
                 loggedIn = await self.validate_login(uploadresponse)
             else:
@@ -1515,10 +1627,9 @@ class PTP():
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=30)
+                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
+                    self._load_cookies_secure(session, cookiefile)
+                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=60)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text
                 # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.

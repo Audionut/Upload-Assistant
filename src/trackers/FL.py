@@ -1,18 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import requests
 import asyncio
-import re
-import os
+import cli_ui
 import glob
-import pickle
+import httpx
+import json
+import os
+import re
+import requests
+import stat
+
+from bs4 import BeautifulSoup
 from unidecode import unidecode
 from urllib.parse import urlparse
-import cli_ui
-from bs4 import BeautifulSoup
-import httpx
-from src.trackers.COMMON import COMMON
-from src.exceptions import *  # noqa F403
+
 from src.console import console
+from src.exceptions import *  # noqa F403
+from src.trackers.COMMON import COMMON
 
 
 class FL():
@@ -27,6 +30,80 @@ class FL():
         self.uploader_name = config['TRACKERS'][self.tracker].get('uploader_name')
         self.signature = None
         self.banned_groups = [""]
+
+    def _save_cookies_secure(self, session, filepath):
+        """Securely save session cookies to JSON file."""
+        try:
+            # Convert RequestsCookieJar to dict for JSON serialization
+            cookie_dict = {}
+            for cookie in session.cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            # Convert .pkl to .json for secure storage
+            if filepath.endswith('.pkl'):
+                filepath = filepath.replace('.pkl', '.json')
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(filepath, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}")
+            raise
+        except (TypeError, ValueError) as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}")
+            raise
+
+    def _load_cookies_secure(self, session, filepath):
+        """Securely load cookies from JSON file into session."""
+        try:
+            # Handle both .pkl and .json files
+            json_filepath = filepath.replace('.pkl', '.json') if filepath.endswith('.pkl') else filepath
+
+            if os.path.exists(json_filepath):
+                with open(json_filepath, 'r', encoding='utf-8') as f:
+                    cookie_dict = json.load(f)
+
+                # Convert dict back to session cookies
+                for name, cookie_data in cookie_dict.items():
+                    session.cookies.set(
+                        name=name,
+                        value=cookie_data['value'],
+                        domain=cookie_data.get('domain', ''),
+                        path=cookie_data.get('path', '/'),
+                        secure=cookie_data.get('secure', False)
+                    )
+            elif os.path.exists(filepath):
+                # Legacy .pkl file exists - convert it
+                console.print(f"[yellow]Converting legacy cookie file {filepath} to secure JSON format...")
+                try:
+                    import pickle  # nosec B403
+                    with open(filepath, 'rb') as f:
+                        legacy_cookies = pickle.load(f)  # nosec B301
+                    session.cookies.update(legacy_cookies)
+                    # Save in new format
+                    self._save_cookies_secure(session, filepath)
+                    # Remove old pickle file
+                    os.remove(filepath)
+                    console.print(f"[green]Successfully converted {filepath} to JSON format")
+                except Exception as e:
+                    console.print(f"[red]Failed to convert legacy cookie file: {e}")
+                    raise
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}")
+            raise
 
     async def get_category_id(self, meta):
         has_ro_audio, has_ro_sub = await self.get_ro_tracks(meta)
@@ -176,9 +253,8 @@ class FL():
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files, timeout=30)
+                    self._load_cookies_secure(session, cookiefile)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -199,8 +275,10 @@ class FL():
         dupes = []
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
 
-        with open(cookiefile, 'rb') as cf:
-            cookies = pickle.load(cf)
+        # Create a session and load cookies securely
+        with requests.Session() as session:
+            self._load_cookies_secure(session, cookiefile)
+            cookies = session.cookies
 
         search_url = "https://filelist.io/browse.php"
 
@@ -241,7 +319,16 @@ class FL():
         return dupes
 
     async def validate_credentials(self, meta):
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+        cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
+        cookiefile_pkl = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+
+        if os.path.exists(cookiefile_json):
+            cookiefile = cookiefile_json
+        elif os.path.exists(cookiefile_pkl):
+            cookiefile = cookiefile_pkl
+        else:
+            cookiefile = cookiefile_json  # Default to JSON for new saves
+
         if not os.path.exists(cookiefile):
             await self.login(cookiefile)
         vcookie = await self.validate_cookies(meta, cookiefile)
@@ -262,8 +349,7 @@ class FL():
         url = "https://filelist.io/index.php"
         if os.path.exists(cookiefile):
             with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
+                self._load_cookies_secure(session, cookiefile)
                 resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print(resp.url)
@@ -292,8 +378,7 @@ class FL():
             response = session.get(index)
             if response.text.find("Logout") != -1:
                 console.print('[green]Successfully logged into FL')
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                self._save_cookies_secure(session, cookiefile)
             else:
                 console.print('[bold red]Something went wrong while trying to log into FL')
                 await asyncio.sleep(1)

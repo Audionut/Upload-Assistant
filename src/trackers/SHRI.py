@@ -1120,7 +1120,7 @@ class SHRI(UNIT3D):
             "unknown",
             "unk",
         ]:
-            shoutouts = f"SHOUTOUTS : {random.choice(pirate_shouts)}"
+            shoutouts = f"SHOUTOUTS : {random.choice(pirate_shouts)}"  # nosec B311
         else:
             shoutouts = f"SHOUTOUTS : {release_group}"
         logo_section = (

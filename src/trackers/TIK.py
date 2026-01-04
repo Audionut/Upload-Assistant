@@ -6,6 +6,7 @@ import click
 import os
 import re
 import urllib.request
+from urllib.parse import urlparse
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
@@ -206,6 +207,9 @@ class TIK(UNIT3D):
             # No poster file exists, download the poster image
             poster_path = poster_jpg_path  # Default to saving as poster.jpg
             try:
+                parsed_url = urlparse(poster_url)
+                if parsed_url.scheme not in ('http', 'https'):
+                    raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
                 urllib.request.urlretrieve(poster_url, poster_path)
                 console.print(f"[green]Poster downloaded to {poster_path}[/green]")
             except Exception as e:

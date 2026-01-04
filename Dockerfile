@@ -28,7 +28,7 @@ ENV PATH="/venv/bin:$PATH"
 RUN pip install --upgrade pip==25.3 wheel==0.45.1 requests==2.32.5
 
 # Install Web UI dependencies (in venv)
-RUN pip install --no-cache-dir flask==3.1.2 flask-cors==6.0.1
+RUN pip install --no-cache-dir flask==3.1.2 flask-cors==6.0.2
 
 # Set the working directory FIRST
 WORKDIR /Upload-Assistant

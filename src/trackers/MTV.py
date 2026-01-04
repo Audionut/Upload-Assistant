@@ -4,13 +4,13 @@ import aiofiles.os
 import asyncio
 import cli_ui
 import httpx
+import json
 import os
-import pickle
 import pyotp
 import re
 import traceback
-import xml.etree.ElementTree as ET
 
+from defusedxml import ElementTree as ET
 from torf import Torrent
 
 from data.config import config
@@ -49,14 +49,14 @@ class MTV():
         pass
 
     # For loading
-    async def async_pickle_loads(self, data):
+    async def async_json_loads(self, data_str):
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.loads, data)
+        return await loop.run_in_executor(None, json.loads, data_str)
 
     # For dumping
-    async def async_pickle_dumps(self, obj):
+    async def async_json_dumps(self, obj):
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.dumps, obj)
+        return await loop.run_in_executor(None, json.dumps, obj)
 
     async def check_image_hosts(self, meta):
         approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
@@ -139,9 +139,9 @@ class MTV():
 
         if not meta['debug']:
             try:
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     cookie_data = await cf.read()
-                    cookies = await self.async_pickle_loads(cookie_data)
+                    cookies = await self.async_json_loads(cookie_data)
 
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -498,9 +498,9 @@ class MTV():
         if await aiofiles.os.path.exists(cookiefile):
             try:
 
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies_dict = await self.async_pickle_loads(data)
+                    cookies_dict = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies_dict, timeout=10) as client:
                     try:
@@ -536,9 +536,9 @@ class MTV():
         url = "https://www.morethantv.me/index.php"
         try:
             if await aiofiles.os.path.exists(cookiefile):
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies = await self.async_pickle_loads(data)
+                    cookies = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies, timeout=10) as client:
                     try:
@@ -604,8 +604,8 @@ class MTV():
                     if 'authkey=' in resp.text:
                         console.print('[green]Successfully logged in to MTV')
                         cookies_dict = dict(client.cookies)
-                        cookies_data = await self.async_pickle_dumps(cookies_dict)
-                        async with aiofiles.open(cookiefile, 'wb') as cf:
+                        cookies_data = await self.async_json_dumps(cookies_dict)
+                        async with aiofiles.open(cookiefile, 'w', encoding='utf-8') as cf:
                             await cf.write(cookies_data)
                         console.print(f"[green]Cookies saved to {cookiefile}")
                         return True
