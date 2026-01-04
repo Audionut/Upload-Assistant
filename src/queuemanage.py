@@ -176,7 +176,7 @@ async def gather_files_recursive(path, allowed_extensions=None):
                             elif os.path.isfile(alt_path) and (allowed_extensions is None or alt_path.lower().endswith(tuple(allowed_extensions))):
                                 queue.append(alt_path)
                     except Exception:
-                        continue  # nosec B112: ignore further errors here
+                        continue
 
         except (OSError, PermissionError) as e:
             console.print(f"[red]Error scanning directory {path}: {e}[/red]")
