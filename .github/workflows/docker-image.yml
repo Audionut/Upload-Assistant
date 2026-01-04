@@ -130,7 +130,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.standard
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-standard.outputs.tags }}
           labels: ${{ steps.meta-standard.outputs.labels }}
@@ -142,7 +142,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-webui.outputs.tags }}
           labels: ${{ steps.meta-webui.outputs.labels }}
