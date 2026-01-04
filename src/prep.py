@@ -251,7 +251,7 @@ class Prep():
             except Exception:
                 meta['search_year'] = ""
             if not meta.get('edit', False):
-                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], export_text=False, debug=meta['debug'])
+                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], debug=meta['debug'])
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']
