@@ -182,6 +182,10 @@ class PTP():
                     # Continue to try next potential file or load JSON normally
                     continue
 
+            elif os.path.exists(potential_pickle) and os.path.exists(cookiefile):
+                os.remove(potential_pickle)
+                console.print(f"[yellow]Removed legacy cookie file {potential_pickle}. Using JSON file.[/yellow]")
+
         # Load cookies from JSON file
         try:
             with open(cookiefile, 'r', encoding='utf-8') as f:
@@ -1420,8 +1424,7 @@ class PTP():
                         if resp["Result"] != "Ok":
                             raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
                         AntiCsrfToken = resp["AntiCsrfToken"]
-                        with open(cookiefile, 'wb') as cf:
-                            pickle.dump(session.cookies, cf)
+                        self._save_cookies_secure(session.cookies, cookiefile)
                     except Exception:
                         raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
                 except Exception:
@@ -1623,6 +1626,7 @@ class PTP():
                 console.log(url)
                 console.log(redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"

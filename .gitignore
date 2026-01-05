@@ -2,9 +2,7 @@ data/config.json
 data/config.py
 data/config*
 data/tags.json
-data/cookies/*.txt
-data/cookies/*.pkl
-data/cookies/*.pickle
+data/cookies/*.*
 data/banned/*.*
 data/web_ui/*.*
 data/web_ui/templates/*.html
