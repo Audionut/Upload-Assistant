@@ -414,7 +414,7 @@ class DescriptionBuilder:
         custom_signature = ""
         try:
             custom_signature = self.config["TRACKERS"][tracker].get(
-                "custom_signature", self.config["DEFAULT"].get("custom_signature", None)
+                "custom_signature", self.config["DEFAULT"].get("custom_signature", "")
             )
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting custom signature: {str(e)}[/yellow]")
@@ -1283,7 +1283,7 @@ class DescriptionBuilder:
         if total_files_to_process > 1:
             console.print()
 
-        description = "".join(desc_parts)
+        description = "".join(p for p in desc_parts if p is not None)
 
         return description
 
