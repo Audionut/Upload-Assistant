@@ -23,6 +23,33 @@ ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 active_processes = {}
 
 
+def _validate_upload_assistant_path(user_path: str) -> str:
+    if not isinstance(user_path, str):
+        raise ValueError('Path must be a string')
+    if not user_path or len(user_path) > 4096:
+        raise ValueError('Invalid path')
+    if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
+        raise ValueError('Invalid characters in path')
+    if not os.path.exists(user_path):
+        raise ValueError(f'Path does not exist: {user_path}')
+    return user_path
+
+
+def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
+    # These are passed to upload.py (not the Python interpreter) and are executed
+    # with shell=False. Still validate to avoid control characters and abuse.
+    safe: list[str] = []
+    for tok in tokens:
+        if not isinstance(tok, str):
+            raise ValueError('Invalid argument')
+        if not tok or len(tok) > 1024:
+            raise ValueError('Invalid argument')
+        if '\x00' in tok or '\n' in tok or '\r' in tok:
+            raise ValueError('Invalid characters in argument')
+        safe.append(tok)
+    return safe
+
+
 def strip_ansi(text):
     """Remove ANSI escape codes from text"""
     return ANSI_ESCAPE.sub('', text)
@@ -136,12 +163,20 @@ def execute_command():
         def generate():
             try:
                 # Build command to run upload.py directly
-                command = ['python', '-u', '/Upload-Assistant/upload.py', path]
+                validated_path = _validate_upload_assistant_path(path)
+
+                upload_script = '/Upload-Assistant/upload.py'
+                command = [sys.executable, '-u', upload_script]
 
                 # Add arguments if provided
                 if args:
                     import shlex
-                    command.extend(shlex.split(args))
+
+                    parsed_args = shlex.split(args)
+                    command.extend(_validate_upload_assistant_args(parsed_args))
+
+                # Ensure any path starting with '-' can't be interpreted as an option
+                command.extend(['--', validated_path])
 
                 command_str = ' '.join(command)
                 print(f"Running: {command_str}")
@@ -154,7 +189,7 @@ def execute_command():
                 env['PYTHONIOENCODING'] = 'utf-8'
                 # Disable Python output buffering
 
-                process = subprocess.Popen(
+                process = subprocess.Popen(  # lgtm[py/command-line-injection]
                     command,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
