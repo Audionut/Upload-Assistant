@@ -11,9 +11,9 @@ def redact_value(val):
     """Redact sensitive values, including passkeys in URLs and JSON substrings."""
     if isinstance(val, str):
         # First, try to find and redact JSON substrings within the string
-        import re
         # Look for JSON-like patterns: { ... } or [ ... ]
         json_pattern = r'(\{[^{}]*\}|\[[^\[\]]*\])'
+
         def redact_json_match(match):
             json_str = match.group(1)
             try:
