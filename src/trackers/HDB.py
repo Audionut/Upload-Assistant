@@ -441,7 +441,19 @@ class HDB():
             'id': id
         }
         r = requests.post(url=api_url, data=json.dumps(data), timeout=30)
-        filename = r.json()['data'][0]['filename']
+        r.raise_for_status()
+        try:
+            r_json = r.json()
+        except json.JSONDecodeError as e:
+            raise Exception(f"Failed to parse JSON response from {api_url}. Response content: {r.text}. Data: {data}. Error: {e}")
+
+        if 'data' not in r_json or not isinstance(r_json['data'], list) or len(r_json['data']) == 0:
+            raise Exception(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
+
+        try:
+            filename = r_json['data'][0]['filename']
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Failed to access filename in response from {api_url}. Response: {r_json}. Data: {data}. Error: {e}")
 
         # Download new .torrent
         download_url = f"https://hdbits.org/download.php/{quote(filename)}"
@@ -451,6 +463,17 @@ class HDB():
         }
 
         r = requests.get(url=download_url, params=params, timeout=30)
+        r.raise_for_status()
+
+        # Validate content-type
+        content_type = r.headers.get('content-type', '').lower()
+        if 'bittorrent' not in content_type and 'octet-stream' not in content_type:
+            raise Exception(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
+
+        # Basic validation: check if content looks like bencoded data (starts with 'd')
+        if not r.content.startswith(b'd'):
+            raise Exception(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
+
         with open(torrent_path, "wb") as tor:
             tor.write(r.content)
         return

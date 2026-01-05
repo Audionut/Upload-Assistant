@@ -3,13 +3,28 @@ import re
 import json
 
 SENSITIVE_KEYS = {
-    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass"
+    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
 }
 
 
 def redact_value(val):
-    """Redact sensitive values, including passkeys in URLs."""
+    """Redact sensitive values, including passkeys in URLs and JSON substrings."""
     if isinstance(val, str):
+        # First, try to find and redact JSON substrings within the string
+        import re
+        # Look for JSON-like patterns: { ... } or [ ... ]
+        json_pattern = r'(\{[^{}]*\}|\[[^\[\]]*\])'
+        def redact_json_match(match):
+            json_str = match.group(1)
+            try:
+                parsed = json.loads(json_str)
+                redacted = redact_private_info(parsed)
+                return json.dumps(redacted)
+            except (json.JSONDecodeError, TypeError):
+                return json_str  # Return original if not valid JSON
+
+        val = re.sub(json_pattern, redact_json_match, val)
+
         # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
         val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
         # Redact content between /proxy/ and /api (e.g. /proxy/<secret>/api)
@@ -22,11 +37,11 @@ def redact_value(val):
 
 
 def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
-    """Recursively redact sensitive info in dicts/lists."""
+    """Recursively redact sensitive info in dicts/lists/strings containing JSON."""
     if isinstance(data, dict):
         return {
             k: (
-                "[REDACTED]" if any(s in k.lower() for s in sensitive_keys)
+                "[REDACTED]" if any(s.lower() in k.lower() for s in sensitive_keys)
                 else redact_private_info(v, sensitive_keys)
             )
             for k, v in data.items()
@@ -34,7 +49,14 @@ def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
     elif isinstance(data, list):
         return [redact_private_info(item, sensitive_keys) for item in data]
     elif isinstance(data, str):
-        return redact_value(data)
+        # Try to parse as JSON first
+        try:
+            parsed_json = json.loads(data)
+            redacted_json = redact_private_info(parsed_json, sensitive_keys)
+            return json.dumps(redacted_json)
+        except (json.JSONDecodeError, TypeError):
+            # Not valid JSON, treat as regular string
+            return redact_value(data)
     else:
         return data
 

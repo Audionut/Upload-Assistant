@@ -1,6 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import stat
-import json
 from bs4 import BeautifulSoup
 import requests
 import asyncio
@@ -11,6 +9,7 @@ import httpx
 from unidecode import unidecode
 from urllib.parse import urlparse
 from src.trackers.COMMON import COMMON
+from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
 from src.console import console
 
@@ -30,68 +29,7 @@ class TTG():
         self.signature = None
         self.banned_groups = [""]
 
-    def _save_cookies_secure(self, session_cookies, cookiefile):
-        """Securely save session cookies using JSON instead of pickle"""
-        try:
-            # Convert RequestsCookieJar to dictionary for JSON serialization
-            cookie_dict = {}
-            for cookie in session_cookies:
-                cookie_dict[cookie.name] = {
-                    'value': cookie.value,
-                    'domain': cookie.domain,
-                    'path': cookie.path,
-                    'secure': cookie.secure,
-                    'expires': cookie.expires
-                }
-
-            with open(cookiefile, 'w', encoding='utf-8') as f:
-                json.dump(cookie_dict, f, indent=2)
-
-            # Set restrictive permissions (0o600) to protect cookie secrets
-            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
-
-        except OSError as e:
-            console.print(f"[red]Error with cookie file operations: {e}")
-            raise
-        except (TypeError, ValueError) as e:
-            console.print(f"[red]Error encoding cookies to JSON: {e}")
-            raise
-
-    def _load_cookies_secure(self, session, cookiefile):
-        """Securely load session cookies from JSON instead of pickle"""
-        try:
-            with open(cookiefile, 'r', encoding='utf-8') as f:
-                cookie_dict = json.load(f)
-
-            # Convert dictionary back to session cookies
-            for name, cookie_data in cookie_dict.items():
-                session.cookies.set(
-                    name=name,
-                    value=cookie_data['value'],
-                    domain=cookie_data.get('domain'),
-                    path=cookie_data.get('path', '/'),
-                    secure=cookie_data.get('secure', False)
-                )
-
-        except OSError as e:
-            console.print(f"[red]Error reading cookie file: {e}")
-            raise
-        except json.JSONDecodeError as e:
-            console.print(f"[red]Error decoding JSON from cookie file: {e}")
-            raise
-
-    def _load_cookies_dict_secure(self, cookiefile):
-        """Securely load cookies as dictionary from JSON instead of pickle"""
-        try:
-            with open(cookiefile, 'r', encoding='utf-8') as f:
-                cookie_dict = json.load(f)
-            return cookie_dict
-        except OSError as e:
-            console.print(f"[red]Error reading cookie file: {e}")
-            raise
-        except json.JSONDecodeError as e:
-            console.print(f"[red]Error decoding JSON from cookie file: {e}")
-            raise
+        self.cookie_validator = CookieValidator(config)
 
     async def edit_name(self, meta):
         ttg_name = meta['name']
@@ -225,7 +163,7 @@ class TTG():
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
-                    self._load_cookies_secure(session, cookiefile)
+                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
                     up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
                     mi_dump.close()
@@ -247,7 +185,7 @@ class TTG():
         if not os.path.exists(cookiefile):
             console.print("[bold red]Cookie file not found: TTG.json")
             return []
-        cookies = self._load_cookies_dict_secure(cookiefile)
+        cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)
 
         if int(meta['imdb_id']) != 0:
             imdb = f"imdb{meta['imdb']}"
@@ -310,7 +248,7 @@ class TTG():
         url = "https://totheglory.im"
         if os.path.exists(cookiefile):
             with requests.Session() as session:
-                self._load_cookies_secure(session, cookiefile)
+                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
                 resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
@@ -346,7 +284,7 @@ class TTG():
                 await asyncio.sleep(0.5)
             if response.url.endswith('my.php'):
                 console.print('[green]Successfully logged into TTG')
-                self._save_cookies_secure(session.cookies, cookiefile)
+                self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
             else:
                 console.print('[bold red]Something went wrong')
                 await asyncio.sleep(1)

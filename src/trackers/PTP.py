@@ -5,12 +5,10 @@ import click
 import glob
 import httpx
 import json
-import pickle  # nosec B403 - Only used for legacy cookie migration
 import platform
 import os
 import re
 import requests
-import stat
 
 from pathlib import Path
 from pymediainfo import MediaInfo
@@ -20,6 +18,7 @@ from cogs.redaction import redact_private_info
 from data.config import config
 from src.bbcode import BBCODE
 from src.console import console
+from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
 from src.rehostimages import check_hosts
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
@@ -97,121 +96,7 @@ class PTP():
             ("Vietnamese", "vie", "vi"): 25,
         }
 
-    def _save_cookies_secure(self, session_cookies, cookiefile):
-        """Securely save session cookies using JSON instead of pickle"""
-        try:
-            # Convert RequestsCookieJar to dictionary for JSON serialization
-            cookie_dict = {}
-            for cookie in session_cookies:
-                cookie_dict[cookie.name] = {
-                    'value': cookie.value,
-                    'domain': cookie.domain,
-                    'path': cookie.path,
-                    'secure': cookie.secure,
-                    'expires': cookie.expires
-                }
-
-            with open(cookiefile, 'w', encoding='utf-8') as f:
-                json.dump(cookie_dict, f, indent=2)
-
-            # Set restrictive permissions (0o600) to protect cookie secrets
-            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
-
-        except OSError as e:
-            console.print(f"[red]Error with cookie file operations: {e}[/red]")
-            raise
-        except (TypeError, ValueError) as e:
-            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
-            raise
-
-    def _load_cookies_secure(self, session, cookiefile):
-        """Securely load session cookies from JSON instead of pickle"""
-
-        # Check for legacy pickle file and migrate if needed
-        pickle_file = cookiefile.replace('.json', '.pickle')
-        legacy_pickle_file = f"{os.path.dirname(cookiefile)}/PTP"  # Legacy filename without extension
-
-        # Try to migrate from pickle files
-        for potential_pickle in [pickle_file, legacy_pickle_file]:
-            if os.path.exists(potential_pickle) and not os.path.exists(cookiefile):
-                try:
-                    console.print(f"[yellow]Migrating legacy cookie file from {potential_pickle} to {cookiefile}[/yellow]")
-
-                    # Load the pickle file
-                    with open(potential_pickle, 'rb') as f:
-                        session_cookies = pickle.load(f)  # nosec B301 - Legacy migration only
-
-                    # Convert to JSON format
-                    cookie_dict = {}
-                    for cookie in session_cookies:
-                        cookie_dict[cookie.name] = {
-                            'value': cookie.value,
-                            'domain': cookie.domain,
-                            'path': cookie.path,
-                            'secure': cookie.secure,
-                            'expires': getattr(cookie, 'expires', None)
-                        }
-
-                    # Save as JSON
-                    with open(cookiefile, 'w', encoding='utf-8') as f:
-                        json.dump(cookie_dict, f, indent=2)
-
-                    # Set restrictive permissions
-                    os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
-
-                    # Verify the migration was successful by loading the JSON
-                    try:
-                        with open(cookiefile, 'r', encoding='utf-8') as f:
-                            json.load(f)  # Just verify it can be loaded
-
-                        # Migration verified successful - delete the old pickle file
-                        os.remove(potential_pickle)
-                        console.print(f"[green]Successfully migrated cookies to JSON format and removed legacy file {potential_pickle}[/green]")
-
-                    except (OSError, json.JSONDecodeError) as verify_error:
-                        console.print(f"[red]Migration verification failed: {verify_error}. Keeping original file {potential_pickle}[/red]")
-                        # Remove the potentially corrupted JSON file
-                        if os.path.exists(cookiefile):
-                            os.remove(cookiefile)
-                        raise
-
-                    break
-
-                except Exception as e:
-                    console.print(f"[red]Error migrating cookie file {potential_pickle}: {e}[/red]")
-                    # Continue to try next potential file or load JSON normally
-                    continue
-
-            elif os.path.exists(potential_pickle) and os.path.exists(cookiefile):
-                os.remove(potential_pickle)
-                console.print(f"[yellow]Removed legacy cookie file {potential_pickle}. Using JSON file.[/yellow]")
-
-        # Load cookies from JSON file
-        try:
-            with open(cookiefile, 'r', encoding='utf-8') as f:
-                cookie_dict = json.load(f)
-
-            # Convert dictionary back to session cookies
-            for name, cookie_data in cookie_dict.items():
-                # Prevent None domain values
-                domain = cookie_data.get('domain')
-                if domain is None:
-                    domain = ''  # Use empty string instead of None
-
-                session.cookies.set(
-                    name=name,
-                    value=cookie_data['value'],
-                    domain=domain,
-                    path=cookie_data.get('path', '/'),
-                    secure=cookie_data.get('secure', False)
-                )
-
-        except OSError as e:
-            console.print(f"[red]Error reading cookie file: {e}[/red]")
-            raise
-        except json.JSONDecodeError as e:
-            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
-            raise
+        self.cookie_validator = CookieValidator(config)
 
     def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
@@ -1394,7 +1279,7 @@ class PTP():
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                self._load_cookies_secure(session, cookiefile)
+                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
                 uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
                 loggedIn = await self.validate_login(uploadresponse)
             else:
@@ -1424,11 +1309,23 @@ class PTP():
                         if resp["Result"] != "Ok":
                             raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
                         AntiCsrfToken = resp["AntiCsrfToken"]
-                        self._save_cookies_secure(session.cookies, cookiefile)
+                        self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
                     except Exception:
-                        raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
+                        try:
+                            parsed = json.loads(loginresponse.text)
+                            redacted = redact_private_info(parsed)
+                            redacted_text = json.dumps(redacted)
+                        except json.JSONDecodeError:
+                            redacted_text = redact_private_info(loginresponse.text)
+                        raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
                 except Exception:
-                    raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
+                    try:
+                        parsed = json.loads(loginresponse.text)
+                        redacted = redact_private_info(parsed)
+                        redacted_text = json.dumps(redacted)
+                    except json.JSONDecodeError:
+                        redacted_text = redact_private_info(loginresponse.text)
+                    raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
     async def validate_login(self, response):
@@ -1632,7 +1529,7 @@ class PTP():
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
-                    self._load_cookies_secure(session, cookiefile)
+                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
                     response = session.post(url=url, data=data, headers=headers, files=files, timeout=60)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text
