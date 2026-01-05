@@ -851,7 +851,7 @@ class ASC:
         data = await self.get_data(meta)
         upload_url = await self.get_upload_url(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -863,6 +863,9 @@ class ASC:
             id_pattern=r'torrents-details\.php\?id=(\d+)',
             success_text="torrents-details.php?id=",
         )
+
+        if not is_uploaded:
+            return False
 
         # Approval
         should_approve = await self.get_approval(meta)

@@ -427,6 +427,8 @@ class PTER():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                return True  # Debug mode - simulated success
             else:
                 cookiefile = f"{meta['base_dir']}/data/cookies/PTER.txt"
                 if os.path.exists(cookiefile):
@@ -440,11 +442,14 @@ class PTER():
                             console.print(f"[green]Uploaded to: [yellow]{up.url.replace('&uploaded=1', '')}[/yellow][/green]")
                             id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                             await self.download_new_torrent(id, torrent_path)
+                            meta['tracker_status'][self.tracker]['status_message'] = up.url.replace('&uploaded=1', '')
+                            meta['tracker_status'][self.tracker]['torrent_id'] = id
+                            return True
                         else:
                             console.print(data)
                             console.print("\n\n")
                             raise UploadException(f"Upload to Pter Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa #F405
-        return
+        return False
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://pterclub.com/download.php?id={id}&passkey={self.passkey}"

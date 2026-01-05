@@ -333,7 +333,7 @@ class HDT:
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -347,5 +347,8 @@ class HDT:
             default_announce='https://hdts-announce.ru/announce.php',
             additional_files=files,
         )
+
+        if not is_uploaded:
+            return False
 
         return True

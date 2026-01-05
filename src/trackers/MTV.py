@@ -195,6 +195,7 @@ class MTV():
                 debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
         return False
 

@@ -1232,8 +1232,9 @@ class BJS:
         issue = await self.check_data(meta, data)
         if issue:
             meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
+            return False
         else:
-            await self.cookie_auth_uploader.handle_upload(
+            is_uploaded = await self.cookie_auth_uploader.handle_upload(
                 meta=meta,
                 tracker=self.tracker,
                 source_flag=self.source_flag,
@@ -1245,5 +1246,8 @@ class BJS:
                 id_pattern=r'torrentid=(\d+)',
                 success_text="action=download&id=",
             )
+
+        if not is_uploaded:
+            return False
 
         return True

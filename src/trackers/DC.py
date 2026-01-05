@@ -3,6 +3,8 @@
 import aiofiles
 import httpx
 import os
+
+from cogs.redaction import redact_private_info
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
@@ -286,6 +288,7 @@ class DC:
 
         else:
             console.print("[cyan]DC Request Data:")
-            console.print(data)
+            console.print(redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading'
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success

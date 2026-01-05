@@ -395,6 +395,8 @@ class CookieAuthUploader:
         if meta.get("debug", False):
             self.upload_debug(tracker, data)
             meta["tracker_status"][tracker]["status_message"] = "Debug mode enabled, not uploading"
+            await self.common.create_torrent_for_upload(meta, f"{tracker}" + "_DEBUG", f"{tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True
 
         else:
             success = False
@@ -438,6 +440,7 @@ class CookieAuthUploader:
                             error_text,
                             response,
                         )
+                        return False
 
             except httpx.ConnectTimeout:
                 meta["tracker_status"][tracker]["status_message"] = "Connection timed out"

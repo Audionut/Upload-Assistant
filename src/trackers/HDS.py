@@ -341,7 +341,7 @@ class HDS:
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -354,5 +354,8 @@ class HDS:
             success_text="download.php?id=",
             additional_files=files,
         )
+
+        if not is_uploaded:
+            return False
 
         return True

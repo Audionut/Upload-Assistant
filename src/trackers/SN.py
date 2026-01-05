@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-import requests
 import asyncio
 import httpx
+import requests
 
-from src.trackers.COMMON import COMMON
+from cogs.redaction import redact_private_info
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 class SN():
@@ -122,9 +123,10 @@ class SN():
                 console.print_exception()
                 return False
         else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
+            console.print("[cyan]SN Request Data:")
+            console.print(redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta):

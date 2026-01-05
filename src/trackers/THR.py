@@ -138,9 +138,10 @@ class THR():
                 console.print("[yellow]It may have uploaded, please check THR manually")
                 return False
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]THR Request Data:")
             console.print(payload)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return False
 
     async def get_cat_id(self, meta):

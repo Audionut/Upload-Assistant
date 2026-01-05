@@ -114,6 +114,7 @@ class RTF():
                 debug_data['file'] = debug_data['file'][:10] + '...'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
     async def search_existing(self, meta, disctype):

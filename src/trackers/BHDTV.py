@@ -114,6 +114,7 @@ class BHDTV():
                 console.print("[cyan]BHDTV Request Data:")
                 console.print(redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True
         finally:
             open_torrent.close()
