@@ -501,8 +501,17 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
 
-    initial_img_host = config['DEFAULT'][f'img_host_{img_host_num}']
-    img_host = meta['imghost']
+    def _clean_host(value):
+        return str(value).strip() if value is not None else ""
+
+    initial_img_host = _clean_host(config['DEFAULT'][f'img_host_{img_host_num}'])
+    img_host = _clean_host(meta.get('imghost'))
+
+    # Track hosts we've attempted for this upload session to avoid looping on duplicates.
+    # Store in return_dict so it doesn't get persisted into meta.json.
+    attempted_hosts = return_dict.setdefault('_imghost_attempts', [])
+    if img_host and img_host not in attempted_hosts:
+        attempted_hosts.append(img_host)
 
     # Check if current host is allowed, if not find an approved one
     if allowed_hosts is not None and img_host not in allowed_hosts:
@@ -510,13 +519,13 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
         # Find the first approved host from config
         approved_host = None
-        for i in range(1, 10):  # Check img_host_1 through img_host_9
-            host_key = f'img_host_{i}'
+        for host_index in range(1, 10):  # Check img_host_1 through img_host_9
+            host_key = f'img_host_{host_index}'
             if host_key in config['DEFAULT']:
-                host = config['DEFAULT'][host_key]
-                if host in allowed_hosts:
+                host = _clean_host(config['DEFAULT'][host_key])
+                if host and host in allowed_hosts:
                     approved_host = host
-                    img_host_num = i
+                    img_host_num = host_index
                     console.print(f"[green]Switching to approved image host: {approved_host}[/green]")
                     break
 
@@ -525,6 +534,25 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         else:
             console.print(f"[red]No approved image hosts found in config. Available: {allowed_hosts}[/red]")
             return meta['image_list'], len(meta['image_list'])
+
+    if not img_host:
+        # If the current host is blank/invalid, try to find a usable one from config.
+        for host_index in range(1, 10):
+            host_key = f'img_host_{host_index}'
+            if host_key in config['DEFAULT']:
+                candidate = _clean_host(config['DEFAULT'][host_key])
+                if not candidate:
+                    continue
+                if allowed_hosts is not None and candidate not in allowed_hosts:
+                    continue
+                img_host = candidate
+                img_host_num = host_index
+                meta['imghost'] = candidate
+                console.print(f"[green]Switching to configured image host: {candidate}[/green]")
+                break
+
+    if not img_host:
+        raise Exception("No image host configured. Set img_host_1 (or use -ih) and ensure it is not blank.")
 
     if meta['debug']:
         console.print(f"[blue]Using image host: {img_host} (configured: {initial_img_host})[/blue]")
@@ -571,8 +599,9 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         existing_images = [img for img in meta['image_list'] if img.get('img_url') and img.get('web_url')]
         existing_count = len(existing_images)
 
-    # Determine images needed
-    images_needed = total_screens - existing_count if not retry_mode else total_screens
+    # We can't reliably map already-uploaded URLs back to local filenames, so we always attempt
+    # up to total_screens local images and let per-host duplicate detection skip as needed.
+    images_needed = total_screens
     if meta['debug']:
         console.print(f"[blue]Existing images: {existing_count}, Images needed: {images_needed}, Total screens: {total_screens}[/blue]")
 
@@ -679,17 +708,42 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
             console.print(f"[blue]Double checking current image host: {img_host}, Initial image host: {initial_img_host}[/blue]")
             console.print(f"[blue]retry_mode: {retry_mode}, using_custom_img_list: {using_custom_img_list}[/blue]")
             console.print(f"[blue]successfully_uploaded={len(successfully_uploaded)}, meta['image_list']={len(meta['image_list'])}, cutoff={meta.get('cutoff', 1)}[/blue]")
-        if (len(successfully_uploaded) + len(meta['image_list'])) < images_needed and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
-            img_host_num += 1
-            if f'img_host_{img_host_num}' in config['DEFAULT']:
-                meta['imghost'] = config['DEFAULT'][f'img_host_{img_host_num}']
-                console.print(f"[cyan]Switching to the next image host: {meta['imghost']}[/cyan]")
+        # If we didn't get enough images, try additional configured hosts (if any).
+        # Note: we allow host switching even in retry_mode, otherwise a second host failure
+        # would always terminate the run.
+        if (len(successfully_uploaded) + len(meta['image_list'])) < total_screens and not using_custom_img_list:
+            next_host_num = img_host_num + 1
+            while True:
+                host_key = f'img_host_{next_host_num}'
+                if host_key not in config['DEFAULT']:
+                    break
+                candidate = _clean_host(config['DEFAULT'][host_key])
+                if not candidate:
+                    next_host_num += 1
+                    continue
+                if allowed_hosts is not None and candidate not in allowed_hosts:
+                    next_host_num += 1
+                    continue
+                if candidate in attempted_hosts:
+                    next_host_num += 1
+                    continue
+                break
 
-                gc.collect()
-                return await upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
+            if f'img_host_{next_host_num}' in config['DEFAULT']:
+                next_host = _clean_host(config['DEFAULT'][f'img_host_{next_host_num}'])
+                if next_host:
+                    meta['imghost'] = next_host
+                    console.print(f"[cyan]Switching to the next image host: {meta['imghost']}[/cyan]")
+                    gc.collect()
+                    return await upload_screens(meta, screens, next_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
             else:
-                console.print("[red]No more image hosts available. Aborting upload process.")
-                return meta['image_list'], len(meta['image_list'])
+                # No more hosts to try.
+                if len(meta.get('image_list', [])) > 0:
+                    console.print("[yellow]No more image hosts available. Continuing with existing uploaded images.[/yellow]")
+                    return meta['image_list'], len(meta['image_list'])
+
+                tried = ", ".join(attempted_hosts) if attempted_hosts else str(img_host)
+                raise Exception(f"No images uploaded. Tried image hosts: {tried}. Configure additional image hosts or use a different -ih")
 
         # Process and store successfully uploaded images
         new_images = []
@@ -714,6 +768,9 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
             if not using_custom_img_list:
                 console.print(f"[green]Successfully obtained and uploaded {len(new_images)} images.")
         else:
+            # Don't fail if we already have images from a previous host.
+            if not using_custom_img_list and len(meta.get('image_list', [])) > 0:
+                return meta['image_list'], len(meta.get('image_list', []))
             raise Exception("No images uploaded. Configure additional image hosts or use a different -ih")
 
         if meta['debug']:
