@@ -87,7 +87,17 @@ jobs:
       continue-on-error: true
       run: |
         echo "Running type checking..."
-        mypy --config-file mypy.ini src/ || true
+        mypy --config-file mypy.ini src/ bin/ upload.py config-generator.py discordbot.py > mypy-results.txt 2>&1 || echo "MyPy scan completed with results saved"
+        
+        # Display results
+        cat mypy-results.txt
+
+    - name: Upload MyPy Results
+      if: github.event_name == 'pull_request'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mypy-results-${{ matrix.python-version }}
+        path: mypy-results.txt
 
     - name: Security Analysis with Bandit
       continue-on-error: false
@@ -210,6 +220,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         pattern: safety-results-*
+        merge-multiple: true
+        
+    - name: Download MyPy Results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: mypy-results-*
         merge-multiple: true
         
     - name: Post Bandit Results to PR
@@ -348,9 +364,53 @@ jobs:
             }
           }
           
+          // Check for merged mypy-results.txt file
+          const mypyFile = 'mypy-results.txt';
+          let mypyResults = '';
+          
+          if (fs.existsSync(mypyFile)) {
+            try {
+              mypyResults = fs.readFileSync(mypyFile, 'utf8');
+              console.log('Found merged MyPy results file');
+            } catch (error) {
+              console.log(`Error reading MyPy file: ${error.message}`);
+            }
+          } else {
+            // Fallback: look for individual result directories
+            console.log('Merged MyPy file not found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('mypy-results-'));
+            
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+                
+                if (stat.isDirectory()) {
+                  const filePath = path.join(itemPath, 'mypy-results.txt');
+                  if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    if (content.trim()) {
+                      mypyResults += content + '\n\n';
+                      console.log(`Found MyPy results in ${item}`);
+                    }
+                  }
+                } else if (stat.isFile() && item.endsWith('.txt')) {
+                  const content = fs.readFileSync(itemPath, 'utf8');
+                  if (content.trim()) {
+                    mypyResults += content + '\n\n';
+                    console.log(`Found MyPy results in ${item}`);
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading MyPy ${item}: ${error.message}`);
+              }
+            }
+          }
+          
           banditResults = banditResults.trim();
           vultureResults = vultureResults.trim();
           safetyResults = safetyResults.trim();
+          mypyResults = mypyResults.trim();
           
           // Filter out manager warnings about test comments from Bandit results
           let cleanBanditResults = '';
@@ -364,14 +424,19 @@ jobs:
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
           const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
+          const hasMyPyIssues = mypyResults && !mypyResults.includes('Success: no issues found') && mypyResults.trim() !== '';
           
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues) {
-            console.log('No security, dead code, or dependency issues found, skipping PR comment.');
+          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasMyPyIssues) {
+            console.log('No security, dead code, dependency, or type issues found, skipping PR comment.');
             return;
           }
           
           // Build the comment body
           let body = '## 🔍 Code Analysis Results\n\n';
+          
+          if (hasMyPyIssues) {
+            body += '### 🔍 MyPy Type Checking\n\n```\n' + mypyResults + '\n```\n\n';
+          }
           
           if (hasBanditIssues) {
             body += '### 🔒 Bandit Security Analysis\n\n```\n' + cleanBanditResults + '\n```\n\n';

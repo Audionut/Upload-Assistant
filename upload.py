@@ -59,7 +59,7 @@ except Exception:
         cli_ui.info(cli_ui.red, "Follow the setup instructions: https://github.com/Audionut/Upload-Assistant")
         exit()
     else:
-        console.print(traceback.print_exc())
+        traceback.print_exc()
 
 from src.prep import Prep  # noqa E402
 client = Clients(config=config)
