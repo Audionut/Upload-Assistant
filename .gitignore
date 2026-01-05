@@ -1,9 +1,13 @@
+data/banned/*.*
 data/config.json
 data/config.py
 data/config*
-data/tags.json
 data/cookies/
-data/banned/*.*
+data/cookies/*.txt
+data/cookies/*.pkl
+data/cookies/*.pickle
+data/tags.json
+data/tvdb/
 data/web_ui/*.*
 data/web_ui/templates/*.html
 data/web_ui/static/js/*.js
