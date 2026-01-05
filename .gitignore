@@ -3,9 +3,6 @@ data/config.json
 data/config.py
 data/config*
 data/cookies/
-data/cookies/*.txt
-data/cookies/*.pkl
-data/cookies/*.pickle
 data/tags.json
 data/tvdb/
 data/web_ui/*.*
