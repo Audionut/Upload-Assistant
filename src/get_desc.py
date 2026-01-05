@@ -534,10 +534,12 @@ class DescriptionBuilder:
         title, episode_image, episode_overview = await self.get_tv_info(meta, tracker)
         if episode_overview:
             if tracker == "HUNO":
-                desc_parts.append(f"[center]{title}[/center]\n")
+                if title:
+                    desc_parts.append(f"[center]{title}[/center]\n")
                 desc_parts.append(f"[center]{episode_overview}[/center]\n")
             else:
-                desc_parts.append(f"[center][pre]{title}[/pre][/center]\n")
+                if title:
+                    desc_parts.append(f"[center][pre]{title}[/pre][/center]\n")
                 desc_parts.append(f"[center][pre]{episode_overview}[/pre][/center]\n")
 
         # Description that may come from API requests
@@ -598,7 +600,6 @@ class DescriptionBuilder:
 
         # Formatting
         bbcode = BBCODE()
-        description = bbcode.convert_pre_to_code(description)
         description = bbcode.convert_hide_to_spoiler(description)
         description = description.replace("[user]", "").replace("[/user]", "")
         description = description.replace("[hr]", "").replace("[/hr]", "")
@@ -1282,7 +1283,7 @@ class DescriptionBuilder:
         if total_files_to_process > 1:
             console.print()
 
-        description = "".join(part for part in desc_parts if part.strip())
+        description = "".join(desc_parts)
 
         return description
 
