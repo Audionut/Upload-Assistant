@@ -216,6 +216,7 @@ def kill_all_threads():
 
 # Wrapped "erase key check and save" in tty check so that Python won't complain if UA is called by a script
 if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
+    erase_key = None  # Initialize to safe default
     try:
         output = subprocess.check_output(['stty', '-a']).decode()
         match = re.search(r' erase = (\S+);', output)
@@ -237,7 +238,8 @@ def reset_terminal():
         if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
             try:
                 subprocess.run(["stty", "sane"], check=False)
-                subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
+                if erase_key is not None:
+                    subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
                 if hasattr(termios, 'tcflush'):
                     tciflush = getattr(termios, 'TCIOFLUSH', None)
                     if tciflush is not None:

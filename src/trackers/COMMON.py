@@ -62,10 +62,17 @@ class COMMON():
                     new_torrent.metainfo['created by'] = f"{created_by} using Upload Assistant"
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
-            if int(meta.get('entropy', None)) == 32:
-                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)  # type: ignore
-            elif int(meta.get('entropy', None)) == 64:
-                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)  # type: ignore
+            entropy_value = meta.get('entropy')
+            if entropy_value is not None:
+                try:
+                    entropy_int = int(entropy_value)
+                    if entropy_int == 32:
+                        new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)  # type: ignore
+                    elif entropy_int == 64:
+                        new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)  # type: ignore
+                except (ValueError, TypeError):
+                    # Skip entropy setting if value is invalid
+                    pass
             out_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 

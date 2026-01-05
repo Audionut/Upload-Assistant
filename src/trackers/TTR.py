@@ -7,7 +7,6 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class TTR(UNIT3D):
-    ttr_name: str = ''
 
     def __init__(self, config):
         super().__init__(config, tracker_name='TTR')
@@ -20,11 +19,12 @@ class TTR(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
+        self.ttr_name = ''  # Initialize instance variable
         pass
 
     async def get_name(self, meta):
         try:
-            name = TTR.ttr_name
+            name = self.ttr_name
         except AttributeError:
             name = await self.build_name(meta)
 
@@ -105,7 +105,7 @@ class TTR(UNIT3D):
         if tag:
             name += tag
 
-        TTR.ttr_name = name
+        self.ttr_name = name
 
         return name
 

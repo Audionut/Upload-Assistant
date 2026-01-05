@@ -53,7 +53,7 @@ class TTG():
         except OSError as e:
             console.print(f"[red]Error with cookie file operations: {e}")
             raise
-        except json.JSONEncodeError as e:
+        except (TypeError, ValueError) as e:
             console.print(f"[red]Error encoding cookies to JSON: {e}")
             raise
 

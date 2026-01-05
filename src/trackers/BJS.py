@@ -581,7 +581,7 @@ class BJS:
 
         found_items = []
         for result in ajax_results:
-            if isinstance(result, BaseException):
+            if isinstance(result, Exception):
                 console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
                 continue
 

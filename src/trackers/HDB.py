@@ -439,7 +439,7 @@ class HDB():
             'passkey': self.passkey,
             'id': id
         }
-        r = requests.get(url=api_url, data=json.dumps(data), timeout=30)
+        r = requests.post(url=api_url, data=json.dumps(data), timeout=30)
         filename = r.json()['data'][0]['filename']
 
         # Download new .torrent
