@@ -50,6 +50,54 @@ def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
     return safe
 
 
+def _get_browse_roots() -> list[str]:
+    raw = os.environ.get('UA_BROWSE_ROOTS', '').strip()
+    if not raw:
+        return [os.path.abspath(os.sep)]
+
+    roots: list[str] = []
+    for part in raw.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        root = os.path.abspath(part)
+        roots.append(root)
+
+    return roots or [os.path.abspath(os.sep)]
+
+
+def _resolve_browse_path(user_path: str | None) -> str:
+    roots = _get_browse_roots()
+    default_root = roots[0]
+
+    if user_path is None or user_path == '':
+        candidate = default_root
+    else:
+        if not isinstance(user_path, str):
+            raise ValueError('Path must be a string')
+        if len(user_path) > 4096:
+            raise ValueError('Invalid path')
+        if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
+            raise ValueError('Invalid characters in path')
+
+        # Treat relative paths as relative to the default root.
+        candidate = user_path if os.path.isabs(user_path) else os.path.join(default_root, user_path)
+
+    candidate = os.path.abspath(os.path.normpath(candidate))
+
+    # Enforce allowlist of roots.
+    for root in roots:
+        root_abs = os.path.abspath(root)
+        try:
+            if os.path.commonpath([candidate, root_abs]) == root_abs:
+                return candidate
+        except ValueError:
+            # Different drive on Windows, etc.
+            continue
+
+    raise ValueError('Browsing this path is not allowed')
+
+
 def strip_ansi(text):
     """Remove ANSI escape codes from text"""
     return ANSI_ESCAPE.sub('', text)
@@ -79,7 +127,12 @@ def health():
 @app.route('/api/browse')
 def browse_path():
     """Browse filesystem paths"""
-    path = request.args.get('path', '/')
+    requested = request.args.get('path', '')
+    try:
+        path = _resolve_browse_path(requested)
+    except ValueError as e:
+        return jsonify({'error': str(e), 'success': False}), 400
+
     print(f"Browsing path: {path}")
 
     try:
