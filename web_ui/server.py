@@ -23,18 +23,6 @@ ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 active_processes = {}
 
 
-def _validate_upload_assistant_path(user_path: str) -> str:
-    if not isinstance(user_path, str):
-        raise ValueError('Path must be a string')
-    if not user_path or len(user_path) > 4096:
-        raise ValueError('Invalid path')
-    if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
-        raise ValueError('Invalid characters in path')
-    if not os.path.exists(user_path):
-        raise ValueError(f'Path does not exist: {user_path}')
-    return user_path
-
-
 def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
     # These are passed to upload.py (not the Python interpreter) and are executed
     # with shell=False. Still validate to avoid control characters and abuse.
@@ -66,7 +54,12 @@ def _get_browse_roots() -> list[str]:
     return roots or [os.path.abspath(os.sep)]
 
 
-def _resolve_browse_path(user_path: str | None) -> str:
+def _resolve_user_path(
+    user_path: str | None,
+    *,
+    require_exists: bool = True,
+    require_dir: bool = False,
+) -> str:
     roots = _get_browse_roots()
     default_root = roots[0]
 
@@ -80,22 +73,38 @@ def _resolve_browse_path(user_path: str | None) -> str:
         if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
             raise ValueError('Invalid characters in path')
 
+        expanded = os.path.expandvars(os.path.expanduser(user_path))
         # Treat relative paths as relative to the default root.
-        candidate = user_path if os.path.isabs(user_path) else os.path.join(default_root, user_path)
+        candidate = expanded if os.path.isabs(expanded) else os.path.join(default_root, expanded)
 
     candidate = os.path.abspath(os.path.normpath(candidate))
 
     # Enforce allowlist of roots.
+    allowed = False
     for root in roots:
         root_abs = os.path.abspath(root)
         try:
             if os.path.commonpath([candidate, root_abs]) == root_abs:
-                return candidate
+                allowed = True
+                break
         except ValueError:
             # Different drive on Windows, etc.
             continue
 
-    raise ValueError('Browsing this path is not allowed')
+    if not allowed:
+        raise ValueError('Browsing this path is not allowed')
+
+    if require_exists and not os.path.exists(candidate):
+        raise ValueError(f'Path does not exist: {candidate}')
+
+    if require_dir and not os.path.isdir(candidate):
+        raise ValueError(f'Not a directory: {candidate}')
+
+    return candidate
+
+
+def _resolve_browse_path(user_path: str | None) -> str:
+    return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 
 def strip_ansi(text):
@@ -136,18 +145,6 @@ def browse_path():
     print(f"Browsing path: {path}")
 
     try:
-        if not os.path.exists(path):
-            return jsonify({
-                'error': f'Path does not exist: {path}',
-                'success': False
-            }), 404
-
-        if not os.path.isdir(path):
-            return jsonify({
-                'error': f'Not a directory: {path}',
-                'success': False
-            }), 400
-
         items = []
         try:
             for item in sorted(os.listdir(path)):
@@ -216,7 +213,7 @@ def execute_command():
         def generate():
             try:
                 # Build command to run upload.py directly
-                validated_path = _validate_upload_assistant_path(path)
+                validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
 
                 upload_script = '/Upload-Assistant/upload.py'
                 command = [sys.executable, '-u', upload_script]
