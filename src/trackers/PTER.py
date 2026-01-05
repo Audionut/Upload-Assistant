@@ -269,22 +269,32 @@ class PTER():
         with requests.Session() as session:
             if os.path.exists(cookiefile):
                 self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
-                files = {}
-                for i in range(len(images)):
-                    files = {'source': open(images[i], 'rb')}
-                    req = session.post(f'{url}/json', data=data, files=files, timeout=60)
-                    try:
-                        res = req.json()
-                    except json.decoder.JSONDecodeError:
-                        res = {}
-                    if not req.ok:
-                        if res['error']['message'] in ('重复上传', 'Duplicated upload'):
-                            continue
-                        raise Exception(f'HTTP {req.status_code}, reason: {res["error"]["message"]}')
-                    image_dict = {}
-                    image_dict['web_url'] = res['image']['url']
-                    image_dict['img_url'] = res['image']['url']
-                    image_list.append(image_dict)
+                for image_path in images:
+                    with open(image_path, 'rb') as f:
+                        files = {'source': f}
+                        req = session.post(f'{url}/json', data=data, files=files, timeout=60)
+
+                        res = None
+                        try:
+                            res = req.json()
+                        except json.decoder.JSONDecodeError:
+                            res = None
+
+                        message = None
+                        if isinstance(res, dict):
+                            message = res.get('error', {}).get('message')
+                        if not message:
+                            message = (req.reason or '').strip() or (req.text or '').strip()
+
+                        if not req.ok:
+                            if message in ('重复上传', 'Duplicated upload'):
+                                continue
+                            raise Exception(f'HTTP {req.status_code}, reason: {message}')
+
+                        image_dict = {}
+                        image_dict['web_url'] = res['image']['url']
+                        image_dict['img_url'] = res['image']['url']
+                        image_list.append(image_dict)
         return image_list
 
     async def edit_name(self, meta):

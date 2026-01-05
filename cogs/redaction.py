@@ -7,23 +7,80 @@ SENSITIVE_KEYS = {
 }
 
 
+def extract_json_blocks(text: str):
+    """Extract JSON-like blocks from a string using bracket counting.
+
+    Returns a list of (start, end) slices where `text[start:end]` is a candidate JSON
+    object (`{...}`) or array (`[...]`). This supports *nested* JSON by tracking a
+    bracket stack, and ignores brackets that occur inside quoted strings.
+
+    Notes / limitations:
+    - This is a best-effort extractor for embedded JSON substrings.
+    - It does not attempt to support non-standard JSON (JSON5, trailing commas, etc.).
+    - Blocks are only redacted if `json.loads` successfully parses them.
+    """
+    blocks: list[tuple[int, int]] = []
+    stack: list[str] = []
+    start: int | None = None
+    in_string = False
+    string_char: str | None = None
+    escape = False
+
+    for i, ch in enumerate(text):
+        if escape:
+            escape = False
+            continue
+
+        if in_string:
+            if ch == "\\":
+                escape = True
+            elif ch == string_char:
+                in_string = False
+                string_char = None
+            continue
+
+        if ch in ("\"", "'"):
+            in_string = True
+            string_char = ch
+            continue
+
+        if ch in ("{", "["):
+            if not stack:
+                start = i
+            stack.append(ch)
+            continue
+
+        if ch in ("}", "]") and stack:
+            top = stack[-1]
+            if (ch == "}" and top == "{") or (ch == "]" and top == "["):
+                stack.pop()
+                if not stack and start is not None:
+                    blocks.append((start, i + 1))
+                    start = None
+
+    return blocks
+
+
 def redact_value(val):
     """Redact sensitive values, including passkeys in URLs and JSON substrings."""
     if isinstance(val, str):
-        # First, try to find and redact JSON substrings within the string
-        # Look for JSON-like patterns: { ... } or [ ... ]
-        json_pattern = r'(\{[^{}]*\}|\[[^\[\]]*\])'
-
-        def redact_json_match(match):
-            json_str = match.group(1)
+        # First, try to find and redact embedded JSON substrings within the string.
+        # This uses bracket counting (not regex) so it can handle nested JSON.
+        blocks = extract_json_blocks(val)
+        for start, end in reversed(blocks):
+            json_str = val[start:end]
             try:
                 parsed = json.loads(json_str)
-                redacted = redact_private_info(parsed)
-                return json.dumps(redacted)
             except (json.JSONDecodeError, TypeError):
-                return json_str  # Return original if not valid JSON
+                continue
 
-        val = re.sub(json_pattern, redact_json_match, val)
+            try:
+                redacted = redact_private_info(parsed)
+                redacted_str = json.dumps(redacted)
+            except (TypeError, ValueError):
+                continue
+
+            val = val[:start] + redacted_str + val[end:]
 
         # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
         val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
