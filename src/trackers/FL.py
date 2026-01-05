@@ -175,7 +175,7 @@ class FL():
         fl_name = fl_name.replace(' ', '.').replace('..', '.')
         return fl_name
 
-    def _is_true(value):
+    def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
 
     async def upload(self, meta, disctype):

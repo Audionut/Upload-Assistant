@@ -202,10 +202,10 @@ async def extract_bluray_release_info(html_content, meta):
         dvd_sections = None
         soup = BeautifulSoup(html_content, 'lxml')
         if is_dvd:
-            dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
+            dvd_sections = soup.find_all('h3', string=re.compile(r'DVD Editions'))  # type: ignore
             selected_sections = dvd_sections
         else:
-            bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
+            bluray_sections = soup.find_all('h3', string=re.compile(r'Blu-ray Editions|4K Blu-ray Editions|3D Blu-ray Editions'))  # type: ignore
             selected_sections = bluray_sections
 
         if meta['debug']:
@@ -778,7 +778,7 @@ async def download_cover_images(meta):
 def extract_cover_images(html_content):
     cover_images = {}
     soup = BeautifulSoup(html_content, 'lxml')
-    scripts = soup.find_all('script', string=lambda s: s and "$(document).ready" in s and "append('<img id=" in s)
+    scripts = soup.find_all('script', string=re.compile(r'\$\(document\)\.ready.*append\(\'<img id="'))  # type: ignore
 
     for script in scripts:
         script_text = script.string

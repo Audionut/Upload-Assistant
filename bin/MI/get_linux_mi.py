@@ -25,7 +25,7 @@ def get_filename(system: str, arch: str, library_type: str = "cli") -> str:
         else:
             raise ValueError(f"Unknown library_type: {library_type}")
     else:
-        return None
+        return ""
 
 
 def get_url(system: str, arch: str, library_type: str = "cli") -> str:

@@ -241,10 +241,10 @@ class HDT:
             rows = soup.find_all('tr')
 
             for row in rows:
-                if row.find('td', class_='mainblockcontent', string='Filename') is not None:
+                if row.find(string='Filename', attrs={'class': 'mainblockcontent'}) is not None:  # type: ignore
                     continue
 
-                name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
+                name_tag = row.find('a', attrs={'href': re.compile(r'details\.php\?id=')})
 
                 name = name_tag.text.strip() if name_tag else None
                 link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None

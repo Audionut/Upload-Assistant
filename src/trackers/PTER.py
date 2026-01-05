@@ -328,7 +328,7 @@ class PTER():
                     if not req.ok:
                         if res['error']['message'] in ('重复上传', 'Duplicated upload'):
                             continue
-                        raise (f'HTTP {req.status_code}, reason: {res["error"]["message"]}')
+                        raise Exception(f'HTTP {req.status_code}, reason: {res["error"]["message"]}')
                     image_dict = {}
                     image_dict['web_url'] = res['image']['url']
                     image_dict['img_url'] = res['image']['url']

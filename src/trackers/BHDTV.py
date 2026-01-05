@@ -99,7 +99,7 @@ class BHDTV():
                         console.print("[cyan]It may have uploaded, go check")
                         # cprint(f"Request Data:", 'cyan')
                         console.print(redact_private_info(data))
-                        console.print(traceback.print_exc())
+                        traceback.print_exc()
 
                 open_torrent.close()
 

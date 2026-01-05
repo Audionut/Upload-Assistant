@@ -617,7 +617,7 @@ class HDB():
             image_patterns = ["*.png", ".[!.]*.png"]
             image_glob = []
             for pattern in image_patterns:
-                full_pattern = os.path.join(glob.escape(screenshot_dir), pattern)
+                full_pattern = os.path.join(glob.escape(screenshot_dir), str(pattern))
                 glob_results = await asyncio.to_thread(glob.glob, full_pattern)
                 image_glob.extend(glob_results)
             unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
@@ -661,7 +661,7 @@ class HDB():
             file_path = all_image_files[i]
             try:
                 filename = os.path.basename(file_path)
-                files[f'images_files[{i}]'] = (filename, open(file_path, 'rb'), 'image/png')
+                files[f'images_files[{i}]'] = (filename, open(file_path, 'rb'), 'image/png')  # type: ignore
                 if meta['debug']:
                     console.print(f"[cyan]Added file {filename} as images_files[{i}]")
             except Exception as e:

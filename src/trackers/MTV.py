@@ -183,7 +183,7 @@ class MTV():
                             return False
                     except Exception:
                         meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
-                        print(traceback.print_exc())
+                        traceback.print_exc()
                         return False
             except (httpx.RequestError, Exception) as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
@@ -738,7 +738,7 @@ class MTV():
         except Exception:
             console.print("[red]Unable to search for existing torrents on site. Most likely the site is down.")
             dupes.append("FAILED SEARCH")
-            print(traceback.print_exc())
+            traceback.print_exc()
             await asyncio.sleep(5)
 
         return dupes

@@ -5,6 +5,7 @@ import glob
 import httpx
 import os
 import platform
+import re
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
@@ -169,7 +170,7 @@ class HDS:
             torrent_rows = []
 
             for table in all_tables:
-                recommend_header = table.find('td', class_='block', string='Our Team Recommend')
+                recommend_header = table.find('td', attrs={'class': 'block'}, string=re.compile(r'Our Team Recommend'))  # type: ignore
                 if recommend_header:
                     continue
 

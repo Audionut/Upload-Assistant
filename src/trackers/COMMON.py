@@ -53,7 +53,7 @@ class COMMON():
             new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             for each in list(new_torrent.metainfo):
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
-                    new_torrent.metainfo.pop(each, None)
+                    new_torrent.metainfo.pop(each, None)  # type: ignore
             new_torrent.metainfo['announce'] = announce_url if announce_url else self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
@@ -63,9 +63,9 @@ class COMMON():
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
             new_torrent.metainfo['comment'] = ''
             if int(meta.get('entropy', None)) == 32:
-                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)  # type: ignore
             elif int(meta.get('entropy', None)) == 64:
-                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)
+                new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)  # type: ignore
             out_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 

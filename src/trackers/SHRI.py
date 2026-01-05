@@ -251,7 +251,7 @@ class SHRI(UNIT3D):
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
         # Extract tag and append if valid
-        tag = self._extract_clean_release_group(meta, name)
+        tag = self._extract_clean_release_group(meta)
         if tag:
             name = f"{name}-{tag}"
 
@@ -380,7 +380,7 @@ class SHRI(UNIT3D):
                 "_shri_distributor_id": distributor_id if distributor_name else None,
             }
 
-        return await super().get_additional_checks(meta)
+        return await super().get_additional_checks(meta)  # type: ignore
 
     async def get_region_id(self, meta):
         """Override to use validated region ID stored in meta"""

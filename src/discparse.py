@@ -314,7 +314,7 @@ class DiscParse():
 
                                     # Store simplified version with only file and duration, keeping only one per unique duration
                                     for playlist in valid_playlists:
-                                        rounded_duration = round(playlist["duration"])
+                                        rounded_duration = round(float(playlist["duration"]))
                                         if rounded_duration in duration_map:
                                             continue
 
@@ -324,7 +324,7 @@ class DiscParse():
                                         }
 
                                     simplified_playlists = list(duration_map.values())
-                                    simplified_playlists.sort(key=lambda x: x["duration"], reverse=True)
+                                    simplified_playlists.sort(key=lambda x: float(x["duration"]), reverse=True)
                                     discs[i]['all_valid_playlists'] = simplified_playlists
 
                                     if meta['debug']:

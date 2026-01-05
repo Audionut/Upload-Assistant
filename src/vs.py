@@ -92,11 +92,11 @@ def vs_screengn(source, encode=None, num=5, dir=".", config=None):
         for _ in range(num):
             frames.append(random.randint(start, end))  # nosec B311
         frames = sorted(frames)
-        frames = [f"{x}\n" for x in frames]
+        frame_lines = [f"{x}\n" for x in frames]
 
         # Write the frame numbers to a file for reuse
         with open(screens_file, "w") as txt:
-            txt.writelines(frames)
+            txt.writelines(frame_lines)
         print(f"Generated and saved new frame numbers to {screens_file}")
 
     # If an encode exists and is provided, crop and resize

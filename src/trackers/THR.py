@@ -115,7 +115,7 @@ class THR():
                         else:
                             console.print(f"[yellow]Upload response didn't contain 'uploaded=1'. URL: {response.url}")
                             soup = BeautifulSoup(response.text, 'html.parser')
-                            error_text = soup.find('h2', string=lambda text: text and 'Error' in text)
+                            error_text = soup.find('h2', string=re.compile(r'Error'))  # type: ignore
 
                             if error_text:
                                 error_message = error_text.find_next('p')
