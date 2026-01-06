@@ -658,7 +658,7 @@ async def process_meta(meta, base_dir, bot=None):
 
         # check for valid image hosts for trackers that require it
         for tracker_name in meta['trackers']:
-            if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'TVC']:
+            if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC']:
                 tracker_class = tracker_class_map[tracker_name](config=config)
                 await tracker_class.check_image_hosts(meta)
 
