@@ -29,7 +29,7 @@ def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
     safe: list[str] = []
     for tok in tokens:
         if not isinstance(tok, str):
-            raise ValueError('Invalid argument')
+            raise TypeError('Invalid argument')
         if not tok or len(tok) > 1024:
             raise ValueError('Invalid argument')
         if '\x00' in tok or '\n' in tok or '\r' in tok:
@@ -64,7 +64,7 @@ def _resolve_user_path(
     default_root = roots[0]
 
     if user_path is None or user_path == '':
-        candidate = default_root
+        candidate_path = Path(default_root)
     else:
         if not isinstance(user_path, str):
             raise ValueError('Path must be a string')
@@ -75,24 +75,34 @@ def _resolve_user_path(
 
         expanded = os.path.expandvars(os.path.expanduser(user_path))
         # Treat relative paths as relative to the default root.
-        candidate = expanded if os.path.isabs(expanded) else os.path.join(default_root, expanded)
+        candidate_path = Path(expanded) if os.path.isabs(expanded) else (Path(default_root) / expanded)
 
-    candidate = os.path.abspath(os.path.normpath(candidate))
+    # Canonicalize and validate the candidate path against the allowlisted roots.
+    # Using resolved (real) paths prevents traversal and symlink-escape issues.
+    try:
+        candidate_resolved = candidate_path.resolve(strict=False)
+    except (OSError, RuntimeError) as e:
+        raise ValueError('Invalid path') from e
 
-    # Enforce allowlist of roots.
     allowed = False
     for root in roots:
-        root_abs = os.path.abspath(root)
         try:
-            if os.path.commonpath([candidate, root_abs]) == root_abs:
-                allowed = True
-                break
+            root_resolved = Path(root).resolve(strict=False)
+        except (OSError, RuntimeError):
+            continue
+
+        try:
+            candidate_resolved.relative_to(root_resolved)
+            allowed = True
+            break
         except ValueError:
-            # Different drive on Windows, etc.
+            # Different drive on Windows, or outside the allowed root.
             continue
 
     if not allowed:
         raise ValueError('Browsing this path is not allowed')
+
+    candidate = str(candidate_resolved)
 
     if require_exists and not os.path.exists(candidate):
         raise ValueError(f'Path does not exist: {candidate}')
@@ -118,9 +128,9 @@ def index():
     try:
         return render_template('index.html')
     except Exception as e:
-        error_msg = f"Error loading template: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
-        print(error_msg)
-        return f"<pre>{error_msg}</pre>", 500
+        print(f"Error loading template: {e}")
+        print(traceback.format_exc())
+        return "<pre>Internal server error</pre>", 500
 
 
 @app.route('/api/health')
@@ -140,7 +150,9 @@ def browse_path():
     try:
         path = _resolve_browse_path(requested)
     except ValueError as e:
-        return jsonify({'error': str(e), 'success': False}), 400
+        # Log details server-side, but avoid leaking paths/internal details to clients.
+        print(f"Path resolution error for requested {requested!r}: {e}")
+        return jsonify({'error': 'Invalid path specified', 'success': False}), 400
 
     print(f"Browsing path: {path}")
 
@@ -168,9 +180,8 @@ def browse_path():
             print(f"Found {len(items)} items in {path}")
 
         except PermissionError:
-            error_msg = f'Permission denied: {path}'
-            print(f"Error: {error_msg}")
-            return jsonify({'error': error_msg, 'success': False}), 403
+            print(f"Error: Permission denied: {path}")
+            return jsonify({'error': 'Permission denied', 'success': False}), 403
 
         return jsonify({
             'items': items,
@@ -180,10 +191,9 @@ def browse_path():
         })
 
     except Exception as e:
-        error_msg = f'Error browsing {path}: {str(e)}'
-        print(f"Error: {error_msg}")
+        print(f"Error browsing {path}: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': error_msg, 'success': False}), 500
+        return jsonify({'error': 'Error browsing path', 'success': False}), 500
 
 
 @app.route('/api/execute', methods=['POST', 'OPTIONS'])
@@ -308,10 +318,9 @@ def execute_command():
                 yield f"data: {json.dumps({'type': 'exit', 'code': process.returncode})}\n\n"
 
             except Exception as e:
-                error_msg = f'Execution error: {str(e)}'
-                print(f"Error: {error_msg}")
+                print(f"Execution error for session {session_id}: {e}")
                 print(traceback.format_exc())
-                yield f"data: {json.dumps({'type': 'error', 'data': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'data': 'Execution error'})}\n\n"
 
                 # Clean up on error
                 if session_id in active_processes:
@@ -320,10 +329,9 @@ def execute_command():
         return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
-        error_msg = f'Request error: {str(e)}'
-        print(f"Error: {error_msg}")
+        print(f"Request error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': error_msg, 'success': False}), 500
+        return jsonify({'error': 'Request error', 'success': False}), 500
 
 
 @app.route('/api/input', methods=['POST'])
@@ -356,15 +364,16 @@ def send_input():
                 return jsonify({'error': 'Process not running', 'success': False}), 400
 
         except Exception as e:
-            print(f"Error writing to stdin: {str(e)}")
-            return jsonify({'error': f'Failed to write input: {str(e)}', 'success': False}), 500
+            print(f"Error writing to stdin for session {session_id}: {e}")
+            print(traceback.format_exc())
+            return jsonify({'error': 'Failed to write input', 'success': False}), 500
 
         return jsonify({'success': True})
 
     except Exception as e:
-        error_msg = f'Input error: {str(e)}'
-        print(f"Error: {error_msg}")
-        return jsonify({'error': error_msg, 'success': False}), 500
+        print(f"Input error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': 'Input error', 'success': False}), 500
 
 
 @app.route('/api/kill', methods=['POST'])
@@ -400,9 +409,9 @@ def kill_process():
         return jsonify({'success': True, 'message': 'Process terminated'})
 
     except Exception as e:
-        error_msg = f'Kill error: {str(e)}'
-        print(f"Error: {error_msg}")
-        return jsonify({'error': error_msg, 'success': False}), 500
+        print(f"Kill error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': 'Kill error', 'success': False}), 500
 
 
 @app.errorhandler(404)
