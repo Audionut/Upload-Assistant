@@ -9,6 +9,14 @@ services:
       - "5000:5000" #change left side to your specific port.
     environment:
       - ENABLE_WEB_UI=true
+      # Bind inside the container so the port mapping is reachable from LAN/other hosts.
+      - UA_WEBUI_HOST=0.0.0.0
+      - UA_WEBUI_PORT=5000
+      # Optional: enable HTTP Basic Auth for the Web UI/API (recommended if exposed beyond localhost)
+      # - UA_WEBUI_USERNAME=admin
+      # - UA_WEBUI_PASSWORD=change-me
+      # Optional: only needed if you serve the UI from a different origin/domain.
+      # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash
     command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
     volumes:

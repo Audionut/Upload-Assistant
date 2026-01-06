@@ -9,18 +9,82 @@ import traceback
 import re
 import threading
 import queue
+import hmac
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 app = Flask(__name__)
-CORS(app)
+
+
+def _parse_cors_origins() -> list[str]:
+    raw = os.environ.get('UA_WEBUI_CORS_ORIGINS', '').strip()
+    if not raw:
+        return []
+    origins: list[str] = []
+    for part in raw.split(','):
+        part = part.strip()
+        if part:
+            origins.append(part)
+    return origins
+
+
+cors_origins = _parse_cors_origins()
+if cors_origins:
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
 
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # Store active processes
 active_processes = {}
+
+
+def _webui_auth_configured() -> bool:
+    return bool(os.environ.get('UA_WEBUI_USERNAME')) or bool(os.environ.get('UA_WEBUI_PASSWORD'))
+
+
+def _webui_auth_ok() -> bool:
+    expected_username = os.environ.get('UA_WEBUI_USERNAME', '')
+    expected_password = os.environ.get('UA_WEBUI_PASSWORD', '')
+
+    # If auth is configured at all, require both values.
+    if not expected_username or not expected_password:
+        return False
+
+    auth = request.authorization
+    if not auth or auth.type != 'basic':
+        return False
+
+    # Constant-time compare to avoid leaking timing info.
+    if not hmac.compare_digest(auth.username or '', expected_username):
+        return False
+    if not hmac.compare_digest(auth.password or '', expected_password):
+        return False
+
+    return True
+
+
+def _auth_required_response():
+    return Response(
+        'Authentication required',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Upload Assistant Web UI"'},
+    )
+
+
+@app.before_request
+def _require_basic_auth_for_webui():
+    # Health endpoint can be used for orchestration checks.
+    if request.path == '/api/health':
+        return None
+
+    # If user configured auth, require it for everything (including / and static).
+    # This makes remote deployment safer by default.
+    if _webui_auth_configured() and not _webui_auth_ok():
+        return _auth_required_response()
+
+    return None
 
 
 def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
@@ -432,14 +496,28 @@ if __name__ == '__main__':
     print("=" * 50)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
-    print("Server will run at: http://localhost:5000")
-    print("Health check: http://localhost:5000/api/health")
+    host = os.environ.get('UA_WEBUI_HOST', '127.0.0.1').strip() or '127.0.0.1'
+    try:
+        port = int(os.environ.get('UA_WEBUI_PORT', '5000'))
+    except ValueError:
+        port = 5000
+
+    scheme = 'http'
+    print(f"Server will run at: {scheme}://{host}:{port}")
+    print(f"Health check: {scheme}://{host}:{port}/api/health")
+    if _webui_auth_configured():
+        if not os.environ.get('UA_WEBUI_USERNAME') or not os.environ.get('UA_WEBUI_PASSWORD'):
+            print("WARNING: UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD must both be set for auth to work")
+        else:
+            print("Auth: HTTP Basic Auth enabled")
+    else:
+        print("Auth: disabled (set UA_WEBUI_USERNAME and UA_WEBUI_PASSWORD to enable)")
     print("=" * 50)
 
     try:
         app.run(
-            host='127.0.0.1',
-            port=5000,
+            host=host,
+            port=port,
             debug=False,
             threaded=True,
             use_reloader=False
