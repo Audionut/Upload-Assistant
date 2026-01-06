@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 import json
+from typing import List, Optional, Tuple
 
 SENSITIVE_KEYS = {
     "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
@@ -19,9 +20,9 @@ def extract_json_blocks(text: str):
     - It does not attempt to support non-standard JSON (JSON5, trailing commas, etc.).
     - Blocks are only redacted if `json.loads` successfully parses them.
     """
-    blocks: list[tuple[int, int]] = []
+    blocks: List[Tuple[int, int]] = []
     stack: list[str] = []
-    start: int | None = None
+    start: Optional[int] = None
     in_string = False
     string_char: str | None = None
     escape = False
