@@ -357,63 +357,6 @@ async def upload_image_task(args):
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
 
-        elif img_host == "sharex":
-            # Generic "ShareX-style" image host (IMageHosting and similar).
-            url = config['DEFAULT'].get('sharex_url', 'https://img.digitalcore.club/api/upload')
-            api_key = config['DEFAULT'].get('sharex_api_key')
-
-            if not api_key:
-                console.print("[red]ShareX image host token not found in config (sharex_api_key).[/red]")
-                return {'status': 'failed', 'reason': 'Missing ShareX image host token'}
-
-            try:
-                headers = {'Authorization': f'{api_key}'}
-                data = {'title': 'Upload-Assistant screenshot'}
-
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as img_file:
-                        files = {'file': (os.path.basename(image), await img_file.read())}
-                        response = await client.post(url, headers=headers, data=data, files=files, timeout=timeout)
-
-                        content_type = response.headers.get('Content-Type', '')
-                        if 'application/json' in content_type:
-                            response_data = response.json()
-                        else:
-                            console.print(f"[red]ShareX image host did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}[/red]")
-                            return {'status': 'failed', 'reason': f'Non-JSON response from sharex image host: {response.status_code}'}
-
-                        if response.status_code not in (200, 201):
-                            message = response_data.get('message') or response_data.get('error') or response.text[:200]
-                            console.print(f"[yellow]ShareX image host upload failed ({response.status_code}): {message}[/yellow]")
-                            return {'status': 'failed', 'reason': f'sharex upload failed: {message}'}
-
-                        link = response_data.get('data', {}).get('link') or response_data.get('link')
-                        if not link:
-                            console.print(f"[yellow]ShareX image host response missing link: {response_data}[/yellow]")
-                            return {'status': 'failed', 'reason': 'No link in sharex response'}
-
-                        img_url = link
-                        raw_url = link
-                        web_url = link
-
-                        if meta.get('debug'):
-                            console.print(f"[green]ShareX image host upload successful: {link}[/green]")
-
-                        return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
-
-            except httpx.TimeoutException:
-                console.print("[red]Request to ShareX image host timed out.[/red]")
-                return {'status': 'failed', 'reason': 'Request timed out'}
-            except httpx.RequestError as e:
-                console.print(f"[red]Request to ShareX image host failed with error: {e}[/red]")
-                return {'status': 'failed', 'reason': str(e)}
-            except ValueError as e:
-                console.print(f"[red]Invalid JSON response from ShareX image host: {e}[/red]")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
-            except Exception as e:
-                console.print(f"[red]Unexpected error with ShareX image host: {str(e)}[/red]")
-                return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
-
         elif img_host == "passtheimage":
             url = "https://passtheima.ge/api/1/upload"
             try:
@@ -524,6 +467,63 @@ async def upload_image_task(args):
                 return {'status': 'failed', 'reason': 'Invalid JSON response'}
             except Exception as e:
                 console.print(f"[red]Unexpected error with Seedpool CDN: {e}")
+                return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
+            
+        elif img_host == "sharex":
+            # Generic "ShareX-style" image host (IMageHosting and similar).
+            url = config['DEFAULT'].get('sharex_url', 'https://img.digitalcore.club/api/upload')
+            api_key = config['DEFAULT'].get('sharex_api_key')
+
+            if not api_key:
+                console.print("[red]ShareX image host token not found in config (sharex_api_key).[/red]")
+                return {'status': 'failed', 'reason': 'Missing ShareX image host token'}
+
+            try:
+                headers = {'Authorization': f'{api_key}'}
+                data = {'title': 'Upload-Assistant screenshot'}
+
+                async with httpx.AsyncClient() as client:
+                    async with aiofiles.open(image, 'rb') as img_file:
+                        files = {'file': (os.path.basename(image), await img_file.read())}
+                        response = await client.post(url, headers=headers, data=data, files=files, timeout=timeout)
+
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'application/json' in content_type:
+                            response_data = response.json()
+                        else:
+                            console.print(f"[red]ShareX image host did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}[/red]")
+                            return {'status': 'failed', 'reason': f'Non-JSON response from sharex image host: {response.status_code}'}
+
+                        if response.status_code not in (200, 201):
+                            message = response_data.get('message') or response_data.get('error') or response.text[:200]
+                            console.print(f"[yellow]ShareX image host upload failed ({response.status_code}): {message}[/yellow]")
+                            return {'status': 'failed', 'reason': f'sharex upload failed: {message}'}
+
+                        link = response_data.get('data', {}).get('link') or response_data.get('link')
+                        if not link:
+                            console.print(f"[yellow]ShareX image host response missing link: {response_data}[/yellow]")
+                            return {'status': 'failed', 'reason': 'No link in sharex response'}
+
+                        img_url = link
+                        raw_url = link
+                        web_url = link
+
+                        if meta.get('debug'):
+                            console.print(f"[green]ShareX image host upload successful: {link}[/green]")
+
+                        return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
+
+            except httpx.TimeoutException:
+                console.print("[red]Request to ShareX image host timed out.[/red]")
+                return {'status': 'failed', 'reason': 'Request timed out'}
+            except httpx.RequestError as e:
+                console.print(f"[red]Request to ShareX image host failed with error: {e}[/red]")
+                return {'status': 'failed', 'reason': str(e)}
+            except ValueError as e:
+                console.print(f"[red]Invalid JSON response from ShareX image host: {e}[/red]")
+                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+            except Exception as e:
+                console.print(f"[red]Unexpected error with ShareX image host: {str(e)}[/red]")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
 
         if img_url and raw_url and web_url:
