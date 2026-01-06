@@ -15,7 +15,8 @@ ffmpeg-python==0.2.0
 guessit==3.8.0
 httpx==0.28.1
 Jinja2==3.1.6
-langcodes[data]==3.5.0
+langcodes==3.5.1
+language-data==1.4.0
 lxml==6.0.2
 nest_asyncio==1.6.0
 packaging==25.0
