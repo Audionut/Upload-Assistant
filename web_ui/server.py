@@ -128,7 +128,7 @@ def _resolve_user_path(
     default_root = roots[0]
 
     if user_path is None or user_path == '':
-        candidate_path = Path(default_root)
+        expanded = ''
     else:
         if not isinstance(user_path, str):
             raise ValueError('Path must be a string')
@@ -138,35 +138,47 @@ def _resolve_user_path(
             raise ValueError('Invalid characters in path')
 
         expanded = os.path.expandvars(os.path.expanduser(user_path))
-        # Treat relative paths as relative to the default root.
-        candidate_path = Path(expanded) if os.path.isabs(expanded) else (Path(default_root) / expanded)
 
-    # Canonicalize and validate the candidate path against the allowlisted roots.
-    # Using resolved (real) paths prevents traversal and symlink-escape issues.
-    try:
-        candidate_resolved = candidate_path.resolve(strict=False)
-    except (OSError, RuntimeError) as e:
-        raise ValueError('Invalid path') from e
+    # Build a normalized path and validate it against allowlisted roots.
+    # Do not rely on string replacement for traversal ("../"); instead:
+    # - join (when relative)
+    # - normpath
+    # - realpath + commonpath check (prevents symlink-escape)
+    matched_root: str | None = None
+    candidate_norm: str | None = None
 
-    allowed = False
-    for root in roots:
-        try:
-            root_resolved = Path(root).resolve(strict=False)
-        except (OSError, RuntimeError):
-            continue
+    if expanded and os.path.isabs(expanded):
+        for root in roots:
+            root_abs = os.path.abspath(root)
+            try:
+                rel = os.path.relpath(expanded, root_abs)
+            except ValueError:
+                # Different drive on Windows.
+                continue
 
-        try:
-            candidate_resolved.relative_to(root_resolved)
-            allowed = True
+            if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
+                continue
+
+            matched_root = root_abs
+            candidate_norm = os.path.normpath(os.path.join(root_abs, rel))
             break
-        except ValueError:
-            # Different drive on Windows, or outside the allowed root.
-            continue
+    else:
+        matched_root = os.path.abspath(default_root)
+        candidate_norm = os.path.normpath(os.path.join(matched_root, expanded))
 
-    if not allowed:
+    if not matched_root or not candidate_norm:
         raise ValueError('Browsing this path is not allowed')
 
-    candidate = str(candidate_resolved)
+    candidate_real = os.path.realpath(candidate_norm)
+    root_real = os.path.realpath(matched_root)
+    try:
+        if os.path.commonpath([candidate_real, root_real]) != root_real:
+            raise ValueError('Browsing this path is not allowed')
+    except ValueError as e:
+        # ValueError can happen on Windows if drives differ.
+        raise ValueError('Browsing this path is not allowed') from e
+
+    candidate = candidate_real
 
     if require_exists and not os.path.exists(candidate):
         raise ValueError(f'Path does not exist: {candidate}')
