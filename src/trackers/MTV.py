@@ -470,7 +470,7 @@ class MTV():
         return tags
 
     async def validate_credentials(self, meta):
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         if not await aiofiles.os.path.exists(cookiefile):
             await self.login(cookiefile)
         vcookie = await self.validate_cookies(meta, cookiefile)
