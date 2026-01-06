@@ -11,6 +11,7 @@ import threading
 import queue
 import hmac
 from pathlib import Path
+from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -105,7 +106,8 @@ def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
 def _get_browse_roots() -> list[str]:
     raw = os.environ.get('UA_BROWSE_ROOTS', '').strip()
     if not raw:
-        return [os.path.abspath(os.sep)]
+        # Require explicit configuration; do not default to the filesystem root.
+        return []
 
     roots: list[str] = []
     for part in raw.split(','):
@@ -115,7 +117,7 @@ def _get_browse_roots() -> list[str]:
         root = os.path.abspath(part)
         roots.append(root)
 
-    return roots or [os.path.abspath(os.sep)]
+    return roots
 
 
 def _resolve_user_path(
@@ -125,6 +127,9 @@ def _resolve_user_path(
     require_dir: bool = False,
 ) -> str:
     roots = _get_browse_roots()
+    if not roots:
+        raise ValueError('Browsing is not configured')
+
     default_root = roots[0]
 
     if user_path is None or user_path == '':
@@ -140,14 +145,14 @@ def _resolve_user_path(
         expanded = os.path.expandvars(os.path.expanduser(user_path))
 
     # Build a normalized path and validate it against allowlisted roots.
-    # Do not rely on string replacement for traversal ("../"); instead:
-    # - join (when relative)
-    # - normpath
-    # - realpath + commonpath check (prevents symlink-escape)
+    # Use werkzeug.utils.safe_join as the initial join/sanitizer, then also
+    # enforce a realpath+commonpath constraint to prevent symlink escapes.
     matched_root: str | None = None
     candidate_norm: str | None = None
 
     if expanded and os.path.isabs(expanded):
+        # If a user supplies an absolute path, only allow it if it is under
+        # one of the configured browse roots.
         for root in roots:
             root_abs = os.path.abspath(root)
             try:
@@ -159,12 +164,19 @@ def _resolve_user_path(
             if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
                 continue
 
+            joined = safe_join(root_abs, rel)
+            if joined is None:
+                continue
+
             matched_root = root_abs
-            candidate_norm = os.path.normpath(os.path.join(root_abs, rel))
+            candidate_norm = os.path.normpath(joined)
             break
     else:
         matched_root = os.path.abspath(default_root)
-        candidate_norm = os.path.normpath(os.path.join(matched_root, expanded))
+        joined = safe_join(matched_root, expanded)
+        if joined is None:
+            raise ValueError('Browsing this path is not allowed')
+        candidate_norm = os.path.normpath(joined)
 
     if not matched_root or not candidate_norm:
         raise ValueError('Browsing this path is not allowed')
@@ -181,10 +193,10 @@ def _resolve_user_path(
     candidate = candidate_real
 
     if require_exists and not os.path.exists(candidate):
-        raise ValueError(f'Path does not exist: {candidate}')
+        raise ValueError('Path does not exist')
 
     if require_dir and not os.path.isdir(candidate):
-        raise ValueError(f'Not a directory: {candidate}')
+        raise ValueError('Not a directory')
 
     return candidate
 
