@@ -66,6 +66,7 @@ class UploadHelper:
                                 meta['we_asked'] = True
                                 meta['were_trumping'] = True
                                 meta['trumpable_release'] = True
+                                meta['trumpable'] = meta.get(f'{tracker_name}_matched_id', None)
                                 if meta.get('filename_match', False) and meta.get('file_count_match', False):
                                     meta['exact_trump_match'] = True
                         except EOFError:
@@ -79,11 +80,12 @@ class UploadHelper:
                         console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
                             if tracker_name == "AITHER":
+                                console.print("[yellow]AITHER supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
                                 upload = cli_ui.ask_yes_no("Are you trumping this exact match?", default=False)
                                 if upload:
                                     meta['we_asked'] = True
                                     meta['were_trumping'] = True
-                                    meta['trumpable'] = [d for d in dupes if isinstance(d, dict) and meta.get('filename_match', False)]
+                                    meta['trumpable'] = meta.get(f'{tracker_name}_matched_id', None)
                                     meta['exact_trump_match'] = True
                             else:
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)

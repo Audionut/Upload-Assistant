@@ -183,6 +183,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             matched_download_key = f"{tracker_name}_matched_download"
             matched_reason_key = f"{tracker_name}_matched_reason"
             matched_count_key = f"{tracker_name}_matched_file_count"
+            matched_torrent_id = f"{tracker_name}_matched_id"
 
             meta[matched_name_key] = entry.get('name')
             if entry.get('link'):
@@ -192,6 +193,8 @@ async def filter_dupes(dupes, meta, tracker_name):
             meta[matched_reason_key] = reason
             if file_count:
                 meta[matched_count_key] = file_count
+            if entry.get('id'):
+                meta[matched_torrent_id] = entry.get('id')
 
         # Aither-specific trumping logic - no internal checking, if it's marked trumpable, it's trumpable
         if tracker_name == "AITHER" and entry.get('trumpable', False) and res_id and target_resolution == res_id:
@@ -234,6 +237,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                         if meta['debug']:
                             console.log(f"[debug] Filename match found: {meta['filename_match']}")
                         remember_match('filename')
+                        remember_match('id')
                         if file_count and file_count > 0 and file_count == len(meta.get('filelist', [])):
                             meta['file_count_match'] = file_count
                             if meta['debug']:

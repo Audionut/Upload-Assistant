@@ -923,7 +923,7 @@ class TRACKER_SETUP:
                 return False  # tracker without trumping url not supported
             reported_torrent_id = f"{meta.get('trumpable_id', '')}"
             if not reported_torrent_id and meta.get('trumpable', ''):
-                reported_torrent_id = f"{meta['trumpable'].get('id', '')}"
+                reported_torrent_id = meta['trumpable']
             if not reported_torrent_id and meta.get('matched_episode_ids', []):
                 reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
             if not reported_torrent_id:
