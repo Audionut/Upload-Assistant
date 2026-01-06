@@ -468,7 +468,7 @@ async def upload_image_task(args):
             except Exception as e:
                 console.print(f"[red]Unexpected error with Seedpool CDN: {e}")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
-            
+
         elif img_host == "sharex":
             # Generic "ShareX-style" image host (IMageHosting and similar).
             url = config['DEFAULT'].get('sharex_url', 'https://img.digitalcore.club/api/upload')
