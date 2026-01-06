@@ -36,6 +36,7 @@ class MTV():
         self.upload_url = 'https://www.morethantv.me/upload.php'
         self.forum_link = 'https://www.morethantv.me/wiki.php?action=article&id=73'
         self.search_url = 'https://www.morethantv.me/api/torznab'
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         self.banned_groups = [
             '3LTON', '[Oj]', 'aXXo', 'BDP', 'BRrip', 'CM8', 'CrEwSaDe', 'CMCT',
             'DeadFish', 'DNL', 'ELiTE', 'AFG', 'ZMNT',
@@ -59,14 +60,13 @@ class MTV():
         return await loop.run_in_executor(None, json.dumps, obj)
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def upload(self, meta, disctype):

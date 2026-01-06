@@ -20,6 +20,7 @@ class DC:
         self.api_base_url = f'{self.base_url}/api/v1/torrents'
         self.torrent_url = f'{self.base_url}/torrent/'
         self.banned_groups = ['']
+        self.approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'digitalcore']
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
         self.session = httpx.AsyncClient(headers={
             'X-API-KEY': self.api_key
@@ -206,7 +207,6 @@ class DC:
         return dc_name
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'digitalcore']
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
@@ -215,7 +215,7 @@ class DC:
             'postimg.cc': 'postimg',
             'digitalcore.club': 'digitalcore'
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def fetch_data(self, meta):

@@ -612,11 +612,125 @@ async def process_meta(meta, base_dir, bot=None):
                 if manual_frames_count > 0:
                     meta['screens'] = manual_frames_count
                 if len(meta.get('image_list', [])) < meta.get('cutoff') and meta.get('skip_imghost_upload', False) is False:
+                    # Validate and (if needed) rehost images to tracker-approved hosts before uploading any new screenshots.
+                    trackers_with_image_host_requirements = {'BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC'}
+
+                    relevant_trackers = [
+                        t for t in meta.get('trackers', [])
+                        if t in trackers_with_image_host_requirements and t in tracker_class_map
+                    ]
+
+                    # If all relevant trackers share exactly one common approved host that the user has configured,
+                    # and it's not the initially selected host, switch meta['imghost'] to that common host.
+                    # If multiple common hosts exist, pick the first by config priority (img_host_1..img_host_9).
+                    allowed_hosts = None
+                    if relevant_trackers:
+                        try:
+                            tracker_instances = {
+                                tracker_name: tracker_class_map[tracker_name](config=config)
+                                for tracker_name in relevant_trackers
+                            }
+
+                            if meta.get('debug'):
+                                console.print(f"[cyan]Image host debug: meta['imghost']={meta.get('imghost')} img_host_1={config['DEFAULT'].get('img_host_1')}[/cyan]")
+                                console.print(f"[cyan]Image host debug: relevant_trackers={relevant_trackers}[/cyan]")
+
+                            configured_hosts = []
+                            for host_index in range(1, 10):
+                                host_key = f'img_host_{host_index}'
+                                if host_key in config.get('DEFAULT', {}):
+                                    host = config['DEFAULT'].get(host_key)
+                                    if host and host not in configured_hosts:
+                                        configured_hosts.append(host)
+
+                            if meta.get('debug'):
+                                console.print(f"[cyan]Image host debug: configured_hosts={configured_hosts}[/cyan]")
+
+                            approved_sets = []
+                            all_known = True
+                            for tracker_name in relevant_trackers:
+                                tracker_instance = tracker_instances[tracker_name]
+                                approved_hosts = getattr(tracker_instance, 'approved_image_hosts', None)
+                                if not approved_hosts:
+                                    all_known = False
+                                    break
+                                approved_sets.append(set(approved_hosts))
+
+                                if meta.get('debug'):
+                                    console.print(f"[cyan]Image host debug: {tracker_name}.approved_image_hosts={list(approved_hosts)}[/cyan]")
+
+                            if all_known and approved_sets and configured_hosts:
+                                common_hosts = set.intersection(*approved_sets)
+                                common_configured_hosts = [h for h in configured_hosts if h in common_hosts]
+
+                                if meta.get('debug'):
+                                    console.print(f"[cyan]Image host debug: common_hosts={sorted(common_hosts)}[/cyan]")
+                                    console.print(f"[cyan]Image host debug: common_configured_hosts={common_configured_hosts}[/cyan]")
+
+                                # If we have any common hosts, use them as allowed_hosts for upload_screens
+                                if common_configured_hosts:
+                                    allowed_hosts = common_configured_hosts
+                                elif common_hosts:
+                                    allowed_hosts = sorted(common_hosts)
+
+                                # upload_screens is called with img_host_num=1 here
+                                initial_img_host = config['DEFAULT'].get('img_host_1')
+                                # Pick the first common configured host that is not the initial host
+                                preferred_host = None
+                                for host in common_configured_hosts:
+                                    if host != initial_img_host:
+                                        preferred_host = host
+                                        break
+                                # If everything common includes only the initial host (or initial is missing), allow it
+                                if preferred_host is None and common_configured_hosts:
+                                    preferred_host = common_configured_hosts[0]
+
+                                if preferred_host and preferred_host != meta.get('imghost'):
+                                    if meta.get('debug'):
+                                        console.print(
+                                            f"[cyan]Image host debug: selecting preferred common host '{preferred_host}' (initial: '{initial_img_host}'). "
+                                            f"Switching meta['imghost'] from '{meta.get('imghost')}' to '{preferred_host}'.[/cyan]"
+                                        )
+                                    meta['imghost'] = preferred_host
+
+                            elif meta.get('debug'):
+                                console.print(
+                                    f"[cyan]Image host debug: cannot compute common host (all_known={all_known}, approved_sets={len(approved_sets)}, configured_hosts={len(configured_hosts)}).[/cyan]"
+                                )
+
+                        except Exception as e:
+                            if meta.get('debug'):
+                                console.print(f"[yellow]Could not determine a common approved image host: {e}[/yellow]")
+
+                    if meta.get('debug'):
+                        console.print(
+                            f"[cyan]Image host debug: pre-upload_screens meta['imghost']={meta.get('imghost')} image_list={len(meta.get('image_list', []) or [])} cutoff={meta.get('cutoff')} screens={meta.get('screens')}[/cyan]"  # noqa: E501
+                        )
+
                     return_dict = {}
                     try:
                         new_images, dummy_var = await upload_screens(
-                            meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict
+                            meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict, allowed_hosts=allowed_hosts
                         )
+                        if meta.get('debug'):
+                            console.print(
+                                f"[cyan]Image host debug: post-upload_screens image_list={len(meta.get('image_list', []) or [])}[/cyan]"
+                            )
+
+                        # Now that image_list exists, populate tracker-specific keys (and only reupload if required)
+                        for tracker_name in relevant_trackers:
+                            tracker_instance = tracker_class_map[tracker_name](config=config)
+                            if meta.get('debug'):
+                                key = f"{tracker_name}_images_key"
+                                console.print(
+                                    f"[cyan]Image host debug: post-upload before {tracker_name}.check_image_hosts() image_list={len(meta.get('image_list', []) or [])} {key}={len(meta.get(key, []) or [])}[/cyan]"  # noqa: E501
+                                )
+                            await tracker_instance.check_image_hosts(meta)
+                            if meta.get('debug'):
+                                key = f"{tracker_name}_images_key"
+                                console.print(
+                                    f"[cyan]Image host debug: post-upload after  {tracker_name}.check_image_hosts() image_list={len(meta.get('image_list', []) or [])} {key}={len(meta.get(key, []) or [])}[/cyan]"  # noqa: E501
+                                )
                     except asyncio.CancelledError:
                         console.print("\n[red]Upload process interrupted! Cancelling tasks...[/red]")
                         return
@@ -655,12 +769,6 @@ async def process_meta(meta, base_dir, bot=None):
                 await progress_task
             except asyncio.CancelledError:
                 pass
-
-        # check for valid image hosts for trackers that require it
-        for tracker_name in meta['trackers']:
-            if tracker_name in ['BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC']:
-                tracker_class = tracker_class_map[tracker_name](config=config)
-                await tracker_class.check_image_hosts(meta)
 
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         if meta.get('force_recheck', False):
