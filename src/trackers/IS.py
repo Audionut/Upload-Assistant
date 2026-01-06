@@ -281,7 +281,7 @@ class IS:
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -295,5 +295,8 @@ class IS:
             additional_files=files,
             success_text="Thank you",
         )
+
+        if not is_uploaded:
+            return False
 
         return True

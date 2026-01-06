@@ -4,13 +4,13 @@ import aiofiles.os
 import asyncio
 import cli_ui
 import httpx
+import json
 import os
-import pickle
 import pyotp
 import re
 import traceback
-import xml.etree.ElementTree as ET
 
+from defusedxml import ElementTree as ET
 from torf import Torrent
 
 from data.config import config
@@ -36,6 +36,7 @@ class MTV():
         self.upload_url = 'https://www.morethantv.me/upload.php'
         self.forum_link = 'https://www.morethantv.me/wiki.php?action=article&id=73'
         self.search_url = 'https://www.morethantv.me/api/torznab'
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         self.banned_groups = [
             '3LTON', '[Oj]', 'aXXo', 'BDP', 'BRrip', 'CM8', 'CrEwSaDe', 'CMCT',
             'DeadFish', 'DNL', 'ELiTE', 'AFG', 'ZMNT',
@@ -49,24 +50,23 @@ class MTV():
         pass
 
     # For loading
-    async def async_pickle_loads(self, data):
+    async def async_json_loads(self, data_str):
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.loads, data)
+        return await loop.run_in_executor(None, json.loads, data_str)
 
     # For dumping
-    async def async_pickle_dumps(self, obj):
+    async def async_json_dumps(self, obj):
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.dumps, obj)
+        return await loop.run_in_executor(None, json.dumps, obj)
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def upload(self, meta, disctype):
@@ -139,9 +139,9 @@ class MTV():
 
         if not meta['debug']:
             try:
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     cookie_data = await cf.read()
-                    cookies = await self.async_pickle_loads(cookie_data)
+                    cookies = await self.async_json_loads(cookie_data)
 
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -183,7 +183,7 @@ class MTV():
                             return False
                     except Exception:
                         meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
-                        print(traceback.print_exc())
+                        traceback.print_exc()
                         return False
             except (httpx.RequestError, Exception) as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
@@ -195,6 +195,7 @@ class MTV():
                 debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
         return False
 
@@ -469,7 +470,7 @@ class MTV():
         return tags
 
     async def validate_credentials(self, meta):
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         if not await aiofiles.os.path.exists(cookiefile):
             await self.login(cookiefile)
         vcookie = await self.validate_cookies(meta, cookiefile)
@@ -498,9 +499,9 @@ class MTV():
         if await aiofiles.os.path.exists(cookiefile):
             try:
 
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies_dict = await self.async_pickle_loads(data)
+                    cookies_dict = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies_dict, timeout=10) as client:
                     try:
@@ -536,9 +537,9 @@ class MTV():
         url = "https://www.morethantv.me/index.php"
         try:
             if await aiofiles.os.path.exists(cookiefile):
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies = await self.async_pickle_loads(data)
+                    cookies = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies, timeout=10) as client:
                     try:
@@ -604,8 +605,8 @@ class MTV():
                     if 'authkey=' in resp.text:
                         console.print('[green]Successfully logged in to MTV')
                         cookies_dict = dict(client.cookies)
-                        cookies_data = await self.async_pickle_dumps(cookies_dict)
-                        async with aiofiles.open(cookiefile, 'wb') as cf:
+                        cookies_data = await self.async_json_dumps(cookies_dict)
+                        async with aiofiles.open(cookiefile, 'w', encoding='utf-8') as cf:
                             await cf.write(cookies_data)
                         console.print(f"[green]Cookies saved to {cookiefile}")
                         return True
@@ -738,7 +739,7 @@ class MTV():
         except Exception:
             console.print("[red]Unable to search for existing torrents on site. Most likely the site is down.")
             dupes.append("FAILED SEARCH")
-            print(traceback.print_exc())
+            traceback.print_exc()
             await asyncio.sleep(5)
 
         return dupes

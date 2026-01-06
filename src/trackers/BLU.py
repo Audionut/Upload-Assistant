@@ -150,7 +150,7 @@ class BLU(UNIT3D):
             resolved_id = type_id.get(meta_type, '0')
             return {'type_id': resolved_id}
 
-    async def get_resolution_id(self, meta, mapping_only=False, reverse=False, resolution=None):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '8640p': '10',
             '4320p': '11',

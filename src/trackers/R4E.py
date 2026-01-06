@@ -22,7 +22,8 @@ class R4E(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+        category_id = '24'
         # Use stored genre IDs if available
         if meta and meta.get('genre_ids'):
             genre_ids = meta['genre_ids'].split(',')
@@ -41,7 +42,7 @@ class R4E(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             '8640p': '2160p',
             '4320p': '2160p',
@@ -75,7 +76,7 @@ class R4E(UNIT3D):
     async def get_sticky(self, meta):
         return {}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         return {}
 
     async def search_existing(self, meta, disctype):

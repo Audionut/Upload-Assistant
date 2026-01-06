@@ -31,10 +31,11 @@ class AZTrackerBase:
         self.az_class = getattr(importlib.import_module(f"src.trackers.{self.tracker}"), self.tracker)
 
         tracker_config = self.config['TRACKERS'][self.tracker]
-        self.base_url = tracker_config.get('base_url')
-        self.requests_url = tracker_config.get('requests_url')
-        self.announce_url = tracker_config.get('announce_url')
-        self.source_flag = tracker_config.get('source_flag')
+        self.base_url: str = tracker_config.get('base_url') or ''
+        self.requests_url: str = tracker_config.get('requests_url') or ''
+        self.announce_url: str = tracker_config.get('announce_url') or ''
+        self.source_flag: str = tracker_config.get('source_flag') or ''
+        self.torrent_url: str = f'{self.base_url}/torrent/' if self.base_url else ''
 
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
@@ -206,7 +207,7 @@ class AZTrackerBase:
                 tracker=self.tracker,
                 test_url=f'{self.base_url}/torrents',
                 error_text='Page not found',
-                token_pattern=r'name="_token" content="([^"]+)"'
+                token_pattern=r'name="_token" content="([^"]+)"'  # nosec B106
             )
         return False
 
@@ -248,7 +249,7 @@ class AZTrackerBase:
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
         elif meta.get('resolution') in ('720p', '1080p'):
-            resolution = meta.get('resolution')
+            resolution = meta.get('resolution') or 'all'
         else:
             resolution = 'all'
 
@@ -713,6 +714,8 @@ class AZTrackerBase:
                         if not match:
                             console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
                             console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
+                            meta['skipping'] = f'{self.tracker}'
+                            return
 
                         task_id = match.group(1)
 
@@ -876,7 +879,7 @@ class AZTrackerBase:
             else:
                 return None
         else:
-            html_label = translation.get(source_type)
+            html_label = translation.get(source_type) or ''
 
         if display_name:
             return html_label
@@ -998,6 +1001,7 @@ class AZTrackerBase:
                 console.print(f"[cyan]{self.tracker} Request Data:")
                 console.print(redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True
 
         return False

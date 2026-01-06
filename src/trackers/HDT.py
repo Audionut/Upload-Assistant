@@ -41,7 +41,7 @@ class HDT:
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             success_text='usercp.php',
-            token_pattern=r'name="csrfToken" value="([^"]+)"'
+            token_pattern=r'name="csrfToken" value="([^"]+)"'  # nosec B106
         )
 
     async def get_category_id(self, meta):
@@ -241,10 +241,10 @@ class HDT:
             rows = soup.find_all('tr')
 
             for row in rows:
-                if row.find('td', class_='mainblockcontent', string='Filename') is not None:
+                if row.find(string='Filename', attrs={'class': 'mainblockcontent'}) is not None:  # type: ignore
                     continue
 
-                name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
+                name_tag = row.find('a', attrs={'href': re.compile(r'details\.php\?id=')})
 
                 name = name_tag.text.strip() if name_tag else None
                 link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
@@ -333,7 +333,7 @@ class HDT:
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -347,5 +347,8 @@ class HDT:
             default_announce='https://hdts-announce.ru/announce.php',
             additional_files=files,
         )
+
+        if not is_uploaded:
+            return False
 
         return True

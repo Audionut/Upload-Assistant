@@ -286,12 +286,13 @@ class HDB():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
             else:
                 with requests.Session() as session:
                     cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
                     session.cookies.update(await common.parseCookieFile(cookiefile))
-                    up = session.post(url=url, data=data, files=files)
+                    up = session.post(url=url, data=data, files=files, timeout=30)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -422,7 +423,7 @@ class HDB():
         if os.path.exists(cookiefile):
             with requests.Session() as session:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
-                resp = session.get(url=url)
+                resp = session.get(url=url, timeout=30)
                 if resp.text.find("""<a href="/logout.php">Logout</a>""") != -1:
                     return True
                 else:
@@ -439,8 +440,20 @@ class HDB():
             'passkey': self.passkey,
             'id': id
         }
-        r = requests.get(url=api_url, data=json.dumps(data))
-        filename = r.json()['data'][0]['filename']
+        r = requests.post(url=api_url, data=json.dumps(data), timeout=30)
+        r.raise_for_status()
+        try:
+            r_json = r.json()
+        except json.JSONDecodeError as e:
+            raise Exception(f"Failed to parse JSON response from {api_url}. Response content: {r.text}. Data: {data}. Error: {e}")
+
+        if 'data' not in r_json or not isinstance(r_json['data'], list) or len(r_json['data']) == 0:
+            raise Exception(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
+
+        try:
+            filename = r_json['data'][0]['filename']
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Failed to access filename in response from {api_url}. Response: {r_json}. Data: {data}. Error: {e}")
 
         # Download new .torrent
         download_url = f"https://hdbits.org/download.php/{quote(filename)}"
@@ -449,7 +462,18 @@ class HDB():
             'id': id
         }
 
-        r = requests.get(url=download_url, params=params)
+        r = requests.get(url=download_url, params=params, timeout=30)
+        r.raise_for_status()
+
+        # Validate content-type
+        content_type = r.headers.get('content-type', '').lower()
+        if 'bittorrent' not in content_type and 'octet-stream' not in content_type:
+            raise Exception(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
+
+        # Basic validation: check if content looks like bencoded data (starts with 'd')
+        if not r.content.startswith(b'd'):
+            raise Exception(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
+
         with open(torrent_path, "wb") as tor:
             tor.write(r.content)
         return
@@ -617,7 +641,7 @@ class HDB():
             image_patterns = ["*.png", ".[!.]*.png"]
             image_glob = []
             for pattern in image_patterns:
-                full_pattern = os.path.join(glob.escape(screenshot_dir), pattern)
+                full_pattern = os.path.join(glob.escape(screenshot_dir), str(pattern))
                 glob_results = await asyncio.to_thread(glob.glob, full_pattern)
                 image_glob.extend(glob_results)
             unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
@@ -661,7 +685,7 @@ class HDB():
             file_path = all_image_files[i]
             try:
                 filename = os.path.basename(file_path)
-                files[f'images_files[{i}]'] = (filename, open(file_path, 'rb'), 'image/png')
+                files[f'images_files[{i}]'] = (filename, open(file_path, 'rb'), 'image/png')  # type: ignore
                 if meta['debug']:
                     console.print(f"[cyan]Added file {filename} as images_files[{i}]")
             except Exception as e:
@@ -716,7 +740,7 @@ class HDB():
                         chunk_size_mb = sum(os.path.getsize(all_image_files[int(key.split('[')[1].split(']')[0])]) for key, _ in chunk) / (1024 * 1024)
                         console.print(f"[cyan]Uploading chunk {chunk_idx + 1}/{len(chunks)} ({len(fileList)} images, {chunk_size_mb:.2f} MiB)")
 
-                    response = requests.post(url, data=data, files=fileList)
+                    response = requests.post(url, data=data, files=fileList, timeout=30)
                     if response.status_code == 200:
                         console.print(f"[green]Chunk {chunk_idx + 1}/{len(chunks)} upload successful!")
                         bbcode += response.text
@@ -725,7 +749,7 @@ class HDB():
                         uploadSuccess = False
                         break
             else:
-                response = requests.post(url, data=data, files=files)
+                response = requests.post(url, data=data, files=files, timeout=30)
                 if response.status_code == 200:
                     console.print("[green]Upload successful!")
                     bbcode = response.text
@@ -772,7 +796,7 @@ class HDB():
         }
 
         try:
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=30)
             if response.ok:
                 response_json = response.json()
 
@@ -845,7 +869,7 @@ class HDB():
             # console.print(f"[yellow]Using this data: {data}")
 
         try:
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=30)
             if response.ok:
                 try:
                     response_json = response.json()

@@ -92,7 +92,7 @@ Many thanks to all who have contributed.
    - From the installation directory, run `python3 config-generator.py`
    - OR
    - Copy and Rename `data/example-config.py` to `data/config.py`
-   - Edit `config.py` to use your information (more detailed information in the [wiki](https://github.com/Audionut/Upload-Assistant/wiki))
+   - Edit `config.py` to use your information (more detailed information in example config options: [docs/example-config.md](docs/example-config.md))
       - tmdb_api key can be obtained from https://www.themoviedb.org/settings/api
       - image host api keys can be obtained from their respective sites
 
@@ -114,11 +114,14 @@ Many thanks to all who have contributed.
 
   Args are OPTIONAL and ALWAYS follow path, for a list of acceptable args, pass `--help`.
   Path works best in quotes.
+  - CLI arguments: [docs/cli-args.md](docs/cli-args.md)
 
 ## **Docker Usage:**
   Visit our wonderful [docker usage wiki page](https://github.com/Audionut/Upload-Assistant/wiki/Docker)
 
   Also see this excellent video put together by a community member https://videos.badkitty.zone/ua
+
+  Web UI docs: [docs/web-ui.md](docs/web-ui.md)
 
 ## **Attributions:**
 

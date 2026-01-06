@@ -2,7 +2,10 @@
 # Restricted-use credential — permitted only under UAPL v1.0 and associated service provider terms
 import asyncio
 import base64
+import json
+import os
 import re
+from pathlib import Path
 from tvdb_v4_official import TVDB
 
 from src.console import console
@@ -79,12 +82,111 @@ class tvdb_data:
             console.print(f"[red]Error: {e}[/red]")
             return None, None
 
-    async def get_tvdb_episodes(self, series_id, debug=False):
+    async def get_tvdb_episodes(self, series_id, base_dir=None, debug=False, season=None, episode=None, absolute_number=None, aired_date=None):
+        # Backward compat: older call sites used (series_id, debug)
+        if isinstance(base_dir, bool) and debug is False:
+            debug = base_dir
+            base_dir = None
+
+        def _episode_is_present(episodes: list) -> bool:
+            if not episodes:
+                return False
+
+            # If no specific episode requested, any cached payload is acceptable.
+            if season is None and episode is None and absolute_number is None and not aired_date:
+                return True
+
+            aired_norm = None
+            if aired_date:
+                aired_norm = str(aired_date).strip().replace('.', '-')
+
+            # Normalize numeric inputs
+            try:
+                season_int = int(season) if season is not None else None
+            except (TypeError, ValueError):
+                season_int = None
+
+            try:
+                episode_int = int(episode) if episode is not None else None
+            except (TypeError, ValueError):
+                episode_int = None
+
+            try:
+                absolute_int = int(absolute_number) if absolute_number is not None else None
+            except (TypeError, ValueError):
+                absolute_int = None
+
+            # For daily-style episodes, match by aired date.
+            if aired_norm:
+                for ep in episodes:
+                    if isinstance(ep, dict) and ep.get('aired') == aired_norm:
+                        return True
+
+            # Treat episode==0/None as "no specific episode" (season packs, etc.)
+            if episode_int in (None, 0) and absolute_int is None and not aired_norm:
+                return True
+
+            for ep in episodes:
+                if not isinstance(ep, dict):
+                    continue
+
+                if absolute_int is not None and ep.get('absoluteNumber') == absolute_int:
+                    return True
+
+                if season_int is not None and episode_int not in (None, 0):
+                    if ep.get('seasonNumber') == season_int and ep.get('number') == episode_int:
+                        return True
+
+            return False
+
+        cache_path = None
+        if base_dir:
+            try:
+                cache_dir = Path(base_dir) / 'data' / 'tvdb'
+                cache_path = cache_dir / f"{series_id}.json"
+
+                if cache_path.exists():
+                    with cache_path.open('r', encoding='utf-8') as f:
+                        cached = json.load(f)
+
+                    if isinstance(cached, dict) and isinstance(cached.get('episodes'), list):
+                        if not _episode_is_present(cached.get('episodes', [])):
+                            if debug:
+                                console.print(
+                                    f"[yellow]Cached TVDB data for {series_id} does not include requested episode; refreshing from TVDB[/yellow]"
+                                )
+                        else:
+                            if debug:
+                                console.print(f"[cyan]Using cached TVDB episodes for {series_id}[/cyan]")
+
+                            episodes_data = {
+                                'episodes': cached.get('episodes', []),
+                                'aliases': cached.get('aliases', []) if isinstance(cached.get('aliases', []), list) else []
+                            }
+
+                            specific_alias = None
+                            if episodes_data.get('aliases'):
+                                year_pattern = re.compile(r'\((\d{4})\)')
+                                eng_aliases = [
+                                    alias['name'] for alias in episodes_data['aliases']
+                                    if isinstance(alias, dict) and alias.get('language') == 'eng' and year_pattern.search(alias.get('name', ''))
+                                ]
+                                if eng_aliases:
+                                    specific_alias = eng_aliases[-1]
+                                    if debug:
+                                        console.print(f"[blue]English alias with year: {specific_alias}[/blue]")
+
+                            return episodes_data, specific_alias
+            except Exception as cache_error:
+                if debug:
+                    console.print(f"[yellow]Failed to read TVDB cache for {series_id}: {cache_error}[/yellow]")
+
         try:
             # Get all episodes for the series with pagination
             all_episodes = []
             page = 0
             max_pages = 20  # Safety limit to prevent infinite loops
+            pages_fetched = 0
 
             while page < max_pages:
                 if debug and page > 0:
@@ -111,6 +213,7 @@ class tvdb_data:
                         break
 
                     all_episodes.extend(current_episodes)
+                    pages_fetched += 1
 
                     if debug:
                         console.print(f"[cyan]Retrieved {len(current_episodes)} episodes from page {page + 1} (total: {len(all_episodes)})[/cyan]")
@@ -152,6 +255,33 @@ class tvdb_data:
             except Exception as alias_error:
                 if debug:
                     console.print(f"[yellow]Could not retrieve series aliases: {alias_error}[/yellow]")
+
+            # If this was a multi-page series and we have a base_dir, cache results for next time.
+            if cache_path and pages_fetched > 1:
+                try:
+                    # Ensure cache dir exists; on POSIX explicitly apply typical dir perms.
+                    if os.name == 'posix':
+                        cache_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                        try:
+                            os.chmod(cache_path.parent, 0o700)
+                        except Exception:
+                            pass
+                    else:
+                        cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with cache_path.open('w', encoding='utf-8') as f:
+                        json.dump(episodes_data, f, ensure_ascii=False)
+
+                    if os.name == 'posix':
+                        try:
+                            os.chmod(cache_path, 0o644)
+                        except Exception:
+                            pass
+                    if debug:
+                        console.print(f"[green]Cached TVDB episodes to {cache_path}[/green]")
+                except Exception as cache_write_error:
+                    if debug:
+                        console.print(f"[yellow]Failed to write TVDB cache for {series_id}: {cache_write_error}[/yellow]")
 
             # Extract specific English alias only if it contains a year (e.g., "Cats eye (2025)")
             specific_alias = None
@@ -312,7 +442,7 @@ class tvdb_data:
             console.print(f"[red]Error getting IMDB ID from TVDB episode ID: {e}[/red]")
             return None
 
-    async def get_specific_episode_data(self, data, season, episode, debug=False):
+    async def get_specific_episode_data(self, data, season, episode, debug=False, aired_date=None):
         if debug:
             console.print("[yellow]Getting specific episode data from TVDB data[/yellow]")
 
@@ -344,6 +474,23 @@ class tvdb_data:
         if debug:
             console.print(f"[blue]Total episodes retrieved from TVDB: {len(episodes)}[/blue]")
             console.print(f"[blue]Looking for Season: {season_int}, Episode: {episode_int}[/blue]")
+
+        # For daily shows, match by air date if provided.
+        if aired_date:
+            aired_norm = str(aired_date).strip().replace('.', '-')
+            for ep in episodes:
+                if ep.get('aired') == aired_norm:
+                    if debug:
+                        console.print(f"[green]Matched daily episode by air date {aired_norm}: S{ep.get('seasonNumber'):02d}E{ep.get('number'):02d} - {ep.get('name')}[/green]")
+                    return (
+                        ep.get('seasonName'),
+                        ep.get('name'),
+                        ep.get('overview'),
+                        ep.get('seasonNumber'),
+                        ep.get('number'),
+                        ep.get('year'),
+                        ep.get('id')
+                    )
 
         # If episode_int is None or 0, return first episode of the season
         if episode_int is None or episode_int == 0:

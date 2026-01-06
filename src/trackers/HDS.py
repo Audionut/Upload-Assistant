@@ -5,6 +5,7 @@ import glob
 import httpx
 import os
 import platform
+import re
 from bs4 import BeautifulSoup
 from src.bbcode import BBCODE
 from src.console import console
@@ -169,7 +170,7 @@ class HDS:
             torrent_rows = []
 
             for table in all_tables:
-                recommend_header = table.find('td', class_='block', string='Our Team Recommend')
+                recommend_header = table.find('td', attrs={'class': 'block'}, string=re.compile(r'Our Team Recommend'))  # type: ignore
                 if recommend_header:
                     continue
 
@@ -340,7 +341,7 @@ class HDS:
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -353,5 +354,8 @@ class HDS:
             success_text="download.php?id=",
             additional_files=files,
         )
+
+        if not is_uploaded:
+            return False
 
         return True

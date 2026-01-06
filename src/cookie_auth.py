@@ -2,8 +2,11 @@
 import aiofiles
 import http.cookiejar
 import httpx
+import json
 import os
+import pickle  # nosec B403 - Only used for legacy cookie migration
 import re
+import stat
 import importlib
 import traceback
 from bs4 import BeautifulSoup
@@ -322,6 +325,135 @@ class CookieValidator:
         else:
             return str(auth_match.group(1))
 
+    def _save_cookies_secure(self, session_cookies, cookiefile):
+        """Securely save session cookies using JSON instead of pickle"""
+        try:
+            # Convert RequestsCookieJar to dictionary for JSON serialization
+            cookie_dict = {}
+            for cookie in session_cookies:
+                cookie_dict[cookie.name] = {
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'secure': cookie.secure,
+                    'expires': cookie.expires
+                }
+
+            with open(cookiefile, 'w', encoding='utf-8') as f:
+                json.dump(cookie_dict, f, indent=2)
+
+            # Set restrictive permissions (0o600) to protect cookie secrets
+            os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+        except OSError as e:
+            console.print(f"[red]Error with cookie file operations: {e}[/red]")
+            raise
+        except (TypeError, ValueError) as e:
+            console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
+            raise
+
+    def _load_cookies_secure(self, session, cookiefile, tracker):
+        """Securely load session cookies from JSON instead of pickle"""
+
+        # Check for legacy pickle file and migrate if needed
+        pickle_file = cookiefile.replace('.json', '.pickle')
+        legacy_pickle_file = f"{os.path.dirname(cookiefile)}/{tracker}"  # Legacy filename without extension
+
+        # Try to migrate from pickle files
+        for potential_pickle in [pickle_file, legacy_pickle_file]:
+            if os.path.exists(potential_pickle) and not os.path.exists(cookiefile):
+                try:
+                    console.print(f"[yellow]Migrating legacy cookie file from {potential_pickle} to {cookiefile}[/yellow]")
+
+                    # Load the pickle file
+                    with open(potential_pickle, 'rb') as f:
+                        session_cookies = pickle.load(f)  # nosec B301 - Legacy migration only
+
+                    # Convert to JSON format
+                    cookie_dict = {}
+                    for cookie in session_cookies:
+                        cookie_dict[cookie.name] = {
+                            'value': cookie.value,
+                            'domain': cookie.domain,
+                            'path': cookie.path,
+                            'secure': cookie.secure,
+                            'expires': getattr(cookie, 'expires', None)
+                        }
+
+                    # Save as JSON
+                    with open(cookiefile, 'w', encoding='utf-8') as f:
+                        json.dump(cookie_dict, f, indent=2)
+
+                    # Set restrictive permissions
+                    os.chmod(cookiefile, stat.S_IRUSR | stat.S_IWUSR)
+
+                    # Verify the migration was successful by loading the JSON
+                    try:
+                        with open(cookiefile, 'r', encoding='utf-8') as f:
+                            json.load(f)  # Just verify it can be loaded
+
+                        # Migration verified successful - delete the old pickle file
+                        os.remove(potential_pickle)
+                        console.print(f"[green]Successfully migrated cookies to JSON format and removed legacy file {potential_pickle}[/green]")
+
+                    except (OSError, json.JSONDecodeError) as verify_error:
+                        console.print(f"[red]Migration verification failed: {verify_error}. Keeping original file {potential_pickle}[/red]")
+                        # Remove the potentially corrupted JSON file
+                        if os.path.exists(cookiefile):
+                            os.remove(cookiefile)
+                        raise
+
+                    break
+
+                except Exception as e:
+                    console.print(f"[red]Error migrating cookie file {potential_pickle}: {e}[/red]")
+                    # Continue to try next potential file or load JSON normally
+                    continue
+
+            elif os.path.exists(potential_pickle) and os.path.exists(cookiefile):
+                os.remove(potential_pickle)
+                console.print(f"[yellow]Removed legacy cookie file {potential_pickle}. Using JSON file.[/yellow]")
+
+        # Load cookies from JSON file
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+
+            # Convert dictionary back to session cookies
+            for name, cookie_data in cookie_dict.items():
+                # Prevent None domain values
+                domain = cookie_data.get('domain')
+                if domain is None:
+                    domain = ''  # Use empty string instead of None
+
+                session.cookies.set(
+                    name=name,
+                    value=cookie_data['value'],
+                    domain=domain,
+                    path=cookie_data.get('path', '/'),
+                    secure=cookie_data.get('secure', False)
+                )
+
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
+            raise
+
+    def _load_cookies_dict_secure(self, cookiefile):
+        """Securely load cookies as dictionary from JSON instead of pickle"""
+        try:
+            with open(cookiefile, 'r', encoding='utf-8') as f:
+                cookie_dict = json.load(f)
+            return cookie_dict
+        except OSError as e:
+            console.print(f"[red]Error reading cookie file: {e}[/red]")
+            raise
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
+            raise
+
 
 class CookieAuthUploader:
     def __init__(self, config):
@@ -395,6 +527,8 @@ class CookieAuthUploader:
         if meta.get("debug", False):
             self.upload_debug(tracker, data)
             meta["tracker_status"][tracker]["status_message"] = "Debug mode enabled, not uploading"
+            await self.common.create_torrent_for_upload(meta, f"{tracker}" + "_DEBUG", f"{tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True
 
         else:
             success = False
@@ -438,6 +572,7 @@ class CookieAuthUploader:
                             error_text,
                             response,
                         )
+                        return False
 
             except httpx.ConnectTimeout:
                 meta["tracker_status"][tracker]["status_message"] = "Connection timed out"

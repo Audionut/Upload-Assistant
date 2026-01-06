@@ -6,7 +6,6 @@ import glob
 import httpx
 import json
 import platform
-import pickle
 import os
 import re
 import requests
@@ -19,6 +18,7 @@ from cogs.redaction import redact_private_info
 from data.config import config
 from src.bbcode import BBCODE
 from src.console import console
+from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
 from src.rehostimages import check_hosts
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
@@ -96,6 +96,8 @@ class PTP():
             ("Vietnamese", "vie", "vi"): 25,
         }
 
+        self.cookie_validator = CookieValidator(config)
+
     def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
 
@@ -111,7 +113,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         console.print(f"[green]Searching PTP for: [bold yellow]{filename}[/bold yellow]")
 
@@ -182,7 +184,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         try:
             if response.status_code == 200:
@@ -216,7 +218,7 @@ class PTP():
         }
         url = 'https://passthepopcorn.me/torrents.php'
         console.print(f"[yellow]Requesting description from {url} with ID {ptp_torrent_id}")
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
 
         ptp_desc = response.text
@@ -269,7 +271,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url=url, headers=headers, params=params)
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
         await asyncio.sleep(1)
         try:
             response = response.json()
@@ -341,7 +343,7 @@ class PTP():
             'User-Agent': self.user_agent
         }
         url = "https://passthepopcorn.me/ajax.php"
-        response = requests.get(url=url, params=params, headers=headers)
+        response = requests.get(url=url, params=params, headers=headers, timeout=30)
         await asyncio.sleep(1)
         tinfo = {}
         try:
@@ -446,7 +448,7 @@ class PTP():
         headers = {'referer': 'https://ptpimg.me/index.php'}
         url = "https://ptpimg.me/upload.php"
 
-        response = requests.post(url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=payload, timeout=30)
         try:
             response = response.json()
             ptpimg_code = response[0]['code']
@@ -1273,13 +1275,12 @@ class PTP():
     async def get_AntiCsrfToken(self, meta):
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
-        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
+        cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
         with requests.Session() as session:
             loggedIn = False
             if os.path.exists(cookiefile):
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                uploadresponse = session.get("https://passthepopcorn.me/upload.php")
+                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
                 loggedIn = await self.validate_login(uploadresponse)
             else:
                 console.print("[yellow]PTP Cookies not found. Creating new session.")
@@ -1308,12 +1309,23 @@ class PTP():
                         if resp["Result"] != "Ok":
                             raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
                         AntiCsrfToken = resp["AntiCsrfToken"]
-                        with open(cookiefile, 'wb') as cf:
-                            pickle.dump(session.cookies, cf)
+                        self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
                     except Exception:
-                        raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
+                        try:
+                            parsed = json.loads(loginresponse.text)
+                            redacted = redact_private_info(parsed)
+                            redacted_text = json.dumps(redacted)
+                        except json.JSONDecodeError:
+                            redacted_text = redact_private_info(loginresponse.text)
+                        raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
                 except Exception:
-                    raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {loginresponse.text}")  # noqa F405
+                    try:
+                        parsed = json.loads(loginresponse.text)
+                        redacted = redact_private_info(parsed)
+                        redacted_text = json.dumps(redacted)
+                    except json.JSONDecodeError:
+                        redacted_text = redact_private_info(loginresponse.text)
+                    raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
     async def validate_login(self, response):
@@ -1511,14 +1523,14 @@ class PTP():
                 console.log(url)
                 console.log(redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
             else:
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
                 with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.pickle"
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    response = session.post(url=url, data=data, headers=headers, files=files)
+                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
+                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=60)
                 console.print(f"[cyan]{response.url}")
                 responsetext = response.text
                 # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.
