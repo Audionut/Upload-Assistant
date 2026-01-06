@@ -673,23 +673,21 @@ async def process_meta(meta, base_dir, bot=None):
                                 elif common_hosts:
                                     allowed_hosts = sorted(common_hosts)
 
-                                # upload_screens is called with img_host_num=1 here
-                                initial_img_host = config['DEFAULT'].get('img_host_1')
-                                # Pick the first common configured host that is not the initial host
+                                # Prefer the user-selected host if it's valid for all relevant trackers; otherwise
+                                # fall back to the first common configured host by config priority (img_host_1..img_host_9).
+                                current_img_host = meta.get('imghost') or config['DEFAULT'].get('img_host_1')
                                 preferred_host = None
-                                for host in common_configured_hosts:
-                                    if host != initial_img_host:
-                                        preferred_host = host
-                                        break
-                                # If everything common includes only the initial host (or initial is missing), allow it
-                                if preferred_host is None and common_configured_hosts:
+
+                                if common_configured_hosts and current_img_host not in common_configured_hosts:
                                     preferred_host = common_configured_hosts[0]
+                                elif common_hosts and current_img_host not in common_hosts:
+                                    preferred_host = sorted(common_hosts)[0]
 
                                 if preferred_host and preferred_host != meta.get('imghost'):
                                     if meta.get('debug'):
                                         console.print(
-                                            f"[cyan]Image host debug: selecting preferred common host '{preferred_host}' (initial: '{initial_img_host}'). "
-                                            f"Switching meta['imghost'] from '{meta.get('imghost')}' to '{preferred_host}'.[/cyan]"
+                                            f"[cyan]Image host debug: current host '{current_img_host}' is not common to all trackers; "
+                                            f"switching meta['imghost'] from '{meta.get('imghost')}' to '{preferred_host}'.[/cyan]"
                                         )
                                     meta['imghost'] = preferred_host
 
