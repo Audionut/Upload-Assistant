@@ -194,7 +194,7 @@ class PTS:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -206,5 +206,8 @@ class PTS:
             id_pattern=r'download\.php\?id=([^&]+)',
             success_status_code="302, 303",
         )
+
+        if not is_uploaded:
+            return False
 
         return True

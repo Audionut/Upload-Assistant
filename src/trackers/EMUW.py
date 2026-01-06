@@ -388,7 +388,7 @@ class EMUW(UNIT3D):
         }
         return category_map.get(category_name, '1')
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         """Types: Full Disc(1), Remux(2), Encode(3), WEB-DL(4), WEBRIP(5), HDTV(6), SD(7)"""
         type_map = {
             'DISC': '1', 'REMUX': '2', 'ENCODE': '3',
@@ -497,9 +497,9 @@ class EMUW(UNIT3D):
 
         return dupes
 
-    def get_upload_data(self, meta):
+    async def get_upload_data(self, meta):
         """Get upload data with EMUW-specific options"""
-        upload_data = super().get_upload_data(meta)
+        upload_data = await super().get_data(meta)
 
         if meta.get('anon', False):
             upload_data['anonymous'] = 1

@@ -67,7 +67,11 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
 
     # Deduplicate results by TVMaze ID
     seen = set()
-    unique_results = [show for show in results if show['id'] not in seen and not seen.add(show['id'])]
+    unique_results = []
+    for show in results:
+        if show['id'] not in seen:
+            seen.add(show['id'])
+            unique_results.append(show)
 
     if not unique_results:
         if debug:

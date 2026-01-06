@@ -25,7 +25,7 @@ def get_filename(system: str, arch: str, library_type: str = "cli") -> str:
         else:
             raise ValueError(f"Unknown library_type: {library_type}")
     else:
-        return
+        return ""
 
 
 def get_url(system: str, arch: str, library_type: str = "cli") -> str:
@@ -147,7 +147,7 @@ def download_dvd_mediainfo(base_dir, debug=False):
 
         # Make CLI binary executable
         if cli_file.exists():
-            os.chmod(cli_file, 0o755)
+            os.chmod(cli_file, 0o700)  # rwx------ (owner only)
 
     if not cli_file.exists():
         raise Exception(f"Failed to extract CLI binary to {cli_file}")

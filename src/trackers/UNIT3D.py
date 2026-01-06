@@ -40,8 +40,13 @@ class UNIT3D:
             return
 
         dupes = []
+
+        headers = {
+            'authorization': f'Bearer {self.api_key}',
+            'accept': 'application/json',
+        }
+
         params = {
-            'api_token': self.api_key,
             'tmdbId': meta['tmdb'],
             'categories[]': (await self.get_category_id(meta))['category_id'],
             'name': '',
@@ -57,7 +62,7 @@ class UNIT3D:
         else:
             params['resolutions[]'] = resolutions['resolution_id']
 
-        if self.tracker not in ['SP']:
+        if self.tracker not in ['SP', 'STC']:
             type_id = (await self.get_type_id(meta))['type_id']
             if isinstance(params, list):
                 params.append(('types[]', type_id))
@@ -74,7 +79,7 @@ class UNIT3D:
 
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url=self.search_url, params=params)
+                response = await client.get(url=self.search_url, headers=headers, params=params)
                 response.raise_for_status()
                 if response.status_code == 200:
                     data = response.json()
@@ -374,8 +379,11 @@ class UNIT3D:
             torrent_bytes = await f.read()
         files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         files.update(await self.get_additional_files(meta))
-        headers = {'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})'}
-        params = {'api_token': self.api_key}
+        headers = {
+            'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
+            'authorization': f'Bearer {self.api_key}',
+            'accept': 'application/json',
+            }
 
         if meta['debug'] is False:
             response_data = {}
@@ -386,7 +394,7 @@ class UNIT3D:
             for attempt in range(max_retries):
                 try:
                     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                        response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                        response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
                         response.raise_for_status()
 
                         response_data = response.json()
@@ -398,7 +406,6 @@ class UNIT3D:
                             meta,
                             self.tracker,
                             headers=headers,
-                            params=params,
                             downurl=response_data['data']
                         )
                         return True  # Success
@@ -421,7 +428,6 @@ class UNIT3D:
                                     meta,
                                     self.tracker,
                                     headers=headers,
-                                    params=params,
                                     downurl=download_url
                                 )
                                 return True  # Success - found existing upload

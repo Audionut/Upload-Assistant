@@ -158,9 +158,9 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     capture_results = []
     if use_vs:
         from src.vs import vs_screengn
-        vs_screengn(source=file, encode=None, filter_b_frames=False, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
+        vs_screengn(source=file, encode=None, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
     else:
-        if meta.get('ffdebug', False):
+        if ffdebug:
             loglevel = 'verbose'
         else:
             loglevel = 'quiet'
@@ -255,7 +255,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         if os.path.exists(image_path):
                             os.remove(image_path)
 
-                        random_time = random.uniform(0, length)
+                        random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                         screenshot_response = await capture_disc_task(
                             index, file, random_time, image_path, keyframe, loglevel, hdr_tonemap, meta
                         )
@@ -621,7 +621,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
                     index = int(image.rsplit('-', 1)[-1].split('.')[0])
                     input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[index % len(main_set)]}"
-                    adjusted_time = random.uniform(0, voblength)
+                    adjusted_time = random.uniform(0, voblength)  # nosec B311 - Random screenshot timing, not cryptographic
 
                     if os.path.exists(image):  # Prevent unnecessary deletion error
                         try:
@@ -1105,7 +1105,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     break
                 else:
                     # Fallback: use random time if original_time is not available
-                    random_time = random.uniform(0, length)
+                    random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                     console.print(f"[yellow]Retaking screenshot for: {image_path} (Attempt {attempt}/{retry_attempts}) at random time {random_time:.2f}s[/yellow]")
                     try:
                         if os.path.exists(image_path):
@@ -1580,7 +1580,13 @@ async def get_frame_info(path, ss_time, meta):
             console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         returncode, _, stderr = await run_ffmpeg(info_command)
-        assert returncode is not None
+        # Check if subprocess completed properly
+        if returncode is None:
+            cmd_str = ' '.join(cmd)
+            raise RuntimeError(
+                f"FFmpeg subprocess did not complete properly. The process may have been "
+                f"terminated unexpectedly or failed to start. Command: {cmd_str}"
+            )
         stderr_text = stderr.decode('utf-8', errors='replace')
 
         # Calculate frame number based on timestamp and framerate

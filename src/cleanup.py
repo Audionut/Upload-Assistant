@@ -8,6 +8,7 @@ import os
 import subprocess
 import re
 import platform
+from typing import Set, Optional
 from src.console import console
 from concurrent.futures import ThreadPoolExecutor
 if os.name == "posix":
@@ -18,8 +19,8 @@ IS_ANDROID = ('android' in platform.platform().lower() or
               os.path.exists('/system/build.prop') or
               'ANDROID_ROOT' in os.environ)
 
-running_subprocesses = set()
-thread_executor: ThreadPoolExecutor = None
+running_subprocesses: Set[subprocess.Popen] = set()
+thread_executor: Optional[ThreadPoolExecutor] = None
 IS_MACOS = sys.platform == 'darwin'
 
 
@@ -54,7 +55,7 @@ async def cleanup():
             try:
                 proc.terminate()  # Send SIGTERM first
                 try:
-                    await asyncio.wait_for(proc.wait(), timeout=3)  # Wait for process to exit
+                    await asyncio.wait_for(asyncio.to_thread(proc.wait), timeout=3)  # Wait for process to exit
                 except asyncio.TimeoutError:
                     if not IS_ANDROID:  # Only try force kill on non-Android
                         # console.print(f"[red]Subprocess {proc.pid} did not exit in time, force killing.[/red]")
@@ -121,7 +122,9 @@ async def cleanup():
     if IS_MACOS:
         try:
             # Ensure any multiprocessing resources are properly released
-            multiprocessing.resource_tracker._resource_tracker = None
+            resource_tracker = getattr(multiprocessing, 'resource_tracker', None)
+            if resource_tracker:
+                resource_tracker._resource_tracker = None
         except Exception:
             console.print("[red]Error releasing multiprocessing resources.[/red]")
             pass
@@ -213,9 +216,12 @@ def kill_all_threads():
 
 # Wrapped "erase key check and save" in tty check so that Python won't complain if UA is called by a script
 if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
+    erase_key = None  # Initialize to safe default
     try:
         output = subprocess.check_output(['stty', '-a']).decode()
-        erase_key = re.search(r' erase = (\S+);', output).group(1)
+        match = re.search(r' erase = (\S+);', output)
+        if match:
+            erase_key = match.group(1)
     except (IOError, OSError):
         pass
 
@@ -232,9 +238,12 @@ def reset_terminal():
         if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
             try:
                 subprocess.run(["stty", "sane"], check=False)
-                subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
+                if erase_key is not None:
+                    subprocess.run(["stty", "erase", erase_key], check=False)  # explicitly restore backspace character to original value
                 if hasattr(termios, 'tcflush'):
-                    termios.tcflush(sys.stdin.fileno(), termios.TCIOFLUSH)
+                    tciflush = getattr(termios, 'TCIOFLUSH', None)
+                    if tciflush is not None:
+                        termios.tcflush(sys.stdin.fileno(), tciflush)
                 subprocess.run(["stty", "-ixon"], check=False)
             except (IOError, OSError):
                 pass

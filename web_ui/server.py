@@ -9,18 +9,200 @@ import traceback
 import re
 import threading
 import queue
+import hmac
 from pathlib import Path
+from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 app = Flask(__name__)
-CORS(app)
+
+
+def _parse_cors_origins() -> list[str]:
+    raw = os.environ.get('UA_WEBUI_CORS_ORIGINS', '').strip()
+    if not raw:
+        return []
+    origins: list[str] = []
+    for part in raw.split(','):
+        part = part.strip()
+        if part:
+            origins.append(part)
+    return origins
+
+
+cors_origins = _parse_cors_origins()
+if cors_origins:
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
 
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # Store active processes
 active_processes = {}
+
+
+def _webui_auth_configured() -> bool:
+    return bool(os.environ.get('UA_WEBUI_USERNAME')) or bool(os.environ.get('UA_WEBUI_PASSWORD'))
+
+
+def _webui_auth_ok() -> bool:
+    expected_username = os.environ.get('UA_WEBUI_USERNAME', '')
+    expected_password = os.environ.get('UA_WEBUI_PASSWORD', '')
+
+    # If auth is configured at all, require both values.
+    if not expected_username or not expected_password:
+        return False
+
+    auth = request.authorization
+    if not auth or auth.type != 'basic':
+        return False
+
+    # Constant-time compare to avoid leaking timing info.
+    if not hmac.compare_digest(auth.username or '', expected_username):
+        return False
+    if not hmac.compare_digest(auth.password or '', expected_password):
+        return False
+
+    return True
+
+
+def _auth_required_response():
+    return Response(
+        'Authentication required',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Upload Assistant Web UI"'},
+    )
+
+
+@app.before_request
+def _require_basic_auth_for_webui():
+    # Health endpoint can be used for orchestration checks.
+    if request.path == '/api/health':
+        return None
+
+    # If user configured auth, require it for everything (including / and static).
+    # This makes remote deployment safer by default.
+    if _webui_auth_configured() and not _webui_auth_ok():
+        return _auth_required_response()
+
+    return None
+
+
+def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
+    # These are passed to upload.py (not the Python interpreter) and are executed
+    # with shell=False. Still validate to avoid control characters and abuse.
+    safe: list[str] = []
+    for tok in tokens:
+        if not isinstance(tok, str):
+            raise TypeError('Invalid argument')
+        if not tok or len(tok) > 1024:
+            raise ValueError('Invalid argument')
+        if '\x00' in tok or '\n' in tok or '\r' in tok:
+            raise ValueError('Invalid characters in argument')
+        safe.append(tok)
+    return safe
+
+
+def _get_browse_roots() -> list[str]:
+    raw = os.environ.get('UA_BROWSE_ROOTS', '').strip()
+    if not raw:
+        # Require explicit configuration; do not default to the filesystem root.
+        return []
+
+    roots: list[str] = []
+    for part in raw.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        root = os.path.abspath(part)
+        roots.append(root)
+
+    return roots
+
+
+def _resolve_user_path(
+    user_path: str | None,
+    *,
+    require_exists: bool = True,
+    require_dir: bool = False,
+) -> str:
+    roots = _get_browse_roots()
+    if not roots:
+        raise ValueError('Browsing is not configured')
+
+    default_root = roots[0]
+
+    if user_path is None or user_path == '':
+        expanded = ''
+    else:
+        if not isinstance(user_path, str):
+            raise ValueError('Path must be a string')
+        if len(user_path) > 4096:
+            raise ValueError('Invalid path')
+        if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
+            raise ValueError('Invalid characters in path')
+
+        expanded = os.path.expandvars(os.path.expanduser(user_path))
+
+    # Build a normalized path and validate it against allowlisted roots.
+    # Use werkzeug.utils.safe_join as the initial join/sanitizer, then also
+    # enforce a realpath+commonpath constraint to prevent symlink escapes.
+    matched_root: str | None = None
+    candidate_norm: str | None = None
+
+    if expanded and os.path.isabs(expanded):
+        # If a user supplies an absolute path, only allow it if it is under
+        # one of the configured browse roots.
+        for root in roots:
+            root_abs = os.path.abspath(root)
+            try:
+                rel = os.path.relpath(expanded, root_abs)
+            except ValueError:
+                # Different drive on Windows.
+                continue
+
+            if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
+                continue
+
+            joined = safe_join(root_abs, rel)
+            if joined is None:
+                continue
+
+            matched_root = root_abs
+            candidate_norm = os.path.normpath(joined)
+            break
+    else:
+        matched_root = os.path.abspath(default_root)
+        joined = safe_join(matched_root, expanded)
+        if joined is None:
+            raise ValueError('Browsing this path is not allowed')
+        candidate_norm = os.path.normpath(joined)
+
+    if not matched_root or not candidate_norm:
+        raise ValueError('Browsing this path is not allowed')
+
+    candidate_real = os.path.realpath(candidate_norm)
+    root_real = os.path.realpath(matched_root)
+    try:
+        if os.path.commonpath([candidate_real, root_real]) != root_real:
+            raise ValueError('Browsing this path is not allowed')
+    except ValueError as e:
+        # ValueError can happen on Windows if drives differ.
+        raise ValueError('Browsing this path is not allowed') from e
+
+    candidate = candidate_real
+
+    if require_exists and not os.path.exists(candidate):
+        raise ValueError('Path does not exist')
+
+    if require_dir and not os.path.isdir(candidate):
+        raise ValueError('Not a directory')
+
+    return candidate
+
+
+def _resolve_browse_path(user_path: str | None) -> str:
+    return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 
 def strip_ansi(text):
@@ -34,9 +216,9 @@ def index():
     try:
         return render_template('index.html')
     except Exception as e:
-        error_msg = f"Error loading template: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
-        print(error_msg)
-        return f"<pre>{error_msg}</pre>", 500
+        print(f"Error loading template: {e}")
+        print(traceback.format_exc())
+        return "<pre>Internal server error</pre>", 500
 
 
 @app.route('/api/health')
@@ -52,22 +234,17 @@ def health():
 @app.route('/api/browse')
 def browse_path():
     """Browse filesystem paths"""
-    path = request.args.get('path', '/')
+    requested = request.args.get('path', '')
+    try:
+        path = _resolve_browse_path(requested)
+    except ValueError as e:
+        # Log details server-side, but avoid leaking paths/internal details to clients.
+        print(f"Path resolution error for requested {requested!r}: {e}")
+        return jsonify({'error': 'Invalid path specified', 'success': False}), 400
+
     print(f"Browsing path: {path}")
 
     try:
-        if not os.path.exists(path):
-            return jsonify({
-                'error': f'Path does not exist: {path}',
-                'success': False
-            }), 404
-
-        if not os.path.isdir(path):
-            return jsonify({
-                'error': f'Not a directory: {path}',
-                'success': False
-            }), 400
-
         items = []
         try:
             for item in sorted(os.listdir(path)):
@@ -91,9 +268,8 @@ def browse_path():
             print(f"Found {len(items)} items in {path}")
 
         except PermissionError:
-            error_msg = f'Permission denied: {path}'
-            print(f"Error: {error_msg}")
-            return jsonify({'error': error_msg, 'success': False}), 403
+            print(f"Error: Permission denied: {path}")
+            return jsonify({'error': 'Permission denied', 'success': False}), 403
 
         return jsonify({
             'items': items,
@@ -103,10 +279,9 @@ def browse_path():
         })
 
     except Exception as e:
-        error_msg = f'Error browsing {path}: {str(e)}'
-        print(f"Error: {error_msg}")
+        print(f"Error browsing {path}: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': error_msg, 'success': False}), 500
+        return jsonify({'error': 'Error browsing path', 'success': False}), 500
 
 
 @app.route('/api/execute', methods=['POST', 'OPTIONS'])
@@ -136,12 +311,20 @@ def execute_command():
         def generate():
             try:
                 # Build command to run upload.py directly
-                command = ['python', '-u', '/Upload-Assistant/upload.py', path]
+                validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
+
+                upload_script = '/Upload-Assistant/upload.py'
+                command = [sys.executable, '-u', upload_script]
 
                 # Add arguments if provided
                 if args:
                     import shlex
-                    command.extend(shlex.split(args))
+
+                    parsed_args = shlex.split(args)
+                    command.extend(_validate_upload_assistant_args(parsed_args))
+
+                # Ensure any path starting with '-' can't be interpreted as an option
+                command.extend(['--', validated_path])
 
                 command_str = ' '.join(command)
                 print(f"Running: {command_str}")
@@ -154,7 +337,7 @@ def execute_command():
                 env['PYTHONIOENCODING'] = 'utf-8'
                 # Disable Python output buffering
 
-                process = subprocess.Popen(
+                process = subprocess.Popen(  # lgtm[py/command-line-injection]
                     command,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
@@ -223,10 +406,9 @@ def execute_command():
                 yield f"data: {json.dumps({'type': 'exit', 'code': process.returncode})}\n\n"
 
             except Exception as e:
-                error_msg = f'Execution error: {str(e)}'
-                print(f"Error: {error_msg}")
+                print(f"Execution error for session {session_id}: {e}")
                 print(traceback.format_exc())
-                yield f"data: {json.dumps({'type': 'error', 'data': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'data': 'Execution error'})}\n\n"
 
                 # Clean up on error
                 if session_id in active_processes:
@@ -235,10 +417,9 @@ def execute_command():
         return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
-        error_msg = f'Request error: {str(e)}'
-        print(f"Error: {error_msg}")
+        print(f"Request error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': error_msg, 'success': False}), 500
+        return jsonify({'error': 'Request error', 'success': False}), 500
 
 
 @app.route('/api/input', methods=['POST'])
@@ -271,15 +452,16 @@ def send_input():
                 return jsonify({'error': 'Process not running', 'success': False}), 400
 
         except Exception as e:
-            print(f"Error writing to stdin: {str(e)}")
-            return jsonify({'error': f'Failed to write input: {str(e)}', 'success': False}), 500
+            print(f"Error writing to stdin for session {session_id}: {e}")
+            print(traceback.format_exc())
+            return jsonify({'error': 'Failed to write input', 'success': False}), 500
 
         return jsonify({'success': True})
 
     except Exception as e:
-        error_msg = f'Input error: {str(e)}'
-        print(f"Error: {error_msg}")
-        return jsonify({'error': error_msg, 'success': False}), 500
+        print(f"Input error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': 'Input error', 'success': False}), 500
 
 
 @app.route('/api/kill', methods=['POST'])
@@ -315,9 +497,9 @@ def kill_process():
         return jsonify({'success': True, 'message': 'Process terminated'})
 
     except Exception as e:
-        error_msg = f'Kill error: {str(e)}'
-        print(f"Error: {error_msg}")
-        return jsonify({'error': error_msg, 'success': False}), 500
+        print(f"Kill error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': 'Kill error', 'success': False}), 500
 
 
 @app.errorhandler(404)
@@ -338,15 +520,29 @@ if __name__ == '__main__':
     print("=" * 50)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
-    print("Server will run at: http://localhost:5000")
-    print("Health check: http://localhost:5000/api/health")
+    host = os.environ.get('UA_WEBUI_HOST', '127.0.0.1').strip() or '127.0.0.1'
+    try:
+        port = int(os.environ.get('UA_WEBUI_PORT', '5000'))
+    except ValueError:
+        port = 5000
+
+    scheme = 'http'
+    print(f"Server will run at: {scheme}://{host}:{port}")
+    print(f"Health check: {scheme}://{host}:{port}/api/health")
+    if _webui_auth_configured():
+        if not os.environ.get('UA_WEBUI_USERNAME') or not os.environ.get('UA_WEBUI_PASSWORD'):
+            print("WARNING: UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD must both be set for auth to work")
+        else:
+            print("Auth: HTTP Basic Auth enabled")
+    else:
+        print("Auth: disabled (set UA_WEBUI_USERNAME and UA_WEBUI_PASSWORD to enable)")
     print("=" * 50)
 
     try:
         app.run(
-            host='0.0.0.0',
-            port=5000,
-            debug=True,
+            host=host,
+            port=port,
+            debug=False,
             threaded=True,
             use_reloader=False
         )

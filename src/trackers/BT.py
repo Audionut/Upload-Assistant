@@ -20,6 +20,8 @@ from src.trackers.COMMON import COMMON
 
 
 class BT:
+    secret_token: str = ''
+
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -104,7 +106,7 @@ class BT:
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             error_text='login.php',
-            token_pattern=r'name="auth" value="([^"]+)"'
+            token_pattern=r'name="auth" value="([^"]+)"'  # nosec B106
         )
 
     async def load_localized_data(self, meta):
@@ -210,7 +212,7 @@ class BT:
 
         found_language_strings = meta.get('subtitle_languages', [])
 
-        subtitle_ids = set()
+        subtitle_ids: set[str] = set()
         for lang_str in found_language_strings:
             target_id = self.ultimate_lang_map.get(lang_str.lower())
             if target_id:
@@ -218,12 +220,12 @@ class BT:
 
         has_pt_subtitles = 'Sim' if '49' in subtitle_ids else 'Nao'
 
-        subtitle_ids = sorted(list(subtitle_ids))
+        subtitle_id_list = sorted(subtitle_ids)
 
-        if not subtitle_ids:
-            subtitle_ids.append('44')
+        if not subtitle_id_list:
+            subtitle_id_list.append('44')
 
-        return has_pt_subtitles, subtitle_ids
+        return has_pt_subtitles, subtitle_id_list
 
     async def get_resolution(self, meta):
         if meta.get('is_disc') == 'BDMV':
@@ -671,7 +673,7 @@ class BT:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -683,5 +685,8 @@ class BT:
             id_pattern=r'groupid=(\d+)',
             success_status_code="200, 302, 303",
         )
+
+        if not is_uploaded:
+            return False
 
         return True

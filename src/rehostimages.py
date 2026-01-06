@@ -34,6 +34,12 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
     if new_images_key not in meta:
         meta[new_images_key] = []
 
+    if meta.get('debug'):
+        console.print(
+            f"[cyan]check_hosts debug: tracker={tracker} meta['imghost']={meta.get('imghost')} approved_image_hosts={approved_image_hosts} "
+            f"image_list={len(meta.get('image_list', []) or [])} {new_images_key}={len(meta.get(new_images_key, []) or [])}[/cyan]"  # noqa: E501
+        )
+
     # Check if we have main image_list but no tracker-specific images yet
     if meta.get('image_list') and not meta.get(new_images_key):
         if meta['debug']:
@@ -161,6 +167,11 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
 
     if not meta.get(new_images_key):
         console.print("[red]All image hosts failed. Please check your configuration.")
+
+    if meta.get('debug'):
+        console.print(
+            f"[cyan]check_hosts debug: done tracker={tracker} image_list={len(meta.get('image_list', []) or [])} {new_images_key}={len(meta.get(new_images_key, []) or [])}[/cyan]"  # noqa: E501
+        )
 
     return meta.get(new_images_key, []), False, images_reuploaded
 

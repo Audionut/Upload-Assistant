@@ -36,7 +36,7 @@ class HHD(UNIT3D):
 
         return should_continue
 
-    async def get_resolution_id(self, meta, mapping_only=False, reverse=False, resolution=None):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

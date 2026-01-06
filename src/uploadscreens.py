@@ -321,7 +321,8 @@ async def upload_image_task(args):
 
             try:
                 with open(image, "rb") as img_file:
-                    files = {'file': img_file}
+                    filename = os.path.basename(image)
+                    files = {'file': (filename, img_file)}
                     headers = {
                         'Authorization': f'{api_key}',
                     }

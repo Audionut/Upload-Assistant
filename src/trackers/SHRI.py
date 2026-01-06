@@ -251,13 +251,13 @@ class SHRI(UNIT3D):
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
         # Extract tag and append if valid
-        tag = self._extract_clean_release_group(meta, name)
+        tag = self._extract_clean_release_group(meta)
         if tag:
             name = f"{name}-{tag}"
 
         return {"name": name}
 
-    def _extract_clean_release_group(self, meta, current_name):
+    def _extract_clean_release_group(self, meta):
         """Extract release group - only accepts VU/UNTOUCHED markers from filename"""
         tag = meta.get("tag", "").strip().lstrip("-")
         if tag and " " not in tag and not self.INVALID_TAG_PATTERN.search(tag):
@@ -380,7 +380,7 @@ class SHRI(UNIT3D):
                 "_shri_distributor_id": distributor_id if distributor_name else None,
             }
 
-        return await super().get_additional_checks(meta)
+        return await super().get_additional_checks(meta)  # type: ignore
 
     async def get_region_id(self, meta):
         """Override to use validated region ID stored in meta"""
@@ -1120,7 +1120,7 @@ class SHRI(UNIT3D):
             "unknown",
             "unk",
         ]:
-            shoutouts = f"SHOUTOUTS : {random.choice(pirate_shouts)}"
+            shoutouts = f"SHOUTOUTS : {random.choice(pirate_shouts)}"  # nosec B311
         else:
             shoutouts = f"SHOUTOUTS : {release_group}"
         logo_section = (

@@ -26,6 +26,9 @@ from urllib.parse import urlparse
 
 
 class BJS:
+    secret_token: str = ''
+    already_has_the_info: bool = False
+
     def __init__(self, config):
         self.config = config
         self.common = COMMON(config)
@@ -63,7 +66,7 @@ class BJS:
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             error_text='login.php',
-            token_pattern=r'name="auth" value="([^"]+)"'
+            token_pattern=r'name="auth" value="([^"]+)"'  # nosec B106
         )
 
     async def load_localized_data(self, meta):
@@ -582,6 +585,7 @@ class BJS:
                 console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
                 continue
 
+            # At this point `result` is expected to be the dict returned by `_fetch_torrent_content`.
             if not result['success']:
                 continue
 
@@ -1228,8 +1232,9 @@ class BJS:
         issue = await self.check_data(meta, data)
         if issue:
             meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
+            return False
         else:
-            await self.cookie_auth_uploader.handle_upload(
+            is_uploaded = await self.cookie_auth_uploader.handle_upload(
                 meta=meta,
                 tracker=self.tracker,
                 source_flag=self.source_flag,
@@ -1241,5 +1246,8 @@ class BJS:
                 id_pattern=r'torrentid=(\d+)',
                 success_text="action=download&id=",
             )
+
+        if not is_uploaded:
+            return False
 
         return True

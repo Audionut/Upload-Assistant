@@ -54,7 +54,7 @@ def download_mkbrr_for_docker(base_dir=".", version="v1.18.0"):
     print(f"Downloading from: {download_url}")
 
     try:
-        response = requests.get(download_url, stream=True)
+        response = requests.get(download_url, stream=True, timeout=60)
         response.raise_for_status()
 
         temp_archive = bin_dir / f"temp_{file_pattern}"
@@ -65,12 +65,84 @@ def download_mkbrr_for_docker(base_dir=".", version="v1.18.0"):
         print(f"Downloaded {file_pattern}")
 
         with tarfile.open(temp_archive, 'r:gz') as tar_ref:
-            tar_ref.extractall(bin_dir)
+            def secure_extract(tar, extract_path="."):
+                """Securely extract tar members with comprehensive security checks"""
+                base_path = Path(extract_path).resolve()
+
+                for member in tar.getmembers():
+                    # Skip symbolic links and hard links entirely for security
+                    if member.issym():
+                        print(f"Warning: Skipping symbolic link: {member.name}")
+                        continue
+                    if member.islnk():
+                        print(f"Warning: Skipping hard link: {member.name}")
+                        continue
+
+                    # Reject absolute paths
+                    if os.path.isabs(member.name):
+                        print(f"Warning: Skipping absolute path: {member.name}")
+                        continue
+
+                    # Reject paths with directory traversal patterns
+                    if ".." in member.name.split(os.sep):
+                        print(f"Warning: Skipping path with '..': {member.name}")
+                        continue
+
+                    # Compute and validate final extraction path
+                    try:
+                        final_path = (base_path / member.name).resolve()
+
+                        # Ensure final path is within base directory
+                        try:
+                            os.path.commonpath([base_path, final_path])
+                            if not str(final_path).startswith(str(base_path) + os.sep) and final_path != base_path:
+                                print(f"Warning: Path outside base directory: {member.name}")
+                                continue
+                        except ValueError:
+                            # Paths are on different drives or commonpath failed
+                            print(f"Warning: Invalid path resolution: {member.name}")
+                            continue
+
+                    except (OSError, ValueError) as e:
+                        print(f"Warning: Path resolution failed for {member.name}: {e}")
+                        continue
+
+                    # Only extract regular files and directories
+                    if not (member.isfile() or member.isdir()):
+                        print(f"Warning: Skipping non-regular file: {member.name}")
+                        continue
+
+                    # Check for reasonable file sizes (prevent zip bombs)
+                    if member.isfile() and member.size > 100 * 1024 * 1024:  # 100MB limit
+                        print(f"Warning: Skipping oversized file: {member.name} ({member.size} bytes)")
+                        continue
+
+                    # Secure extraction: create parent directories if needed
+                    if member.isfile():
+                        final_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Extract file without preserving ownership
+                        with tar.extractfile(member) as source:
+                            with open(final_path, 'wb') as target:
+                                if source:
+                                    target.write(source.read())
+
+                        # Set secure permissions (no owner/group from archive)
+                        final_path.chmod(0o600)  # rw------- for files
+
+                    elif member.isdir():
+                        # Create directory with secure permissions
+                        final_path.mkdir(parents=True, exist_ok=True)
+                        final_path.chmod(0o700)  # rwx------ for directories
+
+                    print(f"Extracted: {member.name}")
+
+            secure_extract(tar_ref, str(bin_dir))
 
         temp_archive.unlink()
 
         if binary_path.exists():
-            os.chmod(binary_path, 0o755)
+            os.chmod(binary_path, 0o700)  # rwx------ (owner only)
             print(f"mkbrr binary ready at: {binary_path}")
 
             with open(version_path, 'w') as f:

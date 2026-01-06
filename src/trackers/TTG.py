@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import pickle
 from bs4 import BeautifulSoup
 import requests
 import asyncio
@@ -10,6 +9,7 @@ import httpx
 from unidecode import unidecode
 from urllib.parse import urlparse
 from src.trackers.COMMON import COMMON
+from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
 from src.console import console
 
@@ -26,9 +26,10 @@ class TTG():
         self.passan = str(config['TRACKERS']['TTG'].get('login_answer', '')).strip()
         self.uid = str(config['TRACKERS']['TTG'].get('user_id', '')).strip()
         self.passkey = str(config['TRACKERS']['TTG'].get('announce_url', '')).strip().split('/')[-1]
-
         self.signature = None
         self.banned_groups = [""]
+
+        self.cookie_validator = CookieValidator(config)
 
     async def edit_name(self, meta):
         ttg_name = meta['name']
@@ -157,13 +158,13 @@ class TTG():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
             else:
                 with requests.Session() as session:
-                    cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files)
+                    cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
+                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
                     mi_dump.close()
 
@@ -180,12 +181,11 @@ class TTG():
 
     async def search_existing(self, meta, disctype):
         dupes = []
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
         if not os.path.exists(cookiefile):
-            console.print("[bold red]Cookie file not found: TTG.pkl")
+            console.print("[bold red]Cookie file not found: TTG.json")
             return []
-        with open(cookiefile, 'rb') as cf:
-            cookies = pickle.load(cf)
+        cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)
 
         if int(meta['imdb_id']) != 0:
             imdb = f"imdb{meta['imdb']}"
@@ -248,9 +248,8 @@ class TTG():
         url = "https://totheglory.im"
         if os.path.exists(cookiefile):
             with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
@@ -270,7 +269,7 @@ class TTG():
             'passan': self.passan
         }
         with requests.Session() as session:
-            response = session.post(url, data=data)
+            response = session.post(url, data=data, timeout=30)
             await asyncio.sleep(0.5)
             if response.url.endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -285,8 +284,7 @@ class TTG():
                 await asyncio.sleep(0.5)
             if response.url.endswith('my.php'):
                 console.print('[green]Successfully logged into TTG')
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
             else:
                 console.print('[bold red]Something went wrong')
                 await asyncio.sleep(1)
@@ -346,7 +344,7 @@ class TTG():
 
     async def download_new_torrent(self, id, torrent_path):
         download_url = f"https://totheglory.im/dl/{id}/{self.passkey}"
-        r = requests.get(url=download_url)
+        r = requests.get(url=download_url, timeout=30)
         if r.status_code == 200:
             with open(torrent_path, "wb") as tor:
                 tor.write(r.content)

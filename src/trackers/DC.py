@@ -3,6 +3,8 @@
 import aiofiles
 import httpx
 import os
+
+from cogs.redaction import redact_private_info
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
@@ -18,6 +20,7 @@ class DC:
         self.api_base_url = f'{self.base_url}/api/v1/torrents'
         self.torrent_url = f'{self.base_url}/torrent/'
         self.banned_groups = ['']
+        self.approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'digitalcore']
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
         self.session = httpx.AsyncClient(headers={
             'X-API-KEY': self.api_key
@@ -204,7 +207,6 @@ class DC:
         return dc_name
 
     async def check_image_hosts(self, meta):
-        approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'sharex']
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
@@ -214,7 +216,7 @@ class DC:
             'digitalcore.club': 'sharex',
             'img.digitalcore.club': 'sharex'
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def fetch_data(self, meta):
@@ -287,6 +289,7 @@ class DC:
 
         else:
             console.print("[cyan]DC Request Data:")
-            console.print(data)
+            console.print(redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading'
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success

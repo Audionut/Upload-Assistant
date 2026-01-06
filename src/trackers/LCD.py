@@ -88,7 +88,7 @@ class LCD(UNIT3D):
 
         return {'mediainfo': mediainfo}
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -98,7 +98,7 @@ class LCD(UNIT3D):
             category_id = '6'
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -109,7 +109,7 @@ class LCD(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             # '8640p':'10',
             '4320p': '1',
