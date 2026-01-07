@@ -29,12 +29,58 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push-image:
+  # Prepare: checkout and compute tags (shared by all build jobs)
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      lowercase_repo: ${{ steps.repo.outputs.lowercase }}
+      standard_tags: ${{ steps.meta-standard.outputs.tags }}
+      standard_labels: ${{ steps.meta-standard.outputs.labels }}
+      webui_tags: ${{ steps.meta-webui.outputs.tags }}
+      webui_labels: ${{ steps.meta-webui.outputs.labels }}
+    steps:
+      - name: Get lowercase repo name
+        id: repo
+        run: |
+          REPO_NAME=${{ env.IMAGE_NAME }}
+          echo "lowercase=${REPO_NAME,,}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels) for Docker - Standard
+        id: meta-standard
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.use_latest_tag == true) }},priority=1000
+            type=ref,event=tag
+            type=ref,event=branch,enable=${{ !inputs.use_latest_tag }}
+
+      - name: Extract metadata (tags, labels) for Docker - WebUI
+        id: meta-webui
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag,suffix=-webui
+            type=ref,event=branch,suffix=-webui
+
+  # Build matrix: 2 variants (standard, webui) x 2 platforms (amd64, arm64) = 4 parallel jobs
+  build:
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        variant: [standard, webui]
+        include:
+          - variant: standard
+            dockerfile: ./Dockerfile.standard
+          - variant: webui
+            dockerfile: ./Dockerfile
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,7 +123,7 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -88,74 +134,110 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get lowercase repo name
+      - name: Prepare platform pair
+        id: platform
         run: |
-          REPO_NAME=${{ env.IMAGE_NAME }} 
-          echo "LOWER_CASE_REPO_NAME=${REPO_NAME,,}" >> $GITHUB_ENV
+          platform=${{ matrix.platform }}
+          echo "pair=${platform//\//-}" >> $GITHUB_OUTPUT
 
-      - name: Get version for tagging
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ matrix.variant == 'standard' && needs.prepare.outputs.standard_labels || needs.prepare.outputs.webui_labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ needs.prepare.outputs.lowercase_repo }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.variant }}-${{ steps.platform.outputs.pair }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ steps.platform.outputs.pair }}
+
+      - name: Export digest
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            RELEASE_VERSION="${{ github.event.release.tag_name }}"
-            echo "VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.pr_number }}" ]; then
-            PR_NUMBER="${{ inputs.pr_number }}"
-            echo "VERSION=pr-${PR_NUMBER}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            BRANCH_NAME="${{ github.ref_name }}"
-            echo "VERSION=${BRANCH_NAME}" >> $GITHUB_ENV
+          mkdir -p /tmp/digests/${{ matrix.variant }}
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${{ matrix.variant }}/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.variant }}-${{ steps.platform.outputs.pair }}
+          path: /tmp/digests/${{ matrix.variant }}/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Merge: create multi-arch manifests from the digests
+  merge:
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        variant: [standard, webui]
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests/${{ matrix.variant }}
+          pattern: digests-${{ matrix.variant }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests/${{ matrix.variant }}
+        run: |
+          # Get tags for this variant
+          if [ "${{ matrix.variant }}" == "standard" ]; then
+            TAGS="${{ needs.prepare.outputs.standard_tags }}"
+          else
+            TAGS="${{ needs.prepare.outputs.webui_tags }}"
           fi
+          
+          # Build tag arguments for docker buildx imagetools create
+          TAG_ARGS=""
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && TAG_ARGS="$TAG_ARGS -t $tag"
+          done <<< "$TAGS"
+          
+          # Create and push multi-arch manifest
+          docker buildx imagetools create $TAG_ARGS \
+            $(printf '${{ env.REGISTRY }}/${{ needs.prepare.outputs.lowercase_repo }}@sha256:%s ' *)
 
-      - name: Extract metadata (tags, labels) for Docker - Standard
-        id: meta-standard
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.use_latest_tag == true) }},priority=1000
-            type=ref,event=tag
-            type=ref,event=branch,enable=${{ !inputs.use_latest_tag }}
+      - name: Inspect image
+        run: |
+          if [ "${{ matrix.variant }}" == "standard" ]; then
+            TAG=$(echo "${{ needs.prepare.outputs.standard_tags }}" | head -n1)
+          else
+            TAG=$(echo "${{ needs.prepare.outputs.webui_tags }}" | head -n1)
+          fi
+          docker buildx imagetools inspect "$TAG"
 
-      - name: Extract metadata (tags, labels) for Docker - WebUI
-        id: meta-webui
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag,suffix=-webui
-            type=ref,event=branch,suffix=-webui
-
-      - name: Build and push Docker image - Standard
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.standard
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-standard.outputs.tags }}
-          labels: ${{ steps.meta-standard.outputs.labels }}
-          cache-from: type=gha,scope=standard
-          cache-to: type=gha,mode=max,scope=standard
-
-      - name: Build and push Docker image - WebUI
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-webui.outputs.tags }}
-          labels: ${{ steps.meta-webui.outputs.labels }}
-          cache-from: type=gha,scope=webui
-          cache-to: type=gha,mode=max,scope=webui
-
+  # Summary job for cleaner workflow output
+  summary:
+    runs-on: ubuntu-latest
+    needs: [prepare, merge]
+    steps:
       - name: Output build information
         run: |
           echo "✅ Docker images built and pushed successfully!"
+          echo ""
           echo "🐋 Standard Images:"
-          echo "${{ steps.meta-standard.outputs.tags }}" | sed 's/^/  - /'
+          echo "${{ needs.prepare.outputs.standard_tags }}" | sed 's/^/  - /'
+          echo ""
           echo "🐋 WebUI Images:"
-          echo "${{ steps.meta-webui.outputs.tags }}" | sed 's/^/  - /'
+          echo "${{ needs.prepare.outputs.webui_tags }}" | sed 's/^/  - /'
+          echo ""
           echo "📝 Event: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "📝 Triggered by release: ${{ github.event.release.tag_name }}"
