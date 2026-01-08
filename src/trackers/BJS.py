@@ -663,6 +663,7 @@ class BJS:
             self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
 
             BJS.already_has_the_info = False
+            BJS.database_title = ''
             params = self._extract_upload_params(meta)
 
             soup = await self._fetch_search_page(meta)
@@ -1165,7 +1166,7 @@ class BJS:
             'titulobrasileiro': brazilian_title,
             'traileryoutube': await self.get_trailer(meta),
             'type': self.get_type(meta),
-            'year': f"{meta['year']}–{meta['imdb_info']['end_year']}" if meta.get('imdb_info').get('end_year') else f"{meta['year']}–",
+            'year': f"{meta['year']}-{meta['imdb_info']['end_year']}" if meta.get('imdb_info').get('end_year') else f"{meta['year']}-",
         })
 
         # These fields are common in movies and TV shows, even if it's anime
