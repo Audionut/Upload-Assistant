@@ -196,9 +196,9 @@ class DescriptionBuilder:
     async def get_custom_header(self) -> str:
         """Returns a custom header if configured."""
         try:
-            custom_description_header = self.tracker_config.get(
+            custom_description_header = str(self.tracker_config.get(
                 "custom_description_header", self.config["DEFAULT"].get("custom_description_header", "")
-            )
+            ))
             if custom_description_header:
                 return custom_description_header
         except Exception as e:
@@ -206,11 +206,11 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_tonemapped_header(self, meta: dict[str, Any]):
+    async def get_tonemapped_header(self, meta: dict[str, Any]) -> str:
         try:
-            tonemapped_description_header = self.tracker_config.get(
+            tonemapped_description_header = str(self.tracker_config.get(
                 "tonemapped_header", self.config["DEFAULT"].get("tonemapped_header", "")
-            )
+            ))
             if tonemapped_description_header and meta.get("tonemapped", False):
                 return tonemapped_description_header
         except Exception as e:
@@ -403,8 +403,8 @@ class DescriptionBuilder:
     async def get_user_description(self, meta: dict[str, Any]) -> str:
         """Returns the user-provided description (file or link)"""
         try:
-            description_file_content = meta.get("description_file_content", "").strip()
-            description_link_content = meta.get("description_link_content", "").strip()
+            description_file_content = str(meta.get("description_file_content", "")).strip()
+            description_link_content = str(meta.get("description_link_content", "")).strip()
 
             if description_file_content or description_link_content:
                 if description_file_content:
@@ -486,9 +486,13 @@ class DescriptionBuilder:
         signature: str = "",
         comparison: bool = False,
         desc_header: str = "",
-        image_list: list[dict[str, str]] = [],
-        approved_image_hosts: list[str] = [],
+        image_list: list[dict[str, str]] | None = None,
+        approved_image_hosts: list[str] | None = None,
     ):
+        if image_list is None:
+            image_list = []
+        if approved_image_hosts is None:
+            approved_image_hosts = []
         if image_list:
             images = image_list
             multi_screens = 0

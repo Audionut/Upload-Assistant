@@ -132,11 +132,9 @@ def build_mkbrr_exclude_string(root_folder, filelist):
 
 
 async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, tracker_url: str = "", piece_size: int = 0):
-    if piece_size:
-        try:
-            piece_size = meta.get('max_piece_size', 0)
-        except Exception:
-            piece_size = 0
+    if not piece_size:
+        piece_size = meta.get('max_piece_size', 0)
+
     if meta['isdir']:
         if meta['keep_folder']:
             cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')

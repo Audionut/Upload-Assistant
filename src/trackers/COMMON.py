@@ -47,7 +47,7 @@ class COMMON():
         user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
-    async def create_torrent_for_upload(self, meta: dict[str, Any], tracker: str, source_flag: str, torrent_filename: str = "BASE", announce_url: str = None):
+    async def create_torrent_for_upload(self, meta: dict[str, Any], tracker: str, source_flag: str, torrent_filename: str = "BASE", announce_url: str = ""):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()

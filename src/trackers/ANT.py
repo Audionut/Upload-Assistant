@@ -304,11 +304,11 @@ class ANT:
 
     async def mediainfo(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc') == 'BDMV':
-            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'], char_limit=100000)
+            mediainfo = str(await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'], char_limit=100000))
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
-                mediainfo = await f.read()
+                mediainfo = str(await f.read())
 
         return mediainfo
 
