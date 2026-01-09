@@ -16,6 +16,7 @@ from src.console import console
 from src.exportmi import exportInfo
 from src.languages import process_desc_language
 from torf import Torrent
+from typing import Any
 
 
 class COMMON():
@@ -24,7 +25,7 @@ class COMMON():
         self.parser = self.MediaInfoParser()
         pass
 
-    async def path_exists(self, path):
+    async def path_exists(self, path: str) -> bool:
         """Async wrapper for os.path.exists"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.path.exists, path)
@@ -34,7 +35,7 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.remove, path)
 
-    async def makedirs(self, path, exist_ok=True):
+    async def makedirs(self, path: str, exist_ok: bool = True) -> None:
         """Async wrapper for os.makedirs"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
@@ -46,7 +47,7 @@ class COMMON():
         user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
-    async def create_torrent_for_upload(self, meta, tracker, source_flag, torrent_filename="BASE", announce_url=None):
+    async def create_torrent_for_upload(self, meta: dict[str, Any], tracker: str, source_flag: str, torrent_filename: str = "BASE", announce_url: str = None):
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
@@ -853,7 +854,7 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta, remove=None, char_limit=None):
+    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: list[str] = [], char_limit: int = 0):
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
@@ -895,14 +896,9 @@ class COMMON():
                     lines = await f.readlines()
 
                 if remove:
-                    if not isinstance(remove, list):
-                        lines_to_remove = [remove]
-                    else:
-                        lines_to_remove = remove
-
                     lines = [
                         line for line in lines
-                        if not any(line.strip().startswith(prefix) for prefix in lines_to_remove)
+                        if not any(line.strip().startswith(prefix) for prefix in remove)
                     ]
 
                 return ''.join(lines)

@@ -37,14 +37,14 @@ class DC:
         return mediainfo
 
     async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
             desc_parts.append(f'[center]{episode_overview}[/center]')
@@ -84,7 +84,7 @@ class DC:
                 desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")

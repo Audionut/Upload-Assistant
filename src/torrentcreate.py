@@ -15,6 +15,7 @@ import sys
 import platform
 import glob
 from src.console import console
+from typing import Any
 
 
 def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
@@ -130,12 +131,12 @@ def build_mkbrr_exclude_string(root_folder, filelist):
     return exclude_str
 
 
-async def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=None):
-    if piece_size is None:
+async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, tracker_url: str = "", piece_size: int = 0):
+    if piece_size:
         try:
-            piece_size = meta.get('max_piece_size', None)
+            piece_size = meta.get('max_piece_size', 0)
         except Exception:
-            piece_size = None
+            piece_size = 0
     if meta['isdir']:
         if meta['keep_folder']:
             cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')

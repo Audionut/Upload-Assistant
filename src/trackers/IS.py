@@ -37,20 +37,20 @@ class IS:
         )
 
     async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'Title: {title}')
             desc_parts.append(f'Overview: {episode_overview}')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'{mediainfo}')
 
@@ -70,7 +70,7 @@ class IS:
             desc_parts.append('Screenshots:\n' + screenshots_block)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

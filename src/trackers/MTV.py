@@ -81,11 +81,11 @@ class MTV():
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
-                piece_size = '8'
+                piece_size = 8
                 tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
                 torrent_create = f"[{self.tracker}]"
 
-                await create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+                await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
             else:

@@ -631,11 +631,11 @@ class AZTrackerBase:
         return tags
 
     async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # TV stuff
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[b]Episode:[/b] {title}')
             desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
@@ -644,7 +644,7 @@ class AZTrackerBase:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 

@@ -71,20 +71,20 @@ class TL:
             return False
 
     async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
         process_screenshot = not self.tracker_config.get("img_rehost", True) or self.tracker_config.get("api_upload", True)
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
-        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        logo, logo_size = await builder.get_logo_section(meta)
         if logo and logo_size:
             desc_parts.append(f"""<center><img src="{logo}" style="max-width: {logo_size}px;"></center>""")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -94,7 +94,7 @@ class TL:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        desc_parts.append(await builder.get_mediainfo_section(meta, self.tracker))
+        desc_parts.append(await builder.get_mediainfo_section(meta))
         desc_parts.append(await builder.get_bdinfo_section(meta))
 
         # NFO
@@ -109,7 +109,7 @@ class TL:
             # Disc menus screenshots header
             menu_images = meta.get("menu_images", [])
             if menu_images:
-                desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+                desc_parts.append(await builder.menu_screenshot_header(meta))
 
                 # Disc menus screenshots
                 menu_screenshots_block = ""
@@ -124,14 +124,14 @@ class TL:
                     desc_parts.append("<center>" + menu_screenshots_block + "</center>")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Screenshots Section
         if process_screenshot:
             images = meta.get("image_list", [])
             if images:
                 # Screenshot Header
-                desc_parts.append(await builder.screenshot_header(self.tracker))
+                desc_parts.append(await builder.screenshot_header())
                 # Screenshots
                 screenshots_block = ""
                 for i, image in enumerate(images):

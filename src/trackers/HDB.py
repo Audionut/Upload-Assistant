@@ -235,10 +235,10 @@ class HDB():
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
             tracker_url = config['TRACKERS']['HDB'].get('announce_url', "https://fake.tracker").strip()
-            piece_size = '16'
+            piece_size = 16
             torrent_create = f"[{self.tracker}]"
 
-            await create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+            await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
         # Proceed with the upload process

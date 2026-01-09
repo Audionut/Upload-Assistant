@@ -38,11 +38,11 @@ class HDS:
         )
 
     async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -50,7 +50,7 @@ class HDS:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -60,7 +60,7 @@ class HDS:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
@@ -74,7 +74,7 @@ class HDS:
         # Disc menus screenshots header
         menu_images = meta.get("menu_images", [])
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+            desc_parts.append(await builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
@@ -90,12 +90,12 @@ class HDS:
                 desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Screenshot Header
         images = meta.get("image_list", [])
         if images:
-            desc_parts.append(await builder.screenshot_header(self.tracker))
+            desc_parts.append(await builder.screenshot_header())
 
             # Screenshots
             if images:

@@ -82,4 +82,4 @@ class STC(UNIT3D):
         else:
             image_list = meta['image_list']
 
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}

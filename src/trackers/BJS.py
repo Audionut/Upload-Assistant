@@ -313,11 +313,11 @@ class BJS:
         return original_title, brazilian_title
 
     async def build_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -339,7 +339,7 @@ class BJS:
 
         # File information
         if meta.get('is_disc', '') == 'DVD':
-            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
         bd_info = await builder.get_bdinfo_section(meta)
         if bd_info:
@@ -349,7 +349,7 @@ class BJS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")

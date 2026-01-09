@@ -129,7 +129,7 @@ class UNIT3D:
         return {'name': meta['name']}
 
     async def get_description(self, meta):
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -383,7 +383,7 @@ class UNIT3D:
             'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
             'authorization': f'Bearer {self.api_key}',
             'accept': 'application/json',
-            }
+        }
 
         if meta['debug'] is False:
             response_data = {}

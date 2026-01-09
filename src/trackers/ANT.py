@@ -15,13 +15,15 @@ from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.torrentcreate import create_torrent
 from src.trackers.COMMON import COMMON
+from typing import Any
 
 
 class ANT:
-    def __init__(self, config):
-        self.config = config
-        self.common = COMMON(config)
+    def __init__(self, config: dict[str, Any]):
         self.tracker = 'ANT'
+        self.config: dict[str, Any] = config
+        self.common = COMMON(config)
+        self.tracker_config: dict[str, str] = self.config['TRACKERS'][self.tracker]
         self.source_flag = 'ANT'
         self.search_url = 'https://anthelion.me/api.php'
         self.upload_url = 'https://anthelion.me/api.php'
@@ -36,10 +38,10 @@ class ANT:
         ]
         pass
 
-    async def get_flags(self, meta):
-        flags = []
+    async def get_flags(self, meta: dict[str, Any]) -> list[str]:
+        flags: list[str] = []
         for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']:
-            if each in meta['edition'].replace("'", ""):
+            if each in str(meta.get('edition', '')).replace("'", ""):
                 flags.append(each)
         for each in ['Dual-Audio', 'Atmos']:
             if each in meta['audio']:
@@ -58,8 +60,8 @@ class ANT:
             flags.append('Remux')
         return flags
 
-    async def get_tags(self, meta):
-        tags = []
+    async def get_tags(self, meta: dict[str, Any]) -> list[str]:
+        tags: list[str] = []
         if meta.get('genres', []):
             genres = meta['genres']
             # Handle both string and list formats
@@ -79,7 +81,7 @@ class ANT:
 
         return tags
 
-    async def get_type(self, meta):
+    async def get_type(self, meta: dict[str, Any]) -> int:
         antType = None
         imdb_info = meta.get('imdb_info', {})
         if imdb_info['type'] is not None:
@@ -121,7 +123,7 @@ class ANT:
                     "Miniseries": 2,
                     "Other": 3
                 }
-                antType = type_map.get(choice)
+                antType = type_map.get(choice, 0)
             else:
                 if meta['debug']:
                     console.print(f"[bold red]{self.tracker} type could not be determined automatically in unattended mode.")
@@ -129,20 +131,19 @@ class ANT:
 
         return antType
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _) -> bool:
         torrent_filename = "BASE"
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
+        tracker_url: str = ''
         if meta.get('mkbrr', False):
-            tracker_url = self.config['TRACKERS']['ANT'].get('announce_url', "https://fake.tracker").strip()
-        else:
-            tracker_url = ''
+            tracker_url = dict(self.tracker_config).get('announce_url', "https://fake.tracker").strip()
 
         # Trigger regeneration automatically if size constraints aren't met
         if torrent_file_size_kib > 250:  # 250 KiB
             console.print("[yellow]Existing .torrent exceeds 250 KiB and will be regenerated to fit constraints.")
             meta['max_piece_size'] = '128'  # 128 MiB
-            await create_torrent(meta, Path(meta['path']), "ANT", tracker_url=tracker_url)
+            await create_torrent(meta, str(Path(meta['path'])), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
@@ -152,10 +153,10 @@ class ANT:
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
-        data = {
+        data: dict[str, Any] = {
             'type': await self.get_type(meta),
             'audioformat': await self.get_audio(meta),
-            'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+            'api_key': str(self.tracker_config.get('api_key', '')).strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
             'mediainfo': await self.mediainfo(meta),
@@ -196,15 +197,15 @@ class ANT:
 
         try:
             if not meta['debug']:
-                async with httpx.AsyncClient(timeout=10) as client:
+                async with httpx.AsyncClient(timeout=20) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
-                    if response.status_code in [200, 201]:
-                        try:
-                            response_data = response.json()
-                        except json.JSONDecodeError:
-                            meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
-                            return False
+                    try:
+                        response_data: dict[str, Any] = response.json()
+                    except json.JSONDecodeError:
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
+                        return False
 
+                    if response.status_code in [200, 201]:
                         is_success = (
                             ('success' in response_data)
                             or (str(response_data.get('status', '')).lower() == 'success')
@@ -278,7 +279,7 @@ class ANT:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
             return False
 
-    async def get_audio(self, meta):
+    async def get_audio(self, meta: dict[str, Any]) -> str:
         '''
         Possible values:
         MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus
@@ -299,9 +300,9 @@ class ANT:
             if key in audio:
                 return value
         console.print(f'{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus')
-        return None
+        return ""
 
-    async def mediainfo(self, meta):
+    async def mediainfo(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc') == 'BDMV':
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'], char_limit=100000)
         else:
@@ -311,15 +312,15 @@ class ANT:
 
         return mediainfo
 
-    async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
-        desc_parts = []
+    async def edit_desc(self, meta: dict[str, Any]) -> str:
+        builder = DescriptionBuilder(self.tracker, self.config)
+        desc_parts: list[str] = []
 
         # Avoid unnecessary descriptions, adding only the logo if there is a user description
-        user_desc = await builder.get_user_description(meta)
+        user_desc: str = await builder.get_user_description(meta)
         if user_desc:
             # Custom Header
-            desc_parts.append(await builder.get_custom_header(self.tracker))
+            desc_parts.append(await builder.get_custom_header())
 
             # Logo
             logo_resize_url = meta.get('tmdb_logo', '')
@@ -338,7 +339,7 @@ class ANT:
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+            desc_parts.append(await builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
@@ -350,7 +351,7 @@ class ANT:
                 desc_parts.append(f"[align=center]{menu_screenshots_block}[/align]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -368,30 +369,32 @@ class ANT:
 
         return description
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
+        dupes: list[dict[str, Any]] = []
         if meta.get('category') == "TV":
             if not meta['unattended']:
                 console.print('[bold red]ANT only ALLOWS Movies.')
             meta['skipping'] = "ANT"
-            return []
+            return dupes
 
         if meta['valid_mi'] is False:
-            console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
-            return False
+            if not meta['unattended']:
+                console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
+            meta['skipping'] = "ANT"
+            return dupes
 
-        dupes = []
         params = {
-            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+            'apikey': str(self.tracker_config.get('api_key')).strip(),
             't': 'search',
             'o': 'json'
         }
-        if str(meta['tmdb']) != 0:
+        if meta['tmdb'] != 0:
             params['tmdb'] = meta['tmdb']
         elif int(meta['imdb_id']) != 0:
             params['imdb'] = meta['imdb']
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(url='https://anthelion.me/api', params=params)
                 if response.status_code == 200:
                     try:
@@ -414,7 +417,7 @@ class ANT:
                                         largest = file
                                 largest_file = largest.get('name', '')
 
-                            result = {
+                            result: dict[str, Any] = {
                                 'name': largest_file or each.get('fileName', ''),
                                 'files': [file.get('name', '') for file in each.get('files', [])],
                                 'size': int(each.get('size', 0)),
@@ -447,25 +450,25 @@ class ANT:
 
         return dupes
 
-    async def get_data_from_files(self, meta):
+    async def get_data_from_files(self, meta: dict[str, Any]) -> list[dict[str, Any]]:
+        imdb_tmdb_list: list[dict[str, Any]] = []
         if meta.get('is_disc', False):
-            return []
+            return imdb_tmdb_list
         filelist = meta.get('filelist', [])
         filename = [os.path.basename(f) for f in filelist][0]
-        params = {
-            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+        params: dict[str, Any] = {
+            'apikey': str(self.tracker_config.get('api_key')).strip(),
             't': 'search',
             'filename': filename,
             'o': 'json'
         }
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(url='https://anthelion.me/api', params=params)
                 if response.status_code == 200:
                     try:
                         data = response.json()
-                        imdb_tmdb_list = []
                         items = data.get('item', [])
 
                         matched_item = None

@@ -325,11 +325,11 @@ class BT:
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -353,7 +353,7 @@ class BT:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/center]")

@@ -188,14 +188,14 @@ class GPW():
         return
 
     async def get_release_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
-        logo, logo_size = await builder.get_logo_section(meta, self.tracker)
+        logo, logo_size = await builder.get_logo_section(meta)
         if logo and logo_size:
             desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
 
@@ -207,7 +207,7 @@ class GPW():
         desc_parts.append(await builder.get_user_description(meta))
 
         # Disc menus screenshots header
-        desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+        desc_parts.append(await builder.menu_screenshot_header(meta))
 
         # Disc menus screenshots
         if f'{self.tracker}_menu_images_key' in meta:
@@ -221,7 +221,7 @@ class GPW():
             desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
+        desc_parts.append(await builder.screenshot_header())
 
         # Screenshots
         if f'{self.tracker}_images_key' in meta:
@@ -235,7 +235,7 @@ class GPW():
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/align]")

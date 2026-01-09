@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import traceback
 import httpx
 import aiofiles
+from typing import Any
 
 try:
     from data.config import config
@@ -551,7 +552,7 @@ async def upload_image_task(args):
 thread_pool = ThreadPoolExecutor(max_workers=10)
 
 
-async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=False, max_retries=3, allowed_hosts=None):
+async def upload_screens(meta: dict[str, Any], screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=False, max_retries=3, allowed_hosts=None):
     if 'image_list' not in meta:
         meta['image_list'] = []
     if meta['debug']:

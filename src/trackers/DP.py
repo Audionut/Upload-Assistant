@@ -74,7 +74,7 @@ class DP(UNIT3D):
             if logo_path:
                 meta['logo'] = logo_path
 
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, self.tracker)}
 
     async def get_additional_data(self, meta):
         data = {
