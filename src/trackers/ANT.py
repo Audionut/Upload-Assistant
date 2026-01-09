@@ -64,18 +64,18 @@ class ANT:
             genres = meta['genres']
             # Handle both string and list formats
             if isinstance(genres, str):
-                tags.append(genres)
+                tags.append(genres.replace(' ', '.'))
             else:
                 for genre in genres:
-                    tags.append(genre)
+                    tags.append(genre.replace(' ', '.'))
         elif meta.get('imdb_info', {}):
             imdb_genres = meta['imdb_info'].get('genres', [])
             # Handle both string and list formats
             if isinstance(imdb_genres, str):
-                tags.append(imdb_genres)
+                tags.append(imdb_genres.replace(' ', '.'))
             else:
                 for genre in imdb_genres:
-                    tags.append(genre)
+                    tags.append(genre.replace(' ', '.'))
 
         return tags
 
@@ -204,7 +204,12 @@ class ANT:
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
                             return False
-                        if "success" not in response_data:
+
+                        is_success = (
+                            ('success' in response_data)
+                            or (str(response_data.get('status', '')).lower() == 'success')
+                        )
+                        if not is_success:
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data}"
                             return False
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
@@ -213,8 +218,13 @@ class ANT:
                         else:
                             meta['tracker_status'][self.tracker]['status_message'] = response_data
                             return True
+
                     elif response.status_code == 400:
-                        if "exact same" in response.text.lower():
+                        is_exact = (
+                            ('exact same' in response_data)
+                            or (str(response_data.get('status', '')).lower() == 'exact same')
+                        )
+                        if is_exact:
                             folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"
                             meta['tracker_status'][self.tracker]['status_message'] = (
                                 "data error: The exact same media file already exists on ANT. You must use the website to upload a new version if you wish to trump.\n"
@@ -225,10 +235,25 @@ class ANT:
                         else:
                             response_data = {
                                 "error": f"Unexpected status code: {response.status_code}",
-                                "response_content": response.text
+                                "response_content": {response.text}
                             }
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                             return False
+
+                    elif response.status_code == 403:
+                        response_data = {
+                            "error": "Wrong API key or insufficient permissions",
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
+
+                    elif response.status_code == 500:
+                        response_data = {
+                            "error": "Internal Server Error, report to ANT staff",
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
+
                     elif response.status_code == 502:
                         response_data = {
                             "error": "Bad Gateway",
@@ -239,7 +264,7 @@ class ANT:
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",
-                            "response_content": response.text
+                            "response_content": {response.text}
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                         return False
@@ -247,6 +272,7 @@ class ANT:
                 console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"

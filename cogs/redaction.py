@@ -1,15 +1,88 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 import json
+from typing import List, Optional, Tuple
 
 SENSITIVE_KEYS = {
-    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass"
+    "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
 }
 
 
+def extract_json_blocks(text: str):
+    """Extract JSON-like blocks from a string using bracket counting.
+
+    Returns a list of (start, end) slices where `text[start:end]` is a candidate JSON
+    object (`{...}`) or array (`[...]`). This supports *nested* JSON by tracking a
+    bracket stack, and ignores brackets that occur inside quoted strings.
+
+    Notes / limitations:
+    - This is a best-effort extractor for embedded JSON substrings.
+    - It does not attempt to support non-standard JSON (JSON5, trailing commas, etc.).
+    - Blocks are only redacted if `json.loads` successfully parses them.
+    """
+    blocks: List[Tuple[int, int]] = []
+    stack: list[str] = []
+    start: Optional[int] = None
+    in_string = False
+    string_char: str | None = None
+    escape = False
+
+    for i, ch in enumerate(text):
+        if escape:
+            escape = False
+            continue
+
+        if in_string:
+            if ch == "\\":
+                escape = True
+            elif ch == string_char:
+                in_string = False
+                string_char = None
+            continue
+
+        if ch in ("\"", "'"):
+            in_string = True
+            string_char = ch
+            continue
+
+        if ch in ("{", "["):
+            if not stack:
+                start = i
+            stack.append(ch)
+            continue
+
+        if ch in ("}", "]") and stack:
+            top = stack[-1]
+            if (ch == "}" and top == "{") or (ch == "]" and top == "["):
+                stack.pop()
+                if not stack and start is not None:
+                    blocks.append((start, i + 1))
+                    start = None
+
+    return blocks
+
+
 def redact_value(val):
-    """Redact sensitive values, including passkeys in URLs."""
+    """Redact sensitive values, including passkeys in URLs and JSON substrings."""
     if isinstance(val, str):
+        # First, try to find and redact embedded JSON substrings within the string.
+        # This uses bracket counting (not regex) so it can handle nested JSON.
+        blocks = extract_json_blocks(val)
+        for start, end in reversed(blocks):
+            json_str = val[start:end]
+            try:
+                parsed = json.loads(json_str)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            try:
+                redacted = redact_private_info(parsed)
+                redacted_str = json.dumps(redacted)
+            except (TypeError, ValueError):
+                continue
+
+            val = val[:start] + redacted_str + val[end:]
+
         # Redact passkeys in announce URLs (e.g. /<passkey>/announce)
         val = re.sub(r'(?<=/)[a-zA-Z0-9]{10,}(?=/announce)', '[REDACTED]', val)
         # Redact content between /proxy/ and /api (e.g. /proxy/<secret>/api)
@@ -22,11 +95,11 @@ def redact_value(val):
 
 
 def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
-    """Recursively redact sensitive info in dicts/lists."""
+    """Recursively redact sensitive info in dicts/lists/strings containing JSON."""
     if isinstance(data, dict):
         return {
             k: (
-                "[REDACTED]" if any(s in k.lower() for s in sensitive_keys)
+                "[REDACTED]" if any(s.lower() in k.lower() for s in sensitive_keys)
                 else redact_private_info(v, sensitive_keys)
             )
             for k, v in data.items()
@@ -34,7 +107,14 @@ def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
     elif isinstance(data, list):
         return [redact_private_info(item, sensitive_keys) for item in data]
     elif isinstance(data, str):
-        return redact_value(data)
+        # Try to parse as JSON first
+        try:
+            parsed_json = json.loads(data)
+            redacted_json = redact_private_info(parsed_json, sensitive_keys)
+            return json.dumps(redacted_json)
+        except (json.JSONDecodeError, TypeError):
+            # Not valid JSON, treat as regular string
+            return redact_value(data)
     else:
         return data
 

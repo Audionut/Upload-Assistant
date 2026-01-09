@@ -6,6 +6,7 @@ import click
 import os
 import re
 import urllib.request
+from urllib.parse import urlparse
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
@@ -90,7 +91,7 @@ class TIK(UNIT3D):
 
         return {'name': name}
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_name = meta['category']
         foreign = meta.get('foreign', False)
         opera = meta.get('opera', False)
@@ -123,7 +124,7 @@ class TIK(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         disctype = meta.get('disctype', None)
         type_id_map = {
             'Custom': '1',
@@ -148,7 +149,7 @@ class TIK(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             'Other': '10',
             '4320p': '1',
@@ -206,7 +207,10 @@ class TIK(UNIT3D):
             # No poster file exists, download the poster image
             poster_path = poster_jpg_path  # Default to saving as poster.jpg
             try:
-                urllib.request.urlretrieve(poster_url, poster_path)
+                parsed_url = urlparse(poster_url)
+                if parsed_url.scheme not in ('http', 'https'):
+                    raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
+                urllib.request.urlretrieve(poster_url, poster_path)  # nosec B310
                 console.print(f"[green]Poster downloaded to {poster_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Error downloading poster: {e}[/red]")

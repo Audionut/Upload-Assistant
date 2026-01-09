@@ -620,7 +620,7 @@ class FF:
         if nfo:
             files['nfo'] = nfo['nfo']
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -634,5 +634,8 @@ class FF:
             success_status_code=302,
             additional_files=files
         )
+
+        if not is_uploaded:
+            return False
 
         return True

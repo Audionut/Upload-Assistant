@@ -12,7 +12,6 @@ try:
 
     from difflib import SequenceMatcher
     from guessit import guessit
-    from pathlib import Path
 
     from data.config import config
     from src.apply_overrides import get_source_override
@@ -42,7 +41,7 @@ try:
     from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
 except ModuleNotFoundError:
-    console.print(traceback.format_exc())
+    traceback.format_exc()
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
     console.print('[yellow]pip3 install --user -U -r requirements.txt')
     exit()
@@ -102,7 +101,7 @@ class Prep():
         if meta.get('uuid', None) is None:
             meta['uuid'] = folder_id
         if not os.path.exists(f"{base_dir}/tmp/{meta['uuid']}"):
-            Path(f"{base_dir}/tmp/{meta['uuid']}").mkdir(parents=True, exist_ok=True)
+            os.makedirs(f"{base_dir}/tmp/{meta['uuid']}", mode=0o700, exist_ok=True)
 
         if meta['debug']:
             console.print(f"[cyan]ID: {meta['uuid']}")
@@ -229,7 +228,7 @@ class Prep():
                 except Exception:
                     meta['search_year'] = ""
                 if not meta.get('edit', False):
-                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_0.IFO", False, meta['uuid'], meta['base_dir'], export_text=False, is_dvd=True, debug=meta.get('debug', False))
+                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_0.IFO", False, meta['uuid'], meta['base_dir'], is_dvd=True, debug=meta.get('debug', False))
                     meta['mediainfo'] = mi
                 else:
                     mi = meta['mediainfo']
@@ -252,7 +251,7 @@ class Prep():
             except Exception:
                 meta['search_year'] = ""
             if not meta.get('edit', False):
-                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], export_text=False, debug=meta['debug'])
+                mi = await exportInfo(meta['discs'][0]['largest_evo'], False, meta['uuid'], meta['base_dir'], debug=meta['debug'])
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']
@@ -314,7 +313,7 @@ class Prep():
                         meta['search_year'] = ""
 
                     if not meta.get('edit', False):
-                        mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, export_text=True)
+                        mi = await exportInfo(videopath, meta['isdir'], meta['uuid'], base_dir, is_dvd=meta.get('is_disc', False), debug=meta.get('debug', False))
                         meta['mediainfo'] = mi
                     else:
                         mi = meta['mediainfo']

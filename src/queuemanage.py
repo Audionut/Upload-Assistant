@@ -176,7 +176,7 @@ async def gather_files_recursive(path, allowed_extensions=None):
                             elif os.path.isfile(alt_path) and (allowed_extensions is None or alt_path.lower().endswith(tuple(allowed_extensions))):
                                 queue.append(alt_path)
                     except Exception:
-                        continue
+                        continue  # nosec B112: ignore further errors here
 
         except (OSError, PermissionError) as e:
             console.print(f"[red]Error scanning directory {path}: {e}[/red]")
@@ -259,19 +259,19 @@ async def resolve_queue_with_glob_or_split(path, paths, allowed_extensions=None)
             if os.path.isdir(file) or (os.path.isfile(file) and (allowed_extensions is None or file.lower().endswith(tuple(allowed_extensions))))
         ]
         if queue:
-            await display_queue(queue)
+            await display_queue(queue, save_to_log=False)
     elif os.path.exists(os.path.dirname(path)) and len(paths) > 1:
         queue = [
             file for file in paths
             if os.path.isdir(file) or (os.path.isfile(file) and (allowed_extensions is None or file.lower().endswith(tuple(allowed_extensions))))
         ]
-        await display_queue(queue)
+        await display_queue(queue, save_to_log=False)
     elif not os.path.exists(os.path.dirname(path)):
         queue = [
             file for file in await _resolve_split_path(path)
             if os.path.isdir(file) or (os.path.isfile(file) and (allowed_extensions is None or file.lower().endswith(tuple(allowed_extensions))))
         ]
-        await display_queue(queue)
+        await display_queue(queue, save_to_log=False)
     return queue
 
 
@@ -305,16 +305,23 @@ async def extract_safe_file_locations(log_file):
     return safe_file_locations
 
 
-async def display_queue(queue, base_dir, queue_name, save_to_log=True):
+async def display_queue(queue, base_dir=None, queue_name=None, save_to_log=True):
     """Displays the queued files in markdown format and optionally saves them to a log file in the tmp directory."""
     md_text = "\n - ".join(queue)
     console.print("\n[bold green]Queuing these files:[/bold green]", end='')
     console.print(Markdown(f"- {md_text.rstrip()}\n\n", style=Style(color='cyan')))
     console.print("\n\n")
 
-    if save_to_log:
+    if save_to_log and base_dir and queue_name:
         tmp_dir = os.path.join(base_dir, "tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir, mode=0o700, exist_ok=True)
+            # Enforce 0700 regardless of process umask (POSIX only).
+            if os.name != 'nt':
+                os.chmod(tmp_dir, 0o700)
+        else:
+            if os.name != 'nt':
+                os.chmod(tmp_dir, 0o700)
         log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
         try:

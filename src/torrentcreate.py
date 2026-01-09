@@ -21,7 +21,7 @@ def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
     # Set max_size
     if piece_size:
         try:
-            max_size = min(int(piece_size) * 1024 * 1024, torf.Torrent.piece_size_max)
+            max_size = min(int(piece_size) * 1024 * 1024, torf.Torrent.piece_size_max)  # type: ignore
         except ValueError:
             max_size = 134217728  # Fallback to default if conversion fails
     else:
@@ -241,12 +241,18 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
     # If using mkbrr, run the external application
     if meta.get('mkbrr'):
         try:
+            # Validate input path to prevent potential command injection
+            if not os.path.exists(path):
+                raise ValueError(f"Path does not exist: {path}")
             mkbrr_binary = get_mkbrr_path(meta)
+            # Validate mkbrr binary exists and is executable
+            if not os.path.exists(mkbrr_binary):
+                raise FileNotFoundError(f"mkbrr binary not found: {mkbrr_binary}")
             output_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"{output_filename}.torrent")
 
             # Ensure executable permission for non-Windows systems
             if not sys.platform.startswith("win"):
-                os.chmod(mkbrr_binary, 0o755)
+                os.chmod(mkbrr_binary, 0o700)
 
             cmd = [mkbrr_binary, "create", path]
 
@@ -439,7 +445,7 @@ def create_random_torrents(base_dir, uuid, num, path):
     base_torrent = Torrent.read(f"{base_dir}/tmp/{uuid}/BASE.torrent")
     for i in range(1, int(num) + 1):
         new_torrent = base_torrent
-        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)
+        new_torrent.metainfo['info']['entropy'] = random.randint(1, 999999)  # type: ignore  # nosec B311
         Torrent.copy(new_torrent).write(f"{base_dir}/tmp/{uuid}/[RAND-{i}]{manual_name}.torrent", overwrite=True)
 
 
@@ -461,10 +467,10 @@ async def create_base_from_existing_torrent(torrentpath, base_dir, uuid):
         # Remove everything not in the whitelist
         for each in list(info_dict):
             if each not in valid_keys:
-                info_dict.pop(each, None)
+                info_dict.pop(each, None)  # type: ignore
         for each in list(base_torrent.metainfo):
             if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
-                base_torrent.metainfo.pop(each, None)
+                base_torrent.metainfo.pop(each, None)  # type: ignore
         base_torrent.source = 'L4G'
         base_torrent.private = True
         Torrent.copy(base_torrent).write(f"{base_dir}/tmp/{uuid}/BASE.torrent", overwrite=True)

@@ -167,7 +167,7 @@ class Args():
         parser.add_argument('-nh', '--nohash', action='store_true', required=False, help="Don't hash .torrent")
         parser.add_argument('-rh', '--rehash', action='store_true', required=False, help="DO hash .torrent")
         parser.add_argument('-mkbrr', '--mkbrr', action='store_true', required=False, help="Use mkbrr for torrent hashing")
-        parser.add_argument('-frc', '--force-recheck', action='store_true', required=False, help="(qBitTorrent only WITH -sat arg) Force recheck torrent in client before uploading", dest="force_recheck")
+        parser.add_argument('-frc', '--force-recheck', action='store_true', required=False, help="(qBitTorrent only with auto torrent searching) Force recheck torrent in client before uploading", dest="force_recheck")
         parser.add_argument('-dr', '--draft', action='store_true', required=False, help="Send to drafts (BHD, LST)")
         parser.add_argument('-mq', '--modq', action='store_true', required=False, help="Send to modQ")
         parser.add_argument('-client', '--client', nargs=1, required=False, help="Use this torrent client instead of default")

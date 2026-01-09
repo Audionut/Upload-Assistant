@@ -1,5 +1,5 @@
 aiofiles==25.1.0
-aiohttp==3.13.2
+aiohttp==3.13.3
 anitopy==2.1.1
 babel==2.17.0
 bbcode==1.1.0
@@ -8,15 +8,15 @@ bencode.py==4.0.0
 cli-ui==0.19.0
 click==8.1.8
 cloudscraper==1.2.71
+defusedxml==0.7.1
 deluge-client==1.10.2
 discord.py==2.6.4
 ffmpeg-python==0.2.0
-flask==3.1.2
-flask-cors>=6.0.0
 guessit==3.8.0
 httpx==0.28.1
 Jinja2==3.1.6
-langcodes[data]==3.5.0
+langcodes==3.5.1
+language-data==1.4.0
 lxml==6.0.2
 nest_asyncio==1.6.0
 packaging==25.0
@@ -38,4 +38,4 @@ tqdm==4.67.1
 transmission_rpc==7.0.11
 tvdb-v4-official==1.1.0
 unidecode==1.4.0
-urllib3==2.5.0
+urllib3==2.6.3

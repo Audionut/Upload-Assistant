@@ -284,7 +284,7 @@ class HUNO(UNIT3D):
         name = re.sub(r'\s{2,}', ' ', name)
         return {'name': name}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_value = (meta.get('type') or '').lower()
         video_encode = (meta.get('video_encode') or '').lower()
 
@@ -301,7 +301,7 @@ class HUNO(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             'Other': '10',
             '4320p': '1',

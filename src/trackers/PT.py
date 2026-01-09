@@ -20,7 +20,7 @@ class PT(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -31,7 +31,7 @@ class PT(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

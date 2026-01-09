@@ -25,7 +25,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # For example, if you need to modify the description, copy and paste the 'get_description' function and adjust it accordingly
 
     # If default UNIT3D categories, remove this function
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -33,7 +33,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'category_id': category_id}
 
     # If default UNIT3D types, remove this function
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -45,7 +45,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'type_id': type_id}
 
     # If default UNIT3D resolutions, remove this function
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
