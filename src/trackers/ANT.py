@@ -137,7 +137,7 @@ class ANT:
         torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
         tracker_url: str = ''
         if meta.get('mkbrr', False):
-            tracker_url = dict(self.tracker_config).get('announce_url', "https://fake.tracker").strip()
+            tracker_url = self.tracker_config.get('announce_url', "https://fake.tracker").strip()
 
         # Trigger regeneration automatically if size constraints aren't met
         if torrent_file_size_kib > 250:  # 250 KiB

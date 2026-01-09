@@ -16,7 +16,7 @@ from src.console import console
 from src.exportmi import exportInfo
 from src.languages import process_desc_language
 from torf import Torrent
-from typing import Any
+from typing import Any, List, Optional
 
 
 class COMMON():
@@ -854,7 +854,7 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: list[str] = [], char_limit: int = 0):
+    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[List[str]] = None, char_limit: int = 0):
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
