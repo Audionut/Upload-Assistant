@@ -1127,7 +1127,8 @@ class TRACKER_SETUP:
         except KeyError:
             console.print(f"[red]No torrent ID found in meta for trumping torrent on {tracker}[/red]")
             console.print("[red]Either the upload failed, or you're in debug[/red]")
-            return False
+            if not meta.get('debug', False):
+                return False
 
         if meta.get('tv_pack'):
             message = "Upload Assistant season pack trump"
