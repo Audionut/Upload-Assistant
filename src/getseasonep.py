@@ -5,7 +5,6 @@ import os
 import re
 import requests
 import sys
-import time
 
 from difflib import SequenceMatcher
 from guessit import guessit
@@ -417,7 +416,6 @@ async def check_season_pack_detail(meta):
 
     if not found_episodes:
         console.print("[red]No episodes found in the season pack files.")
-        time.sleep(1)
         # return true to not annoy the user with bad regex
         return {'complete': True, 'missing_episodes': [], 'found_episodes': [], 'consistent_tags': True, 'tags_found': tags_found}
 
