@@ -1153,6 +1153,28 @@ async def do_the_thing(base_dir):
                 if meta.get('were_trumping', False):
                     console.print("[yellow]Checking for existing trump reports.....")
                     is_trumping = await tracker_setup.process_trumpables(meta, trackers=meta['trackers'])
+
+                    # Apply any per-tracker skip decisions made during trumpable processing
+                    skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
+                    for t, st in meta.get('tracker_status', {}).items():
+                        if st.get('skip_upload') is True:
+                            skip_upload_trackers.add(t)
+
+                    if skip_upload_trackers:
+                        for t in skip_upload_trackers:
+                            meta.setdefault('tracker_status', {})
+                            meta['tracker_status'].setdefault(t, {})
+                            meta['tracker_status'][t]['upload'] = False
+                            meta['tracker_status'][t]['skipped'] = True
+
+                        meta['trackers'] = [t for t in meta.get('trackers', []) if t not in skip_upload_trackers]
+                        if meta.get('debug', False):
+                            console.print(f"[yellow]Skipping trackers due to trump report selection: {', '.join(sorted(skip_upload_trackers))}[/yellow]")
+
+                        if not meta['trackers']:
+                            console.print("[bold red]No trackers left to upload after trump checking.[/bold red]")
+                            meta['are_we_trump_reporting'] = False
+
                     if is_trumping:
                         meta['are_we_trump_reporting'] = True
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)

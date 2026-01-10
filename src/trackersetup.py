@@ -936,7 +936,11 @@ class TRACKER_SETUP:
                 console.print("[yellow]No trackers with trumping support found.[/yellow]")
             return False
 
-        # Store which trackers we're trump reporting on
+        # Track trackers to skip without mutating meta['trackers'] in-place
+        # NOTE: meta['skip_trackers'] is used elsewhere as a boolean, so use a distinct key here.
+        meta.setdefault('skip_upload_trackers', [])
+
+        # Store which trackers we're trump reporting on (may be filtered later)
         meta['trumping_trackers'] = trumping_trackers
 
         for tracker in trumping_trackers:
@@ -972,27 +976,70 @@ class TRACKER_SETUP:
                             console.print(f"  [bold green]Already being trumped by:[/bold green] {torrent_name} (ID: {torrent_id})")
                     else:
                         console.print("  [yellow]The trumping torrent for this report seems to be in modq.....[/yellow]")
-                upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default="no")
+                try:
+                    upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default="no")
+                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                    console.print("[yellow]Prompt cancelled; treating as 'no' for safety.[/yellow]")
+                    upload = False
+
                 if not upload:
-                    console.print(f"[bold red]Removing {tracker} from upload list[/bold red]")
-                    meta['trackers'].remove(tracker)
-                    return False
-                else:
-                    console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
+                    console.print(f"[bold red]Marking {tracker} to be skipped[/bold red]")
+                    if tracker not in meta['skip_upload_trackers']:
+                        meta['skip_upload_trackers'].append(tracker)
+                    # Also mark in tracker_status when available (used elsewhere to skip upload)
+                    meta.setdefault('tracker_status', {})
+                    meta['tracker_status'].setdefault(tracker, {})
+                    meta['tracker_status'][tracker]['skip_upload'] = True
+                    continue
+                console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
             else:
                 if meta['debug']:
                     console.print(f"[bold green]Will make a trumpable report for this upload at {trackers}[/bold green]")
 
+        # Filter trumping trackers by skip marker (do not mutate meta['trackers'] here)
+        active_trumping_trackers = [t for t in trumping_trackers if t not in meta.get('skip_upload_trackers', [])]
+        meta['trumping_trackers'] = active_trumping_trackers
+        if not active_trumping_trackers:
+            if meta.get('debug'):
+                console.print("[yellow]All trump-capable trackers were marked to skip; skipping trump report creation.[/yellow]")
+            return False
+
         if not meta.get('tv_pack'):
             console.print("[yellow]Aither requires comparisons to be provided for trump reports.\n"
                           "Are the comparison images in the description or are you adding links?")
-            where_compare = input("Enter 'd' if in description, 'L' if you want to paste links, or press anything else to skip trumping:")
+            try:
+                where_compare = cli_ui.ask_string(
+                    "Enter 'd' if in description, 'L' if you want to paste links, or press Enter to skip trumping:",
+                    default=""
+                )
+            except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
+                return False
+
+            where_compare = (where_compare or "").strip()
             if where_compare.lower() == 'd':
                 meta['screenshots_in_description'] = True
                 return True
             elif where_compare.upper() == 'L':
-                reported_screenshots = input("Paste screenshots links for the reported torrent separated by commas:")
-                trumping_screenshots = input("Paste screenshots links for the trumping torrent separated by commas:")
+                try:
+                    reported_screenshots = cli_ui.ask_string(
+                        "Paste screenshot links for the reported torrent (comma-separated):",
+                        default=""
+                    )
+                    trumping_screenshots = cli_ui.ask_string(
+                        "Paste screenshot links for the trumping torrent (comma-separated):",
+                        default=""
+                    )
+                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                    console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
+                    return False
+
+                reported_screenshots = (reported_screenshots or "").strip()
+                trumping_screenshots = (trumping_screenshots or "").strip()
+                if not reported_screenshots or not trumping_screenshots:
+                    console.print("[yellow]No screenshot links provided. Skipping trump report creation.[/yellow]")
+                    return False
+
                 meta['screenshots_reported_torrent'] = [link.strip() for link in reported_screenshots.split(',') if link.strip()]
                 meta['screenshots_trumping_torrent'] = [link.strip() for link in trumping_screenshots.split(',') if link.strip()]
                 if not meta['screenshots_reported_torrent'] or not meta['screenshots_trumping_torrent']:

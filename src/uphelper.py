@@ -92,6 +92,18 @@ class UploadHelper:
                                     meta['trump_reason'] = 'exact_match'
                                 else:
                                     meta['trump_reason'] = 'trumpable_release'
+                            else:
+                                # For season packs: individual episodes are only in dupes for trumping purposes.
+                                # If user declines to trump, filter them out so they aren't shown as "potential dupes"
+                                # (they wouldn't match season/episode anyway).
+                                if meta.get('tv_pack') and meta.get('matched_episode_ids', []):
+                                    matched_ids = {ep.get('id') for ep in meta.get('matched_episode_ids', []) if ep.get('id')}
+                                    dupes = [
+                                        d for d in dupes
+                                        if not (isinstance(d, dict) and d.get('id') in matched_ids)
+                                    ]
+                                    # Clear matched_episode_ids since we're not trumping
+                                    meta['matched_episode_ids'] = []
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
@@ -119,7 +131,12 @@ class UploadHelper:
                             await cleanup()
                             reset_terminal()
                             sys.exit(1)
-                    else:
+                    elif dupes:
+                        # Rebuild dupe_text in case dupes was filtered after trump decline
+                        dupe_text = "\n".join([
+                            f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d and d['link'] is not None else (d['name'] if isinstance(d, dict) else d)
+                            for d in dupes
+                        ])
                         console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
                         console.print()
                         console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
@@ -134,6 +151,9 @@ class UploadHelper:
                                 sys.exit(1)
                         else:
                             upload = True
+                    else:
+                        # dupes list was emptied after filtering (e.g., season pack declined trump, no other dupes)
+                        upload = True
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
