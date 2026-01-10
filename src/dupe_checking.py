@@ -403,10 +403,16 @@ async def filter_dupes(dupes, meta, tracker_name):
                 console.log(f"[debug] is_season: {is_season}")
             # Aither episode trumping logic
             if is_season and tracker_name == "AITHER":
-                if type_id and res_id:
+                # Null-safe normalization for comparisons
+                target_source_lower = (target_source or "").lower()
+                type_id_lower = (type_id or "").lower()
+                res_id_safe = res_id or ""
+                target_resolution_safe = target_resolution or ""
+
+                if type_id_lower and res_id_safe:
                     if meta['debug']:
-                        console.log(f"[debug] Checking trumping: target_source='{target_source.lower()}', type_id='{type_id.lower() if type_id else None}', target_res='{target_resolution}', res_id='{res_id}'")
-                    if target_source.lower() in type_id.lower() and target_resolution == res_id:
+                        console.log(f"[debug] Checking trumping: target_source='{target_source_lower}', type_id='{type_id_lower}', target_res='{target_resolution_safe}', res_id='{res_id_safe}'")
+                    if target_source_lower in type_id_lower and target_resolution_safe == res_id_safe:
                         if meta['debug']:
                             console.log(f"[debug] Episode with matching source and resolution found for trumping: {each}")
 
@@ -425,18 +431,31 @@ async def filter_dupes(dupes, meta, tracker_name):
                             # (season pack can trump individual episodes from same season)
                             if 'matched_episode_ids' not in meta:
                                 meta['matched_episode_ids'] = []
-                            if entry.get('id'):
+
+                            entry_id = entry.get('id')
+                            entry_link = entry.get('link')
+
+                            # De-duplication guard: check if this entry already exists
+                            already_exists = any(
+                                existing.get('id') == entry_id or
+                                (existing.get('link') == entry_link and existing.get('tracker') == tracker_name)
+                                for existing in meta['matched_episode_ids']
+                            ) if entry_id or entry_link else False
+
+                            if entry_id and not already_exists:
                                 meta['matched_episode_ids'].append({
-                                    'id': entry.get('id'),
+                                    'id': entry_id,
                                     'name': each,
-                                    'link': entry.get('link'),
+                                    'link': entry_link,
                                     'tracker': tracker_name,
                                     'internal': entry.get('internal', 0)
                                 })
                                 if meta['debug']:
-                                    console.log(f"[debug] Added episode ID {entry.get('id')} to matched list")
+                                    console.log(f"[debug] Added episode ID {entry_id} to matched list")
                                 # Don't exclude this entry - it's a valid trump target
                                 return False
+                            elif already_exists and meta['debug']:
+                                console.log(f"[debug] Skipping duplicate entry for episode ID {entry_id}")
 
             # Normal season/episode matching
             if not season_episode_match:

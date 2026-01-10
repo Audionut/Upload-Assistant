@@ -954,7 +954,8 @@ class TRACKER_SETUP:
                 console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
                 continue
             else:
-                meta['reported_torrent_id'] = reported_torrent_id
+                # Store per-tracker to avoid overwriting across multiple trackers
+                meta[f'{tracker}_reported_torrent_id'] = reported_torrent_id
 
             trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
             if status != 200:
@@ -1027,7 +1028,9 @@ class TRACKER_SETUP:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 while True:
                     try:
-                        # Add query parameters for pagination
+                        # Add pagination cursor to params if we have one
+                        if next_cursor:
+                            params['cursor'] = next_cursor
 
                         response = await client.get(url=url, headers=headers, params=params)
                         status_code = response.status_code
@@ -1069,13 +1072,20 @@ class TRACKER_SETUP:
                 # Process all collected data
                 try:
                     for each in all_data:
+                        # Normalize trumping_torrent to always be a list
+                        trumping_torrent = each.get('trumping_torrent')
+                        if trumping_torrent is None:
+                            trumping_torrent = []
+                        elif isinstance(trumping_torrent, dict):
+                            trumping_torrent = [trumping_torrent] if trumping_torrent else []
+
                         result = {
                             'id': each.get('id'),
                             'type': each.get('type'),
                             'title': each.get('title'),
                             'solved': each.get('solved'),
                             'reported_torrents': each.get('reported_torrents', []),
-                            'trumping_torrent': each.get('trumping_torrent', {}),
+                            'trumping_torrent': trumping_torrent,
                         }
                         requests.append(result)
 
@@ -1121,7 +1131,11 @@ class TRACKER_SETUP:
             'Accept': 'application/json'
         }
 
-        reported_torrent_id = meta['reported_torrent_id']
+        # Read per-tracker reported_torrent_id, with fallback to legacy key for backwards compatibility
+        reported_torrent_id = meta.get(f'{tracker}_reported_torrent_id') or meta.get('reported_torrent_id')
+        if not reported_torrent_id:
+            console.print(f"[red]No reported torrent ID found for {tracker}[/red]")
+            return False
         try:
             trumping_torrent_id = meta['tracker_status'][tracker]['torrent_id']
         except KeyError:
@@ -1129,6 +1143,8 @@ class TRACKER_SETUP:
             console.print("[red]Either the upload failed, or you're in debug[/red]")
             if not meta.get('debug', False):
                 return False
+            # Set fallback for debug mode so payload construction doesn't fail
+            trumping_torrent_id = None
 
         if meta.get('tv_pack'):
             message = "Upload Assistant season pack trump"
