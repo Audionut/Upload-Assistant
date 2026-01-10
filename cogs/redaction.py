@@ -134,6 +134,9 @@ async def clean_meta_for_export(meta):
     if 'torrent_comments' in meta:
         del meta['torrent_comments']
 
+    if 'matched_episode_ids' in meta:
+        del meta['matched_episode_ids']
+
     with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
         json.dump(meta, f, indent=4)
 

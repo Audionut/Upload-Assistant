@@ -421,6 +421,8 @@ async def filter_dupes(dupes, meta, tracker_name):
 
                         if not entry.get('internal', False) or is_internal:
                             # Store the matched episode ID/s for later use
+                            # is_season=True means seasons match, which is sufficient for trump targeting
+                            # (season pack can trump individual episodes from same season)
                             if 'matched_episode_ids' not in meta:
                                 meta['matched_episode_ids'] = []
                             if entry.get('id'):
@@ -433,6 +435,8 @@ async def filter_dupes(dupes, meta, tracker_name):
                                 })
                                 if meta['debug']:
                                     console.log(f"[debug] Added episode ID {entry.get('id')} to matched list")
+                                # Don't exclude this entry - it's a valid trump target
+                                return False
 
             # Normal season/episode matching
             if not season_episode_match:

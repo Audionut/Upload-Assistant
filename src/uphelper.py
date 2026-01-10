@@ -45,10 +45,30 @@ class UploadHelper:
                     ])
                     console.print("[bold red]Trumpable found![/bold red]")
                 elif meta.get('matched_episode_ids', []):
-                    # Only display the first matched episode
-                    first_match = meta['matched_episode_ids'][0]
-                    trumpable_text = f"{first_match['name']} - {first_match['link']}" if 'link' in first_match else first_match['name']
+                    matched_episodes = meta['matched_episode_ids']
+                    user_tag = meta.get('tag', '').lstrip('-').lower()  # Remove leading dash for comparison
+
+                    # Try to find a release with matching tag
+                    selected_match = None
+                    tag_matched = False
+                    if user_tag:
+                        for ep in matched_episodes:
+                            ep_name = ep.get('name', '').lower()
+                            # Tag typically appears at end of name like "H.265-ETHEL"
+                            if ep_name.endswith(user_tag) or f"-{user_tag}" in ep_name:
+                                selected_match = ep
+                                tag_matched = True
+                                break
+
+                    # Fall back to first match if no tag match found
+                    if not selected_match:
+                        selected_match = matched_episodes[0]
+
+                    trumpable_text = f"{selected_match['name']} - {selected_match['link']}" if 'link' in selected_match else selected_match['name']
                     console.print("[bold red]Trumpable found based on episode matching![/bold red]")
+
+                    if user_tag and not tag_matched:
+                        console.print(f"[yellow]Note: No release found with matching tag '{meta.get('tag')}'. Selected release may be from a different group.[/yellow]")
 
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join([
