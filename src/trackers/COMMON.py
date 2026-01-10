@@ -40,7 +40,7 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
-    async def async_input(self, prompt=False):
+    async def async_input(self, prompt: str = ""):
         """Gets user input in a non-blocking way using asyncio.to_thread"""
         if prompt:
             console.print(prompt)
@@ -81,8 +81,8 @@ class COMMON():
             self,
             meta: dict[str, Any],
             tracker: str,
-            headers: dict[str, str] | None = None,
-            params: dict[str, str] | None = None,
+            headers: Any = None,
+            params: Any = None,
             downurl: str = "",
             hash_is_id: bool = False,
             cross: bool = False):
@@ -112,7 +112,15 @@ class COMMON():
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
 
-    async def create_torrent_ready_to_seed(self, meta: dict[str, Any], tracker, source_flag, new_tracker, comment, hash_is_id=False):
+    async def create_torrent_ready_to_seed(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        source_flag: str,
+        new_tracker: str | list[str],
+        comment: str,
+        hash_is_id: bool = False,
+    ):
         """
         Modifies the torrent file to include the tracker's announce URL, a comment, and a source flag.
         """
@@ -121,19 +129,21 @@ class COMMON():
             loop = asyncio.get_running_loop()
             new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             if isinstance(new_tracker, list):
-                new_torrent.metainfo['announce'] = new_tracker[0]
-                new_torrent.metainfo['announce-list'] = [new_tracker]
+                new_torrent.metainfo["announce"] = new_tracker[0]
+                new_torrent.metainfo["announce-list"] = [new_tracker]
             else:
-                new_torrent.metainfo['announce'] = new_tracker
-            new_torrent.metainfo['info']['source'] = source_flag
+                new_torrent.metainfo["announce"] = new_tracker
+            new_torrent.metainfo["info"]["source"] = source_flag
 
             # Calculate hash
-            torrent_hash = None
+            torrent_hash = ""
             if hash_is_id:
-                info_bytes = bencodepy.encode(new_torrent.metainfo['info'])
-                torrent_hash = hashlib.sha1(info_bytes, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
+                info_bytes = bencodepy.encode(new_torrent.metainfo["info"])
+                torrent_hash = hashlib.sha1(
+                    info_bytes, usedforsecurity=False
+                ).hexdigest()  # SHA1 required for torrent info hash
 
-            new_torrent.metainfo['comment'] = comment + torrent_hash if hash_is_id else comment
+            new_torrent.metainfo["comment"] = comment + torrent_hash if hash_is_id else comment
 
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
 
@@ -569,7 +579,7 @@ class COMMON():
         params: dict[str, Any] = {}
         data: dict[str, Any] = {}
         # get douban url
-        if int(meta.get('imdb_id')) != 0:
+        if int(meta.get('imdb_id', 0)) != 0:
             data['search'] = f"tt{meta['imdb_id']}"
             ptgen_response = requests.get(url, params=data, timeout=30)
             if ptgen_response.json()["error"] is not None:

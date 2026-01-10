@@ -1199,6 +1199,8 @@ async def screenshots(
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
         await cleanup()
 
+    return valid_results if valid_results else None
+
 
 async def capture_screenshot(args):
     index, path, ss_time, image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta = args

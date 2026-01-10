@@ -1,12 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 import json
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from upload import Meta
 
-SENSITIVE_KEYS = {
+SENSITIVE_KEYS: set[str] = {
     "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
 }
 
@@ -97,7 +97,7 @@ def redact_value(val):
     return val
 
 
-def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
+def redact_private_info(data: Any, sensitive_keys: set[str] = SENSITIVE_KEYS):
     """Recursively redact sensitive info in dicts/lists/strings containing JSON."""
     if isinstance(data, dict):
         return {

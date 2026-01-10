@@ -9,10 +9,11 @@ from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
+from typing import Any
 
 
 class DC:
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'DC'
@@ -22,11 +23,9 @@ class DC:
         self.banned_groups = ['']
         self.approved_image_hosts = ['imgbox', 'imgbb', 'bhd', 'imgur', 'postimg', 'sharex']
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
-        self.session = httpx.AsyncClient(headers={
-            'X-API-KEY': self.api_key
-        }, timeout=30.0)
+        self.session = httpx.AsyncClient(headers={'X-API-KEY': self.api_key}, timeout=30.0)
 
-    async def mediainfo(self, meta):
+    async def mediainfo(self, meta: dict[str, Any]):
         if meta.get('is_disc') == 'BDMV':
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
@@ -36,7 +35,7 @@ class DC:
 
         return mediainfo
 
-    async def generate_description(self, meta):
+    async def generate_description(self, meta: dict[str, Any]):
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
@@ -118,7 +117,7 @@ class DC:
 
         return description
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta: dict[str, Any]):
         resolution = meta.get('resolution', '')
         category = meta.get('category', '')
         is_disc = meta.get('is_disc', '')
@@ -152,7 +151,7 @@ class DC:
             return category_map[category].get(resolution)
         return None
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _):
         imdb_id = meta.get('imdb_info', {}).get('imdbID')
         category_id = await self.get_category_id(meta)
         if not imdb_id:
@@ -189,7 +188,7 @@ class DC:
 
         return []
 
-    async def edit_name(self, meta):
+    async def edit_name(self, meta: dict[str, Any]):
         """
         Edits the name according to DC's naming conventions.
         Scene uploads should use the scene name.
@@ -206,7 +205,7 @@ class DC:
 
         return dc_name
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: dict[str, Any]):
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
@@ -219,7 +218,7 @@ class DC:
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
-    async def fetch_data(self, meta):
+    async def fetch_data(self, meta: dict[str, Any]):
         anon = '1' if meta['anon'] or self.config['TRACKERS'][self.tracker].get('anon', False) else '0'
 
         data = {
@@ -237,7 +236,7 @@ class DC:
 
         return data
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _):
         data = await self.fetch_data(meta)
         torrent_title = await self.edit_name(meta)
         response = None

@@ -21,7 +21,7 @@ from typing import Any
 class ANT:
     def __init__(self, config: dict[str, Any]):
         self.tracker = 'ANT'
-        self.config: dict[str, Any] = config
+        self.config = config
         self.common = COMMON(config)
         self.tracker_config: dict[str, str] = self.config['TRACKERS'][self.tracker]
         self.source_flag = 'ANT'

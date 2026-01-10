@@ -15,6 +15,7 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
+from typing import Any
 
 
 def _attr_to_string(value: str | AttributeValueList | None) -> str:
@@ -31,7 +32,7 @@ class CookieValidator:
         self.config = config
         pass
 
-    async def load_session_cookies(self, meta, tracker):
+    async def load_session_cookies(self, meta: dict[str, Any], tracker: str):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
         cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
@@ -214,13 +215,13 @@ class CookieValidator:
 
     async def cookie_validation(
         self,
-        meta,
-        tracker,
-        test_url="",
-        status_code="",
-        error_text="",
-        success_text="",
-        token_pattern="",
+        meta: dict[str, Any],
+        tracker: str,
+        test_url: str = "",
+        status_code: str = "",
+        error_text: str = "",
+        success_text: str = "",
+        token_pattern: str = "",
     ):
         """
         Validate login cookies for a tracker by checking specific indicators on a test page.
