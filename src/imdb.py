@@ -535,7 +535,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                 data = response.json()
         except Exception as e:
             console.print(f"[red]IMDb GraphQL API error: {e}[/red]")
-            return 0
+            return []
 
         results = await safe_get(data, ["data", "advancedTitleSearch", "edges"], [])
         search_results = results
@@ -846,7 +846,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
 
 async def get_imdb_from_episode(imdb_id, debug=False):
     if not imdb_id or imdb_id == 0:
-        return None
+        return 0
 
     if not str(imdb_id).startswith("tt"):
         try:
@@ -904,11 +904,11 @@ async def get_imdb_from_episode(imdb_id, debug=False):
         except Exception as e:
             if debug:
                 print(f"[red]IMDb API error: {e}[/red]")
-            return None
+            return int(imdb_id)
 
     title_data = await safe_get(data, ["data", "title"], {})
     if not title_data:
-        return None
+        return int(imdb_id)
 
     result = {
         "id": await safe_get(title_data, ["id"]),

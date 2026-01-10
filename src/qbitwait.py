@@ -71,7 +71,7 @@ class Wait:
         torrent_comments = meta.get('torrent_comments')
         if not isinstance(torrent_comments, list):
             console.print("[red]No torrent comments found in metadata[/red]")
-            return True
+            return False
 
         target_path = path
         if not target_path:

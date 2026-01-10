@@ -26,8 +26,9 @@ async def get_sonarr_data(tvdb_id=None, filename=None, title=None, debug=False):
         # Check if this instance exists in config
         api_key_value = DEFAULT_CONFIG.get(api_key_name)
         if not isinstance(api_key_value, str) or not api_key_value.strip():
-            # No more instances to try
-            break
+            # This slot isn't configured; try the next suffix (supports configs starting at _1)
+            instance_index += 1
+            continue
 
         # Get instance-specific configuration
         base_url_value = DEFAULT_CONFIG.get(url_name)

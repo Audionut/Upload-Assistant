@@ -23,6 +23,11 @@ from src.imdb import get_imdb_info_api
 
 DEFAULT_CFG: dict[str, Any] = typing_cast(dict[str, Any], config['DEFAULT'])
 TMDB_API_KEY = DEFAULT_CFG.get('tmdb_api', False)
+
+# Validate TMDB API key at import time
+if not TMDB_API_KEY or not isinstance(TMDB_API_KEY, str) or not TMDB_API_KEY.strip():
+    raise ValueError("TMDB API key is missing or invalid. Please set 'tmdb_api' in your config under DEFAULT section.")
+
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 parser = Args(config=config)
 

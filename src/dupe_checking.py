@@ -428,11 +428,12 @@ async def filter_dupes(dupes, meta, tracker_name):
                         if entry.get('internal', 0) == 1:
                             trackers_section = cast(dict[str, Any], config.get('TRACKERS', {}))
                             aither_settings = cast(dict[str, Any], trackers_section.get('AITHER', {}))
-                            if bool(aither_settings.get('internal', False)):
-                                internal_groups = cast(list[str], aither_settings.get('internal_groups', []))
-                                tag_without_prefix = meta['tag'][1:]
-                                if tag_without_prefix in internal_groups and tag_without_prefix.lower() in normalized:
-                                    is_internal = True
+                            if aither_settings.get('internal') is True:
+                                internal_groups = aither_settings.get('internal_groups', [])
+                                if isinstance(internal_groups, list):
+                                    tag_without_prefix = meta['tag'][1:]
+                                    if tag_without_prefix in internal_groups and tag_without_prefix.lower() in normalized:
+                                        is_internal = True
                             if not is_internal:
                                 if meta['debug']:
                                     console.log("[debug] Skipping internal episode for trumping since you're not the internal uploader.")

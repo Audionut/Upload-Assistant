@@ -627,6 +627,7 @@ class TRACKER_SETUP:
                     return False
                 requests = await self.bhd_request_check(meta, tracker_name, url)
             elif tracker_name.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                # These trackers have custom request handling
                 requests = await tracker_instance.get_requests(meta)
                 return False
             else:
@@ -1269,7 +1270,7 @@ tracker_class_map: dict[str, type[Any]] = {
 }
 
 api_trackers = {
-    'ACM', 'AITHER', 'AL', 'BHD', 'BLU', 'CBR', 'DP', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
+    'ACM', 'AITHER', 'BHD', 'BLU', 'CBR', 'DP', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT',
     'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TLZ', 'TTR', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 

@@ -5,7 +5,7 @@ import langcodes
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -126,7 +126,7 @@ async def parsed_mediainfo(meta):
         'text': []
     }
 
-    current_section: str | None = None
+    current_section: Optional[str] = None
     current_track: dict[str, str] = {}
 
     lines = mediainfo_content.strip().split('\n')
@@ -357,8 +357,6 @@ async def process_desc_language(meta, desc=None, tracker=None):
             meta['bluray_audio_skip'] = False
         existing_audio_languages: list[str] = meta.get('audio_languages') or []
         existing_subtitle_languages: list[str] = meta.get('subtitle_languages') or []
-        meta['audio_languages'] = existing_audio_languages
-        meta['subtitle_languages'] = existing_subtitle_languages
         try:
             bluray = await parse_blu_ray(meta)
             audio_tracks = bluray.get("audio", [])
@@ -368,7 +366,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if meta['debug']:
                         console.print(f"Skipping commentary track: {track}")
                     audio_tracks.remove(track)
-            audio_language_set: set[str] = {track.get("language", "") for track in audio_tracks if "language" in track}
+            audio_language_set: set[str] = set(existing_audio_languages)
+            audio_language_set.update(track.get("language") for track in audio_tracks if track.get("language"))
             for track in audio_tracks:
                 bitrate_str = track.get("bitrate", "")
                 bitrate_num = None
@@ -408,10 +407,11 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if meta['debug']:
                         console.print(f"Skipping commentary subtitle track: {track}")
                     subtitle_tracks.remove(track)
+            subtitle_language_set: set[str] = set(existing_subtitle_languages)
             if subtitle_tracks and isinstance(subtitle_tracks[0], dict):
-                subtitle_language_set: set[str] = {track.get("language", "") for track in subtitle_tracks if "language" in track}
+                subtitle_language_set.update(track.get("language") for track in subtitle_tracks if track.get("language"))
             else:
-                subtitle_language_set = set(subtitle_tracks)
+                subtitle_language_set.update(track for track in subtitle_tracks if track)
             if subtitle_language_set:
                 meta['subtitle_languages'] = list(subtitle_language_set)
 

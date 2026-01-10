@@ -87,14 +87,14 @@ class Bot(commands.Bot):
         self.app_info = await self.application_info()
         user = self.user
         if user is None:
-            print('[red]Discord client user unavailable[/red]')
+            console.print('[red]Discord client user unavailable[/red]')
             return
         print(f'Logged in as: {user.name}\n'
               f'Using discord.py version: {discord.__version__}\n'
               f'Owner: {self.app_info.owner}\n')
         print('-' * 10)
         channel = self.get_channel(int(self.config['DISCORD']['discord_channel_id']))
-        if channel and hasattr(channel, 'send'):
+        if channel and isinstance(channel, discord.abc.Messageable):
             await channel.send(f'{user.name} is now online')
 
     async def on_message(self, message):

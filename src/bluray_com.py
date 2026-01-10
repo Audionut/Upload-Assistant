@@ -812,8 +812,8 @@ def extract_cover_images(html_content):
                 if not img_id_raw or not url_raw:
                     continue
 
-                img_id = ' '.join(img_id_raw) if isinstance(img_id_raw, AttributeValueList) else str(img_id_raw)
-                url = ' '.join(url_raw) if isinstance(url_raw, AttributeValueList) else str(url_raw)
+                img_id = str(img_id_raw[0]) if isinstance(img_id_raw, AttributeValueList) else str(img_id_raw)
+                url = str(url_raw[0]) if isinstance(url_raw, AttributeValueList) else str(url_raw)
 
                 if "front" in img_id.lower():
                     cover_images["front"] = url

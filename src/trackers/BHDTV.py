@@ -113,7 +113,7 @@ class BHDTV():
                         self.tracker,
                         self.source_flag,
                         self.config['TRACKERS']['BHDTV'].get('my_announce_url'),
-                        data_block['view']
+                        str(data_block['view'])
                     )
                     return True
                 return False

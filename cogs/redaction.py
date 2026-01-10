@@ -3,6 +3,8 @@ import re
 import json
 from typing import List, Optional, Tuple
 
+from upload import Meta
+
 SENSITIVE_KEYS = {
     "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
 }
@@ -119,7 +121,7 @@ def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
         return data
 
 
-async def clean_meta_for_export(meta):
+async def clean_meta_for_export(meta) -> Meta:
     """
     Removes all 'status_message' keys from meta['tracker_status'] and
     removes or clears 'torrent_comments' from meta.

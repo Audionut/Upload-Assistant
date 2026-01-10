@@ -6,6 +6,7 @@ import os
 import requests
 import sys
 import time
+from types import MappingProxyType
 from typing import Any, Mapping, cast
 
 from data.config import config
@@ -20,11 +21,10 @@ client = Clients(config=config)
 
 TRACKERS_CONFIG: Mapping[str, Mapping[str, Any]] = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
-EMPTY_TRACKER_CONFIG: Mapping[str, Any] = {}
 
 
 def get_tracker_config(tracker_name: str) -> Mapping[str, Any]:
-    return TRACKERS_CONFIG.get(tracker_name, EMPTY_TRACKER_CONFIG)
+    return TRACKERS_CONFIG.get(tracker_name, MappingProxyType({}))
 
 
 async def get_tracker_timestamps(base_dir=None):

@@ -77,7 +77,7 @@ if discord_config is not None:
     use_discord = bool(discord_config.get('use_discord', False))
 
 
-async def merge_meta(meta: Dict[str, Any], saved_meta: Any, path: str) -> Dict[str, Any]:
+async def merge_meta(meta: Dict[str, Any], path: str) -> Dict[str, Any]:
     """Merges saved metadata with the current meta, respecting overwrite rules."""
     with open(f"{base_dir}/tmp/{os.path.basename(path)}/meta.json") as f:
         loaded_meta: Dict[str, Any] = json.load(f)
@@ -799,7 +799,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             if not meta['mkbrr']:
                 create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
-        meta = cast(Meta, await gen_desc(meta))
+        meta = await gen_desc(meta)
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
@@ -1096,7 +1096,7 @@ async def do_the_thing(base_dir):
                     with open(meta_file, "r") as f:
                         saved_meta = json.load(f)
                         console.print("[yellow]Existing metadata file found, it holds cached values")
-                        meta.update(await merge_meta(meta, saved_meta, path))
+                        meta.update(await merge_meta(meta, path))
 
             except Exception as e:
                 console.print(f"[red]Exception: '{path}': {e}")
@@ -1290,7 +1290,7 @@ async def do_the_thing(base_dir):
                     if sanitize_meta and not meta.get('emby', False):
                         try:
                             await asyncio.sleep(0.2)  # We can't race the status prints
-                            meta = cast(Meta, await clean_meta_for_export(meta))
+                            meta = await clean_meta_for_export(meta)
                         except Exception as e:
                             console.print(f"[red]Error cleaning meta for export: {e}")
                     await cleanup()

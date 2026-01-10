@@ -4,13 +4,13 @@ import re
 import json
 import builtins
 from collections import defaultdict
-from typing import Any, Mapping, MutableMapping, cast
+from typing import Any, Mapping, MutableMapping
 from src.uploadscreens import upload_screens
 from data.config import config
 from src.console import console
 
 
-DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})
 
 
 ComparisonGroup = dict[str, Any]
@@ -26,23 +26,49 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | lis
     if os.path.exists(comparison_data_file):
         try:
             with open(comparison_data_file, 'r') as f:
-                saved_comparison_data = cast(ComparisonData | list[ComparisonGroup], json.load(f))
+                raw_data = json.load(f)
+                if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()):
+                    saved_comparison_data: ComparisonData = raw_data
+                elif isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
+                    saved_comparison_data: list[ComparisonGroup] = raw_data
+                else:
+                    raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
                 if meta.get('debug'):
                     console.print(f"[cyan]Loading previously saved comparison data from {comparison_data_file}")
                 meta["comparison_groups"] = saved_comparison_data
 
                 comparison_index = meta.get('comparison_index')
-                if comparison_index and comparison_index in saved_comparison_data:
-                    if 'image_list' not in meta:
-                        meta['image_list'] = []
+                if comparison_index:
+                    if isinstance(saved_comparison_data, dict):
+                        if comparison_index in saved_comparison_data:
+                            if 'image_list' not in meta:
+                                meta['image_list'] = []
 
-                    urls_to_add = saved_comparison_data[comparison_index].get('urls', [])
-                    if meta.get('debug'):
-                        console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
+                            urls_to_add = saved_comparison_data[comparison_index].get('urls', [])
+                            if meta.get('debug'):
+                                console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
 
-                    for url_info in urls_to_add:
-                        if url_info not in meta['image_list']:
-                            meta['image_list'].append(url_info)
+                            for url_info in urls_to_add:
+                                if url_info not in meta['image_list']:
+                                    meta['image_list'].append(url_info)
+                    elif isinstance(saved_comparison_data, list):
+                        try:
+                            idx = int(comparison_index)
+                            if 0 <= idx < len(saved_comparison_data):
+                                if 'image_list' not in meta:
+                                    meta['image_list'] = []
+
+                                urls_to_add = saved_comparison_data[idx].get('urls', [])
+                                if meta.get('debug'):
+                                    console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
+
+                                for url_info in urls_to_add:
+                                    if url_info not in meta['image_list']:
+                                        meta['image_list'].append(url_info)
+                            else:
+                                console.print(f"[yellow]Comparison index {comparison_index} out of range for saved list")
+                        except ValueError:
+                            console.print(f"[yellow]Invalid comparison index {comparison_index} for saved list")
 
                 return saved_comparison_data
         except Exception as e:

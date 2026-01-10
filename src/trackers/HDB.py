@@ -32,7 +32,7 @@ class HDB():
         self.banned_groups = [""]
 
     async def get_type_category_id(self, meta):
-        cat_id = "EXIT"
+        cat_id = 0
         # 6 = Audio Track
         # 8 = Misc/Demo
         # 4 = Music
@@ -40,16 +40,16 @@ class HDB():
         # 7 = PORN
         # 1 = Movie
         if meta['category'] == 'MOVIE':
-            cat_id = '1'
+            cat_id = 1
         # 2 = TV
         if meta['category'] == 'TV':
-            cat_id = '2'
+            cat_id = 2
         # 3 = Documentary
         if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
-            cat_id = '3'
+            cat_id = 3
         if meta.get('imdb_info').get('type') is not None and meta.get('imdb_info').get('genres') is not None:
             if 'concert' in meta.get('imdb_info').get('type').lower() or ('video' in meta.get('imdb_info').get('type').lower() and 'music' in meta.get('imdb_info').get('genres').lower()):
-                cat_id = '4'
+                cat_id = 4
         return cat_id
 
     async def get_type_codec_id(self, meta):
@@ -62,28 +62,28 @@ class HDB():
             "VP9": 6
         }
         searchcodec = meta.get('video_codec', meta.get('video_encode'))
-        codec_id = codecmap.get(searchcodec, "EXIT")
+        codec_id = codecmap.get(searchcodec, 0)
         return codec_id
 
     async def get_type_medium_id(self, meta):
-        medium_id = "EXIT"
+        medium_id = 0
         # 1 = Blu-ray / HD DVD
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
-            medium_id = '1'
+            medium_id = 1
         # 4 = Capture
         if meta.get('type', '') == "HDTV":
-            medium_id = '4'
+            medium_id = 4
             if meta.get('has_encode_settings', False) is True:
-                medium_id = '3'
+                medium_id = 3
         # 3 = Encode
         if meta.get('type', '') in ("ENCODE", "WEBRIP"):
-            medium_id = '3'
+            medium_id = 3
         # 5 = Remux
         if meta.get('type', '') == "REMUX":
-            medium_id = '5'
+            medium_id = 5
         # 6 = WEB-DL
         if meta.get('type', '') == "WEBDL":
-            medium_id = '6'
+            medium_id = 6
         return medium_id
 
     async def get_res_id(self, resolution):
@@ -218,7 +218,7 @@ class HDB():
         hdb_tags = await self.get_tags(meta)
 
         for each in (cat_id, codec_id, medium_id):
-            if each == "EXIT":
+            if each == 0:
                 console.print("[bold red]Something didn't map correctly, or this content is not allowed on HDB")
                 return
         if "Dual-Audio" in meta['audio']:
@@ -689,7 +689,7 @@ class HDB():
                 upload_files[f'images_files[{i}]'] = (filename, open(file_path, 'rb'), 'image/png')
                 if meta['debug']:
                     console.print(f"[cyan]Added file {filename} as images_files[{i}]")
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 console.print(f"[red]Failed to open {file_path}: {e}")
                 continue
 

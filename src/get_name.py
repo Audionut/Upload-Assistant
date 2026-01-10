@@ -4,6 +4,7 @@ import cli_ui
 import os
 import re
 import sys
+from typing import Optional
 
 from guessit import guessit
 
@@ -188,8 +189,8 @@ async def extract_title_and_year(meta, filename):
     basename = os.path.basename(filename)
     basename = os.path.splitext(basename)[0]
 
-    secondary_title: str | None = None
-    year: str | None = None
+    secondary_title: Optional[str] = None
+    year: Optional[str] = None
 
     # Check for AKA patterns first
     aka_patterns = [' AKA ', '.aka.', ' aka ', '.AKA.']
@@ -260,7 +261,7 @@ async def extract_title_and_year(meta, filename):
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
     double_year_match = re.search(double_year_pattern, folder_name)
-    actual_year: str | None = None
+    actual_year: Optional[str] = None
 
     if double_year_match:
         full_match = double_year_match.group(0)

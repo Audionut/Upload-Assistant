@@ -334,9 +334,10 @@ class Clients():
                 proxy_url = client.get('qui_proxy_url')
 
                 if proxy_url:
+                    ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
                     qbt_session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
-                        connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                        connector=aiohttp.TCPConnector(ssl=ssl_context)
                     )
                 else:
                     qbt_client = await self.init_qbittorrent_client(client)
@@ -605,9 +606,10 @@ class Clients():
                     return None
                 qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
+                ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
-                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                    connector=aiohttp.TCPConnector(ssl=ssl_context)
                 )
 
         except qbittorrentapi.LoginFailed:
@@ -879,7 +881,8 @@ class Clients():
                 # allow overridden folder name with link_dir_name config var
                 tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
                 link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
-                assert link_target is not None
+                if link_target is None:
+                    raise RuntimeError("link_target cannot be None")
                 tracker_dir = os.path.join(link_target, link_dir_name or tracker)
                 os.makedirs(tracker_dir, exist_ok=True)
 
@@ -1209,7 +1212,8 @@ class Clients():
         if use_symlink or use_hardlink:
             tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
             link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
-            assert link_target is not None
+            if link_target is None:
+                raise RuntimeError("link_target cannot be None")
             tracker_dir = os.path.join(link_target, link_dir_name or tracker)
             await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
@@ -1246,9 +1250,10 @@ class Clients():
         qbt_session = None
 
         if proxy_url:
+            ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
             qbt_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10),
-                connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                connector=aiohttp.TCPConnector(ssl=ssl_context)
             )
             qbt_proxy_url = proxy_url.rstrip('/')
         else:
@@ -1344,7 +1349,8 @@ class Clients():
 
         try:
             if proxy_url:
-                assert qbt_session is not None
+                if qbt_session is None:
+                    raise RuntimeError("qbt_session cannot be None")
                 # Create FormData for multipart/form-data request
                 data = aiohttp.FormData()
                 data.add_field('savepath', save_path)
@@ -1366,7 +1372,8 @@ class Clients():
                         console.print(f"[bold red]Failed to add torrent via proxy: {response.status}")
                         return
             else:
-                assert qbt_client is not None
+                if qbt_client is None:
+                    raise RuntimeError("qbt_client cannot be None")
                 await self.retry_qbt_operation(
                     lambda: asyncio.to_thread(qbt_client.torrents_add,
                                               torrent_files=torrent.dump(),
@@ -1396,7 +1403,8 @@ class Clients():
         for _ in range(timeout):
             try:
                 if proxy_url:
-                    assert qbt_session is not None
+                    if qbt_session is None:
+                        raise RuntimeError("qbt_session cannot be None")
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
                                                params={'hashes': torrent.infohash}) as response:
                         if response.status == 200:
@@ -1407,7 +1415,8 @@ class Clients():
                         else:
                             pass  # Continue waiting
                 else:
-                    assert qbt_client is not None
+                    if qbt_client is None:
+                        raise RuntimeError("qbt_client cannot be None")
                     torrents_info = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
                         "Check torrent addition",
@@ -1437,7 +1446,8 @@ class Clients():
                     #    if response.status != 200:
                     #        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
                 else:
-                    assert qbt_client is not None
+                    if qbt_client is None:
+                        raise RuntimeError("qbt_client cannot be None")
                     await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
                         "Resume torrent"
@@ -1452,13 +1462,15 @@ class Clients():
                 if meta['debug']:
                     console.print(f"{tracker}: Setting super-seed mode.")
                 if proxy_url:
-                    assert qbt_session is not None
+                    if qbt_session is None:
+                        raise RuntimeError("qbt_session cannot be None")
                     async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/setSuperSeeding",
                                                 data={'hashes': torrent.infohash, "value": "true"}) as response:
                         if response.status != 200:
                             console.print(f"{tracker}: Failed to set super-seed via proxy: {response.status}")
                 else:
-                    assert qbt_client is not None
+                    if qbt_client is None:
+                        raise RuntimeError("qbt_client cannot be None")
                     await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_set_super_seeding, torrent_hashes=torrent.infohash),
                         "Set super-seed mode",
@@ -1657,9 +1669,10 @@ class Clients():
             qbt_session = None
 
             if proxy_url:
+                ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
-                    connector=aiohttp.TCPConnector(verify_ssl=client.get('VERIFY_WEBUI_CERTIFICATE', True))
+                    connector=aiohttp.TCPConnector(ssl=ssl_context)
                 )
                 qbt_proxy_url = proxy_url.rstrip('/')
             else:
@@ -2171,9 +2184,10 @@ class Clients():
             proxy_url = client_config.get('qui_proxy_url', '').strip()
             if proxy_url:
                 try:
+                    ssl_context = ssl.create_default_context() if client_config.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
                     session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
-                        connector=aiohttp.TCPConnector(verify_ssl=client_config.get('VERIFY_WEBUI_CERTIFICATE', True))
+                        connector=aiohttp.TCPConnector(ssl=ssl_context)
                     )
 
                     # Store session and URL for later API calls

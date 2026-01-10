@@ -47,7 +47,7 @@ def html_to_bbcode(text):
     return converted_text
 
 
-async def gen_desc(meta: dict[str, Any]):
+async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
     def clean_text(text):
         return text.replace("\r\n", "\n").strip()
 
