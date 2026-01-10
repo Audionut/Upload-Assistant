@@ -99,16 +99,16 @@ class PTER():
         cat_id = "EXIT"
 
         if meta['category'] == 'MOVIE':
-            cat_id = 401
+            cat_id = '401'
 
         if meta['category'] == 'TV':
-            cat_id = 404
+            cat_id = '404'
 
         if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
-            cat_id = 402
+            cat_id = '402'
 
         if 'Animation' in meta.get("genres", "").lower() or 'Animation' in meta.get("keywords", "").lower():
-            cat_id = 403
+            cat_id = '403'
 
         return cat_id
 
@@ -132,28 +132,28 @@ class PTER():
         # 1 = UHD Discs
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
             if meta['resolution'] == '2160p':
-                medium_id = 1
+                medium_id = '1'
             else:
-                medium_id = 2  # BD Discs
+                medium_id = '2'  # BD Discs
 
         if meta.get('is_disc', '') == "DVD":
-            medium_id = 7
+            medium_id = '7'
 
         # 4 = HDTV
         if meta.get('type', '') == "HDTV":
-            medium_id = 4
+            medium_id = '4'
 
         # 6 = Encode
         if meta.get('type', '') in ("ENCODE", "WEBRIP"):
-            medium_id = 6
+            medium_id = '6'
 
         # 3 = Remux
         if meta.get('type', '') == "REMUX":
-            medium_id = 3
+            medium_id = '3'
 
         # 5 = WEB-DL
         if meta.get('type', '') == "WEBDL":
-            medium_id = 5
+            medium_id = '5'
 
         return medium_id
 

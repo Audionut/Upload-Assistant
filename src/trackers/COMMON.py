@@ -553,26 +553,27 @@ class COMMON():
         return cookies
 
     async def ptgen(self, meta, ptgen_site="", ptgen_retry=3):
-        ptgen = ""
+        ptgen_response: Any = None
+        ptgen_text = ""
         url = 'https://ptgen.zhenzhen.workers.dev'
         if ptgen_site != '':
             url = ptgen_site
-        params = {}
-        data = {}
+        params: dict[str, Any] = {}
+        data: dict[str, Any] = {}
         # get douban url
         if int(meta.get('imdb_id')) != 0:
             data['search'] = f"tt{meta['imdb_id']}"
-            ptgen = requests.get(url, params=data, timeout=30)
-            if ptgen.json()["error"] is not None:
+            ptgen_response = requests.get(url, params=data, timeout=30)
+            if ptgen_response.json()["error"] is not None:
                 for retry in range(ptgen_retry):
                     try:
-                        ptgen = requests.get(url, params=params, timeout=30)
-                        if ptgen.json()["error"] is None:
+                        ptgen_response = requests.get(url, params=params, timeout=30)
+                        if ptgen_response.json()["error"] is None:
                             break
                     except requests.exceptions.JSONDecodeError:
                         continue
             try:
-                params['url'] = ptgen.json()['data'][0]['link']
+                params['url'] = ptgen_response.json()['data'][0]['link']
             except Exception:
                 console.print("[red]Unable to get data from ptgen using IMDb")
                 params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
@@ -580,27 +581,28 @@ class COMMON():
             console.print("[red]No IMDb id was found.")
             params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
         try:
-            ptgen = requests.get(url, params=params, timeout=30)
-            if ptgen.json()["error"] is not None:
+            ptgen_response = requests.get(url, params=params, timeout=30)
+            if ptgen_response.json()["error"] is not None:
                 for retry in range(ptgen_retry):
-                    ptgen = requests.get(url, params=params, timeout=30)
-                    if ptgen.json()["error"] is None:
+                    ptgen_response = requests.get(url, params=params, timeout=30)
+                    if ptgen_response.json()["error"] is None:
                         break
-            ptgen = ptgen.json()
-            meta['ptgen'] = ptgen
+            ptgen_json = ptgen_response.json()
+            meta['ptgen'] = ptgen_json
             with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
                 json.dump(meta, f, indent=4)
                 f.close()
-            ptgen = ptgen['format']
-            if "[/img]" in ptgen:
-                ptgen = ptgen.split("[/img]")[1]
-            ptgen = f"[img]{meta.get('imdb_info', {}).get('cover', meta.get('cover', ''))}[/img]{ptgen}"
+            ptgen_text = ptgen_json['format']
+            if "[/img]" in ptgen_text:
+                ptgen_text = ptgen_text.split("[/img]")[1]
+            ptgen_text = f"[img]{meta.get('imdb_info', {}).get('cover', meta.get('cover', ''))}[/img]{ptgen_text}"
         except Exception:
             console.print_exception()
-            console.print(ptgen.text)
+            if ptgen_response is not None and hasattr(ptgen_response, 'text'):
+                console.print(ptgen_response.text)
             console.print("[bold red]There was an error getting the ptgen \nUploading without ptgen")
             return ""
-        return ptgen
+        return ptgen_text
 
     class MediaInfoParser:
         # Language to ISO country code mapping
@@ -702,9 +704,9 @@ class COMMON():
         def parse_mediainfo(self, mediainfo_text):
             # Patterns for matching sections and fields
             section_pattern = re.compile(r"^(General|Video|Audio|Text|Menu)(?:\s#\d+)?", re.IGNORECASE)
-            parsed_data = {"general": {}, "video": [], "audio": [], "text": []}
-            current_section = None
-            current_track = {}
+            parsed_data: dict[str, Any] = {"general": {}, "video": [], "audio": [], "text": []}
+            current_section: str | None = None
+            current_track: dict[str, str] = {}
 
             # Field lists based on PHP definitions
             general_fields = {'file_name', 'format', 'duration', 'file_size', 'bit_rate'}

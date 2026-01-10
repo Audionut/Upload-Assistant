@@ -5,6 +5,7 @@ import os
 import json
 import urllib.parse
 import re
+from typing import Any, Mapping, cast
 from torf import Torrent
 import glob
 from src.console import console
@@ -12,7 +13,11 @@ from src.uploadscreens import upload_screens
 from data.config import config
 
 
-async def package(meta):
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
+
+
+async def package(meta: dict[str, Any]) -> str | bool:
     if meta['tag'] == "":
         tag = ""
     else:
@@ -75,7 +80,9 @@ async def package(meta):
             manual_name = re.sub(r"[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(meta['path']))
             Torrent.copy(base_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{manual_name}.torrent", overwrite=True)
             # shutil.copy(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"), os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['name'].replace(' ', '.')}.torrent").replace(' ', '.'))
-        filebrowser = config['TRACKERS'].get('MANUAL', {}).get('filebrowser', None)
+        manual_tracker_cfg = TRACKER_CONFIG.get('MANUAL', {})
+        manual_filebrowser = manual_tracker_cfg.get('filebrowser')
+        filebrowser = manual_filebrowser if isinstance(manual_filebrowser, str) else None
         shutil.make_archive(archive, 'tar', f"{meta['base_dir']}/tmp/{meta['uuid']}")
         if filebrowser is not None:
             url = '/'.join(s.strip('/') for s in (filebrowser, f"/tmp/{meta['uuid']}"))

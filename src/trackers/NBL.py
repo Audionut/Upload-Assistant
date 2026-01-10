@@ -178,7 +178,14 @@ class NBL():
             console.print(f"[bold red]Unexpected KeyError: {e}")
             if 'result' not in response.json():
                 console.print("[red]NBL API returned an unexpected response. Please manually check for dupes.")
-                dupes.append("ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY")
+                dupes.append({
+                    'name': "ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY",
+                    'files': '',
+                    'size': 0,
+                    'link': '',
+                    'file_count': 0,
+                    'download': ''
+                })
         except Exception as e:
             meta['skipping'] = "NBL"
             console.print(f"[bold red]NBL unexpected error: {e}")

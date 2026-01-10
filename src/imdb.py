@@ -5,6 +5,8 @@ import httpx
 import json
 import sys
 
+from typing import Any
+
 from anitopy import parse as anitopy_parse
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -24,7 +26,7 @@ async def safe_get(data, path, default=None):
 
 
 async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
-    imdb_info = {}
+    imdb_info: dict[str, Any] = {}
 
     if not imdbID or imdbID == 0:
         imdb_info['type'] = None
@@ -297,8 +299,8 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     imdb_info['rating'] = await safe_get(title_data, ['ratingsSummary', 'aggregateRating'], 'N/A')
 
     async def get_credits(title_data, category_keyword):
-        people_list = []
-        people_id_list = []
+        people_list: list[str] = []
+        people_id_list: list[str] = []
         principal_credits = await safe_get(title_data, ['principalCredits'], [])
 
         if not isinstance(principal_credits, list):
@@ -337,7 +339,13 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             minutes = seconds // 60 if seconds else 0
             displayable_property = await safe_get(node, ['displayableProperty', 'value', 'plainText'], '')
             attributes = await safe_get(node, ['attributes'], [])
-            attribute_texts = [attr.get('text') for attr in attributes if isinstance(attr, dict)] if attributes else []
+            attribute_texts: list[str] = []
+            if isinstance(attributes, list):
+                for attr in attributes:
+                    if isinstance(attr, dict):
+                        text = attr.get('text')
+                        if isinstance(text, str) and text:
+                            attribute_texts.append(text)
 
             edition_display = f"{displayable_property} ({minutes} min)"
             if attribute_texts:
@@ -396,7 +404,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
             imdb_info['episodes'].append(episode_info)
 
     if imdb_info['episodes']:
-        seasons_data = {}
+        seasons_data: dict[int, set[int]] = {}
 
         for episode in imdb_info['episodes']:
             season_str = episode.get('season', 'unknown')
@@ -447,7 +455,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
 
 async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, duration=None, unattended=False):
-    search_results = []
+    search_results: list[dict[str, Any]] = []
     imdbID = imdb_id = 0
     if attempted is None:
         attempted = 0
@@ -457,7 +465,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         await asyncio.sleep(1)  # Whoa baby, slow down
 
     async def run_imdb_search(filename, search_year, category=None, debug=False, attempted=0, duration=None, wide_search=False):
-        search_results = []
+        search_results: list[dict[str, Any]] = []
         if secondary_title is not None:
             filename = secondary_title
         if attempted is None:
@@ -567,7 +575,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                     search_results = result
         except Exception as e:
             console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
-            search_results = {"results": []}
+            search_results = []
 
     # relax the constraints
     if not search_results:
@@ -774,7 +782,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                 selection = None
                 while True:
                     try:
-                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ")
+                        selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ") or ""
                     except EOFError:
                         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                         await cleanup()
@@ -814,7 +822,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
         else:
             if not unattended:
                 try:
-                    selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ")
+                    selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ") or ""
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                     await cleanup()

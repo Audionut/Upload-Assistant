@@ -256,7 +256,7 @@ def browse_path():
     print(f"Browsing path: {path}")
 
     try:
-        items = []
+        items: list[dict[str, str]] = []
         try:
             for item in sorted(os.listdir(path)):
                 # Skip hidden files
@@ -368,6 +368,8 @@ def execute_command():
                 # Thread to read stdout - stream raw output with ANSI codes
                 def read_stdout():
                     try:
+                        if process.stdout is None:
+                            return
                         while True:
                             # Read in small chunks for real-time streaming
                             chunk = process.stdout.read(1)
@@ -380,6 +382,8 @@ def execute_command():
                 # Thread to read stderr - stream raw output
                 def read_stderr():
                     try:
+                        if process.stderr is None:
+                            return
                         while True:
                             chunk = process.stderr.read(1)
                             if not chunk:
@@ -388,7 +392,7 @@ def execute_command():
                     except Exception as e:
                         print(f"stderr read error: {e}")
 
-                output_queue = queue.Queue()
+                output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
                 # Start threads (no input thread needed - we write directly)
                 stdout_thread = threading.Thread(target=read_stdout, daemon=True)
@@ -455,9 +459,10 @@ def send_input():
             process = process_info['process']
 
             if process.poll() is None:  # Process still running
-                process.stdin.write(input_with_newline)
-                process.stdin.flush()
-                print(f"Sent to stdin: '{input_with_newline.strip()}'")
+                if process.stdin is not None:
+                    process.stdin.write(input_with_newline)
+                    process.stdin.flush()
+                    print(f"Sent to stdin: '{input_with_newline.strip()}'")
             else:
                 print(f"Process already terminated for session {session_id}")
                 return jsonify({'error': 'Process not running', 'success': False}), 400

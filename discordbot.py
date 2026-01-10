@@ -65,7 +65,11 @@ class Bot(commands.Bot):
         """
         await self.wait_until_ready()
         await asyncio.sleep(1)  # ensure that on_ready has completed and finished printing
-        cogs = [x.stem for x in Path('cogs').glob('*.py')]
+        # cogs/redaction.py is a helper module (not an extension).
+        # cogs/commands.py has been removed.
+        excluded = {"redaction", "commands"}
+
+        cogs = [x.stem for x in Path('cogs').glob('*.py') if x.stem not in excluded]
         for extension in cogs:
             try:
                 await self.load_extension(f'cogs.{extension}')
@@ -81,13 +85,17 @@ class Bot(commands.Bot):
         """
         print('-' * 10)
         self.app_info = await self.application_info()
-        print(f'Logged in as: {self.user.name}\n'
+        user = self.user
+        if user is None:
+            print('[red]Discord client user unavailable[/red]')
+            return
+        print(f'Logged in as: {user.name}\n'
               f'Using discord.py version: {discord.__version__}\n'
               f'Owner: {self.app_info.owner}\n')
         print('-' * 10)
         channel = self.get_channel(int(self.config['DISCORD']['discord_channel_id']))
-        if channel:
-            await channel.send(f'{self.user.name} is now online')
+        if channel and hasattr(channel, 'send'):
+            await channel.send(f'{user.name} is now online')
 
     async def on_message(self, message):
         """
@@ -121,7 +129,7 @@ async def send_discord_notification(config, bot, message, debug=False, meta=None
     try:
         channel_id = int(config['DISCORD']['discord_channel_id'])
         channel = bot.get_channel(channel_id)
-        if channel:
+        if channel and hasattr(channel, 'send'):
             await channel.send(message)
             if debug:
                 console.print(f"[green]Discord notification sent: {message}")
@@ -180,7 +188,7 @@ async def send_upload_status_notification(config, bot, meta):
     try:
         channel_id = int(config['DISCORD']['discord_channel_id'])
         channel = bot.get_channel(channel_id)
-        if channel:
+        if channel and hasattr(channel, 'send'):
             await channel.send(message)
             return True
     except Exception as e:

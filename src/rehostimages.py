@@ -5,12 +5,35 @@ import json
 import aiofiles
 import asyncio
 import re
+from typing import Any, Mapping, cast
 from src.console import console
 from urllib.parse import urlparse
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.uploadscreens import upload_screens
 from data.config import config
 from aiofiles import os as aio_os
+
+
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+
+
+def _to_int(value: Any, fallback: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return fallback
+    return fallback
+
+
+def _as_str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 async def match_host(hostname, approved_hosts):
@@ -193,7 +216,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
     if isinstance(filelist, str):
         filelist = [filelist]
 
-    multi_screens = meta.get('screens') if meta.get('screens') else int(config['DEFAULT'].get('screens', 6))
+    multi_screens = _to_int(meta.get('screens'), _to_int(DEFAULT_CONFIG.get('screens', 6), 6))
     base_dir = meta['base_dir']
     folder_id = meta['uuid']
     meta[new_images_key] = []
@@ -414,7 +437,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
         max_retries = len(approved_image_hosts)
         while img_host_index <= max_retries:
             current_img_host_key = f'img_host_{img_host_index}'
-            current_img_host = config.get('DEFAULT', {}).get(current_img_host_key)
+            current_img_host = _as_str(DEFAULT_CONFIG.get(current_img_host_key))
 
             if not current_img_host:
                 console.print("[red]No more image hosts left to try.")

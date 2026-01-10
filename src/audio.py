@@ -221,7 +221,10 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if tracks_with_id:
                     try:
                         # Extract numeric part from ID (e.g., "128 (0x80)" -> 128)
-                        first_audio_track = min(tracks_with_id, key=lambda x: int(re.search(r'\d+', str(x.get('ID', '999'))).group()))
+                        def get_id_num(x):
+                            id_match = re.search(r'\d+', str(x.get('ID', '999')))
+                            return int(id_match.group()) if id_match else 999
+                        first_audio_track = min(tracks_with_id, key=get_id_num)
                     except (ValueError, TypeError, AttributeError):
                         first_audio_track = tracks_with_id[0]
                 else:
@@ -330,7 +333,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                     pass
 
     # Convert commercial name to naming conventions
-    audio = {
+    audio_codec_map = {
         "DTS": "DTS",
         "AAC": "AAC",
         "AAC LC": "AAC",
@@ -391,7 +394,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                 extra = " Atmos"
 
     if search_format:
-        codec = audio.get(format, "") + audio_extra.get(additional, "")
+        codec = audio_codec_map.get(format, "") + audio_extra.get(additional, "")
         extra = format_extra.get(additional, "")
 
     format_settings = format_settings_extra.get(format_settings, "")

@@ -21,6 +21,9 @@ class UNIT3D:
         tracker_config = self.config['TRACKERS'].get(self.tracker, {})
         self.announce_url = tracker_config.get('announce_url', '')
         self.api_key = tracker_config.get('api_key', '')
+        # Default URLs - should be overridden by subclasses
+        self.search_url = ''
+        self.upload_url = ''
         pass
 
     async def get_additional_checks(self, meta):
@@ -55,10 +58,10 @@ class UNIT3D:
         resolutions = await self.get_resolution_id(meta)
         if resolutions['resolution_id'] in ['3', '4']:
             # Convert params to list of tuples to support duplicate keys
-            params_list = [(k, v) for k, v in params.items()]
+            params_list: list[tuple[str, str]] = [(k, v) for k, v in params.items()]
             params_list.append(('resolutions[]', '3'))
             params_list.append(('resolutions[]', '4'))
-            params = params_list
+            params: dict[str, str] | list[tuple[str, str]] = params_list
         else:
             params['resolutions[]'] = resolutions['resolution_id']
 
@@ -233,7 +236,7 @@ class UNIT3D:
             'draft': await self.get_flag(meta, 'draft'),
         }
         '''
-        data = {}
+        data: dict[str, str] = {}
 
         return data
 

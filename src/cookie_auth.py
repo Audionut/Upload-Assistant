@@ -10,10 +10,20 @@ import stat
 import importlib
 import traceback
 from bs4 import BeautifulSoup
+from bs4.element import AttributeValueList
 from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
+
+
+def _attr_to_string(value: str | AttributeValueList | None) -> str:
+    """Convert BeautifulSoup attribute values to a plain string."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, AttributeValueList):
+        return " ".join(value)
+    return ""
 
 
 class CookieValidator:
@@ -138,7 +148,7 @@ class CookieValidator:
                         soup = BeautifulSoup(test_response.text, 'html.parser')
                         logout_link = soup.find('a', href=True, text='Logout')
                         if logout_link:
-                            href = logout_link['href']
+                            href = _attr_to_string(logout_link.get('href'))
                             auth_match = re.search(r'auth=([^&]+)', href)
                             if auth_match:
                                 auth_key = auth_match.group(1)

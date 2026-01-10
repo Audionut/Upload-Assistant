@@ -9,6 +9,7 @@ import os
 import re
 import requests
 import sys
+from typing import Any, cast as typing_cast
 
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -20,7 +21,8 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.imdb import get_imdb_info_api
 
-TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
+DEFAULT_CFG: dict[str, Any] = typing_cast(dict[str, Any], config['DEFAULT'])
+TMDB_API_KEY = DEFAULT_CFG.get('tmdb_api', False)
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 parser = Args(config=config)
 
@@ -58,8 +60,6 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             except Exception:
                 console.print(f"[bold red]Failed to fetch TMDb data: {response.status_code}[/bold red]")
                 return {}
-
-        return {}
 
     # Run a search by IMDb ID
     info = await _tmdb_find_by_external_source(imdb_id, "imdb_id")
@@ -155,7 +155,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
 
 
 async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
-    search_results = {"results": []}
+    search_results: dict[str, Any] = {"results": []}
     original_category = category
     if new_category:
         category = new_category
@@ -169,7 +169,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
         await asyncio.sleep(1)  # Whoa baby, slow down
 
     async def search_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
-        search_results = {"results": []}
+        search_results: dict[str, Any] = {"results": []}
         original_category = category
         if new_category:
             category = new_category
@@ -493,11 +493,11 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                                 console.print(f"[green]Overview:[/green] {overview[:200]}{'...' if len(overview) > 200 else ''}")
                             console.print()
 
-                        selection = None
+                        selection: str = ""
                         while True:
                             console.print("Enter the number of the correct entry, or manual TMDb ID (tv/12345 or movie/12345):")
                             try:
-                                selection = cli_ui.ask_string("Or push enter to try a different search: ")
+                                selection = cli_ui.ask_string("Or push enter to try a different search: ") or ""
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                                 await cleanup()
@@ -726,11 +726,11 @@ async def tmdb_other_meta(
 
     # Initialize variables that might not be set in all code paths
     backdrop = ""
-    cast = []
+    cast: list[str] = []
     certification = ""
-    creators = []
+    creators: list[str] = []
     demographic = ""
-    directors = []
+    directors: list[str] = []
     genre_ids = ""
     genres = ""
     imdb_mismatch = False
@@ -803,7 +803,7 @@ async def tmdb_other_meta(
         response = await client.get(main_url, params={"api_key": TMDB_API_KEY})
         try:
             response.raise_for_status()
-            media_data = response.json()
+            media_data = typing_cast(dict[str, Any], response.json())
         except Exception:
             console.print(f"[bold red]Failed to fetch media data: {response.status_code}[/bold red]")
             return {}
@@ -852,7 +852,7 @@ async def tmdb_other_meta(
         production_countries = media_data.get('production_countries', [])
 
         overview = media_data['overview']
-        original_language_from_tmdb = media_data['original_language']
+        original_language_from_tmdb = str(media_data.get('original_language', ''))
 
         poster_path = media_data.get('poster_path', '')
         if poster is None and poster_path:
@@ -875,7 +875,7 @@ async def tmdb_other_meta(
         ]
 
         # Add logo request if needed
-        if config['DEFAULT'].get('add_logo', False):
+        if DEFAULT_CFG.get('add_logo', False):
             endpoints.append(
                 client.get(f"{TMDB_BASE_URL}/{('movie' if category == 'MOVIE' else 'tv')}/{tmdb_id}/images",
                            params={"api_key": TMDB_API_KEY})
@@ -890,21 +890,21 @@ async def tmdb_other_meta(
         logo_data = None
 
         # Get logo data if it was requested
-        if config['DEFAULT'].get('add_logo', False):
+        if DEFAULT_CFG.get('add_logo', False):
             logo_data = rest[idx]
             idx += 1
 
         # Process external IDs
-        if isinstance(external_data, Exception):
+        if isinstance(external_data, BaseException):
             console.print("[bold red]Failed to fetch external IDs[/bold red]")
         else:
             try:
-                external = external_data.json()
+                external = typing_cast(dict[str, Any], external_data.json())
                 # Process IMDB ID
                 if quickie_search or imdb_id == 0:
-                    imdb_id_str = external.get('imdb_id', None)
-                    if isinstance(imdb_id_str, str) and imdb_id_str not in ["", " ", "None", "null"]:
-                        imdb_id_clean = imdb_id_str.lstrip('t')
+                    external_imdb_id = external.get('imdb_id', None)
+                    if isinstance(external_imdb_id, str) and external_imdb_id not in ["", " ", "None", "null"]:
+                        imdb_id_clean = external_imdb_id.lstrip('t')
                         if imdb_id_clean.isdigit():
                             imdb_id_clean_int = int(imdb_id_clean)
                             if imdb_id_clean_int != int(original_imdb_id) and quickie_search and original_imdb_id != 0:
@@ -930,11 +930,11 @@ async def tmdb_other_meta(
                 console.print("[bold red]Failed to process external IDs[/bold red]")
 
         # Process videos
-        if isinstance(videos_data, Exception):
+        if isinstance(videos_data, BaseException):
             console.print("[yellow]Unable to grab videos from TMDb.[/yellow]")
         else:
             try:
-                videos = videos_data.json()
+                videos = typing_cast(dict[str, Any], videos_data.json())
                 for each in videos.get('results', []):
                     if each.get('site', "") == 'YouTube' and each.get('type', "") == "Trailer":
                         youtube = f"https://www.youtube.com/watch?v={each.get('key')}"
@@ -943,12 +943,12 @@ async def tmdb_other_meta(
                 console.print("[yellow]Unable to process videos from TMDb.[/yellow]")
 
         # Process keywords
-        if isinstance(keywords_data, Exception):
+        if isinstance(keywords_data, BaseException):
             console.print("[bold red]Failed to fetch keywords[/bold red]")
             keywords = ""
         else:
             try:
-                kw_json = keywords_data.json()
+                kw_json = typing_cast(dict[str, Any], keywords_data.json())
                 if category == "MOVIE":
                     keywords = ', '.join([keyword['name'].replace(',', ' ') for keyword in kw_json.get('keywords', [])])
                 else:  # TV
@@ -968,13 +968,13 @@ async def tmdb_other_meta(
         # Limit to the first 5 unique names
         creators = list(dict.fromkeys(creators))[:5]
 
-        if isinstance(credits_data, Exception):
+        if isinstance(credits_data, BaseException):
             console.print("[bold red]Failed to fetch credits[/bold red]")
             directors = []
             cast = []
         else:
             try:
-                credits = credits_data.json()
+                credits = typing_cast(dict[str, Any], credits_data.json())
                 directors = []
                 cast = []
                 for each in credits.get('cast', []) + credits.get('crew', []):
@@ -996,9 +996,9 @@ async def tmdb_other_meta(
         genre_ids = genres_data['genre_ids']
 
         # Process logo if needed
-        if config['DEFAULT'].get('add_logo', False) and logo_data and not isinstance(logo_data, Exception):
+        if DEFAULT_CFG.get('add_logo', False) and logo_data and not isinstance(logo_data, BaseException):
             try:
-                logo_json = logo_data.json()
+                logo_json = typing_cast(dict[str, Any], logo_data.json())
                 logo_path = await get_logo(tmdb_id, category, debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
                 tmdb_logo = logo_path.split('/')[-1]
             except Exception:
@@ -1289,8 +1289,8 @@ async def get_romaji(tmdb_name, mal, meta):
             expected_season = int(season_match.group(1))
 
     if media not in (None, []):
-        result = {'title': {}}
-        difference = 0
+        result: dict[str, Any] = {'title': {}}
+        difference: float = 0.0
         best_match_with_season = None
         best_season_diff = float('inf')
 
@@ -1594,7 +1594,7 @@ async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API
 
     elif logo_languages is None:
         # Get preferred languages in order (from config, then 'en' as fallback)
-        logo_languages = [config['DEFAULT'].get('logo_language', 'en'), 'en']
+        logo_languages = [DEFAULT_CFG.get('logo_language', 'en'), 'en']
     elif isinstance(logo_languages, str):
         logo_languages = [logo_languages, 'en']
 
@@ -1629,12 +1629,13 @@ async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API
         if debug and image_data:
             console.print(f"[cyan]Image Data: {json.dumps(image_data, indent=2)[:500]}...")
 
+        image_data = typing_cast(dict[str, Any], image_data)
         logos = image_data.get('logos', [])
 
         # Only look for logos that match our specified languages
         for language in logo_languages:
-            matching_logo = next((logo for logo in logos if logo.get('iso_639_1') == language), "")
-            if matching_logo:
+            matching_logo = next((logo for logo in logos if logo.get('iso_639_1') == language), None)
+            if matching_logo is not None:
                 logo_path = f"https://image.tmdb.org/t/p/original{matching_logo['file_path']}"
                 if debug:
                     console.print(f"[cyan]Found logo in language '{language}': {logo_path}[/cyan]")

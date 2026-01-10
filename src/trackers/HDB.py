@@ -8,6 +8,7 @@ import re
 import requests
 
 from torf import Torrent
+from typing import Any
 from unidecode import unidecode
 from urllib.parse import urlparse, quote
 
@@ -40,16 +41,16 @@ class HDB():
         # 7 = PORN
         # 1 = Movie
         if meta['category'] == 'MOVIE':
-            cat_id = 1
+            cat_id = '1'
         # 2 = TV
         if meta['category'] == 'TV':
-            cat_id = 2
+            cat_id = '2'
         # 3 = Documentary
         if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
-            cat_id = 3
+            cat_id = '3'
         if meta.get('imdb_info').get('type') is not None and meta.get('imdb_info').get('genres') is not None:
             if 'concert' in meta.get('imdb_info').get('type').lower() or ('video' in meta.get('imdb_info').get('type').lower() and 'music' in meta.get('imdb_info').get('genres').lower()):
-                cat_id = 4
+                cat_id = '4'
         return cat_id
 
     async def get_type_codec_id(self, meta):
@@ -69,21 +70,21 @@ class HDB():
         medium_id = "EXIT"
         # 1 = Blu-ray / HD DVD
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
-            medium_id = 1
+            medium_id = '1'
         # 4 = Capture
         if meta.get('type', '') == "HDTV":
-            medium_id = 4
+            medium_id = '4'
             if meta.get('has_encode_settings', False) is True:
-                medium_id = 3
+                medium_id = '3'
         # 3 = Encode
         if meta.get('type', '') in ("ENCODE", "WEBRIP"):
-            medium_id = 3
+            medium_id = '3'
         # 5 = Remux
         if meta.get('type', '') == "REMUX":
-            medium_id = 5
+            medium_id = '5'
         # 6 = WEB-DL
         if meta.get('type', '') == "WEBDL":
-            medium_id = 6
+            medium_id = '6'
         return medium_id
 
     async def get_res_id(self, resolution):
@@ -234,7 +235,8 @@ class HDB():
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
-            tracker_url = config['TRACKERS']['HDB'].get('announce_url', "https://fake.tracker").strip()
+            hdb_config = config['TRACKERS'].get('HDB', {})
+            tracker_url = hdb_config.get('announce_url', "https://fake.tracker").strip() if isinstance(hdb_config, dict) else "https://fake.tracker"
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
 
@@ -299,8 +301,9 @@ class HDB():
                     match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
                     if match:
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                        id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
-                        await self.download_new_torrent(id, torrent_file_path)
+                        if id_match := re.search(r"(id=)(\d+)", urlparse(up.url).query):
+                            id = id_match.group(2)
+                            await self.download_new_torrent(id, torrent_file_path)
                         return True
                     else:
                         console.print(data)
@@ -578,13 +581,13 @@ class HDB():
 
             console.print(f"[green]Uploading comparison images from {comparison_path} to HDB Image Host")
 
-            group_images = {}
+            group_images: dict[str, list[str]] = {}
             max_images_per_group = 0
 
             if meta.get('comparison_groups'):
                 for group_idx, group_data in meta['comparison_groups'].items():
                     files_list = group_data.get('files', [])
-                    sorted_files = sorted(files_list, key=lambda f: int(re.match(r"(\d+)-", f).group(1)) if re.match(r"(\d+)-", f) else 0)
+                    sorted_files = sorted(files_list, key=lambda f: int(match.group(1)) if (match := re.match(r"(\d+)-", f)) else 0)
 
                     group_images[group_idx] = []
                     for filename in sorted_files:
@@ -647,9 +650,10 @@ class HDB():
             unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
             unwanted_files = set()
             for pattern in unwanted_patterns:
-                glob_results = await asyncio.to_thread(glob.glob, full_pattern)
+                unwanted_full_pattern = os.path.join(glob.escape(screenshot_dir), str(pattern))
+                glob_results = await asyncio.to_thread(glob.glob, unwanted_full_pattern)
                 unwanted_files.update(glob_results)
-                hidden_pattern = "." + pattern
+                hidden_pattern = os.path.join(glob.escape(screenshot_dir), "." + pattern)
                 hidden_glob_results = await asyncio.to_thread(glob.glob, hidden_pattern)
                 unwanted_files.update(hidden_glob_results)  # finished with hidden_glob_results
             image_glob = [file for file in image_glob if file not in unwanted_files]
@@ -706,8 +710,8 @@ class HDB():
                 max_chunk_size = 100 * 1024 * 1024  # 100 MiB in bytes
                 bbcode = ""
 
-                chunks = []
-                current_chunk = []
+                chunks: list[list[tuple[str, tuple[str, Any, str]]]] = []
+                current_chunk: list[tuple[str, tuple[str, Any, str]]] = []
                 current_chunk_size = 0
 
                 files_list = list(files.items())

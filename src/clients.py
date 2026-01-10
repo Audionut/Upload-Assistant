@@ -19,7 +19,7 @@ import traceback
 import transmission_rpc
 import urllib.parse
 import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
-from typing import Dict, DefaultDict, Tuple
+from typing import Any, Dict, DefaultDict, Tuple
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -632,7 +632,7 @@ class Clients():
                         torrents_data = await response.json()
 
                         class MockTorrent:
-                            def __init__(self, data):
+                            def __init__(self, data: Dict[str, Any]):
                                 for key, value in data.items():
                                     setattr(self, key, value)
                                 # For proxy API, we need to fetch files separately or use num_files from torrents/info
@@ -646,6 +646,9 @@ class Clients():
                                     self.files = [None] * self.num_files  # Dummy list with correct length
                                 elif not hasattr(self, 'files'):
                                     self.files = []
+
+                            def __getattr__(self, name: str) -> Any:
+                                return None
                         torrents = [MockTorrent(torrent) for torrent in torrents_data]
                     else:
                         console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
@@ -693,9 +696,9 @@ class Clients():
         processed_hashes = set()
         best_match = None
 
-        for torrent in matching_torrents:
+        for matching_torrent in matching_torrents:
             try:
-                torrent_hash = torrent['hash']
+                torrent_hash = matching_torrent['hash']
                 if torrent_hash in processed_hashes:
                     continue  # Avoid processing duplicates
 
@@ -876,6 +879,7 @@ class Clients():
                 # allow overridden folder name with link_dir_name config var
                 tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
                 link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
+                assert link_target is not None
                 tracker_dir = os.path.join(link_target, link_dir_name or tracker)
                 os.makedirs(tracker_dir, exist_ok=True)
 
@@ -967,12 +971,18 @@ class Clients():
 
         # Apply remote pathing to `tracker_dir` before assigning `save_path`
         if use_symlink or use_hardlink:
+            if tracker_dir is None:
+                raise ValueError("Linking enabled but tracker_dir was not set")
             save_path = tracker_dir  # Default to linked directory
         else:
             save_path = path  # Default to the original path
 
         # Handle remote path mapping
-        if local_path and remote_path and local_path.lower() != remote_path.lower():
+        if (
+            local_path is not None and remote_path is not None and
+            local_path != "" and remote_path != "" and
+            local_path.lower() != remote_path.lower()
+        ):
             # Normalize paths for comparison
             norm_save_path = os.path.normpath(save_path).lower()
             norm_local_path = os.path.normpath(local_path).lower()
@@ -992,7 +1002,7 @@ class Clients():
             console.print(f"[cyan]Original path: {path}")
             console.print(f"[cyan]Mapped save path: {save_path}")
 
-        rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl._create_stdlib_context())
+        rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl.create_default_context())
         metainfo = bencode.bread(torrent_path)
         if meta['debug']:
             print(f"{rtorrent}: {redact_private_info(rtorrent)}")
@@ -1199,6 +1209,7 @@ class Clients():
         if use_symlink or use_hardlink:
             tracker_cfg = self.config["TRACKERS"].get(tracker.upper(), {})
             link_dir_name = str(tracker_cfg.get("link_dir_name", "")).strip()
+            assert link_target is not None
             tracker_dir = os.path.join(link_target, link_dir_name or tracker)
             await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
@@ -1252,12 +1263,18 @@ class Clients():
 
         # Apply remote pathing to `tracker_dir` before assigning `save_path`
         if use_symlink or use_hardlink:
+            if tracker_dir is None:
+                raise ValueError("Linking enabled but tracker_dir was not set")
             save_path = tracker_dir  # Default to linked directory
         else:
             save_path = path  # Default to the original path
 
         # Handle remote path mapping
-        if local_path and remote_path and local_path.lower() != remote_path.lower():
+        if (
+            local_path is not None and remote_path is not None and
+            local_path != "" and remote_path != "" and
+            local_path.lower() != remote_path.lower()
+        ):
             # Normalize paths for comparison
             norm_save_path = os.path.normpath(save_path).lower()
             norm_local_path = os.path.normpath(local_path).lower()
@@ -1327,6 +1344,7 @@ class Clients():
 
         try:
             if proxy_url:
+                assert qbt_session is not None
                 # Create FormData for multipart/form-data request
                 data = aiohttp.FormData()
                 data.add_field('savepath', save_path)
@@ -1348,6 +1366,7 @@ class Clients():
                         console.print(f"[bold red]Failed to add torrent via proxy: {response.status}")
                         return
             else:
+                assert qbt_client is not None
                 await self.retry_qbt_operation(
                     lambda: asyncio.to_thread(qbt_client.torrents_add,
                                               torrent_files=torrent.dump(),
@@ -1377,6 +1396,7 @@ class Clients():
         for _ in range(timeout):
             try:
                 if proxy_url:
+                    assert qbt_session is not None
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
                                                params={'hashes': torrent.infohash}) as response:
                         if response.status == 200:
@@ -1387,6 +1407,7 @@ class Clients():
                         else:
                             pass  # Continue waiting
                 else:
+                    assert qbt_client is not None
                     torrents_info = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
                         "Check torrent addition",
@@ -1416,6 +1437,7 @@ class Clients():
                     #    if response.status != 200:
                     #        console.print(f"[yellow]Failed to resume torrent via proxy: {response.status}")
                 else:
+                    assert qbt_client is not None
                     await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_resume, torrent.infohash),
                         "Resume torrent"
@@ -1430,11 +1452,13 @@ class Clients():
                 if meta['debug']:
                     console.print(f"{tracker}: Setting super-seed mode.")
                 if proxy_url:
+                    assert qbt_session is not None
                     async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/setSuperSeeding",
                                                 data={'hashes': torrent.infohash, "value": "true"}) as response:
                         if response.status != 200:
                             console.print(f"{tracker}: Failed to set super-seed via proxy: {response.status}")
                 else:
+                    assert qbt_client is not None
                     await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_set_super_seeding, torrent_hashes=torrent.infohash),
                         "Set super-seed mode",
@@ -1448,6 +1472,7 @@ class Clients():
         if meta['debug']:
             try:
                 if proxy_url:
+                    assert qbt_session is not None
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
                                                params={'hashes': torrent.infohash}) as response:
                         if response.status == 200:
@@ -1459,6 +1484,7 @@ class Clients():
                         else:
                             console.print(f"[yellow]Failed to get torrent info via proxy: {response.status}")
                 else:
+                    assert qbt_client is not None
                     info = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
                         "Get torrent info for debug",
@@ -1658,6 +1684,7 @@ class Clients():
 
             try:
                 if proxy_url:
+                    assert qbt_session is not None
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
                                                params={'hash': info_hash_v1}) as response:
                         if response.status == 200:
@@ -1673,6 +1700,7 @@ class Clients():
                             return meta
                 else:
                     try:
+                        assert qbt_client is not None
                         torrent_properties = await self.retry_qbt_operation(
                             lambda: asyncio.to_thread(qbt_client.torrents_properties, torrent_hash=info_hash_v1),
                             f"Get torrent properties for hash {info_hash_v1}",
@@ -1782,6 +1810,7 @@ class Clients():
 
                                 try:
                                     if proxy_url:
+                                        assert qbt_session is not None
                                         async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
                                                                     data={'hash': torrent_hash}) as response:
                                             if response.status == 200:
@@ -1790,6 +1819,7 @@ class Clients():
                                                 console.print(f"[red]Failed to export torrent via proxy: {response.status}")
                                                 continue
                                     else:
+                                        assert qbt_client is not None
                                         torrent_file_content = await self.retry_qbt_operation(
                                             lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
                                             f"Export torrent {torrent_hash}"
@@ -1888,8 +1918,8 @@ class Clients():
                 meta['torrent_comments'] = []
 
             comment_data = {
-                'hash': torrent.get('infohash_v1', ''),
-                'name': torrent.get('name', ''),
+                'hash': getattr(torrent, 'infohash_v1', '') or '',
+                'name': getattr(torrent, 'name', '') or '',
                 'comment': comment,
             }
             meta['torrent_comments'].append(comment_data)
@@ -1994,6 +2024,7 @@ class Clients():
             mtv_config = self.config['TRACKERS'].get('MTV')
             piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
             mtv_torrent = False
+            piece_size_constraints_enabled: str | bool
             if isinstance(mtv_config, dict):
                 mtv_torrent = mtv_config.get('prefer_mtv_torrent', False)
                 # MTV preference takes priority as it's more restrictive (8 MiB vs 16 MiB)
@@ -2229,15 +2260,18 @@ class Clients():
                             # Convert to objects that match qbittorrentapi structure
 
                             class MockTorrent:
-                                def __init__(self, data):
+                                def __init__(self, data: Dict[str, Any]):
                                     for key, value in data.items():
                                         setattr(self, key, value)
                                     if not hasattr(self, 'files'):
-                                        self.files = []
+                                        self.files: list[Any] = []
                                     if not hasattr(self, 'tracker'):
                                         self.tracker = ''
                                     if not hasattr(self, 'comment'):
                                         self.comment = ''
+
+                                def __getattr__(self, name: str) -> Any:
+                                    return None
                             torrents = [MockTorrent(torrent) for torrent in torrents_data]
                         else:
                             if response.status == 404:
@@ -2299,11 +2333,13 @@ class Clients():
                     torrent_properties = []
 
                     if is_match:
-                        url = torrent.tracker if torrent.tracker else []
+                        tracker_url = torrent.tracker or ""
+                        tracker_url_list = [tracker_url] if tracker_url else []
                         try:
                             if proxy_url and not torrent.comment:
                                 if meta['debug']:
                                     console.print(f"[cyan]Fetching torrent properties via proxy for torrent: {torrent.name}")
+                                assert qbt_session is not None
                                 async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
                                                            params={'hash': torrent.hash}) as response:
                                     if response.status == 200:
@@ -2314,6 +2350,7 @@ class Clients():
                                             console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {response.status}")
                                         continue
                             elif not proxy_url:
+                                assert qbt_client is not None
                                 torrent_trackers = await self.retry_qbt_operation(
                                     lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
                                     f"Get trackers for torrent {torrent.name}"
@@ -2369,7 +2406,7 @@ class Clients():
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
 
-                        await match_tracker_url([url], meta)
+                        await match_tracker_url(tracker_url_list, meta)
 
                         match_info = {
                             'hash': torrent.hash,
@@ -2379,14 +2416,14 @@ class Clients():
                             'size': torrent.size,
                             'category': torrent.category,
                             'seeders': torrent.num_complete,
-                            'trackers': url,
+                            'trackers': tracker_url,
                             'has_working_tracker': has_working_tracker,
                             'comment': torrent.comment,
                         }
 
                         # Initialize a list for found tracker IDs
                         tracker_found = False
-                        tracker_urls = []
+                        tracker_id_matches = []
 
                         for tracker_id in tracker_priority:
                             tracker_info = tracker_patterns.get(tracker_id)
@@ -2397,7 +2434,7 @@ class Clients():
                                 match = re.search(tracker_info["pattern"], torrent.comment)
                                 if match:
                                     tracker_id_value = match.group(1)
-                                    tracker_urls.append({
+                                    tracker_id_matches.append({
                                         'id': tracker_id,
                                         'tracker_id': tracker_id_value
                                     })
@@ -2415,7 +2452,7 @@ class Clients():
 
                                 # If we found an ID, use it
                                 if huno_id:
-                                    tracker_urls.append({
+                                    tracker_id_matches.append({
                                         'id': 'huno',
                                         'tracker_id': huno_id,
                                     })
@@ -2425,14 +2462,14 @@ class Clients():
                         if torrent.tracker and 'tracker.anthelion.me' in torrent.tracker:
                             ant_id = 1
                             if has_working_tracker:
-                                tracker_urls.append({
+                                tracker_id_matches.append({
                                     'id': 'ant',
                                     'tracker_id': ant_id,
                                 })
                                 meta['ant'] = ant_id
                                 tracker_found = True
 
-                        match_info['tracker_urls'] = tracker_urls
+                        match_info['tracker_urls'] = tracker_id_matches
                         match_info['has_tracker'] = tracker_found
 
                         if tracker_found:
@@ -2500,7 +2537,7 @@ class Clients():
 
                         # Use piece preference if MTV preference is true, otherwise use general piece limit
                         use_piece_preference = prefer_small_pieces or piece_limit
-                        piece_size_best_match = None  # Track the best match for fallback if piece preference is enabled
+                        piece_size_best_match: Dict[str, Any] | None = None  # Track the best match for fallback if piece preference is enabled
 
                         # Try the best match first (from the sorted matching torrents)
                         best_torrent_match = matching_torrents[0]
@@ -2559,13 +2596,18 @@ class Clients():
                                         is_better_match = False
                                         if prefer_small_pieces:
                                             # MTV preference: always prefer smaller pieces
-                                            is_better_match = piece_size_best_match is None or piece_size < piece_size_best_match['piece_size']
+                                            if piece_size_best_match is None:
+                                                is_better_match = True
+                                            else:
+                                                is_better_match = piece_size < piece_size_best_match['piece_size']
                                         elif piece_limit:
                                             # General preference: prefer <= 16 MiB pieces, then smaller within that range
                                             if piece_size <= 16777216:  # 16 MiB
-                                                is_better_match = (piece_size_best_match is None or
-                                                                   piece_size_best_match['piece_size'] > 16777216 or
-                                                                   piece_size < piece_size_best_match['piece_size'])
+                                                if piece_size_best_match is None:
+                                                    is_better_match = True
+                                                else:
+                                                    is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
+                                                                       piece_size < piece_size_best_match['piece_size'])
 
                                         if is_better_match:
                                             piece_size_best_match = {
@@ -2668,13 +2710,18 @@ class Clients():
                                                 is_better_match = False
                                                 if prefer_small_pieces:
                                                     # MTV preference: always prefer smaller pieces
-                                                    is_better_match = piece_size_best_match is None or piece_size < piece_size_best_match['piece_size']
+                                                    if piece_size_best_match is None:
+                                                        is_better_match = True
+                                                    else:
+                                                        is_better_match = piece_size < piece_size_best_match['piece_size']
                                                 elif piece_limit:
                                                     # General preference: prefer <= 16 MiB pieces, then smaller within that range
                                                     if piece_size <= 16777216:  # 16 MiB
-                                                        is_better_match = (piece_size_best_match is None or
-                                                                           piece_size_best_match['piece_size'] > 16777216 or
-                                                                           piece_size < piece_size_best_match['piece_size'])
+                                                        if piece_size_best_match is None:
+                                                            is_better_match = True
+                                                        else:
+                                                            is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
+                                                                               piece_size < piece_size_best_match['piece_size'])
 
                                                 if is_better_match:
                                                     piece_size_best_match = {

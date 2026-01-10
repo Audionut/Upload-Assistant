@@ -1,11 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import httpx
+from typing import Any, Mapping, cast
 from data.config import config
 from src.console import console
 
 
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+
+
 async def get_sonarr_data(tvdb_id=None, filename=None, title=None, debug=False):
-    if not any(key.startswith('sonarr_api_key') for key in config['DEFAULT']):
+    if not any(key.startswith('sonarr_api_key') for key in DEFAULT_CONFIG):
         console.print("[red]No Sonarr API keys are configured.[/red]")
         return None
 
@@ -20,13 +24,19 @@ async def get_sonarr_data(tvdb_id=None, filename=None, title=None, debug=False):
         url_name = f"sonarr_url{suffix}"
 
         # Check if this instance exists in config
-        if api_key_name not in config['DEFAULT'] or not config['DEFAULT'][api_key_name]:
+        api_key_value = DEFAULT_CONFIG.get(api_key_name)
+        if not isinstance(api_key_value, str) or not api_key_value.strip():
             # No more instances to try
             break
 
         # Get instance-specific configuration
-        api_key = config['DEFAULT'][api_key_name].strip()
-        base_url = config['DEFAULT'][url_name].strip()
+        base_url_value = DEFAULT_CONFIG.get(url_name)
+        if not isinstance(base_url_value, str) or not base_url_value.strip():
+            instance_index += 1
+            continue
+
+        api_key = api_key_value.strip()
+        base_url = base_url_value.strip()
 
         if debug:
             console.print(f"[blue]Trying Sonarr instance {instance_index if instance_index > 0 else 'default'}[/blue]")

@@ -14,6 +14,7 @@ import shutil
 import sys
 import time
 import traceback
+from typing import Any, Dict, Optional, Set, cast
 
 from packaging import version
 from pathlib import Path
@@ -47,11 +48,12 @@ from src.uphelper import UploadHelper
 from src.uploadscreens import upload_screens
 
 cli_ui.setup(color='always', title="Upload Assistant")
-running_subprocesses = set()
+running_subprocesses: Set[Any] = set()
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 try:
     from data.config import config
+    config = cast(Dict[str, Any], config)
 except Exception:
     if not os.path.exists(os.path.abspath(f"{base_dir}/data/config.py")):
         cli_ui.info(cli_ui.red, "Configuration file 'config.py' not found.")
@@ -60,20 +62,22 @@ except Exception:
         exit()
     else:
         traceback.print_exc()
+        config = {}
 
+config = cast(Dict[str, Any], config)
 from src.prep import Prep  # noqa E402
 client = Clients(config=config)
 parser = Args(config)
 use_discord = False
-discord_config = config.get('DISCORD')
-if discord_config:
+discord_config: Optional[Dict[str, Any]] = config.get('DISCORD')
+if discord_config is not None:
     use_discord = discord_config.get('use_discord', False)
 
 
-async def merge_meta(meta, saved_meta, path):
+async def merge_meta(meta: Dict[str, Any], saved_meta: Any, path: str) -> Dict[str, Any]:
     """Merges saved metadata with the current meta, respecting overwrite rules."""
     with open(f"{base_dir}/tmp/{os.path.basename(path)}/meta.json") as f:
-        saved_meta = json.load(f)
+        loaded_meta: Dict[str, Any] = json.load(f)
         overwrite_list = [
             'trackers', 'dupe', 'debug', 'anon', 'category', 'type', 'screens', 'nohash', 'manual_edition', 'imdb', 'tmdb_manual', 'mal', 'manual',
             'hdb', 'ptp', 'blu', 'no_season', 'no_aka', 'no_year', 'no_dub', 'no_tag', 'no_seed', 'client', 'description_link', 'description_file', 'desc', 'draft',
@@ -81,7 +85,7 @@ async def merge_meta(meta, saved_meta, path):
             'skip_imghost_upload', 'imghost', 'manual_source', 'webdv', 'hardcoded-subs', 'dual_audio', 'manual_type', 'tvmaze_manual'
         ]
         sanitized_saved_meta = {}
-        for key, value in saved_meta.items():
+        for key, value in loaded_meta.items():
             clean_key = key.strip().strip("'").strip('"')
             if clean_key in overwrite_list:
                 if clean_key in meta and meta.get(clean_key) is not None:

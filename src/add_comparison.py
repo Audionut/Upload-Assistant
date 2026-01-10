@@ -2,14 +2,22 @@
 import os
 import re
 import json
-import cli_ui
+import builtins
 from collections import defaultdict
+from typing import Any, Mapping, MutableMapping, cast
 from src.uploadscreens import upload_screens
 from data.config import config
 from src.console import console
 
 
-async def add_comparison(meta):
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+
+
+ComparisonGroup = dict[str, Any]
+ComparisonData = dict[str, ComparisonGroup]
+
+
+async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | list[ComparisonGroup]:
     comparison_path = meta.get('comparison')
     if not comparison_path or not os.path.isdir(comparison_path):
         return []
@@ -18,7 +26,7 @@ async def add_comparison(meta):
     if os.path.exists(comparison_data_file):
         try:
             with open(comparison_data_file, 'r') as f:
-                saved_comparison_data = json.load(f)
+                saved_comparison_data = cast(ComparisonData | list[ComparisonGroup], json.load(f))
                 if meta.get('debug'):
                     console.print(f"[cyan]Loading previously saved comparison data from {comparison_data_file}")
                 meta["comparison_groups"] = saved_comparison_data
@@ -54,9 +62,9 @@ async def add_comparison(meta):
             if second not in suffixes:
                 suffixes[second] = suffix
 
-    meta_comparisons = {}
-    img_host_keys = [k for k in config.get('DEFAULT', {}) if k.startswith('img_host_')]
-    img_host_indices = [int(k.split('_')[-1]) for k in img_host_keys]
+    meta_comparisons: ComparisonData = {}
+    img_host_keys = [k for k in DEFAULT_CONFIG if k.startswith('img_host_')]
+    img_host_indices = [int(k.split('_')[-1]) for k in img_host_keys if k.split('_')[-1].isdigit()]
     img_host_indices.sort()
 
     if not img_host_indices:
@@ -65,12 +73,14 @@ async def add_comparison(meta):
     for idx, second in enumerate(sorted(groups, key=lambda x: int(x)), 1):
         img_host_num = img_host_indices[0]
         current_img_host_key = f'img_host_{img_host_num}'
-        current_img_host = config.get('DEFAULT', {}).get(current_img_host_key)
+        current_img_host = DEFAULT_CONFIG.get(current_img_host_key)
+        if current_img_host is not None and not isinstance(current_img_host, str):
+            current_img_host = str(current_img_host)
 
         group = sorted(groups[second], key=lambda x: x[0])
         group_files = [f for _, f in group]
         custom_img_list = [os.path.join(comparison_path, filename) for filename in group_files]
-        upload_meta = meta.copy()
+        upload_meta = dict(meta)
         console.print(f"[cyan]Uploading comparison group {second} with files: {group_files}")
 
         upload_result, _ = await upload_screens(
@@ -95,7 +105,7 @@ async def add_comparison(meta):
     if not comparison_index:
         console.print("[red]No comparison index provided. Please specify a comparison index matching the input file.")
         while True:
-            cli_input = cli_ui.input("Enter comparison index number: ")
+            cli_input = builtins.input("Enter comparison index number: ")
             try:
                 comparison_index = str(int(cli_input.strip()))
                 break

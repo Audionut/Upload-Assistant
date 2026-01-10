@@ -6,8 +6,23 @@ import re
 import time
 import urllib.parse
 from bs4 import BeautifulSoup
+from bs4.element import AttributeValueList
+from typing import Any, Mapping, cast
 from data.config import config
 from src.console import console
+
+
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+
+
+def _attr_to_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, AttributeValueList):
+        return " ".join(value)
+    if value is None:
+        return ""
+    return str(value)
 
 
 async def is_scene(video, meta, imdb=None, lower=False):
@@ -136,12 +151,10 @@ async def is_scene(video, meta, imdb=None, lower=False):
 
         elif not scene and lower and not meta.get('emby_debug', False):
             release_name = None
-            try:
-                name = meta.get('filename', None).replace(" ", ".")
-                tag = meta.get('tag', None).replace("-", "")
-            except Exception:
-                name = None
-                tag = None
+            name_value = meta.get('filename') if hasattr(meta, 'get') else None
+            name = name_value.replace(" ", ".") if isinstance(name_value, str) else None
+            tag_value = meta.get('tag') if hasattr(meta, 'get') else None
+            tag = tag_value.replace("-", "") if isinstance(tag_value, str) else None
             if name and tag:
                 url = f"https://api.srrdb.com/v1/search/start:{name}/group:{tag}"
 
@@ -197,7 +210,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
                     console.print("[yellow]SRRDB: Missing name or tag for lower/tag search")
                 return None
 
-    check_predb = config['DEFAULT'].get('check_predb', False)
+    check_predb = bool(DEFAULT_CONFIG.get('check_predb', False))
     if not scene and check_predb and not meta.get('emby_debug', False):
         if meta['debug']:
             console.print("[yellow]SRRDB: No scene match found, checking predb")
@@ -227,12 +240,15 @@ async def predb_check(meta, video):
                     # The 3rd <td> contains the release name link
                     release_a = tds[2].find('a', title=True)
                     if release_a:
-                        release_name = release_a['title'].strip().lower()
+                        release_attr = _attr_to_string(release_a.get('title')).strip()
+                        if not release_attr:
+                            continue
+                        release_name = release_attr.lower()
                         if meta['debug']:
                             console.print(f"[yellow]Predb: Checking {release_name} against {video_base}")
                         if release_name == video_base:
                             found = True
-                            meta['scene_name'] = release_a['title'].strip()
+                            meta['scene_name'] = release_attr
                             console.print("[green]Predb: Match found")
                             # The 4th <td> contains the group
                             if len(tds) >= 4:

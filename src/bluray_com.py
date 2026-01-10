@@ -6,7 +6,9 @@ import re
 import json
 import cli_ui
 import os
+from typing import Any
 from bs4 import BeautifulSoup
+from bs4.element import AttributeValueList
 from rich.console import Console
 
 console = Console()
@@ -16,6 +18,8 @@ async def search_bluray(meta):
     imdb_id = f"tt{meta['imdb_id']:07d}"
     url = f"https://www.blu-ray.com/search/?quicksearch=1&quicksearch_country=all&quicksearch_keyword={imdb_id}&section=theatrical"
     debug_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/debug_bluray_search_{imdb_id}.html"
+
+    response_text: str | None = None
 
     try:
         if os.path.exists(debug_filename):
@@ -53,7 +57,6 @@ async def search_bluray(meta):
     max_retries = 2
     retry_count = 0
     backoff_time = 3.0
-    response_text = None
 
     while retry_count <= max_retries:
         try:
@@ -534,7 +537,7 @@ async def parse_release_details(response_text, release, meta):
             console.print("[red]Could not find specs section on the release page[/red]")
             return release
 
-        specs = {
+        specs: dict[str, Any] = {
             'video': {},
             'audio': [],
             'subtitles': [],
@@ -776,7 +779,7 @@ async def download_cover_images(meta):
 
 
 def extract_cover_images(html_content):
-    cover_images = {}
+    cover_images: dict[str, str] = {}
     soup = BeautifulSoup(html_content, 'lxml')
     scripts = soup.find_all('script', string=re.compile(r'\$\(document\)\.ready.*append\(\'<img id="'))  # type: ignore
 
@@ -804,8 +807,13 @@ def extract_cover_images(html_content):
         for div in overlay_divs:
             img = div.find('img')
             if img and 'id' in img.attrs and 'src' in img.attrs:
-                img_id = img['id']
-                url = img['src']
+                img_id_raw = img.get('id')
+                url_raw = img.get('src')
+                if not img_id_raw or not url_raw:
+                    continue
+
+                img_id = ' '.join(img_id_raw) if isinstance(img_id_raw, AttributeValueList) else str(img_id_raw)
+                url = ' '.join(url_raw) if isinstance(url_raw, AttributeValueList) else str(url_raw)
 
                 if "front" in img_id.lower():
                     cover_images["front"] = url
@@ -844,6 +852,8 @@ async def fetch_release_details(release, meta):
     if meta['debug']:
         console.print(f"[yellow]Fetching details for: {release['title']} - {release_url}[/yellow]")
 
+    response_text: str | None = None
+
     try:
         import os
         if os.path.exists(debug_filename):
@@ -880,7 +890,6 @@ async def fetch_release_details(release, meta):
     max_retries = 2
     retry_count = 0
     backoff_time = 3.0
-    response_text = None
 
     while retry_count <= max_retries:
         try:
@@ -979,9 +988,9 @@ async def process_all_releases(releases, meta):
     if meta['debug']:
         console.print(f"[dim]Local disc count from meta: {disc_count}")
 
-    meta_video_specs = {}
-    meta_audio_specs = []
-    meta_subtitles = []
+    meta_video_specs: dict[str, Any] = {}
+    meta_audio_specs: list[dict[str, Any]] = []
+    meta_subtitles: list[str] = []
 
     if disc_count > 0 and 'discs' in meta and 'bdinfo' in meta['discs'][0]:
         bdinfo = meta['discs'][0]['bdinfo']
@@ -1000,7 +1009,7 @@ async def process_all_releases(releases, meta):
                     console.print(f"[dim]Local audio: {track.get('language', '')} {track.get('codec', '')} {track.get('channels', '')} {track.get('bitrate', '')}")
 
         bd_summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-        filtered_languages = []
+        filtered_languages: list[str] = []
         meta_subtitles = []  # Initialize here so it's clear we're creating it
 
         if os.path.exists(bd_summary_path):
@@ -1059,7 +1068,7 @@ async def process_all_releases(releases, meta):
         cli_ui.info_section("Processing Complete")
     cli_ui.info(f"Successfully processed {len(detailed_releases)} releases")
 
-    logs = []  # Initialize a list to store logs for each release
+    logs: list[tuple[Any, list[str]]] = []  # Initialize a list to store logs for each release
 
     def log_and_print(message, log_list):
         if meta['debug']:
@@ -1069,7 +1078,7 @@ async def process_all_releases(releases, meta):
     if detailed_releases:
         scored_releases = []
         for idx, release in enumerate(detailed_releases, 1):
-            release_logs = []
+            release_logs: list[str] = []
             if meta['debug']:
                 console.print(f"\n[bold blue]=== Release {idx}/{len(detailed_releases)}: {release['title']} ({release['country']}) ===[/bold blue]")
             log_and_print(f"[blue]Release URL: {release['url']}[/blue]", release_logs)
@@ -1117,8 +1126,9 @@ async def process_all_releases(releases, meta):
                         expected_format = "bd-100"
 
                     format_match = False
+                    generic_format = False
                     if release_format == "bd" or "bd" == release_format:
-                        format_match = "generic"
+                        generic_format = True
                         log_and_print(f"[yellow]⚠[/yellow] Generic BD format found: {specs['discs']['format']} for size {disc_size_gb:.2f} GB", release_logs)
                     elif expected_format and expected_format in release_format:
                         format_match = True
@@ -1129,7 +1139,7 @@ async def process_all_releases(releases, meta):
                         if meta['debug']:
                             log_and_print("[dim]Penalty for disc format mismatch: 50.0[/dim]", release_logs)
 
-                    if format_match == "generic":
+                    if generic_format:
                         score -= 5
                         if meta['debug']:
                             log_and_print("[dim]Reduced penalty for generic BD format: 5.0[/dim]", release_logs)
@@ -1373,18 +1383,18 @@ async def process_all_releases(releases, meta):
                         partial_match_percentage = (partial_audio_matches / total_tracks) * 100
 
                         if audio_matches == total_tracks:
-                            audio_penalty = 0
+                            audio_penalty = 0.0
                         # Single bdinfo track penalty adjustment
                         elif total_tracks == 1:
                             if audio_matches == 1:
-                                audio_penalty = 0
+                                audio_penalty = 0.0
                             elif partial_audio_matches == 1:
                                 audio_penalty = 5.0
                             else:
                                 audio_penalty = 10.0
                         # Multiple bdinfo tracks penalty adjustment
                         else:
-                            audio_penalty = 0
+                            audio_penalty = 0.0
                             audio_penalty += partial_audio_matches * 2.5
                             missing_tracks = total_tracks - (audio_matches + partial_audio_matches)
                             normal_missing = missing_audio_tracks - reduced_penalty_count

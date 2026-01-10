@@ -188,8 +188,8 @@ async def extract_title_and_year(meta, filename):
     basename = os.path.basename(filename)
     basename = os.path.splitext(basename)[0]
 
-    secondary_title = None
-    year = None
+    secondary_title: str | None = None
+    year: str | None = None
 
     # Check for AKA patterns first
     aka_patterns = [' AKA ', '.aka.', ' aka ', '.AKA.']
@@ -260,6 +260,7 @@ async def extract_title_and_year(meta, filename):
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
     double_year_match = re.search(double_year_pattern, folder_name)
+    actual_year: str | None = None
 
     if double_year_match:
         full_match = double_year_match.group(0)
@@ -374,9 +375,8 @@ async def extract_title_and_year(meta, filename):
     }
     filename = re.sub(r'\s+', ' ', filename)
     filename = await multi_replace(title_part, replacements)
-    secondary_title = await multi_replace(secondary_title or '', replacements)
-    if not secondary_title:
-        secondary_title = None
+    processed_secondary = await multi_replace(secondary_title or '', replacements)
+    secondary_title = processed_secondary if processed_secondary else None
     if filename:
         # Look for content in parentheses
         bracket_pattern = r'\s*\(([^)]+)\)\s*'

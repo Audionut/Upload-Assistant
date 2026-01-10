@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 import os
+from typing import Any
 from pymediainfo import MediaInfo
 import requests
 import traceback
@@ -89,7 +90,7 @@ class BHDTV():
 
             if meta['debug'] is False:
                 response = requests.post(url=self.upload_url, data=data, files=files, timeout=30)
-                parsed = None
+                parsed: Any | None = None
                 if response:
                     try:
                         parsed = response.json()
@@ -103,10 +104,17 @@ class BHDTV():
 
                 open_torrent.close()
 
-                # # adding my anounce url to torrent.
-                data = parsed.get('data') if isinstance(parsed, dict) else None
-                if data and 'view' in data:
-                    await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), data['view'])
+                # # adding my announce url to torrent.
+                parsed_data: dict[str, Any] | None = parsed if isinstance(parsed, dict) else None
+                data_block: dict[str, Any] | None = parsed_data.get('data') if parsed_data else None
+                if data_block and 'view' in data_block:
+                    await common.create_torrent_ready_to_seed(
+                        meta,
+                        self.tracker,
+                        self.source_flag,
+                        self.config['TRACKERS']['BHDTV'].get('my_announce_url'),
+                        data_block['view']
+                    )
                     return True
                 return False
 

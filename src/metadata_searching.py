@@ -578,7 +578,16 @@ async def get_tvmaze_tvdb(filename, search_year, imdb, tmdb, manual_date=None, t
 
     # Process TVDb results if we added that task
     if (imdb and imdb != 0) or (tmdb and tmdb != 0):
-        tvdb = results[1]
+        tvdb_result = results[1] if len(results) > 1 else None
+        if isinstance(tvdb_result, Exception):
+            console.print(f"[yellow]TVDb lookup failed: {tvdb_result}[/yellow]")
+            tvdb = 0
+        elif isinstance(tvdb_result, int):
+            tvdb = tvdb_result
+        else:
+            if tvdb_result is not None:
+                console.print(f"[yellow]Unexpected TVDb lookup result type: {type(tvdb_result)}[/yellow]")
+            tvdb = 0
     elif len(results) > 1:
         tvdb_result = results[1]
         if tvdb_result and not isinstance(tvdb_result, Exception):

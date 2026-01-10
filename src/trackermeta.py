@@ -6,6 +6,7 @@ import io
 from io import BytesIO
 import os
 import sys
+from typing import Any, Mapping, cast
 
 from PIL import Image
 
@@ -16,8 +17,27 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 
 # Define expected amount of screenshots from the config
-expected_images = int(config['DEFAULT']['screens'])
-valid_images = []
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
+
+
+def _to_int(value: Any, fallback: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return fallback
+    return fallback
+
+
+expected_images = _to_int(DEFAULT_CONFIG.get('screens', 0))
+valid_images: list[dict[str, Any]] = []
 
 
 async def prompt_user_for_confirmation(message: str) -> bool:
@@ -338,8 +358,9 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                 found_match = False
 
     elif tracker_name == "BHD":
-        bhd_main_api = config['TRACKERS']['BHD'].get('api_key')
-        bhd_other_api = config['DEFAULT'].get('bhd_api')
+        bhd_tracker_config = cast(Mapping[str, Any], TRACKER_CONFIG.get('BHD', {}))
+        bhd_main_api = bhd_tracker_config.get('api_key')
+        bhd_other_api = DEFAULT_CONFIG.get('bhd_api')
         if bhd_main_api and len(bhd_main_api) < 25:
             bhd_main_api = None
         if bhd_other_api and len(bhd_other_api) < 25:
@@ -348,8 +369,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             console.print("[red]BHD API key is being retired from the DEFAULT config section. Only using api from the BHD tracker section instead.[/red]")
             await asyncio.sleep(2)
         bhd_api = bhd_main_api if bhd_main_api else bhd_other_api
-        bhd_main_rss = config['TRACKERS']['BHD'].get('bhd_rss_key')
-        bhd_other_rss = config['DEFAULT'].get('bhd_rss_key')
+        bhd_main_rss = bhd_tracker_config.get('bhd_rss_key')
+        bhd_other_rss = DEFAULT_CONFIG.get('bhd_rss_key')
         if bhd_main_rss and len(bhd_main_rss) < 25:
             bhd_main_rss = None
         if bhd_other_rss and len(bhd_other_rss) < 25:
