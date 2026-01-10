@@ -24,7 +24,7 @@ try:
     from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
     from src.get_disc import get_disc, get_dvd_size
     from src.get_name import extract_title_and_year
-    from src.getseasonep import get_season_episode
+    from src.getseasonep import get_season_episode, check_season_pack_completeness
     from src.get_source import get_source
     from src.get_tracker_data import get_tracker_data, ping_unit3d
     from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
@@ -838,6 +838,9 @@ class Prep():
         # if it was skipped earlier, make sure we have the season/episode data
         if not meta.get('not_anime', False) and meta.get('category') == "TV":
             meta = await get_season_episode(video, meta)
+
+        if meta['category'] == "TV" and meta.get('tv_pack'):
+            await check_season_pack_completeness(meta)
 
         # lets check for tv movies
         meta['tv_movie'] = False

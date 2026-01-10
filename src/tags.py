@@ -6,7 +6,7 @@ from guessit import guessit
 from src.console import console
 
 
-async def get_tag(video, meta):
+async def get_tag(video, meta, season_pack_check=False):
     # Using regex from cross-seed (https://github.com/cross-seed/cross-seed/tree/master?tab=Apache-2.0-1-ov-file)
     release_group = None
     basename = os.path.basename(video)
@@ -28,7 +28,7 @@ async def get_tag(video, meta):
             if os.path.isdir(video):
                 # If video is a directory, use the directory name as basename
                 basename_stripped = os.path.basename(os.path.normpath(video))
-            elif meta.get('tv_pack', False) or meta.get('keep_folder', False):
+            elif (meta.get('tv_pack', False) or meta.get('keep_folder', False)) and not season_pack_check:
                 basename_stripped = meta['uuid']
             else:
                 # If video is a file, use the filename without extension
