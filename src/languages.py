@@ -115,6 +115,8 @@ async def parsed_mediainfo(meta):
         if os.path.exists(mediainfo_file):
             async with aiofiles.open(mediainfo_file, 'r', encoding='utf-8') as f:
                 mediainfo_content = await f.read()
+        else:
+            return {}
     except Exception as e:
         console.print(f"[red]Error reading MEDIAINFO file: {e}[/red]")
         return {}

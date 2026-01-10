@@ -900,11 +900,11 @@ async def tmdb_other_meta(
             idx += 1
 
         # Process external IDs
-        if isinstance(external_data, BaseException):
+        if isinstance(external_data, Exception):
             console.print("[bold red]Failed to fetch external IDs[/bold red]")
         else:
             try:
-                external = typing_cast(dict[str, Any], external_data.json())
+                external = typing_cast(dict[str, Any], external_data.json())  # type: ignore
                 # Process IMDB ID
                 if quickie_search or imdb_id == 0:
                     external_imdb_id = external.get('imdb_id', None)
@@ -935,11 +935,11 @@ async def tmdb_other_meta(
                 console.print("[bold red]Failed to process external IDs[/bold red]")
 
         # Process videos
-        if isinstance(videos_data, BaseException):
+        if isinstance(videos_data, Exception):
             console.print("[yellow]Unable to grab videos from TMDb.[/yellow]")
         else:
             try:
-                videos = typing_cast(dict[str, Any], videos_data.json())
+                videos = typing_cast(dict[str, Any], videos_data.json())  # type: ignore
                 for each in videos.get('results', []):
                     if each.get('site', "") == 'YouTube' and each.get('type', "") == "Trailer":
                         youtube = f"https://www.youtube.com/watch?v={each.get('key')}"
@@ -948,12 +948,12 @@ async def tmdb_other_meta(
                 console.print("[yellow]Unable to process videos from TMDb.[/yellow]")
 
         # Process keywords
-        if isinstance(keywords_data, BaseException):
+        if isinstance(keywords_data, Exception):
             console.print("[bold red]Failed to fetch keywords[/bold red]")
             keywords = ""
         else:
             try:
-                kw_json = typing_cast(dict[str, Any], keywords_data.json())
+                kw_json = typing_cast(dict[str, Any], keywords_data.json())  # type: ignore
                 if category == "MOVIE":
                     keywords = ', '.join([keyword['name'].replace(',', ' ') for keyword in kw_json.get('keywords', [])])
                 else:  # TV
@@ -973,13 +973,13 @@ async def tmdb_other_meta(
         # Limit to the first 5 unique names
         creators = list(dict.fromkeys(creators))[:5]
 
-        if isinstance(credits_data, BaseException):
+        if isinstance(credits_data, Exception):
             console.print("[bold red]Failed to fetch credits[/bold red]")
             directors = []
             cast = []
         else:
             try:
-                credits = typing_cast(dict[str, Any], credits_data.json())
+                credits = typing_cast(dict[str, Any], credits_data.json())  # type: ignore
                 directors = []
                 cast = []
                 for each in credits.get('cast', []) + credits.get('crew', []):
@@ -1001,9 +1001,9 @@ async def tmdb_other_meta(
         genre_ids = genres_data['genre_ids']
 
         # Process logo if needed
-        if DEFAULT_CFG.get('add_logo', False) and logo_data and not isinstance(logo_data, BaseException):
+        if DEFAULT_CFG.get('add_logo', False) and logo_data and not isinstance(logo_data, Exception):
             try:
-                logo_json = typing_cast(dict[str, Any], logo_data.json())
+                logo_json = typing_cast(dict[str, Any], logo_data.json())  # type: ignore
                 logo_path = await get_logo(tmdb_id, category, debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
                 tmdb_logo = logo_path.split('/')[-1]
             except Exception:

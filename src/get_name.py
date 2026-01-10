@@ -280,7 +280,14 @@ async def extract_title_and_year(meta, filename):
         extension_match = re.search(extension_pattern, modified_folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, modified_folder_name, re.IGNORECASE)
 
-        indices = [('year', double_year_match.end(), second_year)]
+        # If the folder starts with YYYY.YYYY (e.g. "1917.2019..."), the first year is the title.
+        # Otherwise, treat the match as a delimiter after a normal title (e.g. "Some.Movie.1982.2011...").
+        year_boundary = (
+            double_year_match.start() + len(first_year)
+            if double_year_match.start() == 0
+            else double_year_match.start()
+        )
+        indices = [('year', year_boundary, second_year)]
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
         if season_pattern_match:
@@ -331,7 +338,7 @@ async def extract_title_and_year(meta, filename):
         # Handle unmatched opening parenthesis
         if title_part.count('(') > title_part.count(')'):
             paren_pos = title_part.rfind('(')
-            content_after_paren = folder_name[paren_pos + 1:first_index].strip()
+            content_after_paren = folder_name_for_title[paren_pos + 1:first_index].strip()
 
             if content_after_paren:
                 secondary_title = content_after_paren

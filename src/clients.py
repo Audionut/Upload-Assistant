@@ -19,7 +19,7 @@ import traceback
 import transmission_rpc
 import urllib.parse
 import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
-from typing import Any, Dict, DefaultDict, Tuple
+from typing import Any, Dict, DefaultDict, Tuple, Union
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -38,6 +38,14 @@ qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections
 class Clients():
     def __init__(self, config):
         self.config = config
+
+    def create_ssl_context_for_client(self, client_config):
+        """Create SSL context for qBittorrent client based on VERIFY_WEBUI_CERTIFICATE setting."""
+        ssl_context = ssl.create_default_context()
+        if not client_config.get('VERIFY_WEBUI_CERTIFICATE', True):
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        return ssl_context
 
     async def retry_qbt_operation(self, operation_func, operation_name, max_retries=2, initial_timeout=10.0):
         for attempt in range(max_retries + 1):
@@ -334,10 +342,7 @@ class Clients():
                 proxy_url = client.get('qui_proxy_url')
 
                 if proxy_url:
-                    ssl_context = ssl.create_default_context()
-                    if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
-                        ssl_context.check_hostname = False
-                        ssl_context.verify_mode = ssl.CERT_NONE
+                    ssl_context = self.create_ssl_context_for_client(client)
                     qbt_session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -609,10 +614,7 @@ class Clients():
                     return None
                 qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
-                ssl_context = ssl.create_default_context()
-                if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
+                ssl_context = self.create_ssl_context_for_client(client)
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
                     connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -1256,10 +1258,7 @@ class Clients():
         qbt_session = None
 
         if proxy_url:
-            ssl_context = ssl.create_default_context()
-            if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+            ssl_context = self.create_ssl_context_for_client(client)
             qbt_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10),
                 connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -1680,10 +1679,7 @@ class Clients():
             qbt_session = None
 
             if proxy_url:
-                ssl_context = ssl.create_default_context()
-                if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
+                ssl_context = self.create_ssl_context_for_client(client)
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
                     connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -2055,7 +2051,7 @@ class Clients():
             mtv_config = self.config['TRACKERS'].get('MTV')
             piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
             mtv_torrent = False
-            piece_size_constraints_enabled: str | bool
+            piece_size_constraints_enabled: Union[str, bool]
             if isinstance(mtv_config, dict):
                 mtv_torrent = mtv_config.get('prefer_mtv_torrent', False)
                 # MTV preference takes priority as it's more restrictive (8 MiB vs 16 MiB)
@@ -2202,10 +2198,7 @@ class Clients():
             proxy_url = client_config.get('qui_proxy_url', '').strip()
             if proxy_url:
                 try:
-                    ssl_context = ssl.create_default_context()
-                    if not client_config.get('VERIFY_WEBUI_CERTIFICATE', True):
-                        ssl_context.check_hostname = False
-                        ssl_context.verify_mode = ssl.CERT_NONE
+                    ssl_context = self.create_ssl_context_for_client(client_config)
                     session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -2574,7 +2567,7 @@ class Clients():
 
                         # Use piece preference if MTV preference is true, otherwise use general piece limit
                         use_piece_preference = prefer_small_pieces or piece_limit
-                        piece_size_best_match: Dict[str, Any] | None = None  # Track the best match for fallback if piece preference is enabled
+                        piece_size_best_match: Union[Dict[str, Any], None] = None  # Track the best match for fallback if piece preference is enabled
 
                         # Try the best match first (from the sorted matching torrents)
                         best_torrent_match = matching_torrents[0]

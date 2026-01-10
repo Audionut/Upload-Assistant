@@ -19,7 +19,7 @@ class Wait:
         self.qbt_client: Optional[qbittorrentapi.Client] = None
         self.qbt_client = self._connect_qbittorrent()
 
-    def _connect_qbittorrent(self):
+    def _connect_qbittorrent(self) -> Optional[qbittorrentapi.Client]:
         config_data: Dict[str, Any] = cast(Dict[str, Any], config)
         default_section = cast(Dict[str, Any], config_data.get('DEFAULT', {}))
         clients_section = cast(Dict[str, Any], config_data.get('TORRENT_CLIENTS', {}))
@@ -61,7 +61,49 @@ class Wait:
                 qbt_client.auth_log_in()
                 return qbt_client
             except qbittorrentapi.LoginFailed as e:
-                raise Exception(f"[ERROR] qBittorrent login failed: {e}")
+                raise RuntimeError(f"qBittorrent login failed: {e}") from e
+
+    async def wait_for_completion(self, infohash, check_interval=3):
+        if not self.proxy_url and not self.qbt_client:
+            raise Exception("[ERROR] qBittorrent is not configured.")
+
+        print(f"Waiting for torrent {infohash} to complete...")
+
+        if self.proxy_url:
+            self.qbt_session = aiohttp.ClientSession()
+
+        try:
+            while True:
+                if self.proxy_url:
+                    async with self.qbt_session.get(  # type: ignore
+                        f"{self.qbt_proxy_url}/api/v2/torrents/info",
+                        params={'hashes': infohash}
+                    ) as response:
+                        if response.status == 200:
+                            torrents_data = await response.json()
+                            target_torrent = torrents_data[0] if torrents_data else None
+                        else:
+                            print(f"[ERROR] Failed to get torrent info via proxy: {response.status}")
+                            break
+                else:
+                    torrents = self.qbt_client.torrents_info(hashes=infohash)  # type: ignore
+                    target_torrent = next((t for t in torrents if t.hash == infohash), None)
+
+                if target_torrent:
+                    state = target_torrent.get('state') if self.proxy_url else target_torrent.state
+                    print(f"[DEBUG] Torrent {infohash} state: {state}")
+
+                    if state in {'pausedUP', 'seeding', 'completed', 'stalledUP', 'uploading'}:
+                        print(f"[INFO] Torrent {infohash} has completed!")
+                        return
+                else:
+                    print(f"[ERROR] Torrent with hash {infohash} not found!")
+                    break
+
+                await asyncio.sleep(check_interval)
+        finally:
+            if self.qbt_session:
+                await self.qbt_session.close()
 
     async def select_and_recheck_best_torrent(self, meta: Dict[str, Any], path: str, check_interval: int = 5) -> bool:
         if not self.proxy_url and not self.qbt_client:
@@ -151,6 +193,9 @@ class Wait:
                     if self.qbt_session is None:
                         console.print("[bold red]qbt_session is not initialized")
                         return False
+                    if self.qbt_proxy_url is None:
+                        console.print("[bold red]Proxy URL is not configured correctly")
+                        return False
                     async with self.qbt_session.get(
                         f"{self.qbt_proxy_url}/api/v2/torrents/info",
                         params={'hashes': torrent_hash}
@@ -160,7 +205,12 @@ class Wait:
                             if torrents_data:
                                 torrent = torrents_data[0]
                                 state = torrent.get('state')
-                                progress = torrent.get('progress')
+                                progress = torrent.get('progress', 0)
+                                state_str = str(state) if state is not None else 'unknown'
+                                try:
+                                    progress_float = float(progress or 0)
+                                except (TypeError, ValueError):
+                                    progress_float = 0.0
                             else:
                                 raise Exception("No torrents found in response")
                         else:
@@ -238,7 +288,7 @@ class Wait:
 
             if final_state not in {'pausedUP', 'seeding', 'completed', 'stalledUP', 'uploading'}:
                 console.print("[yellow]Torrent needs to download missing data. Waiting for completion...[/yellow]")
-                # No longer calling wait_for_completion directly - this method doesn't exist yet
+                await self.wait_for_completion(torrent_hash, check_interval)
 
             return True
 

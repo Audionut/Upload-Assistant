@@ -69,8 +69,6 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
                     template_desc = template.render(meta)
                     cleaned_content = clean_text(template_desc)
                     if cleaned_content:
-                        if not content_written:
-                            description.write
                         if len(template_desc) > 0:
                             description.write(cleaned_content + "\n")
                             meta["description_template_content"] = cleaned_content
@@ -156,8 +154,8 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
                 if cleaned_content:
                     if not content_written:
                         description.write(file_content)
-                meta["description_file_content"] = cleaned_content
-                content_written = True
+                    meta["description_file_content"] = cleaned_content
+                    content_written = True
 
         if not content_written:
             if meta.get("description"):
