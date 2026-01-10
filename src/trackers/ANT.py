@@ -198,13 +198,13 @@ class ANT:
             if not meta['debug']:
                 async with httpx.AsyncClient(timeout=10) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
-                    if response.status_code in [200, 201]:
-                        try:
-                            response_data = response.json()
-                        except json.JSONDecodeError:
-                            meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
-                            return False
+                    try:
+                        response_data = response.json()
+                    except json.JSONDecodeError:
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
+                        return False
 
+                    if response.status_code in [200, 201]:
                         is_success = (
                             ('success' in response_data)
                             or (str(response_data.get('status', '')).lower() == 'success')
