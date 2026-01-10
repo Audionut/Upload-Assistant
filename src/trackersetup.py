@@ -1025,8 +1025,8 @@ class TRACKER_SETUP:
                                 break  # Exit loop if there are no more pages
                             else:
                                 # Rest between page fetches
-                                console.print(f"[cyan]Fetched {len(page_data)} trumping reports, waiting 0.2 seconds before next page...[/cyan]")
-                                await asyncio.sleep(0.2)
+                                console.print(f"[cyan]Fetched {len(page_data)} trumping reports, waiting 1 second before next page...[/cyan]")
+                                await asyncio.sleep(1)
                         else:
                             console.print(f"[bold red]Failed to search trumps on {tracker}. HTTP Status: {response.status_code} - {response.text}[/bold red]")
                             break
