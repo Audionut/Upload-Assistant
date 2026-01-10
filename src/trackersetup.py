@@ -964,7 +964,14 @@ class TRACKER_SETUP:
             trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
             if status != 200:
                 console.print(f"[bold red]Failed to retrieve trumping reports from {tracker}. HTTP Status: {status}[/bold red]")
-                return False
+                # Mark this tracker as failed/skipped and continue to the next tracker
+                console.print(f"[bold red]Marking {tracker} to be skipped due to API failure[/bold red]")
+                if tracker not in meta['skip_upload_trackers']:
+                    meta['skip_upload_trackers'].append(tracker)
+                meta.setdefault('tracker_status', {})
+                meta['tracker_status'].setdefault(tracker, {})
+                meta['tracker_status'][tracker]['skip_upload'] = True
+                continue
             if trumping_reports:
                 console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping report/s on {tracker} for this release[/bold yellow]")
                 for report in trumping_reports:
@@ -994,7 +1001,7 @@ class TRACKER_SETUP:
                 console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
             else:
                 if meta['debug']:
-                    console.print(f"[bold green]Will make a trumpable report for this upload at {trackers}[/bold green]")
+                    console.print(f"[bold green]Will make a trumpable report for this upload at {trumping_trackers}[/bold green]")
 
         # Filter trumping trackers by skip marker (do not mutate meta['trackers'] here)
         active_trumping_trackers = [t for t in trumping_trackers if t not in meta.get('skip_upload_trackers', [])]
@@ -1051,7 +1058,7 @@ class TRACKER_SETUP:
                 return False
         else:
             if meta.get('debug'):
-                console.print(f"[bold green]TV pack upload detected, skipping comparison images for trump report on {trackers}[/bold green]")
+                console.print(f"[bold green]TV pack upload detected, skipping comparison images for trump report on {active_trumping_trackers}[/bold green]")
             return True
 
     async def get_tracker_trumps(self, meta, tracker, url, reported_torrent_id):

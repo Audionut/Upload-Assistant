@@ -1399,7 +1399,10 @@ async def process_cross_seeds(meta):
 
                 if dupes:
                     dupes = await filter_dupes(dupes, meta, tracker)
-                    await helper.dupe_check(dupes, meta, tracker)
+                    is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
+                    # Persist any updates from dupe_check (defensive in case it returns a copy)
+                    if isinstance(updated_meta, dict) and updated_meta is not meta:
+                        meta.update(updated_meta)
 
             except Exception as e:
                 if meta.get('debug'):
