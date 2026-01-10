@@ -263,16 +263,24 @@ async def check_season_pack_completeness(meta):
     completeness = await check_season_pack_detail(meta)
     if not completeness['complete']:
         just_go = False
+        unattended = meta.get('unattended', False)
+        unattended_confirm = meta.get('unattended_confirm', False)
         try:
             missing_list = [f"S{s:02d}E{e:02d}" for s, e in completeness['missing_episodes']]
         except ValueError:
             console.print("[red]Error determining missing episodes, you should double check the pack manually.")
-            time.sleep(5)
             missing_list = ["Unknown"]
         if 'Unknown' not in missing_list:
             console.print("[red]Warning: Season pack appears incomplete!")
             console.print(f"[yellow]Missing episodes: {', '.join(missing_list)}")
+        else:
+            console.print("[red]Warning: Season pack appears incomplete (missing episodes could not be determined).")
 
+        # In unattended mode with no confirmation prompts, ensure we always log that we're proceeding.
+        if unattended and not unattended_confirm:
+            console.print("[yellow]Unattended mode: continuing despite incomplete season pack (no confirmation).")
+
+        if 'Unknown' not in missing_list:
             # Show first 15 files from filelist
             filelist = meta['filelist']
             files_shown = 0
@@ -285,7 +293,7 @@ async def check_season_pack_completeness(meta):
             files_shown = min(batch_size, len(filelist))
 
             # Loop to handle showing more files in batches
-            while files_shown < len(filelist) and not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+            while files_shown < len(filelist) and (not unattended or unattended_confirm):
                 remaining_files = len(filelist) - files_shown
                 console.print(f"[yellow]... and {remaining_files} more files")
 
@@ -314,13 +322,13 @@ async def check_season_pack_completeness(meta):
                     sys.exit(1)
 
             # Final confirmation if not in unattended mode
-            if not meta['unattended'] and not just_go or (meta['unattended'] and meta.get('unattended_confirm', False) and not just_go):
+            if (not unattended or unattended_confirm) and not just_go:
                 response = input("Continue with incomplete season pack? (y/N): ")
                 if response.lower() != 'y':
                     console.print("[red]Aborting torrent creation due to incomplete season pack")
                     sys.exit(1)
     else:
-        if meta['debug']:
+        if meta.get('debug', False):
             console.print("[green]Season pack completeness verified")
 
     if not completeness['consistent_tags']:
@@ -351,6 +359,13 @@ async def check_season_pack_detail(meta):
 
     # Pattern for anime: " - 43 (1080p)" or "43 (1080p)" or similar
     anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
+
+    # Normalize season_int once so all (season, episode) tuples are (int, int)
+    raw_season_int = meta.get('season_int', 1)
+    try:
+        default_season_num = int(raw_season_int)
+    except (TypeError, ValueError):
+        default_season_num = 1
 
     for file_path in files:
         filename = os.path.basename(file_path)
@@ -385,7 +400,7 @@ async def check_season_pack_detail(meta):
                 episode1_num = int(match[0])
                 episode2_num = int(match[1]) if match[1] else None
 
-                season_num = meta.get('season_int', 1)
+                season_num = default_season_num
                 found_episodes.append((season_num, episode1_num))
                 season_numbers.add(season_num)
 
@@ -396,7 +411,7 @@ async def check_season_pack_detail(meta):
             anime_matches = re.findall(anime_pattern, filename)
             for match in anime_matches:
                 episode_num = int(match)
-                season_num = meta.get('season_int', 1)
+                season_num = default_season_num
                 found_episodes.append((season_num, episode_num))
                 season_numbers.add(season_num)
 
