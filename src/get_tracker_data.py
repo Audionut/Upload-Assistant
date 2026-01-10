@@ -374,7 +374,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
     return meta
 
 
-async def ping_unit3d(meta):
+async def ping_unit3d(meta: dict[str, Any]):
     from src.trackers.COMMON import COMMON
     common = COMMON(config)
     import re
@@ -392,7 +392,7 @@ async def ping_unit3d(meta):
                     console.print(f"[green]Both region ({meta['region']}) and distributor ({meta['distributor']}) found - no need to check more trackers[/green]")
                 break
 
-            tracker_id = None
+            tracker_id: str = ""
             tracker_key = tracker_name.lower()
             # Check each stored comment for matching tracker URL
             for comment_data in meta.get('torrent_comments', []):
@@ -431,7 +431,7 @@ async def ping_unit3d(meta):
 
             # If we found a tracker ID, try to get region/distributor data
             if tracker_id:
-                missing_info = []
+                missing_info: list[str] = []
                 if not meta.get('region'):
                     missing_info.append("region")
                 if not meta.get('distributor'):
@@ -445,7 +445,7 @@ async def ping_unit3d(meta):
                 # Store initial state to detect changes
                 had_region = bool(meta.get('region'))
                 had_distributor = bool(meta.get('distributor'))
-                await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, tracker_id)
+                await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, str(tracker_id))
 
                 if meta.get('region') and not had_region:
                     if meta.get('debug', False):

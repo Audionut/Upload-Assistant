@@ -13,7 +13,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 import httpx
 import aiofiles
-from typing import Any, Mapping, cast
+from typing import Any, cast
 from data.config import config as raw_config
 
 config = cast(dict[str, Any], raw_config)

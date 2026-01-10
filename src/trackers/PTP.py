@@ -1195,7 +1195,7 @@ class PTP():
                             if not new_screens:
                                 try:
                                     await screenshots(
-                                        file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, None)
+                                        file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
                                 except Exception as e:
                                     print(f"Error during generic screenshot capture: {e}")
                             new_screens = glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")

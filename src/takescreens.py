@@ -90,9 +90,9 @@ async def disc_screenshots(
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
         return
 
-    if num_screens is None:
+    if not num_screens:
         num_screens = screens
-    if num_screens == 0 or len(image_list) >= num_screens:
+    if num_screens == 0 or (image_list and len(image_list) >= num_screens):
         return
 
     sanitized_filename = await sanitize_filename(filename)
@@ -448,7 +448,7 @@ async def dvd_screenshots(
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
         return
     screens = meta.get('screens', 6)
-    if num_screens is None:
+    if not num_screens:
         num_screens = screens - len(existing_images)
     if num_screens == 0 or (len(meta.get('image_list', [])) >= screens and disc_num == 0):
         return
@@ -814,8 +814,8 @@ async def screenshots(
         meta: dict[str, Any],
         num_screens: int = 0,
         force_screenshots: bool = False,
-        manual_frames: str = "",
-) -> None:
+        manual_frames: str | list[str] = "",
+) -> list[str] | None:
     img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:
@@ -891,12 +891,11 @@ async def screenshots(
     ss_times = []
     if manual_frames and not force_screenshots:
         try:
+            manual_frames_list = []
             if isinstance(manual_frames, str):
                 manual_frames_list = [int(frame.strip()) for frame in manual_frames.split(',') if frame.strip()]
             elif isinstance(manual_frames, list):
                 manual_frames_list = [int(frame) if isinstance(frame, str) else frame for frame in manual_frames]
-            else:
-                manual_frames_list = []
             num_screens = len(manual_frames_list)
             if num_screens > 0:
                 ss_times = [frame / frame_rate for frame in manual_frames_list]
@@ -913,7 +912,7 @@ async def screenshots(
     sanitized_filename = await sanitize_filename(filename)
 
     existing_images_count = 0
-    existing_image_paths = []
+    existing_image_paths: list[str] = []
     for i in range(num_screens):
         image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
         if os.path.exists(image_path) and not meta.get('retake', False):
@@ -973,14 +972,14 @@ async def screenshots(
                     hdr_tonemap = False
                     console.print("[yellow]FFMPEG failed tonemap checking.[/yellow]")
                     await asyncio.sleep(2)
-                if not libplacebo and "HDR" not in meta.get('hdr'):
+                if not libplacebo and "HDR" not in meta.get('hdr', ''):
                     hdr_tonemap = False
             else:
                 hdr_tonemap = True
                 meta['tonemapped'] = True
                 meta['libplacebo'] = True
         else:
-            if "HDR" not in meta.get('hdr'):
+            if "HDR" not in meta.get('hdr', ''):
                 hdr_tonemap = False
             else:
                 hdr_tonemap = True

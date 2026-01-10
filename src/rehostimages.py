@@ -360,7 +360,7 @@ async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, a
                 await dvd_screenshots(meta, disc_num=0, retry_cap=True)
             else:
                 await screenshots(path, filename, meta['uuid'], base_dir, meta,
-                                  needed_screenshots, True, None)
+                                  needed_screenshots, True, "")
 
             if meta['is_disc'] == "DVD":
                 new_screens = await asyncio.to_thread(glob.glob, f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][0]['name']}-*.png")

@@ -42,10 +42,10 @@ class AZTrackerBase:
         }, timeout=60.0)
         self.media_code = ''
 
-    async def rules(self, meta):
+    async def rules(self, meta: dict[str, Any]):
         return ''
 
-    def get_resolution(self, meta):
+    def get_resolution(self, meta: dict[str, Any]):
         resolution = ''
         width, height = None, None
 
@@ -69,7 +69,7 @@ class AZTrackerBase:
 
         return resolution
 
-    def get_video_quality(self, meta):
+    def get_video_quality(self, meta: dict[str, Any]):
         resolution = meta.get('resolution')
 
         if self.tracker != 'PHD':
@@ -87,7 +87,7 @@ class AZTrackerBase:
 
         return keyword_map.get(resolution.lower())
 
-    async def get_media_code(self, meta):
+    async def get_media_code(self, meta: dict[str, Any]):
         self.media_code = ''
 
         if meta['category'] == 'MOVIE':
@@ -162,7 +162,7 @@ class AZTrackerBase:
 
         return bool(self.media_code)
 
-    async def add_media_to_db(self, meta, title, category, imdb_id, tmdb_id):
+    async def add_media_to_db(self, meta: dict[str, Any], title, category, imdb_id, tmdb_id):
         data = {
             '_token': self.az_class.secret_token,
             'type_id': category,
@@ -201,7 +201,7 @@ class AZTrackerBase:
             console.print(f'{self.tracker}: Exception when trying to add media to the database: {e}')
             return False
 
-    async def validate_credentials(self, meta):
+    async def validate_credentials(self, meta: dict[str, Any]):
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
@@ -214,7 +214,7 @@ class AZTrackerBase:
             )
         return False
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], disctype):
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
             warnings = await self.rules(meta)
             if warnings:
@@ -334,7 +334,7 @@ class AZTrackerBase:
         }.get(category_name, '0')
         return category_id
 
-    async def get_file_info(self, meta):
+    async def get_file_info(self, meta: dict[str, Any]):
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
             if self.tracker == 'CZ':
@@ -349,7 +349,7 @@ class AZTrackerBase:
             with open(info_file_path, 'r', encoding='utf-8') as f:
                 return f.read()
 
-    async def get_lang(self, meta):
+    async def get_lang(self, meta: dict[str, Any]):
         self.language_map()
         audio_ids = set()
         subtitle_ids = set()
@@ -427,7 +427,7 @@ class AZTrackerBase:
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta, referer, image_bytes: bytes, filename: str) -> Optional[str]:
+    async def img_host(self, meta: dict[str, Any], referer, image_bytes: bytes, filename: str) -> Optional[str]:
         upload_url = f'{self.base_url}/ajax/image/upload'
 
         headers = {
@@ -466,7 +466,7 @@ class AZTrackerBase:
             print(f'{self.tracker}: Exception when uploading {filename}: {e}')
             return None
 
-    async def get_screenshots(self, meta):
+    async def get_screenshots(self, meta: dict[str, Any]):
         screenshot_dir = Path(meta['base_dir']) / 'tmp' / meta['uuid']
         local_files = sorted(screenshot_dir.glob('*.png'))
         results = []
@@ -526,7 +526,7 @@ class AZTrackerBase:
 
         return results
 
-    async def get_requests(self, meta):
+    async def get_requests(self, meta: dict[str, Any]):
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
@@ -606,7 +606,7 @@ class AZTrackerBase:
 
         return None
 
-    async def get_tags(self, meta):
+    async def get_tags(self, meta: dict[str, Any]):
         genres = meta.get('keywords', '')
         if not genres:
             return []
@@ -640,7 +640,7 @@ class AZTrackerBase:
 
         return tags
 
-    async def edit_desc(self, meta):
+    async def edit_desc(self, meta: dict[str, Any]):
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
@@ -695,7 +695,7 @@ class AZTrackerBase:
 
         return final_html_desc
 
-    async def create_task_id(self, meta):
+    async def create_task_id(self, meta: dict[str, Any]):
         await self.get_media_code(meta)
         data = {
             '_token': self.az_class.secret_token,
@@ -757,7 +757,7 @@ class AZTrackerBase:
 
         meta['tracker_status'][self.tracker]['status_message'] = status_message
 
-    def edit_name(self, meta):
+    def edit_name(self, meta: dict[str, Any]):
         # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
         # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
         # https://privatehd.to/rules/upload-rules
@@ -834,7 +834,7 @@ class AZTrackerBase:
 
         return re.sub(r'\s{2,}', ' ', upload_name)
 
-    def get_rip_type(self, meta, display_name=False):
+    def get_rip_type(self, meta: dict[str, Any], display_name=False):
         # Translation from meta keywords to site display labels
         translation = {
             "bdrip": "BDRip",
@@ -900,7 +900,7 @@ class AZTrackerBase:
 
         return available_rip_types.get(html_label)
 
-    async def fetch_data(self, meta):
+    async def fetch_data(self, meta: dict[str, Any]):
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
@@ -956,13 +956,13 @@ class AZTrackerBase:
 
         return data
 
-    async def check_data(self, meta, data):
+    async def check_data(self, meta: dict[str, Any], data):
         if not meta.get('debug', False):
             if len(data['screenshots[]']) < 3:
                 return f'UPLOAD FAILED: The {self.tracker} image host did not return the minimum number of screenshots.'
         return False
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], disctype):
         data = await self.fetch_data(meta)
         status_message = ''
 

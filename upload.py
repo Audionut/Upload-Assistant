@@ -439,10 +439,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             return
 
         filename: str = meta.get('title', '')
-        bdmv_filename = meta.get('filename', None)
-        bdinfo = meta.get('bdinfo', None)
-        videopath: list[str] = meta.get('filelist', [None])
-        videopath: str = videopath[0] if videopath else ""
+        bdmv_filename = meta.get('filename', '')
+        bdinfo = meta.get('bdinfo', '')
+        videopath: str = meta.get('filelist', [""])[0] or ""
         console.print(f"Processing {filename} for upload.....")
 
         meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
@@ -518,7 +517,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         try:
                             await disc_screenshots(
                                 meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
-                                meta.get('image_list', []), meta.get('ffdebug', False), None
+                                meta.get('image_list', []), meta.get('ffdebug', False), 0
                             )
                         except asyncio.CancelledError:
                             await cleanup_screenshot_temp_files(meta)
@@ -1459,7 +1458,7 @@ async def process_cross_seeds(meta):
         if debug:
             console.print(f"[green]Found cross-seed for {tracker}!")
 
-        download_url = None
+        download_url = ""
         if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
             download_url = cross_seed_value
 

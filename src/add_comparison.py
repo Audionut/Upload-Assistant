@@ -106,12 +106,12 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | lis
 
         group = sorted(groups[second], key=lambda x: x[0])
         group_files = [f for _, f in group]
-        custom_img_list = [os.path.join(comparison_path, filename) for filename in group_files]
+        custom_img_list: list[str] = [os.path.join(comparison_path, filename) for filename in group_files]
         upload_meta = dict(meta)
         console.print(f"[cyan]Uploading comparison group {second} with files: {group_files}")
 
         upload_result, _ = await upload_screens(
-            upload_meta, custom_img_list, img_host_num, 0, len(custom_img_list), custom_img_list, {}
+            upload_meta, len(custom_img_list), img_host_num, 0, len(custom_img_list), custom_img_list, {}
         )
 
         uploaded_infos = [

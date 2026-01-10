@@ -56,8 +56,8 @@ class UNIT3D:
         }
 
         params_dict: dict[str, str] = {
-            "tmdbId": meta["tmdb"],
-            "categories[]": (await self.get_category_id(meta))["category_id"],
+            "tmdbId": f"{meta['tmdb']}",
+            "categories[]": f"{(await self.get_category_id(meta))['category_id']}",
             "name": "",
             "perPage": "100",
         }

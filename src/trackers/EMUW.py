@@ -502,12 +502,12 @@ class EMUW(UNIT3D):
         upload_data = await super().get_data(meta)
 
         if meta.get('anon', False):
-            upload_data['anonymous'] = 1
+            upload_data['anonymous'] = "1"
         if meta.get('stream', False):
-            upload_data['stream'] = 1
+            upload_data['stream'] = "1"
         if meta.get('resolution', '') in ['576p', '540p', '480p']:
-            upload_data['sd'] = 1
+            upload_data['sd'] = "1"
         if meta.get('personalrelease', False):
-            upload_data['personal_release'] = 1
+            upload_data['personal_release'] = "1"
 
         return upload_data
