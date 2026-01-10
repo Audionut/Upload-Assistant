@@ -18,7 +18,7 @@ class UTP(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_name = meta['category']
         edition = meta.get('edition', '')
         category_id = {
@@ -30,7 +30,7 @@ class UTP(UNIT3D):
             category_id = '3'
         return {'category_id': category_id}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

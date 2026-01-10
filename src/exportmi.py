@@ -4,8 +4,33 @@ import json
 import os
 import platform
 import subprocess
+from pathlib import Path
 from pymediainfo import MediaInfo
 from src.console import console
+
+
+def validate_file_path(file_path):
+    if not file_path:
+        raise ValueError("File path cannot be empty")
+
+    # Convert to Path object for safer handling
+    try:
+        path = Path(file_path).resolve()
+    except (OSError, ValueError) as e:
+        raise ValueError(f"Invalid file path: {e}") from e
+
+    # Check if path exists
+    if not path.exists():
+        raise ValueError(f"File does not exist: {path}")
+
+    # Ensure it's a file (not a directory, unless specifically allowed)
+    if not path.is_file():
+        # Allow directories for DVD/Blu-ray structures
+        if not path.is_dir():
+            raise ValueError(f"Path is neither a file nor directory: {path}")
+
+    # Convert back to string
+    return str(path)
 
 
 def setup_mediainfo_library(base_dir, debug=False):
@@ -134,7 +159,7 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=False, debug=False):
+async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=False):
 
     def filter_mediainfo(data):
         filtered = {
@@ -359,7 +384,10 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
 
     if mediainfo_cmd and is_dvd:
         try:
-            cmd = [mediainfo_cmd, video]
+            # Validate and sanitize the video path
+            safe_video_path = validate_file_path(video)
+            safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
+            cmd = [safe_mediainfo_cmd, safe_video_path]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0 and result.stdout:
@@ -369,6 +397,10 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
 
         except subprocess.TimeoutExpired:
             console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
+            media_info = MediaInfo.parse(video, output="STRING", full=False)
+        except ValueError as e:
+            console.print(f"[bold red]Path validation error: {e}[/bold red]")
+            console.print("[bold yellow]Falling back to standard MediaInfo for text...")
             media_info = MediaInfo.parse(video, output="STRING", full=False)
         except (subprocess.CalledProcessError, Exception) as e:
             console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
@@ -380,16 +412,11 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
     else:
         media_info = MediaInfo.parse(video, output="STRING", full=False)
 
-    if isinstance(media_info, str):
-        filtered_media_info = "\n".join(
-            line for line in media_info.splitlines()
-            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-        )
-    else:
-        filtered_media_info = "\n".join(
-            line for line in media_info.splitlines()
-            if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
-        )
+    # Filter out unwanted lines from media info regardless of type
+    filtered_media_info = "\n".join(
+        line for line in media_info.splitlines()
+        if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+    )
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
         await export.write(filtered_media_info.replace(video, os.path.basename(video)))
@@ -400,7 +427,10 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
 
     if mediainfo_cmd and is_dvd:
         try:
-            cmd = [mediainfo_cmd, "--Output=JSON", video]
+            # Validate and sanitize the video path
+            safe_video_path = validate_file_path(video)
+            safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
+            cmd = [safe_mediainfo_cmd, "--Output=JSON", safe_video_path]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0 and result.stdout:
@@ -409,6 +439,11 @@ async def exportInfo(video, isdir, folder_id, base_dir, export_text, is_dvd=Fals
             else:
                 raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
 
+        except ValueError as e:
+            console.print(f"[bold red]Path validation error: {e}[/bold red]")
+            console.print("[bold yellow]Falling back to standard MediaInfo for JSON...")
+            media_info_json = MediaInfo.parse(video, output="JSON")
+            media_info_dict = json.loads(media_info_json)
         except subprocess.TimeoutExpired:
             console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
             media_info_json = MediaInfo.parse(video, output="JSON")

@@ -44,7 +44,11 @@ async def all_ids(meta):
     if meta.get('category') == 'TV':
         tvdb_episodes_task = tvdb_handler.get_tvdb_episodes(
             meta['tvdb_id'],
-            meta.get('debug', False)
+            meta.get('base_dir'),
+            meta.get('debug', False),
+            season=meta.get('season_int'),
+            episode=meta.get('episode_int'),
+            aired_date=meta.get('daily_episode_title')
         )
         all_tasks.append(tvdb_episodes_task)
 
@@ -207,7 +211,11 @@ async def imdb_tmdb_tvdb(meta, filename):
     if meta.get('category') == 'TV':
         tvdb_task = tvdb_handler.get_tvdb_episodes(
             meta['tvdb_id'],
-            meta.get('debug', False)
+            meta.get('base_dir'),
+            meta.get('debug', False),
+            season=meta.get('season_int'),
+            episode=meta.get('episode_int'),
+            aired_date=meta.get('daily_episode_title')
         )
         tasks.append(tvdb_task)
 
@@ -342,7 +350,11 @@ async def imdb_tvdb(meta, filename):
     if meta.get('category') == 'TV':
         tvdb_episodes_task = tvdb_handler.get_tvdb_episodes(
             meta['tvdb_id'],
-            meta.get('debug', False)
+            meta.get('base_dir'),
+            meta.get('debug', False),
+            season=meta.get('season_int'),
+            episode=meta.get('episode_int'),
+            aired_date=meta.get('daily_episode_title')
         )
         tasks.append(tvdb_episodes_task)
 
@@ -598,7 +610,14 @@ async def get_tv_data(meta):
         if (not meta.get('we_checked_tvdb', False) and not meta.get('we_asked_tvmaze', False)) and meta.get('tvmaze_id') != 0 and meta['tvmaze_id'] != 0 and not meta.get('anime', False):
             meta = await get_tvdb_tvmaze_tmdb_episode_data(meta)
         elif meta.get('tvdb_id', 0) and not meta.get('we_checked_tvdb', False):
-            tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(meta['tvdb_id'])
+            tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(
+                meta['tvdb_id'],
+                meta.get('base_dir'),
+                meta.get('debug', False),
+                season=meta.get('season_int'),
+                episode=meta.get('episode_int'),
+                aired_date=meta.get('daily_episode_title')
+            )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
             if tvdb_name:
@@ -614,7 +633,13 @@ async def get_tv_data(meta):
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
-                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(
+                    meta['tvdb_episode_data'],
+                    meta.get('season_int', None),
+                    meta.get('episode_int', None),
+                    debug=meta.get('debug', False),
+                    aired_date=meta.get('daily_episode_title')
+                )
             except Exception as e:
                 console.print(f"[red]Error fetching TVDb episode data: {e}[/red]")
 
@@ -674,7 +699,14 @@ async def get_tv_data(meta):
 
     elif meta.get('tv_pack', False):
         if not meta.get('we_checked_tvdb', False) and meta.get('tvdb_id', 0):
-            tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(meta['tvdb_id'])
+            tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(
+                meta['tvdb_id'],
+                meta.get('base_dir'),
+                meta.get('debug', False),
+                season=meta.get('season_int'),
+                episode=meta.get('episode_int'),
+                aired_date=meta.get('daily_episode_title')
+            )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
             if tvdb_name:
@@ -689,7 +721,13 @@ async def get_tv_data(meta):
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
-                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(meta['tvdb_episode_data'], meta.get('season_int', None), meta.get('episode_int', None), debug=meta.get('debug', False))
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(
+                    meta['tvdb_episode_data'],
+                    meta.get('season_int', None),
+                    meta.get('episode_int', None),
+                    debug=meta.get('debug', False),
+                    aired_date=meta.get('daily_episode_title')
+                )
             except Exception as e:
                 console.print(f"[red]Error fetching TVDb episode data: {e}[/red]")
 
@@ -726,7 +764,11 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta):
         tasks.append(
             tvdb_handler.get_tvdb_episodes(
                 meta['tvdb_id'],
-                meta.get('debug', False)
+                meta.get('base_dir'),
+                meta.get('debug', False),
+                season=meta.get('season_int'),
+                episode=meta.get('episode_int'),
+                aired_date=meta.get('daily_episode_title')
             )
         )
         task_map['tvdb'] = len(tasks) - 1

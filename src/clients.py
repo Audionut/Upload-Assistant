@@ -5,6 +5,7 @@ import asyncio
 import base64
 import bencode
 import collections
+import defusedxml.xmlrpc
 import errno
 import os
 import platform
@@ -17,7 +18,8 @@ import time
 import traceback
 import transmission_rpc
 import urllib.parse
-import xmlrpc.client
+import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
+from typing import Dict, DefaultDict, Tuple
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -25,9 +27,12 @@ from src.console import console
 from src.torrentcreate import create_base_from_existing_torrent
 from torf import Torrent
 
+# Secure XML-RPC client using defusedxml to prevent XML attacks
+defusedxml.xmlrpc.monkey_patch()
+
 # These have to be global variables to be shared across all instances since a new instance is made every time
-qbittorrent_cached_clients = {}  # Cache for qbittorrent clients that have been successfully logged into
-qbittorrent_locks = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+qbittorrent_cached_clients: Dict[Tuple[str, int, str], qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
+qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
 class Clients():
@@ -88,6 +93,8 @@ class Clients():
     async def add_to_client(self, meta, tracker, cross=False):
         if cross:
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
+        elif meta['debug']:
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_DEBUG].torrent"
         else:
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if meta.get('no_seed', False) is True:
@@ -97,30 +104,50 @@ class Clients():
         if os.path.exists(torrent_path):
             torrent = Torrent.read(torrent_path)
         else:
+            console.print(f"[bold red]Torrent file {torrent_path} does not exist, cannot add to client")
             return
 
         inject_clients = []
         if meta.get('client') and meta.get('client') != 'none':
             inject_clients = [meta['client']]
+            if meta['debug']:
+                console.print(f"[cyan]DEBUG: Using client from meta: {inject_clients}[/cyan]")
         elif meta.get('client') == 'none':
+            if meta['debug']:
+                console.print("[cyan]DEBUG: meta client is 'none', skipping adding to client[/cyan]")
             return
         else:
-            inject_clients_config = self.config['DEFAULT'].get('injecting_client_list')
-            if isinstance(inject_clients_config, str) and inject_clients_config.strip():
-                inject_clients = [inject_clients_config]
-            elif isinstance(inject_clients_config, list):
-                # Filter out empty strings and whitespace-only strings
-                inject_clients = [c for c in inject_clients_config if c and str(c).strip()]
-            else:
-                inject_clients = []
+            try:
+                inject_clients_config = self.config['DEFAULT'].get('injecting_client_list')
+                if isinstance(inject_clients_config, str) and inject_clients_config.strip():
+                    inject_clients = [inject_clients_config]
+                    if meta['debug']:
+                        console.print(f"[cyan]DEBUG: Converted injecting_client_list string to list: {inject_clients}[/cyan]")
+                elif isinstance(inject_clients_config, list):
+                    # Filter out empty strings and whitespace-only strings
+                    inject_clients = [c for c in inject_clients_config if c and str(c).strip()]
+                    if meta['debug']:
+                        console.print(f"[cyan]DEBUG: Using injecting_client_list from config: {inject_clients}[/cyan]")
+                else:
+                    inject_clients = []
+            except Exception as e:
+                if meta['debug']:
+                    console.print(f"[cyan]DEBUG: Error reading injecting_client_list from config: {e}[/cyan]")
 
             if not inject_clients:
                 default_client = self.config['DEFAULT'].get('default_torrent_client')
                 if default_client and default_client != 'none':
+                    if meta['debug']:
+                        console.print(f"[cyan]DEBUG: Falling back to default_torrent_client: {default_client}[/cyan]")
                     inject_clients = [default_client]
 
         if not inject_clients:
+            if meta['debug']:
+                console.print("[cyan]DEBUG: No clients configured for injecting[/cyan]")
             return
+
+        if meta['debug']:
+            console.print(f"[cyan]DEBUG: Clients to inject into: {inject_clients}[/cyan]")
 
         for client_name in inject_clients:
             if client_name == "none" or not client_name:
@@ -175,11 +202,15 @@ class Clients():
 
         if meta.get('client') and meta['client'] != 'none':
             clients_to_search = [meta['client']]
+            if meta['debug']:
+                console.print(f"[cyan]DEBUG: Using client from meta: {clients_to_search}[/cyan]")
         else:
             searching_list = self.config['DEFAULT'].get('searching_client_list', [])
 
             if isinstance(searching_list, list) and len(searching_list) > 0:
                 clients_to_search = [c for c in searching_list if c and c != 'none']
+                if meta['debug']:
+                    console.print(f"[cyan]DEBUG: Using searching_client_list from config: {clients_to_search}[/cyan]")
             else:
                 clients_to_search = []
 
@@ -290,7 +321,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name, print_err=True)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name)
 
                 if valid:
                     return resolved_path
@@ -403,7 +434,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client_name, print_err=False
+                        meta, found_torrent_path, found_hash, torrent_client, client_name
                     )
                 else:
                     valid = False
@@ -433,7 +464,7 @@ class Clients():
 
         return best_match
 
-    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client, print_err=False):
+    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client):
         valid = False
         wrong_file = False
 
@@ -715,7 +746,7 @@ class Clients():
 
             # **Validate the .torrent file**
             try:
-                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
             except Exception as e:
                 console.print(f"[bold red]Error validating torrent {torrent_hash}: {e}")
                 valid = False
@@ -1769,7 +1800,7 @@ class Clients():
                                         f.write(torrent_file_content)
 
                                     # Validate the .torrent file before saving as BASE.torrent
-                                    valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client, print_err=False)
+                                    valid, _ = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
                                     if not valid:
                                         if meta['debug']:
                                             console.print(f"[bold red]Validation failed for {torrent_file_path}")
@@ -1910,7 +1941,7 @@ class Clients():
 
             if not pathed:
                 valid, resolved_path = await self.is_valid_torrent(
-                    meta, torrent_path, info_hash_v1, 'rtorrent', client, print_err=False
+                    meta, torrent_path, info_hash_v1, 'rtorrent', client
                 )
 
                 if valid:
@@ -2508,7 +2539,7 @@ class Clients():
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
                         if torrent_file_path:
-                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config, print_err=False)
+                            valid, torrent_path = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client_config)
                             if valid:
                                 if use_piece_preference:
                                     # **Track best match based on piece size**
@@ -2615,7 +2646,7 @@ class Clients():
                                 # Validate the alternative torrent
                                 if alt_torrent_file_path:
                                     alt_valid, alt_torrent_path = await self.is_valid_torrent(
-                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config, print_err=False
+                                        meta, alt_torrent_file_path, alt_torrent_hash, 'qbit', client_config
                                     )
 
                                     if alt_valid:
@@ -3056,6 +3087,11 @@ async def match_tracker_url(tracker_urls, meta):
                     found_ids.add(tracker_id.upper())
                     if meta.get('debug'):
                         console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {redact_private_info(tracker)}")
+                    if tracker_id.upper() == 'PTP' and 'passthepopcorn.me' in tracker:
+                        if tracker.startswith('http://'):
+                            console.print("[red]Found PTP announce URL using plaintext HTTP.\n")
+                            console.print("[red]PTP is turning off their plaintext HTTP tracker soon. You must update your announce URLS. See PTP/forums.php?page=1&action=viewthread&threadid=46663")
+                            await asyncio.sleep(10)
 
     if "remove_trackers" not in meta or not isinstance(meta["remove_trackers"], list):
         meta["remove_trackers"] = []

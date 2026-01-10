@@ -1,18 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import requests
 import asyncio
-import re
-import os
+import cli_ui
 import glob
-import pickle
+import httpx
+import os
+import re
+import requests
+
+from bs4 import BeautifulSoup
 from unidecode import unidecode
 from urllib.parse import urlparse
-import cli_ui
-from bs4 import BeautifulSoup
-import httpx
-from src.trackers.COMMON import COMMON
-from src.exceptions import *  # noqa F403
+
 from src.console import console
+from src.cookie_auth import CookieValidator
+from src.exceptions import *  # noqa F403
+from src.trackers.COMMON import COMMON
 
 
 class FL():
@@ -27,6 +29,8 @@ class FL():
         self.uploader_name = config['TRACKERS'][self.tracker].get('uploader_name')
         self.signature = None
         self.banned_groups = [""]
+
+        self.cookie_validator = CookieValidator(config)
 
     async def get_category_id(self, meta):
         has_ro_audio, has_ro_sub = await self.get_ro_tracks(meta)
@@ -98,7 +102,7 @@ class FL():
         fl_name = fl_name.replace(' ', '.').replace('..', '.')
         return fl_name
 
-    def _is_true(value):
+    def _is_true(self, value):
         return str(value).strip().lower() in {"true", "1", "yes"}
 
     async def upload(self, meta, disctype):
@@ -118,7 +122,7 @@ class FL():
                 if fl_name_manually == "":
                     console.print('No proper name given')
                     console.print("Aborting...")
-                    return
+                    return False
                 else:
                     fl_name = fl_name_manually
 
@@ -172,12 +176,13 @@ class FL():
                 console.print(url)
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                return True  # Debug mode - simulated success
             else:
                 with requests.Session() as session:
                     cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
-                    with open(cookiefile, 'rb') as cf:
-                        session.cookies.update(pickle.load(cf))
-                    up = session.post(url=url, data=data, files=files)
+                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                    up = session.post(url=url, data=data, files=files, timeout=60)
                     torrentFile.close()
 
                     # Match url to verify successful upload
@@ -186,19 +191,22 @@ class FL():
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
                         id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
                         await self.download_new_torrent(session, id, torrent_path)
+                        return True
                     else:
                         console.print(data)
                         console.print("\n\n")
                         console.print(up.text)
                         raise UploadException(f"Upload to FL Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
-        return
+        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
 
-        with open(cookiefile, 'rb') as cf:
-            cookies = pickle.load(cf)
+        # Create a session and load cookies securely
+        with requests.Session() as session:
+            self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+            cookies = session.cookies
 
         search_url = "https://filelist.io/browse.php"
 
@@ -239,7 +247,16 @@ class FL():
         return dupes
 
     async def validate_credentials(self, meta):
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+        cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
+        cookiefile_pkl = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+
+        if os.path.exists(cookiefile_json):
+            cookiefile = cookiefile_json
+        elif os.path.exists(cookiefile_pkl):
+            cookiefile = cookiefile_pkl
+        else:
+            cookiefile = cookiefile_json  # Default to JSON for new saves
+
         if not os.path.exists(cookiefile):
             await self.login(cookiefile)
         vcookie = await self.validate_cookies(meta, cookiefile)
@@ -260,9 +277,8 @@ class FL():
         url = "https://filelist.io/index.php"
         if os.path.exists(cookiefile):
             with requests.Session() as session:
-                with open(cookiefile, 'rb') as cf:
-                    session.cookies.update(pickle.load(cf))
-                resp = session.get(url=url)
+                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)
+                resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print(resp.url)
                 if resp.text.find("Logout") != -1:
@@ -274,7 +290,7 @@ class FL():
 
     async def login(self, cookiefile):
         with requests.Session() as session:
-            r = session.get("https://filelist.io/login.php")
+            r = session.get("https://filelist.io/login.php", timeout=30)
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
             validator = soup.find('input', {'name': 'validator'}).get('value')
@@ -284,14 +300,13 @@ class FL():
                 'password': self.password,
                 'unlock': '1',
             }
-            response = session.post('https://filelist.io/takelogin.php', data=data)
+            response = session.post('https://filelist.io/takelogin.php', data=data, timeout=30)
             await asyncio.sleep(0.5)
             index = 'https://filelist.io/index.php'
             response = session.get(index)
             if response.text.find("Logout") != -1:
                 console.print('[green]Successfully logged into FL')
-                with open(cookiefile, 'wb') as cf:
-                    pickle.dump(session.cookies, cf)
+                self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
             else:
                 console.print('[bold red]Something went wrong while trying to log into FL')
                 await asyncio.sleep(1)
@@ -332,7 +347,7 @@ class FL():
                 files = []
                 for screen in screen_glob:
                     files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
                 final_desc = response.text.replace('\r\n', '\n')
             else:
                 # BD Description Generator
@@ -347,7 +362,7 @@ class FL():
                     files = []
                     for screen in screen_glob:
                         files.append(('images', (os.path.basename(screen), open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb'), 'image/png')))
-                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                    response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
                     final_desc += response.text.replace('\r\n', '\n')
             descfile.write(final_desc)
 

@@ -14,7 +14,7 @@ config = {
         "btn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -34,6 +34,9 @@ config = {
         "zipline_api_key": "",
         # Seedpool CDN API key
         "seedpool_cdn_api": "",
+        # ShareX-style image host (IMageHosting) token
+        "sharex_url": "https://img.digitalcore.club/api/upload",
+        "sharex_api_key": "",
 
         # Whether to add a logo for the show/movie from TMDB to the top of the description
         "add_logo": False,
@@ -161,12 +164,12 @@ config = {
 
         # A list of clients to use for injection (aka actually adding the torrent for uploading)
         # eg: ["qbittorrent", "rtorrent"]
-        "injecting_client_list": [""],
+        # "injecting_client_list": [""],
 
         # A list of clients to search for torrents.
         # eg: ["qbittorrent", "qbittorrent_searching"]
         # will fallback to default_torrent_client if empty
-        "searching_client_list": [""],
+        # "searching_client_list": [""],
 
         # set true to skip automated client torrent searching
         # this will search qbittorrent clients for matching torrents

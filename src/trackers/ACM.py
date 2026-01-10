@@ -29,7 +29,7 @@ class ACM(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -91,7 +91,7 @@ class ACM(UNIT3D):
         }.get(category_name, '0')
         return category_id
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
         resolution_id = {
             '2160p': '1',
             '1080p': '2',
@@ -278,17 +278,22 @@ class ACM(UNIT3D):
                         params=params,
                         downurl=response_data['data']
                     )
+                    return True
                 except httpx.TimeoutException:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: {self.tracker} request timed out after 10 seconds'
+                    return False
                 except httpx.RequestError as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload to {self.tracker}: {e}'
+                    return False
                 except Exception:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check: {self.tracker}'
-                    return
+                    return False
         else:
-            console.print("[cyan]Request Data:")
+            console.print("[cyan]ACM Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True
 
     async def search_existing(self, meta, disctype):
         dupes = []

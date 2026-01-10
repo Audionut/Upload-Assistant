@@ -851,7 +851,7 @@ class ASC:
         data = await self.get_data(meta)
         upload_url = await self.get_upload_url(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -864,6 +864,9 @@ class ASC:
             success_text="torrents-details.php?id=",
         )
 
+        if not is_uploaded:
+            return False
+
         # Approval
         should_approve = await self.get_approval(meta)
         if should_approve:
@@ -874,7 +877,7 @@ class ASC:
             if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 await self.set_internal_flag(meta)
 
-        return
+        return True
 
     async def auto_approval(self, meta):
         if meta.get('debug', False):

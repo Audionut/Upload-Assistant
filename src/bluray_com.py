@@ -57,7 +57,7 @@ async def search_bluray(meta):
 
     while retry_count <= max_retries:
         try:
-            delay = random.uniform(1, 3)
+            delay = random.uniform(1, 3)  # nosec B311 - Rate limiting delay, not cryptographic
             if meta['debug']:
                 console.print(f"[dim]Waiting {delay:.2f} seconds before request (attempt {retry_count + 1}/{max_retries + 1})...[/dim]")
             await asyncio.sleep(delay)
@@ -202,10 +202,10 @@ async def extract_bluray_release_info(html_content, meta):
         dvd_sections = None
         soup = BeautifulSoup(html_content, 'lxml')
         if is_dvd:
-            dvd_sections = soup.find_all('h3', string=lambda s: s and ('DVD Editions' in s))
+            dvd_sections = soup.find_all('h3', string=re.compile(r'DVD Editions'))  # type: ignore
             selected_sections = dvd_sections
         else:
-            bluray_sections = soup.find_all('h3', string=lambda s: s and ('Blu-ray Editions' in s or '4K Blu-ray Editions' in s or '3D Blu-ray Editions' in s))
+            bluray_sections = soup.find_all('h3', string=re.compile(r'Blu-ray Editions|4K Blu-ray Editions|3D Blu-ray Editions'))  # type: ignore
             selected_sections = bluray_sections
 
         if meta['debug']:
@@ -365,7 +365,7 @@ async def get_bluray_releases(meta):
             console.print(f"[yellow]Error reading cached file: {str(e)}[/yellow]")
 
         # If we're here, we need to make a request
-        delay = random.uniform(2, 4)
+        delay = random.uniform(2, 4)  # nosec B311 - Rate limiting delay, not cryptographic
         if meta['debug']:
             console.print(f"[dim]Waiting {delay:.2f} seconds before request...[/dim]")
         await asyncio.sleep(delay)
@@ -778,7 +778,7 @@ async def download_cover_images(meta):
 def extract_cover_images(html_content):
     cover_images = {}
     soup = BeautifulSoup(html_content, 'lxml')
-    scripts = soup.find_all('script', string=lambda s: s and "$(document).ready" in s and "append('<img id=" in s)
+    scripts = soup.find_all('script', string=re.compile(r'\$\(document\)\.ready.*append\(\'<img id="'))  # type: ignore
 
     for script in scripts:
         script_text = script.string
@@ -860,7 +860,7 @@ async def fetch_release_details(release, meta):
         console.print(f"[yellow]Error reading cached file: {str(e)}[/yellow]")
 
     # If we're here, we need to make a request
-    delay = random.uniform(2, 4)
+    delay = random.uniform(2, 4)  # nosec B311 - Rate limiting delay, not cryptographic
     if meta['debug']:
         console.print(f"[dim]Waiting {delay:.2f} seconds before request...[/dim]")
     await asyncio.sleep(delay)

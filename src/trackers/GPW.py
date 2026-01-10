@@ -7,6 +7,7 @@ import os
 import re
 import unicodedata
 from bs4 import BeautifulSoup
+from cogs.redaction import redact_private_info
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -794,7 +795,6 @@ class GPW():
     async def upload(self, meta, disctype):
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta, disctype)
-        status_message = ''
 
         if not meta.get('debug', False):
             response_data = ''
@@ -812,20 +812,23 @@ class GPW():
 
                         torrent_id = str(response_data['response']['torrent_id'])
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                        status_message = 'Torrent uploaded successfully.'
+                        meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
+                        await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                        return True
 
                 except httpx.TimeoutException:
                     meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
+                    return False
                 except httpx.RequestError as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                    return False
                 except Exception as e:
                     meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
-                    return
-
-            await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                    return False
 
         else:
-            console.print(data)
-            status_message = 'Debug mode enabled, not uploading.'
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+            console.print("[cyan]GPW Request Data:")
+            console.print(redact_private_info(data))
+            meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True

@@ -45,7 +45,7 @@ class ITT(UNIT3D):
 
         return type_name
 
-    async def get_type_id(self, meta, mapping_only=False):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id_map = {
             'DISC': '1',
             'REMUX': '2',
@@ -63,6 +63,11 @@ class ITT(UNIT3D):
         }
         if mapping_only:
             return type_id_map
+        if reverse:
+            return {v: k for k, v in type_id_map.items()}
+        if type is not None:
+            return {'type_id': type_id_map.get(type, '0')}
+
         type_name = await self.get_type_name(meta)
         type_id = type_id_map.get(type_name, '0')
 

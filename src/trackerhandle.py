@@ -69,7 +69,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         console.print(f"(draft: {draft})")
                     try:
                         upload_start_time = time.time()
-                        await tracker_class.upload(meta, disctype)
+                        is_uploaded = await tracker_class.upload(meta, disctype)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
@@ -80,17 +80,20 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(traceback.format_exc())
                     return
                 status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
-                if 'status_message' in status and "data error" not in str(status['status_message']):
+                if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
                     await client.add_to_client(meta, tracker_class.tracker)
+                else:
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker in other_api_trackers:
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
+                    is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        await tracker_class.upload(meta, disctype)
+                        is_uploaded = await tracker_class.upload(meta, disctype)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
@@ -103,17 +106,20 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     console.print(traceback.format_exc())
                     return
                 status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
-                if 'status_message' in status and "data error" not in str(status['status_message']):
+                if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
                     await client.add_to_client(meta, tracker_class.tracker)
+                else:
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker in http_trackers:
             tracker_status = meta.get('tracker_status', {})
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 try:
+                    is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        await tracker_class.upload(meta, disctype)
+                        is_uploaded = await tracker_class.upload(meta, disctype)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
@@ -124,9 +130,14 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+                # ugly catch incase I missed a return
+                if is_uploaded is None:
+                    is_uploaded = True
                 status = meta.get('tracker_status', {}).get(tracker_class.tracker, {})
-                if 'status_message' in status and "data error" not in str(status['status_message']):
+                if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
                     await client.add_to_client(meta, tracker_class.tracker)
+                else:
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker == "MANUAL":
             if meta['unattended']:
@@ -145,7 +156,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         manual_tracker = manual_tracker.replace(" ", "").upper().strip()
                         tracker_class = tracker_class_map[manual_tracker](config=config)
                         if manual_tracker in api_trackers:
-                            await DescriptionBuilder(config).unit3d_edit_desc(meta, tracker_class.tracker, tracker_class.signature)
+                            await DescriptionBuilder(config).unit3d_edit_desc(meta, "MANUAL")
                         else:
                             await tracker_class.edit_desc(meta)
                 url = await package(meta)
@@ -160,16 +171,20 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             upload_status = tracker_status.get(tracker, {}).get('upload', False)
             if upload_status:
                 thr = THR(config=config)
+                is_uploaded = False
                 try:
                     upload_start_time = time.time()
-                    await thr.upload(meta, disctype)
+                    is_uploaded = await thr.upload(meta, disctype)
                     upload_duration = time.time() - upload_start_time
                     meta[f'{tracker}_upload_duration'] = upload_duration
                 except Exception as e:
                     console.print(f"[red]Upload failed: {e}")
                     console.print(traceback.format_exc())
                     return
-                await client.add_to_client(meta, "THR")
+                if is_uploaded:
+                    await client.add_to_client(meta, "THR")
+                else:
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker == "PTP":
             tracker_status = meta.get('tracker_status', {})
@@ -179,9 +194,10 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     ptp = PTP(config=config)
                     groupID = meta.get('ptp_groupID', None)
                     ptpUrl, ptpData = await ptp.fill_upload_form(groupID, meta)
+                    is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        await ptp.upload(meta, ptpUrl, ptpData, disctype)
+                        is_uploaded = await ptp.upload(meta, ptpUrl, ptpData, disctype)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                         await asyncio.sleep(5)
@@ -189,7 +205,11 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
                         return
-                    await client.add_to_client(meta, "PTP")
+                    status = meta.get('tracker_status', {}).get(ptp.tracker, {})
+                    if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
+                        await client.add_to_client(meta, "PTP")
+                    else:
+                        console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
                 except Exception:
                     console.print(traceback.format_exc())
                     return

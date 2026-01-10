@@ -11,13 +11,15 @@ import re
 import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
+from typing import Optional
+from urllib.parse import urlparse
+
+from cogs.redaction import redact_private_info
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
-from typing import Optional
-from urllib.parse import urlparse
 
 
 class AZTrackerBase:
@@ -29,10 +31,11 @@ class AZTrackerBase:
         self.az_class = getattr(importlib.import_module(f"src.trackers.{self.tracker}"), self.tracker)
 
         tracker_config = self.config['TRACKERS'][self.tracker]
-        self.base_url = tracker_config.get('base_url')
-        self.requests_url = tracker_config.get('requests_url')
-        self.announce_url = tracker_config.get('announce_url')
-        self.source_flag = tracker_config.get('source_flag')
+        self.base_url: str = tracker_config.get('base_url') or ''
+        self.requests_url: str = tracker_config.get('requests_url') or ''
+        self.announce_url: str = tracker_config.get('announce_url') or ''
+        self.source_flag: str = tracker_config.get('source_flag') or ''
+        self.torrent_url: str = f'{self.base_url}/torrent/' if self.base_url else ''
 
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
@@ -204,7 +207,7 @@ class AZTrackerBase:
                 tracker=self.tracker,
                 test_url=f'{self.base_url}/torrents',
                 error_text='Page not found',
-                token_pattern=r'name="_token" content="([^"]+)"'
+                token_pattern=r'name="_token" content="([^"]+)"'  # nosec B106
             )
         return False
 
@@ -246,7 +249,7 @@ class AZTrackerBase:
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
         elif meta.get('resolution') in ('720p', '1080p'):
-            resolution = meta.get('resolution')
+            resolution = meta.get('resolution') or 'all'
         else:
             resolution = 'all'
 
@@ -711,6 +714,8 @@ class AZTrackerBase:
                         if not match:
                             console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
                             console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
+                            meta['skipping'] = f'{self.tracker}'
+                            return
 
                         task_id = match.group(1)
 
@@ -874,7 +879,7 @@ class AZTrackerBase:
             else:
                 return None
         else:
-            html_label = translation.get(source_type)
+            html_label = translation.get(source_type) or ''
 
         if display_name:
             return html_label
@@ -961,21 +966,21 @@ class AZTrackerBase:
                     download_url = torrent_url.replace('/torrent/', '/download/torrent/')
                     register_download = await self.session.get(download_url)
                     if register_download.status_code != 200:
-                        status_message = (
+                        meta['tracker_status'][self.tracker]['status_message'] = (
                             f'data error - Unable to register your upload in your download history, please go to the URL and download the torrent file before you can start seeding: {torrent_url}\n'
                             f'Error: {register_download.status_code}'
                         )
-                        meta['tracker_status'][self.tracker]['status_message'] = status_message
-                        return
+                        return False
 
                     await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_url, torrent_url)
 
-                    status_message = 'Torrent uploaded successfully.'
+                    meta['tracker_status'][self.tracker]['status_message'] = f'{self.tracker} torrent uploaded successfully.'
 
                     match = re.search(r'/torrent/(\d+)', torrent_url)
                     if match:
                         torrent_id = match.group(1)
                         meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                    return True
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
@@ -990,13 +995,16 @@ class AZTrackerBase:
                         f"The HTML response has been saved to '{failure_path}' for analysis."
                     )
                     meta['tracker_status'][self.tracker]['status_message'] = status_message
-                    return
+                    return False
 
             else:
-                console.print(data)
-                status_message = 'Debug mode enabled, not uploading.'
+                console.print(f"[cyan]{self.tracker} Request Data:")
+                console.print(redact_private_info(data))
+                meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                return True
 
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+        return False
 
     def language_map(self):
         all_lang_map = {

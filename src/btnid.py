@@ -46,8 +46,25 @@ async def get_btn_torrents(btn_api, btn_id, meta):
         print("[ERROR] BTN API response is empty or invalid.")
         return 0, 0
 
-    if "result" in data and "torrents" in data["result"]:
-        torrents = data["result"]["torrents"]
+    error = data.get('error')
+    if isinstance(error, dict):
+        code = error.get('code', 'unknown')
+        message = str(error.get('message', 'Unknown BTN API error'))
+        if 'unauthorized ip' in message.lower():
+            console.print(f"[red]BTN API error: Unauthorized IP address (code {code}).[/red]")
+            console.print("[yellow]Your current public IP isn't whitelisted for your BTN API key.[/yellow]")
+        else:
+            console.print(f"[red]BTN API error (code {code}): {message}[/red]")
+        if meta.get('debug'):
+            console.print(data)
+        return 0, 0
+
+    if meta.get('debug'):
+        console.print(f"[green]BTN data fetched successfully for BTN ID {data.get('id')}[/green]")
+
+    result = data.get('result')
+    if isinstance(result, dict) and "torrents" in result:
+        torrents = result["torrents"]
         first_torrent = next(iter(torrents.values()), None)
         if first_torrent:
             imdb_id = first_torrent.get("ImdbID")

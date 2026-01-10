@@ -113,6 +113,8 @@ class TRACKER_SETUP:
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_banned_groups.json')
 
         tracker_class = tracker_class_map.get(tracker.upper())
+        if tracker_class is None:
+            return None
         tracker_instance = tracker_class(self.config)
         try:
             banned_url = tracker_instance.banned_url
@@ -340,6 +342,8 @@ class TRACKER_SETUP:
     async def get_torrent_claims(self, meta, tracker):
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
         tracker_class = tracker_class_map.get(tracker.upper())
+        if tracker_class is None:
+            return None
         tracker_instance = tracker_class(self.config)
         try:
             claims_url = tracker_instance.claims_url

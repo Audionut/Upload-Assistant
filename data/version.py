@@ -1,4 +1,116 @@
-__version__ = "v6.3.0"
+__version__ = "v6.3.2"
+
+"""
+Release Notes for version v6.3.2 (2025-12-31):
+
+# ## What's Changed
+# 
+# * fix: docker tagging by @Audionut in cda7a2c
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.3.1...v6.3.2
+"""
+
+
+"""
+Release Notes for version v6.3.1 (2025-12-30):
+
+# 
+# ## RELEASE NOTES
+#  - Updated the docker builds to have standard latest tag, and latest-webui specifically for the webui builds. This should assist those who were experiencing issues with the last release that defaulted to have the webui changes.
+#  - Added cross-seeding support. If you attempt to upload to site XYZ, and the exact filename is found at that site during the dupe checking, UA can now download and add that torrent to the client (follows any hard/symlinking).
+#  - wastaken refactored the unit3d torrent handling to skip functions that were no longer needed with torrent downloading.
+#  - wastaken added an option to log the time it takes each individual tracker to upload.
+#  - I refactored the major async blockers in the upload and inject process, which allows each individual site upload/injection into client, to process immediately as it's finished, regardless of what any other tracker upload is doing.
+#  - For example, you can upload to 10 x unit3d based sites, and be uploaded and injected into client, and seeding, whilst MTV might still be rehashing to satisfy their 8 MiB piece size constraint.
+# 
+# ## New config options - see example.py
+#  - cross-seeding related options.
+#  - Seedpool added their imagehost as an option.
+#  
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * TVC: fix python f-string by @Audionut in 603ccb4
+# * ACM: fix name return by @Audionut in df3a9d3
+# * ACM: fix description by @Audionut in 0064917
+# * refactor anime/anilist handling by @Audionut in 994eba2
+# * Update banned groups in DP.py (#1055) by @FortKnox1337 in 9fae288
+# * LT: release naming for spanish variants (#1052) by @Caleb Contreras in 482184b
+# * fix: set VP9, AV1 and VC-1 (#1050) by @cucaracha7126378 in 2abe5c5
+# * fix: some bdinfo going though dual audio checking by @Audionut in 4738b02
+# * fix NBLA service from filename by @Audionut in d9ab112
+# * use existing mi json for dvd type source handling by @Audionut in 865663c
+# * improve group tagging by @Audionut in 7f49621
+# * PTP: send dvdrips with other resolution by @Audionut in e23e54e
+# * PTP: tag scene by @Audionut in 135fab4
+# * PTP: remove scene nfo from descriptions by @Audionut in 63af9a7
+# * strip TBA from episode titles by @Audionut in 98ca55e
+# * Add support for disc menu images (#1051) by @wastaken7 in 2719211
+# * docker, default to running upload.py by @Audionut in 929beb8
+# * fix: use cleaned summary for BDInfo parsing and meta (#1062) by @wastaken7 in 28c3784
+# * ping tv metadata sites when tv movie by @Audionut in 3fac3d8
+# * Merge branch 'docker-exec' by @Audionut
+# * add cross-seeding support (#1029) by @Audionut in 392d06b
+# * Add seedpool cdn support  (#1058) by @tetrahydroc in 8df1424
+# * fix tv handling by @Audionut in bb2b51f
+# * fix indentation by @Audionut in 9c41e1c
+# * SHRI: catch unknown locales by @Audionut in 4d832bb
+# * clarify linking setup for rtorrent by @Audionut in 431da41
+# * feat(THR): add documentary category detection (#1066) by @cucaracha7126378 in 4c78baa
+# * fix(ptscreens): status code error (#1073) by @Caleb Contreras in a9fa020
+# * refactor: improve duplicate search in selected supported trackers (#1071) by @wastaken7 in e85eb1d
+# * PTP: add HDT to banned groups by @Audionut in 86f5c9b
+# * improve sat torrent matching by @Audionut in bae0499
+# * add tvmovie to type detection by @Audionut in e29859e
+# * MTV: ua handling for 4K releases by @Audionut in fef236f
+# * refactor: stop modifying the torrent file if it is downloaded (#1067) by @wastaken7 in 2f7e149
+# * Process screenshots in paths with special characters for HDB (#1070) by @Khoa Pham in 4e9b054
+# * SP: only 1080+ by @Audionut in e6e05b7
+# * SP: add porn catch by @Audionut in 2e78343
+# * dupe checking: source mismatches by @Audionut in 4027486
+# * convert tv overview html by @Audionut in a523342
+# * fix: don't put discs through dual audio handling by @Audionut in 5fef312
+# * fix: use double quotes in client type defaults by @Audionut in 6cc8a05
+# * requests debugging by @Audionut in 0fae58e
+# * DC: set upload torrent file (#1077) by @Audionut in f951701
+# * Fix condition for BluRay source mismatch check (#1079) by @FortKnox1337 in 6de3161
+# * FNP: Add request search support. (#1082) by @FortKnox1337 in 5e18b0b
+# * ANT: dupe filename feedbackl by @Audionut in f7815c7
+# * CBR: add multi tag support (#1081) by @wastaken7 in 26e70ca
+# * Enhance BDMV MediaInfo generation with character limit fallback (#1080) by @wastaken7 in 40f0ce6
+# * HDB: fix indentation by @Audionut in 4122a8d
+# * Remove unnecessary time.sleep (#1041) by @WOSSFOSS in cb3ffdd
+# * Docker building - specific webui builds (#1085) by @Audionut in a197129
+# * release notes by @Audionut in 09bede4
+# * allow setting 0 for some ids by @Audionut in 2c307c0
+# * Revert "allow setting 0 for some ids" by @Audionut in 49247a7
+# * BJS: Handle image URL validation and error reporting (#1089) by @wastaken7 in 9d0f244
+# * CBR, SAM: do not add DUAL/MULTI to the title when it is a full disc (#1088) by @wastaken7 in 7e337ce
+# * Add upload duration tracking for each tracker upload (#1087) by @wastaken7 in dd46b8c
+# * fix existing tracker check for cross-seeding by @Audionut in 5c76671
+# * fix some tracker id searches by @Audionut in c384c08
+# * add tracker flags for HDR type dupe matching by @Audionut in 2a79d0f
+# * unit3d: gather 1080p and 1080i in existing search by @Audionut in 8184253
+# * catch unit3d 520 error by @Audionut in e27b77c
+# * unit3d: add upload retries by @Audionut in 1e3620b
+# * RAS and ULCX: update the language handling by @Audionut in de648ab
+# * unit3d: handle torrent download on error by @Audionut in 8de7a23
+# * remove async blockers from upload process by @Audionut in 0265fc5
+# * qbit: add an arg to force a recheck before uploading by @Audionut in ec9a827
+# * unit3d: bump the perpage search results by @Audionut in 019046f
+# * mkbrr: bump to v1.18.0 by @Audionut in d0e9aad
+# * Refactor is_scene to use httpx for async requests and implement caching for srrDB searches (#1086) by @wastaken7 in 78239b9
+# * PTP: fix announce url replacement by @Audionut in 8a488a6
+# * PTP: use the updated announce url for torrent creation by @Audionut in 12a8458
+# * PTP: add plaintext url warnings by @Audionut in 49448fd
+# * Implement bloated audio track check with tracker-specific language allowances (#1084) by @wastaken7 in 181e248
+# * release notes by @Audionut in 9c84fa4
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.3.0...v6.3.1
+"""
+
 
 """
 Release Notes for version v6.3.0 (2025-12-15):

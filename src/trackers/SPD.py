@@ -8,7 +8,9 @@ import httpx
 import os
 import re
 import unicodedata
+
 from .COMMON import COMMON
+from cogs.redaction import redact_private_info
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -282,16 +284,16 @@ class SPD:
         channel = str(channel)
         data['channel'] = channel
 
-        status_message = ''
         torrent_id = ''
 
         if meta['debug'] is False:
+            response = None
             try:
                 response = await self.session.post(url=self.upload_url, json=data, headers=self.session.headers)
                 response.raise_for_status()
                 response = response.json()
                 if response.get('status') is True and response.get('error') is False:
-                    status_message = "Torrent uploaded successfully."
+                    meta['tracker_status'][self.tracker]['status_message'] = "Torrent uploaded successfully."
 
                     if 'downloadUrl' in response:
                         torrent_id = str(response.get('torrent', {}).get('id', ''))
@@ -305,27 +307,38 @@ class SPD:
                             headers={'Authorization': self.config['TRACKERS'][self.tracker]['api_key']},
                             downurl=download_url
                         )
+                        return True
 
                     else:
-                        console.print("[bold red]No downloadUrl in response.")
-                        console.print("[bold red]Confirm it uploaded correctly and try to download manually")
-                        console.print(response)
+                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: No downloadUrl in response, check manually if it uploaded. Response: \n{response}'
+                        return False
 
                 else:
-                    status_message = f'data error: {response}'
+                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: {response}'
+                    return False
 
             except httpx.HTTPStatusError as e:
-                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                return False
             except httpx.TimeoutException:
-                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                return False
             except httpx.RequestError as e:
-                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+                response_info = "no response"
+                if response is not None:
+                    response_info = getattr(response, 'text', str(response))
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e!r}.\nResponse: {response_info}'
+                return False
             except Exception as e:
-                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
-                return
+                response_info = "no response"
+                if response is not None:
+                    response_info = getattr(response, 'text', str(response))
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e!r}.\nResponse: {response_info}'
+                return False
 
         else:
-            console.print(data)
-            status_message = "Debug mode enabled, not uploading."
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+            console.print("[cyan]SPD Request Data:")
+            console.print(redact_private_info(data))
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success

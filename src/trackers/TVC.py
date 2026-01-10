@@ -27,6 +27,7 @@ class TVC():
         self.torrent_url = 'https://tvchaosuk.com/torrents/'
         self.signature = ""
         self.banned_groups = []
+        self.approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         tmdb.API_KEY = config['DEFAULT']['tmdb_api']
 
         # TV type mapping as a dict for clarity and maintainability
@@ -176,13 +177,12 @@ class TVC():
             "onlyimage.org": "onlyimage",
         }
 
-        approved_image_hosts = ['imgbb', 'ptpimg', 'imgbox', 'pixhost', 'bam', 'onlyimage']
         await check_hosts(
             meta,
             self.tracker,
             url_host_mapping=url_host_mapping,
             img_host_index=1,
-            approved_image_hosts=approved_image_hosts
+            approved_image_hosts=self.approved_image_hosts
         )
         return
 
@@ -392,19 +392,24 @@ class TVC():
                     self.config['TRACKERS'][self.tracker].get('announce_url'),
                     f"https://tvchaosuk.com/torrents/{t_id}"
                 )
+                return True
 
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 30 seconds'
+                return False
             except httpx.RequestError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {(response.text) if response else "No response"}'
+                return False
             except Exception as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {(response.text) if response else "No response"}'
-                return
+                return False
 
         else:
             console.print("[cyan]TVC Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
 
     def get_audio_languages(self, mi):
         """

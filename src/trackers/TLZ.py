@@ -19,14 +19,14 @@ class TLZ(UNIT3D):
         self.banned_groups = [""]
         pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(meta['category'], '0')
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
             'FILM': '1',
             'EPISODE': '3',

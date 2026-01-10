@@ -51,9 +51,6 @@ class ULCX(UNIT3D):
             if not meta['unattended']:
                 console.print(f'[bold red]Encodes must be at least 720p resolution for {self.tracker}.[/bold red]')
             return False
-        if meta['bloated'] is True:
-            console.print(f"[bold red]Non-English dub not allowed at {self.tracker}[/bold red]")
-            return False
 
         if not meta['is_disc'] == "BDMV":
             if not await self.common.check_language_requirements(

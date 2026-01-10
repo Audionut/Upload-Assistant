@@ -28,7 +28,7 @@ class AITHER(UNIT3D):
     async def get_additional_checks(self, meta):
         should_continue = True
         if meta['valid_mi'] is False:
-            console.print("[bold red]No unique ID in mediainfo, skipping AITHER upload.")
+            console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
             return False
 
         return should_continue

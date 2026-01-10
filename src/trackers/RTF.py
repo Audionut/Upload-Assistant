@@ -92,17 +92,20 @@ class RTF():
                         await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag,
                                                                   self.config['TRACKERS'][self.tracker].get('announce_url'),
                                                                   "https://retroflix.club/browse/t/" + str(t_id))
+                        return True
 
                     except Exception:
                         console.print("It may have uploaded, go check")
-                        return
+                        return False
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = "data error: RTF request timed out while uploading."
+                return False
             except httpx.RequestError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: An error occurred while making the request: {e}"
+                return False
             except Exception:
                 meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
-                return
+                return False
 
         else:
             console.print("[cyan]RTF Request Data:")
@@ -111,6 +114,8 @@ class RTF():
                 debug_data['file'] = debug_data['file'][:10] + '...'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
 
     async def search_existing(self, meta, disctype):
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"

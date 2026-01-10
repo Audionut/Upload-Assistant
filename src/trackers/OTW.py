@@ -56,6 +56,17 @@ class OTW(UNIT3D):
             else:
                 return False
 
+        game_show_keywords = ['reality', 'game show', 'game-show', 'reality tv', 'reality television']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in game_show_keywords):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Reality / Game Show content not allowed at OTW.')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    return False
+            else:
+                return False
+
         if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
             if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):

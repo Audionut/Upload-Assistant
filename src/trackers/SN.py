@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-import requests
 import asyncio
 import httpx
+import requests
 
-from src.trackers.COMMON import COMMON
+from cogs.redaction import redact_private_info
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 class SN():
@@ -101,27 +102,32 @@ class SN():
         }
 
         if meta['debug'] is False:
-            response = requests.request("POST", url=self.upload_url, data=data, files=files)
+            response = requests.request("POST", url=self.upload_url, data=data, files=files, timeout=30)
 
             try:
                 if response.json().get('success'):
                     meta['tracker_status'][self.tracker]['status_message'] = response.json()['link']
                     if 'link' in response.json():
                         await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.json()['link']))
+                        return True
                     else:
                         console.print("[red]No Link in Response")
+                        return False
                 else:
                     console.print("[red]Did not upload successfully")
                     console.print(response.json())
+                    return False
             except Exception:
                 console.print("[red]Error! It may have uploaded, go check")
                 console.print(data)
                 console.print_exception()
-                return
+                return False
         else:
-            console.print("[cyan]Request Data:")
-            console.print(data)
+            console.print("[cyan]SN Request Data:")
+            console.print(redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta):
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()

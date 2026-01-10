@@ -40,7 +40,7 @@ def optimize_images(image, config):
     return
 
 
-def vs_screengn(source, encode=None, filter_b_frames=False, num=5, dir=".", config=None):
+def vs_screengn(source, encode=None, num=5, dir=".", config=None):
     if config is None:
         config = {'optimize_images': True}  # Default configuration
 
@@ -90,13 +90,13 @@ def vs_screengn(source, encode=None, filter_b_frames=False, num=5, dir=".", conf
     # Generate random frame numbers for screenshots if not using existing ones
     if not frames:
         for _ in range(num):
-            frames.append(random.randint(start, end))
+            frames.append(random.randint(start, end))  # nosec B311
         frames = sorted(frames)
-        frames = [f"{x}\n" for x in frames]
+        frame_lines = [f"{x}\n" for x in frames]
 
         # Write the frame numbers to a file for reuse
         with open(screens_file, "w") as txt:
-            txt.writelines(frames)
+            txt.writelines(frame_lines)
         print(f"Generated and saved new frame numbers to {screens_file}")
 
     # If an encode exists and is provided, crop and resize

@@ -235,7 +235,7 @@ class AR():
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(path)
 
-    async def search_existing(self, meta, DISCTYPE):
+    async def search_existing(self, meta, disctype):
         dupes = []
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not cookie_jar:
@@ -420,11 +420,11 @@ class AR():
         # Load cookies for upload
         upload_cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not upload_cookies:
-            meta['tracker_status'][self.tracker]['status_message'] = "data error:Failed to load cookies for upload"
-            return
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: Failed to load cookies for upload"
+            return False
 
         # Use centralized handle_upload from CookieAuthUploader
-        await self.cookie_uploader.handle_upload(
+        is_uploaded = await self.cookie_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             data=data,
@@ -436,6 +436,10 @@ class AR():
             id_pattern=r'torrents\.php\?id=(\d+)',
             success_status_code="200",
         )
+        if not is_uploaded:
+            return False
+
+        return True
 
     async def parse_mediainfo_async(self, video_path, template_path):
         """Parse MediaInfo asynchronously using thread executor"""

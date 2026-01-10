@@ -168,16 +168,17 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                                 await cleanup()
                                 reset_terminal()
                                 sys.exit(1)
-                if any(tag in file for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
-                    console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
-                    try:
-                        if cli_ui.ask_yes_no("Do you want to upload with this file?", default="yes"):
-                            pass
-                    except EOFError:
-                        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                        await cleanup()
-                        reset_terminal()
-                        sys.exit(1)
+        for file in filelist:
+            if any(tag in file for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
+                console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
+                try:
+                    if cli_ui.ask_yes_no("Do you want to upload with this file?", default="yes"):
+                        pass
+                except EOFError:
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    await cleanup()
+                    reset_terminal()
+                    sys.exit(1)
         try:
             if sorted_filelist:
                 video = sorted(filelist, key=os.path.getsize, reverse=True)[0]
@@ -190,6 +191,16 @@ async def get_video(videoloc, mode, sorted_filelist=False):
     else:
         video = videoloc
         filelist.append(videoloc)
+        if any(tag in videoloc for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
+            console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{videoloc}")
+            try:
+                if cli_ui.ask_yes_no("Do you want to upload with this file?", default="yes"):
+                    pass
+            except EOFError:
+                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                await cleanup()
+                reset_terminal()
+                sys.exit(1)
     if sorted_filelist:
         filelist = sorted(filelist, key=os.path.getsize, reverse=True)
     else:

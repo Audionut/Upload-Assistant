@@ -30,6 +30,7 @@ class BHD():
         self.torrent_url = 'https://beyond-hd.me/details/'
         self.requests_url = f"https://beyond-hd.me/api/requests/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT']
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bhd', 'bam']
         pass
 
     async def check_image_hosts(self, meta):
@@ -42,8 +43,7 @@ class BHD():
             "imagebam.com": "bam",
         }
 
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bhd', 'bam']
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
     async def upload(self, meta, disctype):
@@ -143,23 +143,33 @@ class BHD():
                             torrent_id = match.group(1)
                             meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             details_link = f"https://beyond-hd.me/details/{torrent_id}"
+                            meta['tracker_status'][self.tracker]['status_message'] = response.json()
                         else:
-                            console.print("[yellow]No valid details link found in status_message.")
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: No valid details link found in status_message."
+                            return False
+                    else:
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: No status_message in response."
+                        return False
 
-                    meta['tracker_status'][self.tracker]['status_message'] = response.json()
             except Exception as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f"Error: {e}"
-                return
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
+                return False
         else:
             console.print("[cyan]BHD Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True
 
         if details_link:
             try:
                 await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), details_link)
+                return True
             except Exception as e:
                 console.print(f"Error while editing the torrent file: {e}")
+                return False
+        else:
+            return False
 
     async def get_cat_id(self, category_name):
         category_id = {
@@ -324,10 +334,6 @@ class BHD():
         if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
             if not meta['unattended']:
                 console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
-            meta['skipping'] = "BHD"
-            return []
-        if meta['bloated'] is True:
-            console.print("[bold red]Non-English dub not allowed at BHD[/bold red]")
             meta['skipping'] = "BHD"
             return []
 

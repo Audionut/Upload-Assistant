@@ -64,18 +64,18 @@ class ANT:
             genres = meta['genres']
             # Handle both string and list formats
             if isinstance(genres, str):
-                tags.append(genres)
+                tags.append(genres.replace(' ', '.'))
             else:
                 for genre in genres:
-                    tags.append(genre)
+                    tags.append(genre.replace(' ', '.'))
         elif meta.get('imdb_info', {}):
             imdb_genres = meta['imdb_info'].get('genres', [])
             # Handle both string and list formats
             if isinstance(imdb_genres, str):
-                tags.append(imdb_genres)
+                tags.append(imdb_genres.replace(' ', '.'))
             else:
                 for genre in imdb_genres:
-                    tags.append(genre)
+                    tags.append(genre.replace(' ', '.'))
 
         return tags
 
@@ -182,19 +182,13 @@ class ANT:
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
                     data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-                    if meta.get('is_disc') == 'BDMV':
-                        data.update({'flagchangereason': "(Adult with screens) BDMV Uploaded with Upload Assistant"})
-                    else:
-                        data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
+                    data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
                 else:
                     data.update({'screenshots': ''})  # No screenshots for adult content
             else:
                 data.update({'screenshots': ''})
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-
-        if meta.get('is_disc') == 'BDMV' and data.get('flagchangereason') is None:
-            data.update({'flagchangereason': "BDMV Uploaded with Upload Assistant"})
 
         headers = {
             'User-Agent': f'Upload Assistant/2.4 ({platform.system()} {platform.release()})'
@@ -209,45 +203,80 @@ class ANT:
                             response_data = response.json()
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT json decode error, the API is probably down"
-                            return
-                        if "Success" not in response_data:
+                            return False
+
+                        is_success = (
+                            ('success' in response_data)
+                            or (str(response_data.get('status', '')).lower() == 'success')
+                        )
+                        if not is_success:
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data}"
+                            return False
                         if meta.get('tag', '') and 'HONE' in meta.get('tag', ''):
                             meta['tracker_status'][self.tracker]['status_message'] = f"{response_data} - HONE release, fix tag at ANT"
+                            return True
                         else:
                             meta['tracker_status'][self.tracker]['status_message'] = response_data
+                            return True
+
                     elif response.status_code == 400:
-                        if "exact same" in response.text.lower():
+                        is_exact = (
+                            ('exact same' in response_data)
+                            or (str(response_data.get('status', '')).lower() == 'exact same')
+                        )
+                        if is_exact:
                             folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"
                             meta['tracker_status'][self.tracker]['status_message'] = (
                                 "data error: The exact same media file already exists on ANT. You must use the website to upload a new version if you wish to trump.\n"
                                 f"Use the files from {folder} to assist with manual upload.\n"
                                 "raw_url image links from the image_data.json file"
                             )
+                            return False
                         else:
                             response_data = {
                                 "error": f"Unexpected status code: {response.status_code}",
-                                "response_content": response.text
+                                "response_content": {response.text}
                             }
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                            return False
+
+                    elif response.status_code == 403:
+                        response_data = {
+                            "error": "Wrong API key or insufficient permissions",
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
+
+                    elif response.status_code == 500:
+                        response_data = {
+                            "error": "Internal Server Error, report to ANT staff",
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
+
                     elif response.status_code == 502:
                         response_data = {
                             "error": "Bad Gateway",
                             "site seems down": "https://ant.trackerstatus.info/"
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",
-                            "response_content": response.text
+                            "response_content": {response.text}
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
+                        return False
             else:
                 console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                return True
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
+            return False
 
     async def get_audio(self, meta):
         '''
@@ -346,11 +375,9 @@ class ANT:
             meta['skipping'] = "ANT"
             return []
 
-        if meta.get('bloated', False):
-            if not meta['unattended']:
-                console.print('[bold red]ANT does not allow bloated releases.')
-            meta['skipping'] = "ANT"
-            return []
+        if meta['valid_mi'] is False:
+            console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
+            return False
 
         dupes = []
         params = {

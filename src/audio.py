@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
+import langcodes
 import os
-import time
 import traceback
 import re
 
@@ -282,12 +282,16 @@ async def get_audio_v2(mi, meta, bdinfo):
                     audio_language = None
                     if meta['debug']:
                         console.print(f"DEBUG: Audio Tracks (not commentary)= {len(audio_tracks)}")
+
+                    # First pass: collect all audio languages and set flags
+                    non_eng_non_orig_languages = []
                     for t in audio_tracks:
                         audio_language = t.get('Language', '')
                         if meta['debug']:
                             console.print(f"DEBUG: Audio Language = {audio_language}")
 
                         if isinstance(audio_language, str):
+                            audio_language = audio_language.lower().strip()
                             if audio_language.startswith("en"):
                                 if meta['debug']:
                                     console.print(f"DEBUG: Found English audio track: {audio_language}")
@@ -304,21 +308,17 @@ async def get_audio_v2(mi, meta, bdinfo):
                                     console.print(f"DEBUG: Found original language audio track with variant: {audio_language}")
                                 orig = True
 
-                        if isinstance(audio_language, str):
-                            audio_language = audio_language.strip().lower()
                             if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
                                 non_en_non_commentary = True
-                                console.print(f"[bold red]This release has a(n) {audio_language} audio track, and may be considered bloated")
-                                time.sleep(5)
+                                non_eng_non_orig_languages.append(audio_language)
 
-                    if (
-                        orig_lang == "en"
-                        and eng
-                        and non_en_non_commentary
-                    ):
-                        console.print("[bold red]This release is English original, has English audio, but also has other non-English audio tracks (not commentary). This may be considered bloated.[/bold red]")
-                        meta['bloated'] = True
-                        time.sleep(5)
+                    # Second pass: now that we have complete information about all tracks, check for bloat
+                    if non_eng_non_orig_languages:
+                        # Compute is_eng_original once with complete track information
+                        is_eng_original = (orig_lang == "en" and eng and non_en_non_commentary)
+
+                        # Check all non-English, non-original languages for bloat
+                        bloated_check(meta, non_eng_non_orig_languages, is_eng_original_with_non_eng=is_eng_original)
 
                     if ((eng and (orig or non_en_non_commentary)) or (orig and non_en_non_commentary)) and len(audio_tracks) > 1 and not meta.get('no_dual', False):
                         dual = "Dual-Audio"
@@ -420,3 +420,97 @@ async def get_audio_v2(mi, meta, bdinfo):
     audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
     audio = ' '.join(audio.split())
     return audio, chan, has_commentary
+
+
+def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
+    # Normalize to list
+    if isinstance(audio_languages, str):
+        audio_languages = [audio_languages]
+
+    bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SHRI", "SP", "TL"]
+    tracker_allowed_bloat_language = {
+        "AITHER": "en",
+        "ANT": "en",
+        "BLU": "en",
+        "ITT": "it",
+        "LT": "es",
+        "PT": "pt",
+        "SPD": "ro",
+        "TTR": "es",
+    }
+
+    # Track whether we've already printed messages
+    printed_not_allowed = False
+    printed_warning = False
+
+    # Loop through each audio language
+    for audio_language in audio_languages:
+        trackers_to_warn = []
+
+        for tracker in meta.get("trackers", []):
+            if tracker in tracker_allowed_bloat_language:
+                if audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
+                    continue
+            if tracker not in bloat_is_allowed:
+                trackers_to_warn.append(tracker)
+
+        # If no trackers to warn about for this language, continue to next
+        if not trackers_to_warn:
+            continue
+
+        # Convert language code to full language name
+        language_display = audio_language
+        try:
+            # Clean up the language code - take only the first part before any dash or underscore
+            clean_lang = audio_language.split('-')[0].split('_')[0].strip().lower()
+            if clean_lang:
+                lang = langcodes.Language.get(clean_lang)
+                language_display = lang.display_name()
+        except (langcodes.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+            # Silently fall back to the original language code
+            if meta.get('debug'):
+                console.print(f"[yellow]Debug: Unable to convert language code '{audio_language}' to full name: {e}[/yellow]")
+
+        # Separate trackers that don't allow bloat at all vs those that just warn
+        # Only remove trackers if this is an English original with English and non-English tracks
+        not_allowed_trackers = []
+        warning_trackers = []
+
+        if is_eng_original_with_non_eng:
+            not_allowed_trackers = [t for t in trackers_to_warn if t in ["ANT", "BHD", "ULCX", "MTV"]]
+            warning_trackers = [t for t in trackers_to_warn if t not in ["ANT", "BHD", "ULCX", "MTV"]]
+        else:
+            warning_trackers = trackers_to_warn
+
+        # Handle trackers that don't allow bloated releases (only for English original with English and non-English audio)
+        if not_allowed_trackers and not printed_not_allowed:
+            not_allowed_list = ", ".join(not_allowed_trackers)
+            console.print(f"[bold red]This release is English original, has English audio, but also has [bold yellow]{language_display}[/bold yellow] audio and is not allowed on [yellow]{not_allowed_list}[/yellow][/bold red]")
+            # Remove these trackers from meta['trackers']
+            meta['trackers'] = [t for t in meta.get('trackers', []) if t not in not_allowed_trackers]
+            meta['bloated'] = True
+            printed_not_allowed = True
+            if meta['debug']:
+                console.print(f"[yellow]Removed trackers: {not_allowed_list}[/yellow]")
+                console.print(f"[yellow]Remaining trackers: {', '.join(meta['trackers']) if meta['trackers'] else 'None'}[/yellow]")
+
+        # Handle trackers that warn about bloat (only print once)
+        if warning_trackers and not printed_warning:
+            trackers = ", ".join(warning_trackers)
+            # If we already printed the not_allowed message, use a simplified message
+            if printed_not_allowed:
+                warning_msg = f"[bold red]This release may also be considered bloated on [yellow]{trackers}[/yellow][/bold red]"
+            else:
+                # Build warning message based on context
+                if is_eng_original_with_non_eng:
+                    warning_msg = f"[bold red]This release is English original, has English audio, but also has [bold yellow]{language_display}[/bold yellow] audio (not commentary).\nThis may be considered bloated on [yellow]{trackers}[/yellow][/bold red]"
+                else:
+                    warning_msg = f"[bold red]This release has a(n) [bold yellow]{language_display}[/bold yellow] audio track, which is not original language, not English\nand may be considered bloated on [yellow]{trackers}[/yellow][/bold red]"
+
+            console.print(warning_msg)
+            printed_warning = True
+            meta['bloated'] = True
+
+        # Early exit if we've printed both messages
+        if printed_not_allowed and printed_warning:
+            return
