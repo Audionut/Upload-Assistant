@@ -161,7 +161,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                                 console.print(f"[cyan]{tf}")
                             console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
                             try:
-                                if cli_ui.ask_yes_no("Do you want to remove it?", default="yes"):
+                                if cli_ui.ask_yes_no("Do you want to remove it?", default=True):
                                     filelist.remove(f)
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
@@ -172,7 +172,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
             if any(tag in file for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
                 console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
                 try:
-                    if cli_ui.ask_yes_no("Do you want to upload with this file?", default="yes"):
+                    if cli_ui.ask_yes_no("Do you want to upload with this file?", default=True):
                         pass
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
@@ -194,7 +194,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
         if any(tag in videoloc for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
             console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{videoloc}")
             try:
-                if cli_ui.ask_yes_no("Do you want to upload with this file?", default="yes"):
+                if cli_ui.ask_yes_no("Do you want to upload with this file?", default=True):
                     pass
             except EOFError:
                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")

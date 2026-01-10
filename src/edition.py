@@ -2,6 +2,7 @@
 from guessit import guessit
 import os
 import re
+from typing import Any
 from src.console import console
 from src.region import get_distributor
 
@@ -99,7 +100,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
             elif meta.get('is_disc') == "BDMV" and meta.get('discs'):
                 if meta['debug']:
                     console.print("[cyan]Checking BDMV playlists for edition matches...[/cyan]")
-                matched_editions = []
+                matched_editions: list[str] = []
 
                 all_playlists = []
                 for disc in meta['discs']:
@@ -113,8 +114,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                     console.print(f"[cyan]Found {len(all_playlists)} playlists to check against IMDb editions[/cyan]")
 
                 leeway_seconds = 50
-                matched_editions_with_attributes = []
-                matched_editions_without_attributes = []
+                matched_editions_with_attributes: list[str] = []
+                matched_editions_without_attributes: list[str] = []
 
                 for playlist in all_playlists:
                     if playlist.get('file', None):
@@ -131,7 +132,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         if meta['debug']:
                             console.print(f"[cyan]Checking playlist duration: {formatted_duration} seconds[/cyan]")
 
-                        matching_editions = []
+                        playlist_matching_editions: list[dict[str, Any]] = []
 
                         for runtime_key, edition_info in meta['imdb_info']['edition_details'].items():
                             edition_seconds = edition_info.get('seconds', 0)
@@ -144,7 +145,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                 else:
                                     edition_name = f"{edition_info['minutes']} Minute Version (Theatrical)"
 
-                                matching_editions.append({
+                                playlist_matching_editions.append({
                                     'name': edition_name,
                                     'display_name': edition_info['display_name'],
                                     'has_attributes': bool(edition_info.get('attributes') and len(edition_info['attributes']) > 0),
@@ -153,55 +154,58 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                 })
 
                         # If multiple editions match this playlist, ask the user
-                        if len(matching_editions) > 1:
+                        if len(playlist_matching_editions) > 1:
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Playlist edition [green]{playlist_edition} [yellow]using file [green]{playlist_file} [yellow]with duration [green]{formatted_duration} [yellow]matches multiple editions:[/yellow]")
-                                for i, ed in enumerate(matching_editions):
+                                for i, ed in enumerate(playlist_matching_editions):
                                     console.print(f"[yellow]{i+1}. [green]{ed['name']} ({ed['display_name']}, diff: {ed['difference']:.2f} seconds)")
 
                                 try:
-                                    choice = console.input(f"[yellow]Select edition number (1-{len(matching_editions)}), press e to use playlist edition or press Enter to use the closest match: [/yellow]")
+                                    choice = console.input(f"[yellow]Select edition number (1-{len(playlist_matching_editions)}), press e to use playlist edition or press Enter to use the closest match: [/yellow]")
 
-                                    if choice.strip() and choice.isdigit() and 1 <= int(choice) <= len(matching_editions):
-                                        selected = matching_editions[int(choice)-1]
+                                    playlist_selected: str | dict[str, Any]
+
+                                    if choice.strip() and choice.isdigit() and 1 <= int(choice) <= len(playlist_matching_editions):
+                                        playlist_selected = playlist_matching_editions[int(choice)-1]
                                     elif choice.strip().lower() == 'e':
-                                        selected = playlist_edition
+                                        playlist_selected = str(playlist_edition)
                                     else:
                                         # Default to the closest match (smallest difference)
-                                        selected = min(matching_editions, key=lambda x: x['difference'])
-                                        console.print(f"[yellow]Using closest match: {selected['name']}[/yellow]")
+                                        playlist_selected = min(playlist_matching_editions, key=lambda x: x['difference'])
+                                        console.print(f"[yellow]Using closest match: {playlist_selected['name']}[/yellow]")
 
                                     # Add the selected edition to our matches
-                                    if selected == playlist_edition:
-                                        console.print(f"[green]Using playlist edition: {selected}[/green]")
-                                        matched_editions_with_attributes.append(selected)
-                                    elif selected['has_attributes']:
-                                        if selected['name'] not in matched_editions_with_attributes:
-                                            matched_editions_with_attributes.append(selected['name'])
-                                            console.print(f"[green]Added edition with attributes: {selected['name']}[/green]")
+                                    if isinstance(playlist_selected, str):
+                                        console.print(f"[green]Using playlist edition: {playlist_selected}[/green]")
+                                        matched_editions_with_attributes.append(playlist_selected)
                                     else:
-                                        matched_editions_without_attributes.append(str(selected['minutes']))
-                                        console.print(f"[yellow]Added edition without attributes: {selected['name']}[/yellow]")
+                                        if playlist_selected['has_attributes']:
+                                            if playlist_selected['name'] not in matched_editions_with_attributes:
+                                                matched_editions_with_attributes.append(playlist_selected['name'])
+                                                console.print(f"[green]Added edition with attributes: {playlist_selected['name']}[/green]")
+                                        else:
+                                            matched_editions_without_attributes.append(str(playlist_selected['minutes']))
+                                            console.print(f"[yellow]Added edition without attributes: {playlist_selected['name']}[/yellow]")
 
                                 except Exception as e:
                                     console.print(f"[red]Error processing selection: {e}. Using closest match.[/red]")
                                     # Default to closest match
-                                    selected = min(matching_editions, key=lambda x: x['difference'])
-                                    if selected['has_attributes']:
-                                        matched_editions_with_attributes.append(selected['name'])
+                                    fallback_selected = min(playlist_matching_editions, key=lambda x: x['difference'])
+                                    if fallback_selected['has_attributes']:
+                                        matched_editions_with_attributes.append(fallback_selected['name'])
                                     else:
-                                        matched_editions_without_attributes.append(str(selected['minutes']))
+                                        matched_editions_without_attributes.append(str(fallback_selected['minutes']))
                             else:
                                 console.print(f"[yellow]Playlist edition [green]{playlist_edition} [yellow]using file [green]{playlist_file} [yellow]with duration [green]{formatted_duration} [yellow]matches multiple editions, but unattended mode is enabled. Using closest match.[/yellow]")
-                                selected = min(matching_editions, key=lambda x: x['difference'])
-                                if selected['has_attributes']:
-                                    matched_editions_with_attributes.append(selected['name'])
+                                unattended_selected = min(playlist_matching_editions, key=lambda x: x['difference'])
+                                if unattended_selected['has_attributes']:
+                                    matched_editions_with_attributes.append(unattended_selected['name'])
                                 else:
-                                    matched_editions_without_attributes.append(str(selected['minutes']))
+                                    matched_editions_without_attributes.append(str(unattended_selected['minutes']))
 
                         # If just one edition matches, add it directly
-                        elif len(matching_editions) == 1:
-                            edition_info = matching_editions[0]
+                        elif len(playlist_matching_editions) == 1:
+                            edition_info = playlist_matching_editions[0]
                             if meta['debug']:
                                 console.print(f"[green]Playlist {playlist_edition} matches edition: {edition_info['display_name']} {edition_name}[/green]")
 
@@ -256,29 +260,34 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
         if video.lower().startswith('dc'):
             video = video.lower().replace('dc', '', 1)
 
-        guess = guessit(video)
-        tag = guess.get('release_group', 'NOGROUP')
-        if isinstance(tag, list):
-            tag = " ".join(str(t) for t in tag)
+        guess: Any = guessit(video)
+
+        tag_value: Any = guess.get('release_group', 'NOGROUP')
+        if isinstance(tag_value, list):
+            tag = " ".join(str(t) for t in tag_value)
+        else:
+            tag = str(tag_value)
         repack = ""
 
         if bdinfo is not None:
             try:
-                edition = guessit(bdinfo['label'])['edition']
+                edition_value: Any = guessit(bdinfo['label']).get('edition', '')
             except Exception as e:
                 if meta['debug']:
                     print(f"BDInfo Edition Guess Error: {e}")
-                edition = ""
+                edition_value = ""
         else:
             try:
-                edition = guess.get('edition', "")
+                edition_value = guess.get('edition', "")
             except Exception as e:
                 if meta['debug']:
                     print(f"Video Edition Guess Error: {e}")
-                edition = ""
+                edition_value = ""
 
-        if isinstance(edition, list):
-            edition = " ".join(str(e) for e in edition)
+        if isinstance(edition_value, list):
+            edition = " ".join(str(e) for e in edition_value)
+        else:
+            edition = str(edition_value or "")
 
         if len(filelist) == 1:
             video = os.path.basename(video)

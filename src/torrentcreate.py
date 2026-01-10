@@ -78,9 +78,9 @@ def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
 
 
 class CustomTorrent(torf.Torrent):
-    # Default piece size limits
-    torf.Torrent.piece_size_min = 32768  # 32 KiB
-    torf.Torrent.piece_size_max = 134217728
+    # Default piece size limits (torf's type stubs expose these as methods/properties)
+    setattr(torf.Torrent, "piece_size_min", 32768)  # 32 KiB
+    setattr(torf.Torrent, "piece_size_max", 134217728)
 
     def __init__(self, meta, *args, **kwargs):
         self._meta = meta
@@ -131,9 +131,19 @@ def build_mkbrr_exclude_string(root_folder, filelist):
     return exclude_str
 
 
-async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, tracker_url: str = "", piece_size: int = 0):
+async def create_torrent(
+    meta: dict[str, Any],
+    path: str | os.PathLike[str],
+    output_filename: str,
+    tracker_url: str | None = None,
+    piece_size: int = 0,
+):
     if not piece_size:
         piece_size = meta.get('max_piece_size', 0)
+
+    tracker_url = tracker_url or None
+    include: list[str] = []
+    exclude: list[str] = []
 
     if meta['isdir']:
         if meta['keep_folder']:
@@ -151,16 +161,17 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
                 include = []
                 exclude = []
             elif not meta.get('tv_pack', False):
-                os.chdir(path)
-                globs = glob.glob1(path, "*.mkv") + glob.glob1(path, "*.mp4") + glob.glob1(path, "*.ts")
+                path_dir = os.fspath(path)
+                os.chdir(path_dir)
+                globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
                 no_sample_globs = [
-                    os.path.abspath(f"{path}{os.sep}{file}") for file in globs
+                    os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
                     if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
                 ]
                 if len(no_sample_globs) == 1:
                     path = meta['filelist'][0]
-                exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
-                include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
+                exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+                include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
             else:
                 folder_name = os.path.basename(str(path))
                 include = [
@@ -169,8 +180,8 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
                 ]
                 exclude = ["*", "*/**"]
     else:
-        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
-        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
+        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
 
     if meta['category'] == "TV" and meta.get('tv_pack'):
         completeness = check_season_pack_completeness(meta)
@@ -253,15 +264,15 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
             if not sys.platform.startswith("win"):
                 os.chmod(mkbrr_binary, 0o700)
 
-            cmd = [mkbrr_binary, "create", path]
+            cmd = [mkbrr_binary, "create", os.fspath(path)]
 
-            if tracker_url is not None:
+            if tracker_url:
                 cmd.extend(["-t", tracker_url])
 
             if int(meta.get('randomized', 0)) >= 1:
                 cmd.extend(["-e"])
 
-            if piece_size and tracker_url is None:
+            if piece_size and not tracker_url:
                 try:
                     max_size_bytes = int(piece_size) * 1024 * 1024
 
@@ -275,7 +286,7 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
 
-            if not piece_size and tracker_url is None and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
+            if not piece_size and not tracker_url and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
                 cmd.extend(['-m', '27'])
 
             if meta.get('mkbrr_threads') != '0':
@@ -292,6 +303,9 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
             # Run mkbrr subprocess in thread to avoid blocking
             def run_mkbrr():
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+                if process.stdout is None:
+                    return process.wait()
 
                 total_pieces = 100  # Default to 100% for scaling progress
                 pieces_done = 0
@@ -316,7 +330,7 @@ async def create_torrent(meta: dict[str, Any], path: str, output_filename: str, 
                             elapsed_time = time.time() - mkbrr_start_time
                             if pieces_done > 0:
                                 estimated_total_time = elapsed_time / (pieces_done / 100)
-                                eta_seconds = max(0, estimated_total_time - elapsed_time)
+                                eta_seconds = int(max(0.0, estimated_total_time - elapsed_time))
                                 eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
                             else:
                                 eta = "--:--"  # Placeholder if we can't estimate yet
@@ -552,20 +566,22 @@ def check_season_pack_completeness(meta):
             episode_only_matches = re.findall(episode_only_pattern, filename)
             for match in episode_only_matches:
                 episode1_num = int(match[0])
-                episode2_num = int(match[1]) if match[1] else None
+                episode2_num_opt = int(match[1]) if match[1] else None
 
-                season_num = meta.get('season_int', 1)
+                season_from_meta = meta.get('season_int')
+                season_num = int(season_from_meta) if season_from_meta is not None else 1
                 found_episodes.append((season_num, episode1_num))
                 season_numbers.add(season_num)
 
-                if episode2_num:
-                    found_episodes.append((season_num, episode2_num))
+                if episode2_num_opt is not None:
+                    found_episodes.append((season_num, episode2_num_opt))
 
         if not matches and not episode_only_matches:
             anime_matches = re.findall(anime_pattern, filename)
             for match in anime_matches:
                 episode_num = int(match)
-                season_num = meta.get('season_int', 1)
+                season_from_meta = meta.get('season_int')
+                season_num = int(season_from_meta) if season_from_meta is not None else 1
                 found_episodes.append((season_num, episode_num))
                 season_numbers.add(season_num)
 

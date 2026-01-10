@@ -3,8 +3,11 @@ import os
 import re
 import subprocess
 import datetime
+from typing import Any
 from src.console import console
-from data.config import config
+from data.config import config as _config
+
+config: dict[str, Any] = _config
 
 
 async def create_season_nfo(season_folder, season_number, season_year, tvdbid, tvmazeid, plot, outline):

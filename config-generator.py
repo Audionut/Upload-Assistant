@@ -6,12 +6,18 @@ import re
 import json
 from pathlib import Path
 import ast
+from typing import Any, Callable, TypedDict
+
+
+class LinkedSetting(TypedDict):
+    condition: Callable[[str], bool]
+    settings: list[str]
 
 
 def read_example_config():
     """Read the example config file and return its structure and comments"""
     example_path = Path("data/example-config.py")
-    comments = {}
+    comments: dict[str, list[str]] = {}
 
     if not example_path.exists():
         print("[!] Warning: Could not find data/example-config.py")
@@ -22,8 +28,8 @@ def read_example_config():
         with open(example_path, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
-        current_comments = []
-        key_stack = []
+        current_comments: list[str] = []
+        key_stack: list[str] = []
         indent_stack = [0]
 
         for idx, line in enumerate(lines):
@@ -253,10 +259,10 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
     """
     print("\n====== DEFAULT CONFIGURATION ======")
     print("\n[i] Press enter to accept the default values/skip, or input your own values.")
-    config_defaults = {}
+    config_defaults: dict[str, Any] = {}
 
     # Settings that should only be prompted if a parent setting has a specific value
-    linked_settings = {
+    linked_settings: dict[str, LinkedSetting] = {
         "update_notification": {
             "condition": lambda value: value.lower() == "true",
             "settings": ["verbose_notification"]
@@ -284,7 +290,7 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
     }
 
     # Store which settings should be skipped based on linked settings
-    skip_settings = set()
+    skip_settings: set[str] = set()
 
     # If this is a fresh config (no existing defaults), offer quick setup
     do_quick_setup = False
@@ -484,7 +490,7 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
     ).upper()
     trackers_list = [t.strip().upper() for t in trackers_input.split(",") if t.strip()]
 
-    trackers_config = {"default_trackers": ", ".join(trackers_list)}
+    trackers_config: dict[str, Any] = {"default_trackers": ", ".join(trackers_list)}
 
     # Ask if user wants to update all trackers or specific ones
     update_all = input("\n[i] Do you want to update ALL trackers in your default trackers list? (Y/n): ").lower() != "n"
@@ -508,9 +514,9 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
             continue
 
         print(f"\n\nConfiguring **{tracker}**:")
-        existing_tracker_config = existing_trackers.get(tracker, {})
-        example_tracker = example_trackers.get(tracker, {})
-        tracker_config = {}
+        existing_tracker_config: dict[str, Any] = existing_trackers.get(tracker, {})
+        example_tracker: dict[str, Any] = example_trackers.get(tracker, {})
+        tracker_config: dict[str, Any] = {}
 
         if example_tracker and isinstance(example_tracker, dict):
             for key, default_value in example_tracker.items():
@@ -561,11 +567,11 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
                 continue  # Already configured
             print(f"\n\nConfiguring **{tracker}**:")
             example_tracker = example_trackers.get(tracker, {})
-            tracker_config = {}
+            additional_tracker_config: dict[str, Any] = {}
             if example_tracker and isinstance(example_tracker, dict):
                 for key, default_value in example_tracker.items():
                     if tracker == "HDT" and key == "announce_url":
-                        tracker_config[key] = example_tracker[key]
+                        additional_tracker_config[key] = example_tracker[key]
                         continue
                     comment_key = f"TRACKERS.{tracker}.{key}"
                     if comment_key in config_comments:
@@ -575,11 +581,11 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
                         default_str = str(default_value)
                         value = get_user_input(f"Tracker setting '{key}'? (True/False)",
                                                default=default_str)
-                        tracker_config[key] = value
+                        additional_tracker_config[key] = value
                     else:
                         is_password = key in ["api_key", "passkey", "rss_key", "password", "opt_uri"] or key.endswith("rss_key")
                         is_announce_url = key.endswith("announce_url")
-                        tracker_config[key] = get_user_input(
+                        additional_tracker_config[key] = get_user_input(
                             f"Tracker setting '{key}'",
                             default=str(default_value) if default_value else "",
                             is_password=is_password,
@@ -587,7 +593,7 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
                         )
             else:
                 print(f"[!] No example config found for tracker '{tracker}'.")
-            trackers_config[tracker] = tracker_config
+            trackers_config[tracker] = additional_tracker_config
 
     return trackers_config
 
@@ -597,7 +603,7 @@ def configure_torrent_clients(existing_clients=None, example_clients=None, defau
     Helper to configure the TORRENT_CLIENTS section.
     Returns a dict with the configured client(s) and the selected default client name.
     """
-    config_clients = {}
+    config_clients: dict[str, Any] = {}
     existing_clients = existing_clients or {}
     example_clients = example_clients or {}
     config_comments = config_comments or {}

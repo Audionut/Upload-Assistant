@@ -12,10 +12,13 @@ import psutil
 import sys
 import gc
 import traceback
+from typing import Any
 from pymediainfo import MediaInfo
 from src.console import console
-from data.config import config
+from data.config import config as _config
 from src.cleanup import cleanup, reset_terminal
+
+config: dict[str, Any] = _config
 
 task_limit = int(config['DEFAULT'].get('process_limit', 1))
 threads = str(config['DEFAULT'].get('threads', '1'))
@@ -154,7 +157,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     if meta['debug']:
         console.print(f"Using {num_workers} worker(s) for {num_screens} image(s)")
 
-    capture_tasks = []
+    capture_tasks: list[Any] = []
     capture_results = []
     if use_vs:
         from src.vs import vs_screengn
@@ -440,7 +443,9 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         return
 
     ifo_mi = MediaInfo.parse(f"{meta['discs'][disc_num]['path']}/VTS_{meta['discs'][disc_num]['main_set'][0][:2]}_0.IFO", mediainfo_options={'inform_version': '1'})
-    sar = 1
+    sar = 1.0
+    w_sar = 1.0
+    h_sar = 1.0
     for track in ifo_mi.tracks:
         if track.track_type == "Video":
             if isinstance(track.duration, str):
@@ -457,12 +462,12 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
     if par < 1:
         new_height = dar * height
         sar = width / new_height
-        w_sar = 1
+        w_sar = 1.0
         h_sar = sar
     else:
         sar = par
         w_sar = sar
-        h_sar = 1
+        h_sar = 1.0
 
     async def _is_vob_good(n, loops, num_screens):
         max_loops = 6
@@ -505,18 +510,18 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
     voblength, n = await _is_vob_good(0, 0, num_screens)
     ss_times = await valid_ss_time([], num_screens, voblength, frame_rate, meta, retake=retry_cap)
-    capture_tasks = []
-    existing_images = 0
+    capture_tasks: list[Any] = []
+    existing_images_count = 0
     existing_image_paths = []
 
     for i in range(num_screens + 1):
         image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][disc_num]['name']}-{i}.png"
         input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[i % len(main_set)]}"
         if os.path.exists(image) and not meta.get('retake', False):
-            existing_images += 1
+            existing_images_count += 1
             existing_image_paths.append(image)
 
-    if existing_images == num_screens and not meta.get('retake', False):
+    if existing_images_count == num_screens and not meta.get('retake', False):
         console.print("[yellow]The correct number of screenshots already exists. Skipping capture process.")
         capture_results = existing_image_paths
         return
@@ -981,9 +986,9 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
 
     try:
         results = await asyncio.gather(*capture_tasks, return_exceptions=True)
-        capture_results = [r for r in results if isinstance(r, tuple) and len(r) == 2]
-        capture_results.sort(key=lambda x: x[0])
-        capture_results = [r[1] for r in capture_results if r[1] is not None]
+        capture_result_tuples = [r for r in results if isinstance(r, tuple) and len(r) == 2]
+        capture_result_tuples.sort(key=lambda x: x[0])
+        capture_results: list[str] = [r[1] for r in capture_result_tuples if r[1] is not None]
 
     except KeyboardInterrupt:
         console.print("\n[red]CTRL+C detected. Cancelling capture tasks...[/red]")
@@ -1014,7 +1019,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if not force_screenshots and meta['debug']:
         console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
-    valid_results = []
+    valid_results: list[str] = []
     remaining_retakes = []
     for image_path in capture_results:
         if "Error" in image_path:
@@ -1096,7 +1101,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                                     valid_image = True
 
                             if valid_image:
-                                valid_results.append(screenshot_response)
+                                valid_results.append(screenshot_path)
                                 break
                         except Exception as e:
                             console.print(f"[red]Error retaking screenshot for {image_path} at {adjusted_time:.2f}s: {e}[/red]")
@@ -1137,7 +1142,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                                 valid_image = True
 
                         if valid_image:
-                            valid_results.append(screenshot_response)
+                            valid_results.append(screenshot_path)
                             break
                     except Exception as e:
                         console.print(f"[red]Error retaking screenshot for {image_path} at random time {random_time:.2f}s: {e}[/red]")
