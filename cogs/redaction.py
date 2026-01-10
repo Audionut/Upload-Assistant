@@ -121,7 +121,7 @@ def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
         return data
 
 
-async def clean_meta_for_export(meta) -> Meta:
+async def clean_meta_for_export(meta: Meta) -> Meta:
     """
     Removes all 'status_message' keys from meta['tracker_status'] and
     removes or clears 'torrent_comments' from meta.

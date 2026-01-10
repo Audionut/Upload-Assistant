@@ -334,7 +334,10 @@ class Clients():
                 proxy_url = client.get('qui_proxy_url')
 
                 if proxy_url:
-                    ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
+                    ssl_context = ssl.create_default_context()
+                    if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
                     qbt_session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -606,7 +609,10 @@ class Clients():
                     return None
                 qbt_client = potential_qbt_client
             elif proxy_url and qbt_session is None:
-                ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
+                ssl_context = ssl.create_default_context()
+                if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
                     connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -1250,7 +1256,10 @@ class Clients():
         qbt_session = None
 
         if proxy_url:
-            ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
+            ssl_context = ssl.create_default_context()
+            if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
             qbt_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=10),
                 connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -1484,7 +1493,8 @@ class Clients():
         if meta['debug']:
             try:
                 if proxy_url:
-                    assert qbt_session is not None
+                    if qbt_session is None:
+                        raise RuntimeError("qbt_session should not be None")
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info",
                                                params={'hashes': torrent.infohash}) as response:
                         if response.status == 200:
@@ -1496,7 +1506,8 @@ class Clients():
                         else:
                             console.print(f"[yellow]Failed to get torrent info via proxy: {response.status}")
                 else:
-                    assert qbt_client is not None
+                    if qbt_client is None:
+                        raise RuntimeError("qbt_client should not be None")
                     info = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info, torrent_hashes=torrent.infohash),
                         "Get torrent info for debug",
@@ -1669,7 +1680,10 @@ class Clients():
             qbt_session = None
 
             if proxy_url:
-                ssl_context = ssl.create_default_context() if client.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
+                ssl_context = ssl.create_default_context()
+                if not client.get('VERIFY_WEBUI_CERTIFICATE', True):
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
                     connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -1697,7 +1711,8 @@ class Clients():
 
             try:
                 if proxy_url:
-                    assert qbt_session is not None
+                    if qbt_session is None:
+                        raise RuntimeError("qbt_session should not be None")
                     async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
                                                params={'hash': info_hash_v1}) as response:
                         if response.status == 200:
@@ -1713,7 +1728,8 @@ class Clients():
                             return meta
                 else:
                     try:
-                        assert qbt_client is not None
+                        if qbt_client is None:
+                            raise RuntimeError("qbt_client should not be None")
                         torrent_properties = await self.retry_qbt_operation(
                             lambda: asyncio.to_thread(qbt_client.torrents_properties, torrent_hash=info_hash_v1),
                             f"Get torrent properties for hash {info_hash_v1}",
@@ -1823,7 +1839,8 @@ class Clients():
 
                                 try:
                                     if proxy_url:
-                                        assert qbt_session is not None
+                                        if qbt_session is None:
+                                            raise RuntimeError("qbt_session should not be None")
                                         async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
                                                                     data={'hash': torrent_hash}) as response:
                                             if response.status == 200:
@@ -1832,7 +1849,8 @@ class Clients():
                                                 console.print(f"[red]Failed to export torrent via proxy: {response.status}")
                                                 continue
                                     else:
-                                        assert qbt_client is not None
+                                        if qbt_client is None:
+                                            raise RuntimeError("qbt_client should not be None")
                                         torrent_file_content = await self.retry_qbt_operation(
                                             lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
                                             f"Export torrent {torrent_hash}"
@@ -2184,7 +2202,10 @@ class Clients():
             proxy_url = client_config.get('qui_proxy_url', '').strip()
             if proxy_url:
                 try:
-                    ssl_context = ssl.create_default_context() if client_config.get('VERIFY_WEBUI_CERTIFICATE', True) else ssl.create_default_context(check_hostname=False, verify_mode=ssl.CERT_NONE)
+                    ssl_context = ssl.create_default_context()
+                    if not client_config.get('VERIFY_WEBUI_CERTIFICATE', True):
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
                     session = aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
@@ -2353,7 +2374,8 @@ class Clients():
                             if proxy_url and not torrent.comment:
                                 if meta['debug']:
                                     console.print(f"[cyan]Fetching torrent properties via proxy for torrent: {torrent.name}")
-                                assert qbt_session is not None
+                                if qbt_session is None:
+                                    raise RuntimeError("qbt_session should not be None")
                                 async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
                                                            params={'hash': torrent.hash}) as response:
                                     if response.status == 200:
@@ -2364,7 +2386,8 @@ class Clients():
                                             console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {response.status}")
                                         continue
                             elif not proxy_url:
-                                assert qbt_client is not None
+                                if qbt_client is None:
+                                    raise RuntimeError("qbt_client should not be None")
                                 torrent_trackers = await self.retry_qbt_operation(
                                     lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
                                     f"Get trackers for torrent {torrent.name}"

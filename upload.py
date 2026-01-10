@@ -1301,7 +1301,7 @@ async def do_the_thing(base_dir):
             if sanitize_meta and not meta.get('emby', False):
                 try:
                     await asyncio.sleep(0.2)
-                    meta = cast(Meta, await clean_meta_for_export(meta))
+                    meta = await clean_meta_for_export(meta)
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
             await cleanup()
@@ -1311,7 +1311,7 @@ async def do_the_thing(base_dir):
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")
         if sanitize_meta:
-            meta = cast(Meta, await clean_meta_for_export(meta))
+            meta = await clean_meta_for_export(meta)
         console.print(traceback.format_exc())
         reset_terminal()
 

@@ -10,7 +10,7 @@ from data.config import config
 from src.console import console
 
 
-DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})
+DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})  # type: ignore
 
 
 ComparisonGroup = dict[str, Any]
@@ -27,10 +27,11 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | lis
         try:
             with open(comparison_data_file, 'r') as f:
                 raw_data = json.load(f)
+                saved_comparison_data: ComparisonData | list[ComparisonGroup]
                 if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()):
-                    saved_comparison_data: ComparisonData = raw_data
+                    saved_comparison_data = raw_data
                 elif isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
-                    saved_comparison_data: list[ComparisonGroup] = raw_data
+                    saved_comparison_data = raw_data
                 else:
                     raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
                 if meta.get('debug'):
