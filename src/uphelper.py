@@ -35,7 +35,8 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
-            if meta.get('trumpable', []) or meta.get('matched_episode_ids', []):
+            trumpable_text = None
+            if meta.get('trumpable_id') or meta.get('matched_episode_ids', []):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
                 if trumpable_dupes:
                     trumpable_text = "\n".join([
@@ -55,7 +56,7 @@ class UploadHelper:
                     for d in dupes
                 ])
 
-                if meta.get('trumpable', []) or meta.get('matched_episode_ids', []):
+                if trumpable_text and (meta.get('trumpable_id') or meta.get('matched_episode_ids', [])):
                     console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
                     console.print("[yellow]Please check the trumpable entries above to see if you want to upload[/yellow]")
                     console.print("[yellow]You will have the option to report the trumpable torrent if you upload.[/yellow]")
@@ -65,10 +66,12 @@ class UploadHelper:
                             if upload:
                                 meta['we_asked'] = True
                                 meta['were_trumping'] = True
-                                meta['trumpable_release'] = True
-                                meta['trumpable'] = meta.get(f'{tracker_name}_matched_id', None)
+                                if not meta.get('trumpable_id'):
+                                    meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                                 if meta.get('filename_match', False) and meta.get('file_count_match', False):
-                                    meta['exact_trump_match'] = True
+                                    meta['trump_reason'] = 'exact_match'
+                                else:
+                                    meta['trump_reason'] = 'trumpable_release'
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
@@ -85,8 +88,9 @@ class UploadHelper:
                                 if upload:
                                     meta['we_asked'] = True
                                     meta['were_trumping'] = True
-                                    meta['trumpable'] = meta.get(f'{tracker_name}_matched_id', None)
-                                    meta['exact_trump_match'] = True
+                                    meta['trump_reason'] = 'exact_match'
+                                    if not meta.get('trumpable_id'):
+                                        meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                             else:
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True

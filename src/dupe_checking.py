@@ -30,7 +30,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             console.log(dupes_to_print)
         else:
             console.log(dupes)
-    meta['trumpable'] = False
+    meta['trumpable_id'] = None
     processed_dupes = []
     for d in dupes:
         if isinstance(d, str):
@@ -198,13 +198,8 @@ async def filter_dupes(dupes, meta, tracker_name):
 
         # Aither-specific trumping logic - no internal checking, if it's marked trumpable, it's trumpable
         if tracker_name == "AITHER" and entry.get('trumpable', False) and res_id and target_resolution == res_id:
-            meta['trumpable'].append({
-                'id': entry.get('id'),
-                'name': each,
-                'link': entry.get('link'),
-                'tracker': tracker_name,
-                'internal': entry.get('internal', 0)
-            })
+            meta['trumpable_id'] = entry.get('id')
+            remember_match('trumpable_id')
 
         if not meta.get('is_disc'):
             for file in filenames:

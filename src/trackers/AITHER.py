@@ -69,7 +69,7 @@ class AITHER(UNIT3D):
             aither_name = aither_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
             aither_name = aither_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
 
-        if meta.get('exact_trump_match', False):
-            aither_name = aither_name + " - TRUMP"
+        if meta.get('trump_reason') == 'exact_match':
+            aither_name = aither_name + " - TRUMP TEST"
 
         return {'name': aither_name}

@@ -1151,7 +1151,7 @@ async def do_the_thing(base_dir):
                 console.print("[yellow]Processing uploads to trackers.....")
                 meta['are_we_trump_reporting'] = False
                 if meta.get('were_trumping', False):
-                    console.print("[yellow]Checking for existing trump reports on Aither.....")
+                    console.print("[yellow]Checking for existing trump reports.....")
                     is_trumping = await tracker_setup.process_trumpables(meta, trackers=meta['trackers'])
                     if is_trumping:
                         meta['are_we_trump_reporting'] = True
@@ -1215,8 +1215,9 @@ async def do_the_thing(base_dir):
 
             if meta.get('are_we_trump_reporting', False):
                 console.print()
-                console.print("[yellow]Submitting trumpable report to Aither.....")
-                await tracker_setup.make_trumpable_report(meta, "AITHER")
+                for tracker in meta.get('trumping_trackers', []):
+                    console.print(f"[yellow]Submitting trumpable report to {tracker}.....")
+                    await tracker_setup.make_trumpable_report(meta, tracker)
 
             find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
             if find_requests and meta['trackers'] not in ([], None, "") and not (meta.get('site_check', False) and not meta['is_disc']):
