@@ -309,9 +309,15 @@ class PTP():
                             console.print("[yellow]User chose to skip all matches[/yellow]")
                             return None
 
-                        selected_index = choices.index(selected)
-                        selected_movie = movies[selected_index]
-                        groupID = selected_movie.get('GroupId')
+                        # Match selection directly to movie data to avoid index issues from cli_ui sorting
+                        groupID = None
+                        for movie in movies:
+                            title = movie.get('Title', 'Unknown')
+                            year = movie.get('Year', 'Unknown')
+                            group_id = movie.get('GroupId', 'Unknown')
+                            if f"{title} ({year}) - Group ID: {group_id}" == selected:
+                                groupID = group_id
+                                break
 
                         console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
                         return groupID

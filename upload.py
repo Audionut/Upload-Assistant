@@ -1125,7 +1125,7 @@ async def do_the_thing(base_dir):
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
             await process_meta(meta, base_dir, bot=bot)
-
+            tracker_setup = TRACKER_SETUP(config=config)
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 if config['DEFAULT'].get('cross_seeding', True):
                     await process_cross_seeds(meta)
@@ -1149,6 +1149,34 @@ async def do_the_thing(base_dir):
             else:
                 console.print()
                 console.print("[yellow]Processing uploads to trackers.....")
+                meta['are_we_trump_reporting'] = False
+                if meta.get('were_trumping', False):
+                    console.print("[yellow]Checking for existing trump reports.....")
+                    is_trumping = await tracker_setup.process_trumpables(meta, trackers=meta['trackers'])
+
+                    # Apply any per-tracker skip decisions made during trumpable processing
+                    skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
+                    for t, st in meta.get('tracker_status', {}).items():
+                        if st.get('skip_upload') is True:
+                            skip_upload_trackers.add(t)
+
+                    if skip_upload_trackers:
+                        for t in skip_upload_trackers:
+                            meta.setdefault('tracker_status', {})
+                            meta['tracker_status'].setdefault(t, {})
+                            meta['tracker_status'][t]['upload'] = False
+                            meta['tracker_status'][t]['skipped'] = True
+
+                        meta['trackers'] = [t for t in meta.get('trackers', []) if t not in skip_upload_trackers]
+                        if meta.get('debug', False):
+                            console.print(f"[yellow]Skipping trackers due to trump report selection: {', '.join(sorted(skip_upload_trackers))}[/yellow]")
+
+                        if not meta['trackers']:
+                            console.print("[bold red]No trackers left to upload after trump checking.[/bold red]")
+                            meta['are_we_trump_reporting'] = False
+
+                    if is_trumping:
+                        meta['are_we_trump_reporting'] = True
                 await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                 if use_discord and bot:
                     await send_upload_status_notification(config, bot, meta)
@@ -1207,10 +1235,15 @@ async def do_the_thing(base_dir):
                 else:
                     await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta)
 
+            if meta.get('are_we_trump_reporting', False):
+                console.print()
+                for tracker in meta.get('trumping_trackers', []):
+                    console.print(f"[yellow]Submitting trumpable report to {tracker}.....")
+                    await tracker_setup.make_trumpable_report(meta, tracker)
+
             find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
             if find_requests and meta['trackers'] not in ([], None, "") and not (meta.get('site_check', False) and not meta['is_disc']):
                 console.print("[green]Searching for requests on supported trackers.....")
-                tracker_setup = TRACKER_SETUP(config=config)
                 if meta.get('site_check', False):
                     trackers = meta['requested_trackers']
                     if meta['debug']:
@@ -1366,7 +1399,10 @@ async def process_cross_seeds(meta):
 
                 if dupes:
                     dupes = await filter_dupes(dupes, meta, tracker)
-                    await helper.dupe_check(dupes, meta, tracker)
+                    is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
+                    # Persist any updates from dupe_check (defensive in case it returns a copy)
+                    if isinstance(updated_meta, dict) and updated_meta is not meta:
+                        meta.update(updated_meta)
 
             except Exception as e:
                 if meta.get('debug'):

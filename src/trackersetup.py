@@ -906,6 +906,346 @@ class TRACKER_SETUP:
 
         return match_found
 
+    async def process_trumpables(self, meta, trackers):
+        if isinstance(trackers, str):
+            trackers = [trackers.strip().upper()]
+        elif isinstance(trackers, list):
+            trackers = [s.upper() for s in trackers]
+        else:
+            console.print("[red]Invalid trackers input format.[/red]")
+            return False
+
+        # Track which trackers support trumping for later use
+        trumping_trackers = []
+
+        for tracker in trackers:
+            tracker_class = tracker_class_map.get(tracker)
+            if not tracker_class:
+                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+                continue
+
+            tracker_instance = tracker_class(self.config)
+            try:
+                url = tracker_instance.trumping_url
+            except AttributeError:
+                continue  # Skip trackers without trumping url support
+
+            trumping_trackers.append(tracker)
+        if not trumping_trackers:
+            if meta['debug']:
+                console.print("[yellow]No trackers with trumping support found.[/yellow]")
+            return False
+
+        # Track trackers to skip without mutating meta['trackers'] in-place
+        # NOTE: meta['skip_trackers'] is used elsewhere as a boolean, so use a distinct key here.
+        meta.setdefault('skip_upload_trackers', [])
+
+        # Store which trackers we're trump reporting on (may be filtered later)
+        meta['trumping_trackers'] = trumping_trackers
+
+        for tracker in trumping_trackers:
+            tracker_class = tracker_class_map.get(tracker)
+            tracker_instance = tracker_class(self.config)
+            url = tracker_instance.trumping_url
+
+            reported_torrent_id = f"{meta.get('trumpable_id', '')}"
+            if not reported_torrent_id:
+                # Try tracker-specific matched ID
+                reported_torrent_id = f"{meta.get(f'{tracker}_matched_id', '')}"
+            if not reported_torrent_id and meta.get('matched_episode_ids', []):
+                reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
+            if not reported_torrent_id:
+                console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
+                continue
+            else:
+                # Store per-tracker to avoid overwriting across multiple trackers
+                meta[f'{tracker}_reported_torrent_id'] = reported_torrent_id
+
+            trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
+            if status != 200:
+                console.print(f"[bold red]Failed to retrieve trumping reports from {tracker}. HTTP Status: {status}[/bold red]")
+                # Mark this tracker as failed/skipped and continue to the next tracker
+                console.print(f"[bold red]Marking {tracker} to be skipped due to API failure[/bold red]")
+                if tracker not in meta['skip_upload_trackers']:
+                    meta['skip_upload_trackers'].append(tracker)
+                meta.setdefault('tracker_status', {})
+                meta['tracker_status'].setdefault(tracker, {})
+                meta['tracker_status'][tracker]['skip_upload'] = True
+                continue
+            if trumping_reports:
+                console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping report/s on {tracker} for this release[/bold yellow]")
+                for report in trumping_reports:
+                    console.print(f"  [cyan]Report ID:[/cyan] {report.get('id')} - [cyan]Title:[/cyan] {report.get('title')}")
+                    if report.get('trumping_torrent'):
+                        for torrent in report.get('trumping_torrent', []):
+                            torrent_name = torrent.get('name', 'Unknown')
+                            torrent_id = torrent.get('id', 'N/A')
+                            console.print(f"  [bold green]Already being trumped by:[/bold green] {torrent_name} (ID: {torrent_id})")
+                    else:
+                        console.print("  [yellow]The trumping torrent for this report seems to be in modq.....[/yellow]")
+                try:
+                    upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default="no")
+                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                    console.print("[yellow]Prompt cancelled; treating as 'no' for safety.[/yellow]")
+                    upload = False
+
+                if not upload:
+                    console.print(f"[bold red]Marking {tracker} to be skipped[/bold red]")
+                    if tracker not in meta['skip_upload_trackers']:
+                        meta['skip_upload_trackers'].append(tracker)
+                    # Also mark in tracker_status when available (used elsewhere to skip upload)
+                    meta.setdefault('tracker_status', {})
+                    meta['tracker_status'].setdefault(tracker, {})
+                    meta['tracker_status'][tracker]['skip_upload'] = True
+                    continue
+                console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
+            else:
+                if meta['debug']:
+                    console.print(f"[bold green]Will make a trumpable report for this upload at {trumping_trackers}[/bold green]")
+
+        # Filter trumping trackers by skip marker (do not mutate meta['trackers'] here)
+        active_trumping_trackers = [t for t in trumping_trackers if t not in meta.get('skip_upload_trackers', [])]
+        meta['trumping_trackers'] = active_trumping_trackers
+        if not active_trumping_trackers:
+            if meta.get('debug'):
+                console.print("[yellow]All trump-capable trackers were marked to skip; skipping trump report creation.[/yellow]")
+            return False
+
+        if not meta.get('tv_pack'):
+            console.print("[yellow]Aither requires comparisons to be provided for trump reports.\n"
+                          "Are the comparison images in the description or are you adding links?")
+            try:
+                where_compare = cli_ui.ask_string(
+                    "Enter 'd' if in description, 'L' if you want to paste links, or press Enter to skip trumping:",
+                    default=""
+                )
+            except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
+                return False
+
+            where_compare = (where_compare or "").strip()
+            if where_compare.lower() == 'd':
+                meta['screenshots_in_description'] = True
+                return True
+            elif where_compare.upper() == 'L':
+                try:
+                    reported_screenshots = cli_ui.ask_string(
+                        "Paste screenshot links for the reported torrent (comma-separated):",
+                        default=""
+                    )
+                    trumping_screenshots = cli_ui.ask_string(
+                        "Paste screenshot links for the trumping torrent (comma-separated):",
+                        default=""
+                    )
+                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                    console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
+                    return False
+
+                reported_screenshots = (reported_screenshots or "").strip()
+                trumping_screenshots = (trumping_screenshots or "").strip()
+                if not reported_screenshots or not trumping_screenshots:
+                    console.print("[yellow]No screenshot links provided. Skipping trump report creation.[/yellow]")
+                    return False
+
+                meta['screenshots_reported_torrent'] = [link.strip() for link in reported_screenshots.split(',') if link.strip()]
+                meta['screenshots_trumping_torrent'] = [link.strip() for link in trumping_screenshots.split(',') if link.strip()]
+                if not meta['screenshots_reported_torrent'] or not meta['screenshots_trumping_torrent']:
+                    console.print("[yellow]No valid screenshot links provided. Skipping trump report creation.[/yellow]")
+                    return False
+                return True
+            else:
+                console.print("[yellow]Skipping trump report creation as no comparison method provided.[/yellow]")
+                return False
+        else:
+            if meta.get('debug'):
+                console.print(f"[bold green]TV pack upload detected, skipping comparison images for trump report on {active_trumping_trackers}[/bold green]")
+            return True
+
+    async def get_tracker_trumps(self, meta, tracker, url, reported_torrent_id):
+        if meta['debug']:
+            console.print(f"[bold green]Searching for trumps on {tracker}[/bold green]")
+        requests = []
+        status_code = None
+        headers = {
+            'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
+            'Accept': 'application/json'
+        }
+
+        params = {
+            'reported_torrent_id': f"{reported_torrent_id}",
+        }
+
+        all_data = []
+        next_cursor = None
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                while True:
+                    try:
+                        # Add pagination cursor to params if we have one
+                        if next_cursor:
+                            params['cursor'] = next_cursor
+
+                        response = await client.get(url=url, headers=headers, params=params)
+                        status_code = response.status_code
+
+                        if response.status_code == 200:
+                            data = response.json()
+
+                            if 'data' in data and isinstance(data['data'], list):
+                                page_data = data['data']
+                            elif 'results' in data and isinstance(data['results'], list):
+                                page_data = data['results']
+                            else:
+                                console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
+                                return requests, status_code
+
+                            all_data.extend(page_data)
+
+                            # Check for pagination
+                            meta_info = data.get('meta', {})
+                            if not isinstance(meta_info, dict):
+                                console.print(f"[bold red]Unexpected 'meta' format: {type(meta_info)}[/bold red]")
+                                break
+
+                            next_cursor = meta_info.get('next_cursor')
+                            if not next_cursor:
+                                break  # Exit loop if there are no more pages
+                            else:
+                                # Rest between page fetches
+                                console.print(f"[cyan]Fetched {len(page_data)} trumping reports, waiting 1 second before next page...[/cyan]")
+                                await asyncio.sleep(1)
+                        else:
+                            console.print(f"[bold red]Failed to search trumps on {tracker}. HTTP Status: {response.status_code} - {response.text}[/bold red]")
+                            break
+
+                    except httpx.RequestError as e:
+                        console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
+                        break
+
+                # Process all collected data
+                try:
+                    for each in all_data:
+                        # Normalize trumping_torrent to always be a list
+                        trumping_torrent = each.get('trumping_torrent')
+                        if trumping_torrent is None:
+                            trumping_torrent = []
+                        elif isinstance(trumping_torrent, dict):
+                            trumping_torrent = [trumping_torrent] if trumping_torrent else []
+
+                        result = {
+                            'id': each.get('id'),
+                            'type': each.get('type'),
+                            'title': each.get('title'),
+                            'solved': each.get('solved'),
+                            'reported_torrents': each.get('reported_torrents', []),
+                            'trumping_torrent': trumping_torrent,
+                        }
+                        requests.append(result)
+
+                except Exception as e:
+                    console.print(f"[bold red]Error processing response data: {e}[/bold red]")
+                    return requests, status_code
+
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 10 seconds")
+            status_code = None
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            status_code = None
+
+        if meta['debug']:
+            console.print(f"Total trumping reports retrieved: {len(requests)}")
+
+        return requests, status_code
+
+    async def make_trumpable_report(self, meta, tracker):
+        """Create a trump report by POSTing to the /create endpoint"""
+        if meta['debug']:
+            console.print(f"[bold green]Creating trump report on {tracker}[/bold green]")
+
+        tracker_class = tracker_class_map.get(tracker)
+        if not tracker_class:
+            console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+            return False
+
+        tracker_instance = tracker_class(self.config)
+        try:
+            base_url = tracker_instance.trumping_url
+        except AttributeError:
+            console.print(f"[red]No trumping URL found for {tracker}[/red]")
+            return False
+
+        # Replace /filter with /create
+        create_url = base_url.replace('/filter', '/create')
+
+        headers = {
+            'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        # Read per-tracker reported_torrent_id, with fallback to legacy key for backwards compatibility
+        reported_torrent_id = meta.get(f'{tracker}_reported_torrent_id') or meta.get('reported_torrent_id')
+        if not reported_torrent_id:
+            console.print(f"[red]No reported torrent ID found for {tracker}[/red]")
+            return False
+        try:
+            trumping_torrent_id = meta['tracker_status'][tracker]['torrent_id']
+        except KeyError:
+            console.print(f"[red]No torrent ID found in meta for trumping torrent on {tracker}[/red]")
+            console.print("[red]Either the upload failed, or you're in debug[/red]")
+            if not meta.get('debug', False):
+                return False
+            # Set fallback for debug mode so payload construction doesn't fail
+            trumping_torrent_id = None
+
+        if meta.get('tv_pack'):
+            message = "Upload Assistant season pack trump"
+        elif meta.get('trump_reason') == 'exact_match':
+            message = "Upload Assistant exact filename trump"
+        elif meta.get('trump_reason') == 'trumpable_release':
+            message = "Upload Assistant trumpable release trump"
+        else:
+            message = "Upload Assistant is trumping this torrent for reasons Audionut has not correctly caught. User selected yes at a prompt."
+
+        payload = {
+            'reported_torrent_id': reported_torrent_id,
+            'trumping_torrent_id': trumping_torrent_id,
+            'message': message
+        }
+        if 'screenshots_reported_torrent' in meta:
+            payload['screenshots_reported_torrent'] = ','.join(meta['screenshots_reported_torrent'])
+        if 'screenshots_trumping_torrent' in meta:
+            payload['screenshots_trumping_torrent'] = ','.join(meta['screenshots_trumping_torrent'])
+        if 'screenshots_in_description' in meta and meta['screenshots_in_description']:
+            payload['message'] += " - User says comparison screenshots are in description."
+        if not meta.get('debug', False):
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(url=create_url, headers=headers, json=payload)
+                    if response.status_code in (200, 201):
+                        console.print(f"[bold green]Successfully created trump report on {tracker}[/bold green]")
+                        return True
+                    else:
+                        console.print(f"[bold red]Failed to create trump report. HTTP Status: {response.status_code}[/bold red]")
+                        return False
+
+            except httpx.TimeoutException:
+                console.print("[bold red]Request timed out after 10 seconds[/bold red]")
+                return False
+            except httpx.RequestError as e:
+                console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
+                return False
+            except Exception as e:
+                console.print(f"[bold red]Unexpected error: {e}[/bold red]")
+                return False
+        else:
+            console.print("[bold yellow]Debug mode enabled, skipping actual trump report creation.[/bold yellow]")
+            console.print(f"[cyan]POST URL: {create_url}[/cyan]")
+            console.print(f"[cyan]Payload: {payload}[/cyan]")
+            return True
+
 
 tracker_class_map = {
     'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,

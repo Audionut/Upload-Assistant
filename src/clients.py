@@ -2216,8 +2216,16 @@ class Clients():
                             else:
                                 torrents_data = response_data
 
-                            if meta['debug']:
-                                console.print(f"[cyan]Retrieved {len(torrents_data)} torrents via proxy search for '{search_term}'")
+                            # Ensure torrents_data is iterable
+                            if torrents_data is None:
+                                torrents_data = []
+
+                            if meta.get('debug', False):
+                                if torrents_data:
+                                    console.print(f"[cyan]qBittorrent proxy search returned {len(torrents_data)} torrents for '{search_term}'")
+                                else:
+                                    console.print("[cyan]No matching torrents found via proxy search")
+
                             # Convert to objects that match qbittorrentapi structure
 
                             class MockTorrent:

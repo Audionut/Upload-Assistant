@@ -14,10 +14,11 @@ from src.trackersetup import tracker_class_map
 
 class UploadHelper:
     async def dupe_check(self, dupes, meta, tracker_name):
+        meta['were_trumping'] = False
         if not dupes:
             if meta['debug']:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
-            return False
+            return False,  meta
         else:
             tracker_class = tracker_class_map[tracker_name](config=config)
             try:
@@ -34,7 +35,8 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
-            if meta.get('trumpable', False):
+            trumpable_text = None
+            if meta.get('trumpable_id') or meta.get('matched_episode_ids', []):
                 trumpable_dupes = [d for d in dupes if isinstance(d, dict) and d.get('trumpable')]
                 if trumpable_dupes:
                     trumpable_text = "\n".join([
@@ -42,49 +44,112 @@ class UploadHelper:
                         for d in trumpable_dupes
                     ])
                     console.print("[bold red]Trumpable found![/bold red]")
-                    console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+                elif meta.get('matched_episode_ids', []):
+                    matched_episodes = meta['matched_episode_ids']
+                    user_tag = meta.get('tag', '').lstrip('-').lower()  # Remove leading dash for comparison
 
-                    meta['aither_trumpable'] = [
-                        {'name': d.get('name'), 'link': d.get('link')}
-                        for d in trumpable_dupes
-                    ]
+                    # Try to find a release with matching tag
+                    selected_match = None
+                    tag_matched = False
+                    if user_tag:
+                        for ep in matched_episodes:
+                            ep_name = ep.get('name', '').lower()
+                            # Tag typically appears at end of name like "H.265-ETHEL"
+                            if ep_name.endswith(user_tag) or f"-{user_tag}" in ep_name:
+                                selected_match = ep
+                                tag_matched = True
+                                break
 
-                # Remove trumpable dupes from the main list
-                dupes = [d for d in dupes if not (isinstance(d, dict) and d.get('trumpable'))]
+                    # Fall back to first match if no tag match found
+                    if not selected_match:
+                        selected_match = matched_episodes[0]
+
+                    trumpable_text = f"{selected_match['name']} - {selected_match['link']}" if 'link' in selected_match else selected_match['name']
+                    console.print("[bold red]Trumpable found based on episode matching![/bold red]")
+
+                    if user_tag and not tag_matched:
+                        console.print(f"[yellow]Note: No release found with matching tag '{meta.get('tag')}'. Selected release may be from a different group.[/yellow]")
+
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join([
                     f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d and d['link'] is not None else (d['name'] if isinstance(d, dict) else d)
                     for d in dupes
                 ])
-                if not dupe_text and meta.get('trumpable', False):
-                    console.print("[yellow]Please check the trumpable entries above to see if you want to upload, and report the trumpable torrent if you upload.[/yellow]")
+
+                if trumpable_text and (meta.get('trumpable_id') or meta.get('matched_episode_ids', [])):
+                    console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
+                    console.print("[yellow]Please check the trumpable entries above to see if you want to upload[/yellow]")
+                    console.print("[yellow]You will have the option to report the trumpable torrent if you upload.[/yellow]")
                     if meta.get('dupe', False) is False:
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            upload = cli_ui.ask_yes_no("Are you trumping this release?", default=False)
+                            if upload:
+                                meta['we_asked'] = True
+                                meta['were_trumping'] = True
+                                if not meta.get('trumpable_id'):
+                                    meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                                if meta.get('filename_match', False) and meta.get('file_count_match', False):
+                                    meta['trump_reason'] = 'exact_match'
+                                else:
+                                    meta['trump_reason'] = 'trumpable_release'
+                            else:
+                                # For season packs: individual episodes are only in dupes for trumping purposes.
+                                # If user declines to trump, filter them out so they aren't shown as "potential dupes"
+                                # (they wouldn't match season/episode anyway).
+                                if meta.get('tv_pack') and meta.get('matched_episode_ids', []):
+                                    matched_ids = {ep.get('id') for ep in meta.get('matched_episode_ids', []) if ep.get('id')}
+                                    dupes = [
+                                        d for d in dupes
+                                        if not (isinstance(d, dict) and d.get('id') in matched_ids)
+                                    ]
+                                    # Clear matched_episode_ids since we're not trumping
+                                    meta['matched_episode_ids'] = []
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
                             reset_terminal()
                             sys.exit(1)
-                    else:
-                        upload = True
-                        meta['we_asked'] = False
-                else:
+
+                if not meta.get('were_trumping', False):
                     if meta.get('filename_match', False) and meta.get('file_count_match', False):
                         console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
-                            upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
-                            meta['we_asked'] = True
+                            if tracker_name == "AITHER":
+                                console.print("[yellow]AITHER supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
+                                upload = cli_ui.ask_yes_no("Are you trumping this exact match?", default=False)
+                                if upload:
+                                    meta['we_asked'] = True
+                                    meta['were_trumping'] = True
+                                    meta['trump_reason'] = 'exact_match'
+                                    if not meta.get('trumpable_id'):
+                                        meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                            else:
+                                upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
+                                meta['we_asked'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup()
                             reset_terminal()
                             sys.exit(1)
-                    else:
-                        console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
-                        console.print()
-                        console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
+                    elif dupes:
+                        # Rebuild dupe_text in case dupes was filtered after trump decline
+                        dupe_text = "\n".join([
+                            f"{d['name']} - {d['link']}" if isinstance(d, dict) and 'link' in d and d['link'] is not None else (d['name'] if isinstance(d, dict) else d)
+                            for d in dupes
+                        ])
+                        if meta.get('season_pack_exists', False):
+                            # Display only the matched season pack info from dupe_checking
+                            season_pack_name = meta.get('season_pack_name', '')
+                            season_pack_link = meta.get('season_pack_link')
+                            season_pack_text = f"{season_pack_name} - {season_pack_link}" if season_pack_link else season_pack_name
+                            console.print(f"[yellow]Note: A season pack exists on {tracker_name}[/yellow]")
+                            console.print("[yellow]Ensure your upload is not part of that season pack, or is otherwise allowed.[/yellow]")
+                            console.print()
+                            console.print(f"[bold cyan]{season_pack_text}[/bold cyan]")
+                        else:
+                            console.print(f"[bold blue]Check if these are actually dupes from {tracker_name}:[/bold blue]")
+                            console.print()
+                            console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
                         if meta.get('dupe', False) is False:
                             try:
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
@@ -96,6 +161,10 @@ class UploadHelper:
                                 sys.exit(1)
                         else:
                             upload = True
+                    else:
+                        # dupes list was emptied after filtering (e.g., season pack declined trump, no other dupes)
+                        upload = True
+
             else:
                 if meta.get('dupe', False) is False:
                     upload = False
@@ -152,14 +221,14 @@ class UploadHelper:
                             break
 
             if upload is False:
-                return True
+                return True, meta
             else:
                 for each in dupes:
                     each_name = each['name'] if isinstance(each, dict) else each
                     if each_name == meta['name']:
                         meta['name'] = f"{meta['name']} DUPE?"
 
-                return False
+                return False, meta
 
     async def get_confirmation(self, meta):
         if meta['debug'] is True:
