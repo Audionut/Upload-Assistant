@@ -170,14 +170,19 @@ class TTG():
 
                     if up.url.startswith("https://totheglory.im/details.php?id="):
                         meta['tracker_status'][self.tracker]['status_message'] = up.url
-                        id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
-                        await self.download_new_torrent(id, torrent_path)
+                        id_match = re.search(r"(id=)(\d+)", urlparse(up.url).query)
+                        if not id_match:
+                            raise UploadException(  # noqa #F405
+                                f"Upload to TTG succeeded but torrent id missing from URL {up.url}",
+                                'red',
+                            )
+                        torrent_id = id_match.group(2)
+                        await self.download_new_torrent(torrent_id, torrent_path)
                         return True
                     else:
                         console.print(data)
                         console.print("\n\n")
                         raise UploadException(f"Upload to TTG Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa #F405
-        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []
@@ -207,7 +212,8 @@ class TTG():
                     soup = BeautifulSoup(response.text, 'html.parser')
                     find = soup.find_all('a', href=True)
                     for each in find:
-                        if each['href'].startswith('/t/'):
+                        href_value = each.get('href')
+                        if isinstance(href_value, str) and href_value.startswith('/t/'):
                             release = re.search(r"(<b>)(<font.*>)?(.*)<br", str(each))
                             if release:
                                 dupes.append(release.group(3))
@@ -273,7 +279,10 @@ class TTG():
             await asyncio.sleep(0.5)
             if response.url.endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
-                auth_token = soup.find('input', {'name': 'authenticity_token'}).get('value')
+                token_input = soup.find('input', {'name': 'authenticity_token'})
+                auth_token = token_input.get('value') if token_input else None
+                if not auth_token:
+                    raise UploadException('Missing authenticity token during TTG login', 'red')  # noqa #F405
                 two_factor_data = {
                     'otp': console.input('[yellow]TTG 2FA Code: '),
                     'authenticity_token': auth_token,

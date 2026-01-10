@@ -33,6 +33,12 @@ class PTER():
 
         self.cookie_validator = CookieValidator(config)
 
+    def _extract_auth_token(self, text: str, pattern: str) -> str:
+        match = re.search(pattern, text)
+        if match is None:
+            raise LoginException("Unable to locate auth token for Pterimg.")  # noqa: F405
+        return match.group(1)
+
     async def validate_credentials(self, meta):
         vcookie = await self.validate_cookies(meta)
         if vcookie is not True:
@@ -231,7 +237,7 @@ class PTER():
             else:
                 console.print("[yellow]Pterimg Cookies not found. Creating new session.")
             if loggedIn is True:
-                auth_token = re.search(r'auth_token.*?\"(\w+)\"', r.text).groups()[0]
+                auth_token = self._extract_auth_token(r.text, r'auth_token.*?"(\w+)"')
             else:
                 data = {
                     'login-subject': self.username,
@@ -239,11 +245,11 @@ class PTER():
                     'keep-login': 1
                 }
                 r = session.get("https://s3.pterclub.com", timeout=30)
-                data['auth_token'] = re.search(r'auth_token.*?\"(\w+)\"', r.text).groups()[0]
+                data['auth_token'] = self._extract_auth_token(r.text, r'auth_token.*?"(\w+)"')
                 loginresponse = session.post(url='https://s3.pterclub.com/login', data=data, timeout=30)
                 if not loginresponse.ok:
                     raise LoginException("Failed to login to Pterimg. ")  # noqa #F405
-                auth_token = re.search(r'auth_token = *?\"(\w+)\"', loginresponse.text).groups()[0]
+                auth_token = self._extract_auth_token(loginresponse.text, r'auth_token = *?"(\w+)"')
                 self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)
 
         return auth_token
@@ -291,9 +297,18 @@ class PTER():
                                 continue
                             raise Exception(f'HTTP {req.status_code}, reason: {message}')
 
-                        image_dict = {}
-                        image_dict['web_url'] = res['image']['url']
-                        image_dict['img_url'] = res['image']['url']
+                        if not isinstance(res, dict):
+                            raise ValueError('Unexpected response payload while uploading to Pterimg.')
+                        image_data = res.get('image')
+                        if not isinstance(image_data, dict):
+                            raise ValueError('Missing image data in Pterimg response.')
+                        image_url = image_data.get('url')
+                        if not isinstance(image_url, str):
+                            raise ValueError('Missing image url in Pterimg response.')
+                        image_dict = {
+                            'web_url': image_url,
+                            'img_url': image_url,
+                        }
                         image_list.append(image_dict)
         return image_list
 
@@ -402,10 +417,13 @@ class PTER():
 
                         if up.url.startswith("https://pterclub.com/details.php?id="):
                             console.print(f"[green]Uploaded to: [yellow]{up.url.replace('&uploaded=1', '')}[/yellow][/green]")
-                            id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
-                            await self.download_new_torrent(id, torrent_path)
+                            id_match = re.search(r"(id=)(\d+)", urlparse(up.url).query)
+                            if id_match is None:
+                                raise UploadException("Upload succeeded but torrent id was not present in the redirect URL.", 'red')  # noqa: F405
+                            torrent_id = id_match.group(2)
+                            await self.download_new_torrent(torrent_id, torrent_path)
                             meta['tracker_status'][self.tracker]['status_message'] = up.url.replace('&uploaded=1', '')
-                            meta['tracker_status'][self.tracker]['torrent_id'] = id
+                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             return True
                         else:
                             console.print(data)

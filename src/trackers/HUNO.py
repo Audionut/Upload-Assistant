@@ -154,28 +154,26 @@ class HUNO(UNIT3D):
     async def get_audio(self, meta):
         channels = meta.get('channels', "")
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
-        languages = ""
+        languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
             await process_desc_language(meta, desc=None, tracker=self.tracker)
-        if meta.get('audio_languages'):
-            languages = meta['audio_languages']
-            languages = set(languages)
-            if len(languages) > 2:
-                languages = "Multi"
-            elif len(languages) > 1:
-                languages = "Dual"
+        audio_languages = meta.get('audio_languages')
+        if audio_languages:
+            normalized_languages = set(audio_languages)
+            if "zxx" in normalized_languages:
+                languages_result = "NONE"
+            elif len(normalized_languages) > 2:
+                languages_result = "Multi"
+            elif len(normalized_languages) > 1:
+                languages_result = "Dual"
             else:
-                languages = list(languages)[0]
+                languages_result = next(iter(normalized_languages), "SKIPPED")
 
-            if "zxx" in languages:
-                languages = "NONE"
-            elif not languages:
-                languages = "SKIPPED"
-        else:
-            languages = "SKIPPED"
+            if not languages_result:
+                languages_result = "SKIPPED"
 
-        return f'{codec} {channels} {languages}'
+        return f'{codec} {channels} {languages_result}'
 
     def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])

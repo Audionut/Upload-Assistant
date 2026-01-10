@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-from typing import Literal
+from typing import Any, Literal
 import asyncio
 import aiofiles
 import certifi
@@ -17,7 +17,7 @@ from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
-_shri_session_data = {}
+_shri_session_data: dict[str, dict[str, str | None]] = {}
 
 
 class SHRI(UNIT3D):
@@ -430,7 +430,7 @@ class SHRI(UNIT3D):
             encoded_lib = str(general.get("Encoded_Library", "")).lower()
 
             if "makemkv" in encoded_app or "makemkv" in encoded_lib:
-                video = next((t for t in mi if t.get("@type") == "Video"), {})
+                video: dict[str, Any] = next((t for t in mi if t.get("@type") == "Video"), {})
                 settings = video.get("Encoded_Library_Settings")
                 if not settings or isinstance(settings, dict):
                     return True
@@ -922,8 +922,8 @@ class SHRI(UNIT3D):
             tracks = mi.get("track", [])
 
             # Parse track types
-            general = next((t for t in tracks if t.get("@type") == "General"), {})
-            video = next((t for t in tracks if t.get("@type") == "Video"), {})
+            general: dict[str, Any] = next((t for t in tracks if t.get("@type") == "General"), {})
+            video: dict[str, Any] = next((t for t in tracks if t.get("@type") == "Video"), {})
             audio_tracks = [t for t in tracks if t.get("@type") == "Audio"]
             text_tracks = [t for t in tracks if t.get("@type") == "Text"]
 

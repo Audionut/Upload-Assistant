@@ -348,15 +348,21 @@ class GPW():
 
                     for torrent_row in torrent_table.find_all('tr', class_='TableTorrent-rowTitle'):
                         title_link = torrent_row.find('a', href=re.compile(r'torrentid=\d+'))
-                        if not title_link or not title_link.get('data-tooltip'):
+                        if not title_link:
                             continue
 
-                        name = title_link['data-tooltip']
+                        tooltip_value = title_link.get('data-tooltip')
+                        if not isinstance(tooltip_value, str):
+                            continue
+
+                        name = tooltip_value
 
                         size_cell = torrent_row.find('td', class_='TableTorrent-cellStatSize')
                         size = size_cell.get_text(strip=True) if size_cell else None
 
-                        match = re.search(r'torrentid=(\d+)', title_link['href'])
+                        href_value = title_link.get('href')
+                        href_text = href_value if isinstance(href_value, str) else ''
+                        match = re.search(r'torrentid=(\d+)', href_text)
                         torrent_link = f'{self.torrent_url}{match.group(1)}' if match else None
 
                         dupe_entry = {
@@ -403,7 +409,8 @@ class GPW():
                 resolution = '2160p'
 
             if not resolution:
-                slot_type_tag = row.find('td', class_='TableTorrent-cellEmptySlotNote').find('i')
+                slot_cell = row.find('td', class_='TableTorrent-cellEmptySlotNote')
+                slot_type_tag = slot_cell.find('i') if slot_cell else None
                 if slot_type_tag:
                     resolution = slot_type_tag.get_text(strip=True).replace('empty slots:', '').strip()
 
@@ -417,7 +424,9 @@ class GPW():
 
             span_tags = row.find_all('span', class_='tooltipstered')
             for tag in span_tags:
-                slot_names.append(tag.find('i').get_text(strip=True))
+                icon = tag.find('i')
+                if icon:
+                    slot_names.append(icon.get_text(strip=True))
 
             final_slots_list = sorted(list(set(slot_names)))
             formatted_slots = [f'- {slot}' for slot in final_slots_list]

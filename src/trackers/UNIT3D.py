@@ -8,9 +8,14 @@ import httpx
 import os
 import platform
 import re
+from typing import Any
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
+
+QueryValue = str | int | float | bool | None
+ParamsList = list[tuple[str, QueryValue]]
 
 
 class UNIT3D:
@@ -42,47 +47,56 @@ class UNIT3D:
             meta['skipping'] = f'{self.tracker}'
             return
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
         headers = {
             'authorization': f'Bearer {self.api_key}',
             'accept': 'application/json',
         }
 
-        params = {
+        params_dict: dict[str, str] = {
             'tmdbId': meta['tmdb'],
             'categories[]': (await self.get_category_id(meta))['category_id'],
             'name': '',
             'perPage': '100'
         }
+        params_list: ParamsList | None = None
         resolutions = await self.get_resolution_id(meta)
         if resolutions['resolution_id'] in ['3', '4']:
             # Convert params to list of tuples to support duplicate keys
-            params_list: list[tuple[str, str]] = [(k, v) for k, v in params.items()]
+            params_list = [(k, v) for k, v in params_dict.items()]
             params_list.append(('resolutions[]', '3'))
             params_list.append(('resolutions[]', '4'))
-            params: dict[str, str] | list[tuple[str, str]] = params_list
         else:
-            params['resolutions[]'] = resolutions['resolution_id']
+            params_dict['resolutions[]'] = resolutions['resolution_id']
 
         if self.tracker not in ['SP', 'STC']:
             type_id = (await self.get_type_id(meta))['type_id']
-            if isinstance(params, list):
-                params.append(('types[]', type_id))
+            if params_list is not None:
+                params_list.append(('types[]', type_id))
             else:
-                params['types[]'] = type_id
+                params_dict['types[]'] = type_id
 
         if meta['category'] == 'TV':
             season_value = f" {meta.get('season', '')}"
-            if isinstance(params, list):
+            if params_list is not None:
                 # Update the 'name' parameter in the list
-                params = [(k, v + season_value if k == 'name' else v) for k, v in params]
+                params_list = [
+                    (k, (v + season_value if k == 'name' and isinstance(v, str) else v))
+                    for k, v in params_list
+                ]
             else:
-                params['name'] = params['name'] + season_value
+                params_dict['name'] = params_dict['name'] + season_value
+
+        request_params: ParamsList
+        if params_list is not None:
+            request_params = params_list
+        else:
+            request_params = [(k, v) for k, v in params_dict.items()]
 
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url=self.search_url, headers=headers, params=params)
+                response = await client.get(url=self.search_url, headers=headers, params=request_params)
                 response.raise_for_status()
                 if response.status_code == 200:
                     data = response.json()

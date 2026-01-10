@@ -9,11 +9,11 @@ import os
 import pyotp
 import re
 import traceback
+from typing import Any
 
 from defusedxml import ElementTree as ET
 from torf import Torrent
 
-from data.config import config
 from src.console import console
 from src.rehostimages import check_hosts
 from src.torrentcreate import create_torrent
@@ -82,7 +82,7 @@ class MTV():
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
                 piece_size = 8
-                tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
+                tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
                 torrent_create = f"[{self.tracker}]"
 
                 await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
@@ -197,7 +197,6 @@ class MTV():
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
-        return False
 
     async def edit_desc(self, meta):
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8') as f:
@@ -388,7 +387,7 @@ class MTV():
             return '3'
 
     async def get_tags(self, meta):
-        tags = []
+        tags: list[str] = []
         # Genres
         # MTV takes issue with some of the pulled TMDB tags, and I'm not hand checking and attempting
         # to regex however many tags need changing, so they're just getting skipped
@@ -444,7 +443,8 @@ class MTV():
             tags.append('atmos.audio')
 
         # Video tags
-        tags.append(meta.get('video_codec').replace('AVC', 'h264').replace('HEVC', 'h265').replace('-', ''))
+        video_codec = str(meta.get('video_codec', ''))
+        tags.append(video_codec.replace('AVC', 'h264').replace('HEVC', 'h265').replace('-', ''))
 
         # Group Tags
         if meta['tag'] != "":
@@ -466,8 +466,8 @@ class MTV():
             if len(meta['bdinfo']['subtitles']) >= 1:
                 tags.append('subtitles')
 
-        tags = ' '.join(tags)
-        return tags
+        tag_string = ' '.join(tag for tag in tags if tag)
+        return tag_string
 
     async def validate_credentials(self, meta):
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
@@ -589,7 +589,11 @@ class MTV():
 
                         otp_uri = self.config['TRACKERS'][self.tracker].get('otp_uri')
                         if otp_uri:
-                            mfa_code = pyotp.parse_uri(otp_uri).now()
+                            try:
+                                otp = pyotp.parse_uri(otp_uri)
+                                mfa_code = pyotp.TOTP(otp.secret).now()
+                            except (ValueError, TypeError):
+                                mfa_code = console.input('[yellow]MTV 2FA Code: ')
                         else:
                             mfa_code = console.input('[yellow]MTV 2FA Code: ')
 
@@ -683,7 +687,7 @@ class MTV():
                 meta['skipping'] = "MTV"
                 return []
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
         # Build request parameters
         params = {
@@ -738,7 +742,6 @@ class MTV():
             console.print(f"[red]Unable to search for existing torrents: {e}")
         except Exception:
             console.print("[red]Unable to search for existing torrents on site. Most likely the site is down.")
-            dupes.append("FAILED SEARCH")
             traceback.print_exc()
             await asyncio.sleep(5)
 

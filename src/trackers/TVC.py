@@ -15,6 +15,7 @@ from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
 from datetime import datetime
+from typing import Any
 
 
 class TVC():
@@ -301,7 +302,7 @@ class TVC():
         if meta.get('unattended', False) is False:
             upload_to_tvc = cli_ui.ask_yes_no(f"Upload to {self.tracker} with the name {tvc_name}?", default=False)
             if not upload_to_tvc:
-                tvc_name = cli_ui.ask_string("Please enter New Name:")
+                tvc_name = cli_ui.ask_string("Please enter New Name:") or tvc_name
                 upload_to_tvc = cli_ui.ask_yes_no(f"Upload to {self.tracker} with the name {tvc_name}?", default=False)
 
         data = {
@@ -381,9 +382,6 @@ class TVC():
                 # Use last segment as torrent ID
                 t_id = segments[-1]
                 meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-
-                if meta['debug']:
-                    console.print(f"[cyan]Extracted torrent ID {t_id} from {data_str}")
 
                 await common.create_torrent_ready_to_seed(
                     meta,
@@ -528,7 +526,7 @@ class TVC():
 
     async def search_existing(self, meta, _disctype=None):
         # Search on TVCUK has been DISABLED due to issues, but we can still skip uploads based on criteria
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
         # UHD, Discs, remux and non-1080p HEVC are not allowed on TVC.
         if meta['resolution'] == '2160p' or (meta['is_disc'] or "REMUX" in meta['type']) or (meta['video_codec'] == 'HEVC' and meta['resolution'] != '1080p'):

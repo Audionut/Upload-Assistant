@@ -11,7 +11,7 @@ import re
 import uuid
 from bs4 import BeautifulSoup
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional, cast
 from urllib.parse import urlparse
 
 from cogs.redaction import redact_private_info
@@ -41,6 +41,9 @@ class AZTrackerBase:
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=60.0)
         self.media_code = ''
+
+    async def rules(self, meta):
+        return ''
 
     def get_resolution(self, meta):
         resolution = ''
@@ -255,10 +258,10 @@ class AZTrackerBase:
 
         rip_type = self.get_rip_type(meta, display_name=True)
 
-        page_url = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
+        page_url: str | None = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
 
-        duplicates = []
-        visited_urls = set()
+        duplicates: list[dict[str, str]] = []
+        visited_urls: set[str] = set()
 
         while page_url and page_url not in visited_urls:
             visited_urls.add(page_url)
@@ -274,7 +277,12 @@ class AZTrackerBase:
                     page_url = None
                     continue
 
-                torrent_rows = torrent_table.find('tbody').find_all('tr', recursive=False)
+                tbody = torrent_table.find('tbody')
+                if not tbody:
+                    page_url = None
+                    continue
+
+                torrent_rows = tbody.find_all('tr', recursive=False)
 
                 for row in torrent_rows:
                     badges = [b.get_text(strip=True) for b in row.find_all('span', class_='badge-extra')]
@@ -285,7 +293,8 @@ class AZTrackerBase:
                     name_tag = row.find('a', class_='torrent-filename')
                     name = name_tag.get_text(strip=True) if name_tag else ''
 
-                    torrent_link = name_tag.get('href') if name_tag and 'href' in name_tag.attrs else ''
+                    href_value = name_tag.get('href') if name_tag else None
+                    torrent_link = href_value if isinstance(href_value, str) else ''
                     if torrent_link:
                         match = re.search(r'/(\d+)', torrent_link)
                         if match:
@@ -305,9 +314,10 @@ class AZTrackerBase:
 
                     duplicates.append(dupe_entry)
 
-                next_page_tag = soup.select_one('a[rel=\'next\']')
+                next_page_tag = soup.select_one("a[rel='next']")
                 if next_page_tag and 'href' in next_page_tag.attrs:
-                    page_url = next_page_tag['href']
+                    next_href = next_page_tag.get('href')
+                    page_url = next_href if isinstance(next_href, str) else None
                 else:
                     page_url = None
 
@@ -674,7 +684,11 @@ class AZTrackerBase:
         if amount > 0:
             console.print(f'{self.tracker}: Deleted from description: {amount} BBCode tag(s).')
 
-        final_html_desc = bbcode.render_html(processed_desc)
+        render_html = getattr(bbcode, 'render_html', None)
+        if callable(render_html):
+            final_html_desc = cast(Callable[[str], str], render_html)(processed_desc)
+        else:
+            final_html_desc = cast(Any, bbcode).Parser().format(processed_desc)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(final_html_desc)

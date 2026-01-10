@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-from data.config import config
 from src.get_desc import DescriptionBuilder
 from src.tmdb import get_logo
 from src.trackers.UNIT3D import UNIT3D
@@ -33,7 +32,7 @@ class RAS(UNIT3D):
 
     async def get_description(self, meta):
         if meta.get('logo', "") == "":
-            TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
+            TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api', False)
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
             tmdb_id = meta.get('tmdb')
             category = meta.get('category')

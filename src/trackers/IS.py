@@ -84,7 +84,7 @@ class IS:
 
     async def search_existing(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        dupes = []
+        dupes: list[dict[str, str | None]] = []
 
         if meta['category'] == "MOVIE":
             search_type = 't_genre'
@@ -114,7 +114,8 @@ class IS:
                     continue
 
                 name = name_tag.get_text(strip=True)
-                torrent_link = name_tag.get('href')
+                href_value = name_tag.get('href')
+                torrent_link = href_value if isinstance(href_value, str) else ''
 
                 size_tag = row.select_one('td:nth-of-type(5)')
                 size = size_tag.get_text(strip=True) if size_tag else None

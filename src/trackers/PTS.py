@@ -144,8 +144,8 @@ class PTS:
         )
 
         if not mandarin:
-            response = input("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway? (y/n): ")
-            if response.lower() not in ['y', 'yes']:
+            user_input = input("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway? (y/n): ")
+            if user_input.lower() not in ['y', 'yes']:
                 print("Upload cancelled by user.")
                 meta['skipping'] = f"{self.tracker}"
                 return

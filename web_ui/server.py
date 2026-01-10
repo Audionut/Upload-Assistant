@@ -11,6 +11,7 @@ import threading
 import queue
 import hmac
 from pathlib import Path
+from typing import Literal, TypedDict
 from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -39,6 +40,15 @@ ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # Store active processes
 active_processes = {}
+
+
+class BrowseItem(TypedDict):
+    """Serialized representation of an entry returned by the browse API."""
+
+    name: str
+    path: str
+    type: Literal['folder', 'file']
+    children: list['BrowseItem'] | None
 
 
 def _webui_auth_configured() -> bool:
@@ -256,7 +266,7 @@ def browse_path():
     print(f"Browsing path: {path}")
 
     try:
-        items: list[dict[str, str]] = []
+        items: list[BrowseItem] = []
         try:
             for item in sorted(os.listdir(path)):
                 # Skip hidden files

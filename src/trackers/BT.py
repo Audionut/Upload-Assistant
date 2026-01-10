@@ -429,8 +429,9 @@ class BT:
             group_links = set()
             for group_row in torrent_table.find_all('tr'):
                 link = group_row.find('a', href=re.compile(r'torrents\.php\?id=\d+'))
-                if link and 'torrentid' not in link.get('href', ''):
-                    group_links.add(link['href'])
+                href_value = link.get('href') if link else None
+                if isinstance(href_value, str) and 'torrentid' not in href_value:
+                    group_links.add(href_value)
 
             if not group_links:
                 return []
@@ -447,7 +448,10 @@ class BT:
                         continue
                     description_text = ' '.join(desc_link.get_text(strip=True).split())
 
-                    torrent_id = torrent_row.get('id', '').replace('torrent', '')
+                    row_id = torrent_row.get('id')
+                    if not isinstance(row_id, str):
+                        continue
+                    torrent_id = row_id.replace('torrent', '')
                     file_div = group_soup.find('div', id=f'files_{torrent_id}')
                     if not file_div:
                         continue
@@ -464,13 +468,23 @@ class BT:
                         file_table = file_div.find('table', class_='filelist_table')
                         if file_table:
                             for row in file_table.find_all('tr'):
-                                if 'colhead_dark' not in row.get('class', []):
-                                    cell = row.find('td')
-                                    if cell:
-                                        filename = cell.get_text(strip=True)
-                                        if filename:
-                                            found_items.append(filename)
-                                            break
+                                class_attr = row.get('class')
+                                if isinstance(class_attr, str):
+                                    class_list = [class_attr]
+                                elif isinstance(class_attr, list):
+                                    class_list = [str(value) for value in class_attr]
+                                else:
+                                    class_list = []
+
+                                if 'colhead_dark' in class_list:
+                                    continue
+
+                                cell = row.find('td')
+                                if cell:
+                                    filename = cell.get_text(strip=True)
+                                    if filename:
+                                        found_items.append(filename)
+                                        break
 
         except Exception as e:
             console.print(f'[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]')

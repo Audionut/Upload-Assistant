@@ -6,7 +6,7 @@ import httpx
 import os
 import platform
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
@@ -145,7 +145,7 @@ class HDS:
     async def search_existing(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
 
-        dupes = []
+        dupes: list[dict[str, str | None]] = []
         imdb_id = meta.get('imdb', '')
         if imdb_id == '0':
             console.print(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
@@ -167,7 +167,7 @@ class HDS:
 
             all_tables = soup.find_all('table', class_='lista')
 
-            torrent_rows = []
+            torrent_rows: list[Tag] = []
 
             for table in all_tables:
                 recommend_header = table.find('td', attrs={'class': 'block'}, string=re.compile(r'Our Team Recommend'))  # type: ignore

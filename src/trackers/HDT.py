@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 
 class HDT:
+    secret_token: str = ''
+
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
@@ -219,7 +221,7 @@ class HDT:
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
             params = {
-                'csrfToken': HDT.secret_token,
+                'csrfToken': self.secret_token,
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -227,7 +229,7 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': HDT.secret_token,
+                'csrfToken': self.secret_token,
                 'search': meta['title'],
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
@@ -284,7 +286,7 @@ class HDT:
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': HDT.secret_token,
+            'csrfToken': self.secret_token,
         }
 
         # 3D

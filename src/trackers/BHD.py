@@ -121,7 +121,7 @@ class BHD():
         }
 
         url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        details_link = {}
+        details_link: str | None = None
         if meta['debug'] is False:
             try:
                 async with httpx.AsyncClient(timeout=60) as client:

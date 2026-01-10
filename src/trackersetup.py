@@ -7,8 +7,8 @@ import json
 import os
 import re
 import sys
+from typing import Any
 
-from data.config import config
 from datetime import datetime, timedelta
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -16,7 +16,6 @@ from src.trackers.COMMON import COMMON
 
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
-from src.trackers.AL import AL
 from src.trackers.ANT import ANT
 from src.trackers.AR import AR
 from src.trackers.ASC import ASC
@@ -82,16 +81,20 @@ from src.trackers.EMUW import EMUW
 
 
 class TRACKER_SETUP:
-    def __init__(self, config):
-        self.config = config
-        # Add initialization details here
-        pass
+    def __init__(self, config: dict[str, Any]):
+        self.config: dict[str, Any] = config
+
+    def _create_tracker_instance(self, tracker: str) -> Any | None:
+        tracker_class = tracker_class_map.get(tracker.upper())
+        if tracker_class is None:
+            return None
+        return tracker_class(self.config)
 
     def trackers_enabled(self, meta):
         if meta.get('trackers') is not None:
             trackers = meta['trackers']
         else:
-            trackers = config['TRACKERS']['default_trackers']
+            trackers = self.config['TRACKERS']['default_trackers']
 
         if isinstance(trackers, str):
             trackers = trackers.split(',')
@@ -112,13 +115,11 @@ class TRACKER_SETUP:
     async def get_banned_groups(self, meta, tracker):
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_banned_groups.json')
 
-        tracker_class = tracker_class_map.get(tracker.upper())
-        if tracker_class is None:
+        tracker_instance = self._create_tracker_instance(tracker)
+        if tracker_instance is None:
             return None
-        tracker_instance = tracker_class(self.config)
-        try:
-            banned_url = tracker_instance.banned_url
-        except AttributeError:
+        banned_url = getattr(tracker_instance, 'banned_url', None)
+        if not isinstance(banned_url, str):
             return None
 
         # Check if we need to update
@@ -341,13 +342,11 @@ class TRACKER_SETUP:
 
     async def get_torrent_claims(self, meta, tracker):
         file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
-        tracker_class = tracker_class_map.get(tracker.upper())
-        if tracker_class is None:
+        tracker_instance = self._create_tracker_instance(tracker)
+        if tracker_instance is None:
             return None
-        tracker_instance = tracker_class(self.config)
-        try:
-            claims_url = tracker_instance.claims_url
-        except AttributeError:
+        claims_url = getattr(tracker_instance, 'claims_url', None)
+        if not isinstance(claims_url, str):
             return None
 
         # Check if we need to update
@@ -419,12 +418,11 @@ class TRACKER_SETUP:
 
         async def process_single_tracker(tracker_name):
             try:
-                tracker_class = tracker_class_map.get(tracker_name.upper())
-                if not tracker_class:
+                tracker_instance = self._create_tracker_instance(tracker_name)
+                if tracker_instance is None:
                     console.print(f"[red]Tracker {tracker_name} is not registered in tracker_class_map[/red]")
                     return False
 
-                tracker_instance = tracker_class(self.config)
                 # Get name-to-ID mappings directly
                 type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)
                 type_name = meta.get('type', '')
@@ -492,7 +490,7 @@ class TRACKER_SETUP:
     async def get_tracker_requests(self, meta, tracker, url):
         if meta['debug']:
             console.print(f"[bold green]Searching for existing requests on {tracker}[/bold green]")
-        requests = []
+        requests: list[dict[str, Any]] = []
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
             'Accept': 'application/json'
@@ -547,10 +545,10 @@ class TRACKER_SETUP:
     async def bhd_request_check(self, meta, tracker, url):
         if 'BHD' not in self.config['TRACKERS'] or not self.config['TRACKERS']['BHD'].get('api_key'):
             console.print("[red]BHD API key not configured. Skipping BHD request check.[/red]")
-            return False
+            return []
         if meta['debug']:
             console.print(f"[bold green]Searching for existing requests on {tracker}[/bold green]")
-        requests = []
+        requests: list[dict[str, Any]] = []
         params = {
             'action': 'search',
             'tmdb_id': f"{meta['category'].lower()}/{meta['tmdb_id']}",
@@ -609,28 +607,32 @@ class TRACKER_SETUP:
             console.print("[red]Invalid trackers input format.[/red]")
             return False
 
-        async def process_single_tracker(tracker):
-            tracker_class = tracker_class_map.get(tracker)
-            if not tracker_class:
-                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+        async def process_single_tracker(tracker_name: str):
+            tracker_instance = self._create_tracker_instance(tracker_name)
+            if tracker_instance is None:
+                console.print(f"[red]Tracker {tracker_name} is not registered in tracker_class_map[/red]")
                 return False
 
-            tracker_instance = tracker_class(self.config)
+            requests: list[dict[str, Any]] = []
+            url: str | None = None
             try:
                 url = tracker_instance.requests_url
             except AttributeError:
-                if tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
-                    pass
-                else:
+                if tracker_name.upper() not in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
                     # tracker without requests url not supported
-                    return
-            if tracker.upper() == "BHD":
-                requests = await self.bhd_request_check(meta, tracker, url)
-            elif tracker.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+                    return False
+
+            if tracker_name.upper() == "BHD":
+                if not url:
+                    return False
+                requests = await self.bhd_request_check(meta, tracker_name, url)
+            elif tracker_name.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
                 requests = await tracker_instance.get_requests(meta)
-                return
+                return False
             else:
-                requests = await self.get_tracker_requests(meta, tracker, url)
+                if not url:
+                    return False
+                requests = await self.get_tracker_requests(meta, tracker_name, url)
                 type_mapping = await tracker_instance.get_type_id(meta, mapping_only=True)
                 type_name = meta.get('type', '')
                 type_ids = [type_mapping.get(type_name)] if type_name else []
@@ -661,12 +663,12 @@ class TRACKER_SETUP:
                 return False
 
             # Initialize request log for this tracker
-            common = COMMON(config)
-            log_path = f"{meta['base_dir']}/tmp/{tracker}_request_results.json"
+            common = COMMON(self.config)
+            log_path = f"{meta['base_dir']}/tmp/{tracker_name}_request_results.json"
             if not await common.path_exists(log_path):
                 await common.makedirs(os.path.dirname(log_path))
 
-            request_data = []
+            request_data: list[dict[str, Any]] = []
             try:
                 async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
                     content = await f.read()
@@ -684,35 +686,46 @@ class TRACKER_SETUP:
                 double_check = False
                 api_id = each.get('id')
                 api_category = each.get('category')
-                api_name = each.get('name')
+                api_name = str(each.get('name') or '')
                 api_type = each.get('type')
+                api_type_str = str(api_type or '')
                 api_bounty = each.get('bounty')
                 api_status = each.get('status')
-                if "BHD" not in tracker:
+                api_description = str(each.get('description') or '')
+                api_resolution = each.get('resolution')
+                api_resolution_str = str(api_resolution or '')
+                api_resolution_lower = api_resolution_str.lower()
+                if "BHD" not in tracker_name:
                     if str(api_type) in [str(tid) for tid in type_ids]:
                         type_name = True
                     elif api_type is None:
                         type_name = True
                         double_check = True
-                    api_resolution = each.get('resolution')
                     if str(api_resolution) in [str(rid) for rid in resolution_ids]:
                         resolution = True
                     elif api_resolution is None:
                         resolution = True
                         double_check = True
                     api_claimed = each.get('claimed')
-                    api_description = each.get('description')
                     if meta['category'] == "TV":
-                        api_season = int(each.get('season')) if each.get('season') is not None else 0
+                        season_value = each.get('season')
+                        if season_value is not None:
+                            api_season = int(season_value)
+                        else:
+                            api_season = 0
                         if api_season and meta.get('season_int') and api_season == meta.get('season_int'):
                             season = True
-                        api_episode = int(each.get('episode')) if each.get('episode') is not None else 0
+                        episode_value = each.get('episode')
+                        if episode_value is not None:
+                            api_episode = int(episode_value)
+                        else:
+                            api_episode = 0
                         if api_episode and meta.get('episode_int') and api_episode == meta.get('episode_int'):
                             episode = True
                     if str(api_category) in [str(cid) for cid in category_ids]:
                         new_url = re.sub(r'/api/requests/filter$', f'/requests/{api_id}', url)
                         if meta.get('category') == "MOVIE" and type_name and resolution and not api_claimed:
-                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                             console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
                             console.print(f"[bold green]{api_name}:[/bold green] {new_url}")
                             console.print()
@@ -734,7 +747,7 @@ class TRACKER_SETUP:
                                 request_data.append(request_entry)
                                 existing_uuids.add(meta.get('uuid'))
                         elif meta.get('category') == "TV" and season and episode and type_name and resolution and not api_claimed:
-                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                             console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
                             console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]S{api_season:02d} E{api_episode:02d}:[/bold yellow] {new_url}")
                             console.print()
@@ -756,7 +769,7 @@ class TRACKER_SETUP:
                                 request_data.append(request_entry)
                                 existing_uuids.add(meta.get('uuid'))
                         else:
-                            console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
+                            console.print(f"[bold blue]Found request on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{api_status}[/bold yellow][/bold blue]")
                             console.print(f"[bold blue]Claimed status:[/bold blue] [bold yellow]{api_claimed}[/bold yellow]")
                             if meta.get('category') == "MOVIE":
                                 console.print(f"[bold yellow]{api_name}:[/bold yellow] {new_url}")
@@ -803,28 +816,29 @@ class TRACKER_SETUP:
                         dv = True
                     if not each.get('hdr') and meta_hdr not in ("HDR10", "HDR10+", "HDR"):
                         hdr = True
-                    if 'remux' in each.get('resolution', '').lower():
-                        if 'uhd' in each.get('resolution', '').lower() and meta.get('resolution') == "2160p" and meta.get('type') == "REMUX":
+                    if 'remux' in api_resolution_lower:
+                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p" and meta.get('type') == "REMUX":
                             resolution = True
                             type_name = True
-                        elif 'uhd' not in each.get('resolution', '').lower() and meta.get('resolution') == "1080p" and meta.get('type') == "REMUX":
+                        elif 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p" and meta.get('type') == "REMUX":
                             resolution = True
                             type_name = True
-                    elif 'remux' not in each.get('resolution', '').lower() and meta.get('is_disc') == "BDMV":
-                        if 'uhd' in each.get('resolution', '').lower() and meta.get('resolution') == "2160p":
+                    elif 'remux' not in api_resolution_lower and meta.get('is_disc') == "BDMV":
+                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p":
                             resolution = True
                             type_name = True
-                        elif 'uhd' not in each.get('resolution', '').lower() and meta.get('resolution') == "1080p":
+                        elif 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p":
                             resolution = True
                             type_name = True
-                    elif each.get('resolution') == meta.get('resolution'):
+                    elif api_resolution == meta.get('resolution'):
                         resolution = True
-                    if 'Blu-ray' in each.get('type') and meta.get('type') == "ENCODE":
+                    meta_type = str(meta.get('type') or '')
+                    if 'Blu-ray' in api_type_str and meta_type == "ENCODE":
                         type_name = True
-                    elif 'WEB' in each.get('type') and 'WEB' in meta.get('type'):
+                    elif 'WEB' in api_type_str and 'WEB' in meta_type:
                         type_name = True
                     if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and dv and hdr:
-                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
                         console.print()
 
@@ -839,8 +853,8 @@ class TRACKER_SETUP:
                             }
                             request_data.append(request_entry)
                             existing_uuids.add(meta.get('uuid'))
-                    if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and not dv and not hdr and 'uhd' in each.get('resolution').lower():
-                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
+                    if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and not dv and not hdr and 'uhd' in api_resolution_lower:
+                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
                         console.print(f"[bold green]{api_name}:[/bold green] {each.get('url')}")
                         console.print()
 
@@ -856,7 +870,7 @@ class TRACKER_SETUP:
                             request_data.append(request_entry)
                             existing_uuids.add(meta.get('uuid'))
                     if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and dv and hdr:
-                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
                         console.print()
 
@@ -872,7 +886,7 @@ class TRACKER_SETUP:
                             request_data.append(request_entry)
                             existing_uuids.add(meta.get('uuid'))
                     if meta.get('category') == "TV" and season and type_name and resolution and unclaimed and not internal and not dv and not hdr:
-                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
+                        console.print(f"[bold blue]Found request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] with mismatched HDR or DV[/bold blue]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - [bold yellow]{meta.get('season')}:[/bold yellow] {each.get('url')}")
                         console.print()
 
@@ -888,7 +902,7 @@ class TRACKER_SETUP:
                             request_data.append(request_entry)
                             existing_uuids.add(meta.get('uuid'))
                     else:
-                        console.print(f"[bold blue]Found request on [bold yellow]{tracker}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
+                        console.print(f"[bold blue]Found request on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
                         if internal:
                             console.print("[bold red]Request is internal only[/bold red]")
                         console.print(f"[bold yellow]{api_name}[/bold yellow] - {each.get('url')}")
@@ -916,18 +930,15 @@ class TRACKER_SETUP:
             return False
 
         # Track which trackers support trumping for later use
-        trumping_trackers = []
+        trumping_trackers: list[str] = []
 
         for tracker in trackers:
-            tracker_class = tracker_class_map.get(tracker)
-            if not tracker_class:
+            tracker_instance = self._create_tracker_instance(tracker)
+            if tracker_instance is None:
                 console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
                 continue
 
-            tracker_instance = tracker_class(self.config)
-            try:
-                url = tracker_instance.trumping_url
-            except AttributeError:
+            if not isinstance(getattr(tracker_instance, 'trumping_url', None), str):
                 continue  # Skip trackers without trumping url support
 
             trumping_trackers.append(tracker)
@@ -944,9 +955,13 @@ class TRACKER_SETUP:
         meta['trumping_trackers'] = trumping_trackers
 
         for tracker in trumping_trackers:
-            tracker_class = tracker_class_map.get(tracker)
-            tracker_instance = tracker_class(self.config)
-            url = tracker_instance.trumping_url
+            tracker_instance = self._create_tracker_instance(tracker)
+            if tracker_instance is None:
+                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
+                continue
+            url = getattr(tracker_instance, 'trumping_url', None)
+            if not isinstance(url, str):
+                continue
 
             reported_torrent_id = f"{meta.get('trumpable_id', '')}"
             if not reported_torrent_id:
@@ -984,8 +999,8 @@ class TRACKER_SETUP:
                     else:
                         console.print("  [yellow]The trumping torrent for this report seems to be in modq.....[/yellow]")
                 try:
-                    upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default="no")
-                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                    upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default=False)
+                except (EOFError, KeyboardInterrupt):
                     console.print("[yellow]Prompt cancelled; treating as 'no' for safety.[/yellow]")
                     upload = False
 
@@ -1019,7 +1034,7 @@ class TRACKER_SETUP:
                     "Enter 'd' if in description, 'L' if you want to paste links, or press Enter to skip trumping:",
                     default=""
                 )
-            except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+            except (EOFError, KeyboardInterrupt):
                 console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
                 return False
 
@@ -1037,7 +1052,7 @@ class TRACKER_SETUP:
                         "Paste screenshot links for the trumping torrent (comma-separated):",
                         default=""
                     )
-                except (EOFError, KeyboardInterrupt, cli_ui.Interrupted):
+                except (EOFError, KeyboardInterrupt):
                     console.print("[yellow]Prompt cancelled; skipping trump report creation.[/yellow]")
                     return False
 
@@ -1064,7 +1079,7 @@ class TRACKER_SETUP:
     async def get_tracker_trumps(self, meta, tracker, url, reported_torrent_id):
         if meta['debug']:
             console.print(f"[bold green]Searching for trumps on {tracker}[/bold green]")
-        requests = []
+        requests: list[dict[str, Any]] = []
         status_code = None
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
@@ -1075,7 +1090,7 @@ class TRACKER_SETUP:
             'reported_torrent_id': f"{reported_torrent_id}",
         }
 
-        all_data = []
+        all_data: list[dict[str, Any]] = []
         next_cursor = None
 
         try:
@@ -1164,15 +1179,13 @@ class TRACKER_SETUP:
         if meta['debug']:
             console.print(f"[bold green]Creating trump report on {tracker}[/bold green]")
 
-        tracker_class = tracker_class_map.get(tracker)
-        if not tracker_class:
+        tracker_instance = self._create_tracker_instance(tracker)
+        if not tracker_instance:
             console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
             return False
 
-        tracker_instance = tracker_class(self.config)
-        try:
-            base_url = tracker_instance.trumping_url
-        except AttributeError:
+        base_url = getattr(tracker_instance, 'trumping_url', None)
+        if not isinstance(base_url, str):
             console.print(f"[red]No trumping URL found for {tracker}[/red]")
             return False
 
@@ -1247,8 +1260,8 @@ class TRACKER_SETUP:
             return True
 
 
-tracker_class_map = {
-    'ACM': ACM, 'AITHER': AITHER, 'AL': AL, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
+tracker_class_map: dict[str, type[Any]] = {
+    'ACM': ACM, 'AITHER': AITHER, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
     'CZ': CZ, 'DC': DC, 'DP': DP, 'EMUW': EMUW, 'FNP': FNP, 'FF': FF, 'FL': FL, 'FRIKI': FRIKI, 'GPW': GPW, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
     'IHD': IHD, 'IS': IS, 'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,

@@ -15,7 +15,6 @@ from pymediainfo import MediaInfo
 from torf import Torrent
 
 from cogs.redaction import redact_private_info
-from data.config import config
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator
@@ -322,7 +321,7 @@ class PTP():
                         console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
                         return groupID
 
-                    except (KeyboardInterrupt, cli_ui.Interrupted):
+                    except (KeyboardInterrupt, EOFError):
                         console.print("[yellow]Selection cancelled by user[/yellow]")
                         return None
             elif response.get("Page") == "Browse":  # No Releases on Site with ID
@@ -613,37 +612,36 @@ class PTP():
             "Hardcoded Subs (Non-English)": "OTHER"
         }
         opts = cli_ui.select_choices("Please select any/all applicable options:", choices=list(trumpable_values.keys()))
-        trumpable = []
+        trumpable_list: list[int] = []
         for opt in opts:
             v = trumpable_values.get(opt)
             if v is None:
                 continue
             elif v == 4:
-                trumpable.append(4)
+                trumpable_list.append(4)
                 if 3 not in sub_langs:
                     sub_langs.append(3)
                 if 44 in sub_langs:
                     sub_langs.remove(44)
             elif v == 50:
-                trumpable.append(50)
+                trumpable_list.append(50)
                 if 50 not in sub_langs:
                     sub_langs.append(50)
                 if 44 in sub_langs:
                     sub_langs.remove(44)
             elif v == 14:
-                trumpable.append(14)
+                trumpable_list.append(14)
             elif v == "OTHER":
-                trumpable.append(15)
-                hc_sub_langs = cli_ui.ask_string("Enter language code for HC Subtitle languages")
-                for lang, subID in self.sub_lang_map.items():
-                    if any(hc_sub_langs.strip() == x for x in list(lang)):
-                        if subID not in sub_langs:
+                trumpable_list.append(15)
+                hc_sub_langs = (cli_ui.ask_string("Enter language code for HC Subtitle languages") or "").strip()
+                if hc_sub_langs:
+                    for lang, subID in self.sub_lang_map.items():
+                        if any(hc_sub_langs == x for x in list(lang)) and subID not in sub_langs:
                             sub_langs.append(subID)
-        sub_langs = list(set(sub_langs))
-        trumpable = list(set(trumpable))
-        if not trumpable:
-            trumpable = None
-        return trumpable, sub_langs
+        sub_langs_result = list({*sub_langs})
+        trumpable_unique = list({*trumpable_list})
+        trumpable_result: list[int] | None = trumpable_unique if trumpable_unique else None
+        return trumpable_result, sub_langs_result
 
     def get_remaster_title(self, meta):
         remaster_title = []
@@ -1291,9 +1289,15 @@ class PTP():
             else:
                 console.print("[yellow]PTP Cookies not found. Creating new session.")
             if loggedIn is True:
-                AntiCsrfToken = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text).group(1)
+                token_match = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text)
+                if not token_match:
+                    raise LoginException("Failed to find AntiCsrfToken on upload page.")  # noqa F405
+                AntiCsrfToken = token_match.group(1)
             else:
-                passKey = re.match(r"https?://please\.passthepopcorn\.me:?\d*/(.+)/announce", self.announce_url).group(1)
+                passkey_match = re.match(r"https?://please\.passthepopcorn\.me:?\d*/(.+)/announce", self.announce_url)
+                if not passkey_match:
+                    raise LoginException("Failed to extract passkey from PTP announce URL.")  # noqa F405
+                passKey = passkey_match.group(1)
                 data = {
                     "username": self.username,
                     "password": self.password,
@@ -1485,8 +1489,14 @@ class PTP():
                     console.print("Valid tags can be found on the PTP upload form")
                     new_data["tags"] = console.input("Please enter at least one tag. Comma separated (action, animation, short):")
             data.update(new_data)
-            if meta["imdb_info"].get("directors", None) is not None:
-                data["artist[]"] = tuple(meta['imdb_info'].get('directors'))
+            imdb_info = meta.get("imdb_info")
+            directors: list[str] | tuple[str, ...] | None = None
+            if isinstance(imdb_info, dict):
+                directors_value = imdb_info.get('directors')
+                if isinstance(directors_value, (list, tuple)):
+                    directors = tuple(str(name) for name in directors_value if isinstance(name, str))
+            if directors:
+                data["artist[]"] = directors
                 data["importance[]"] = "1"
         else:  # Upload on existing group
             url = f"https://passthepopcorn.me/upload.php?groupid={groupID}"
@@ -1504,7 +1514,7 @@ class PTP():
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
-            tracker_url = config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
+            tracker_url = self.config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
 
