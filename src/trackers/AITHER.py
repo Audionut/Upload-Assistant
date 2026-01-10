@@ -49,7 +49,7 @@ class AITHER(UNIT3D):
         source = meta.get('source', "")
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta['audio_languages']
         if audio_languages and not await has_english_language(audio_languages):
             foreign_lang = meta['audio_languages'][0].upper()

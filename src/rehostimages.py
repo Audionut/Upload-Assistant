@@ -48,7 +48,7 @@ async def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
+async def check_hosts(meta: dict[str, Any], tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
     if meta.get('skip_imghost_upload', False):
         if meta['debug']:
             console.print(f"[yellow]Skipping image host upload for {tracker} as per meta['skip_imghost_upload'] setting.")
@@ -199,7 +199,7 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
     return meta.get(new_images_key, []), False, images_reuploaded
 
 
-async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_hosts=None, img_host_index=1, file=None):
+async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, approved_image_hosts=None, img_host_index=1, file=None):
     original_imghost = meta.get('imghost')
     retry_mode = False
     images_reuploaded = False
@@ -357,7 +357,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
                                        meta.get('vapoursynth', False), [], meta.get('ffdebug', False),
                                        needed_screenshots, True)
             elif meta['is_disc'] == "DVD":
-                await dvd_screenshots(meta, 0, None, True)
+                await dvd_screenshots(meta, disc_num=0, retry_cap=True)
             else:
                 await screenshots(path, filename, meta['uuid'], base_dir, meta,
                                   needed_screenshots, True, None)

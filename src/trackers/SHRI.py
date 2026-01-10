@@ -91,7 +91,7 @@ class SHRI(UNIT3D):
         - DISC region injection
         """
         if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         # Title and basic info
         title = meta.get("title", "")

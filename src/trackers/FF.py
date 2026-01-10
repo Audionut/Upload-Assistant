@@ -467,7 +467,7 @@ class FF:
 
     async def languages(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         lang_map = {
             'english': 'en',

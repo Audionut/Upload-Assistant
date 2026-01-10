@@ -66,7 +66,18 @@ async def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, image_list, ffdebug, num_screens=None, force_screenshots=False):
+async def disc_screenshots(
+        meta: dict[str, Any],
+        filename: str,
+        bdinfo: dict[str, Any],
+        folder_id: str,
+        base_dir: str,
+        use_vs: bool,
+        image_list: list[dict[str, str]] | None = None,
+        ffdebug: bool = False,
+        num_screens: int = 0,
+        force_screenshots: bool = False
+):
     img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:
@@ -422,7 +433,12 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
         return None
 
 
-async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
+async def dvd_screenshots(
+        meta: dict[str, Any],
+        disc_num: int,
+        num_screens: int = 0,
+        retry_cap: bool = False
+):
     screens = meta['screens']
     if 'image_list' not in meta:
         meta['image_list'] = []
@@ -790,7 +806,16 @@ async def capture_dvd_screenshot(task):
         return (index, None)
 
 
-async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=None, force_screenshots=False, manual_frames=None):
+async def screenshots(
+        path: str,
+        filename: str,
+        folder_id: str,
+        base_dir: str,
+        meta: dict[str, Any],
+        num_screens: int = 0,
+        force_screenshots: bool = False,
+        manual_frames: str = "",
+) -> None:
     img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:

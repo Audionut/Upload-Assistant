@@ -103,7 +103,7 @@ class HUNO(UNIT3D):
         else:
             image_list = meta['image_list']
 
-        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -157,7 +157,7 @@ class HUNO(UNIT3D):
         languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta.get('audio_languages')
         if audio_languages:
             normalized_languages = set(audio_languages)

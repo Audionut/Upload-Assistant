@@ -169,7 +169,7 @@ class BJS:
 
     async def get_audio(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -192,7 +192,7 @@ class BJS:
 
     async def get_subtitle(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
         subtitle_type = 'Nenhuma'

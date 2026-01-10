@@ -20,7 +20,7 @@ from src.uploadscreens import upload_screens
 from typing import Any
 
 
-def html_to_bbcode(text):
+def html_to_bbcode(text: str) -> str:
     """Convert HTML tags to BBCode format."""
     if not text:
         return text
@@ -48,7 +48,7 @@ def html_to_bbcode(text):
 
 
 async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
-    def clean_text(text):
+    def clean_text(text: str) -> str:
         return text.replace("\r\n", "\n").strip()
 
     description_link = meta.get("description_link")
@@ -131,7 +131,7 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
 
         if description_link:
             try:
-                parsed = urllib.parse.urlparse(description_link.replace("/raw/", "/"))
+                parsed: ParseResult = urllib.parse.urlparse(description_link.replace("/raw/", "/") or "")
                 split = os.path.split(parsed.path)
                 raw = parsed._replace(
                     path=f"{split[0]}/raw/{split[1]}" if split[0] != "/" else f"/raw{parsed.path}"
@@ -480,7 +480,6 @@ class DescriptionBuilder:
     async def unit3d_edit_desc(
         self,
         meta: dict[str, Any],
-        tracker: str,
         signature: str = "",
         comparison: bool = False,
         desc_header: str = "",
@@ -511,7 +510,7 @@ class DescriptionBuilder:
         # Language
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, desc_parts, tracker)
+                await process_desc_language(meta, self.tracker)
             if meta.get("audio_languages") and meta.get("write_audio_languages"):
                 desc_parts.append(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]")
 
@@ -541,7 +540,7 @@ class DescriptionBuilder:
         # TV
         title, _, episode_overview = await self.get_tv_info(meta)
         if episode_overview:
-            if tracker == "HUNO":
+            if self.tracker == "HUNO":
                 if title:
                     desc_parts.append(f"[center]{title}[/center]\n")
                 desc_parts.append(f"[center]{episode_overview}[/center]\n")
@@ -553,7 +552,7 @@ class DescriptionBuilder:
         # Description that may come from API requests
         meta_description = meta.get("description", "")
         # Add FraMeSToR NFO to Aither
-        if tracker == "AITHER" and "framestor" in meta and meta["framestor"]:
+        if self.tracker == "AITHER" and "framestor" in meta and meta["framestor"]:
             nfo_content = meta.get("description_nfo_content", "")
             if nfo_content:
                 aither_framestor_nfo = f"[code]{nfo_content}[/code]"
@@ -597,7 +596,7 @@ class DescriptionBuilder:
         # UA Signature
         if not signature:
             signature = f"[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-            if tracker == "HUNO":
+            if self.tracker == "HUNO":
                 signature = signature.replace("[size=4]", "[size=8]")
         desc_parts.append(signature)
 
@@ -618,7 +617,7 @@ class DescriptionBuilder:
             description = bbcode.convert_comparison_to_collapse(description, 1000)
 
         if meta['debug']:
-            desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt"
+            desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
             console.print(f"DEBUG: Saving final description to [yellow]{desc_file}[/yellow]")
             async with aiofiles.open(desc_file, "w", encoding="utf-8") as description_file:
                 await description_file.write(description)
@@ -834,7 +833,7 @@ class DescriptionBuilder:
                                 if uploaded_images and not meta.get("skip_imghost_upload", False):
                                     await self.common.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
-                                    meta[new_images_key].append(
+                                    list(meta[new_images_key]).append(
                                         {
                                             "img_url": img["img_url"],
                                             "raw_url": img["raw_url"],
@@ -1170,7 +1169,6 @@ class DescriptionBuilder:
                                 meta,
                                 multi_screens,
                                 True,
-                                None,
                             )
                             await asyncio.sleep(0.1)
                         except Exception as e:
@@ -1291,7 +1289,7 @@ class DescriptionBuilder:
         if total_files_to_process > 1:
             console.print()
 
-        description = "".join(p for p in desc_parts if p is not None)
+        description = "".join(p for p in desc_parts if p)
 
         return description
 

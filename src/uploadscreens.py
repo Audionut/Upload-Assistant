@@ -14,7 +14,9 @@ from concurrent.futures import ThreadPoolExecutor
 import httpx
 import aiofiles
 from typing import Any, Mapping, cast
-from data.config import config
+from data.config import config as raw_config
+
+config = cast(dict[str, Any], raw_config)
 
 
 async def upload_image_task(args):
@@ -544,8 +546,19 @@ async def upload_image_task(args):
 thread_pool = ThreadPoolExecutor(max_workers=10)
 
 
-async def upload_screens(meta: dict[str, Any], screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=False, max_retries=3, allowed_hosts=None):
-    default_config = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+async def upload_screens(
+        meta: dict[str, Any],
+        screens: int,
+        img_host_num: int,
+        i: int,
+        total_screens: int,
+        custom_img_list: list[str],
+        return_dict: dict[str, Any],
+        retry_mode: bool = False,
+        max_retries: int = 3,
+        allowed_hosts: list[str] | None = None
+):
+    default_config = config.get('DEFAULT', {})
     if 'image_list' not in meta:
         meta['image_list'] = []
     if meta['debug']:

@@ -178,7 +178,7 @@ async def parsed_mediainfo(meta):
     return parsed_data
 
 
-async def process_desc_language(meta, desc=None, tracker=None):
+async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
     if 'language_checked' not in meta:
         meta['language_checked'] = False
     if 'tracker_status' not in meta:
@@ -350,7 +350,7 @@ async def process_desc_language(meta, desc=None, tracker=None):
             console.print(f"[red]Error processing mediainfo languages: {e}[/red]")
 
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
     elif meta['is_disc'] == "BDMV":
         if "language_checked" not in meta:
@@ -422,11 +422,11 @@ async def process_desc_language(meta, desc=None, tracker=None):
             console.print(f"[red]Error processing BDInfo languages: {e}[/red]")
 
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
     else:
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
 
 async def has_english_language(languages):

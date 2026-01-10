@@ -135,7 +135,7 @@ class IHD(UNIT3D):
         resolution = meta.get('resolution')
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta['audio_languages']
         if audio_languages and not await has_english_language(audio_languages):
             foreign_lang = meta['audio_languages'][0].upper()
@@ -158,7 +158,7 @@ class IHD(UNIT3D):
 
         if not meta['is_disc'] == "BDMV":
             if not meta.get('language_checked', False):
-                await process_desc_language(meta, desc=None, tracker=self.tracker)
+                await process_desc_language(meta, tracker=self.tracker)
             original_language = self.original_language_check(meta)
             has_eng_audio = await has_english_language(meta.get('audio_languages'))
             has_eng_subs = await has_english_language(meta.get('subtitle_languages'))

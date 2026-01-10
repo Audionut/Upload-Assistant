@@ -816,7 +816,7 @@ class ASC:
     async def get_data(self, meta):
         await self.load_localized_data(meta)
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         resolution = await self.get_resolution(meta)
 
         data = {

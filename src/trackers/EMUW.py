@@ -48,7 +48,7 @@ class EMUW(UNIT3D):
 
         # Process language information
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         # Build audio string
         audio_str = await self._build_audio_string(meta)

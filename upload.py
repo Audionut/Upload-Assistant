@@ -353,7 +353,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
             if tracker in trackers:
                 if not audio_prompted:
-                    await process_desc_language(meta, desc=None, tracker=tracker)
+                    await process_desc_language(meta, tracker=tracker)
                     audio_prompted = True
                 else:
                     if 'tracker_status' not in meta:
@@ -438,11 +438,11 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             meta['we_are_uploading'] = False
             return
 
-        filename = meta.get('title', None)
+        filename: str = meta.get('title', '')
         bdmv_filename = meta.get('filename', None)
         bdinfo = meta.get('bdinfo', None)
-        videopath = meta.get('filelist', [None])
-        videopath = videopath[0] if videopath else None
+        videopath: list[str] = meta.get('filelist', [None])
+        videopath: str = videopath[0] if videopath else ""
         console.print(f"Processing {filename} for upload.....")
 
         meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
@@ -538,7 +538,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     elif meta['is_disc'] == "DVD":
                         try:
                             await dvd_screenshots(
-                                meta, 0, None, None
+                                meta,
+                                disc_num=0,
+                                num_screens=0,
+                                retry_cap=False
                             )
                         except asyncio.CancelledError:
                             await cleanup_screenshot_temp_files(meta)

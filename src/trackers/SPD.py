@@ -35,7 +35,7 @@ class SPD:
 
     async def get_cat_id(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
         romanian = 'romanian' in langs

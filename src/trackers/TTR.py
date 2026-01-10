@@ -118,7 +118,7 @@ class TTR(UNIT3D):
 
     async def get_additional_checks(self, meta):
         if not meta.get("language_checked", False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         if "Spanish" not in meta.get('audio_languages', []):
             if "Spanish" not in meta.get('subtitle_languages', []):

@@ -72,7 +72,7 @@ class ULCX(UNIT3D):
         return data
 
     async def get_description(self, meta):
-        desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)
+        desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']

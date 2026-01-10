@@ -77,12 +77,20 @@ class COMMON():
             out_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
-    async def download_tracker_torrent(self, meta, tracker, headers=None, params=None, downurl=None, hash_is_id=False, cross=False):
+    async def download_tracker_torrent(
+            self,
+            meta: dict[str, Any],
+            tracker: str,
+            headers: dict[str, str] | None = None,
+            params: dict[str, str] | None = None,
+            downurl: str = "",
+            hash_is_id: bool = False,
+            cross: bool = False):
         if cross:
             path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
         else:
             path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
-        if downurl is not None:
+        if downurl:
             try:
                 async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session:
                     async with session.stream("GET", downurl) as r:
@@ -133,7 +141,7 @@ class COMMON():
 
         return None
 
-    async def get_torrent_hash(self, meta, tracker):
+    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         async with aiofiles.open(torrent_path, 'rb') as torrent_file:
             torrent_content = await torrent_file.read()
@@ -142,7 +150,7 @@ class COMMON():
             info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
-    async def save_image_links(self, meta, image_key, image_list=None):
+    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[List[dict[str, str]]]) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -201,7 +209,7 @@ class COMMON():
             console.print(f"[bold red]Error saving image links: {e}[/bold red]")
             return None
 
-    async def unit3d_region_ids(self, region, reverse=False, region_id=None):
+    async def unit3d_region_ids(self, region: str, reverse: bool = False, region_id: int = 0) -> str:
         region_map = {
             'AFG': 1, 'AIA': 2, 'ALA': 3, 'ALG': 4, 'AND': 5, 'ANG': 6, 'ARG': 7, 'ARM': 8, 'ARU': 9,
             'ASA': 10, 'ATA': 11, 'ATF': 12, 'ATG': 13, 'AUS': 14, 'AUT': 15, 'AZE': 16, 'BAH': 17,
@@ -241,12 +249,12 @@ class COMMON():
             for code, id_value in region_map.items():
                 if id_value == region_id:
                     return code
-            return None
+            return "0"
         else:
             # Forward lookup: Find region ID by code
-            return region_map.get(region, 0)
+            return str(region_map.get(region, "0"))
 
-    async def unit3d_distributor_ids(self, distributor, reverse=False, distributor_id=None):
+    async def unit3d_distributor_ids(self, distributor: str, reverse: bool = False, distributor_id: int = 0) -> str:
         distributor_map = {
             '01 DISTRIBUTION': 1, '100 DESTINATIONS TRAVEL FILM': 2, '101 FILMS': 3, '1FILMS': 4, '2 ENTERTAIN VIDEO': 5, '20TH CENTURY FOX': 6, '2L': 7, '3D CONTENT HUB': 8, '3D MEDIA': 9, '3L FILM': 10, '4DIGITAL': 11, '4DVD': 12, '4K ULTRA HD MOVIES': 13, '4K UHD': 13, '8-FILMS': 14, '84 ENTERTAINMENT': 15, '88 FILMS': 16, '@ANIME': 17, 'ANIME': 17, 'A CONTRACORRIENTE': 18, 'A CONTRACORRIENTE FILMS': 19, 'A&E HOME VIDEO': 20, 'A&E': 20, 'A&M RECORDS': 21, 'A+E NETWORKS': 22, 'A+R': 23, 'A-FILM': 24, 'AAA': 25, 'AB VIDÉO': 26, 'AB VIDEO': 26, 'ABC - (AUSTRALIAN BROADCASTING CORPORATION)': 27, 'ABC': 27, 'ABKCO': 28, 'ABSOLUT MEDIEN': 29, 'ABSOLUTE': 30, 'ACCENT FILM ENTERTAINMENT': 31, 'ACCENTUS': 32, 'ACORN MEDIA': 33, 'AD VITAM': 34, 'ADA': 35, 'ADITYA VIDEOS': 36, 'ADSO FILMS': 37, 'AFM RECORDS': 38, 'AGFA': 39, 'AIX RECORDS': 40, 'ALAMODE FILM': 41, 'ALBA RECORDS': 42, 'ALBANY RECORDS': 43, 'ALBATROS': 44, 'ALCHEMY': 45, 'ALIVE': 46, 'ALL ANIME': 47, 'ALL INTERACTIVE ENTERTAINMENT': 48, 'ALLEGRO': 49, 'ALLIANCE': 50, 'ALPHA MUSIC': 51, 'ALTERDYSTRYBUCJA': 52, 'ALTERED INNOCENCE': 53, 'ALTITUDE FILM DISTRIBUTION': 54, 'ALUCARD RECORDS': 55, 'AMAZING D.C.': 56, 'AMAZING DC': 56, 'AMMO CONTENT': 57, 'AMUSE SOFT ENTERTAINMENT': 58, 'ANCONNECT': 59, 'ANEC': 60, 'ANIMATSU': 61, 'ANIME HOUSE': 62, 'ANIME LTD': 63, 'ANIME WORKS': 64, 'ANIMEIGO': 65, 'ANIPLEX': 66, 'ANOLIS ENTERTAINMENT': 67, 'ANOTHER WORLD ENTERTAINMENT': 68, 'AP INTERNATIONAL': 69, 'APPLE': 70, 'ARA MEDIA': 71, 'ARBELOS': 72, 'ARC ENTERTAINMENT': 73, 'ARP SÉLECTION': 74, 'ARP SELECTION': 74, 'ARROW': 75, 'ART SERVICE': 76, 'ART VISION': 77, 'ARTE ÉDITIONS': 78, 'ARTE EDITIONS': 78, 'ARTE VIDÉO': 79, 'ARTE VIDEO': 79, 'ARTHAUS MUSIK': 80, 'ARTIFICIAL EYE': 81, 'ARTSPLOITATION FILMS': 82, 'ARTUS FILMS': 83, 'ASCOT ELITE HOME ENTERTAINMENT': 84, 'ASIA VIDEO': 85, 'ASMIK ACE': 86, 'ASTRO RECORDS & FILMWORKS': 87, 'ASYLUM': 88, 'ATLANTIC FILM': 89, 'ATLANTIC RECORDS': 90, 'ATLAS FILM': 91, 'AUDIO VISUAL ENTERTAINMENT': 92, 'AURO-3D CREATIVE LABEL': 93, 'AURUM': 94, 'AV VISIONEN': 95, 'AV-JET': 96, 'AVALON': 97, 'AVENTI': 98, 'AVEX TRAX': 99, 'AXIOM': 100, 'AXIS RECORDS': 101, 'AYNGARAN': 102, 'BAC FILMS': 103, 'BACH FILMS': 104, 'BANDAI VISUAL': 105, 'BARCLAY': 106, 'BBC': 107, 'BRITISH BROADCASTING CORPORATION': 107, 'BBI FILMS': 108, 'BBI': 108, 'BCI HOME ENTERTAINMENT': 109, 'BEGGARS BANQUET': 110, 'BEL AIR CLASSIQUES': 111, 'BELGA FILMS': 112, 'BELVEDERE': 113, 'BENELUX FILM DISTRIBUTORS': 114, 'BENNETT-WATT MEDIA': 115, 'BERLIN CLASSICS': 116, 'BERLINER PHILHARMONIKER RECORDINGS': 117, 'BEST ENTERTAINMENT': 118, 'BEYOND HOME ENTERTAINMENT': 119, 'BFI VIDEO': 120, 'BFI': 120, 'BRITISH FILM INSTITUTE': 120, 'BFS ENTERTAINMENT': 121, 'BFS': 121, 'BHAVANI': 122, 'BIBER RECORDS': 123, 'BIG HOME VIDEO': 124, 'BILDSTÖRUNG': 125, 'BILDSTORUNG': 125, 'BILL ZEBUB': 126, 'BIRNENBLATT': 127, 'BIT WEL': 128, 'BLACK BOX': 129, 'BLACK HILL PICTURES': 130, 'BLACK HILL': 130, 'BLACK HOLE RECORDINGS': 131, 'BLACK HOLE': 131, 'BLAQOUT': 132, 'BLAUFIELD MUSIC': 133, 'BLAUFIELD': 133, 'BLOCKBUSTER ENTERTAINMENT': 134, 'BLOCKBUSTER': 134, 'BLU PHASE MEDIA': 135, 'BLU-RAY ONLY': 136, 'BLU-RAY': 136, 'BLURAY ONLY': 136, 'BLURAY': 136, 'BLUE GENTIAN RECORDS': 137, 'BLUE KINO': 138, 'BLUE UNDERGROUND': 139, 'BMG/ARISTA': 140, 'BMG': 140, 'BMGARISTA': 140, 'BMG ARISTA': 140, 'ARISTA':
             140, 'ARISTA/BMG': 140, 'ARISTABMG': 140, 'ARISTA BMG': 140, 'BONTON FILM': 141, 'BONTON': 141, 'BOOMERANG PICTURES': 142, 'BOOMERANG': 142, 'BQHL ÉDITIONS': 143, 'BQHL EDITIONS': 143, 'BQHL': 143, 'BREAKING GLASS': 144, 'BRIDGESTONE': 145, 'BRINK': 146, 'BROAD GREEN PICTURES': 147, 'BROAD GREEN': 147, 'BUSCH MEDIA GROUP': 148, 'BUSCH': 148, 'C MAJOR': 149, 'C.B.S.': 150, 'CAICHANG': 151, 'CALIFÓRNIA FILMES': 152, 'CALIFORNIA FILMES': 152, 'CALIFORNIA': 152, 'CAMEO': 153, 'CAMERA OBSCURA': 154, 'CAMERATA': 155, 'CAMP MOTION PICTURES': 156, 'CAMP MOTION': 156, 'CAPELIGHT PICTURES': 157, 'CAPELIGHT': 157, 'CAPITOL': 159, 'CAPITOL RECORDS': 159, 'CAPRICCI': 160, 'CARGO RECORDS': 161, 'CARLOTTA FILMS': 162, 'CARLOTTA': 162, 'CARLOTA': 162, 'CARMEN FILM': 163, 'CASCADE': 164, 'CATCHPLAY': 165, 'CAULDRON FILMS': 166, 'CAULDRON': 166, 'CBS TELEVISION STUDIOS': 167, 'CBS': 167, 'CCTV': 168, 'CCV ENTERTAINMENT': 169, 'CCV': 169, 'CD BABY': 170, 'CD LAND': 171, 'CECCHI GORI': 172, 'CENTURY MEDIA': 173, 'CHUAN XUN SHI DAI MULTIMEDIA': 174, 'CINE-ASIA': 175, 'CINÉART': 176, 'CINEART': 176, 'CINEDIGM': 177, 'CINEFIL IMAGICA': 178, 'CINEMA EPOCH': 179, 'CINEMA GUILD': 180, 'CINEMA LIBRE STUDIOS': 181, 'CINEMA MONDO': 182, 'CINEMATIC VISION': 183, 'CINEPLOIT RECORDS': 184, 'CINESTRANGE EXTREME': 185, 'CITEL VIDEO': 186, 'CITEL': 186, 'CJ ENTERTAINMENT': 187, 'CJ': 187, 'CLASSIC MEDIA': 188, 'CLASSICFLIX': 189, 'CLASSICLINE': 190, 'CLAUDIO RECORDS': 191, 'CLEAR VISION': 192, 'CLEOPATRA': 193, 'CLOSE UP': 194, 'CMS MEDIA LIMITED': 195, 'CMV LASERVISION': 196, 'CN ENTERTAINMENT': 197, 'CODE RED': 198, 'COHEN MEDIA GROUP': 199, 'COHEN': 199, 'COIN DE MIRE CINÉMA': 200, 'COIN DE MIRE CINEMA': 200, 'COLOSSEO FILM': 201, 'COLUMBIA': 203, 'COLUMBIA PICTURES': 203, 'COLUMBIA/TRI-STAR': 204, 'TRI-STAR': 204, 'COMMERCIAL MARKETING': 205, 'CONCORD MUSIC GROUP': 206, 'CONCORDE VIDEO': 207, 'CONDOR': 208, 'CONSTANTIN FILM': 209, 'CONSTANTIN': 209, 'CONSTANTINO FILMES': 210, 'CONSTANTINO': 210, 'CONSTRUCTIVE MEDIA SERVICE': 211, 'CONSTRUCTIVE': 211, 'CONTENT ZONE': 212, 'CONTENTS GATE': 213, 'COQUEIRO VERDE': 214, 'CORNERSTONE MEDIA': 215, 'CORNERSTONE': 215, 'CP DIGITAL': 216, 'CREST MOVIES': 217, 'CRITERION': 218, 'CRITERION COLLECTION':
@@ -275,9 +283,9 @@ class COMMON():
             for name, id_value in distributor_map.items():
                 if id_value == distributor_id:
                     return name
-            return None
+            return "0"
         else:
-            return distributor_map.get(distributor, 0)
+            return str(distributor_map.get(distributor, "0"))
 
     async def prompt_user_for_id_selection(self, meta, tmdb=None, imdb=None, tvdb=None, mal=None, filename=None, tracker_name=None):
         if not tracker_name:
@@ -701,7 +709,7 @@ class COMMON():
             "zulu": ("https://ptpimg.me/7teg09.png", "20")
         }
 
-        def parse_mediainfo(self, mediainfo_text):
+        def parse_mediainfo(self, mediainfo_text: str) -> dict[str, Any]:
             # Patterns for matching sections and fields
             section_pattern = re.compile(r"^(General|Video|Audio|Text|Menu)(?:\s#\d+)?", re.IGNORECASE)
             parsed_data: dict[str, Any] = {"general": {}, "video": [], "audio": [], "text": []}
@@ -801,7 +809,7 @@ class COMMON():
 
             return parsed_data
 
-        def format_bbcode(self, parsed_mediainfo):
+        def format_bbcode(self, parsed_mediainfo: dict[str, Any]) -> str:
             bbcode_output = "\n"
 
             # Format General Section
@@ -847,7 +855,7 @@ class COMMON():
             # Format Text Section - Centered with flags or text, spaced apart
             if "text" in parsed_mediainfo:
                 bbcode_output += "\n[b]Subtitles[/b]\n"
-                subtitle_entries = []
+                subtitle_entries: list[str] = []
                 for track in parsed_mediainfo["text"]:
                     language_display = track.get("language", "")
                     subtitle_entries.append(language_display)
@@ -947,7 +955,7 @@ class COMMON():
         """Check if the given media meets language requirements."""
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, desc=None, tracker=tracker)
+                await process_desc_language(meta, tracker=tracker)
 
             languages_to_check = [lang.lower() for lang in languages_to_check]
             audio_languages = [lang.lower() for lang in meta.get("audio_languages", [])]
