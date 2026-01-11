@@ -959,12 +959,12 @@ class AZTrackerBase:
         if not meta.get('debug', False):
             try:
                 self.upload_url_step2 = task_info.get('redirect_url', '')
-
+                screenshots = await self.get_screenshots(meta) or []
                 # task_id and screenshot cannot be called until Step 1 is completed
                 data.update({
                     'info_hash': task_info.get('info_hash'),
                     'task_id': task_info.get('task_id'),
-                    'screenshots[]': await self.get_screenshots(meta)
+                    'screenshots[]': screenshots
                 })
 
             except Exception as e:
