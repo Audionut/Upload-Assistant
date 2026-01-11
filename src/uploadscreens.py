@@ -10,7 +10,6 @@ import time
 import re
 import gc
 import json
-from concurrent.futures import ThreadPoolExecutor
 import httpx
 import aiofiles
 from typing import Any, Union, cast
@@ -542,10 +541,6 @@ async def upload_image_task(args):
         }
 
 
-# Global Thread Pool Executor for better thread control
-thread_pool = ThreadPoolExecutor(max_workers=10)
-
-
 async def upload_screens(
         meta: dict[str, Any],
         screens: int,
@@ -802,7 +797,6 @@ async def upload_screens(
 
     finally:
         # Cleanup
-        thread_pool.shutdown(wait=True)
         gc.collect()
 
 

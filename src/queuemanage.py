@@ -110,7 +110,7 @@ async def save_processed_path(processed_files_log, path):
         console.print(f"[red]Error saving processed path: {e}[/red]")
 
 
-async def get_log_file(base_dir, queue_name):
+async def get_log_file(base_dir: str, queue_name: str) -> str:
     """
     Returns the path to the log file for the given base directory and queue name.
     """
@@ -118,7 +118,7 @@ async def get_log_file(base_dir, queue_name):
     return os.path.join(base_dir, "tmp", f"{safe_queue_name}_processed_files.log")
 
 
-async def load_processed_files(log_file):
+async def load_processed_files(log_file: str) -> set[str]:
     """
     Loads the list of processed files from the log file.
     """

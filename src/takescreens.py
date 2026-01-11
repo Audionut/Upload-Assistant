@@ -147,18 +147,19 @@ async def disc_screenshots(
 
     if meta.get('frame_overlay', False):
         console.print("[yellow]Getting frame information for overlays...")
-        frame_info_tasks = [
-            get_frame_info(file, ss_times[i], meta)
+        # Build list of (original_index, task) to preserve index correspondence
+        frame_info_tasks_with_idx = [
+            (i, get_frame_info(file, ss_times[i], meta))
             for i in range(num_screens + 1)
-            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
+            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{len(existing_screens) + i}.png")
             or meta.get('retake', False)
         ]
-        frame_info_results = await asyncio.gather(*frame_info_tasks)
+        frame_info_results = await asyncio.gather(*[task for _, task in frame_info_tasks_with_idx])
         meta['frame_info_map'] = {}
 
-        # Create a mapping from time to frame info
-        for i, info in enumerate(frame_info_results):
-            meta['frame_info_map'][ss_times[i]] = info
+        # Create a mapping from time to frame info using preserved indices
+        for (orig_idx, _), info in zip(frame_info_tasks_with_idx, frame_info_results):
+            meta['frame_info_map'][ss_times[orig_idx]] = info
 
         if meta['debug']:
             console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
@@ -931,18 +932,19 @@ async def screenshots(
     if meta.get('frame_overlay', False):
         if meta['debug']:
             console.print("[yellow]Getting frame information for overlays...")
-        frame_info_tasks = [
-            get_frame_info(path, ss_times[i], meta)
+        # Build list of (original_index, task) to preserve index correspondence
+        frame_info_tasks_with_idx = [
+            (i, get_frame_info(path, ss_times[i], meta))
             for i in range(num_capture)
-            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
+            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{existing_images_count + i}.png")
             or meta.get('retake', False)
         ]
-        frame_info_results = await asyncio.gather(*frame_info_tasks)
+        frame_info_results = await asyncio.gather(*[task for _, task in frame_info_tasks_with_idx])
         meta['frame_info_map'] = {}
 
-        # Create a mapping from time to frame info
-        for i, info in enumerate(frame_info_results):
-            meta['frame_info_map'][ss_times[i]] = info
+        # Create a mapping from time to frame info using preserved indices
+        for (orig_idx, _), info in zip(frame_info_tasks_with_idx, frame_info_results):
+            meta['frame_info_map'][ss_times[orig_idx]] = info
 
         if meta['debug']:
             console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
@@ -1010,6 +1012,12 @@ async def screenshots(
 
     try:
         results = await asyncio.gather(*capture_tasks, return_exceptions=True)
+        # Log any error strings that were returned (these indicate exceptions in capture_screenshot)
+        for r in results:
+            if isinstance(r, str) and r.startswith("Error"):
+                console.print(f"[red]{r}[/red]")
+            elif isinstance(r, Exception):
+                console.print(f"[red]Screenshot capture exception: {r}[/red]")
         capture_result_tuples = [r for r in results if isinstance(r, tuple) and len(r) == 2]
         capture_result_tuples.sort(key=lambda x: x[0])
         capture_results: list[str] = [r[1] for r in capture_result_tuples if r[1] is not None]
@@ -1046,10 +1054,6 @@ async def screenshots(
     valid_results: list[str] = []
     remaining_retakes = []
     for image_path in capture_results:
-        if "Error" in image_path:
-            console.print(f"[red]{image_path}")
-            continue
-
         retake = False
         image_size = os.path.getsize(image_path)
         if meta['debug']:

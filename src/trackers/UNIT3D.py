@@ -5,6 +5,7 @@ import aiofiles
 import asyncio
 import glob
 import httpx
+import json
 import os
 import platform
 import re
@@ -38,6 +39,11 @@ class UNIT3D:
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
+
+        # Ensure tracker_status keys exist before any potential writes
+        meta.setdefault("tracker_status", {})
+        meta["tracker_status"].setdefault(self.tracker, {})
+
         if not self.api_key:
             if not meta["debug"]:
                 console.print(
@@ -56,24 +62,26 @@ class UNIT3D:
             "accept": "application/json",
         }
 
+        category_id = str((await self.get_category_id(meta))['category_id'])
         params_dict: dict[str, str] = {
-            "tmdbId": f"{meta['tmdb']}",
-            "categories[]": f"{(await self.get_category_id(meta))['category_id']}",
+            "tmdbId": str(meta['tmdb']),
+            "categories[]": category_id,
             "name": "",
             "perPage": "100",
         }
         params_list: Optional[ParamsList] = None
         resolutions = await self.get_resolution_id(meta)
-        if resolutions["resolution_id"] in ["3", "4"]:
+        resolution_id = str(resolutions["resolution_id"])
+        if resolution_id in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys
             params_list = [(k, v) for k, v in params_dict.items()]
             params_list.append(("resolutions[]", "3"))
             params_list.append(("resolutions[]", "4"))
         else:
-            params_dict["resolutions[]"] = resolutions["resolution_id"]
+            params_dict["resolutions[]"] = resolution_id
 
         if self.tracker not in ["SP", "STC"]:
-            type_id = (await self.get_type_id(meta))["type_id"]
+            type_id = str((await self.get_type_id(meta))["type_id"])
             if params_list is not None:
                 params_list.append(("types[]", type_id))
             else:
@@ -462,8 +470,9 @@ class UNIT3D:
 
                         # Verify API success before proceeding
                         if not response_data.get("success"):
-                            meta["tracker_status"][self.tracker]["status_message"] = response_data
-                            console.print(f"[yellow]Upload to {self.tracker} failed: {response_data.get('message', 'Unknown error')}[/yellow]")
+                            error_msg = response_data.get("message", "Unknown error")
+                            meta["tracker_status"][self.tracker]["status_message"] = f"API error: {error_msg}"
+                            console.print(f"[yellow]Upload to {self.tracker} failed: {error_msg}[/yellow]")
                             return False
 
                         meta["tracker_status"][self.tracker]["status_message"] = (
@@ -533,11 +542,11 @@ class UNIT3D:
                             "status_message"
                         ] = f"data error: Unable to upload. Error: {e}.\nResponse: {response_data}"
                         return False  # Request error after all retries
-                except Exception as e:
+                except json.JSONDecodeError as e:
                     meta["tracker_status"][self.tracker][
                         "status_message"
-                    ] = f"data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}"
-                    return False  # Generic error
+                    ] = f"data error: Invalid JSON response from {self.tracker}. Error: {e}"
+                    return False  # JSON parsing error
         else:
             console.print(f"[cyan]{self.tracker} Request Data:")
             console.print(data)
@@ -563,12 +572,13 @@ class UNIT3D:
             print("Could not parse torrent_id from response data.")
         return torrent_id
 
-    async def process_response_data(self, response_data: dict[str, Any]) -> Any:
-        """Returns only the success message from the response data if the upload is successful; otherwise, returns the complete response data."""
-        try:
-            if response_data.get("success") is True:
-                return response_data.get("message", "")
+    async def process_response_data(self, response_data: dict[str, Any]) -> str:
+        """Returns the success message from the response data as a string."""
+        if response_data.get("success") is True:
+            return str(response_data.get("message", "Upload successful"))
 
-            return response_data
-        except Exception:
-            return response_data
+        # For non-success responses, format as string
+        error_msg = response_data.get("message", "")
+        if error_msg:
+            return f"API response: {error_msg}"
+        return f"API response: {response_data}"

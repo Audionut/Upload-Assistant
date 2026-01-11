@@ -84,7 +84,7 @@ class ANT:
     async def get_type(self, meta: dict[str, Any]) -> int:
         antType = None
         imdb_info = meta.get('imdb_info', {})
-        if imdb_info['type'] is not None:
+        if imdb_info.get('type') is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie'):
                 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
@@ -383,8 +383,14 @@ class ANT:
             meta['skipping'] = "ANT"
             return dupes
 
+        api_key = self.tracker_config.get('api_key')
+        if not api_key or not isinstance(api_key, str) or not api_key.strip():
+            console.print(f"[bold red]{self.tracker} API key not configured or invalid.")
+            meta['skipping'] = "ANT"
+            return dupes
+
         params = {
-            'apikey': str(self.tracker_config.get('api_key')).strip(),
+            'apikey': api_key.strip(),
             't': 'search',
             'o': 'json'
         }
@@ -454,10 +460,23 @@ class ANT:
         imdb_tmdb_list: list[dict[str, Any]] = []
         if meta.get('is_disc', False):
             return imdb_tmdb_list
+
         filelist = meta.get('filelist', [])
-        filename = [os.path.basename(f) for f in filelist][0]
+        if not filelist or not isinstance(filelist, list):
+            if meta.get('debug'):
+                console.print(f"[yellow]{self.tracker}: No files in filelist, skipping file-based search.")
+            return imdb_tmdb_list
+
+        filename = os.path.basename(filelist[0])
+
+        api_key = self.tracker_config.get('api_key')
+        if not api_key or not isinstance(api_key, str) or not api_key.strip():
+            if meta.get('debug'):
+                console.print(f"[yellow]{self.tracker}: API key not configured, skipping file-based search.")
+            return imdb_tmdb_list
+
         params: dict[str, Any] = {
-            'apikey': str(self.tracker_config.get('api_key')).strip(),
+            'apikey': api_key.strip(),
             't': 'search',
             'filename': filename,
             'o': 'json'

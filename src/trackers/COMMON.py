@@ -118,7 +118,7 @@ class COMMON():
         tracker: str,
         source_flag: str,
         new_tracker: Union[str, list[str]],
-        comment: str,
+        comment: str = "",
         hash_is_id: bool = False,
     ):
         """
@@ -129,6 +129,9 @@ class COMMON():
             loop = asyncio.get_running_loop()
             new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             if isinstance(new_tracker, list):
+                if not new_tracker:
+                    console.print(f"[red]Error: Empty tracker list provided for {tracker}. Cannot create torrent.[/red]")
+                    return None
                 new_torrent.metainfo["announce"] = new_tracker[0]
                 new_torrent.metainfo["announce-list"] = [new_tracker]
             else:
@@ -585,9 +588,9 @@ class COMMON():
             data['search'] = f"tt{meta['imdb_id']}"
             ptgen_response = requests.get(url, params=data, timeout=30)
             if ptgen_response.json()["error"] is not None:
-                for retry in range(ptgen_retry):
+                for _retry in range(ptgen_retry):
                     try:
-                        ptgen_response = requests.get(url, params=params, timeout=30)
+                        ptgen_response = requests.get(url, params=data, timeout=30)
                         if ptgen_response.json()["error"] is None:
                             break
                     except requests.exceptions.JSONDecodeError:
@@ -603,7 +606,7 @@ class COMMON():
         try:
             ptgen_response = requests.get(url, params=params, timeout=30)
             if ptgen_response.json()["error"] is not None:
-                for retry in range(ptgen_retry):
+                for _retry in range(ptgen_retry):
                     ptgen_response = requests.get(url, params=params, timeout=30)
                     if ptgen_response.json()["error"] is None:
                         break

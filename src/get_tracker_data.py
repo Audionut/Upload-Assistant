@@ -258,7 +258,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 if tracker_to_process == "BTN":
                     btn_id = meta.get('btn')
                     btn_api = DEFAULT_CONFIG.get('btn_api')
-                    if btn_api and len(btn_api) > 25:
+                    if isinstance(btn_api, str) and len(btn_api) > 25:
                         imdb, tvdb = await get_btn_torrents(btn_api, btn_id, meta)
                         if imdb != 0 or tvdb != 0:
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):

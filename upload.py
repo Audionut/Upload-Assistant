@@ -4,7 +4,7 @@
 # Pre-check config.py for syntax and common errors before any imports that depend on it
 import os
 import sys
-from typing import Any, Dict, Optional, Set, cast
+from typing import Any, Dict, Optional, cast
 from typing_extensions import TypeAlias
 
 _base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -50,7 +50,8 @@ config: Dict[str, Any]
 
 if os.path.exists(_config_path):
     try:
-        from data.config import config as config  # noqa: E402, F811
+        from data.config import config as _imported_config  # noqa: E402
+        config = cast(Dict[str, Any], _imported_config)
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -176,7 +177,6 @@ from src.uphelper import UploadHelper  # noqa: E402
 from src.uploadscreens import upload_screens  # noqa: E402
 
 cli_ui.setup(color='always', title="Upload Assistant")
-running_subprocesses: Set[Any] = set()
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 Meta: TypeAlias = Dict[str, Any]
@@ -935,24 +935,6 @@ async def cleanup_screenshot_temp_files(meta: Meta) -> None:
                         console.print(f"[yellow]Removed temporary screenshot file: {file_path}[/yellow]")
         except Exception as e:
             console.print(f"[red]Error cleaning up temporary screenshot files: {e}[/red]", highlight=False)
-
-
-async def get_log_file(base_dir: str, queue_name: str) -> str:
-    """
-    Returns the path to the log file for the given base directory and queue name.
-    """
-    safe_queue_name = queue_name.replace(" ", "_")
-    return os.path.join(base_dir, "tmp", f"{safe_queue_name}_processed_files.log")
-
-
-async def load_processed_files(log_file: str) -> set[str]:
-    """
-    Loads the list of processed files from the log file.
-    """
-    if os.path.exists(log_file):
-        with open(log_file, "r") as f:
-            return set(json.load(f))
-    return set()
 
 
 async def save_processed_file(log_file: str, file_path: str) -> None:

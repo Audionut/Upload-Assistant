@@ -176,10 +176,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                                     # Add the selected edition to our matches
                                     if isinstance(playlist_selected, str):
-                                        if playlist_selected.strip():
-                                            console.print(f"[green]Using playlist edition: {playlist_selected}[/green]")
-                                            matched_editions_with_attributes.append(playlist_selected)
-                                        else:
+                                        normalized_playlist = playlist_selected.strip().lower()
+                                        if not normalized_playlist:
                                             # Empty playlist edition, fall back to closest match
                                             console.print("[yellow]Empty playlist edition, using closest match.[/yellow]")
                                             playlist_selected = min(playlist_matching_editions, key=lambda x: x['difference'])
@@ -190,6 +188,18 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                             else:
                                                 matched_editions_without_attributes.append(str(playlist_selected['minutes']))
                                                 console.print(f"[yellow]Added edition without attributes: {playlist_selected['name']}[/yellow]")
+                                        elif normalized_playlist in ("theatrical", "theater", "theatre"):
+                                            # Theatrical is a non-attribute edition; use closest match's minutes
+                                            console.print(f"[yellow]Playlist edition '{playlist_selected}' is theatrical, treating as non-attribute edition.[/yellow]")
+                                            fallback = min(playlist_matching_editions, key=lambda x: x['difference'])
+                                            matched_editions_without_attributes.append(str(fallback['minutes']))
+                                        else:
+                                            # Genuine attribute edition from playlist
+                                            if playlist_selected.strip() not in matched_editions_with_attributes:
+                                                matched_editions_with_attributes.append(playlist_selected.strip())
+                                                console.print(f"[green]Using playlist edition: {playlist_selected}[/green]")
+                                            else:
+                                                console.print(f"[yellow]Playlist edition '{playlist_selected}' already added, skipping duplicate.[/yellow]")
                                     else:
                                         if playlist_selected['has_attributes']:
                                             if playlist_selected['name'] not in matched_editions_with_attributes:
