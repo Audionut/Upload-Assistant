@@ -828,7 +828,7 @@ async def screenshots(
 
     if len(existing_images) >= cutoff and not force_screenshots:
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
-        return
+        return None
 
     try:
         with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", encoding='utf-8') as f:
@@ -881,7 +881,7 @@ async def screenshots(
         if meta.get('debug', False):
             import traceback
             console.print(traceback.format_exc())
-        return
+        return None
     meta['frame_rate'] = frame_rate
     loglevel = 'verbose' if meta.get('ffdebug', False) else 'quiet'
     os.chdir(f"{base_dir}/tmp/{folder_id}")
@@ -907,7 +907,7 @@ async def screenshots(
     if num_screens is None or num_screens <= 0:
         num_screens = screens - len(existing_images)
     if num_screens <= 0:
-        return
+        return None
 
     sanitized_filename = await sanitize_filename(filename)
 

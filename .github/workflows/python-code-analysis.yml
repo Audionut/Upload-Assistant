@@ -87,7 +87,7 @@ jobs:
       continue-on-error: true
       run: |
         echo "Running type checking..."
-        mypy --config-file mypy.ini src/ bin/ upload.py config-generator.py discordbot.py > mypy-results.txt 2>&1 || echo "MyPy scan completed with results saved"
+        mypy --config-file mypy.ini . > mypy-results.txt 2>&1 || echo "MyPy scan completed with results saved"
         
         # Display results
         cat mypy-results.txt

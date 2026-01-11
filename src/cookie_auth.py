@@ -296,7 +296,7 @@ class CookieValidator:
         except httpx.TooManyRedirects:
             console.print(f"{tracker}: Too many redirects. Request exceeded the maximum redirect limit.")
         except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code
+            status_code = str(e.response.status_code)
             reason = e.response.reason_phrase if e.response.reason_phrase else "Unknown Reason"
             url = e.request.url
             console.print(f"{tracker}: HTTP status error {status_code}: {reason} for {url}")
