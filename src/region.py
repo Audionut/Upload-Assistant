@@ -91,8 +91,8 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'Comedians in Cars Getting Coffee': 'CCGC', 'CHGD': 'CHGD', 'CHRGD': 'CHGD', 'CMAX': 'CMAX', 'Cinemax': 'CMAX',
         'CMOR': 'CMOR', 'CMT': 'CMT', 'Country Music Television': 'CMT', 'CN': 'CN', 'Cartoon Network': 'CN', 'CNBC': 'CNBC',
         'CNLP': 'CNLP', 'Canal+': 'CNLP', 'CNGO': 'CNGO', 'Cinego': 'CNGO', 'COOK': 'COOK', 'CORE': 'CORE', 'CR': 'CR',
-        'Crunchy Roll': 'CR', 'Crave': 'CRAV', 'CRIT': 'CRIT', 'Criterion': 'CRIT', 'Chorki': 'CRKI', 'CRKI': 'CRKI', 'CRKL': 'CRKL', 'Crackle': 'CRKL',
-        'CSPN': 'CSPN', 'CSpan': 'CSPN', 'CTV': 'CTV', 'CUR': 'CUR', 'CuriosityStream': 'CUR', 'CW': 'CW', 'The CW': 'CW',
+        'Crunchy Roll': 'CR', 'Crave': 'CRAV', 'CRAV': 'CRAV', 'CRIT': 'CRIT', 'Criterion': 'CRIT', 'Chorki': 'CRKI', 'CRKI': 'CRKI', 'CRKL': 'CRKL', 'Crackle': 'CRKL',
+        'CSPN': 'CSPN', 'CSpan': 'CSPN', 'CTHP': 'CTHP', 'CTV': 'CTV', 'CUR': 'CUR', 'CuriosityStream': 'CUR', 'CW': 'CW', 'The CW': 'CW',
         'CWS': 'CWS', 'CWSeed': 'CWS', 'DAZN': 'DAZN', 'DCU': 'DCU', 'DC Universe': 'DCU', 'DDY': 'DDY',
         'Digiturk Diledigin Yerde': 'DDY', 'DEST': 'DEST', 'DramaFever': 'DF', 'DHF': 'DHF', 'Deadhouse Films': 'DHF',
         'DISC': 'DISC', 'Discovery': 'DISC', 'DIY': 'DIY', 'DIY Network': 'DIY', 'DOCC': 'DOCC', 'Doc Club': 'DOCC', 'DOCPLAY': 'DOCPLAY',
@@ -128,7 +128,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'TVNZ': 'TVNZ', 'UFC': 'UFC', 'UKTV': 'UKTV', 'UNIV': 'UNIV', 'Univision': 'UNIV', 'USAN': 'USAN', 'USA Network': 'USAN',
         'VH1': 'VH1', 'VIAP': 'VIAP', 'VICE': 'VICE', 'Viceland': 'VICE', 'Viki': 'VIKI', 'VIMEO': 'VIMEO', 'Vivamax': 'VMAX', 'VMAX': 'VMAX', 'Vivaone': 'VONE', 'VONE': 'VONE', 'VLCT': 'VLCT',
         'Velocity': 'VLCT', 'VMEO': 'VMEO', 'Vimeo': 'VMEO', 'VRV': 'VRV', 'VUDU': 'VUDU', 'WME': 'WME', 'WatchMe': 'WME', 'WNET': 'WNET',
-        'W Network': 'WNET', 'WWEN': 'WWEN', 'WWE Network': 'WWEN', 'XBOX': 'XBOX', 'Xbox Video': 'XBOX', 'XUMO': 'XUMO', 'YHOO': 'YHOO', 'Yahoo': 'YHOO',
+        'W Network': 'WNET', 'WOW Presents Plus': 'WOWP', 'WOWP': 'WOWP', 'WWEN': 'WWEN', 'WWE Network': 'WWEN', 'XBOX': 'XBOX', 'Xbox Video': 'XBOX', 'XUMO': 'XUMO', 'YHOO': 'YHOO', 'Yahoo': 'YHOO',
         'YT': 'YT', 'ZDF': 'ZDF', 'iP': 'iP', 'BBC iPlayer': 'iP', 'iQIYI': 'iQIYI', 'iT': 'iT', 'iTunes': 'iT'
     }
 

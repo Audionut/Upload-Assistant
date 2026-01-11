@@ -53,6 +53,11 @@ COPY . .
 
 # Ensure mkbrr is executable
 RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
+# And enable non-root access while still letting Upload-Assistant tighten mkbrr permissions at runtime
+RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
+
+# Enable non-root access for DVD MediaInfo binary
+RUN chown -R 1000:1000 /Upload-Assistant/bin/MI
 
 # Create tmp directory with appropriate permissions
 RUN mkdir -p /Upload-Assistant/tmp && chmod 777 /Upload-Assistant/tmp

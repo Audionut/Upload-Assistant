@@ -922,6 +922,14 @@ async def tmdb_other_meta(
                     else:
                         imdb_id = original_imdb_id
                 else:
+                    external_imdb_id = external.get('imdb_id', None)
+                    if isinstance(external_imdb_id, str) and external_imdb_id not in ["", " ", "None", "null"]:
+                        imdb_id_clean = external_imdb_id.lstrip('t')
+                        if imdb_id_clean.isdigit():
+                            imdb_id_clean_int = int(imdb_id_clean)
+                            if imdb_id_clean_int != int(original_imdb_id):
+                                console.print(f"[yellow]Warning: TMDb IMDb ID ({imdb_id_clean_int}) does not match provided IMDb ID ({original_imdb_id}). Using original IMDb ID.[/yellow]")
+
                     imdb_id = original_imdb_id
 
                 # Process TVDB ID

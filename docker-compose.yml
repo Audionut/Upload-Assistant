@@ -1,6 +1,6 @@
 services:
   l4g-upload-assistant-cli:
-    image: ghcr.io/audionut/upload-assistant:master-webui #you can use the version number with -webui appended, for example :v6.3.1-webui
+    image: ghcr.io/audionut/upload-assistant:master-webui # It is preferred to use the version number with -webui appended, for example :v6.3.1-webui
     container_name: UA
     restart: unless-stopped
     networks:
