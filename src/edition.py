@@ -2,7 +2,7 @@
 from guessit import guessit
 import os
 import re
-from typing import Any
+from typing import Any, Union
 from src.console import console
 from src.region import get_distributor
 
@@ -163,7 +163,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                                 try:
                                     choice = console.input(f"[yellow]Select edition number (1-{len(playlist_matching_editions)}), press e to use playlist edition or press Enter to use the closest match: [/yellow]")
 
-                                    playlist_selected: str | dict[str, Any]
+                                    playlist_selected: Union[str, dict[str, Any]]
 
                                     if choice.strip() and choice.isdigit() and 1 <= int(choice) <= len(playlist_matching_editions):
                                         playlist_selected = playlist_matching_editions[int(choice)-1]

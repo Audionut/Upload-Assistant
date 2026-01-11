@@ -13,7 +13,7 @@ import requests
 from pathlib import Path
 from pymediainfo import MediaInfo
 from torf import Torrent
-
+from typing import Union
 from cogs.redaction import redact_private_info
 from src.bbcode import BBCODE
 from src.console import console
@@ -640,7 +640,7 @@ class PTP():
                             sub_langs.append(subID)
         sub_langs_result = list({*sub_langs})
         trumpable_unique = list({*trumpable_list})
-        trumpable_result: list[int] | None = trumpable_unique if trumpable_unique else None
+        trumpable_result: Union[list[int], None] = trumpable_unique if trumpable_unique else None
         return trumpable_result, sub_langs_result
 
     def get_remaster_title(self, meta):
@@ -1490,7 +1490,7 @@ class PTP():
                     new_data["tags"] = console.input("Please enter at least one tag. Comma separated (action, animation, short):")
             data.update(new_data)
             imdb_info = meta.get("imdb_info")
-            directors: list[str] | tuple[str, ...] | None = None
+            directors: Union[list[str], tuple[str, ...], None] = None
             if isinstance(imdb_info, dict):
                 directors_value = imdb_info.get('directors')
                 if isinstance(directors_value, (list, tuple)):

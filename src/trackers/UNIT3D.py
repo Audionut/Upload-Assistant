@@ -8,14 +8,15 @@ import httpx
 import os
 import platform
 import re
-from typing import Any
+from typing import Any, Union, Optional
+from typing_extensions import TypeAlias
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
-QueryValue = str | int | float | bool | None
-ParamsList = list[tuple[str, QueryValue]]
+QueryValue: TypeAlias = Union[str, int, float, bool, None]
+ParamsList: TypeAlias = list[tuple[str, QueryValue]]
 
 
 class UNIT3D:
@@ -61,7 +62,7 @@ class UNIT3D:
             "name": "",
             "perPage": "100",
         }
-        params_list: ParamsList | None = None
+        params_list: Optional[ParamsList] = None
         resolutions = await self.get_resolution_id(meta)
         if resolutions["resolution_id"] in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys

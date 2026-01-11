@@ -5,7 +5,7 @@ import os
 import json
 import urllib.parse
 import re
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Union, cast
 from torf import Torrent
 import glob
 from src.console import console
@@ -17,7 +17,7 @@ DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT'
 TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
 
 
-async def package(meta: dict[str, Any]) -> str | bool:
+async def package(meta: dict[str, Any]) -> Union[str, bool]:
     if meta['tag'] == "":
         tag = ""
     else:

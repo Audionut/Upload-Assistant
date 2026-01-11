@@ -7,7 +7,7 @@ import json
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Union
 
 from datetime import datetime, timedelta
 from src.cleanup import cleanup, reset_terminal
@@ -84,7 +84,7 @@ class TRACKER_SETUP:
     def __init__(self, config: dict[str, Any]):
         self.config: dict[str, Any] = config
 
-    def _create_tracker_instance(self, tracker: str) -> Any | None:
+    def _create_tracker_instance(self, tracker: str) -> Union[Any, None]:
         tracker_class = tracker_class_map.get(tracker.upper())
         if tracker_class is None:
             return None
@@ -614,7 +614,7 @@ class TRACKER_SETUP:
                 return False
 
             requests: list[dict[str, Any]] = []
-            url: str | None = None
+            url: Union[str, None] = None
             try:
                 url = tracker_instance.requests_url
             except AttributeError:

@@ -15,10 +15,10 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
-from typing import Any
+from typing import Any, Union
 
 
-def _attr_to_string(value: str | AttributeValueList | None) -> str:
+def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
     """Convert BeautifulSoup attribute values to a plain string."""
     if isinstance(value, str):
         return value

@@ -13,7 +13,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 import httpx
 import aiofiles
-from typing import Any, cast
+from typing import Any, Union, cast
 from data.config import config as raw_config
 
 config = cast(dict[str, Any], raw_config)
@@ -556,7 +556,7 @@ async def upload_screens(
         return_dict: dict[str, Any],
         retry_mode: bool = False,
         max_retries: int = 3,
-        allowed_hosts: list[str] | None = None
+        allowed_hosts: Union[list[str], None] = None
 ):
     default_config = config.get('DEFAULT', {})
     if 'image_list' not in meta:

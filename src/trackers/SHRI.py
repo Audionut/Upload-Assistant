@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-from typing import Any, Literal
+from typing import Any, Literal, Union
 import asyncio
 import aiofiles
 import certifi
@@ -17,7 +17,7 @@ from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
-_shri_session_data: dict[str, dict[str, str | None]] = {}
+_shri_session_data: dict[str, dict[str, Union[str, None]]] = {}
 
 
 class SHRI(UNIT3D):

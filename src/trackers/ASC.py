@@ -10,6 +10,7 @@ import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
+from typing import Union
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
@@ -117,7 +118,7 @@ class ASC:
             try:
                 api_results = await asyncio.gather(*coroutines)
 
-                for data_type, result_data in zip(data_types, api_results, strict=True):
+                for data_type, result_data in zip(data_types, api_results):
                     if result_data:  # Only assign if result_data is not None
                         if data_type == 'main':
                             self.main_tmdb_data = result_data
@@ -354,7 +355,7 @@ class ASC:
         layout_image = {k: v for k, v in user_layout.items() if k.startswith('BARRINHA_')}
         description_parts = ['[center]']
 
-        async def append_section(key: str, content: str | None):
+        async def append_section(key: str, content: Union[str, None]):
             if content and (img := layout_image.get(key)):
                 description_parts.append(f'\n{await self.format_image(img)}')
                 description_parts.append(f'\n{content}\n')
@@ -652,7 +653,7 @@ class ASC:
         else:
             return f'{self.base_url}/enviar-series.php'
 
-    async def format_image(self, url: str | None):
+    async def format_image(self, url: Union[str, None]):
         return f'[img]{url}[/img]' if isinstance(url, str) and url else ''
 
     async def format_date(self, date_str):

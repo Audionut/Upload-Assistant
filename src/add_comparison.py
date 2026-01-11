@@ -4,7 +4,7 @@ import re
 import json
 import cli_ui
 from collections import defaultdict
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Union
 from src.uploadscreens import upload_screens
 from data.config import config
 from src.console import console
@@ -17,7 +17,7 @@ ComparisonGroup = dict[str, Any]
 ComparisonData = dict[str, ComparisonGroup]
 
 
-async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | list[ComparisonGroup]:
+async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData, list[ComparisonGroup]]:
     comparison_path = meta.get('comparison')
     if not comparison_path or not os.path.isdir(comparison_path):
         return []
@@ -27,7 +27,7 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | lis
         try:
             with open(comparison_data_file, 'r') as f:
                 raw_data = json.load(f)
-                saved_comparison_data: ComparisonData | list[ComparisonGroup]
+                saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
                 if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()):
                     saved_comparison_data = raw_data
                 elif isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):

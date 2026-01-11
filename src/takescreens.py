@@ -12,7 +12,7 @@ import psutil
 import sys
 import gc
 import traceback
-from typing import Any
+from typing import Any, Union
 from pymediainfo import MediaInfo
 from src.console import console
 from data.config import config as _config
@@ -73,7 +73,7 @@ async def disc_screenshots(
         folder_id: str,
         base_dir: str,
         use_vs: bool,
-        image_list: list[dict[str, str]] | None = None,
+        image_list: Union[list[dict[str, str]], None] = None,
         ffdebug: bool = False,
         num_screens: int = 0,
         force_screenshots: bool = False
@@ -814,8 +814,8 @@ async def screenshots(
         meta: dict[str, Any],
         num_screens: int = 0,
         force_screenshots: bool = False,
-        manual_frames: str | list[str] = "",
-) -> list[str] | None:
+        manual_frames: Union[str, list[str]] = "",
+) -> Union[list[str], None]:
     img_host = await get_image_host(meta)
     screens = meta['screens']
     if meta['debug']:

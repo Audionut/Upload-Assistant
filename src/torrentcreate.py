@@ -15,7 +15,7 @@ import sys
 import platform
 import glob
 from src.console import console
-from typing import Any
+from typing import Any, Union, Optional
 
 
 def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
@@ -133,9 +133,9 @@ def build_mkbrr_exclude_string(root_folder, filelist):
 
 async def create_torrent(
     meta: dict[str, Any],
-    path: str | os.PathLike[str],
+    path: Union[str, os.PathLike[str]],
     output_filename: str,
-    tracker_url: str | None = None,
+    tracker_url: Optional[str] = None,
     piece_size: int = 0,
 ):
     if not piece_size:

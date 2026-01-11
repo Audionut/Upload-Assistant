@@ -8,6 +8,7 @@ import httpx
 import re
 import cli_ui
 import aiofiles
+from typing import Union
 from src.trackers.COMMON import COMMON
 from src.console import console
 from src.rehostimages import check_hosts
@@ -121,7 +122,7 @@ class BHD():
         }
 
         url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()
-        details_link: str | None = None
+        details_link: Union[str, None] = None
         if meta['debug'] is False:
             try:
                 async with httpx.AsyncClient(timeout=60) as client:

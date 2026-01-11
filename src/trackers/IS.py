@@ -7,6 +7,7 @@ import os
 import platform
 import re
 from bs4 import BeautifulSoup
+from typing import Union
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
@@ -84,7 +85,7 @@ class IS:
 
     async def search_existing(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        dupes: list[dict[str, str | None]] = []
+        dupes: list[dict[str, Union[str, None]]] = []
 
         if meta['category'] == "MOVIE":
             search_type = 't_genre'

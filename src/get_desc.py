@@ -17,7 +17,7 @@ from src.languages import process_desc_language
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
-from typing import Any
+from typing import Any, Union
 
 
 def html_to_bbcode(text: str) -> str:
@@ -483,8 +483,8 @@ class DescriptionBuilder:
         signature: str = "",
         comparison: bool = False,
         desc_header: str = "",
-        image_list: list[dict[str, str]] | None = None,
-        approved_image_hosts: list[str] | None = None,
+        image_list: Union[list[dict[str, str]], None] = None,
+        approved_image_hosts: Union[list[str], None] = None,
     ):
         if image_list is None:
             image_list = []

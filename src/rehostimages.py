@@ -5,7 +5,7 @@ import json
 import aiofiles
 import asyncio
 import re
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Union, cast
 from src.console import console
 from urllib.parse import urlparse
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
@@ -32,7 +32,7 @@ def _to_int(value: Any, fallback: int = 0) -> int:
     return fallback
 
 
-def _as_str(value: Any) -> str | None:
+def _as_str(value: Any) -> Union[str, None]:
     return value if isinstance(value, str) else None
 
 

@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 import json
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Tuple, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from upload import Meta
@@ -27,7 +27,7 @@ def extract_json_blocks(text: str):
     stack: list[str] = []
     start: Optional[int] = None
     in_string = False
-    string_char: str | None = None
+    string_char: Union[str, None] = None
     escape = False
 
     for i, ch in enumerate(text):

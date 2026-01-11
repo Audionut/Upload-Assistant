@@ -11,7 +11,7 @@ import threading
 import queue
 import hmac
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, Union
 from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -48,7 +48,7 @@ class BrowseItem(TypedDict):
     name: str
     path: str
     type: Literal['folder', 'file']
-    children: list['BrowseItem'] | None
+    children: Union[list['BrowseItem'], None]
 
 
 def _webui_auth_configured() -> bool:
@@ -131,7 +131,7 @@ def _get_browse_roots() -> list[str]:
 
 
 def _resolve_user_path(
-    user_path: str | None,
+    user_path: Union[str, None],
     *,
     require_exists: bool = True,
     require_dir: bool = False,
@@ -157,8 +157,8 @@ def _resolve_user_path(
     # Build a normalized path and validate it against allowlisted roots.
     # Use werkzeug.utils.safe_join as the initial join/sanitizer, then also
     # enforce a realpath+commonpath constraint to prevent symlink escapes.
-    matched_root: str | None = None
-    candidate_norm: str | None = None
+    matched_root: Union[str, None] = None
+    candidate_norm: Union[str, None] = None
 
     if expanded and os.path.isabs(expanded):
         # If a user supplies an absolute path, only allow it if it is under
@@ -222,7 +222,7 @@ def _resolve_user_path(
     return candidate
 
 
-def _resolve_browse_path(user_path: str | None) -> str:
+def _resolve_browse_path(user_path: Union[str, None]) -> str:
     return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 

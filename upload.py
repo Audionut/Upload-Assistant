@@ -14,7 +14,8 @@ import shutil
 import sys
 import time
 import traceback
-from typing import Any, Dict, Optional, Set, TypeAlias, cast
+from typing import Any, Dict, Optional, Set, cast
+from typing_extensions import TypeAlias
 
 from packaging import version
 from pathlib import Path

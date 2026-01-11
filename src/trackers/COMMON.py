@@ -16,7 +16,7 @@ from src.console import console
 from src.exportmi import exportInfo
 from src.languages import process_desc_language
 from torf import Torrent
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 
 class COMMON():
@@ -117,7 +117,7 @@ class COMMON():
         meta: dict[str, Any],
         tracker: str,
         source_flag: str,
-        new_tracker: str | list[str],
+        new_tracker: Union[str, list[str]],
         comment: str,
         hash_is_id: bool = False,
     ):
@@ -347,7 +347,7 @@ class COMMON():
         except ValueError:
             return
         try:
-            data: list[dict[str, Any]] | str = json_response.get('data', [])
+            data: Union[list[dict[str, Any]], str] = json_response.get('data', [])
             if data == "404":
                 console.print("[yellow]No data found (404). Returning None.[/yellow]")
                 return
@@ -443,7 +443,7 @@ class COMMON():
 
         try:
             # Handle response when searching by file name (which might return a 'data' array)
-            data: list[dict[str, Any]] | str = json_response.get('data', [])
+            data: Union[list[dict[str, Any]], str] = json_response.get('data', [])
             if data == "404":
                 console.print("[yellow]No data found (404). Returning None.[/yellow]")
                 return None, None, None, None, None, None, None, None, None
@@ -723,7 +723,7 @@ class COMMON():
             # Patterns for matching sections and fields
             section_pattern = re.compile(r"^(General|Video|Audio|Text|Menu)(?:\s#\d+)?", re.IGNORECASE)
             parsed_data: dict[str, Any] = {"general": {}, "video": [], "audio": [], "text": []}
-            current_section: str | None = None
+            current_section: Optional[str] = None
             current_track: dict[str, str] = {}
 
             # Field lists based on PHP definitions

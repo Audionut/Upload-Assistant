@@ -6,7 +6,7 @@ import re
 import json
 import cli_ui
 import os
-from typing import Any
+from typing import Any, Union
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
 from rich.console import Console
@@ -19,7 +19,7 @@ async def search_bluray(meta):
     url = f"https://www.blu-ray.com/search/?quicksearch=1&quicksearch_country=all&quicksearch_keyword={imdb_id}&section=theatrical"
     debug_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/debug_bluray_search_{imdb_id}.html"
 
-    response_text: str | None = None
+    response_text: Union[str, None] = None
 
     try:
         if os.path.exists(debug_filename):
@@ -852,7 +852,7 @@ async def fetch_release_details(release, meta):
     if meta['debug']:
         console.print(f"[yellow]Fetching details for: {release['title']} - {release_url}[/yellow]")
 
-    response_text: str | None = None
+    response_text: Union[str, None] = None
 
     try:
         import os
