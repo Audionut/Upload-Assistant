@@ -4,7 +4,8 @@
 # Pre-check config.py for syntax and common errors before any imports that depend on it
 import os
 import sys
-from typing import Optional as _Optional
+from typing import Any, Dict, Optional, Set, cast
+from typing_extensions import TypeAlias
 
 _base_dir = os.path.abspath(os.path.dirname(__file__))
 _config_path = os.path.join(_base_dir, "data", "config.py")
@@ -27,9 +28,9 @@ _GREEN = "\033[92m" if _use_colors else ""
 _RESET = "\033[0m" if _use_colors else ""
 
 
-def _print_config_error(error_type: str, message: str, lineno: _Optional[int] = None,
-                        text: _Optional[str] = None, offset: _Optional[int] = None,
-                        suggestion: _Optional[str] = None) -> None:
+def _print_config_error(error_type: str, message: str, lineno: Optional[int] = None,
+                        text: Optional[str] = None, offset: Optional[int] = None,
+                        suggestion: Optional[str] = None) -> None:
     """Print a formatted config error message."""
     print(f"{_RED}{error_type} in config.py:{_RESET}")
     if lineno:
@@ -45,15 +46,11 @@ def _print_config_error(error_type: str, message: str, lineno: _Optional[int] = 
     print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}")
 
 
+config: Dict[str, Any]
+
 if os.path.exists(_config_path):
     try:
-        with open(_config_path, "r", encoding="utf-8") as f:
-            _config_source = f.read()
-        # First check syntax
-        _compiled = compile(_config_source, _config_path, "exec")
-        # Then try to execute to catch NameError, etc.
-        _config_namespace = {}  # type: dict[str, object]
-        exec(_compiled, _config_namespace)
+        from data.config import config  # noqa: E402, F811
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -128,6 +125,11 @@ if os.path.exists(_config_path):
             text=text
         )
         sys.exit(1)
+else:
+    print(f"{_RED}Configuration file 'config.py' not found.{_RESET}")
+    print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}")
+    print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
+    sys.exit(1)
 
 import aiofiles  # noqa: E402
 import asyncio  # noqa: E402
@@ -141,8 +143,6 @@ import requests  # noqa: E402
 import shutil  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
-from typing import Any, Dict, Optional, Set, cast  # noqa: E402
-from typing_extensions import TypeAlias  # noqa: E402
 
 from packaging import version  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -181,36 +181,7 @@ base_dir = os.path.abspath(os.path.dirname(__file__))
 
 Meta: TypeAlias = Dict[str, Any]
 
-try:
-    config: Dict[str, Any]
-    from data.config import config as raw_config
-    config = cast(Dict[str, Any], raw_config)
-
-except ImportError as e:
-    if "config" in str(e).lower():
-        if not os.path.exists(os.path.abspath(f"{base_dir}/data/config.py")):
-            cli_ui.info(cli_ui.red, "Configuration file 'config.py' not found.")
-            cli_ui.info(cli_ui.red, "Please ensure the file is located at:", cli_ui.yellow, os.path.abspath(f"{base_dir}/data/config.py"))
-            cli_ui.info(cli_ui.red, "Follow the setup instructions: https://github.com/Audionut/Upload-Assistant")
-            raise SystemExit(1)
-        else:
-            traceback.print_exc()
-            raise SystemExit(1)
-    else:
-        raise
-except SystemExit:
-    raise
-except Exception:
-    if not os.path.exists(os.path.abspath(f"{base_dir}/data/config.py")):
-        cli_ui.info(cli_ui.red, "Configuration file 'config.py' not found.")
-        cli_ui.info(cli_ui.red, "Please ensure the file is located at:", cli_ui.yellow, os.path.abspath(f"{base_dir}/data/config.py"))
-        cli_ui.info(cli_ui.red, "Follow the setup instructions: https://github.com/Audionut/Upload-Assistant")
-        raise SystemExit(1)
-    else:
-        traceback.print_exc()
-        raise SystemExit(1)
-
-from src.prep import Prep  # noqa E402
+from src.prep import Prep  # noqa: E402
 client = Clients(config=config)
 parser = Args(config)
 use_discord = False

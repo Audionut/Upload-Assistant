@@ -466,14 +466,14 @@ def _validate_trackers_section(
                         f"(e.g., <PASSKEY>) - replace with actual value"
                     )
 
-        # Check boolean fields are actually booleans
+        # Check boolean fields are actually booleans (must be real bool, not string)
         bool_fields = ["anon", "useAPI", "modq", "draft", "draft_default", "img_rehost"]
         for field in bool_fields:
             if field in tracker_config:
                 value = tracker_config[field]
-                if not isinstance(value, bool) and value not in ("True", "False", "true", "false"):
+                if not isinstance(value, bool):
                     warnings.append(ConfigValidationWarning(
-                        f"'{field}' should be a boolean (True/False), got {type(value).__name__}",
+                        f"'{field}' must be a boolean type (True/False), got {type(value).__name__}: {value!r}",
                         key=tracker_name,
                         section="TRACKERS"
                     ))
