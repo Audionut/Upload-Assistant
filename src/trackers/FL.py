@@ -9,7 +9,6 @@ import requests
 
 from bs4 import BeautifulSoup
 from unidecode import unidecode
-from urllib.parse import urlparse
 
 from src.console import console
 from src.cookie_auth import CookieValidator
@@ -189,15 +188,14 @@ class FL():
                     match = re.match(r".*?filelist\.io/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
                     if match:
                         meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                        id = re.search(r"(id=)(\d+)", urlparse(up.url).query).group(2)
-                        await self.download_new_torrent(session, id, torrent_path)
+                        torrent_id = match.group(1)
+                        await self.download_new_torrent(session, torrent_id, torrent_path)
                         return True
                     else:
                         console.print(data)
                         console.print("\n\n")
                         console.print(up.text)
                         raise UploadException(f"Upload to FL Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
-        return False
 
     async def search_existing(self, meta, disctype):
         dupes = []
@@ -230,8 +228,15 @@ class FL():
                     soup = BeautifulSoup(response.text, 'html.parser')
                     find = soup.find_all('a', href=True)
                     for each in find:
-                        if each['href'].startswith('details.php?id=') and "&" not in each['href']:
-                            dupes.append(each['title'])
+                        href_attr = each.get('href')
+                        title_attr = each.get('title')
+                        if (
+                            isinstance(href_attr, str)
+                            and href_attr.startswith('details.php?id=')
+                            and '&' not in href_attr
+                            and isinstance(title_attr, str)
+                        ):
+                            dupes.append(title_attr)
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
                 await asyncio.sleep(0.5)
@@ -293,7 +298,13 @@ class FL():
             r = session.get("https://filelist.io/login.php", timeout=30)
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
-            validator = soup.find('input', {'name': 'validator'}).get('value')
+            validator_input = soup.find('input', {'name': 'validator'})
+            if validator_input is None:
+                raise LoginException('Unable to locate validator input on FL login page.')  # noqa: F405
+            validator_value = validator_input.get('value')
+            if not isinstance(validator_value, str):
+                raise LoginException('Validator input missing value attribute on FL login page.')  # noqa: F405
+            validator = validator_value
             data = {
                 'validator': validator,
                 'username': self.username,

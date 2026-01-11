@@ -6,6 +6,8 @@ import os
 import requests
 import sys
 import time
+from types import MappingProxyType
+from typing import Any, Mapping, cast
 
 from data.config import config
 from src.btnid import get_btn_torrents
@@ -16,6 +18,18 @@ from src.trackermeta import update_metadata_from_tracker
 from src.trackersetup import tracker_class_map
 
 client = Clients(config=config)
+
+TRACKERS_CONFIG: Mapping[str, Mapping[str, Any]] = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
+if not isinstance(TRACKERS_CONFIG, dict):
+    raise ValueError("'TRACKERS' config section must be a dict")
+
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
+
+
+def get_tracker_config(tracker_name: str) -> Mapping[str, Any]:
+    return TRACKERS_CONFIG.get(tracker_name, MappingProxyType({}))
 
 
 async def get_tracker_timestamps(base_dir=None):
@@ -129,7 +143,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     valid_trackers.append(tracker)
                     continue
                 else:
-                    tracker_config = config.get('TRACKERS', {}).get(tracker, {})
+                    tracker_config = get_tracker_config(tracker)
                     api_key = tracker_config.get('api_key', '')
                     announce_url = tracker_config.get('announce_url', '')
 
@@ -181,11 +195,12 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
 
             async def process_tracker(tracker_name, meta, only_id):
                 nonlocal found_match
-                if tracker_class_map is None:
-                    print(f"Tracker class for {tracker_name} not found.")
+                tracker_factory = tracker_class_map.get(tracker_name)
+                if tracker_factory is None:
+                    console.print(f"[red]Tracker class for {tracker_name} not found.[/red]")
                     return meta
 
-                tracker_instance = tracker_class_map[tracker_name](config=config)
+                tracker_instance = tracker_factory(config=config)
                 try:
                     updated_meta, match = await update_metadata_from_tracker(
                         tracker_name, tracker_instance, meta, search_term, search_file_folder, only_id
@@ -242,7 +257,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                 # Process the selected tracker
                 if tracker_to_process == "BTN":
                     btn_id = meta.get('btn')
-                    btn_api = config['DEFAULT'].get('btn_api')
+                    btn_api = DEFAULT_CONFIG.get('btn_api')
                     if btn_api and len(btn_api) > 25:
                         imdb, tvdb = await get_btn_torrents(btn_api, btn_id, meta)
                         if imdb != 0 or tvdb != 0:
@@ -325,11 +340,12 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
 
             async def process_tracker(tracker_name, meta, only_id):
                 nonlocal found_match
-                if tracker_class_map is None:
-                    print(f"Tracker class for {tracker_name} not found.")
+                tracker_factory = tracker_class_map.get(tracker_name)
+                if tracker_factory is None:
+                    console.print(f"[red]Tracker class for {tracker_name} not found.[/red]")
                     return meta
 
-                tracker_instance = tracker_class_map[tracker_name](config=config)
+                tracker_instance = tracker_factory(config=config)
                 try:
                     updated_meta, match = await update_metadata_from_tracker(
                         tracker_name, tracker_instance, meta, search_term, search_file_folder, only_id
@@ -348,7 +364,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
 
             for tracker_name in tracker_order:
                 if not found_match:  # Stop checking once a match is found
-                    tracker_config = config['TRACKERS'].get(tracker_name, {})
+                    tracker_config = get_tracker_config(tracker_name)
                     if str(tracker_config.get('useAPI', 'false')).lower() == "true":
                         meta = await process_tracker(tracker_name, meta, only_id)
 
@@ -363,7 +379,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
     return meta
 
 
-async def ping_unit3d(meta):
+async def ping_unit3d(meta: dict[str, Any]):
     from src.trackers.COMMON import COMMON
     common = COMMON(config)
     import re
@@ -381,7 +397,7 @@ async def ping_unit3d(meta):
                     console.print(f"[green]Both region ({meta['region']}) and distributor ({meta['distributor']}) found - no need to check more trackers[/green]")
                 break
 
-            tracker_id = None
+            tracker_id: str = ""
             tracker_key = tracker_name.lower()
             # Check each stored comment for matching tracker URL
             for comment_data in meta.get('torrent_comments', []):
@@ -420,7 +436,7 @@ async def ping_unit3d(meta):
 
             # If we found a tracker ID, try to get region/distributor data
             if tracker_id:
-                missing_info = []
+                missing_info: list[str] = []
                 if not meta.get('region'):
                     missing_info.append("region")
                 if not meta.get('distributor'):
@@ -434,7 +450,7 @@ async def ping_unit3d(meta):
                 # Store initial state to detect changes
                 had_region = bool(meta.get('region'))
                 had_distributor = bool(meta.get('distributor'))
-                await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, tracker_id)
+                await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, str(tracker_id))
 
                 if meta.get('region') and not had_region:
                     if meta.get('debug', False):

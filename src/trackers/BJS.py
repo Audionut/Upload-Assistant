@@ -21,7 +21,7 @@ from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 
@@ -169,7 +169,7 @@ class BJS:
 
     async def get_audio(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -192,7 +192,7 @@ class BJS:
 
     async def get_subtitle(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
         subtitle_type = 'Nenhuma'
@@ -313,11 +313,11 @@ class BJS:
         return original_title, brazilian_title
 
     async def build_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -339,7 +339,7 @@ class BJS:
 
         # File information
         if meta.get('is_disc', '') == 'DVD':
-            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
         bd_info = await builder.get_bdinfo_section(meta)
         if bd_info:
@@ -349,7 +349,7 @@ class BJS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
@@ -499,7 +499,7 @@ class BJS:
         return False, False
 
     def _extract_torrent_ids(self, rows_to_process):
-        ajax_tasks = []
+        ajax_tasks: list[dict[str, Any]] = []
 
         for row, process_folder_name in rows_to_process:
             id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
@@ -530,7 +530,7 @@ class BJS:
 
         return ajax_tasks
 
-    async def _fetch_torrent_content(self, task_info):
+    async def _fetch_torrent_content(self, task_info: dict[str, Any]) -> dict[str, Any]:
         torrent_id = task_info['torrent_id']
         group_id = task_info['group_id']
         ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
@@ -579,7 +579,7 @@ class BJS:
 
         return item_name
 
-    async def _process_ajax_responses(self, ajax_tasks, params):
+    async def _process_ajax_responses(self, ajax_tasks: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, str]]:
         if not ajax_tasks:
             return []
 
@@ -588,29 +588,36 @@ class BJS:
             return_exceptions=True
         )
 
-        found_items = []
+        found_items: list[dict[str, str]] = []
         for result in ajax_results:
             if isinstance(result, Exception):
                 console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
                 continue
 
             # At this point `result` is expected to be the dict returned by `_fetch_torrent_content`.
-            if not result['success']:
+            fetch_result = cast(dict[str, Any], result)
+            if not fetch_result.get('success'):
                 continue
 
-            task_info = result['task_info']
+            task_info = fetch_result.get('task_info')
+            soup_obj = fetch_result.get('soup')
+            if not isinstance(task_info, dict) or not isinstance(soup_obj, BeautifulSoup):
+                continue
+
+            description_text = str(task_info.get('description_text', ''))
+            process_folder_name = bool(task_info.get('process_folder_name'))
             item_name = self._extract_item_name(
-                result['soup'],
-                task_info['description_text'],
+                soup_obj,
+                description_text,
                 params['is_tv_pack'],
-                task_info['process_folder_name']
+                process_folder_name
             )
 
             if item_name:
                 found_items.append({
                     'name': item_name,
-                    'size': task_info.get('size', ''),
-                    'link': task_info.get('link', '')
+                    'size': str(task_info.get('size', '') or ''),
+                    'link': str(task_info.get('link', '') or '')
                 })
 
         return found_items

@@ -9,11 +9,12 @@ try:
     import sys
     import traceback
     import time
+    from typing import Any, cast
 
     from difflib import SequenceMatcher
     from guessit import guessit
 
-    from data.config import config
+    from data.config import config as raw_config
     from src.apply_overrides import get_source_override
     from src.audio import get_audio_v2
     from src.bluray_com import get_bluray_releases
@@ -40,6 +41,8 @@ try:
     from src.tvmaze import search_tvmaze
     from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
 
+    config = cast(dict[str, Any], raw_config)
+
 except ModuleNotFoundError:
     traceback.format_exc()
     console.print('[bold red]Missing Module Found. Please reinstall required dependencies.')
@@ -64,7 +67,7 @@ class Prep():
         self.img_host = img_host.lower()
         self.tvdb_handler = tvdb_data(config)
 
-    async def gather_prep(self, meta, mode):
+    async def gather_prep(self, meta: dict[str, Any], mode: str) -> dict[str, Any]:
         # set a timer to check speed
         if meta['debug']:
             meta_start_time = time.time()
@@ -639,11 +642,13 @@ class Prep():
         user_overrides = config['DEFAULT'].get('user_overrides', False)
         if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0) and not meta.get('emby', False):
             meta = await get_source_override(meta, other_id=True)
-            meta['category'] = meta.get('category', None).upper()
+            category = meta.get('category')
+            meta['category'] = str(category).upper() if category is not None else ''
             # set a flag so that the other check later doesn't run
             meta['no_override'] = True
 
-        if meta.get('emby_cat', None) is not None and meta.get('emby_cat', None).upper() != meta.get('category', None):
+        emby_cat = meta.get('emby_cat')
+        if emby_cat is not None and str(emby_cat).upper() != str(meta.get('category') or '').upper():
             return meta
 
         if meta['debug']:
@@ -666,8 +671,9 @@ class Prep():
             meta_middle_time = time.time()
             console.print(f"Source/tracker data processed in {meta_middle_time - meta_start_time:.2f} seconds")
 
-        if meta.get('manual_language'):
-            meta['original_language'] = meta.get('manual_language').lower()
+        manual_language = meta.get('manual_language')
+        if isinstance(manual_language, str) and manual_language:
+            meta['original_language'] = manual_language.lower()
 
         meta['type'] = await get_type(video, meta['scene'], meta['is_disc'], meta)
 
@@ -844,7 +850,7 @@ class Prep():
 
         # lets check for tv movies
         meta['tv_movie'] = False
-        is_tv_movie = meta.get('imdb_info', None).get('type', '')
+        is_tv_movie = meta.get('imdb_info', {}).get('type', '')
         tv_movie_keywords = ['tv movie', 'tv special', 'tvmovie']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', is_tv_movie, re.IGNORECASE) for keyword in tv_movie_keywords):
             if meta['debug']:
@@ -1095,7 +1101,8 @@ class Prep():
         # return duplicate ids so I don't have to catch every site file
         # this has the other advantage of stringing imdb for this object
         meta['tmdb'] = meta.get('tmdb_id')
-        if int(meta.get('imdb_id')) != 0:
+        imdb_id_value = meta.get('imdb_id')
+        if int(imdb_id_value or 0) != 0:
             imdb_str = str(meta['imdb_id']).zfill(7)
             meta['imdb'] = imdb_str
         else:

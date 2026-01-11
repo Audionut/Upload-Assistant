@@ -48,7 +48,7 @@ class EMUW(UNIT3D):
 
         # Process language information
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         # Build audio string
         audio_str = await self._build_audio_string(meta)
@@ -502,12 +502,12 @@ class EMUW(UNIT3D):
         upload_data = await super().get_data(meta)
 
         if meta.get('anon', False):
-            upload_data['anonymous'] = 1
+            upload_data['anonymous'] = "1"
         if meta.get('stream', False):
-            upload_data['stream'] = 1
+            upload_data['stream'] = "1"
         if meta.get('resolution', '') in ['576p', '540p', '480p']:
-            upload_data['sd'] = 1
+            upload_data['sd'] = "1"
         if meta.get('personalrelease', False):
-            upload_data['personal_release'] = 1
+            upload_data['personal_release'] = "1"
 
         return upload_data

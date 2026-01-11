@@ -41,31 +41,31 @@ class SN():
 
         # Anime
         if meta.get('mal_id'):
-            cat_id = 7
-            sub_cat_id = 47
+            cat_id = '7'
+            sub_cat_id = '47'
 
             demographics_map = {
-                'Shounen': 27,
-                'Seinen': 28,
-                'Shoujo': 29,
-                'Josei': 30,
-                'Kodomo': 31,
-                'Mina': 47
+                'Shounen': '27',
+                'Seinen': '28',
+                'Shoujo': '29',
+                'Josei': '30',
+                'Kodomo': '31',
+                'Mina': '47'
             }
 
             demographic = meta.get('demographic', 'Mina')
             sub_cat_id = demographics_map.get(demographic, sub_cat_id)
 
         elif meta['category'] == 'MOVIE':
-            cat_id = 1
+            cat_id = '1'
             # sub cat is source so using source to get
             sub_cat_id = await self.get_type_id(meta['source'])
         elif meta['category'] == 'TV':
-            cat_id = 2
+            cat_id = '2'
             if meta['tv_pack']:
-                sub_cat_id = 6
+                sub_cat_id = '6'
             else:
-                sub_cat_id = 5
+                sub_cat_id = '5'
             # todo need to do a check for docs and add as subcat
 
         if meta['bdinfo'] is not None:

@@ -1,11 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
+from typing import Any, Callable, TypedDict, cast
 
 from cogs.redaction import redact_private_info
 from data.config import config
 from src.console import console
 from src.trackers.HUNO import HUNO
+
+
+class AttributeCheck(TypedDict):
+    key: str
+    uuid_flag: bool
+    condition: Callable[[str], bool]
+    exclude_msg: Callable[[str], str]
 
 
 async def filter_dupes(dupes, meta, tracker_name):
@@ -31,7 +39,7 @@ async def filter_dupes(dupes, meta, tracker_name):
         else:
             console.log(dupes)
     meta['trumpable_id'] = None
-    processed_dupes = []
+    processed_dupes: list[dict[str, Any]] = []
     for d in dupes:
         if isinstance(d, str):
             # Case 1: Simple string (just name)
@@ -102,7 +110,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             if meta['debug']:
                 console.log(f"dupe checking filenames: {filenames[:10]}{'...' if len(filenames) > 10 else ''}")
 
-    attribute_checks = [
+    attribute_checks: list[AttributeCheck] = [
         {
             "key": "remux",
             "uuid_flag": "remux" in meta.get('name', '').lower(),
@@ -418,9 +426,14 @@ async def filter_dupes(dupes, meta, tracker_name):
 
                         is_internal = False
                         if entry.get('internal', 0) == 1:
-                            if config['TRACKERS']['AITHER'].get('internal', False) is True:
-                                if meta['tag'][1:] in config['TRACKERS']['AITHER'].get('internal_groups', []) and meta['tag'][1:].lower() in normalized:
-                                    is_internal = True
+                            trackers_section = cast(dict[str, Any], config.get('TRACKERS', {}))
+                            aither_settings = cast(dict[str, Any], trackers_section.get('AITHER', {}))
+                            if aither_settings.get('internal') is True:
+                                internal_groups = aither_settings.get('internal_groups', [])
+                                if isinstance(internal_groups, list):
+                                    tag_without_prefix = meta['tag'][1:]
+                                    if tag_without_prefix in internal_groups and tag_without_prefix.lower() in normalized:
+                                        is_internal = True
                             if not is_internal:
                                 if meta['debug']:
                                     console.log("[debug] Skipping internal episode for trumping since you're not the internal uploader.")

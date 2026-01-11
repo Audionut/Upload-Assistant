@@ -366,4 +366,7 @@ class PHD(AZTrackerBase):
         if display_name:
             return html_label
 
+        if html_label is None:
+            return None
+
         return available_rip_types.get(html_label)

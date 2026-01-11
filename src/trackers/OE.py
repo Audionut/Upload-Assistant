@@ -75,7 +75,7 @@ class OE(UNIT3D):
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
-            await process_desc_language(meta, descfile, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
             bbcode = BBCODE()
             if meta.get('discs', []) != []:
@@ -159,7 +159,7 @@ class OE(UNIT3D):
                 oe_name = oe_name.replace(f"{video_codec}", f"{audio} {video_codec}", 1)
 
         if not meta.get('audio_languages'):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         elif meta.get('audio_languages'):
             audio_languages = meta['audio_languages']
             if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":

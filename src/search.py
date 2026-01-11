@@ -16,7 +16,7 @@ class Search():
     async def searchFile(self, filename):
         os_info = platform.platform()  # noqa F841
         filename = filename.lower()
-        files_total = []
+        files_total: list[str] = []
         if filename == "":
             console.print("nothing entered")
             return
@@ -24,7 +24,7 @@ class Search():
         words = filename.split()
 
         async def search_file(search_dir):
-            files_total_search = []
+            files_total_search: list[str] = []
             console.print(f"Searching {search_dir}")
             for root, dirs, files in os.walk(search_dir, topdown=False):
                 for name in files:
@@ -50,7 +50,7 @@ class Search():
     async def searchFolder(self, foldername):
         os_info = platform.platform()  # noqa F841
         foldername = foldername.lower()
-        folders_total = []
+        folders_total: list[str] = []
         if foldername == "":
             console.print("nothing entered")
             return
@@ -59,7 +59,7 @@ class Search():
 
         async def search_dir(search_dir):
             console.print(f"Searching {search_dir}")
-            folders_total_search = []
+            folders_total_search: list[str] = []
             for root, dirs, files in os.walk(search_dir, topdown=False):
 
                 for name in dirs:

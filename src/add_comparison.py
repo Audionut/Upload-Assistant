@@ -4,12 +4,22 @@ import re
 import json
 import cli_ui
 from collections import defaultdict
+from typing import Any, Mapping, MutableMapping, Union, cast
 from src.uploadscreens import upload_screens
 from data.config import config
 from src.console import console
 
 
-async def add_comparison(meta):
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
+
+
+ComparisonGroup = dict[str, Any]
+ComparisonData = dict[str, ComparisonGroup]
+
+
+async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData, list[ComparisonGroup]]:
     comparison_path = meta.get('comparison')
     if not comparison_path or not os.path.isdir(comparison_path):
         return []
@@ -18,23 +28,53 @@ async def add_comparison(meta):
     if os.path.exists(comparison_data_file):
         try:
             with open(comparison_data_file, 'r') as f:
-                saved_comparison_data = json.load(f)
+                raw_data = json.load(f)
+                saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
+                if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()):
+                    saved_comparison_data = raw_data
+                elif isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
+                    saved_comparison_data = raw_data
+                else:
+                    raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
                 if meta.get('debug'):
                     console.print(f"[cyan]Loading previously saved comparison data from {comparison_data_file}")
                 meta["comparison_groups"] = saved_comparison_data
 
                 comparison_index = meta.get('comparison_index')
-                if comparison_index and comparison_index in saved_comparison_data:
+                if comparison_index is not None:
+                    # Normalize comparison_index to string once
+                    comparison_index_str = str(comparison_index).strip()
+
+                    # Initialize image_list once if needed
                     if 'image_list' not in meta:
                         meta['image_list'] = []
 
-                    urls_to_add = saved_comparison_data[comparison_index].get('urls', [])
-                    if meta.get('debug'):
-                        console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
+                    urls_to_add: list[dict[str, Any]] = []
+                    found = False
 
-                    for url_info in urls_to_add:
-                        if url_info not in meta['image_list']:
-                            meta['image_list'].append(url_info)
+                    if isinstance(saved_comparison_data, dict):
+                        if comparison_index_str in saved_comparison_data:
+                            urls_to_add = saved_comparison_data[comparison_index_str].get('urls', [])
+                            found = True
+                        else:
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
+                    elif isinstance(saved_comparison_data, list):
+                        try:
+                            idx = int(comparison_index_str)
+                            if 0 <= idx < len(saved_comparison_data):
+                                urls_to_add = saved_comparison_data[idx].get('urls', [])
+                                found = True
+                            else:
+                                console.print(f"[yellow]Comparison index '{comparison_index_str}' out of range; valid range: 0-{len(saved_comparison_data) - 1}[/yellow]")
+                        except ValueError:
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' is not a valid integer for list data[/yellow]")
+
+                    if found and urls_to_add:
+                        if meta.get('debug'):
+                            console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
+                        for url_info in urls_to_add:
+                            if url_info not in meta['image_list']:
+                                meta['image_list'].append(url_info)
 
                 return saved_comparison_data
         except Exception as e:
@@ -54,9 +94,9 @@ async def add_comparison(meta):
             if second not in suffixes:
                 suffixes[second] = suffix
 
-    meta_comparisons = {}
-    img_host_keys = [k for k in config.get('DEFAULT', {}) if k.startswith('img_host_')]
-    img_host_indices = [int(k.split('_')[-1]) for k in img_host_keys]
+    meta_comparisons: ComparisonData = {}
+    img_host_keys = [k for k in DEFAULT_CONFIG if k.startswith('img_host_')]
+    img_host_indices = [int(k.split('_')[-1]) for k in img_host_keys if k.split('_')[-1].isdigit()]
     img_host_indices.sort()
 
     if not img_host_indices:
@@ -65,16 +105,18 @@ async def add_comparison(meta):
     for idx, second in enumerate(sorted(groups, key=lambda x: int(x)), 1):
         img_host_num = img_host_indices[0]
         current_img_host_key = f'img_host_{img_host_num}'
-        current_img_host = config.get('DEFAULT', {}).get(current_img_host_key)
+        current_img_host = DEFAULT_CONFIG.get(current_img_host_key)
+        if current_img_host is not None and not isinstance(current_img_host, str):
+            current_img_host = str(current_img_host)
 
         group = sorted(groups[second], key=lambda x: x[0])
         group_files = [f for _, f in group]
-        custom_img_list = [os.path.join(comparison_path, filename) for filename in group_files]
-        upload_meta = meta.copy()
+        custom_img_list: list[str] = [os.path.join(comparison_path, filename) for filename in group_files]
+        upload_meta = dict(meta)
         console.print(f"[cyan]Uploading comparison group {second} with files: {group_files}")
 
         upload_result, _ = await upload_screens(
-            upload_meta, custom_img_list, img_host_num, 0, len(custom_img_list), custom_img_list, {}
+            upload_meta, len(custom_img_list), img_host_num, 0, len(custom_img_list), custom_img_list, {}
         )
 
         uploaded_infos = [
@@ -95,7 +137,7 @@ async def add_comparison(meta):
     if not comparison_index:
         console.print("[red]No comparison index provided. Please specify a comparison index matching the input file.")
         while True:
-            cli_input = cli_ui.input("Enter comparison index number: ")
+            cli_input = cli_ui.ask_string("Enter comparison index number: ") or ""
             try:
                 comparison_index = str(int(cli_input.strip()))
                 break

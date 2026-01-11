@@ -7,6 +7,7 @@ import os
 import platform
 import re
 from bs4 import BeautifulSoup
+from typing import Union
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
@@ -37,20 +38,20 @@ class IS:
         )
 
     async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, _, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'Title: {title}')
             desc_parts.append(f'Overview: {episode_overview}')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'{mediainfo}')
 
@@ -70,7 +71,7 @@ class IS:
             desc_parts.append('Screenshots:\n' + screenshots_block)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -84,7 +85,7 @@ class IS:
 
     async def search_existing(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        dupes = []
+        dupes: list[dict[str, Union[str, None]]] = []
 
         if meta['category'] == "MOVIE":
             search_type = 't_genre'
@@ -114,7 +115,8 @@ class IS:
                     continue
 
                 name = name_tag.get_text(strip=True)
-                torrent_link = name_tag.get('href')
+                href_value = name_tag.get('href')
+                torrent_link = href_value if isinstance(href_value, str) else ''
 
                 size_tag = row.select_one('td:nth-of-type(5)')
                 size = size_tag.get_text(strip=True) if size_tag else None

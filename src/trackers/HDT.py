@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 
 class HDT:
+    secret_token: str = ''
+
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
@@ -124,11 +126,11 @@ class HDT:
         return hdt_name
 
     async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -136,7 +138,7 @@ class HDT:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -146,7 +148,7 @@ class HDT:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[left][font=consolas]{mediainfo}[/font][/left]')
 
@@ -158,10 +160,10 @@ class HDT:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
+        desc_parts.append(await builder.screenshot_header())
 
         # Screenshots
         images = meta.get('image_list', [])
@@ -219,7 +221,7 @@ class HDT:
         if int(meta.get('imdb_id', 0)) != 0:
             imdbID = f"tt{meta['imdb']}"
             params = {
-                'csrfToken': HDT.secret_token,
+                'csrfToken': self.secret_token,
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -227,7 +229,7 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': HDT.secret_token,
+                'csrfToken': self.secret_token,
                 'search': meta['title'],
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
@@ -284,7 +286,7 @@ class HDT:
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': HDT.secret_token,
+            'csrfToken': self.secret_token,
         }
 
         # 3D

@@ -11,6 +11,7 @@ import threading
 import queue
 import hmac
 from pathlib import Path
+from typing import Literal, TypedDict, Union
 from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -39,6 +40,15 @@ ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # Store active processes
 active_processes = {}
+
+
+class BrowseItem(TypedDict):
+    """Serialized representation of an entry returned by the browse API."""
+
+    name: str
+    path: str
+    type: Literal['folder', 'file']
+    children: Union[list['BrowseItem'], None]
 
 
 def _webui_auth_configured() -> bool:
@@ -121,7 +131,7 @@ def _get_browse_roots() -> list[str]:
 
 
 def _resolve_user_path(
-    user_path: str | None,
+    user_path: Union[str, None],
     *,
     require_exists: bool = True,
     require_dir: bool = False,
@@ -147,8 +157,8 @@ def _resolve_user_path(
     # Build a normalized path and validate it against allowlisted roots.
     # Use werkzeug.utils.safe_join as the initial join/sanitizer, then also
     # enforce a realpath+commonpath constraint to prevent symlink escapes.
-    matched_root: str | None = None
-    candidate_norm: str | None = None
+    matched_root: Union[str, None] = None
+    candidate_norm: Union[str, None] = None
 
     if expanded and os.path.isabs(expanded):
         # If a user supplies an absolute path, only allow it if it is under
@@ -212,7 +222,7 @@ def _resolve_user_path(
     return candidate
 
 
-def _resolve_browse_path(user_path: str | None) -> str:
+def _resolve_browse_path(user_path: Union[str, None]) -> str:
     return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 
@@ -256,7 +266,7 @@ def browse_path():
     print(f"Browsing path: {path}")
 
     try:
-        items = []
+        items: list[BrowseItem] = []
         try:
             for item in sorted(os.listdir(path)):
                 # Skip hidden files
@@ -368,6 +378,8 @@ def execute_command():
                 # Thread to read stdout - stream raw output with ANSI codes
                 def read_stdout():
                     try:
+                        if process.stdout is None:
+                            return
                         while True:
                             # Read in small chunks for real-time streaming
                             chunk = process.stdout.read(1)
@@ -380,6 +392,8 @@ def execute_command():
                 # Thread to read stderr - stream raw output
                 def read_stderr():
                     try:
+                        if process.stderr is None:
+                            return
                         while True:
                             chunk = process.stderr.read(1)
                             if not chunk:
@@ -388,7 +402,7 @@ def execute_command():
                     except Exception as e:
                         print(f"stderr read error: {e}")
 
-                output_queue = queue.Queue()
+                output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
                 # Start threads (no input thread needed - we write directly)
                 stdout_thread = threading.Thread(target=read_stdout, daemon=True)
@@ -455,9 +469,10 @@ def send_input():
             process = process_info['process']
 
             if process.poll() is None:  # Process still running
-                process.stdin.write(input_with_newline)
-                process.stdin.flush()
-                print(f"Sent to stdin: '{input_with_newline.strip()}'")
+                if process.stdin is not None:
+                    process.stdin.write(input_with_newline)
+                    process.stdin.flush()
+                    print(f"Sent to stdin: '{input_with_newline.strip()}'")
             else:
                 print(f"Process already terminated for session {session_id}")
                 return jsonify({'error': 'Process not running', 'success': False}), 400

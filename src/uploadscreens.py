@@ -13,7 +13,10 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 import httpx
 import aiofiles
-from data.config import config
+from typing import Any, Union, cast
+from data.config import config as raw_config
+
+config = cast(dict[str, Any], raw_config)
 
 
 async def upload_image_task(args):
@@ -543,7 +546,19 @@ async def upload_image_task(args):
 thread_pool = ThreadPoolExecutor(max_workers=10)
 
 
-async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=False, max_retries=3, allowed_hosts=None):
+async def upload_screens(
+        meta: dict[str, Any],
+        screens: int,
+        img_host_num: int,
+        i: int,
+        total_screens: int,
+        custom_img_list: list[str],
+        return_dict: dict[str, Any],
+        retry_mode: bool = False,
+        max_retries: int = 3,
+        allowed_hosts: Union[list[str], None] = None
+):
+    default_config = config.get('DEFAULT', {})
     if 'image_list' not in meta:
         meta['image_list'] = []
     if meta['debug']:
@@ -551,7 +566,7 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
 
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
 
-    initial_img_host = config['DEFAULT'][f'img_host_{img_host_num}']
+    initial_img_host = default_config[f'img_host_{img_host_num}']
     img_host = meta['imghost']
 
     # Check if current host is allowed, if not find an approved one
@@ -562,8 +577,8 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
         approved_host = None
         for i in range(1, 10):  # Check img_host_1 through img_host_9
             host_key = f'img_host_{i}'
-            if host_key in config['DEFAULT']:
-                host = config['DEFAULT'][host_key]
+            if host_key in default_config:
+                host = default_config[host_key]
                 if host in allowed_hosts:
                     approved_host = host
                     img_host_num = i
@@ -731,8 +746,9 @@ async def upload_screens(meta, screens, img_host_num, i, total_screens, custom_i
             console.print(f"[blue]successfully_uploaded={len(successfully_uploaded)}, meta['image_list']={len(meta['image_list'])}, cutoff={meta.get('cutoff', 1)}[/blue]")
         if (len(successfully_uploaded) + len(meta['image_list'])) < images_needed and not retry_mode and img_host == initial_img_host and not using_custom_img_list:
             img_host_num += 1
-            if f'img_host_{img_host_num}' in config['DEFAULT']:
-                meta['imghost'] = config['DEFAULT'][f'img_host_{img_host_num}']
+            next_host_key = f'img_host_{img_host_num}'
+            if next_host_key in default_config:
+                meta['imghost'] = default_config[next_host_key]
                 console.print(f"[cyan]Switching to the next image host: {meta['imghost']}[/cyan]")
 
                 gc.collect()

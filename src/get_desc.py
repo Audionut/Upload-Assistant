@@ -7,6 +7,7 @@ import os
 import re
 import requests
 import urllib.parse
+from urllib.parse import ParseResult
 from jinja2 import Template
 
 from pymediainfo import MediaInfo
@@ -16,9 +17,10 @@ from src.languages import process_desc_language
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
+from typing import Any, Union
 
 
-def html_to_bbcode(text):
+def html_to_bbcode(text: str) -> str:
     """Convert HTML tags to BBCode format."""
     if not text:
         return text
@@ -45,8 +47,8 @@ def html_to_bbcode(text):
     return converted_text
 
 
-async def gen_desc(meta):
-    def clean_text(text):
+async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
+    def clean_text(text: str) -> str:
         return text.replace("\r\n", "\n").strip()
 
     description_link = meta.get("description_link")
@@ -67,8 +69,6 @@ async def gen_desc(meta):
                     template_desc = template.render(meta)
                     cleaned_content = clean_text(template_desc)
                     if cleaned_content:
-                        if not content_written:
-                            description.write
                         if len(template_desc) > 0:
                             description.write(cleaned_content + "\n")
                             meta["description_template_content"] = cleaned_content
@@ -131,7 +131,7 @@ async def gen_desc(meta):
 
         if description_link:
             try:
-                parsed = urllib.parse.urlparse(description_link.replace("/raw/", "/"))
+                parsed: ParseResult = urllib.parse.urlparse(description_link.replace("/raw/", "/") or "")
                 split = os.path.split(parsed.path)
                 raw = parsed._replace(
                     path=f"{split[0]}/raw/{split[1]}" if split[0] != "/" else f"/raw{parsed.path}"
@@ -153,9 +153,9 @@ async def gen_desc(meta):
                 cleaned_content = clean_text(file_content)
                 if cleaned_content:
                     if not content_written:
-                        description.write(file_content)
-                meta["description_file_content"] = cleaned_content
-                content_written = True
+                        description.write(cleaned_content + "\n")
+                    meta["description_file_content"] = cleaned_content
+                    content_written = True
 
         if not content_written:
             if meta.get("description"):
@@ -184,17 +184,29 @@ async def gen_desc(meta):
 
 
 class DescriptionBuilder:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, tracker: str, config: dict[str, Any]):
+        self.config: dict[str, Any] = config
         self.common = COMMON(config)
+        self.tracker: str = tracker
+
+        trackers_config = self.config.get('TRACKERS')
+        if not isinstance(trackers_config, dict):
+            raise KeyError("Missing 'TRACKERS' section in config")
+
+        tracker_cfg = trackers_config.get(tracker)
+        if tracker_cfg is None:
+            available = list(trackers_config.keys())
+            raise KeyError(f"Missing tracker config for '{tracker}'; available trackers: {available}")
+
+        self.tracker_config: dict[str, Any] = tracker_cfg if isinstance(tracker_cfg, dict) else {}
         self.parser = self.common.parser
 
-    async def get_custom_header(self, tracker):
+    async def get_custom_header(self) -> str:
         """Returns a custom header if configured."""
         try:
-            custom_description_header = self.config["TRACKERS"][tracker].get(
-                "custom_description_header", self.config["DEFAULT"].get("custom_description_header", False)
-            )
+            custom_description_header = str(self.tracker_config.get(
+                "custom_description_header", self.config["DEFAULT"].get("custom_description_header", "")
+            ))
             if custom_description_header:
                 return custom_description_header
         except Exception as e:
@@ -202,22 +214,22 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_tonemapped_header(self, meta, tracker):
+    async def get_tonemapped_header(self, meta: dict[str, Any]) -> str:
         try:
-            tonemapped_description_header = self.config["TRACKERS"][tracker].get(
+            tonemapped_description_header = str(self.tracker_config.get(
                 "tonemapped_header", self.config["DEFAULT"].get("tonemapped_header", "")
-            )
+            ))
             if tonemapped_description_header and meta.get("tonemapped", False):
                 return tonemapped_description_header
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
         return ""
 
-    async def get_logo_section(self, meta, tracker):
+    async def get_logo_section(self, meta: dict[str, Any]):
         """Returns the logo URL and size if applicable."""
         logo, logo_size = "", ""
         try:
-            if not self.config["TRACKERS"][tracker].get(
+            if not self.tracker_config.get(
                 "add_logo", self.config["DEFAULT"].get("add_logo", False)
             ):
                 return logo, logo_size
@@ -232,11 +244,13 @@ class DescriptionBuilder:
 
         return logo, logo_size
 
-    async def get_tv_info(self, meta, tracker, resize=False):
-        title, image, overview = "", "", ""
+    async def get_tv_info(self, meta: dict[str, Any], resize: bool = False):
+        title: str = ""
+        image: str = ""
+        overview: str = ""
         try:
             if (
-                not self.config["TRACKERS"][tracker].get(
+                not self.tracker_config.get(
                     "episode_overview", self.config["DEFAULT"].get("episode_overview", False)
                 )
                 or meta["category"] != "TV"
@@ -282,12 +296,12 @@ class DescriptionBuilder:
 
         return title, image, overview
 
-    async def get_mediainfo_section(self, meta, tracker):
+    async def get_mediainfo_section(self, meta: dict[str, Any]):
         """Returns the mediainfo/bdinfo section, using a cache file if available."""
         if meta.get("is_disc") == "BDMV":
             return ""
 
-        if self.config["TRACKERS"][tracker].get(
+        if self.tracker_config.get(
             "full_mediainfo", self.config["DEFAULT"].get("full_mediainfo", False)
         ):
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
@@ -351,11 +365,11 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_bdinfo_section(self, meta):
+    async def get_bdinfo_section(self, meta: dict[str, Any]):
         """Returns the bdinfo section if applicable."""
         try:
             if meta.get("is_disc") == "BDMV":
-                bdinfo_sections = []
+                bdinfo_sections: list[str] = []
                 if meta.get("discs"):
                     for disc in meta["discs"]:
                         file_info = disc.get("summary", "")
@@ -367,10 +381,10 @@ class DescriptionBuilder:
 
         return ""
 
-    async def screenshot_header(self, tracker):
+    async def screenshot_header(self):
         """Returns the screenshot header if applicable."""
         try:
-            screenheader = self.config["TRACKERS"][tracker].get(
+            screenheader = self.tracker_config.get(
                 "custom_screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
             )
             if screenheader:
@@ -380,11 +394,11 @@ class DescriptionBuilder:
 
         return ""
 
-    async def menu_screenshot_header(self, meta, tracker):
+    async def menu_screenshot_header(self, meta: dict[str, Any]):
         """Returns the screenshot header for menus if applicable."""
         try:
             if meta.get("is_disc", "") and meta.get('menu_images', []):
-                disc_menu_header = self.config["TRACKERS"][tracker].get(
+                disc_menu_header = self.tracker_config.get(
                     "disc_menu_header", self.config["DEFAULT"].get("disc_menu_header", None)
                 )
                 if disc_menu_header:
@@ -394,11 +408,11 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_user_description(self, meta):
+    async def get_user_description(self, meta: dict[str, Any]) -> str:
         """Returns the user-provided description (file or link)"""
         try:
-            description_file_content = meta.get("description_file_content", "").strip()
-            description_link_content = meta.get("description_link_content", "").strip()
+            description_file_content = str(meta.get("description_file_content", "")).strip()
+            description_link_content = str(meta.get("description_link_content", "")).strip()
 
             if description_file_content or description_link_content:
                 if description_file_content:
@@ -410,20 +424,22 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_custom_signature(self, tracker):
-        custom_signature = ""
+    async def get_custom_signature(self) -> str:
+        custom_signature: str = ""
         try:
-            custom_signature = self.config["TRACKERS"][tracker].get(
+            raw_signature = self.tracker_config.get(
                 "custom_signature", self.config["DEFAULT"].get("custom_signature", "")
             )
+            custom_signature = raw_signature or ""
         except Exception as e:
             console.print(f"[yellow]Warning: Error setting custom signature: {str(e)}[/yellow]")
+
         return custom_signature
 
-    async def get_bluray_section(self, meta, tracker):
-        release_url = ""
-        cover_list = []
-        cover_images = ""
+    async def get_bluray_section(self, meta: dict[str, Any]) -> tuple[str, str]:
+        release_url: str = ""
+        cover_list: list[str] = []
+        cover_images: str = ""
 
         try:
             cover_size = int(self.config["DEFAULT"].get("bluray_image_size", "250"))
@@ -444,26 +460,24 @@ class DescriptionBuilder:
                 async with aiofiles.open(
                     f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", "r", encoding="utf-8"
                 ) as f:
-                    cover_data = json.loads(await f.read())
+                    cover_data: list[dict[str, str]] = json.loads(await f.read())
 
-                if isinstance(cover_data, list):
                     for img_data in cover_data:
-                        if "raw_url" in img_data and "web_url" in img_data:
-                            web_url = img_data["web_url"]
-                            raw_url = img_data["raw_url"]
+                        web_url = img_data.get("web_url", "")
+                        raw_url = img_data.get("raw_url", "")
 
-                            if tracker == "TL":
-                                cover_list.append(
-                                    f"""<a href="{web_url}"><img src="{raw_url}" style="max-width: {cover_size}px;"></a>  """
-                                )
-                            elif tracker == "HDT":
-                                cover_list.append(
-                                    f"<a href='{raw_url}'><img src='{web_url}' height=137></a> "
-                                )
-                            else:
-                                cover_list.append(
-                                    f"[url={web_url}][img={cover_size}]{raw_url}[/img][/url]"
-                                )
+                        if self.tracker == "TL":
+                            cover_list.append(
+                                f"""<a href="{web_url}"><img src="{raw_url}" style="max-width: {cover_size}px;"></a>  """
+                            )
+                        elif self.tracker == "HDT":
+                            cover_list.append(
+                                f"<a href='{raw_url}'><img src='{web_url}' height=137></a> "
+                            )
+                        else:
+                            cover_list.append(
+                                f"[url={web_url}][img={cover_size}]{raw_url}[/img][/url]"
+                            )
 
             if cover_list:
                 cover_images = "".join(cover_list)
@@ -475,15 +489,18 @@ class DescriptionBuilder:
 
     async def unit3d_edit_desc(
         self,
-        meta,
-        tracker,
-        signature="",
-        comparison=False,
-        desc_header="",
-        image_list=None,
-        approved_image_hosts=None,
+        meta: dict[str, Any],
+        signature: str = "",
+        comparison: bool = False,
+        desc_header: str = "",
+        image_list: Union[list[dict[str, str]], None] = None,
+        approved_image_hosts: Union[list[str], None] = None,
     ):
-        if image_list is not None:
+        if image_list is None:
+            image_list = []
+        if approved_image_hosts is None:
+            approved_image_hosts = []
+        if image_list:
             images = image_list
             multi_screens = 0
         else:
@@ -492,18 +509,18 @@ class DescriptionBuilder:
         if meta.get("sorted_filelist"):
             multi_screens = 0
 
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
         if not desc_header:
-            desc_header = await self.get_custom_header(tracker)
+            desc_header = await self.get_custom_header()
         if desc_header:
             desc_parts.append(desc_header + "\n")
 
         # Language
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, desc_parts, tracker)
+                await process_desc_language(meta, self.tracker)
             if meta.get("audio_languages") and meta.get("write_audio_languages"):
                 desc_parts.append(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]")
 
@@ -519,21 +536,21 @@ class DescriptionBuilder:
             console.print(f"[yellow]Warning: Error processing language: {str(e)}[/yellow]")
 
         # Logo
-        logo, logo_size = await self.get_logo_section(meta, tracker)
+        logo, logo_size = await self.get_logo_section(meta)
         if logo and logo_size:
             desc_parts.append(f"[center][img={logo_size}]{logo}[/img][/center]\n")
 
         # Blu-ray
-        release_url, cover_images = await self.get_bluray_section(meta, tracker)
+        release_url, cover_images = await self.get_bluray_section(meta)
         if release_url:
             desc_parts.append(f"[center]{release_url}[/center]")
         if cover_images:
             desc_parts.append(f"[center]{cover_images}[/center]\n")
 
         # TV
-        title, episode_image, episode_overview = await self.get_tv_info(meta, tracker)
+        title, _, episode_overview = await self.get_tv_info(meta)
         if episode_overview:
-            if tracker == "HUNO":
+            if self.tracker == "HUNO":
                 if title:
                     desc_parts.append(f"[center]{title}[/center]\n")
                 desc_parts.append(f"[center]{episode_overview}[/center]\n")
@@ -545,7 +562,7 @@ class DescriptionBuilder:
         # Description that may come from API requests
         meta_description = meta.get("description", "")
         # Add FraMeSToR NFO to Aither
-        if tracker == "AITHER" and "framestor" in meta and meta["framestor"]:
+        if self.tracker == "AITHER" and "framestor" in meta and meta["framestor"]:
             nfo_content = meta.get("description_nfo_content", "")
             if nfo_content:
                 aither_framestor_nfo = f"[code]{nfo_content}[/code]"
@@ -572,30 +589,30 @@ class DescriptionBuilder:
         desc_parts.append(await self.get_user_description(meta))
 
         # Menu Screenshots
-        desc_parts.append(await self.menu_section(meta, tracker))
+        desc_parts.append(await self.menu_section(meta))
 
         # Tonemapped Header
-        desc_parts.append(await self.get_tonemapped_header(meta, tracker))
+        desc_parts.append(await self.get_tonemapped_header(meta))
 
         # Discs and Screenshots
         discs_and_screenshots = await self._handle_discs_and_screenshots(
-            meta, tracker, approved_image_hosts, images, multi_screens
+            meta, approved_image_hosts, images, multi_screens
         )
         desc_parts.append(discs_and_screenshots)
 
         # Custom Signature
-        desc_parts.append(await self.get_custom_signature(tracker))
+        desc_parts.append(await self.get_custom_signature())
 
         # UA Signature
         if not signature:
             signature = f"[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]"
-            if tracker == "HUNO":
+            if self.tracker == "HUNO":
                 signature = signature.replace("[size=4]", "[size=8]")
         desc_parts.append(signature)
 
-        description = "\n".join(
+        description: str = "\n".join(
             part for part in desc_parts
-            if part is not None and str(part).strip()
+            if str(part).strip()
         )
 
         # Formatting
@@ -610,16 +627,16 @@ class DescriptionBuilder:
             description = bbcode.convert_comparison_to_collapse(description, 1000)
 
         if meta['debug']:
-            desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.txt"
+            desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
             console.print(f"DEBUG: Saving final description to [yellow]{desc_file}[/yellow]")
             async with aiofiles.open(desc_file, "w", encoding="utf-8") as description_file:
                 await description_file.write(description)
 
         return description
 
-    async def _check_saved_pack_image_links(self, meta, approved_image_hosts):
+    async def _check_saved_pack_image_links(self, meta: dict[str, Any], approved_image_hosts: list[str]) -> dict[str, Any]:
         pack_images_file = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "pack_image_links.json")
-        pack_images_data = {}
+        pack_images_data: dict[str, Any] = {}
         approved_hosts = set(approved_image_hosts or [])
         if await self.common.path_exists(pack_images_file):
             try:
@@ -627,19 +644,27 @@ class DescriptionBuilder:
                     pack_images_data = json.loads(await f.read())
 
                     # Filter out keys with non-approved image hosts
-                    keys_to_remove = []
+                    keys_to_remove: list[str] = []
                     for key_name, key_data in pack_images_data.get("keys", {}).items():
-                        images_to_keep = []
+                        images_to_keep: list[dict[str, str]] = []
                         for img in key_data.get("images", []):
                             raw_url = img.get("raw_url", "")
-                            # Extract hostname from URL (e.g., ptpimg.me -> ptpimg)
+                            # Extract hostname from URL and check against approved hosts
                             try:
-                                parsed_url = urllib.parse.urlparse(raw_url)
+                                parsed_url: ParseResult = urllib.parse.urlparse(raw_url or "")
                                 hostname = parsed_url.netloc
-                                # Get the main domain name (first part before the dot)
-                                host_key = hostname.split(".")[0] if hostname else ""
 
-                                if not approved_hosts or host_key in approved_hosts:
+                                # Use suffix-based matching: check if hostname matches or is subdomain of approved host
+                                host_approved = False
+                                if not approved_hosts:
+                                    host_approved = True  # If no approved hosts specified, allow all
+                                else:
+                                    for approved_host in approved_hosts:
+                                        if hostname == approved_host or hostname.endswith(f".{approved_host}"):
+                                            host_approved = True
+                                            break
+
+                                if host_approved:
                                     images_to_keep.append(img)
                                 elif meta["debug"]:
                                     console.print(
@@ -688,9 +713,9 @@ class DescriptionBuilder:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
         return pack_images_data
 
-    async def _handle_discs_and_screenshots(self, meta, tracker, approved_image_hosts, images, multi_screens):
+    async def _handle_discs_and_screenshots(self, meta: dict[str, Any], approved_image_hosts: list[str], images: list[dict[str, str]], multi_screens: int):
         try:
-            screenheader = await self.screenshot_header(tracker)
+            screenheader = await self.screenshot_header()
         except Exception:
             screenheader = None
 
@@ -702,9 +727,9 @@ class DescriptionBuilder:
         thumb_size = int(self.config["DEFAULT"].get("pack_thumb_size", "300"))
         process_limit = int(self.config["DEFAULT"].get("processLimit", 10))
 
-        screensPerRow = await self.get_screens_per_row(tracker)
+        screensPerRow = await self.get_screens_per_row()
 
-        desc_parts = []
+        desc_parts: list[str] = []
 
         discs = meta.get("discs", [])
         if len(discs) == 1:
@@ -1056,7 +1081,7 @@ class DescriptionBuilder:
                 comparison_groups = meta.get("comparison_groups", {})
                 sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(x))
 
-                comp_sources = []
+                comp_sources: list[str] = []
                 for group_idx in sorted_group_indices:
                     group_data = comparison_groups[group_idx]
                     group_name = group_data.get("name", f"Group {group_idx}")
@@ -1162,7 +1187,6 @@ class DescriptionBuilder:
                                 meta,
                                 multi_screens,
                                 True,
-                                None,
                             )
                             await asyncio.sleep(0.1)
                         except Exception as e:
@@ -1283,15 +1307,15 @@ class DescriptionBuilder:
         if total_files_to_process > 1:
             console.print()
 
-        description = "".join(p for p in desc_parts if p is not None)
+        description = "".join(p for p in desc_parts if p)
 
         return description
 
-    async def get_screens_per_row(self, tracker):
+    async def get_screens_per_row(self):
         try:
             # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
             screensPerRow = int(self.config["DEFAULT"].get("screens_per_row", 2))
-            if tracker == "HUNO":
+            if self.tracker == "HUNO":
                 width = int(self.config["DEFAULT"].get("thumbnail_size", "350"))
                 # Adjust screensPerRow to keep total width below 1100
                 while screensPerRow * width > 1100 and screensPerRow > 1:
@@ -1300,13 +1324,13 @@ class DescriptionBuilder:
             screensPerRow = 2
         return screensPerRow
 
-    async def menu_section(self, meta, tracker):
+    async def menu_section(self, meta: dict[str, Any]):
         menu_image_section = ""
         try:
-            disc_menu_header = await self.menu_screenshot_header(meta, tracker)
-            screensPerRow = await self.get_screens_per_row(tracker)
+            disc_menu_header = await self.menu_screenshot_header(meta)
+            screensPerRow = await self.get_screens_per_row()
             if meta.get("is_disc"):
-                menu_parts = []
+                menu_parts: list[str] = []
                 menu_images = meta.get("menu_images", [])
                 if disc_menu_header and menu_images:
                     menu_parts.append(disc_menu_header + "\n")

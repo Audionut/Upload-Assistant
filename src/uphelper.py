@@ -4,12 +4,17 @@ import os
 import json
 import sys
 from difflib import SequenceMatcher
+from typing import Any, Mapping, cast
 
 from cogs.redaction import redact_private_info
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackersetup import tracker_class_map
+
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 class UploadHelper:
@@ -304,7 +309,7 @@ class UploadHelper:
         else:
             if not meta.get('emby', False):
                 await self.get_missing(meta)
-                ring_the_bell = "\a" if config['DEFAULT'].get("sfx_on_prompt", True) is True else ""
+                ring_the_bell = "\a" if bool(DEFAULT_CONFIG.get("sfx_on_prompt", True)) else ""
                 if ring_the_bell:
                     console.print(ring_the_bell)
 

@@ -236,7 +236,7 @@ class AR():
         return os.path.basename(path)
 
     async def search_existing(self, meta, disctype):
-        dupes = []
+        dupes: list[dict[str, str]] = []
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not cookie_jar:
             console.print(f"{self.tracker}: Cannot search without valid cookies.")
@@ -320,8 +320,11 @@ class AR():
                 logout_link = soup.find('a', href=True, text='Logout')
 
                 if logout_link:
-                    href = logout_link['href']
-                    match = re.search(r'auth=([^&]+)', href)
+                    href_value = logout_link.get('href')
+                    if isinstance(href_value, str):
+                        match = re.search(r'auth=([^&]+)', href_value)
+                    else:
+                        match = None
                     if match:
                         auth_key = match.group(1)
                         # Save it for next time
@@ -365,21 +368,24 @@ class AR():
                 cover = None
 
         # Tag Compilation
-        genres = meta.get('genres')
-        if genres:
-            tags = []
-            for item in genres.split(','):
+        genres_raw = meta.get('genres', '')
+        genres = ''
+        if isinstance(genres_raw, str) and genres_raw.strip():
+            tags_parts: list[str] = []
+            for item in genres_raw.split(','):
                 for subitem in item.split('&'):
-                    tags.append(subitem.strip())
-            genres = ', '.join(tags)
-
+                    stripped = subitem.strip()
+                    if stripped:
+                        tags_parts.append(stripped)
+            genres = ', '.join(tags_parts)
             genres = re.sub(r'\.{2,}', '.', genres)
 
         # adding tags
         tags = ""
         if meta['imdb_id'] != 0:
             tags += f"tt{meta.get('imdb', '')}, "
-        tags += f"{genres}, "
+        if genres:
+            tags += f"{genres}, "
 
         # Get auth key
         auth_key = await self.get_auth_key(meta)
@@ -399,7 +405,7 @@ class AR():
             ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
             ar_name = re.sub(r'\.{2,}', '.', ar_name)
 
-        tag_lower = meta['tag'].lower()
+        tag_lower = meta.get('tag', '').lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:

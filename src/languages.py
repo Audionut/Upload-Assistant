@@ -5,6 +5,7 @@ import langcodes
 import os
 import re
 import sys
+from typing import Any, Optional
 
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -23,7 +24,7 @@ async def parse_blu_ray(meta):
         console.print(f"[red]Error reading BD_SUMMARY file: {e}[/red]")
         return {}
 
-    parsed_data = {
+    parsed_data: dict[str, Any] = {
         'disc_info': {},
         'playlist_info': {},
         'video': {},
@@ -114,19 +115,21 @@ async def parsed_mediainfo(meta):
         if os.path.exists(mediainfo_file):
             async with aiofiles.open(mediainfo_file, 'r', encoding='utf-8') as f:
                 mediainfo_content = await f.read()
+        else:
+            return {}
     except Exception as e:
         console.print(f"[red]Error reading MEDIAINFO file: {e}[/red]")
         return {}
 
-    parsed_data = {
+    parsed_data: dict[str, Any] = {
         'general': {},
         'video': [],
         'audio': [],
         'text': []
     }
 
-    current_section = None
-    current_track = {}
+    current_section: Optional[str] = None
+    current_track: dict[str, str] = {}
 
     lines = mediainfo_content.strip().split('\n')
 
@@ -175,7 +178,7 @@ async def parsed_mediainfo(meta):
     return parsed_data
 
 
-async def process_desc_language(meta, desc=None, tracker=None):
+async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
     if 'language_checked' not in meta:
         meta['language_checked'] = False
     if 'tracker_status' not in meta:
@@ -347,22 +350,15 @@ async def process_desc_language(meta, desc=None, tracker=None):
             console.print(f"[red]Error processing mediainfo languages: {e}[/red]")
 
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
     elif meta['is_disc'] == "BDMV":
         if "language_checked" not in meta:
             meta['language_checked'] = False
         if 'bluray_audio_skip' not in meta:
             meta['bluray_audio_skip'] = False
-        audio_languages = []
-        if meta.get('audio_languages'):
-            audio_languages = meta['audio_languages']
-        else:
-            meta['audio_languages'] = []
-        if meta.get('subtitle_languages'):
-            subtitle_languages = meta['subtitle_languages']
-        else:
-            meta['subtitle_languages'] = []
+        existing_audio_languages: list[str] = meta.get('audio_languages') or []
+        existing_subtitle_languages: list[str] = meta.get('subtitle_languages') or []
         try:
             bluray = await parse_blu_ray(meta)
             audio_tracks = bluray.get("audio", [])
@@ -372,7 +368,8 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if meta['debug']:
                         console.print(f"Skipping commentary track: {track}")
                     audio_tracks.remove(track)
-            audio_languages = {track.get("language", "") for track in audio_tracks if "language" in track}
+            audio_language_set: set[str] = set(existing_audio_languages)
+            audio_language_set.update(track.get("language") for track in audio_tracks if track.get("language"))
             for track in audio_tracks:
                 bitrate_str = track.get("bitrate", "")
                 bitrate_num = None
@@ -390,19 +387,19 @@ async def process_desc_language(meta, desc=None, tracker=None):
 
                 lang = track.get("language", "")
                 if bitrate_num is not None and bitrate_num < 258:
-                    if lang and lang in audio_languages and len(lang) > 1 and not meta['bluray_audio_skip']:
+                    if lang and lang in audio_language_set and len(lang) > 1 and not meta['bluray_audio_skip']:
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             console.print(f"Audio track '{lang}' has a bitrate of {bitrate_num} kbps. Probably commentary and should be removed.")
                             try:
                                 if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
-                                    audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
+                                    audio_language_set.discard(lang)
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                                 await cleanup()
                                 reset_terminal()
                                 sys.exit(1)
                         else:
-                            audio_languages.discard(lang) if isinstance(audio_languages, set) else audio_languages.remove(lang)
+                            audio_language_set.discard(lang)
                         meta['bluray_audio_skip'] = True
 
             subtitle_tracks = bluray.get("subtitles", [])
@@ -412,23 +409,24 @@ async def process_desc_language(meta, desc=None, tracker=None):
                     if meta['debug']:
                         console.print(f"Skipping commentary subtitle track: {track}")
                     subtitle_tracks.remove(track)
+            subtitle_language_set: set[str] = set(existing_subtitle_languages)
             if subtitle_tracks and isinstance(subtitle_tracks[0], dict):
-                subtitle_languages = {track.get("language", "") for track in subtitle_tracks if "language" in track}
+                subtitle_language_set.update(track.get("language") for track in subtitle_tracks if track.get("language"))
             else:
-                subtitle_languages = set(subtitle_tracks)
-            if subtitle_languages:
-                meta['subtitle_languages'] = list(subtitle_languages)
+                subtitle_language_set.update(track for track in subtitle_tracks if track)
+            if subtitle_language_set:
+                meta['subtitle_languages'] = list(subtitle_language_set)
 
-            meta['audio_languages'] = list(audio_languages)
+            meta['audio_languages'] = list(audio_language_set)
         except Exception as e:
             console.print(f"[red]Error processing BDInfo languages: {e}[/red]")
 
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
     else:
         meta['language_checked'] = True
-        return desc if desc is not None else None
+        return None
 
 
 async def has_english_language(languages):

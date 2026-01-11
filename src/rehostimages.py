@@ -5,12 +5,37 @@ import json
 import aiofiles
 import asyncio
 import re
+from typing import Any, Mapping, Union, cast
 from src.console import console
 from urllib.parse import urlparse
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.uploadscreens import upload_screens
 from data.config import config
 from aiofiles import os as aio_os
+
+
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
+
+
+def _to_int(value: Any, fallback: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return fallback
+    return fallback
+
+
+def _as_str(value: Any) -> Union[str, None]:
+    return value if isinstance(value, str) else None
 
 
 async def match_host(hostname, approved_hosts):
@@ -25,7 +50,7 @@ async def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
+async def check_hosts(meta: dict[str, Any], tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
     if meta.get('skip_imghost_upload', False):
         if meta['debug']:
             console.print(f"[yellow]Skipping image host upload for {tracker} as per meta['skip_imghost_upload'] setting.")
@@ -176,7 +201,7 @@ async def check_hosts(meta, tracker, url_host_mapping, img_host_index=1, approve
     return meta.get(new_images_key, []), False, images_reuploaded
 
 
-async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_hosts=None, img_host_index=1, file=None):
+async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, approved_image_hosts=None, img_host_index=1, file=None):
     original_imghost = meta.get('imghost')
     retry_mode = False
     images_reuploaded = False
@@ -193,7 +218,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
     if isinstance(filelist, str):
         filelist = [filelist]
 
-    multi_screens = meta.get('screens') if meta.get('screens') else int(config['DEFAULT'].get('screens', 6))
+    multi_screens = _to_int(meta.get('screens'), _to_int(DEFAULT_CONFIG.get('screens', 6), 6))
     base_dir = meta['base_dir']
     folder_id = meta['uuid']
     meta[new_images_key] = []
@@ -334,10 +359,10 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
                                        meta.get('vapoursynth', False), [], meta.get('ffdebug', False),
                                        needed_screenshots, True)
             elif meta['is_disc'] == "DVD":
-                await dvd_screenshots(meta, 0, None, True)
+                await dvd_screenshots(meta, disc_num=0, retry_cap=True)
             else:
                 await screenshots(path, filename, meta['uuid'], base_dir, meta,
-                                  needed_screenshots, True, None)
+                                  needed_screenshots, True, "")
 
             if meta['is_disc'] == "DVD":
                 new_screens = await asyncio.to_thread(glob.glob, f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][0]['name']}-*.png")
@@ -414,7 +439,7 @@ async def handle_image_upload(meta, tracker, url_host_mapping, approved_image_ho
         max_retries = len(approved_image_hosts)
         while img_host_index <= max_retries:
             current_img_host_key = f'img_host_{img_host_index}'
-            current_img_host = config.get('DEFAULT', {}).get(current_img_host_key)
+            current_img_host = _as_str(DEFAULT_CONFIG.get(current_img_host_key))
 
             if not current_img_host:
                 console.print("[red]No more image hosts left to try.")

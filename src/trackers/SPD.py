@@ -35,7 +35,7 @@ class SPD:
 
     async def get_cat_id(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
 
         langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
         romanian = 'romanian' in langs
@@ -179,14 +179,14 @@ class SPD:
             console.print_exception()
 
     async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
+        builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
         user_description = await builder.get_user_description(meta)
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if user_description or episode_overview:  # Avoid unnecessary descriptions
             # Custom Header
-            desc_parts.append(await builder.get_custom_header(self.tracker))
+            desc_parts.append(await builder.get_custom_header())
 
             # Logo
             logo_resize_url = meta.get('tmdb_logo', '')
@@ -206,7 +206,7 @@ class SPD:
             desc_parts.append(user_description)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")

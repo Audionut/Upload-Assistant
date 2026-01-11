@@ -15,6 +15,7 @@ import sys
 import platform
 import glob
 from src.console import console
+from typing import Any, Union, Optional
 
 
 def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
@@ -77,9 +78,9 @@ def calculate_piece_size(total_size, min_size, max_size, meta, piece_size=None):
 
 
 class CustomTorrent(torf.Torrent):
-    # Default piece size limits
-    torf.Torrent.piece_size_min = 32768  # 32 KiB
-    torf.Torrent.piece_size_max = 134217728
+    # Default piece size limits (torf's type stubs expose these as methods/properties)
+    setattr(torf.Torrent, "piece_size_min", 32768)  # 32 KiB
+    setattr(torf.Torrent, "piece_size_max", 134217728)
 
     def __init__(self, meta, *args, **kwargs):
         self._meta = meta
@@ -130,12 +131,20 @@ def build_mkbrr_exclude_string(root_folder, filelist):
     return exclude_str
 
 
-async def create_torrent(meta, path, output_filename, tracker_url=None, piece_size=None):
-    if piece_size is None:
-        try:
-            piece_size = meta.get('max_piece_size', None)
-        except Exception:
-            piece_size = None
+async def create_torrent(
+    meta: dict[str, Any],
+    path: Union[str, os.PathLike[str]],
+    output_filename: str,
+    tracker_url: Optional[str] = None,
+    piece_size: int = 0,
+):
+    if not piece_size:
+        piece_size = meta.get('max_piece_size', 0)
+
+    tracker_url = tracker_url or None
+    include: list[str] = []
+    exclude: list[str] = []
+
     if meta['isdir']:
         if meta['keep_folder']:
             cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')
@@ -152,16 +161,17 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
                 include = []
                 exclude = []
             elif not meta.get('tv_pack', False):
-                os.chdir(path)
-                globs = glob.glob1(path, "*.mkv") + glob.glob1(path, "*.mp4") + glob.glob1(path, "*.ts")
+                path_dir = os.fspath(path)
+                os.chdir(path_dir)
+                globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
                 no_sample_globs = [
-                    os.path.abspath(f"{path}{os.sep}{file}") for file in globs
+                    os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
                     if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
                 ]
                 if len(no_sample_globs) == 1:
                     path = meta['filelist'][0]
-                exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
-                include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
+                exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+                include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
             else:
                 folder_name = os.path.basename(str(path))
                 include = [
@@ -170,8 +180,8 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
                 ]
                 exclude = ["*", "*/**"]
     else:
-        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else ""
-        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else ""
+        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
 
     # If using mkbrr, run the external application
     if meta.get('mkbrr'):
@@ -189,15 +199,15 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
             if not sys.platform.startswith("win"):
                 os.chmod(mkbrr_binary, 0o700)
 
-            cmd = [mkbrr_binary, "create", path]
+            cmd = [mkbrr_binary, "create", os.fspath(path)]
 
-            if tracker_url is not None:
+            if tracker_url:
                 cmd.extend(["-t", tracker_url])
 
             if int(meta.get('randomized', 0)) >= 1:
                 cmd.extend(["-e"])
 
-            if piece_size and tracker_url is None:
+            if piece_size and not tracker_url:
                 try:
                     max_size_bytes = int(piece_size) * 1024 * 1024
 
@@ -211,7 +221,7 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
                 except (ValueError, TypeError):
                     console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
 
-            if not piece_size and tracker_url is None and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
+            if not piece_size and not tracker_url and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
                 cmd.extend(['-m', '27'])
 
             if meta.get('mkbrr_threads') != '0':
@@ -228,6 +238,9 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
             # Run mkbrr subprocess in thread to avoid blocking
             def run_mkbrr():
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+                if process.stdout is None:
+                    return process.wait()
 
                 total_pieces = 100  # Default to 100% for scaling progress
                 pieces_done = 0
@@ -252,7 +265,7 @@ async def create_torrent(meta, path, output_filename, tracker_url=None, piece_si
                             elapsed_time = time.time() - mkbrr_start_time
                             if pieces_done > 0:
                                 estimated_total_time = elapsed_time / (pieces_done / 100)
-                                eta_seconds = max(0, estimated_total_time - elapsed_time)
+                                eta_seconds = int(max(0.0, estimated_total_time - elapsed_time))
                                 eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
                             else:
                                 eta = "--:--"  # Placeholder if we can't estimate yet

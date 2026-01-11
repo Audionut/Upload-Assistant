@@ -193,8 +193,8 @@ async def ensure_mkbrr_binary(base_dir, debug, version=None):
         if not binary_path.exists():
             raise Exception(f"Failed to extract mkbrr binary to {binary_path}")
 
-        with open(version_path, 'w') as f:
-            f.write(f"mkbrr version {version} installed successfully.")
+        with open(version_path, 'w', encoding='utf-8') as version_file:
+            version_file.write(f"mkbrr version {version} installed successfully.")
         return str(binary_path)
 
     except requests.RequestException as e:

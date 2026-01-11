@@ -1,9 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 import json
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Union, TYPE_CHECKING
 
-SENSITIVE_KEYS = {
+if TYPE_CHECKING:
+    from upload import Meta
+
+SENSITIVE_KEYS: set[str] = {
     "token", "passkey", "password", "auth", "cookie", "csrf", "email", "username", "user", "key", "info_hash", "AntiCsrfToken", "torrent_pass", "Popcron"
 }
 
@@ -24,7 +27,7 @@ def extract_json_blocks(text: str):
     stack: list[str] = []
     start: Optional[int] = None
     in_string = False
-    string_char: str | None = None
+    string_char: Union[str, None] = None
     escape = False
 
     for i, ch in enumerate(text):
@@ -94,7 +97,7 @@ def redact_value(val):
     return val
 
 
-def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
+def redact_private_info(data: Any, sensitive_keys: set[str] = SENSITIVE_KEYS):
     """Recursively redact sensitive info in dicts/lists/strings containing JSON."""
     if isinstance(data, dict):
         return {
@@ -119,7 +122,7 @@ def redact_private_info(data, sensitive_keys=SENSITIVE_KEYS):
         return data
 
 
-async def clean_meta_for_export(meta):
+async def clean_meta_for_export(meta: "Meta") -> "Meta":
     """
     Removes all 'status_message' keys from meta['tracker_status'] and
     removes or clears 'torrent_comments' from meta.

@@ -184,7 +184,7 @@ async def get_season_episode(video, meta):
                             names_response = requests.get(names_url, timeout=30).json()
                             if meta['debug']:
                                 console.log(f'[cyan]Matching Season Number from TheXEM\n{names_response}')
-                            difference = 0
+                            difference: float = 0.0
                             if names_response['result'] == "success":
                                 for season_num, values in names_response['data'].items():
                                     for lang, names in values.items():
@@ -346,9 +346,9 @@ async def check_season_pack_detail(meta):
     if not files:
         return {'complete': True, 'missing_episodes': [], 'found_episodes': [], 'consistent_tags': True, 'tags_found': {}}
 
-    found_episodes = []
-    season_numbers = set()
-    tags_found = {}  # tag -> list of files with that tag
+    found_episodes: list[tuple[int, int]] = []
+    season_numbers: set[int] = set()
+    tags_found: dict[str, list[str]] = {}  # tag -> list of files with that tag
 
     # Pattern for standard TV shows: S01E01, S01E01E02
     episode_pattern = r'[Ss](\d{1,2})[Ee](\d{1,3})(?:[Ee](\d{1,3}))?'
@@ -397,14 +397,14 @@ async def check_season_pack_detail(meta):
             episode_only_matches = re.findall(episode_only_pattern, filename)
             for match in episode_only_matches:
                 episode1_num = int(match[0])
-                episode2_num = int(match[1]) if match[1] else None
+                episode2_optional = int(match[1]) if match[1] else None
 
                 season_num = default_season_num
                 found_episodes.append((season_num, episode1_num))
                 season_numbers.add(season_num)
 
-                if episode2_num:
-                    found_episodes.append((season_num, episode2_num))
+                if episode2_optional is not None:
+                    found_episodes.append((season_num, episode2_optional))
 
         if not matches and not episode_only_matches:
             anime_matches = re.findall(anime_pattern, filename)

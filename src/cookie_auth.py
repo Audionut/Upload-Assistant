@@ -10,10 +10,21 @@ import stat
 import importlib
 import traceback
 from bs4 import BeautifulSoup
+from bs4.element import AttributeValueList
 from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
+from typing import Any, Union
+
+
+def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
+    """Convert BeautifulSoup attribute values to a plain string."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, AttributeValueList):
+        return " ".join(value)
+    return ""
 
 
 class CookieValidator:
@@ -21,7 +32,7 @@ class CookieValidator:
         self.config = config
         pass
 
-    async def load_session_cookies(self, meta, tracker):
+    async def load_session_cookies(self, meta: dict[str, Any], tracker: str):
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
         cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
@@ -138,7 +149,7 @@ class CookieValidator:
                         soup = BeautifulSoup(test_response.text, 'html.parser')
                         logout_link = soup.find('a', href=True, text='Logout')
                         if logout_link:
-                            href = logout_link['href']
+                            href = _attr_to_string(logout_link.get('href'))
                             auth_match = re.search(r'auth=([^&]+)', href)
                             if auth_match:
                                 auth_key = auth_match.group(1)
@@ -204,13 +215,13 @@ class CookieValidator:
 
     async def cookie_validation(
         self,
-        meta,
-        tracker,
-        test_url="",
-        status_code="",
-        error_text="",
-        success_text="",
-        token_pattern="",
+        meta: dict[str, Any],
+        tracker: str,
+        test_url: str = "",
+        status_code: str = "",
+        error_text: str = "",
+        success_text: str = "",
+        token_pattern: str = "",
     ):
         """
         Validate login cookies for a tracker by checking specific indicators on a test page.
@@ -285,7 +296,7 @@ class CookieValidator:
         except httpx.TooManyRedirects:
             console.print(f"{tracker}: Too many redirects. Request exceeded the maximum redirect limit.")
         except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code
+            status_code = str(e.response.status_code)
             reason = e.response.reason_phrase if e.response.reason_phrase else "Unknown Reason"
             url = e.request.url
             console.print(f"{tracker}: HTTP status error {status_code}: {reason} for {url}")

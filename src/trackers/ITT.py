@@ -157,7 +157,7 @@ class ITT(UNIT3D):
 
     async def get_dubs(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         dubs = ''
         audio_languages = set(meta.get('audio_languages', []))
         if audio_languages:

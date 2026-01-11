@@ -145,8 +145,8 @@ def download_mkbrr_for_docker(base_dir=".", version="v1.18.0"):
             os.chmod(binary_path, 0o700)  # rwx------ (owner only)
             print(f"mkbrr binary ready at: {binary_path}")
 
-            with open(version_path, 'w') as f:
-                f.write(f"mkbrr version {version} installed successfully.")
+            with open(version_path, 'w', encoding='utf-8') as version_file:
+                version_file.write(f"mkbrr version {version} installed successfully.")
 
             return str(binary_path)
         else:

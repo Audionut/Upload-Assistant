@@ -103,7 +103,7 @@ class HUNO(UNIT3D):
         else:
             image_list = meta['image_list']
 
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
     async def get_mediainfo(self, meta):
         if meta['bdinfo'] is not None:
@@ -154,28 +154,26 @@ class HUNO(UNIT3D):
     async def get_audio(self, meta):
         channels = meta.get('channels', "")
         codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
-        languages = ""
+        languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
-        if meta.get('audio_languages'):
-            languages = meta['audio_languages']
-            languages = set(languages)
-            if len(languages) > 2:
-                languages = "Multi"
-            elif len(languages) > 1:
-                languages = "Dual"
+            await process_desc_language(meta, tracker=self.tracker)
+        audio_languages = meta.get('audio_languages')
+        if audio_languages:
+            normalized_languages = set(audio_languages)
+            if "zxx" in normalized_languages:
+                languages_result = "NONE"
+            elif len(normalized_languages) > 2:
+                languages_result = "Multi"
+            elif len(normalized_languages) > 1:
+                languages_result = "Dual"
             else:
-                languages = list(languages)[0]
+                languages_result = next(iter(normalized_languages), "SKIPPED")
 
-            if "zxx" in languages:
-                languages = "NONE"
-            elif not languages:
-                languages = "SKIPPED"
-        else:
-            languages = "SKIPPED"
+            if not languages_result:
+                languages_result = "SKIPPED"
 
-        return f'{codec} {channels} {languages}'
+        return f'{codec} {channels} {languages_result}'
 
     def get_basename(self, meta):
         path = next(iter(meta['filelist']), meta['path'])

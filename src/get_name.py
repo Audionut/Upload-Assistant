@@ -4,6 +4,7 @@ import cli_ui
 import os
 import re
 import sys
+from typing import Optional
 
 from guessit import guessit
 
@@ -188,8 +189,8 @@ async def extract_title_and_year(meta, filename):
     basename = os.path.basename(filename)
     basename = os.path.splitext(basename)[0]
 
-    secondary_title = None
-    year = None
+    secondary_title: Optional[str] = None
+    year: Optional[str] = None
 
     # Check for AKA patterns first
     aka_patterns = [' AKA ', '.aka.', ' aka ', '.AKA.']
@@ -260,6 +261,7 @@ async def extract_title_and_year(meta, filename):
     # Check for the specific pattern: year.year (e.g., "1970.2014")
     double_year_pattern = r'\b(18|19|20)\d{2}\.(18|19|20)\d{2}\b'
     double_year_match = re.search(double_year_pattern, folder_name)
+    actual_year: Optional[str] = None
 
     if double_year_match:
         full_match = double_year_match.group(0)
@@ -278,7 +280,14 @@ async def extract_title_and_year(meta, filename):
         extension_match = re.search(extension_pattern, modified_folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, modified_folder_name, re.IGNORECASE)
 
-        indices = [('year', double_year_match.end(), second_year)]
+        # If the folder starts with YYYY.YYYY (e.g. "1917.2019..."), the first year is the title.
+        # Otherwise, treat the match as a delimiter after a normal title (e.g. "Some.Movie.1982.2011...").
+        year_boundary = (
+            double_year_match.start() + len(first_year)
+            if double_year_match.start() == 0
+            else double_year_match.start()
+        )
+        indices = [('year', year_boundary, second_year)]
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
         if season_pattern_match:
@@ -329,7 +338,7 @@ async def extract_title_and_year(meta, filename):
         # Handle unmatched opening parenthesis
         if title_part.count('(') > title_part.count(')'):
             paren_pos = title_part.rfind('(')
-            content_after_paren = folder_name[paren_pos + 1:first_index].strip()
+            content_after_paren = folder_name_for_title[paren_pos + 1:first_index].strip()
 
             if content_after_paren:
                 secondary_title = content_after_paren
@@ -374,9 +383,8 @@ async def extract_title_and_year(meta, filename):
     }
     filename = re.sub(r'\s+', ' ', filename)
     filename = await multi_replace(title_part, replacements)
-    secondary_title = await multi_replace(secondary_title or '', replacements)
-    if not secondary_title:
-        secondary_title = None
+    processed_secondary = await multi_replace(secondary_title or '', replacements)
+    secondary_title = processed_secondary if processed_secondary else None
     if filename:
         # Look for content in parentheses
         bracket_pattern = r'\s*\(([^)]+)\)\s*'

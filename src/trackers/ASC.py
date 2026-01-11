@@ -10,6 +10,7 @@ import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
+from typing import Union
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
@@ -117,7 +118,7 @@ class ASC:
             try:
                 api_results = await asyncio.gather(*coroutines)
 
-                for data_type, result_data in zip(data_types, api_results, strict=True):
+                for data_type, result_data in zip(data_types, api_results):
                     if result_data:  # Only assign if result_data is not None
                         if data_type == 'main':
                             self.main_tmdb_data = result_data
@@ -354,7 +355,7 @@ class ASC:
         layout_image = {k: v for k, v in user_layout.items() if k.startswith('BARRINHA_')}
         description_parts = ['[center]']
 
-        async def append_section(key: str, content: str):
+        async def append_section(key: str, content: Union[str, None]):
             if content and (img := layout_image.get(key)):
                 description_parts.append(f'\n{await self.format_image(img)}')
                 description_parts.append(f'\n{content}\n')
@@ -534,7 +535,11 @@ class ASC:
             file_li_tag = file_page_soup.find('li', class_='list-group-item')
 
             if file_li_tag and file_li_tag.contents:
-                filename = file_li_tag.contents[0].strip()
+                first_content = file_li_tag.contents[0]
+                if isinstance(first_content, str):
+                    filename = first_content.strip()
+                else:
+                    filename = first_content.get_text(strip=True)
 
         except Exception as e:
             console.print(f'[bold red]Falha ao obter nome do arquivo para ID {torrent_id}: {e}[/bold red]')
@@ -548,7 +553,7 @@ class ASC:
     async def search_existing(self, meta, disctype):
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
 
-        found_items = []
+        found_items: list[dict[str, str]] = []
         if meta.get('anime'):
             await self.load_localized_data(meta)
             search_name = await self.get_title(meta)
@@ -580,7 +585,8 @@ class ASC:
 
         for release in releases:
             details_link_tag = release.find('a', href=lambda href: href and 'torrents-details.php?id=' in href)
-            torrent_link = details_link_tag.get('href', '') if details_link_tag else ''
+            torrent_link_value = details_link_tag.get('href') if details_link_tag else None
+            torrent_link = torrent_link_value if isinstance(torrent_link_value, str) else ''
             size_tag = release.find('span', text=lambda t: t and ('GB' in t.upper() or 'MB' in t.upper()), class_='badge-info')
             size = size_tag.get_text(strip=True).strip() if size_tag else ''
 
@@ -622,7 +628,11 @@ class ASC:
                     if not details_link_tag:
                         continue
 
-                    torrent_id = details_link_tag['href'].split('id=')[-1]
+                    href_value = details_link_tag.get('href')
+                    if not isinstance(href_value, str):
+                        continue
+
+                    torrent_id = href_value.split('id=')[-1]
                     name_search_tasks.append(self._fetch_file_info(torrent_id, torrent_link, size))
 
             except Exception as e:
@@ -643,8 +653,8 @@ class ASC:
         else:
             return f'{self.base_url}/enviar-series.php'
 
-    async def format_image(self, url):
-        return f'[img]{url}[/img]' if url else ''
+    async def format_image(self, url: Union[str, None]):
+        return f'[img]{url}[/img]' if isinstance(url, str) and url else ''
 
     async def format_date(self, date_str):
         if not date_str or date_str == 'N/A':
@@ -807,7 +817,7 @@ class ASC:
     async def get_data(self, meta):
         await self.load_localized_data(meta)
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await process_desc_language(meta, tracker=self.tracker)
         resolution = await self.get_resolution(meta)
 
         data = {

@@ -4,6 +4,7 @@ import cli_ui
 import copy
 import os
 import sys
+from typing import Any, Mapping, cast
 
 from torf import Torrent
 
@@ -17,6 +18,8 @@ from src.torrentcreate import create_base_from_existing_torrent
 from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP, tracker_class_map
 from src.uphelper import UploadHelper
+
+TRACKERS_CONFIG: Mapping[str, Mapping[str, Any]] = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
 
 
 async def process_all_trackers(meta):
@@ -85,7 +88,7 @@ async def process_all_trackers(meta):
 
             if local_meta['tracker_status'][tracker_name].get('skip_upload'):
                 local_tracker_status['skipped'] = True
-            elif 'skipped' not in local_meta and local_tracker_status['skipped'] is None:
+            elif 'skipped' not in local_meta:
                 local_tracker_status['skipped'] = False
 
             if not local_tracker_status['banned'] and not local_tracker_status['skipped']:
@@ -151,7 +154,7 @@ async def process_all_trackers(meta):
 
                 if tracker_name == "MTV":
                     if not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
-                        tracker_config = config['TRACKERS'].get(tracker_name, {})
+                        tracker_config = TRACKERS_CONFIG.get(tracker_name, {})
                         if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "true":
                             torrent_path = os.path.abspath(f"{local_meta['base_dir']}/tmp/{local_meta['uuid']}/BASE.torrent")
                             if not os.path.exists(torrent_path):
