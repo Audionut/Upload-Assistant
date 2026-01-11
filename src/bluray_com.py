@@ -1127,7 +1127,7 @@ async def process_all_releases(releases, meta):
 
                     format_match = False
                     generic_format = False
-                    if release_format == "bd" or "bd" == release_format:
+                    if release_format.lower() == "bd":
                         generic_format = True
                         log_and_print(f"[yellow]⚠[/yellow] Generic BD format found: {specs['discs']['format']} for size {disc_size_gb:.2f} GB", release_logs)
                     elif expected_format and expected_format in release_format:
@@ -1497,6 +1497,9 @@ async def process_all_releases(releases, meta):
 
             log_and_print(f"[blue]Final score: {score:.1f}/100 for {release['title']} ({release['country']})[/blue]", release_logs)
             log_and_print("", release_logs)
+            # Store flags on the release for later reference
+            release['_generic_format'] = generic_format if 'specs' in release and 'discs' in release['specs'] else False
+            release['_specs_missing'] = specs_missing if 'specs' in release else True
             scored_releases.append((score, release))
             logs.append((release, release_logs))
 
@@ -1563,9 +1566,12 @@ async def process_all_releases(releases, meta):
             elif len(close_matches) > 1:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
                     console.print("[yellow]Multiple releases are within 40 points of the best match. Please confirm which release to use:[/yellow]")
-                    if generic_format:
+                    # Check if any close match has generic format or missing specs
+                    any_generic_format = any(r.get('_generic_format', False) for r in close_matches)
+                    any_specs_missing = any(r.get('_specs_missing', False) for r in close_matches)
+                    if any_generic_format:
                         console.print("[red]Note: Generic BD format found, please confirm the release.[/red]")
-                    if specs_missing:
+                    if any_specs_missing:
                         console.print("[red]Note: Missing specs in release, please confirm the release.[/red]")
                     for idx, release in enumerate(close_matches, 1):
                         score = next(score for score, r in scored_releases if r == release)

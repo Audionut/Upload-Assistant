@@ -187,8 +187,18 @@ class DescriptionBuilder:
     def __init__(self, tracker: str, config: dict[str, Any]):
         self.config: dict[str, Any] = config
         self.common = COMMON(config)
-        self.tracker_config: dict[str, Any] = self.config['TRACKERS'][tracker]
         self.tracker: str = tracker
+
+        trackers_config = self.config.get('TRACKERS')
+        if not isinstance(trackers_config, dict):
+            raise KeyError("Missing 'TRACKERS' section in config")
+
+        tracker_cfg = trackers_config.get(tracker)
+        if tracker_cfg is None:
+            available = list(trackers_config.keys())
+            raise KeyError(f"Missing tracker config for '{tracker}'; available trackers: {available}")
+
+        self.tracker_config: dict[str, Any] = tracker_cfg if isinstance(tracker_cfg, dict) else {}
         self.parser = self.common.parser
 
     async def get_custom_header(self) -> str:

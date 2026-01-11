@@ -41,37 +41,40 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
                 meta["comparison_groups"] = saved_comparison_data
 
                 comparison_index = meta.get('comparison_index')
-                if comparison_index:
+                if comparison_index is not None:
+                    # Normalize comparison_index to string once
+                    comparison_index_str = str(comparison_index).strip()
+
+                    # Initialize image_list once if needed
+                    if 'image_list' not in meta:
+                        meta['image_list'] = []
+
+                    urls_to_add: list[dict[str, Any]] = []
+                    found = False
+
                     if isinstance(saved_comparison_data, dict):
-                        if comparison_index in saved_comparison_data:
-                            if 'image_list' not in meta:
-                                meta['image_list'] = []
-
-                            urls_to_add = saved_comparison_data[comparison_index].get('urls', [])
-                            if meta.get('debug'):
-                                console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
-
-                            for url_info in urls_to_add:
-                                if url_info not in meta['image_list']:
-                                    meta['image_list'].append(url_info)
+                        if comparison_index_str in saved_comparison_data:
+                            urls_to_add = saved_comparison_data[comparison_index_str].get('urls', [])
+                            found = True
+                        else:
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
                     elif isinstance(saved_comparison_data, list):
                         try:
-                            idx = int(comparison_index)
+                            idx = int(comparison_index_str)
                             if 0 <= idx < len(saved_comparison_data):
-                                if 'image_list' not in meta:
-                                    meta['image_list'] = []
-
                                 urls_to_add = saved_comparison_data[idx].get('urls', [])
-                                if meta.get('debug'):
-                                    console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
-
-                                for url_info in urls_to_add:
-                                    if url_info not in meta['image_list']:
-                                        meta['image_list'].append(url_info)
+                                found = True
                             else:
-                                console.print(f"[yellow]Comparison index {comparison_index} out of range for saved list")
+                                console.print(f"[yellow]Comparison index '{comparison_index_str}' out of range; valid range: 0-{len(saved_comparison_data) - 1}[/yellow]")
                         except ValueError:
-                            console.print(f"[yellow]Invalid comparison index {comparison_index} for saved list")
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' is not a valid integer for list data[/yellow]")
+
+                    if found and urls_to_add:
+                        if meta.get('debug'):
+                            console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
+                        for url_info in urls_to_add:
+                            if url_info not in meta['image_list']:
+                                meta['image_list'].append(url_info)
 
                 return saved_comparison_data
         except Exception as e:

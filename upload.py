@@ -299,7 +299,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
-        meta, help, before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta))
+        meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta))
         if not meta.get('trackers'):
             meta['trackers'] = previous_trackers
         if isinstance(meta.get('trackers'), str):
@@ -645,7 +645,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 console.print(f"[cyan]Image host debug: meta['imghost']={meta.get('imghost')} img_host_1={config['DEFAULT'].get('img_host_1')}[/cyan]")
                                 console.print(f"[cyan]Image host debug: relevant_trackers={relevant_trackers}[/cyan]")
 
-                            default_cfg = cast(dict[str, Any], config.get('DEFAULT', {}))
+                            default_cfg_obj = config.get('DEFAULT', {})
+                            default_cfg: dict[str, Any] = default_cfg_obj if isinstance(default_cfg_obj, dict) else {}
                             configured_hosts: list[str] = []
                             for host_index in range(1, 10):
                                 host_key = f'img_host_{host_index}'
@@ -999,10 +1000,10 @@ async def do_the_thing(base_dir):
         # If cleanup is the only operation, use a dummy path to satisfy the parser
         if cleanup_only:
             args_list = sys.argv[1:] + ['dummy_path']
-            meta, help, before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(args_list).split(' ')), meta))
+            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(args_list).split(' ')), meta))
             meta['path'] = None  # Clear the dummy path after parsing
         else:
-            meta, help, before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')), meta))
+            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')), meta))
 
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):

@@ -85,7 +85,8 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
             manual_name = re.sub(r"[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(meta['path']))
             Torrent.copy(base_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{manual_name}.torrent", overwrite=True)
             # shutil.copy(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"), os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['name'].replace(' ', '.')}.torrent").replace(' ', '.'))
-        manual_tracker_cfg = TRACKER_CONFIG.get('MANUAL', {})
+        manual_tracker_raw = TRACKER_CONFIG.get('MANUAL')
+        manual_tracker_cfg = manual_tracker_raw if isinstance(manual_tracker_raw, dict) else {}
         manual_filebrowser = manual_tracker_cfg.get('filebrowser')
         filebrowser = manual_filebrowser if isinstance(manual_filebrowser, str) else None
         shutil.make_archive(archive, 'tar', f"{meta['base_dir']}/tmp/{meta['uuid']}")
