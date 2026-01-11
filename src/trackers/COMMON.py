@@ -224,7 +224,12 @@ class COMMON():
 
         # Update counts
         existing_data["keys"][image_key]["count"] = len(existing_data["keys"][image_key]["images"])
-        existing_data["total_count"] = sum(key_data["count"] for key_data in existing_data["keys"].values())
+        # Safely compute total_count, handling any malformed per-key entries
+        total = 0
+        for key_data in existing_data["keys"].values():
+            if isinstance(key_data, dict) and isinstance(key_data.get("count"), int):
+                total += key_data["count"]
+        existing_data["total_count"] = total
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -276,6 +281,11 @@ class COMMON():
 
         if reverse:
             # Reverse lookup: Find region code by ID
+            # Convert to int to handle cases where API returns string
+            try:
+                region_id = int(region_id)
+            except (ValueError, TypeError):
+                return ""
             for code, id_value in region_map.items():
                 if id_value == region_id:
                     return code
@@ -311,6 +321,11 @@ class COMMON():
         }
 
         if reverse:
+            # Convert to int to handle cases where API returns string
+            try:
+                distributor_id = int(distributor_id)
+            except (ValueError, TypeError):
+                return ""
             for name, id_value in distributor_map.items():
                 if id_value == distributor_id:
                     return name

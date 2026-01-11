@@ -23,7 +23,7 @@ class ANT:
         self.tracker = 'ANT'
         self.config = config
         self.common = COMMON(config)
-        self.tracker_config: dict[str, Any] = self.config['TRACKERS'][self.tracker]
+        self.tracker_config: dict[str, Any] = self.config['TRACKERS'].get(self.tracker, {})
         self.source_flag = 'ANT'
         self.search_url = 'https://anthelion.me/api.php'
         self.upload_url = 'https://anthelion.me/api.php'
@@ -148,6 +148,11 @@ class ANT:
 
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
         flags = await self.get_flags(meta)
+        audioformat = await self.get_audio(meta)
+        if not audioformat:
+            console.print(f"[bold red]{self.tracker} upload aborted due to unsupported audio format.")
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: upload aborted: unsupported audio format"
+            return False
 
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
@@ -155,7 +160,7 @@ class ANT:
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data: dict[str, Any] = {
             'type': await self.get_type(meta),
-            'audioformat': await self.get_audio(meta),
+            'audioformat': audioformat,
             'api_key': str(self.tracker_config.get('api_key', '')).strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
@@ -236,7 +241,7 @@ class ANT:
                         else:
                             response_data = {
                                 "error": f"Unexpected status code: {response.status_code}",
-                                "response_content": {response.text}
+                                "response_content": response.text
                             }
                             meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                             return False
@@ -265,7 +270,7 @@ class ANT:
                     else:
                         response_data = {
                             "error": f"Unexpected status code: {response.status_code}",
-                            "response_content": {response.text}
+                            "response_content": response.text
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
                         return False

@@ -196,7 +196,7 @@ class UNIT3D:
         }
 
     async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta["bdinfo"] is not None:
+        if meta.get("bdinfo", None) is not None:
             mediainfo = ""
         else:
             async with aiofiles.open(
@@ -206,7 +206,7 @@ class UNIT3D:
         return {"mediainfo": mediainfo}
 
     async def get_bdinfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta["bdinfo"] is not None:
+        if meta.get("bdinfo", None) is not None:
             async with aiofiles.open(
                 f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", "r", encoding="utf-8"
             ) as f:
@@ -576,7 +576,7 @@ class UNIT3D:
             if match:
                 torrent_id = match.group(1)
         except (IndexError, KeyError):
-            print("Could not parse torrent_id from response data.")
+            console.print("Could not parse torrent_id from response data.")
         return torrent_id
 
     async def process_response_data(self, response_data: dict[str, Any]) -> str:
