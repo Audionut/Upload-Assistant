@@ -1178,22 +1178,20 @@ async def do_the_thing(base_dir):
                     if is_trumping:
                         meta['are_we_trump_reporting'] = True
 
+                # we're uploading. the hardcoded successful_trackers = 10 is to bypass the skip_uploading check if not doing double dupe check
+                # allowing the skip uploading feature to only apply when double dupe checking is enabled
                 successful_trackers = 10
                 if meta.get('dupe_again', False):
                     console.print("[yellow]Performing double dupe check on trackers that passed initial upload checks.....[/yellow]")
                     for tracker in list(meta.get('trackers', [])):
-                        tracker_class = tracker_class_map.get(tracker)
-                        if tracker_class:
-                            tracker_status = meta.get('tracker_status', {}).get(tracker, {})
-                            if tracker_status.get('upload') is not True:
-                                if meta.get('debug'):
-                                    console.print(f"[yellow]{tracker} was previously marked to skip upload. Skipping double dupe check.[/yellow]")
-                                meta['trackers'].remove(tracker)
-                                meta['tracker_status'].pop(tracker, None)
-                                continue
+                        tracker_status = meta.get('tracker_status', {}).get(tracker, {})
+                        if tracker_status.get('upload') is not True:
+                            if meta.get('debug'):
+                                console.print(f"[yellow]{tracker} was previously marked to skip upload. Skipping double dupe check.[/yellow]")
+                            meta['trackers'].remove(tracker)
+                            meta['tracker_status'].pop(tracker, None)
+                            continue
 
-                        else:
-                            console.print(f"[yellow]Tracker class for {tracker} not found during double dupe check.[/yellow]")
                     if meta.get('trackers', []):
                         successful_trackers = await process_all_trackers(meta)
                     else:
