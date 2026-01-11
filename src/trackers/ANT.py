@@ -23,7 +23,7 @@ class ANT:
         self.tracker = 'ANT'
         self.config = config
         self.common = COMMON(config)
-        self.tracker_config: dict[str, str] = self.config['TRACKERS'][self.tracker]
+        self.tracker_config: dict[str, Any] = self.config['TRACKERS'][self.tracker]
         self.source_flag = 'ANT'
         self.search_url = 'https://anthelion.me/api.php'
         self.upload_url = 'https://anthelion.me/api.php'

@@ -26,8 +26,15 @@ class UNIT3D:
         self.tracker = tracker_name
         self.common = COMMON(config)
         self.tracker_config: dict[str, Any] = self.config["TRACKERS"].get(self.tracker, {})
-        self.announce_url = self.tracker_config.get("announce_url", "")
-        self.api_key = self.tracker_config.get("api_key", "")
+
+        # Normalize announce_url: must be a non-empty string after stripping
+        raw_announce = self.tracker_config.get("announce_url")
+        self.announce_url = raw_announce.strip() if isinstance(raw_announce, str) else ""
+
+        # Normalize api_key: must be a non-empty string after stripping
+        raw_api_key = self.tracker_config.get("api_key")
+        self.api_key = raw_api_key.strip() if isinstance(raw_api_key, str) else ""
+
         # Default URLs - should be overridden by subclasses
         self.search_url = ""
         self.upload_url = ""

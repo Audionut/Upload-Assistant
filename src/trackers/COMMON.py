@@ -8,7 +8,6 @@ import httpx
 import json
 import os
 import re
-import requests
 import secrets
 import sys
 from src.bbcode import BBCODE
@@ -55,7 +54,11 @@ class COMMON():
             for each in list(new_torrent.metainfo):
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)  # type: ignore
-            new_torrent.metainfo['announce'] = announce_url if announce_url else self.config['TRACKERS'][tracker].get('announce_url', "https://fake.tracker").strip()
+            if announce_url:
+                new_torrent.metainfo['announce'] = announce_url
+            else:
+                raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
+                new_torrent.metainfo['announce'] = str(raw_announce).strip() if raw_announce else "https://fake.tracker"
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
                 created_by = new_torrent.metainfo['created by']
@@ -68,7 +71,7 @@ class COMMON():
                 try:
                     entropy_int = int(entropy_value)
                     if entropy_int == 32:
-                        new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**31)  # type: ignore
+                        new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**32)  # type: ignore
                     elif entropy_int == 64:
                         new_torrent.metainfo['info']['entropy'] = secrets.randbelow(2**64)  # type: ignore
                 except (ValueError, TypeError):
@@ -138,15 +141,16 @@ class COMMON():
                 new_torrent.metainfo["announce"] = new_tracker
             new_torrent.metainfo["info"]["source"] = source_flag
 
-            # Calculate hash
-            torrent_hash = ""
+            # Calculate hash only when hash_is_id is True
+            torrent_hash: Optional[str] = None
             if hash_is_id:
                 info_bytes = bencodepy.encode(new_torrent.metainfo["info"])
                 torrent_hash = hashlib.sha1(
                     info_bytes, usedforsecurity=False
                 ).hexdigest()  # SHA1 required for torrent info hash
-
-            new_torrent.metainfo["comment"] = comment + torrent_hash if hash_is_id else comment
+                new_torrent.metainfo["comment"] = comment + torrent_hash
+            else:
+                new_torrent.metainfo["comment"] = comment
 
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(path, overwrite=True))
 
@@ -173,23 +177,36 @@ class COMMON():
         output_file = os.path.join(output_dir, "pack_image_links.json")
 
         # Load existing data if the file exists
-        existing_data = {}
+        existing_data: dict[str, Any] = {}
         if os.path.exists(output_file):
             try:
                 with open(output_file, 'r', encoding='utf-8') as f:
-                    existing_data = json.load(f)
-            except Exception as e:
+                    loaded_data = json.load(f)
+                    # Validate schema: must have 'keys' as dict and 'total_count' as int
+                    if (
+                        isinstance(loaded_data, dict)
+                        and isinstance(loaded_data.get('keys'), dict)
+                        and isinstance(loaded_data.get('total_count'), int)
+                    ):
+                        existing_data = loaded_data
+                    else:
+                        console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
+            except (json.JSONDecodeError, OSError) as e:
                 console.print(f"[yellow]Warning: Could not load existing image data: {str(e)}[/yellow]")
 
-        # Create data structure if it doesn't exist yet
+        # Create data structure if it doesn't exist or was invalid
         if not existing_data:
             existing_data = {
                 "keys": {},
                 "total_count": 0
             }
 
+        # Ensure 'keys' is a dict (extra safety)
+        if not isinstance(existing_data.get('keys'), dict):
+            existing_data['keys'] = {}
+
         # Update the data with the new images under the specific key
-        if image_key not in existing_data["keys"]:
+        if image_key not in existing_data["keys"] or not isinstance(existing_data["keys"].get(image_key), dict):
             existing_data["keys"][image_key] = {
                 "count": 0,
                 "images": []
@@ -344,11 +361,17 @@ class COMMON():
 
     async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = ""):
         """Get region and distributor information from API response"""
-        params: dict[str, str] = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
+        raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
+        api_key = str(raw_api_key).strip() if raw_api_key else ''
+        params: dict[str, str] = {'api_token': api_key}
         url = f"{torrent_url}{id}"
-        response = requests.get(url=url, params=params, timeout=30)
         try:
-            json_response = response.json()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url=url, params=params)
+                json_response = response.json()
+        except (httpx.RequestError, httpx.TimeoutException) as e:
+            console.print(f"[yellow]Request error in unit3d_region_distributor: {e}[/yellow]")
+            return
         except ValueError:
             return
         try:
@@ -417,7 +440,9 @@ class COMMON():
         imagelist = []
 
         # Build the params for the API request
-        params = {'api_token': self.config['TRACKERS'][tracker].get('api_key', '')}
+        raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
+        api_key = str(raw_api_key).strip() if raw_api_key else ''
+        params: dict[str, Any] = {'api_token': api_key}
 
         # Determine the search method and add parameters accordingly
         if file_name:
@@ -435,14 +460,13 @@ class COMMON():
             return None, None, None, None, None, None, None, None, None
 
         # Make the GET request with proper encoding handled by 'params'
-        response = requests.get(url=url, params=params, timeout=30)
-        # console.print(f"[blue]Raw API Response: {response}[/blue]")
-
         try:
-            json_response = response.json()
-
-            # console.print(f"Raw API Response: {json_response}", markup=False)
-
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url=url, params=params)
+                json_response = response.json()
+        except (httpx.RequestError, httpx.TimeoutException) as e:
+            console.print(f"[yellow]Request error in unit3d_torrent_info: {e}[/yellow]")
+            return None, None, None, None, None, None, None, None, None
         except ValueError:
             return None, None, None, None, None, None, None, None, None
 
@@ -576,54 +600,73 @@ class COMMON():
         return cookies
 
     async def ptgen(self, meta: dict[str, Any], ptgen_site="", ptgen_retry=3):
-        ptgen_response: Any = None
         ptgen_text = ""
         url = 'https://ptgen.zhenzhen.workers.dev'
         if ptgen_site != '':
             url = ptgen_site
         params: dict[str, Any] = {}
         data: dict[str, Any] = {}
-        # get douban url
-        if int(meta.get('imdb_id', 0)) != 0:
-            data['search'] = f"tt{meta['imdb_id']}"
-            ptgen_response = requests.get(url, params=data, timeout=30)
-            if ptgen_response.json()["error"] is not None:
-                for _retry in range(ptgen_retry):
-                    try:
-                        ptgen_response = requests.get(url, params=data, timeout=30)
-                        if ptgen_response.json()["error"] is None:
-                            break
-                    except requests.exceptions.JSONDecodeError:
-                        continue
+
+        async def fetch_ptgen(client: httpx.AsyncClient, request_url: str, request_params: dict[str, Any]) -> Optional[dict[str, Any]]:
+            """Helper to fetch and parse ptgen response with error handling."""
             try:
-                params['url'] = ptgen_response.json()['data'][0]['link']
-            except Exception:
-                console.print("[red]Unable to get data from ptgen using IMDb")
-                params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
-        else:
-            console.print("[red]No IMDb id was found.")
-            params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+                response = await client.get(request_url, params=request_params, timeout=30.0)
+                json_data: dict[str, Any] = response.json()
+                return json_data
+            except (httpx.RequestError, httpx.TimeoutException, ValueError):
+                return None
+
         try:
-            ptgen_response = requests.get(url, params=params, timeout=30)
-            if ptgen_response.json()["error"] is not None:
-                for _retry in range(ptgen_retry):
-                    ptgen_response = requests.get(url, params=params, timeout=30)
-                    if ptgen_response.json()["error"] is None:
-                        break
-            ptgen_json = ptgen_response.json()
-            meta['ptgen'] = ptgen_json
-            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-                json.dump(meta, f, indent=4)
-                f.close()
-            ptgen_text = ptgen_json['format']
-            if "[/img]" in ptgen_text:
-                ptgen_text = ptgen_text.split("[/img]")[1]
-            ptgen_text = f"[img]{meta.get('imdb_info', {}).get('cover', meta.get('cover', ''))}[/img]{ptgen_text}"
+            async with httpx.AsyncClient() as client:
+                # get douban url
+                if int(meta.get('imdb_id', 0)) != 0:
+                    data['search'] = f"tt{meta['imdb_id']}"
+                    ptgen_json = await fetch_ptgen(client, url, data)
+
+                    # Check for error and retry if needed
+                    if ptgen_json is None or ptgen_json.get("error") is not None:
+                        for _retry in range(ptgen_retry):
+                            ptgen_json = await fetch_ptgen(client, url, data)
+                            if ptgen_json is not None and ptgen_json.get("error") is None:
+                                break
+
+                    # Try to extract douban link
+                    try:
+                        if ptgen_json and 'data' in ptgen_json and ptgen_json['data']:
+                            params['url'] = ptgen_json['data'][0]['link']
+                        else:
+                            raise KeyError("No data in response")
+                    except (KeyError, IndexError, TypeError):
+                        console.print("[red]Unable to get data from ptgen using IMDb")
+                        params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+                else:
+                    console.print("[red]No IMDb id was found.")
+                    params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+
+                # Fetch with douban URL
+                ptgen_json = await fetch_ptgen(client, url, params)
+                if ptgen_json is None or ptgen_json.get("error") is not None:
+                    for _retry in range(ptgen_retry):
+                        ptgen_json = await fetch_ptgen(client, url, params)
+                        if ptgen_json is not None and ptgen_json.get("error") is None:
+                            break
+
+                if ptgen_json is None:
+                    console.print("[bold red]Failed to get valid ptgen response after retries")
+                    return ""
+
+                meta['ptgen'] = ptgen_json
+                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
+                    json.dump(meta, f, indent=4)
+
+                ptgen_text = ptgen_json.get('format', '')
+                if "[/img]" in ptgen_text:
+                    ptgen_text = ptgen_text.split("[/img]")[1]
+                ptgen_text = f"[img]{meta.get('imdb_info', {}).get('cover', meta.get('cover', ''))}[/img]{ptgen_text}"
+
         except Exception:
             console.print_exception()
-            if ptgen_response is not None and hasattr(ptgen_response, 'text'):
-                console.print(ptgen_response.text)
-            console.print("[bold red]There was an error getting the ptgen \nUploading without ptgen")
+            console.print("[bold red]There was an error getting the ptgen \\nUploading without ptgen")
             return ""
         return ptgen_text
 
