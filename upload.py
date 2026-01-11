@@ -1177,25 +1177,48 @@ async def do_the_thing(base_dir):
 
                     if is_trumping:
                         meta['are_we_trump_reporting'] = True
-                await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
-                if use_discord and bot:
-                    await send_upload_status_notification(config, bot, meta)
 
-                if config['DEFAULT'].get('cross_seeding', True):
-                    await process_cross_seeds(meta)
+                successful_trackers = 10
+                if meta.get('dupe_again', False):
+                    console.print("[yellow]Performing double dupe check on trackers that passed initial upload checks.....[/yellow]")
+                    for tracker in list(meta.get('trackers', [])):
+                        tracker_class = tracker_class_map.get(tracker)
+                        if tracker_class:
+                            tracker_status = meta.get('tracker_status', {}).get(tracker, {})
+                            if tracker_status.get('upload') is not True:
+                                if meta.get('debug'):
+                                    console.print(f"[yellow]{tracker} was previously marked to skip upload. Skipping double dupe check.[/yellow]")
+                                meta['trackers'].remove(tracker)
+                                meta['tracker_status'].pop(tracker, None)
+                                continue
 
-                if 'queue' in meta and meta.get('queue') is not None:
-                    processed_files_count += 1
-                    if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
-                        console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
-                    else:
-                        console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
-                    if not meta['debug'] or "debug" in os.path.basename(log_file):
-                        if log_file:
-                            if meta.get('site_upload_queue'):
-                                await save_processed_path(log_file, current_item_path)
-                            else:
-                                await save_processed_file(log_file, path)
+                        else:
+                            console.print(f"[yellow]Tracker class for {tracker} not found during double dupe check.[/yellow]")
+
+                    successful_trackers = await process_all_trackers(meta)
+
+                if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
+                    console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
+                else:
+                    await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
+                    if use_discord and bot:
+                        await send_upload_status_notification(config, bot, meta)
+
+                    if config['DEFAULT'].get('cross_seeding', True):
+                        await process_cross_seeds(meta)
+
+                    if 'queue' in meta and meta.get('queue') is not None:
+                        processed_files_count += 1
+                        if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
+                            console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
+                        else:
+                            console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
+                        if not meta['debug'] or "debug" in os.path.basename(log_file):
+                            if log_file:
+                                if meta.get('site_upload_queue'):
+                                    await save_processed_path(log_file, current_item_path)
+                                else:
+                                    await save_processed_file(log_file, path)
 
             if meta['debug']:
                 finish_time = time.time()

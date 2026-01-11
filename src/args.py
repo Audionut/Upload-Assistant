@@ -160,6 +160,7 @@ class Args():
         parser.add_argument('-pr', '--personalrelease', action='store_true', required=False, help="Personal Release")
         parser.add_argument('-sdc', '--skip-dupe-check', action='store_true', required=False, help="Ignore dupes and upload anyway (Skips dupe check)", dest="dupe")
         parser.add_argument('-sda', '--skip-dupe-asking', action='store_true', required=False, help="Don't prompt about dupes, just treat dupes as actual dupes", dest="ask_dupe")
+        parser.add_argument('-ddc', '--double-dupe-check', action='store_true', required=False, help="May be useful when trying to race. Will run another dupe checking pass on any trackers that previously passed upload check, right before uploading", dest="dupe_again")
         parser.add_argument('-debug', '--debug', action='store_true', required=False, help="Debug Mode, will run through all the motions providing extra info, but will not upload to trackers.")
         parser.add_argument('-ffdebug', '--ffdebug', action='store_true', required=False, help="Will show info from ffmpeg while taking screenshots.")
         parser.add_argument('-uptimer', '--upload-timer', action='store_true', required=False, help="Prints the time it takes to upload to each individual site.", dest="upload_timer")
