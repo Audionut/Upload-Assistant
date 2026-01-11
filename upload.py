@@ -1194,8 +1194,10 @@ async def do_the_thing(base_dir):
 
                         else:
                             console.print(f"[yellow]Tracker class for {tracker} not found during double dupe check.[/yellow]")
-
-                    successful_trackers = await process_all_trackers(meta)
+                    if meta.get('trackers', []):
+                        successful_trackers = await process_all_trackers(meta)
+                    else:
+                        successful_trackers = 0
 
                 if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
                     console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
