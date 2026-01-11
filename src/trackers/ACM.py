@@ -11,12 +11,11 @@ import re
 from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
-from src.trackers.UNIT3D import UNIT3D
+from typing import Any
 
 
-class ACM(UNIT3D):
-    def __init__(self, config):
-        super().__init__(config, tracker_name='ACM')
+class ACM:
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'ACM'
@@ -26,10 +25,10 @@ class ACM(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
-        self.banned_groups = []
+        self.banned_groups: list[str] = []
         pass
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -84,14 +83,14 @@ class ACM(UNIT3D):
 
         return type_id
 
-    async def get_cat_id(self, category_name):
+    async def get_cat_id(self, category_name: str) -> str:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(category_name, '0')
         return category_id
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(self, meta: dict[str, Any]) -> str:
         resolution_id = {
             '2160p': '1',
             '1080p': '2',
@@ -105,7 +104,7 @@ class ACM(UNIT3D):
         return resolution_id
 
     # ACM rejects uploads with more that 10 keywords
-    async def get_keywords(self, meta):
+    async def get_keywords(self, meta: dict[str, Any]):
         keywords = meta.get('keywords', '')
         if keywords != '':
             keywords_list = keywords.split(',')
@@ -113,11 +112,8 @@ class ACM(UNIT3D):
             keywords = ', '.join(keywords_list)
         return keywords
 
-    async def get_additional_files(self, meta):
-        return {}
-
-    def get_subtitles(self, meta):
-        sub_lang_map = {
+    def get_subtitles(self, meta: dict[str, Any]) -> list[str]:
+        sub_lang_map: dict[tuple[str, ...], str] = {
             ("Arabic", "ara", "ar"): 'Ara',
             ("Brazilian Portuguese", "Brazilian", "Portuguese-BR", 'pt-br'): 'Por-BR',
             ("Bulgarian", "bul", "bg"): 'Bul',
@@ -161,7 +157,7 @@ class ACM(UNIT3D):
             ("Vietnamese", "vie", "vi"): 'Vie',
         }
 
-        sub_langs = []
+        sub_langs: list[str] = []
         if meta.get('is_disc', '') != 'BDMV':
             mi = meta['mediainfo']
             for track in mi['media']['track']:
@@ -186,7 +182,7 @@ class ACM(UNIT3D):
         #     sub_langs = [44] # No Subtitle
         return sub_langs
 
-    def get_subs_tag(self, subs):
+    def get_subs_tag(self, subs: list[str]) -> str:
         if subs == []:
             return ' [No subs]'
         elif 'Eng' in subs:
@@ -195,14 +191,14 @@ class ACM(UNIT3D):
             return ' [No Eng subs]'
         return f" [{subs[0]} subs only]"
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _) -> bool:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(meta['category'])
         type_id = await self.get_type_id(meta)
         resolution_id = await self.get_resolution_id(meta)
         desc = await self.get_description(meta)
-        region_id = await self.common.unit3d_region_ids(meta.get('region'))
-        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
+        region_id = await self.common.unit3d_region_ids(meta.get('region', ''))
+        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor', ''))
         acm_name = await self.get_name(meta)
         if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             anon = 0
@@ -223,7 +219,7 @@ class ACM(UNIT3D):
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
         files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
-        data = {
+        data: dict[str, Any] = {
             'name': acm_name,
             'description': desc,
             'mediainfo': mi_dump,
@@ -295,12 +291,12 @@ class ACM(UNIT3D):
             await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True
 
-    async def search_existing(self, meta, disctype):
-        dupes = []
-        params = {
+    async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
+        dupes: list[str] = []
+        params: dict[str, Any] = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],
-            'categories[]': (await self.get_category_id(meta)),
+            'categories[]': (await self.get_cat_id(meta['category'])),
             'types[]': (await self.get_type_id(meta)),
             # A majority of the ACM library doesn't contain resolution information
             # 'resolutions[]' : await self.get_res_id(meta['resolution']),
@@ -327,15 +323,15 @@ class ACM(UNIT3D):
 
         return dupes
 
-    async def get_name(self, meta):
-        name = meta.get('name')
-        aka = meta.get('aka')
-        original_title = meta.get('original_title')
-        audio = meta.get('audio')
-        source = meta.get('source')
-        is_disc = meta.get('is_disc')
+    async def get_name(self, meta: dict[str, Any]):
+        name: str = meta.get('name', '')
+        aka: str = meta.get('aka', '')
+        original_title: str = meta.get('original_title', '')
+        audio: str = meta.get('audio', '')
+        source: str = meta.get('source', '')
+        is_disc: str = meta.get('is_disc', '')
         subs = self.get_subtitles(meta)
-        resolution = meta.get('resolution')
+        resolution: str = meta.get('resolution', '')
         if aka != '':
             # ugly fix to remove the extra space in the title
             aka = aka + ' '
@@ -360,7 +356,7 @@ class ACM(UNIT3D):
         name = name + self.get_subs_tag(subs)
         return name
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: dict[str, Any]):
         async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
             base = await f.read()
 

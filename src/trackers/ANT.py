@@ -466,13 +466,13 @@ class ANT:
         if meta.get('is_disc', False):
             return imdb_tmdb_list
 
-        filelist = meta.get('filelist', [])
-        if not filelist or not isinstance(filelist, list):
+        filelist: list[str] = meta.get('filelist', [])
+        if not filelist:
             if meta.get('debug'):
                 console.print(f"[yellow]{self.tracker}: No files in filelist, skipping file-based search.")
             return imdb_tmdb_list
 
-        filename = os.path.basename(filelist[0])
+        filename: str = os.path.basename(filelist[0])
 
         api_key = self.tracker_config.get('api_key')
         if not api_key or not isinstance(api_key, str) or not api_key.strip():

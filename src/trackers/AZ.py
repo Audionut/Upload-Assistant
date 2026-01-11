@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 from src.trackers.COMMON import COMMON
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
+from typing import Any
 
 
 class AZ(AZTrackerBase):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='AZ')
         self.config = config
         self.common = COMMON(config)
@@ -16,8 +17,8 @@ class AZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta):
-        warnings = []
+    async def rules(self, meta: dict[str, Any]) -> str:
+        warnings: list[str] = []
 
         is_disc = False
         if meta.get('is_disc', ''):
@@ -134,7 +135,7 @@ class AZ(AZTrackerBase):
             if isinstance(audio_field, str) and 'opus' in audio_field.lower() and bool(meta.get('untouched', False)):
                 is_untouched_opus = True
 
-            audio_tracks = []
+            audio_tracks: list[dict[str, Any]] = []
             media_tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in media_tracks:
                 if track.get('@type') == 'Audio':
@@ -145,7 +146,7 @@ class AZ(AZTrackerBase):
                         'language': track.get('Language', '')
                     })
 
-            invalid_codecs = []
+            invalid_codecs: list[str] = []
             for track in audio_tracks:
                 codec = track['codec']
                 if not codec:
@@ -174,4 +175,4 @@ class AZ(AZTrackerBase):
             all_warnings = '\n\n'.join(filter(None, warnings))
             return all_warnings
 
-        return
+        return ''

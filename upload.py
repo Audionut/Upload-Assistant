@@ -555,7 +555,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         filename: str = meta.get('title', '')
         bdmv_filename = meta.get('filename', '')
         bdinfo = meta.get('bdinfo', '')
-        videopath: str = meta.get('filelist', [""])[0] or ""
+        file_list: list[str] = meta.get('filelist', [])
+        videopath: str = file_list[0] if file_list else ""
         console.print(f"Processing {filename} for upload.....")
 
         meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)

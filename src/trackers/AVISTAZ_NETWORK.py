@@ -9,17 +9,17 @@ import os
 import platform
 import re
 import uuid
-from bs4 import BeautifulSoup
-from pathlib import Path
-from typing import Any, Callable, Optional, cast
-from urllib.parse import urlparse
 
+from bs4 import BeautifulSoup
 from cogs.redaction import redact_private_info
+from pathlib import Path
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON
+from typing import Any, Callable, Optional, cast
+from urllib.parse import urlparse
 
 
 class AZTrackerBase:
@@ -42,10 +42,10 @@ class AZTrackerBase:
         }, timeout=60.0)
         self.media_code = ''
 
-    async def rules(self, meta: dict[str, Any]):
+    async def rules(self, meta: dict[str, Any]) -> str:
         return ''
 
-    def get_resolution(self, meta: dict[str, Any]):
+    def get_resolution(self, meta: dict[str, Any]) -> str:
         resolution = ''
         width, height = None, None
 
@@ -69,7 +69,7 @@ class AZTrackerBase:
 
         return resolution
 
-    def get_video_quality(self, meta: dict[str, Any]):
+    def get_video_quality(self, meta: dict[str, Any]) -> str:
         resolution: str = meta.get('resolution', '')
 
         if self.tracker != 'PHD':
@@ -85,9 +85,9 @@ class AZTrackerBase:
             '720p': '2',
         }
 
-        return keyword_map.get(resolution.lower())
+        return keyword_map.get(resolution.lower(), "0")
 
-    async def get_media_code(self, meta: dict[str, Any]):
+    async def get_media_code(self, meta: dict[str, Any]) -> bool:
         self.media_code = ''
 
         if meta['category'] == 'MOVIE':
@@ -162,7 +162,7 @@ class AZTrackerBase:
 
         return bool(self.media_code)
 
-    async def add_media_to_db(self, meta: dict[str, Any], title: str, category: str, imdb_id: str, tmdb_id: str):
+    async def add_media_to_db(self, meta: dict[str, Any], title: str, category: str, imdb_id: str, tmdb_id: str) -> bool:
         data: dict[str, Any] = {
             '_token': self.az_class.secret_token,
             'type_id': category,
@@ -214,7 +214,9 @@ class AZTrackerBase:
             )
         return False
 
-    async def search_existing(self, meta: dict[str, Any], _):
+    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, str]]:
+        duplicates: list[dict[str, str]] = []
+
         if self.config['TRACKERS'][self.tracker].get('check_for_rules', True):
             warnings = await self.rules(meta)
             if warnings:
@@ -223,10 +225,10 @@ class AZTrackerBase:
                     choice = await self.common.async_input(prompt='Do you want to continue anyway? [y/N]: ')
                     if choice != 'y':
                         meta['skipping'] = f'{self.tracker}'
-                        return
+                        return duplicates
                 else:
                     meta['skipping'] = f'{self.tracker}'
-                    return
+                    return duplicates
 
         if meta['type'] not in ['WEBDL'] and self.tracker == "PHD":
             if meta.get('tag', "") in ['FGT', 'EVO']:
@@ -235,10 +237,10 @@ class AZTrackerBase:
                     choice = await self.common.async_input('Do you want to upload anyway? [y/N]: ')
                     if choice != 'y':
                         meta['skipping'] = f'{self.tracker}'
-                        return
+                        return duplicates
                 else:
                     meta['skipping'] = f'{self.tracker}'
-                    return
+                    return duplicates
 
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
@@ -247,7 +249,7 @@ class AZTrackerBase:
         if not await self.get_media_code(meta):
             console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
             meta['skipping'] = f'{self.tracker}'
-            return
+            return duplicates
 
         if meta.get('resolution') == '2160p':
             resolution = 'UHD'
@@ -260,7 +262,6 @@ class AZTrackerBase:
 
         page_url: str = f'{self.base_url}/movies/torrents/{self.media_code}?quality={resolution}'
 
-        duplicates: list[dict[str, str]] = []
         visited_urls: set[str] = set()
 
         while page_url and page_url not in visited_urls:
@@ -327,15 +328,16 @@ class AZTrackerBase:
 
         return duplicates
 
-    async def get_cat_id(self, category_name: str):
+    async def get_cat_id(self, category_name: str) -> str:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
-        }.get(category_name, '0')
+        }.get(category_name, "0")
         return category_id
 
-    async def get_file_info(self, meta: dict[str, Any]):
+    async def get_file_info(self, meta: dict[str, Any]) -> str:
         info_file_path = ''
+        file_info = ''
         if meta.get('is_disc') == 'BDMV':
             if self.tracker == 'CZ':
                 summary_file = 'BD_SUMMARY_EXT_00'
@@ -347,9 +349,11 @@ class AZTrackerBase:
 
         if os.path.exists(info_file_path):
             with open(info_file_path, 'r', encoding='utf-8') as f:
-                return f.read()
+                file_info = f.read()
 
-    async def get_lang(self, meta: dict[str, Any]):
+        return file_info
+
+    async def get_lang(self, meta: dict[str, Any]) -> dict[str, list[str]]:
         self.language_map()
         audio_ids: set[str] = set()
         subtitle_ids: set[str] = set()
@@ -585,7 +589,7 @@ class AZTrackerBase:
                 console.print(f'{self.tracker}: An error occurred while fetching requests: {e}')
                 return results
 
-    async def fetch_tag_id(self, word: str):
+    async def fetch_tag_id(self, word: str) -> int:
         tags_url = f'{self.base_url}/ajax/tags'
         params = {'term': word}
 
@@ -601,12 +605,16 @@ class AZTrackerBase:
 
             for tag_info in json_data.get('data', []):
                 if tag_info.get('tag') == word:
-                    return tag_info.get('id')
+                    try:
+                        tag = int(tag_info.get('id', 0))
+                        return tag
+                    except ValueError:
+                        return 0
 
         except Exception as e:
             print(f"An unexpected error occurred while processing the tag '{word}': {e}")
 
-        return None
+        return 0
 
     async def get_tags(self, meta: dict[str, Any]) -> list[str]:
         tags: list[str] = []
@@ -624,7 +632,7 @@ class AZTrackerBase:
 
         tag_ids_results = await asyncio.gather(*tasks)
 
-        tags = [str(tag_id) for tag_id in tag_ids_results if tag_id is not None]
+        tags = [str(tag_id) for tag_id in tag_ids_results if tag_id]
 
         if meta.get('personalrelease', False):
             if self.tracker == 'AZ':
@@ -765,7 +773,7 @@ class AZTrackerBase:
         meta['tracker_status'][self.tracker]['status_message'] = status_message
         return {}
 
-    def edit_name(self, meta: dict[str, Any]):
+    def edit_name(self, meta: dict[str, Any]) -> str:
         # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
         # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
         # https://privatehd.to/rules/upload-rules
@@ -842,7 +850,7 @@ class AZTrackerBase:
 
         return re.sub(r'\s{2,}', ' ', upload_name)
 
-    def get_rip_type(self, meta: dict[str, Any], display_name: bool = False):
+    def get_rip_type(self, meta: dict[str, Any], display_name: bool = False) -> str:
         # Translation from meta keywords to site display labels
         translation = {
             "bdrip": "BDRip",
@@ -899,16 +907,16 @@ class AZTrackerBase:
             elif source in ("bluray", "blu-ray"):
                 html_label = "BluRay REMUX"
             else:
-                return None
+                return "0"
         else:
             html_label = translation.get(source_type) or ''
 
         if display_name:
             return html_label
 
-        return available_rip_types.get(html_label)
+        return available_rip_types.get(html_label, "0")
 
-    async def fetch_data(self, meta: dict[str, Any]):
+    async def fetch_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
@@ -968,9 +976,19 @@ class AZTrackerBase:
         if not meta.get('debug', False):
             if len(data['screenshots[]']) < 3:
                 return f'UPLOAD FAILED: The {self.tracker} image host did not return the minimum number of screenshots.'
+
+        if data["rip_type_id"] == "0":
+            return "UPLOAD FAILED: Unable to determine rip type for this upload."
+
+        if data["type_id"] == "0":
+            return "UPLOAD FAILED: Unable to determine category for this upload."
+
+        if data["video_quality_id"] == "0":
+            return "UPLOAD FAILED: Unable to determine the resolution for this upload."
+
         return False
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _) -> bool:
         data = await self.fetch_data(meta)
         status_message = ''
 
@@ -1028,7 +1046,7 @@ class AZTrackerBase:
 
         return False
 
-    def language_map(self):
+    def language_map(self) -> None:
         all_lang_map = {
             ('Abkhazian', 'abk', 'ab'): '1',
             ('Afar', 'aar', 'aa'): '2',

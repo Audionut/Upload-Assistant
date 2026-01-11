@@ -5,7 +5,7 @@ import langcodes
 import os
 import re
 import sys
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -429,7 +429,7 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
         return None
 
 
-async def has_english_language(languages):
+async def has_english_language(languages: Union[list[str], str]):
     """Check if any language in the list contains 'english'"""
     if isinstance(languages, str):
         languages = [languages]
