@@ -50,7 +50,7 @@ config: Dict[str, Any]
 
 if os.path.exists(_config_path):
     try:
-        from data.config import config  # noqa: E402, F811
+        from data.config import config as config  # noqa: E402, F811
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -1193,6 +1193,7 @@ async def do_the_thing(base_dir):
 
         for queue_item in queue:
             total_files = len(queue)
+            bot = None
             try:
                 meta = base_meta.copy()
 
@@ -1256,14 +1257,17 @@ async def do_the_thing(base_dir):
                 console.print(f"[red]Exception: '{path}': {e}")
                 reset_terminal()
 
-            if use_discord and config['DISCORD'].get('discord_bot_token') and not meta['debug']:
-                if (config.get('DISCORD', {}).get('only_unattended', False) and meta.get('unattended', False)) or not config.get('DISCORD', {}).get('only_unattended', False):
+            discord_bot_token = discord_config.get('discord_bot_token') if discord_config is not None else None
+            only_unattended = bool(discord_config.get('only_unattended', False)) if discord_config is not None else False
+
+            if use_discord and discord_config is not None and isinstance(discord_bot_token, str) and discord_bot_token and not meta['debug']:
+                if (only_unattended and meta.get('unattended', False)) or not only_unattended:
                     try:
                         console.print("[cyan]Starting Discord bot initialization...")
                         intents = discord.Intents.default()
                         intents.message_content = True
                         bot = discord.Client(intents=intents)
-                        token = config['DISCORD']['discord_bot_token']
+                        token = discord_bot_token
                         await asyncio.wait_for(bot.login(token), timeout=10)
                         connect_task = asyncio.create_task(bot.connect())
 
@@ -1367,7 +1371,8 @@ async def do_the_thing(base_dir):
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
 
             if use_discord and bot:
-                if config['DISCORD'].get('send_upload_links'):
+                send_upload_links = bool(discord_config.get('send_upload_links', False)) if discord_config is not None else False
+                if send_upload_links:
                     try:
                         discord_message = ""
                         for tracker, status in meta.get('tracker_status', {}).items():
@@ -1613,6 +1618,10 @@ async def process_cross_seeds(meta):
         download_url = ""
         if isinstance(cross_seed_value, str) and cross_seed_value.startswith('http'):
             download_url = cross_seed_value
+        else:
+            if meta.get('debug'):
+                console.print(f"[yellow]Invalid cross-seed URL for {tracker}, skipping[/yellow]")
+            return
 
         headers = None
         if tracker == "RTF":

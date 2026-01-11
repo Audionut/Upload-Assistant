@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, TypedDict, cast
 
 from cogs.redaction import redact_private_info
 from data.config import config
@@ -426,7 +426,7 @@ async def filter_dupes(dupes, meta, tracker_name):
 
                         is_internal = False
                         if entry.get('internal', 0) == 1:
-                            trackers_section: dict[str, Any] = config.get('TRACKERS', {})  # type: ignore[assignment]
+                            trackers_section: dict[str, Any] = cast(dict[str, Any], config.get('TRACKERS', {}))
                             aither_settings: dict[str, Any] = trackers_section.get('AITHER', {})
                             if aither_settings.get('internal') is True:
                                 internal_groups = aither_settings.get('internal_groups', [])

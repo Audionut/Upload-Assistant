@@ -366,17 +366,24 @@ jobs:
           }
           
           // Check for mypy results files (one per Python version)
+          // Collect results per version, then deduplicate identical outputs
           let mypyResults = '';
           const mypyFiles = fs.readdirSync('.').filter(f => f.startsWith('mypy-results-') && f.endsWith('.txt'));
+          
+          // Map: content -> [versions]
+          const mypyByContent = new Map();
           
           if (mypyFiles.length > 0) {
             for (const file of mypyFiles) {
               try {
-                const content = fs.readFileSync(file, 'utf8');
-                if (content.trim()) {
+                const content = fs.readFileSync(file, 'utf8').trim();
+                if (content) {
                   // Extract version from filename (e.g., mypy-results-3.9.txt -> 3.9)
                   const version = file.replace('mypy-results-', '').replace('.txt', '');
-                  mypyResults += `=== Python ${version} ===\n${content.trim()}\n\n`;
+                  if (!mypyByContent.has(content)) {
+                    mypyByContent.set(content, []);
+                  }
+                  mypyByContent.get(content).push(version);
                   console.log(`Found MyPy results for Python ${version}`);
                 }
               } catch (error) {
@@ -397,10 +404,13 @@ jobs:
                   const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
                   for (const file of dirFiles) {
                     const filePath = path.join(itemPath, file);
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    if (content.trim()) {
+                    const content = fs.readFileSync(filePath, 'utf8').trim();
+                    if (content) {
                       const version = item.replace('mypy-results-', '');
-                      mypyResults += `=== Python ${version} ===\n${content.trim()}\n\n`;
+                      if (!mypyByContent.has(content)) {
+                        mypyByContent.set(content, []);
+                      }
+                      mypyByContent.get(content).push(version);
                       console.log(`Found MyPy results in ${item}/${file}`);
                     }
                   }
@@ -408,6 +418,17 @@ jobs:
               } catch (error) {
                 console.log(`Error reading MyPy ${item}: ${error.message}`);
               }
+            }
+          }
+          
+          // Build deduplicated mypy output
+          for (const [content, versions] of mypyByContent.entries()) {
+            // Sort versions for consistent display
+            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            if (versions.length === 1) {
+              mypyResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+            } else {
+              mypyResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
             }
           }
           
