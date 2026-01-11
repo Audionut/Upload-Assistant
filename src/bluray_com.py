@@ -1563,7 +1563,7 @@ async def process_all_releases(releases, meta):
             elif len(close_matches) > 1:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended-confirm', False)):
                     console.print("[yellow]Multiple releases are within 40 points of the best match. Please confirm which release to use:[/yellow]")
-                    if format_match == "generic":
+                    if generic_format:
                         console.print("[red]Note: Generic BD format found, please confirm the release.[/red]")
                     if specs_missing:
                         console.print("[red]Note: Missing specs in release, please confirm the release.[/red]")
