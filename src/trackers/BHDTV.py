@@ -107,15 +107,17 @@ class BHDTV():
                 # # adding my announce url to torrent.
                 parsed_data: Union[dict[str, Any], None] = parsed if isinstance(parsed, dict) else None
                 data_block: Union[dict[str, Any], None] = parsed_data.get('data') if parsed_data else None
-                if data_block and 'view' in data_block:
-                    await common.create_torrent_ready_to_seed(
-                        meta,
-                        self.tracker,
-                        self.source_flag,
-                        self.config['TRACKERS']['BHDTV'].get('my_announce_url'),
-                        str(data_block['view'])
-                    )
-                    return True
+                if isinstance(data_block, dict) and 'view' in data_block:
+                    my_announce_url = self.config['TRACKERS']['BHDTV'].get('my_announce_url')
+                    if my_announce_url:
+                        await common.create_torrent_ready_to_seed(
+                            meta,
+                            self.tracker,
+                            self.source_flag,
+                            my_announce_url,
+                            str(data_block['view'])
+                        )
+                        return True
                 return False
 
             else:

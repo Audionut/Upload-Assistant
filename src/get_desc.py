@@ -153,7 +153,7 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
                 cleaned_content = clean_text(file_content)
                 if cleaned_content:
                     if not content_written:
-                        description.write(file_content)
+                        description.write(cleaned_content + "\n")
                     meta["description_file_content"] = cleaned_content
                     content_written = True
 
@@ -649,14 +649,22 @@ class DescriptionBuilder:
                         images_to_keep: list[dict[str, str]] = []
                         for img in key_data.get("images", []):
                             raw_url = img.get("raw_url", "")
-                            # Extract hostname from URL (e.g., ptpimg.me -> ptpimg)
+                            # Extract hostname from URL and check against approved hosts
                             try:
                                 parsed_url: ParseResult = urllib.parse.urlparse(raw_url or "")
                                 hostname = parsed_url.netloc
-                                # Get the main domain name (first part before the dot)
-                                host_key = hostname.split(".")[0] if hostname else ""
 
-                                if not approved_hosts or host_key in approved_hosts:
+                                # Use suffix-based matching: check if hostname matches or is subdomain of approved host
+                                host_approved = False
+                                if not approved_hosts:
+                                    host_approved = True  # If no approved hosts specified, allow all
+                                else:
+                                    for approved_host in approved_hosts:
+                                        if hostname == approved_host or hostname.endswith(f".{approved_host}"):
+                                            host_approved = True
+                                            break
+
+                                if host_approved:
                                     images_to_keep.append(img)
                                 elif meta["debug"]:
                                     console.print(
@@ -843,7 +851,7 @@ class DescriptionBuilder:
                                 if uploaded_images and not meta.get("skip_imghost_upload", False):
                                     await self.common.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
-                                    list(meta[new_images_key]).append(
+                                    meta[new_images_key].append(
                                         {
                                             "img_url": img["img_url"],
                                             "raw_url": img["raw_url"],

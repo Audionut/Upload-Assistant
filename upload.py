@@ -66,7 +66,7 @@ except Exception:
         exit()
     else:
         traceback.print_exc()
-        config = {}
+        raise SystemExit(1)
 
 from src.prep import Prep  # noqa E402
 client = Clients(config=config)
@@ -463,7 +463,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         progress_task = asyncio.create_task(print_progress("[yellow]Still processing, please wait...", interval=10))
         try:
             if 'manual_frames' not in meta:
-                meta['manual_frames'] = {}
+                meta['manual_frames'] = ""
             manual_frames = meta['manual_frames']
 
             if meta.get('comparison', False):

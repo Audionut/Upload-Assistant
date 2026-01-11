@@ -219,7 +219,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         elif len(playlist_matching_editions) == 1:
                             edition_info = playlist_matching_editions[0]
                             if meta['debug']:
-                                console.print(f"[green]Playlist {playlist_edition} matches edition: {edition_info['display_name']} {edition_name}[/green]")
+                                console.print(f"[green]Playlist {playlist_edition} matches edition: {edition_info['display_name']} {edition_info['name']}[/green]")
 
                             if edition_info['has_attributes']:
                                 if edition_info['name'] not in matched_editions_with_attributes:
@@ -238,10 +238,17 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         matched_editions = matched_editions_with_attributes + ["Theatrical"]
                         if meta['debug']:
                             console.print("[cyan]Adding 'Theatrical' label because we have both attribute and non-attribute editions[/cyan]")
-                    else:
+                    elif matched_editions_with_attributes:
                         matched_editions = matched_editions_with_attributes
                         if meta['debug']:
                             console.print("[cyan]Using only editions with attributes[/cyan]")
+                    else:
+                        # Only non-attribute editions matched (typically the base/theatrical cut).
+                        # Keep the previous behavior of not explicitly labeling it "Theatrical",
+                        # but ensure the edition is not dropped entirely.
+                        matched_editions = [f"{m} Minute Version" for m in matched_editions_without_attributes if str(m).strip()]
+                        if meta['debug']:
+                            console.print("[cyan]Using only non-attribute editions (minutes only)[/cyan]")
 
                     # Handle final edition formatting
                     if matched_editions:

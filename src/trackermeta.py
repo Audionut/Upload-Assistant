@@ -6,7 +6,7 @@ import io
 from io import BytesIO
 import os
 import sys
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Optional, cast
 
 from PIL import Image
 
@@ -39,6 +39,13 @@ def _to_int(value: Any, fallback: int = 0) -> int:
         except ValueError:
             return fallback
     return fallback
+
+
+def _to_stripped_nonempty_str(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
 
 
 expected_images = _to_int(DEFAULT_CONFIG.get('screens', 0))
@@ -364,8 +371,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
 
     elif tracker_name == "BHD":
         bhd_tracker_config = cast(Mapping[str, Any], TRACKER_CONFIG.get('BHD', {}))
-        bhd_main_api = bhd_tracker_config.get('api_key')
-        bhd_other_api = DEFAULT_CONFIG.get('bhd_api')
+        bhd_main_api = _to_stripped_nonempty_str(bhd_tracker_config.get('api_key'))
+        bhd_other_api = _to_stripped_nonempty_str(DEFAULT_CONFIG.get('bhd_api'))
         if bhd_main_api and len(bhd_main_api) < 25:
             bhd_main_api = None
         if bhd_other_api and len(bhd_other_api) < 25:
@@ -374,8 +381,8 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             console.print("[red]BHD API key is being retired from the DEFAULT config section. Only using api from the BHD tracker section instead.[/red]")
             await asyncio.sleep(2)
         bhd_api = bhd_main_api if bhd_main_api else bhd_other_api
-        bhd_main_rss = bhd_tracker_config.get('bhd_rss_key')
-        bhd_other_rss = DEFAULT_CONFIG.get('bhd_rss_key')
+        bhd_main_rss = _to_stripped_nonempty_str(bhd_tracker_config.get('bhd_rss_key'))
+        bhd_other_rss = _to_stripped_nonempty_str(DEFAULT_CONFIG.get('bhd_rss_key'))
         if bhd_main_rss and len(bhd_main_rss) < 25:
             bhd_main_rss = None
         if bhd_other_rss and len(bhd_other_rss) < 25:

@@ -259,10 +259,11 @@ class COMMON():
             for code, id_value in region_map.items():
                 if id_value == region_id:
                     return code
-            return "0"
+            return ""
         else:
             # Forward lookup: Find region ID by code
-            return str(region_map.get(region, "0"))
+            region_id_value = region_map.get(region)
+            return str(region_id_value) if region_id_value else ""
 
     async def unit3d_distributor_ids(self, distributor: str = "", reverse: bool = False, distributor_id: int = 0) -> str:
         distributor_map = {
@@ -293,9 +294,10 @@ class COMMON():
             for name, id_value in distributor_map.items():
                 if id_value == distributor_id:
                     return name
-            return "0"
+            return ""
         else:
-            return str(distributor_map.get(distributor, "0"))
+            distributor_id_value = distributor_map.get(distributor)
+            return str(distributor_id_value) if distributor_id_value else ""
 
     async def prompt_user_for_id_selection(self, meta: dict[str, Any], tmdb=None, imdb=None, tvdb=None, mal=None, filename=None, tracker_name=None):
         if not tracker_name:
@@ -853,8 +855,8 @@ class COMMON():
                         # If language is not found, use a fallback or display the language as plain text
                         parts.append(language.capitalize() if language else "")
 
-                    # Other properties to concatenate
-                    properties = ["language", "codec", "format", "channels", "bit_rate", "format_profile", "stream_size"]
+                    # Other properties to concatenate (language already handled above)
+                    properties = ["codec", "format", "channels", "bit_rate", "format_profile", "stream_size"]
                     for prop in properties:
                         if prop in track and track[prop]:  # Only add non-empty properties
                             parts.append(track[prop])

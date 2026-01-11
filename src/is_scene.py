@@ -256,7 +256,8 @@ async def predb_check(meta, video):
                             if len(tds) >= 4:
                                 group_a = tds[3].find('a')
                                 if group_a:
-                                    meta['tag'] = group_a.text.strip()
+                                    group = group_a.text.strip()
+                                    meta['tag'] = f"-{group}" if group and not group.startswith("-") else group
                             return True
             if not found:
                 console.print("[yellow]Predb: No match found")

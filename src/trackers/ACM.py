@@ -250,9 +250,9 @@ class ACM(UNIT3D):
         if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
             if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
                 data['internal'] = 1
-        if region_id != "0":
+        if region_id:
             data['region_id'] = region_id
-        if distributor_id != "0":
+        if distributor_id:
             data['distributor_id'] = distributor_id
         if meta.get('category') == "TV":
             data['season_number'] = meta.get('season_int', '0')

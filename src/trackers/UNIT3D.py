@@ -299,14 +299,14 @@ class UNIT3D:
 
     async def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, str]:
         distributor_id = await self.common.unit3d_distributor_ids(meta.get("distributor", ""))
-        if distributor_id != "0":
+        if distributor_id:
             return {"distributor_id": distributor_id}
 
         return {}
 
     async def get_region_id(self, meta: dict[str, Any]) -> dict[str, str]:
         region_id = await self.common.unit3d_region_ids(meta.get("region", ""))
-        if region_id != "0":
+        if region_id:
             return {"region_id": region_id}
 
         return {}
@@ -459,6 +459,13 @@ class UNIT3D:
                         response.raise_for_status()
 
                         response_data = response.json()
+
+                        # Verify API success before proceeding
+                        if not response_data.get("success"):
+                            meta["tracker_status"][self.tracker]["status_message"] = response_data
+                            console.print(f"[yellow]Upload to {self.tracker} failed: {response_data.get('message', 'Unknown error')}[/yellow]")
+                            return False
+
                         meta["tracker_status"][self.tracker]["status_message"] = (
                             await self.process_response_data(response_data)
                         )

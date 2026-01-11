@@ -453,7 +453,8 @@ async def dvd_screenshots(
     if num_screens == 0 or (len(meta.get('image_list', [])) >= screens and disc_num == 0):
         return
 
-    if len(glob.glob(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][disc_num]['name']}-*.png")) >= num_screens:
+    sanitized_disc_name = await sanitize_filename(meta['discs'][disc_num]['name'])
+    if len(glob.glob(f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-*.png")) >= num_screens:
         i = num_screens
         console.print('[bold green]Reusing screenshots')
         return
@@ -531,7 +532,7 @@ async def dvd_screenshots(
     existing_image_paths = []
 
     for i in range(num_screens + 1):
-        image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][disc_num]['name']}-{i}.png"
+        image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-{i}.png"
         input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[i % len(main_set)]}"
         if os.path.exists(image) and not meta.get('retake', False):
             existing_images_count += 1
@@ -547,7 +548,6 @@ async def dvd_screenshots(
         input_files = []
 
         for i in range(num_screens + 1):
-            sanitized_disc_name = await sanitize_filename(meta['discs'][disc_num]['name'])
             image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-{i}.png"
             input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[i % len(main_set)]}"
             image_paths.append(image)

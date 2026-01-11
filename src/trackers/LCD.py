@@ -74,7 +74,7 @@ class LCD(UNIT3D):
             return {}
 
         region_id = await self.common.unit3d_region_ids(meta.get('region'))
-        if region_id != "0":
+        if region_id:
             return {'region_id': region_id}
 
         return {}
