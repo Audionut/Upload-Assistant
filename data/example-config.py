@@ -301,6 +301,9 @@ config = {
         # regardless of whether the tracker was selected for upload or not (needs cross-seeding above to be True)
         "cross_seed_check_everything": False,
 
+        # Set true to suppress config warnings on startup
+        "suppress_warnings": False,
+
     },
 
     # these are used for DB links on AR
