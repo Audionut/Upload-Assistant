@@ -20,7 +20,12 @@ from src.trackersetup import tracker_class_map
 client = Clients(config=config)
 
 TRACKERS_CONFIG: Mapping[str, Mapping[str, Any]] = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
+if not isinstance(TRACKERS_CONFIG, dict):
+    raise ValueError("'TRACKERS' config section must be a dict")
+
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 def get_tracker_config(tracker_name: str) -> Mapping[str, Any]:

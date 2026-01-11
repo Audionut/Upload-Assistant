@@ -620,7 +620,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     manual_frames_count = 0
                 if manual_frames_count > 0:
                     meta['screens'] = manual_frames_count
-                cutoff = int(meta.get('cutoff') or 0)
+                cutoff = int(meta.get('cutoff') or 1)
                 if len(meta.get('image_list', [])) < cutoff and meta.get('skip_imghost_upload', False) is False:
                     # Validate and (if needed) rehost images to tracker-approved hosts before uploading any new screenshots.
                     trackers_with_image_host_requirements = {'BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC'}

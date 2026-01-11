@@ -176,8 +176,20 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
 
                                     # Add the selected edition to our matches
                                     if isinstance(playlist_selected, str):
-                                        console.print(f"[green]Using playlist edition: {playlist_selected}[/green]")
-                                        matched_editions_with_attributes.append(playlist_selected)
+                                        if playlist_selected.strip():
+                                            console.print(f"[green]Using playlist edition: {playlist_selected}[/green]")
+                                            matched_editions_with_attributes.append(playlist_selected)
+                                        else:
+                                            # Empty playlist edition, fall back to closest match
+                                            console.print("[yellow]Empty playlist edition, using closest match.[/yellow]")
+                                            playlist_selected = min(playlist_matching_editions, key=lambda x: x['difference'])
+                                            if playlist_selected['has_attributes']:
+                                                if playlist_selected['name'] not in matched_editions_with_attributes:
+                                                    matched_editions_with_attributes.append(playlist_selected['name'])
+                                                    console.print(f"[green]Added edition with attributes: {playlist_selected['name']}[/green]")
+                                            else:
+                                                matched_editions_without_attributes.append(str(playlist_selected['minutes']))
+                                                console.print(f"[yellow]Added edition without attributes: {playlist_selected['name']}[/yellow]")
                                     else:
                                         if playlist_selected['has_attributes']:
                                             if playlist_selected['name'] not in matched_editions_with_attributes:

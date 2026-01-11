@@ -13,6 +13,8 @@ from src.console import console
 from src.trackersetup import tracker_class_map
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 class UploadHelper:

@@ -15,6 +15,8 @@ from aiofiles import os as aio_os
 
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 def _to_int(value: Any, fallback: int = 0) -> int:

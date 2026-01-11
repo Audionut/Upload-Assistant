@@ -187,7 +187,7 @@ class DescriptionBuilder:
     def __init__(self, tracker: str, config: dict[str, Any]):
         self.config: dict[str, Any] = config
         self.common = COMMON(config)
-        self.tracker_config: dict[str, str] = self.config['TRACKERS'][tracker]
+        self.tracker_config: dict[str, Any] = self.config['TRACKERS'][tracker]
         self.tracker: str = tracker
         self.parser = self.common.parser
 

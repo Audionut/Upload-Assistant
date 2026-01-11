@@ -13,6 +13,8 @@ from src.console import console
 
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 def _attr_to_string(value: Any) -> str:

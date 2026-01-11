@@ -4,13 +4,15 @@ import re
 import json
 import cli_ui
 from collections import defaultdict
-from typing import Any, Mapping, MutableMapping, Union
+from typing import Any, Mapping, MutableMapping, Union, cast
 from src.uploadscreens import upload_screens
 from data.config import config
 from src.console import console
 
 
-DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})  # type: ignore[assignment]
+DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
 
 
 ComparisonGroup = dict[str, Any]

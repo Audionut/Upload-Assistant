@@ -24,9 +24,9 @@ class UNIT3D:
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
-        tracker_config = self.config["TRACKERS"].get(self.tracker, {})
-        self.announce_url = tracker_config.get("announce_url", "")
-        self.api_key = tracker_config.get("api_key", "")
+        self.tracker_config: dict[str, Any] = self.config["TRACKERS"].get(self.tracker, {})
+        self.announce_url = self.tracker_config.get("announce_url", "")
+        self.api_key = self.tracker_config.get("api_key", "")
         # Default URLs - should be overridden by subclasses
         self.search_url = ""
         self.upload_url = ""
@@ -43,8 +43,8 @@ class UNIT3D:
                 console.print(
                     f"[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]"
                 )
-                meta["skipping"] = f"{self.tracker}"
-                return dupes
+            meta["skipping"] = f"{self.tracker}"
+            return dupes
 
         should_continue = await self.get_additional_checks(meta)
         if not should_continue:
@@ -105,11 +105,13 @@ class UNIT3D:
                     for each in data["data"]:
                         torrent_id = each.get("id", None)
                         attributes = each.get("attributes", {})
+                        name = attributes.get("name", "")
+                        size = attributes.get("size", 0)
                         result: dict[str, Any]
                         if not meta["is_disc"]:
                             result = {
-                                "name": attributes["name"],
-                                "size": attributes["size"],
+                                "name": name,
+                                "size": size,
                                 "files": [
                                     file["name"]
                                     for file in attributes.get("files", [])
@@ -130,8 +132,8 @@ class UNIT3D:
                             }
                         else:
                             result = {
-                                "name": attributes["name"],
-                                "size": attributes["size"],
+                                "name": name,
+                                "size": size,
                                 "files": [],
                                 "file_count": (
                                     len(attributes.get("files", []))
@@ -267,7 +269,7 @@ class UNIT3D:
             return {"resolution_id": resolved_id}
 
     async def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta["anon"] == 0 and not self.config["TRACKERS"][self.tracker].get("anon", False):
+        if meta["anon"] == 0 and not self.tracker_config.get("anon", False):
             anonymous = "0"
         else:
             anonymous = "1"
@@ -286,7 +288,7 @@ class UNIT3D:
         return data
 
     async def get_flag(self, meta: dict[str, Any], flag_name: str) -> str:
-        config_flag = self.config["TRACKERS"][self.tracker].get(flag_name)
+        config_flag = self.tracker_config.get(flag_name)
         if meta.get(flag_name, False):
             return "1"
         else:
@@ -340,9 +342,9 @@ class UNIT3D:
 
     async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = "0"
-        if self.config["TRACKERS"][self.tracker].get("internal", False) is True:
+        if self.tracker_config.get("internal", False) is True:
             if meta["tag"] != "" and (
-                meta["tag"][1:] in self.config["TRACKERS"][self.tracker].get("internal_groups", [])
+                meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
             ):
                 internal = "1"
 

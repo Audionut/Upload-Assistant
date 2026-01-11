@@ -321,7 +321,7 @@ class PTP():
                         console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
                         return groupID
 
-                    except (KeyboardInterrupt, EOFError):
+                    except KeyboardInterrupt:
                         console.print("[yellow]Selection cancelled by user[/yellow]")
                         return None
             elif response.get("Page") == "Browse":  # No Releases on Site with ID
@@ -1514,7 +1514,7 @@ class PTP():
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
         if torrent.piece_size > 16777216:  # 16 MiB in bytes
             console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
-            tracker_url = self.config['TRACKERS']['PTP'].get('announce_url', "https://fake.tracker").strip()
+            tracker_url = self.announce_url.strip() if self.announce_url else "https://fake.tracker"
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
 

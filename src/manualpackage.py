@@ -14,7 +14,12 @@ from data.config import config
 
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+if not isinstance(DEFAULT_CONFIG, dict):
+    raise ValueError("'DEFAULT' config section must be a dict")
+
 TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
+if not isinstance(TRACKER_CONFIG, dict):
+    raise ValueError("'TRACKERS' config section must be a dict")
 
 
 async def package(meta: dict[str, Any]) -> Union[str, bool]:
