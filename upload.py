@@ -1,52 +1,179 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
-import asyncio
-import cli_ui
-import discord
-import gc
-import json
+
+# Pre-check config.py for syntax and common errors before any imports that depend on it
 import os
-import platform
-import re
-import requests
-import shutil
 import sys
-import time
-import traceback
 from typing import Any, Dict, Optional, Set, cast
 from typing_extensions import TypeAlias
 
-from packaging import version
-from pathlib import Path
+_base_dir = os.path.abspath(os.path.dirname(__file__))
+_config_path = os.path.join(_base_dir, "data", "config.py")
 
-from bin.get_mkbrr import ensure_mkbrr_binary
-from cogs.redaction import clean_meta_for_export, redact_private_info
-from discordbot import send_discord_notification, send_upload_status_notification
-from src.add_comparison import add_comparison
-from src.args import Args
-from src.cleanup import cleanup, reset_terminal
-from src.clients import Clients
-from src.console import console
-from src.disc_menus import process_disc_menus
-from src.dupe_checking import filter_dupes
-from src.get_name import get_name
-from src.get_desc import gen_desc
-from src.get_tracker_data import get_tracker_data
-from src.languages import process_desc_language
-from src.nfo_link import nfo_link
-from src.qbitwait import Wait
-from src.queuemanage import handle_queue, save_processed_path, process_site_upload_item
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
-from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent
-from src.trackerhandle import process_trackers
-from src.trackerstatus import process_all_trackers
-from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers
-from src.trackers.COMMON import COMMON
-from src.trackers.PTP import PTP
-from src.trackers.AR import AR
-from src.uphelper import UploadHelper
-from src.uploadscreens import upload_screens
+# Enable ANSI colors on Windows
+_use_colors = True
+if sys.platform == "win32":
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # Enable VIRTUAL_TERMINAL_PROCESSING
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+    except Exception:
+        _use_colors = False
+
+# Color codes (empty strings if colors not supported)
+_RED = "\033[91m" if _use_colors else ""
+_YELLOW = "\033[93m" if _use_colors else ""
+_GREEN = "\033[92m" if _use_colors else ""
+_RESET = "\033[0m" if _use_colors else ""
+
+
+def _print_config_error(error_type: str, message: str, lineno: Optional[int] = None,
+                        text: Optional[str] = None, offset: Optional[int] = None,
+                        suggestion: Optional[str] = None) -> None:
+    """Print a formatted config error message."""
+    print(f"{_RED}{error_type} in config.py:{_RESET}")
+    if lineno:
+        print(f"{_RED}  Line {lineno}: {message}{_RESET}")
+        if text:
+            print(f"{_YELLOW}    {text.rstrip()}{_RESET}")
+            if offset:
+                print(f"{_YELLOW}    {' ' * (offset - 1)}^{_RESET}")
+    else:
+        print(f"{_RED}  {message}{_RESET}")
+    if suggestion:
+        print(f"{_GREEN}  Suggestion: {suggestion}{_RESET}")
+    print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}")
+
+
+config: Dict[str, Any]
+
+if os.path.exists(_config_path):
+    try:
+        from data.config import config  # noqa: E402, F811
+    except SyntaxError as e:
+        _print_config_error(
+            "Syntax error",
+            str(e.msg) if e.msg else "Invalid syntax",
+            lineno=e.lineno,
+            text=e.text,
+            offset=e.offset
+        )
+        print(f"\n{_RED}Common syntax issues:{_RESET}")
+        print(f"{_YELLOW}  - Missing comma between dictionary items{_RESET}")
+        print(f"{_YELLOW}  - Missing closing bracket, brace, quote or comma{_RESET}")
+        print(f"{_YELLOW}  - Unclosed string (missing quote at end){_RESET}")
+        sys.exit(1)
+    except NameError as e:
+        # Extract line number from traceback
+        import traceback
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        lineno = tb[-1].lineno if tb else None
+        text = tb[-1].line if tb else None
+
+        # Check for common mistakes
+        suggestion = None
+        error_str = str(e)
+        if "'true'" in error_str.lower():
+            suggestion = "Use 'True' (capital T) instead of 'true'"
+        elif "'false'" in error_str.lower():
+            suggestion = "Use 'False' (capital F) instead of 'false'"
+        elif "'null'" in error_str.lower() or "'none'" in error_str.lower():
+            suggestion = "Use 'None' (capital N) instead of 'null' or 'none'"
+        elif "is not defined" in error_str:
+            # Extract the undefined name from the error message
+            import re as _re
+            match = _re.search(r"name '([^']+)' is not defined", error_str)
+            if match:
+                undefined_name = match.group(1)
+                suggestion = f"Did you forget quotes? Try \"{undefined_name}\" instead of '{undefined_name}'"
+
+        _print_config_error(
+            "Name error",
+            str(e),
+            lineno=lineno,
+            text=text,
+            suggestion=suggestion
+        )
+        sys.exit(1)
+    except TypeError as e:
+        import traceback
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        lineno = tb[-1].lineno if tb else None
+        text = tb[-1].line if tb else None
+
+        _print_config_error(
+            "Type error",
+            str(e),
+            lineno=lineno,
+            text=text
+        )
+        print(f"\n{_RED}Common type issues:{_RESET}")
+        print(f"{_YELLOW}  - Using unhashable type as dictionary key{_RESET}")
+        print(f"{_YELLOW}  - Incorrect data structure nesting{_RESET}")
+        sys.exit(1)
+    except Exception as e:
+        import traceback
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        lineno = tb[-1].lineno if tb else None
+        text = tb[-1].line if tb else None
+
+        _print_config_error(
+            "Error",
+            str(e),
+            lineno=lineno,
+            text=text
+        )
+        sys.exit(1)
+else:
+    print(f"{_RED}Configuration file 'config.py' not found.{_RESET}")
+    print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}")
+    print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
+    sys.exit(1)
+
+import aiofiles  # noqa: E402
+import asyncio  # noqa: E402
+import cli_ui  # noqa: E402
+import discord  # noqa: E402
+import gc  # noqa: E402
+import json  # noqa: E402
+import platform  # noqa: E402
+import re  # noqa: E402
+import requests  # noqa: E402
+import shutil  # noqa: E402
+import time  # noqa: E402
+import traceback  # noqa: E402
+
+from packaging import version  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from bin.get_mkbrr import ensure_mkbrr_binary  # noqa: E402
+from cogs.redaction import clean_meta_for_export, redact_private_info  # noqa: E402
+from discordbot import send_discord_notification, send_upload_status_notification  # noqa: E402
+from src.add_comparison import add_comparison  # noqa: E402
+from src.args import Args  # noqa: E402
+from src.cleanup import cleanup, reset_terminal  # noqa: E402
+from src.clients import Clients  # noqa: E402
+from src.console import console  # noqa: E402
+from src.disc_menus import process_disc_menus  # noqa: E402
+from src.dupe_checking import filter_dupes  # noqa: E402
+from src.get_name import get_name  # noqa: E402
+from src.get_desc import gen_desc  # noqa: E402
+from src.get_tracker_data import get_tracker_data  # noqa: E402
+from src.languages import process_desc_language  # noqa: E402
+from src.nfo_link import nfo_link  # noqa: E402
+from src.qbitwait import Wait  # noqa: E402
+from src.queuemanage import handle_queue, save_processed_path, process_site_upload_item  # noqa: E402
+from src.takescreens import disc_screenshots, dvd_screenshots, screenshots  # noqa: E402
+from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent  # noqa: E402
+from src.trackerhandle import process_trackers  # noqa: E402
+from src.trackerstatus import process_all_trackers  # noqa: E402
+from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers  # noqa: E402
+from src.trackers.COMMON import COMMON  # noqa: E402
+from src.trackers.PTP import PTP  # noqa: E402
+from src.trackers.AR import AR  # noqa: E402
+from src.uphelper import UploadHelper  # noqa: E402
+from src.uploadscreens import upload_screens  # noqa: E402
 
 cli_ui.setup(color='always', title="Upload Assistant")
 running_subprocesses: Set[Any] = set()
@@ -54,21 +181,7 @@ base_dir = os.path.abspath(os.path.dirname(__file__))
 
 Meta: TypeAlias = Dict[str, Any]
 
-try:
-    config: Dict[str, Any]
-    from data.config import config as raw_config
-    config = cast(Dict[str, Any], raw_config)
-except Exception:
-    if not os.path.exists(os.path.abspath(f"{base_dir}/data/config.py")):
-        cli_ui.info(cli_ui.red, "Configuration file 'config.py' not found.")
-        cli_ui.info(cli_ui.red, "Please ensure the file is located at:", cli_ui.yellow, os.path.abspath(f"{base_dir}/data/config.py"))
-        cli_ui.info(cli_ui.red, "Follow the setup instructions: https://github.com/Audionut/Upload-Assistant")
-        exit()
-    else:
-        traceback.print_exc()
-        raise SystemExit(1)
-
-from src.prep import Prep  # noqa E402
+from src.prep import Prep  # noqa: E402
 client = Clients(config=config)
 parser = Args(config)
 use_discord = False
@@ -1004,6 +1117,43 @@ async def do_the_thing(base_dir):
             meta['path'] = None  # Clear the dummy path after parsing
         else:
             meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')), meta))
+
+        # Validate config structure and types (after args parsed so we have trackers list)
+        from src.configvalidator import validate_config, group_warnings
+
+        # Get active trackers from meta (parsed from command line) or fall back to config default
+        active_trackers: Optional[list[str]] = None
+        if meta.get('trackers'):
+            if isinstance(meta['trackers'], str):
+                active_trackers = [t.strip().upper() for t in meta['trackers'].split(',') if t.strip()]
+            elif isinstance(meta['trackers'], list):
+                active_trackers = [t.strip().upper() for t in meta['trackers'] if isinstance(t, str) and t.strip()]
+
+        # Get active imghost from meta (parsed from command line)
+        active_imghost: Optional[str] = None
+        if meta.get('imghost'):
+            imghost_val = meta['imghost']
+            if isinstance(imghost_val, str) and imghost_val.strip():
+                active_imghost = imghost_val.strip()
+
+        is_valid, config_errors, config_warnings = validate_config(config, active_trackers, active_imghost)
+
+        if not is_valid:
+            console.print("[bold red]Configuration validation failed:[/bold red]")
+            for error in config_errors:
+                console.print(f"[red]  ✗ {error}[/red]")
+            console.print("[red]\nPlease fix the above errors in your config.py[/red]")
+            console.print("[yellow]Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py[/yellow]")
+            raise SystemExit(1)
+
+        if config_warnings:
+            suppress_warnings = config.get('DEFAULT', {}).get('suppress_warnings', False)
+            if not suppress_warnings:
+                grouped = group_warnings(config_warnings)
+                console.print(f"[yellow]Config validation passed with {len(grouped)} warning(s):[/yellow]")
+                for warning_str in grouped:
+                    console.print(f"[yellow]  ⚠ {warning_str}[/yellow]")
+                print()  # Blank line after warnings
 
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):

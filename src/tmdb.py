@@ -21,7 +21,7 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.imdb import get_imdb_info_api
 
-DEFAULT_CFG: dict[str, Any] = typing_cast(dict[str, Any], config['DEFAULT'])
+DEFAULT_CFG: dict[str, Any] = config['DEFAULT']  # type: ignore[assignment]
 TMDB_API_KEY = DEFAULT_CFG.get('tmdb_api', False)
 
 # Validate TMDB API key at import time
