@@ -846,17 +846,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
 
 async def get_imdb_from_episode(imdb_id, debug=False):
     if not imdb_id or imdb_id == 0:
-        return 0
-
-    if imdb_id and isinstance(imdb_id, str) and imdb_id.startswith("tt"):
-        try:
-            imdb_id_numeric = int(imdb_id.replace('tt', ''))
-        except Exception:
-            imdb_id_numeric = 0
-    elif isinstance(imdb_id, str) and imdb_id.isdigit():
-        imdb_id_numeric = int(imdb_id)
-    else:
-        imdb_id_numeric = int(imdb_id)
+        return None
 
     if not str(imdb_id).startswith("tt"):
         try:
@@ -914,11 +904,11 @@ async def get_imdb_from_episode(imdb_id, debug=False):
         except Exception as e:
             if debug:
                 print(f"[red]IMDb API error: {e}[/red]")
-            return int(imdb_id_numeric)
+            return None
 
     title_data = await safe_get(data, ["data", "title"], {})
     if not title_data:
-        return int(imdb_id_numeric)
+        return None
     result = {
         "id": await safe_get(title_data, ["id"]),
         "title": await safe_get(title_data, ["titleText", "text"]),

@@ -20,16 +20,23 @@ class Wait:
         self.qbt_client = self._connect_qbittorrent()
 
     def _connect_qbittorrent(self) -> Optional[qbittorrentapi.Client]:
-        config_data: Dict[str, Any] = cast(Dict[str, Any], config)
-        default_section = cast(Dict[str, Any], config_data.get('DEFAULT', {}))
-        clients_section = cast(Dict[str, Any], config_data.get('TORRENT_CLIENTS', {}))
+        if not isinstance(config, dict):
+            raise TypeError("config must be a dictionary")
 
-        default_torrent_client = cast(str, default_section.get('default_torrent_client', ''))
-        if not default_torrent_client:
+        default_section = config.get('DEFAULT', {})
+        if not isinstance(default_section, dict):
+            raise TypeError("DEFAULT section must be a dictionary")
+
+        clients_section = config.get('TORRENT_CLIENTS', {})
+        if not isinstance(clients_section, dict):
+            raise TypeError("TORRENT_CLIENTS section must be a dictionary")
+
+        default_torrent_client = default_section.get('default_torrent_client', '')
+        if not isinstance(default_torrent_client, str) or not default_torrent_client:
             raise ValueError("DEFAULT.default_torrent_client is not configured")
 
-        client = cast(Optional[Dict[str, Any]], clients_section.get(default_torrent_client))
-        if client is None:
+        client = clients_section.get(default_torrent_client)
+        if not isinstance(client, dict):
             raise ValueError(f"No torrent client configuration for '{default_torrent_client}'")
 
         proxy_value = client.get('qui_proxy_url')
@@ -43,6 +50,11 @@ class Wait:
             return None  # No traditional client needed for proxy
         else:
             # Use traditional qbittorrent API client
+            required_keys = ['qbit_url', 'qbit_port', 'qbit_user', 'qbit_pass']
+            missing_keys = [key for key in required_keys if key not in client]
+            if missing_keys:
+                raise ValueError(f"Missing required qBittorrent config keys: {', '.join(missing_keys)}")
+
             verify_cert_value = client.get('VERIFY_WEBUI_CERTIFICATE', True)
             if isinstance(verify_cert_value, str):
                 verify_cert = verify_cert_value.strip().lower() in {'1', 'true', 'yes'}
@@ -71,11 +83,15 @@ class Wait:
 
         if self.proxy_url:
             self.qbt_session = aiohttp.ClientSession()
+            if self.qbt_session is None:
+                raise RuntimeError("Failed to create aiohttp ClientSession")
 
         try:
             while True:
                 if self.proxy_url:
-                    async with self.qbt_session.get(  # type: ignore
+                    if self.qbt_session is None:
+                        raise RuntimeError("qbt_session is not initialized")
+                    async with self.qbt_session.get(
                         f"{self.qbt_proxy_url}/api/v2/torrents/info",
                         params={'hashes': infohash}
                     ) as response:
@@ -86,7 +102,9 @@ class Wait:
                             print(f"[ERROR] Failed to get torrent info via proxy: {response.status}")
                             break
                 else:
-                    torrents = self.qbt_client.torrents_info(hashes=infohash)  # type: ignore
+                    if self.qbt_client is None:
+                        raise RuntimeError("qbt_client is not initialized")
+                    torrents = self.qbt_client.torrents_info(hashes=infohash)
                     target_torrent = next((t for t in torrents if t.hash == infohash), None)
 
                 if target_torrent:

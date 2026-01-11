@@ -2,7 +2,7 @@
 import os
 import re
 import json
-import builtins
+import cli_ui
 from collections import defaultdict
 from typing import Any, Mapping, MutableMapping
 from src.uploadscreens import upload_screens
@@ -10,7 +10,7 @@ from data.config import config
 from src.console import console
 
 
-DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})  # type: ignore
+DEFAULT_CONFIG: Mapping[str, Any] = config.get('DEFAULT', {})  # type: ignore[assignment]
 
 
 ComparisonGroup = dict[str, Any]
@@ -132,7 +132,7 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> ComparisonData | lis
     if not comparison_index:
         console.print("[red]No comparison index provided. Please specify a comparison index matching the input file.")
         while True:
-            cli_input = builtins.input("Enter comparison index number: ")
+            cli_input = cli_ui.ask_string("Enter comparison index number: ") or ""
             try:
                 comparison_index = str(int(cli_input.strip()))
                 break
