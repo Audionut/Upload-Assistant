@@ -135,7 +135,7 @@ class TOS(UNIT3D):
                 exclude = []
             else:
                 include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
-                exclude = ["*.*", "*sample.mkv", "!sample*.*"]
+                exclude = ["*.*", "*sample.mkv"]
             initial_size = 0
             path = Path(meta['path'])
             if os.path.isfile(path):
@@ -303,4 +303,4 @@ class TOS(UNIT3D):
             console.print(f'[cyan]{self.tracker} Request Data:')
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
-            return False
+            return True
