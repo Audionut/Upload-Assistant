@@ -175,6 +175,7 @@ from src.trackers.PTP import PTP  # noqa: E402
 from src.trackers.AR import AR  # noqa: E402
 from src.uphelper import UploadHelper  # noqa: E402
 from src.uploadscreens import upload_screens  # noqa: E402
+from torf import Torrent  # noqa: E402
 
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -909,6 +910,35 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         elif os.path.exists(torrent_path) and meta.get('rehash', False) is True and meta['nohash'] is False:
             await create_torrent(meta, Path(meta['path']), "BASE")
+
+        if os.path.exists(torrent_path):
+            raw_trackers = meta.get('trackers')
+            trackers_list = [raw_trackers] if isinstance(raw_trackers, str) else (raw_trackers or [])
+            trackers_upper = [str(t).strip().upper() for t in trackers_list if str(t).strip()]
+
+            base_piece_mb: Optional[int] = cast(Optional[int], meta.get('base_torrent_piece_mb'))
+            if base_piece_mb is None and any(t in {"HDB", "MTV", "PTP"} for t in trackers_upper):
+                try:
+                    torrent = await asyncio.to_thread(Torrent.read, torrent_path)
+                    base_piece_mb = int(torrent.piece_size // (1024 * 1024))
+                    meta['base_torrent_piece_mb'] = base_piece_mb
+                except Exception as e:
+                    if meta.get('debug', False):
+                        console.print(f"[yellow]Unable to cache BASE.torrent piece size: {e}")
+                    base_piece_mb = None
+
+            if "MTV" in trackers_upper:
+                mtv_cfg = config.get('TRACKERS', {}).get('MTV', {})
+                if str(mtv_cfg.get('skip_if_rehash', 'false')).lower() == 'true' and base_piece_mb and base_piece_mb > 8:
+                    meta['trackers'] = [t for t in trackers_list if str(t).strip().upper() != "MTV"]
+                    trackers_list = meta.get('trackers') or []
+                    trackers_upper = [str(t).strip().upper() for t in trackers_list if str(t).strip()]
+                    if meta.get('debug', False):
+                        console.print("[yellow]Removed MTV from trackers due to skip_if_rehash config and 8 MiB limit.[/yellow]")
+                    if not meta['trackers']:
+                        console.print("[red]No trackers remain after removing MTV for skip_if_rehash.[/red]")
+                        meta['we_are_uploading'] = False
+                        return
 
         if int(meta.get('randomized', 0)) >= 1:
             if not meta['mkbrr']:

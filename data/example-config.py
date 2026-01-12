@@ -304,6 +304,11 @@ config = {
         # Set true to suppress config warnings on startup
         "suppress_warnings": False,
 
+        # Tracker based rehashing cooldown,set true to enable
+        # For trackers that might need specific piece size rehashing, enabling this will add a small cooldown before
+        # rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
+        "rehash_cooldown": False,
+
     },
 
     # these are used for DB links on AR

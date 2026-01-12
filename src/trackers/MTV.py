@@ -10,9 +10,7 @@ import pyotp
 import re
 import traceback
 from typing import Any
-
 from defusedxml import ElementTree as ET
-from torf import Torrent
 
 from src.console import console
 from src.rehostimages import check_hosts
@@ -74,16 +72,16 @@ class MTV():
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        loop = asyncio.get_running_loop()
-        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
-        if torrent.piece_size > 8388608:
+        if meta['base_torrent_piece_mb'] > 8 and not meta.get('nohash', False):
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
                 piece_size = 8
                 tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
                 torrent_create = f"[{self.tracker}]"
+                if self.config.get('DEFAULT', {}).get('rehash_cooldown', False):
+                    await asyncio.sleep(6)  # Small cooldown before rehashing
 
                 await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)

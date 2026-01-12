@@ -12,7 +12,6 @@ import requests
 
 from pathlib import Path
 from pymediainfo import MediaInfo
-from torf import Torrent
 from typing import Union
 from cogs.redaction import redact_private_info
 from src.bbcode import BBCODE
@@ -1508,15 +1507,15 @@ class PTP():
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        loop = asyncio.get_running_loop()
-        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
-        if torrent.piece_size > 16777216:  # 16 MiB in bytes
+        if meta['base_torrent_piece_mb'] > 16 and not meta.get('nohash', False):
             console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
             tracker_url = self.announce_url.strip() if self.announce_url else "https://fake.tracker"
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
+            if self.config.get('DEFAULT', {}).get('rehash_cooldown', False):
+                await asyncio.sleep(6)  # Small cooldown before rehashing
 
             await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)

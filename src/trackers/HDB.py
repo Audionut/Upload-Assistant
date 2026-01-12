@@ -7,7 +7,6 @@ import os
 import re
 import requests
 
-from torf import Torrent
 from typing import IO
 from unidecode import unidecode
 from urllib.parse import urlparse, quote
@@ -228,16 +227,16 @@ class HDB():
 
         hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        loop = asyncio.get_running_loop()
-        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
-        if torrent.piece_size > 16777216:  # 16 MiB in bytes
+        if meta['base_torrent_piece_mb'] > 16 and not meta.get('nohash', False):
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
             hdb_config = self.config['TRACKERS'].get('HDB', {})
             tracker_url = hdb_config.get('announce_url', "https://fake.tracker").strip() if isinstance(hdb_config, dict) else "https://fake.tracker"
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
+            if self.config.get('DEFAULT', {}).get('rehash_cooldown', False):
+                await asyncio.sleep(6)  # Small cooldown before rehashing
 
             await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
