@@ -826,9 +826,12 @@ config = {
             "anon": False,
         },
         "TOS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
+            # Mon profil > Réglages > Clé API
             "api_key": "",
-            "announce_url": "",
+            # Mon profil > Réglages > Passkey
+            "announce_url": "https://theoldschool.cc/announce/PasskeyHere",
             "anon": False,
             # Upload with Exclusive flag (team of staff only)
             "exclusive": False,
