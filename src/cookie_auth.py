@@ -222,7 +222,7 @@ class CookieValidator:
         error_text: str = "",
         success_text: str = "",
         token_pattern: str = "",
-    ):
+    ) -> bool:
         """
         Validate login cookies for a tracker by checking specific indicators on a test page.
         Return False to skip the upload if credentials are invalid.
@@ -474,23 +474,23 @@ class CookieAuthUploader:
 
     async def handle_upload(
         self,
-        meta,
-        tracker,
-        source_flag,
-        torrent_url,
-        data,
-        torrent_field_name,
-        upload_cookies,
-        upload_url,
-        default_announce="",
-        torrent_name="",
-        id_pattern="",
-        success_status_code="",
-        error_text="",
-        success_text="",
-        additional_files={},
-        hash_is_id=False,
-    ):
+        meta: dict[str, Any],
+        tracker: str,
+        source_flag: str,
+        torrent_url: str,
+        data: dict[str, Any],
+        torrent_field_name: str,
+        upload_cookies: Any,
+        upload_url: str,
+        default_announce: str = "",
+        torrent_name: str = "",
+        id_pattern: str = "",
+        success_status_code: str = "",
+        error_text: str = "",
+        success_text: str = "",
+        additional_files: dict[str, Any] = {},
+        hash_is_id: bool = False,
+    ) -> bool:
         """
         Upload a torrent to a tracker using cookies for authentication.
         Return True if the upload is successful, False otherwise.
@@ -564,7 +564,7 @@ class CookieAuthUploader:
                         success = True
 
                     if success:
-                        return await self.handle_successful_upload(
+                        await self.handle_successful_upload(
                             meta,
                             tracker,
                             response,
@@ -574,6 +574,7 @@ class CookieAuthUploader:
                             user_announce_url,
                             torrent_url,
                         )
+                        return True
                     else:
                         await self.handle_failed_upload(
                             meta,

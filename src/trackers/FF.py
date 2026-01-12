@@ -631,7 +631,7 @@ class FF:
             upload_cookies=self.session.cookies,
             upload_url=f"{self.base_url}/takeupload.php",
             id_pattern=r'details\.php\?id=(\d+)',
-            success_status_code=302,
+            success_status_code="302",
             additional_files=files
         )
 
