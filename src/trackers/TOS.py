@@ -114,24 +114,11 @@ class TOS(UNIT3D):
 
     async def upload(self, meta, disctype):
         # Check language requirements: must be French audio OR original audio with French subtitles
-        audio_languages = meta.get('audio_languages', [])
-        subtitle_languages = meta.get('subtitle_languages', [])
-
-        # Normalize audio and subtitle languages to lowercase for comparison
-        audio_langs_lower = [lang.lower() if lang else '' for lang in (audio_languages or [])]
-        subtitle_langs_lower = [lang.lower() if lang else '' for lang in (subtitle_languages or [])]
-
-        # Check if audio or subtitles are in French
-        french_variants = ['french', 'fre', 'fra', 'fr', 'français', 'francais']
-        has_french_audio = any(lang in french_variants for lang in audio_langs_lower)
-        has_french_subtitles = any(lang in french_variants for lang in subtitle_langs_lower)
-
-        # If not French audio, check if it's original audio with French subtitles
-        if not has_french_audio:
-            if not has_french_subtitles:
-                console.print('[yellow]Skipping upload to TOS: Content must have French audio or original audio with French subtitles[/yellow]')
-                meta['tracker_status'][self.tracker]['status_message'] = 'Skipped: Content must have French audio or original audio with French subtitles'
-                return
+        french_languages = ['french', 'fre', 'fra', 'fr', 'français', 'francais']
+        if not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=french_languages, check_audio=True, check_subtitle=True
+        ):
+            return
 
         data = await self.get_data(meta)
 
