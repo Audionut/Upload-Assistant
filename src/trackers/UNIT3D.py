@@ -430,6 +430,16 @@ class UNIT3D:
         for r in results:
             merged.update(r)
 
+        # Handle exclusive flag centrally for all UNIT3D trackers
+        # Priority: meta['exclusive'] > tracker config > default (not set)
+        exclusive_flag = None
+        if meta.get("exclusive", False):
+            exclusive_flag = "1"
+        elif self.tracker_config.get("exclusive", False):
+            exclusive_flag = "1"
+        if exclusive_flag:
+            merged["exclusive"] = exclusive_flag
+
         return merged
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:

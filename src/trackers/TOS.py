@@ -122,9 +122,6 @@ class TOS(UNIT3D):
 
         data = await self.get_data(meta)
 
-        # Set exclusive flag
-        if meta.get("exclusive", False):
-            data["exclusive"] = "1"
 
         if meta['isdir']:
             # As TOS want us to keep directory at upload and upload NFO file, we need to generate a new .torrent
