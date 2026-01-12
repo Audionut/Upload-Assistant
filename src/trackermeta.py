@@ -6,7 +6,7 @@ import io
 from io import BytesIO
 import os
 import sys
-from typing import Any, Mapping, Optional, cast
+from typing import Any, Mapping, cast
 
 from PIL import Image
 
@@ -39,13 +39,6 @@ def _to_int(value: Any, fallback: int = 0) -> int:
         except ValueError:
             return fallback
     return fallback
-
-
-def _to_stripped_nonempty_str(value: Any) -> Optional[str]:
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped if stripped else None
 
 
 expected_images = _to_int(DEFAULT_CONFIG.get('screens', 0))

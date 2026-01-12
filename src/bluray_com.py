@@ -1088,6 +1088,7 @@ async def process_all_releases(releases, meta):
                 specs = release['specs']
 
                 specs_missing = False
+                generic_format = False
                 # Check for completeness of data (penalty for missing info)
                 if not specs.get('video', {}):
                     score -= 5  # Missing video info
@@ -1126,7 +1127,6 @@ async def process_all_releases(releases, meta):
                         expected_format = "bd-100"
 
                     format_match = False
-                    generic_format = False
                     if "bd" in release_format:
                         generic_format = True
                         log_and_print(f"[yellow]⚠[/yellow] Generic BD format found: {specs['discs']['format']} for size {disc_size_gb:.2f} GB", release_logs)

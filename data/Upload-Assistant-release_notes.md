@@ -13,7 +13,7 @@ v7.0.0
  
  ## SECURITY
  - There have been a number of changes in the UA coding process, with the specific intent of improving security.
- - Some of the changes protect against malicious attacks that could have occurred, under quite specific circstances, such as attacks via downloaded binaries. These would likely have never occurred, but are now mitigated against.
+ - Some of the changes protect against malicious attacks that could have occurred, under quite specific circumstances, such as attacks via downloaded binaries. These would likely have never occurred, but are now mitigated against.
  - It has been brought to my attention, that many users who are running the docker webui, have been exposing their ui to the web. You should not expose to the web unless strictly necessary, set it as localhost only.
  - I've defaulted to 127.0.0.1 only, and added some basic auth, but users should ensure that their network is properly protected if exposing to the web. See updated docs https://github.com/Audionut/Upload-Assistant/tree/master/docs
 

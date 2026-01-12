@@ -103,7 +103,7 @@ class ACM:
         return resolution_id
 
     # ACM rejects uploads with more that 10 keywords
-    async def get_keywords(self, meta: dict[str, Any]):
+    async def get_keywords(self, meta: dict[str, Any]) -> str:
         keywords = meta.get('keywords', '')
         if keywords != '':
             keywords_list = keywords.split(',')
@@ -322,7 +322,7 @@ class ACM:
 
         return dupes
 
-    async def get_name(self, meta: dict[str, Any]):
+    async def get_name(self, meta: dict[str, Any]) -> str:
         name: str = meta.get('name', '')
         aka: str = meta.get('aka', '')
         original_title: str = meta.get('original_title', '')
@@ -355,7 +355,7 @@ class ACM:
         name = name + self.get_subs_tag(subs)
         return name
 
-    async def get_description(self, meta: dict[str, Any]):
+    async def get_description(self, meta: dict[str, Any]) -> str:
         async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
             base = await f.read()
 

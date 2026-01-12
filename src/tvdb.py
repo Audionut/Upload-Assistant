@@ -30,7 +30,7 @@ def _get_tvdb_k() -> str:
     return base64.b64decode(b64_bytes).decode()
 
 
-tvdb = None
+tvdb: Union[TVDB, None] = None
 _TVDB_INIT_ERROR: Union[Exception, None] = None
 _TVDB_ERROR_REPORTED = False
 
