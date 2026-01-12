@@ -242,7 +242,7 @@ async def process_all_trackers(meta):
                 skipped_trackers.append(tracker_name)
 
         if skipped_trackers:
-            console.print(f"[red]Trackers skipped due to conditions: [bold yellow]{', '.join(skipped_trackers)}[/bold yellow].")
+            console.print(f"[red]Skipped due to specific tracker conditions: [bold yellow]{', '.join(skipped_trackers)}[/bold yellow].")
         if dupe_trackers:
             console.print(f"[red]Found potential dupes on: [bold yellow]{', '.join(dupe_trackers)}[/bold yellow].")
         if passed_trackers:
