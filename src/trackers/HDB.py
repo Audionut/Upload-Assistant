@@ -209,7 +209,6 @@ class HDB():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         await self.edit_desc(meta)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         hdb_name = await self.edit_name(meta)
         cat_id = await self.get_type_category_id(meta)
         codec_id = await self.get_type_codec_id(meta)
@@ -226,10 +225,12 @@ class HDB():
                 return
 
         hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+
+        base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
-        if meta['base_torrent_piece_mb'] > 16 and not meta.get('nohash', False):
+        if base_piece_mb > 16 and not meta.get('nohash', False):
             console.print("[red]Piece size is OVER 16M and does not work on HDB. Generating a new .torrent")
             hdb_config = self.config['TRACKERS'].get('HDB', {})
             tracker_url = hdb_config.get('announce_url', "https://fake.tracker").strip() if isinstance(hdb_config, dict) else "https://fake.tracker"
@@ -240,6 +241,8 @@ class HDB():
 
             await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+        else:
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         # Proceed with the upload process
         with open(torrent_file_path, 'rb') as torrentFile:

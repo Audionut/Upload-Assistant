@@ -70,10 +70,10 @@ class MTV():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-        if meta['base_torrent_piece_mb'] > 8 and not meta.get('nohash', False):
+        if base_piece_mb > 8 and not meta.get('nohash', False):
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
@@ -89,6 +89,8 @@ class MTV():
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
+        else:
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         cat_id = await self.get_cat_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])

@@ -321,7 +321,7 @@ async def create_torrent(
                 meta['mkbrr'] = False
             except Exception as e:
                 console.print(f"[bold red]Error using mkbrr: {str(e)}")
-                raise sys.exit(1)
+                raise SystemExit(1) from e
 
         overall_start_time = time.time()
 

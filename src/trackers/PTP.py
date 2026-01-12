@@ -1505,11 +1505,11 @@ class PTP():
 
     async def upload(self, meta, url, data, disctype):
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         # Check if the piece size exceeds 16 MiB and regenerate the torrent if needed
-        if meta['base_torrent_piece_mb'] > 16 and not meta.get('nohash', False):
+        if base_piece_mb > 16 and not meta.get('nohash', False):
             console.print("[red]Piece size is OVER 16M and does not work on PTP. Generating a new .torrent")
             tracker_url = self.announce_url.strip() if self.announce_url else "https://fake.tracker"
             piece_size = 16
@@ -1519,6 +1519,8 @@ class PTP():
 
             await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+        else:
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         # Proceed with the upload process
         with open(torrent_file_path, 'rb') as torrentFile:
