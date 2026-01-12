@@ -412,13 +412,15 @@ async def handle_queue(path, meta, paths, base_dir):
             if new_files or removed_files:
                 console.print("[bold yellow]Queue changes detected:[/bold yellow]")
                 if new_files:
-                    console.print(f"[green]New files found ({len(new_files)}):[/green]")
-                    for file in sorted(new_files):
-                        console.print(f"  + {file}")
+                    if meta.get('debug'):
+                        console.print(f"[green]New files found ({len(new_files)}):[/green]")
+                        for file in sorted(new_files):
+                            console.print(f"  + {file}")
                 if removed_files:
-                    console.print(f"[red]Removed files ({len(removed_files)}):[/red]")
-                    for file in sorted(removed_files):
-                        console.print(f"  - {file}")
+                    if meta.get('debug'):
+                        console.print(f"[red]Removed files ({len(removed_files)}):[/red]")
+                        for file in sorted(removed_files):
+                            console.print(f"  - {file}")
 
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[yellow]Do you want to update the queue log, edit, discard, or keep the existing queue?[/yellow]")

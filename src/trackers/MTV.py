@@ -10,9 +10,7 @@ import pyotp
 import re
 import traceback
 from typing import Any
-
 from defusedxml import ElementTree as ET
-from torf import Torrent
 
 from src.console import console
 from src.rehostimages import check_hosts
@@ -72,18 +70,22 @@ class MTV():
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        loop = asyncio.get_running_loop()
-        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
-        if torrent.piece_size > 8388608:
+        if base_piece_mb > 8 and not meta.get('nohash', False):
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
                 piece_size = 8
                 tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
                 torrent_create = f"[{self.tracker}]"
+                try:
+                    cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
+                except (ValueError, TypeError):
+                    cooldown = 0
+                if cooldown > 0:
+                    await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
                 await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
@@ -91,6 +93,8 @@ class MTV():
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
+        else:
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         cat_id = await self.get_cat_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])
@@ -155,6 +159,11 @@ class MTV():
                 ) as client:
 
                     response = await client.post(url=self.upload_url, data=data, files=files)
+
+                    # This is not a header or cookie size issue, but MTV returns this status.
+                    if response.status_code == 400 and ("Request Header" in response.text or "Cookie Too Large" in response.text or "Header Too Large" in response.text):
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: Request Header or Cookie Too Large error from server"
+                        return False
 
                     try:
                         if "torrents.php" in str(response.url):
@@ -226,7 +235,8 @@ class MTV():
                 await desc.write("[mediainfo]" + meta['discs'][0]['vob_mi'] + "[/mediainfo]\n\n")
             try:
                 if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                    console.print("[green]Adding tonemapped header to description")
+                    if meta.get("debug", False):
+                        console.print("[green]Adding tonemapped header to description")
                     tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
                     await desc.write(tonemapped_header)
                     await desc.write("\n\n")

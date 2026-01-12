@@ -184,7 +184,7 @@ class HUNO(UNIT3D):
         region = meta.get('region', '')
 
         basename = self.get_basename(meta)
-        if meta.get('hardcoded-subs'):
+        if meta.get('hardcoded_subs'):
             hc = "Hardsubbed"
         else:
             hc = ""
