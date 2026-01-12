@@ -15,7 +15,7 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
-from typing import Any, Union
+from typing import Any, Union, Optional
 
 
 def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
@@ -488,7 +488,7 @@ class CookieAuthUploader:
         success_status_code: str = "",
         error_text: str = "",
         success_text: str = "",
-        additional_files: dict[str, Any] = {},
+        additional_files: Optional[dict[str, Any]] = None,
         hash_is_id: bool = False,
     ) -> bool:
         """
