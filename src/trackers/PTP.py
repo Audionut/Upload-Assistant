@@ -1394,7 +1394,7 @@ class PTP():
                     english_audio = False
 
         ptp_trumpable = None
-        if meta['hardcoded-subs']:
+        if meta.get('hardcoded_subs'):
             ptp_trumpable, ptp_subtitles = self.get_trumpable(ptp_subtitles)
             if ptp_trumpable and 50 in ptp_trumpable:
                 ptp_trumpable.remove(50)
@@ -1514,8 +1514,12 @@ class PTP():
             tracker_url = self.announce_url.strip() if self.announce_url else "https://fake.tracker"
             piece_size = 16
             torrent_create = f"[{self.tracker}]"
-            if self.config.get('DEFAULT', {}).get('rehash_cooldown', False):
-                await asyncio.sleep(6)  # Small cooldown before rehashing
+            try:
+                cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
+            except (ValueError, TypeError):
+                cooldown = 0
+            if cooldown > 0:
+                await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
             await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)

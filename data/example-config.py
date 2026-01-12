@@ -305,9 +305,9 @@ config = {
         "suppress_warnings": False,
 
         # Tracker based rehashing cooldown,set true to enable
-        # For trackers that might need specific piece size rehashing, enabling this will add a small cooldown before
-        # rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
-        "rehash_cooldown": False,
+        # For trackers that might need specific piece size rehashing, using a value higher than 0 will add the specified cooldown
+        # in (seconds) before rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
+        "rehash_cooldown": "0",
 
     },
 

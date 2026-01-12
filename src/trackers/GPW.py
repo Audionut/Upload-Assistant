@@ -773,7 +773,7 @@ class GPW():
             'source_other': '',
             'source': await self.get_source(meta),
             'submit': 'true',
-            'subtitle_type': ('2' if meta.get('hardcoded-subs', False) else '1' if meta.get('subtitle_languages', []) else '3'),
+            'subtitle_type': ('2' if meta.get('hardcoded_subs', False) else '1' if meta.get('subtitle_languages', []) else '3'),
             'subtitles[]': await self.get_subtitle(meta),
         })
 

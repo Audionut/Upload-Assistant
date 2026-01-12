@@ -80,8 +80,12 @@ class MTV():
                 piece_size = 8
                 tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
                 torrent_create = f"[{self.tracker}]"
-                if self.config.get('DEFAULT', {}).get('rehash_cooldown', False):
-                    await asyncio.sleep(6)  # Small cooldown before rehashing
+                try:
+                    cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
+                except (ValueError, TypeError):
+                    cooldown = 0
+                if cooldown > 0:
+                    await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
                 await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
@@ -226,7 +230,8 @@ class MTV():
                 await desc.write("[mediainfo]" + meta['discs'][0]['vob_mi'] + "[/mediainfo]\n\n")
             try:
                 if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                    console.print("[green]Adding tonemapped header to description")
+                    if meta.get("debug", False):
+                        console.print("[green]Adding tonemapped header to description")
                     tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
                     await desc.write(tonemapped_header)
                     await desc.write("\n\n")

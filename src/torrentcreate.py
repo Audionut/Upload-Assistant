@@ -152,231 +152,228 @@ async def create_torrent(
         if meta.get('debug', False):
             console.print("[yellow]Waiting for create_torrent slot...[/yellow]")
 
-    await _CREATE_TORRENT_SEMAPHORE.acquire()
-    _create_torrent_inflight += 1
-    if meta.get('debug', False):
-        wait_msg = ""
-        if wait_started is not None:
-            waited = time.time() - wait_started
-            wait_msg = f" (waited {waited:.2f}s)"
-        console.print(f"[cyan]create_torrent start | in-flight={_create_torrent_inflight}{wait_msg}[/cyan]")
+    async with _CREATE_TORRENT_SEMAPHORE:
+        _create_torrent_inflight += 1
+        if meta.get('debug', False):
+            wait_msg = ""
+            if wait_started is not None:
+                waited = time.time() - wait_started
+                wait_msg = f" (waited {waited:.2f}s)"
+            console.print(f"[cyan]create_torrent start | in-flight={_create_torrent_inflight}{wait_msg}[/cyan]")
 
-    try:
-        if not piece_size:
-            piece_size = meta.get('max_piece_size', 0)
-        tracker_url = tracker_url or None
-        include: list[str] = []
-        exclude: list[str] = []
+        try:
+            if not piece_size:
+                piece_size = meta.get('max_piece_size', 0)
+            tracker_url = tracker_url or None
+            include: list[str] = []
+            exclude: list[str] = []
 
-        if meta['isdir']:
-            if meta['keep_folder']:
-                cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')
-                if not meta.get('tv_pack', False):
-                    folder_name = os.path.basename(str(path))
-                    include = [
-                        f"{folder_name}/{os.path.basename(f)}"
-                        for f in meta['filelist']
-                    ]
-                    exclude = ["*", "*/**"]
-            else:
-                if meta.get('is_disc', False):
-                    path = path
-                    include = []
-                    exclude = []
-                elif not meta.get('tv_pack', False):
-                    path_dir = os.fspath(path)
-                    os.chdir(path_dir)
-                    globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
-                    no_sample_globs = [
-                        os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
-                        if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
-                    ]
-                    if len(no_sample_globs) == 1:
-                        path = meta['filelist'][0]
-                    exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
-                    include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
+            if meta['isdir']:
+                if meta['keep_folder']:
+                    cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')
+                    if not meta.get('tv_pack', False):
+                        folder_name = os.path.basename(str(path))
+                        include = [
+                            f"{folder_name}/{os.path.basename(f)}"
+                            for f in meta['filelist']
+                        ]
+                        exclude = ["*", "*/**"]
                 else:
-                    folder_name = os.path.basename(str(path))
-                    include = [
-                        f"{folder_name}/{os.path.basename(f)}"
-                        for f in meta['filelist']
-                    ]
-                    exclude = ["*", "*/**"]
-        else:
-            exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
-            include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
+                    if meta.get('is_disc', False):
+                        include = []
+                        exclude = []
+                    elif not meta.get('tv_pack', False):
+                        path_dir = os.fspath(path)
+                        os.chdir(path_dir)
+                        globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
+                        no_sample_globs = [
+                            os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
+                            if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
+                        ]
+                        if len(no_sample_globs) == 1:
+                            path = meta['filelist'][0]
+                        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+                        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
+                    else:
+                        folder_name = os.path.basename(str(path))
+                        include = [
+                            f"{folder_name}/{os.path.basename(f)}"
+                            for f in meta['filelist']
+                        ]
+                        exclude = ["*", "*/**"]
+            else:
+                exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+                include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
 
-        # If using mkbrr, run the external application
-        if meta.get('mkbrr'):
-            try:
-                # Validate input path to prevent potential command injection
-                if not os.path.exists(path):
-                    raise ValueError(f"Path does not exist: {path}")
-                mkbrr_binary = get_mkbrr_path(meta)
-                # Validate mkbrr binary exists and is executable
-                if not os.path.exists(mkbrr_binary):
-                    raise FileNotFoundError(f"mkbrr binary not found: {mkbrr_binary}")
-                output_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"{output_filename}.torrent")
+            # If using mkbrr, run the external application
+            if meta.get('mkbrr'):
+                try:
+                    # Validate input path to prevent potential command injection
+                    if not os.path.exists(path):
+                        raise ValueError(f"Path does not exist: {path}")
+                    mkbrr_binary = get_mkbrr_path(meta)
+                    # Validate mkbrr binary exists and is executable
+                    if not os.path.exists(mkbrr_binary):
+                        raise FileNotFoundError(f"mkbrr binary not found: {mkbrr_binary}")
+                    output_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], f"{output_filename}.torrent")
 
-                # Ensure executable permission for non-Windows systems
-                if not sys.platform.startswith("win"):
-                    os.chmod(mkbrr_binary, 0o700)
+                    # Ensure executable permission for non-Windows systems
+                    if not sys.platform.startswith("win"):
+                        os.chmod(mkbrr_binary, 0o700)
 
-                cmd = [mkbrr_binary, "create", os.fspath(path)]
+                    cmd = [mkbrr_binary, "create", os.fspath(path)]
 
-                if tracker_url:
-                    cmd.extend(["-t", tracker_url])
+                    if tracker_url:
+                        cmd.extend(["-t", tracker_url])
 
-                if int(meta.get('randomized', 0)) >= 1:
-                    cmd.extend(["-e"])
+                    if int(meta.get('randomized', 0)) >= 1:
+                        cmd.extend(["-e"])
 
-                if piece_size and not tracker_url:
-                    try:
-                        max_size_bytes = int(piece_size) * 1024 * 1024
+                    if piece_size and not tracker_url:
+                        try:
+                            max_size_bytes = int(piece_size) * 1024 * 1024
 
-                        # Calculate the appropriate power of 2 (log2)
-                        # We want the largest power of 2 that's less than or equal to max_size_bytes
-                        import math
-                        power = min(27, max(16, math.floor(math.log2(max_size_bytes))))
+                            # Calculate the appropriate power of 2 (log2)
+                            # We want the largest power of 2 that's less than or equal to max_size_bytes
+                            power = min(27, max(16, math.floor(math.log2(max_size_bytes))))
 
-                        cmd.extend(["-l", str(power)])
-                        console.print(f"[yellow]Setting mkbrr piece length to 2^{power} ({(2**power) / (1024 * 1024):.2f} MiB)")
-                    except (ValueError, TypeError):
-                        console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
+                            cmd.extend(["-l", str(power)])
+                            console.print(f"[yellow]Setting mkbrr piece length to 2^{power} ({(2**power) / (1024 * 1024):.2f} MiB)")
+                        except (ValueError, TypeError):
+                            console.print("[yellow]Warning: Invalid max_piece_size value, using default piece length")
 
-                if not piece_size and not tracker_url and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
-                    cmd.extend(['-m', '27'])
+                    if not piece_size and not tracker_url and not any(tracker in meta.get('trackers', []) for tracker in ['HDB', 'PTP', 'MTV']):
+                        cmd.extend(['-m', '27'])
 
-                if meta.get('mkbrr_threads') != '0':
-                    cmd.extend(["--workers", meta['mkbrr_threads']])
+                    if meta.get('mkbrr_threads') != '0':
+                        cmd.extend(["--workers", meta['mkbrr_threads']])
 
-                if not meta.get('is_disc', False):
-                    exclude_str = build_mkbrr_exclude_string(str(path), meta['filelist'])
-                    cmd.extend(["--exclude", exclude_str])
+                    if not meta.get('is_disc', False):
+                        exclude_str = build_mkbrr_exclude_string(str(path), meta['filelist'])
+                        cmd.extend(["--exclude", exclude_str])
 
-                cmd.extend(["-o", output_path])
-                if meta['debug']:
-                    console.print(f"[cyan]mkbrr cmd: {cmd}")
+                    cmd.extend(["-o", output_path])
+                    if meta['debug']:
+                        console.print(f"[cyan]mkbrr cmd: {cmd}")
 
-                # Run mkbrr subprocess in thread to avoid blocking
-                def run_mkbrr():
-                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    # Run mkbrr subprocess in thread to avoid blocking
+                    def run_mkbrr():
+                        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
-                    if process.stdout is None:
-                        return process.wait()
+                        if process.stdout is None:
+                            return process.wait()
 
-                    total_pieces = 100  # Default to 100% for scaling progress
-                    pieces_done = 0
-                    mkbrr_start_time = time.time()
+                        total_pieces = 100  # Default to 100% for scaling progress
+                        pieces_done = 0
+                        mkbrr_start_time = time.time()
 
-                    for line in process.stdout:
-                        line = line.strip()
+                        for line in process.stdout:
+                            line = line.strip()
 
-                        # Detect hashing progress, speed, and percentage
-                        match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
-                        if match:
-                            speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
-                            pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
+                            # Detect hashing progress, speed, and percentage
+                            match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
+                            if match:
+                                speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
+                                pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
 
-                            # Try to extract the ETA directly if it's in the format [elapsed:remaining]
-                            eta_match = re.search(r'\[(\d+)s:(\d+)s\]', line)
-                            if eta_match:
-                                eta_seconds = int(eta_match.group(2))
-                                eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
-                            else:
-                                # Fallback to calculating ETA if not directly available
-                                elapsed_time = time.time() - mkbrr_start_time
-                                if pieces_done > 0:
-                                    estimated_total_time = elapsed_time / (pieces_done / 100)
-                                    eta_seconds = int(max(0.0, estimated_total_time - elapsed_time))
+                                # Try to extract the ETA directly if it's in the format [elapsed:remaining]
+                                eta_match = re.search(r'\[(\d+)s:(\d+)s\]', line)
+                                if eta_match:
+                                    eta_seconds = int(eta_match.group(2))
                                     eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
                                 else:
-                                    eta = "--:--"  # Placeholder if we can't estimate yet
+                                    # Fallback to calculating ETA if not directly available
+                                    elapsed_time = time.time() - mkbrr_start_time
+                                    if pieces_done > 0:
+                                        estimated_total_time = elapsed_time / (pieces_done / 100)
+                                        eta_seconds = int(max(0.0, estimated_total_time - elapsed_time))
+                                        eta = time.strftime("%M:%S", time.gmtime(eta_seconds))
+                                    else:
+                                        eta = "--:--"  # Placeholder if we can't estimate yet
 
-                            cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
+                                cli_ui.info_progress(f"mkbrr hashing... {speed} | ETA: {eta}", pieces_done, total_pieces)
 
-                        # Detect final output line
-                        if "Wrote" in line and ".torrent" in line and meta['debug']:
-                            console.print(f"[bold cyan]{line}")  # Print the final torrent file creation message
+                            # Detect final output line
+                            if "Wrote" in line and ".torrent" in line and meta['debug']:
+                                console.print(f"[bold cyan]{line}")  # Print the final torrent file creation message
 
-                    # Wait for the process to finish
-                    return process.wait()
+                        # Wait for the process to finish
+                        return process.wait()
 
-                result = await asyncio.to_thread(run_mkbrr)
+                    result = await asyncio.to_thread(run_mkbrr)
 
-                # Verify the torrent was actually created
-                if result != 0:
-                    console.print(f"[bold red]mkbrr exited with non-zero status code: {result}")
-                    raise RuntimeError(f"mkbrr exited with status code {result}")
+                    # Verify the torrent was actually created
+                    if result != 0:
+                        console.print(f"[bold red]mkbrr exited with non-zero status code: {result}")
+                        raise RuntimeError(f"mkbrr exited with status code {result}")
 
-                if not os.path.exists(output_path):
-                    console.print("[bold red]mkbrr did not create a torrent file!")
-                    raise FileNotFoundError(f"Expected torrent file {output_path} was not created")
-                else:
-                    return output_path
+                    if not os.path.exists(output_path):
+                        console.print("[bold red]mkbrr did not create a torrent file!")
+                        raise FileNotFoundError(f"Expected torrent file {output_path} was not created")
+                    else:
+                        return output_path
 
-            except subprocess.CalledProcessError as e:
-                console.print(f"[bold red]Error creating torrent with mkbrr: {e}")
-                console.print("[yellow]Falling back to CustomTorrent method")
-                meta['mkbrr'] = False
-            except Exception as e:
-                console.print(f"[bold red]Error using mkbrr: {str(e)}")
-                raise SystemExit(1) from e
+                except subprocess.CalledProcessError as e:
+                    console.print(f"[bold red]Error creating torrent with mkbrr: {e}")
+                    console.print("[yellow]Falling back to CustomTorrent method")
+                    meta['mkbrr'] = False
+                except Exception as e:
+                    console.print(f"[bold red]Error using mkbrr: {str(e)}")
+                    console.print("[yellow]Falling back to CustomTorrent method")
+                    meta['mkbrr'] = False
+            overall_start_time = time.time()
 
-        overall_start_time = time.time()
+            # Calculate initial size
+            def calculate_size():
+                size = 0
+                if os.path.isfile(path):
+                    size = os.path.getsize(path)
+                elif os.path.isdir(path):
+                    for root, dirs, files in os.walk(path):
+                        size += sum(os.path.getsize(os.path.join(root, f)) for f in files if os.path.isfile(os.path.join(root, f)))
+                return size
 
-        # Calculate initial size
-        def calculate_size():
-            size = 0
-            if os.path.isfile(path):
-                size = os.path.getsize(path)
-            elif os.path.isdir(path):
-                for root, dirs, files in os.walk(path):
-                    size += sum(os.path.getsize(os.path.join(root, f)) for f in files if os.path.isfile(os.path.join(root, f)))
-            return size
+            initial_size = await asyncio.to_thread(calculate_size)
 
-        initial_size = await asyncio.to_thread(calculate_size)
+            piece_size = calculate_piece_size(initial_size, 32768, 134217728, meta, piece_size=piece_size)
 
-        piece_size = calculate_piece_size(initial_size, 32768, 134217728, meta, piece_size=piece_size)
+            # Fallback to CustomTorrent if mkbrr is not used
+            torrent = CustomTorrent(
+                meta=meta,
+                path=path,
+                trackers=["https://fake.tracker"],
+                source="UA",
+                private=True,
+                exclude_globs=exclude or [],
+                include_globs=include or [],
+                creation_date=datetime.now(),
+                comment="Created by Upload Assistant",
+                created_by="Upload Assistant",
+                piece_size=piece_size
+            )
 
-        # Fallback to CustomTorrent if mkbrr is not used
-        torrent = CustomTorrent(
-            meta=meta,
-            path=path,
-            trackers=["https://fake.tracker"],
-            source="UA",
-            private=True,
-            exclude_globs=exclude or [],
-            include_globs=include or [],
-            creation_date=datetime.now(),
-            comment="Created by Upload Assistant",
-            created_by="Upload Assistant",
-            piece_size=piece_size
-        )
+            # Run torrent generation in thread to avoid blocking the event loop
+            def generate_torrent():
+                torrent.generate(callback=torf_cb, interval=5)
+                torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent", overwrite=True)
+                torrent.verify_filesize(path)
 
-        # Run torrent generation in thread to avoid blocking the event loop
-        def generate_torrent():
-            torrent.generate(callback=torf_cb, interval=5)
-            torrent.write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent", overwrite=True)
-            torrent.verify_filesize(path)
+            await asyncio.to_thread(generate_torrent)
 
-        await asyncio.to_thread(generate_torrent)
+            total_elapsed_time = time.time() - overall_start_time
+            formatted_time = time.strftime("%H:%M:%S", time.gmtime(total_elapsed_time))
 
-        total_elapsed_time = time.time() - overall_start_time
-        formatted_time = time.strftime("%H:%M:%S", time.gmtime(total_elapsed_time))
-
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent"
-        torrent_file_size = os.path.getsize(torrent_file_path) / 1024
-        if meta['debug']:
-            console.print()
-            console.print(f"[bold green]torrent created in {formatted_time}")
-            console.print(f"[green]Torrent file size: {torrent_file_size:.2f} KB")
-        return torrent
-    finally:
-        _create_torrent_inflight -= 1
-        _CREATE_TORRENT_SEMAPHORE.release()
-        if meta.get('debug', False):
-            console.print(f"[cyan]create_torrent end | in-flight={_create_torrent_inflight}[/cyan]")
+            torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{output_filename}.torrent"
+            torrent_file_size = os.path.getsize(torrent_file_path) / 1024
+            if meta['debug']:
+                console.print()
+                console.print(f"[bold green]torrent created in {formatted_time}")
+                console.print(f"[green]Torrent file size: {torrent_file_size:.2f} KB")
+            return torrent
+        finally:
+            _create_torrent_inflight -= 1
+            if meta.get('debug', False):
+                console.print(f"[cyan]create_torrent end | in-flight={_create_torrent_inflight}[/cyan]")
 
 
 torf_start_time = time.time()

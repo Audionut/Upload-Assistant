@@ -324,7 +324,7 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
                         if meta['subtitle_languages']:
                             meta['subtitle_languages'] = [lang.split()[0] for lang in meta['subtitle_languages']]
 
-                    if meta.get('hardcoded-subs', False):
+                    if meta.get('hardcoded_subs', False):
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             try:
                                 hc_lang = cli_ui.ask_string("What language/s are the hardcoded subtitles?")
@@ -343,7 +343,7 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
                         else:
                             meta['subtitle_languages'] = "English"
                             meta['write_hc_languages'] = True
-                    if 'text' not in parsed_info and not meta.get('hardcoded-subs', False):
+                    if 'text' not in parsed_info and not meta.get('hardcoded_subs', False):
                         meta['no_subs'] = True
 
         except Exception as e:
