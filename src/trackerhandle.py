@@ -31,11 +31,13 @@ async def check_mod_q_and_draft(tracker_class, meta, debug, disctype):
 
     else:
         if tracker_caps.get('mod_q'):
-            modq = await tracker_class.get_flag(meta, 'modq')
-            modq = 'Yes' if modq else 'No'
+            modq_flag = await tracker_class.get_flag(meta, 'modq')
+            modq_enabled = str(modq_flag).lower() in ["1", "true", "yes"]
+            modq = 'Yes' if modq_enabled else 'No'
         if tracker_caps.get('draft'):
-            draft = await tracker_class.get_flag(meta, 'draft')
-            draft = 'Yes' if draft else 'No'
+            draft_flag = await tracker_class.get_flag(meta, 'draft')
+            draft_enabled = str(draft_flag).lower() in ["1", "true", "yes"]
+            draft = 'Yes' if draft_enabled else 'No'
 
     return modq, draft, tracker_caps
 
