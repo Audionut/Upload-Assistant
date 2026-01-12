@@ -15,34 +15,14 @@ from src.bbcode import BBCODE
 from src.btnid import get_bhd_torrents
 from src.console import console
 from src.trackers.COMMON import COMMON
+from src.type_utils import to_int
 
 # Define expected amount of screenshots from the config
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
-if not isinstance(DEFAULT_CONFIG, dict):
-    raise ValueError("'DEFAULT' config section must be a dict")
-
 TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
-if not isinstance(TRACKER_CONFIG, dict):
-    raise ValueError("'TRACKERS' config section must be a dict")
 
 
-def _to_int(value: Any, fallback: int = 0) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return fallback
-    return fallback
-
-
-expected_images = _to_int(DEFAULT_CONFIG.get('screens', 0))
-valid_images: list[dict[str, Any]] = []
+expected_images = to_int(DEFAULT_CONFIG.get('screens', 0))
 
 
 async def prompt_user_for_confirmation(message: str) -> bool:

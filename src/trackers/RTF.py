@@ -158,7 +158,8 @@ class RTF():
         if meta.get('category') == "TV":
             year = most_recent_year
         if datetime.date.today().year - year <= 9:
-            console.print("[red]Content must be older than 10 Years to upload at RTF")
+            if not meta.get('unattended', False):
+                console.print("[red]Content must be older than 10 Years to upload at RTF")
             meta['skipping'] = "RTF"
             return []
 

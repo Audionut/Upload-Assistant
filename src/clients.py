@@ -779,7 +779,7 @@ class Clients():
                                     'torrent_path': torrent_path if torrent_path else torrent_file_path,
                                     'piece_size': piece_size
                                 }
-                            console.print(f"[green]Updated best match: {best_match}")
+                                console.print(f"[green]Updated best match: {best_match}")
                     except Exception as e:
                         console.print(f"[bold red]Error reading torrent data for {torrent_hash}: {e}")
                         continue
@@ -1420,8 +1420,9 @@ class Clients():
                         if response.status == 200:
                             torrents_info = await response.json()
                             if len(torrents_info) > 0:
+                                if meta.get('debug'):
+                                    console.print(f"[green]Found {tracker} torrent in qBittorrent.")
                                 break
-                            console.print(f"[green]Added {tracker} torrent via qui.")
                         else:
                             pass  # Continue waiting
                 else:

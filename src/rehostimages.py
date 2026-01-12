@@ -12,26 +12,10 @@ from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.uploadscreens import upload_screens
 from data.config import config
 from aiofiles import os as aio_os
+from src.type_utils import to_int
 
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
-if not isinstance(DEFAULT_CONFIG, dict):
-    raise ValueError("'DEFAULT' config section must be a dict")
-
-
-def _to_int(value: Any, fallback: int = 0) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return fallback
-    return fallback
 
 
 def _as_str(value: Any) -> Union[str, None]:
@@ -218,7 +202,8 @@ async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, a
     if isinstance(filelist, str):
         filelist = [filelist]
 
-    multi_screens = _to_int(meta.get('screens'), _to_int(DEFAULT_CONFIG.get('screens', 6), 6))
+    default_screens = to_int(DEFAULT_CONFIG.get('screens', 6), 6)
+    multi_screens = to_int(meta.get('screens'), default_screens)
     base_dir = meta['base_dir']
     folder_id = meta['uuid']
     meta[new_images_key] = []

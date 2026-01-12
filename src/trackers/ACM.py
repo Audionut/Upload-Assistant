@@ -104,7 +104,7 @@ class ACM:
 
     # ACM rejects uploads with more that 10 keywords
     async def get_keywords(self, meta: dict[str, Any]) -> str:
-        keywords = meta.get('keywords', '')
+        keywords: str = str(meta.get('keywords', ''))
         if keywords != '':
             keywords_list = keywords.split(',')
             keywords_list = [keyword.strip() for keyword in keywords_list if " " not in keyword.strip()][:10]
@@ -308,7 +308,7 @@ class ACM:
                 if response.status_code == 200:
                     data = response.json()
                     for each in data['data']:
-                        result = [each][0]['attributes']['name']
+                        result = each['attributes']['name']
                         dupes.append(result)
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
@@ -412,6 +412,6 @@ class ACM:
             await descfile.write(f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
         async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
-            final_desc = await f.read()
+            final_desc: str = await f.read()
 
         return final_desc
