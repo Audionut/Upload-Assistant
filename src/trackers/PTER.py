@@ -113,7 +113,7 @@ class PTER():
         if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
             cat_id = '402'
 
-        if 'Animation' in meta.get("genres", "").lower() or 'Animation' in meta.get("keywords", "").lower():
+        if 'animation' in meta.get("genres", "").lower() or 'animation' in meta.get("keywords", "").lower():
             cat_id = '403'
 
         return cat_id

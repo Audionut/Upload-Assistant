@@ -311,6 +311,8 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
             if category_keyword in category_text:
                 credits = await safe_get(pc, ['credits'], [])
+                if not isinstance(credits, list):
+                    continue
                 for c in credits:
                     name_obj = await safe_get(c, ['name'], {})
                     person_id = await safe_get(name_obj, ['id'], '')
@@ -783,7 +785,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
                 while True:
                     try:
                         selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ") or ""
-                    except EOFError:
+                    except (EOFError, KeyboardInterrupt):
                         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                         await cleanup()
                         reset_terminal()
@@ -823,7 +825,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             if not unattended:
                 try:
                     selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ") or ""
-                except EOFError:
+                except (EOFError, KeyboardInterrupt):
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                     await cleanup()
                     reset_terminal()

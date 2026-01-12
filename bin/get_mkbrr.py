@@ -9,7 +9,7 @@ from pathlib import Path
 from src.console import console
 
 
-async def ensure_mkbrr_binary(base_dir, debug, version=None):
+async def ensure_mkbrr_binary(base_dir, debug, version):
     system = platform.system().lower()
     machine = platform.machine().lower()
     if debug:

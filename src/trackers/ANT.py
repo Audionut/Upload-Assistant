@@ -226,9 +226,11 @@ class ANT:
                             return True
 
                     elif response.status_code == 400:
+                        response_text_lc = str(response_data).lower()
                         is_exact = (
-                            ('exact same' in response_data)
+                            ('exact same' in response_text_lc)
                             or (str(response_data.get('status', '')).lower() == 'exact same')
+                            or ('exact same' in str(response_data.get('error', '')).lower())
                         )
                         if is_exact:
                             folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"

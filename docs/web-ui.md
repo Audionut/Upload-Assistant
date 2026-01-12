@@ -26,15 +26,21 @@ If you use the `-webui` Docker image / Dockerfile that installs Flask, you do **
 2. Set `ENABLE_WEB_UI=true`.
 3. Configure **browse roots** (required): set `UA_BROWSE_ROOTS` to a comma-separated list of directories inside the container that you want the UI to be able to browse and execute against.
 
-Example (compose-style env vars):
+Example (compose-style, localhost-only by default):
 
 ```yaml
+ports:
+  # Localhost-only on the Docker host (recommended default).
+  # Change to "0.0.0.0:5000:5000" (or "5000:5000") to allow access from other devices.
+  # Note: "other devices" typically means LAN, but it can become WAN exposure if you port-forward, enable UPnP,
+  # run a reverse proxy, or otherwise expose the host publicly.
+  - "127.0.0.1:5000:5000"
 environment:
   - ENABLE_WEB_UI=true
   - UA_WEBUI_HOST=0.0.0.0
   - UA_WEBUI_PORT=5000
   - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
-  # Optional but strongly recommended if exposed beyond localhost/LAN:
+  # Optional but strongly recommended if exposed beyond localhost:
   # - UA_WEBUI_USERNAME=admin
   # - UA_WEBUI_PASSWORD=change-me
   # Optional: only needed if you serve the UI from a different origin/domain.
@@ -108,10 +114,11 @@ Optional comma-separated allowlist of origins for `/api/*` routes.
 ## Security notes
 
 - Do not expose the Web UI to the public internet.
-- If binding to `0.0.0.0` (LAN/remote access), set `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD`.
+- Docker: access scope is controlled by your published port. Using `ports: "5000:5000"` exposes the UI to other devices (typically LAN); adding a router port-forward / UPnP / reverse proxy can expose it to the internet.
+- If you allow access from other devices, set `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD`.
 - Keep `UA_BROWSE_ROOTS` as narrow as possible (only the directories you need).
 
 ## Troubleshooting
 
 - Browsing returns “Invalid path specified”: ensure `UA_BROWSE_ROOTS` is set and includes the directory you’re trying to access.
-- Can’t reach the UI from another machine: set `UA_WEBUI_HOST=0.0.0.0` and publish/map the port.
+- Can’t reach the UI from another machine (Docker): ensure `UA_WEBUI_HOST=0.0.0.0` and your compose `ports` publishes on the host LAN interface (e.g. `0.0.0.0:5000:5000` or `5000:5000`).

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import ssl
+from typing import Union
 from urllib.error import URLError
 from pathlib import Path
 from tvdb_v4_official import TVDB
@@ -30,7 +31,7 @@ def _get_tvdb_k() -> str:
 
 
 tvdb = None
-_TVDB_INIT_ERROR = None
+_TVDB_INIT_ERROR: Union[Exception, None] = None
 _TVDB_ERROR_REPORTED = False
 
 try:

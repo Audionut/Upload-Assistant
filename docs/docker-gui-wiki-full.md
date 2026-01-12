@@ -63,7 +63,8 @@ Download the [docker-compose.yml](https://github.com/Audionut/Upload-Assistant/b
 ### Step 4: Configure docker-compose.yml
 
 Edit the file to configure:
-- **Ports**: Change `5000:5000` if you need a different port
+- **Ports**: Default is localhost-only (`127.0.0.1:5000:5000`). Use `0.0.0.0:5000:5000` (or `5000:5000`) to allow access from other devices.
+  Note: this is typically LAN access, but it can become WAN exposure if you port-forward, enable UPnP, or reverse-proxy it.
 - **Volume mounts**: Update paths to match your system
 - **Network**: Set to your torrent client's network
 
@@ -80,10 +81,14 @@ services:
     networks:
       - yournetwork  # Change to the network with your torrent instance
     ports: 
-      - "5000:5000"  # Change left side to your specific port
+      # Localhost-only on the Docker host (recommended default).
+      # Change to "0.0.0.0:5000:5000" (or "5000:5000") to allow access from other devices.
+      # Note: this is typically LAN access, but it can become WAN exposure if you port-forward, enable UPnP,
+      # run a reverse proxy, or otherwise expose the host publicly.
+      - "127.0.0.1:5000:5000"
     environment:
       - ENABLE_WEB_UI=true
-      # Bind inside the container so the port mapping is reachable from LAN/other hosts
+      # Bind inside the container so the host port mapping works
       - UA_WEBUI_HOST=0.0.0.0
       - UA_WEBUI_PORT=5000
       # Required: allowlisted roots the Web UI is allowed to browse/execute within
@@ -118,8 +123,10 @@ docker compose up -d
 ### Step 6: Access the WebUI
 
 Open your browser and navigate to:
-- Local: `http://localhost:5000`
-- Remote: `http://[your-server-ip]:5000`
+- Localhost-only default: `http://localhost:5000` (on the Docker host)
+- Access from other devices: change the compose `ports` line to `0.0.0.0:5000:5000` (or `5000:5000`), then use `http://[your-server-ip]:5000`
+
+Security note: if you enable access from other devices, set `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD` and do not port-forward this service to the internet.
 
 **Enjoy!**
 
@@ -172,7 +179,9 @@ services:
     networks:
       - br0  # Or your custom network
     ports: 
-      - "5000:5000"
+      # Unraid users typically access the UI from another machine on the LAN.
+      # Use localhost-only ("127.0.0.1:5000:5000") if you intentionally want host-only access.
+      - "0.0.0.0:5000:5000"
     environment:
       - ENABLE_WEB_UI=true
       - UA_WEBUI_HOST=0.0.0.0
@@ -200,7 +209,7 @@ networks:
 If you want an icon-accessible web link in Unraid:
 
 1. Edit the stack UI labels
-2. Point it to:
+2. Point it to (requires access from other devices / published port on the host):
 
 ```
 http://[IP]:5000

@@ -26,7 +26,6 @@ class ACM:
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups: list[str] = []
-        pass
 
     async def get_type_id(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
@@ -131,7 +130,7 @@ class ACM:
             ("German", "ger", "de"): 'Ger',
             ("Greek", "gre", "el"): 'Gre',
             ("Hebrew", "heb", "he"): 'Heb',
-            ("Hindi" "hin", "hi"): 'Hin',
+            ("Hindi", "hin", "hi"): 'Hin',
             ("Hungarian", "hun", "hu"): 'Hun',
             ("Icelandic", "ice", "is"): 'Ice',
             ("Indonesian", "ind", "id"): 'Ind',

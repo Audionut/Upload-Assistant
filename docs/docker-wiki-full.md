@@ -113,6 +113,46 @@ ghcr.io/audionut/upload-assistant:v2.0.0
 
 ---
 
+## Web UI (Docker / Compose)
+
+Upload Assistant has an optional Web UI (Flask) which is included in the `*-webui` images.
+
+- Use an image tag that includes the Web UI, e.g. `ghcr.io/audionut/upload-assistant:master-webui` or `<version>-webui`.
+- Set `ENABLE_WEB_UI=true`.
+- Set `UA_BROWSE_ROOTS` (required): a comma-separated list of directories inside the container that the UI is allowed to browse/execute within.
+
+Recommended compose pattern (localhost-only on the Docker host by default):
+
+```yaml
+services:
+  upload-assistant-webui:
+    image: ghcr.io/audionut/upload-assistant:master-webui
+    ports:
+      # Localhost-only on the Docker host (recommended default).
+      # Change to "0.0.0.0:5000:5000" (or "5000:5000") to allow access from other devices.
+      # Note: "other devices" typically means LAN, but it can become WAN exposure if you port-forward, enable UPnP,
+      # run a reverse proxy, or otherwise expose the host publicly.
+      - "127.0.0.1:5000:5000"
+    environment:
+      - ENABLE_WEB_UI=true
+      # Bind inside the container so the host port mapping works.
+      - UA_WEBUI_HOST=0.0.0.0
+      - UA_WEBUI_PORT=5000
+      - UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp
+      # Strongly recommended if you allow access from other devices:
+      # - UA_WEBUI_USERNAME=admin
+      # - UA_WEBUI_PASSWORD=change-me
+    volumes:
+      - /path/to/torrents:/data:rw
+      - /path/to/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw
+      - /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw
+
+```
+
+For more details (auth, CORS, troubleshooting), see [docs/web-ui.md](web-ui.md).
+
+---
+
 ## How do I update the docker image?
 
 ```bash

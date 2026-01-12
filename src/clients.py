@@ -705,7 +705,7 @@ class Clients():
         # **Step 2: Extract and Save .torrent Files**
         processed_hashes = set()
         best_match = None
-
+        torrent_hash = None
         for matching_torrent in matching_torrents:
             try:
                 torrent_hash = matching_torrent['hash']
@@ -715,7 +715,7 @@ class Clients():
                 processed_hashes.add(torrent_hash)
 
             except Exception as e:
-                console.print(f"[bold red]Unexpected error while handling {torrent_hash}: {e}")
+                console.print(f"[bold red]Unexpected error while handling torrent{f' {torrent_hash}' if torrent_hash else ''}: {e}")
 
             # **Use `torrent_storage_dir` if available**
             if torrent_storage_dir:
@@ -771,12 +771,14 @@ class Clients():
                     try:
                         torrent_data = Torrent.read(torrent_file_path)
                         piece_size = torrent_data.piece_size
-                        if best_match is None or piece_size < best_match['piece_size']:
-                            best_match = {
-                                'hash': torrent_hash,
-                                'torrent_path': torrent_path if torrent_path else torrent_file_path,
-                                'piece_size': piece_size
-                            }
+                        if isinstance(piece_size, int):
+                            best_piece_size = best_match.get('piece_size') if best_match else None
+                            if best_match is None or (isinstance(best_piece_size, int) and piece_size < best_piece_size):
+                                best_match = {
+                                    'hash': torrent_hash,
+                                    'torrent_path': torrent_path if torrent_path else torrent_file_path,
+                                    'piece_size': piece_size
+                                }
                             console.print(f"[green]Updated best match: {best_match}")
                     except Exception as e:
                         console.print(f"[bold red]Error reading torrent data for {torrent_hash}: {e}")
