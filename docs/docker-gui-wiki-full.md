@@ -21,11 +21,10 @@ Docker will automatically pull the correct image for your system architecture.
 
 | Tag | Description |
 |-----|-------------|
-| `master-webui` | Latest from master branch with WebUI |
 | `<version>-webui` | Specific release version with WebUI (e.g., `v6.3.1-webui`) |
-| `<branch>-webui` | Specific branch build with WebUI |
+| `<branch>-webui` | Specific branch build with WebUI | Not recommended unless you know what you are doing.
 
-**Note:** The standard `latest` tag does NOT include WebUI. You must use a `-webui` suffixed tag.
+**Note:** The standard `latest` tag does NOT include WebUI. You must use a `-webui` suffixed tag appended to a version.
 
 ---
 
@@ -88,8 +87,8 @@ services:
       - UA_WEBUI_HOST=0.0.0.0
       - UA_WEBUI_PORT=5000
       # Required: allowlisted roots the Web UI is allowed to browse/execute within
-      # Set these to match the container-side mount points you configured under volumes
-      - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
+      # Using a specific subfolder is not working correctly, use the top folder as needed. for instance, /data, not /data/torrents
+      - UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp
       # Optional: enable HTTP Basic Auth for the Web UI/API (recommended if exposed beyond localhost)
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
@@ -100,7 +99,7 @@ services:
     volumes:
       - /path/to/torrents/:/data/torrents/:rw  # Map to qbit download location
       - /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw
-      - /path/to/qBittorrent/BT_backup/:/torrent_storage_dir:rw  # Map to your qbittorrent bt_backup
+      - /path/to/qBittorrent/BT_backup/:/torrent_storage_dir:rw  # Map to your qbittorrent bt_backup if qbit API access does not work
       - /path/to/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw
 networks:
   "yournetwork":

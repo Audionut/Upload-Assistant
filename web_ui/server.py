@@ -182,6 +182,13 @@ def _resolve_user_path(
                 if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
                     continue
 
+                # Handle the case where the path equals the root exactly.
+                # safe_join may return None for '.' in some Werkzeug versions.
+                if rel == '.':
+                    matched_root = check_root
+                    candidate_norm = os.path.normpath(check_root)
+                    break
+
                 joined = safe_join(check_root, rel)
                 if joined is None:
                     continue
@@ -194,10 +201,15 @@ def _resolve_user_path(
                 break
     else:
         matched_root = os.path.abspath(default_root)
-        joined = safe_join(matched_root, expanded)
-        if joined is None:
-            raise ValueError('Browsing this path is not allowed')
-        candidate_norm = os.path.normpath(joined)
+        # Handle empty path (initial browse request) - use the root directly.
+        # safe_join may return None for empty strings in some Werkzeug versions.
+        if not expanded:
+            candidate_norm = os.path.normpath(matched_root)
+        else:
+            joined = safe_join(matched_root, expanded)
+            if joined is None:
+                raise ValueError('Browsing this path is not allowed')
+            candidate_norm = os.path.normpath(joined)
 
     if not matched_root or not candidate_norm:
         raise ValueError('Browsing this path is not allowed')

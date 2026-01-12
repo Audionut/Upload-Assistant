@@ -5,6 +5,8 @@ import base64
 import json
 import os
 import re
+import ssl
+from urllib.error import URLError
 from pathlib import Path
 from tvdb_v4_official import TVDB
 
@@ -27,7 +29,40 @@ def _get_tvdb_k() -> str:
     return base64.b64decode(b64_bytes).decode()
 
 
-tvdb = TVDB(_get_tvdb_k())
+tvdb = None
+_TVDB_INIT_ERROR = None
+_TVDB_ERROR_REPORTED = False
+
+try:
+    tvdb = TVDB(_get_tvdb_k())
+except (ssl.SSLError, URLError) as e:
+    _TVDB_INIT_ERROR = e
+except Exception as e:
+    _TVDB_INIT_ERROR = e
+
+
+def _get_tvdb_or_warn():
+    global _TVDB_ERROR_REPORTED
+
+    if tvdb is not None:
+        return tvdb
+
+    if not _TVDB_ERROR_REPORTED:
+        _TVDB_ERROR_REPORTED = True
+        if _TVDB_INIT_ERROR:
+            console.print(
+                "[yellow]TVDB login failed; continuing without TVDB. "
+                f"Reason: {_TVDB_INIT_ERROR}[/yellow]"
+            )
+            console.print(
+                "[yellow]This is usually a local Python CA/cert issue. "
+                "Fix options: install/update Windows roots, or set SSL_CERT_FILE to certifi's bundle "
+                "(e.g. `python -c \"import certifi; print(certifi.where())\"`).[/yellow]"
+            )
+        else:
+            console.print("[yellow]TVDB unavailable; continuing without TVDB.[/yellow]")
+
+    return None
 
 
 class tvdb_data:
@@ -38,7 +73,11 @@ class tvdb_data:
     async def search_tvdb_series(self, filename, year=None, debug=False):
         if debug:
             console.print(f"filename for TVDB search: {filename} year: {year}")
-        results = tvdb.search({filename}, year=year, type="series", lang="eng")
+        client = _get_tvdb_or_warn()
+        if client is None:
+            return None, None
+
+        results = client.search({filename}, year=year, type="series", lang="eng")
         await asyncio.sleep(0.1)
         try:
             if results and len(results) > 0:
@@ -182,6 +221,10 @@ class tvdb_data:
                     console.print(f"[yellow]Failed to read TVDB cache for {series_id}: {cache_error}[/yellow]")
 
         try:
+            client = _get_tvdb_or_warn()
+            if client is None:
+                return None, None
+
             # Get all episodes for the series with pagination
             all_episodes = []
             page = 0
@@ -193,7 +236,7 @@ class tvdb_data:
                     console.print(f"[cyan]Fetching TVDB episodes page {page + 1}[/cyan]")
 
                 try:
-                    episodes_response = tvdb.get_series_episodes(
+                    episodes_response = client.get_series_episodes(
                         series_id,
                         season_type="default",
                         page=page,
@@ -249,7 +292,7 @@ class tvdb_data:
             try:
                 if all_episodes:
                     # Get series details for aliases
-                    series_info = tvdb.get_series_extended(series_id)
+                    series_info = client.get_series_extended(series_id)
                     if 'aliases' in series_info:
                         episodes_data['aliases'] = series_info['aliases']
             except Exception as alias_error:
@@ -305,6 +348,10 @@ class tvdb_data:
             return None, None
 
     async def get_tvdb_by_external_id(self, imdb, tmdb, debug=False, tv_movie=False):
+        client = _get_tvdb_or_warn()
+        if client is None:
+            return None
+
         # Try IMDB first if available
         if imdb:
             try:
@@ -320,7 +367,7 @@ class tvdb_data:
                 if debug:
                     console.print(f"[cyan]Trying TVDB lookup with IMDB ID: {imdb_formatted}[/cyan]")
 
-                results = tvdb.search_by_remote_id(imdb_formatted)
+                results = client.search_by_remote_id(imdb_formatted)
                 await asyncio.sleep(0.1)
 
                 if results and len(results) > 0:
@@ -370,7 +417,7 @@ class tvdb_data:
                 if debug:
                     console.print(f"[cyan]Trying TVDB lookup with TMDB ID: {tmdb_str}[/cyan]")
 
-                results = tvdb.search_by_remote_id(tmdb_str)
+                results = client.search_by_remote_id(tmdb_str)
                 await asyncio.sleep(0.1)
 
                 if results and len(results) > 0:
@@ -419,7 +466,11 @@ class tvdb_data:
 
     async def get_imdb_id_from_tvdb_episode_id(self, episode_id, debug=False):
         try:
-            episode_data = tvdb.get_episode_extended(episode_id)
+            client = _get_tvdb_or_warn()
+            if client is None:
+                return None
+
+            episode_data = client.get_episode_extended(episode_id)
             if debug:
                 console.print(f"[yellow]Episode data retrieved for episode ID {episode_id}[/yellow]")
 
