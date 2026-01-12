@@ -27,7 +27,7 @@ class TOS(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
-        self.banned_groups = ['FL3ER', 'SUNS3T', 'WoLFHD', 'EXTREME', 'Slay3R']
+        self.banned_groups = ['FL3ER', 'SUNS3T', 'WoLFHD', 'EXTREME', 'Slay3R', '3T3AM', 'BARBiE']
         pass
 
     async def get_category_id(self, meta: dict[str, Any], category: str = '', reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
@@ -61,10 +61,19 @@ class TOS(UNIT3D):
                 'REMUX': '2',
                 'ENCODE': '3',
                 'WEBDL': '4',
-                'WEBRIP': '4',
+                'WEBRIP': '5',
                 'HDTV': '6',
             }.get(meta['type'], '0')
         return {'type_id': type_id}
+
+    async def get_res_id(self, resolution):
+        """Resolutions: 4320p(1), 2160p(2), 1080p(3), 1080i(4), 720p(5), 576p(6), 540p(7), 480p(8), Otras(10)"""
+        resolution_map = {
+            '4320p': '1', '2160p': '2', '1080p': '3', '1080i': '4',
+            '720p': '5', '576p': '6', '540p': '7', '480p': '8',
+            'SD': '10', 'OTHER': '10'
+        }
+        return resolution_map.get(resolution, '10')
 
     async def get_name(self, meta):
         is_scene = bool(meta.get('scene_name'))
@@ -104,16 +113,6 @@ class TOS(UNIT3D):
         return files
 
     async def upload(self, meta, disctype):
-        # Check for Tsundere-Raws in path or filename
-        path_str = str(meta.get('path', ''))
-        uuid_str = str(meta.get('uuid', ''))
-        scene_name = str(meta.get('scene_name', ''))
-
-        if 'Tsundere-Raws' in path_str or 'Tsundere-Raws' in uuid_str or 'Tsundere-Raws' in scene_name:
-            console.print('[yellow]Skipping upload to TOS: Tsundere-Raws already uploads their own releases[/yellow]')
-            meta['tracker_status'][self.tracker]['status_message'] = 'Skipped: Tsundere-Raws already uploads their own releases'
-            return
-
         # Check language requirements: must be French audio OR original audio with French subtitles
         audio_languages = meta.get('audio_languages', [])
         subtitle_languages = meta.get('subtitle_languages', [])
