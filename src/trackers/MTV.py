@@ -160,6 +160,11 @@ class MTV():
 
                     response = await client.post(url=self.upload_url, data=data, files=files)
 
+                    # This is not a header or cookie size issue, but MTV returns this status.
+                    if response.status_code == 400 and ("Request Header" in response.text or "Cookie Too Large" in response.text or "Header Too Large" in response.text):
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: Request Header or Cookie Too Large error from server"
+                        return False
+
                     try:
                         if "torrents.php" in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = response.url

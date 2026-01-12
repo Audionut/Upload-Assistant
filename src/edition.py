@@ -253,12 +253,8 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
                         if meta['debug']:
                             console.print("[cyan]Using only editions with attributes[/cyan]")
                     else:
-                        # Only non-attribute editions matched (typically the base/theatrical cut).
-                        # Keep the previous behavior of not explicitly labeling it "Theatrical",
-                        # but ensure the edition is not dropped entirely.
-                        matched_editions = [f"{m} Minute Version" for m in matched_editions_without_attributes if str(m).strip()]
                         if meta['debug']:
-                            console.print("[cyan]Using only non-attribute editions (minutes only)[/cyan]")
+                            console.print("[cyan]No useful editions found[/cyan]")
 
                     # Handle final edition formatting
                     if matched_editions:
