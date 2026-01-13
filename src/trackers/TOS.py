@@ -120,6 +120,15 @@ class TOS(UNIT3D):
         ):
             return
 
+        # Check if it's a Scene release without NFO - TOS requires NFO for Scene releases
+        is_scene = bool(meta.get('scene_name'))
+        has_nfo = meta.get('nfo', False) or meta.get('auto_nfo', False)
+
+        if is_scene and not has_nfo:
+            console.print(f"[red]{self.tracker}: Scene release detected but no NFO file found. TOS requires NFO files for Scene releases.[/red]")
+            meta['tracker_status'][self.tracker]['status_message'] = 'Skipped: Scene release requires NFO file'
+            return
+
         data = await self.get_data(meta)
 
 
