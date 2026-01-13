@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sys
+from langcodes import tag_parser
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
@@ -1020,21 +1021,49 @@ class COMMON():
     async def check_language_requirements(
         self,
         meta: dict[str, Any],
-        tracker,
-        languages_to_check,
-        check_audio=False,
-        check_subtitle=False,
-        require_both=False,
-        original_language=False,
-    ):
-        """Check if the given media meets language requirements."""
+        tracker: str,
+        languages_to_check: List[str],
+        check_audio: bool = False,
+        check_subtitle: bool = False,
+        require_both: bool = False,
+        original_language: bool = False,
+    ) -> bool:
+        """
+        Check if the media metadata meets specific language requirements for audio and/or subtitles.
+
+        The function evaluates whether the provided media contains the required languages.
+        It can also handle logic for original language tracks and cross-reference them
+        with subtitles if the primary audio requirement isn't met.
+
+        :param meta: Dictionary containing media metadata (audio_languages, subtitle_languages, etc.).
+        :type meta: dict[str, Any]
+        :param tracker: Name of the tracker being processed, used for logging/output.
+        :type tracker: str
+        :param languages_to_check: A list of language names or codes to search for.
+        :type languages_to_check: List[str]
+        :param check_audio: If True, validates if required languages are present in audio tracks.
+        :type check_audio: bool
+        :param check_subtitle: If True, validates if required languages are present in subtitle tracks.
+        :type check_subtitle: bool
+        :param require_both: If True, both audio AND subtitle requirements must be satisfied.
+                             If False, satisfying either is enough (OR logic).
+        :type require_both: bool
+        :param original_language: If True, checks if the media's original language matches the audio
+                                  track, allowing a fallback to subtitle-only validation.
+        :type original_language: bool
+        :return: True if language requirements are met, False otherwise.
+        :rtype: bool
+        """
         try:
             if not meta.get("language_checked", False):
                 await process_desc_language(meta, tracker=tracker)
 
+            meta_audio_languages: list[str] = meta.get("audio_languages", [])
+            meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])
+
             languages_to_check = [lang.lower() for lang in languages_to_check]
-            audio_languages = [lang.lower() for lang in meta.get("audio_languages", [])]
-            subtitle_languages = [lang.lower() for lang in meta.get("subtitle_languages", [])]
+            audio_languages = [lang.lower() for lang in meta_audio_languages]
+            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
             language_display = None
             original_ok = False
             if original_language:
@@ -1054,7 +1083,7 @@ class COMMON():
                     if clean_lang:
                         lang = langcodes.Language.get(clean_lang)
                         language_display = lang.display_name().lower()
-                except (langcodes.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+                except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError) as e:
                     if meta.get('debug'):
                         console.print(f"[yellow]Debug: Unable to convert language code '{first_lang}' to full name: {e}[/yellow]")
 
