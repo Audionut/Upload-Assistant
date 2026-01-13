@@ -1019,20 +1019,23 @@ class COMMON():
     async def check_language_requirements(
         self,
         meta: dict[str, Any],
-        tracker,
-        languages_to_check,
-        check_audio=False,
-        check_subtitle=False,
-        require_both=False,
-    ):
+        tracker: str,
+        languages_to_check: List[str],
+        check_audio: bool = False,
+        check_subtitle: bool = False,
+        require_both: bool = False,
+    ) -> bool:
         """Check if the given media meets language requirements."""
         try:
             if not meta.get("language_checked", False):
                 await process_desc_language(meta, tracker=tracker)
 
+            meta_audio_languages: list[str] = meta.get("audio_languages", [])
+            meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])
+
             languages_to_check = [lang.lower() for lang in languages_to_check]
-            audio_languages = [lang.lower() for lang in meta.get("audio_languages", [])]
-            subtitle_languages = [lang.lower() for lang in meta.get("subtitle_languages", [])]
+            audio_languages = [lang.lower() for lang in meta_audio_languages]
+            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
 
             audio_ok = (
                 not check_audio
