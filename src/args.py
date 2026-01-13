@@ -152,6 +152,7 @@ class Args():
         parser.add_argument('-nfo', '--nfo', action='store_true', required=False, help="Use .nfo in directory for description")
         parser.add_argument('-k', '--keywords', nargs=1, required=False, help="Add comma separated keywords e.g. 'keyword, keyword2, etc'")
         parser.add_argument('-kf', '--keep-folder', action='store_true', required=False, help="Keep the folder containing the single file. Works only when supplying a directory as input. For uploads with poor filenames, like some scene.")
+        parser.add_argument('-knfo', '--keep-nfo', action='store_true', required=False, help="For specific trackers only, allows to keep nfo files. With single files, must be used in conjuction with --keep-folder to find the nfo in the same folder as the file.", dest="keep_nfo")
         parser.add_argument('-reg', '--region', nargs=1, required=False, help="Region for discs")
         parser.add_argument('-a', '--anon', action='store_true', required=False, help="Upload anonymously")
         parser.add_argument('-st', '--stream', action='store_true', required=False, help="Stream Optimized Upload")

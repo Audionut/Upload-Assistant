@@ -448,6 +448,10 @@ class UNIT3D:
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
+        if not nfo_files and meta.get('keep_nfo', False):
+            if meta.get('keep_folder', False) or meta.get('isdir', False):
+                search_dir = os.path.dirname(meta["path"])
+                nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
             async with aiofiles.open(nfo_files[0], "rb") as f:

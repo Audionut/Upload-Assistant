@@ -1095,7 +1095,7 @@ class COMMON():
                         f"{', '.join(languages_to_check)}\n"
                         f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}\n"
-                        f"[cyan]Original Audio Track:[/cyan] {language_display}"
+                        f"[cyan]Original Audio Language:[/cyan] {language_display}"
                     )
                     return False
 
