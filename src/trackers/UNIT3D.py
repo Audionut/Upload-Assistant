@@ -513,12 +513,16 @@ class UNIT3D:
                         if e.response.status_code == 403:
                             meta["tracker_status"][self.tracker][
                                 "status_message"
-                            ] = "data error: Forbidden (403). This may indicate that you do not have upload permission."
+                            ] = f"data error: Forbidden (403). This may indicate that you do not have upload permission. {e.response.text}"
                         else:
                             meta["tracker_status"][self.tracker][
                                 "status_message"
-                            ] = "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
+                            ] = f"data error: Redirect (302). This may indicate a problem with authentication. {e.response.text}"
                         return False  # Auth/permission error
+                    elif e.response.status_code in [401, 404, 422]:
+                        meta["tracker_status"][self.tracker][
+                            "status_message"
+                        ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
                     else:
                         # Retry other HTTP errors
                         if attempt < max_retries - 1:

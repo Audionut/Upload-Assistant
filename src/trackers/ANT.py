@@ -202,7 +202,7 @@ class ANT:
 
         try:
             if not meta['debug']:
-                async with httpx.AsyncClient(timeout=20) as client:
+                async with httpx.AsyncClient(timeout=40) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data, headers=headers)
                     try:
                         response_data: dict[str, Any] = response.json()
@@ -282,6 +282,12 @@ class ANT:
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True
+        except httpx.TimeoutException:
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT request timed out while uploading."
+            return False
+        except httpx.RequestError as e:
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: An error occurred while making the request: {e}"
+            return False
         except Exception as e:
             import traceback
             error_type = type(e).__name__
@@ -289,7 +295,7 @@ class ANT:
             traceback_str = traceback.format_exc()
             console.print(f"[bold red]ANT upload exception ({error_type}): {error_msg}[/bold red]")
             console.print(f"[red]Traceback:\n{traceback_str}[/red]")
-            meta['tracker_status'][self.tracker]['status_message'] = f"data error: double check if it uploaded"
+            meta['tracker_status'][self.tracker]['status_message'] = "data error: double check if it uploaded"
             return False
 
     async def get_audio(self, meta: dict[str, Any]) -> str:

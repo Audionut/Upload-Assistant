@@ -81,30 +81,82 @@ class RTF():
 
         if meta['debug'] is False:
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
+                async with httpx.AsyncClient(timeout=40.0) as client:
                     response = await client.post(url=self.upload_url, json=json_data, headers=headers)
-                    try:
+
+                    # Handle successful upload (201)
+                    if response.status_code == 201:
+                        try:
+                            response_json = response.json()
+
+                            # Check if there's an error in the response despite 201 status
+                            if response_json.get('error', False):
+                                error_msg = response_json.get('message', 'Unknown error occurred')
+                                meta['tracker_status'][self.tracker]['status_message'] = f"Upload error: {error_msg}"
+                                return False
+
+                            meta['tracker_status'][self.tracker]['status_message'] = response_json
+                            t_id = response_json['torrent']['id']
+                            meta['tracker_status'][self.tracker]['torrent_id'] = t_id
+                            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag,
+                                                                      self.config['TRACKERS'][self.tracker].get('announce_url'),
+                                                                      "https://retroflix.club/browse/t/" + str(t_id))
+                            return True
+                        except KeyError as e:
+                            meta['tracker_status'][self.tracker]['status_message'] = f"Error parsing response: {response.text}: missing key {e}"
+                            return False
+
+                    # Handle error responses
+                    elif response.status_code == 400:
                         response_json = response.json()
-                        meta['tracker_status'][self.tracker]['status_message'] = response.json()
-
-                        t_id = response_json['torrent']['id']
-                        meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                        await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag,
-                                                                  self.config['TRACKERS'][self.tracker].get('announce_url'),
-                                                                  "https://retroflix.club/browse/t/" + str(t_id))
-                        return True
-
-                    except Exception:
-                        console.print("It may have uploaded, go check")
+                        error_msg = response_json.get('message', 'Bad request or torrent file')
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Bad request: {error_msg}"
                         return False
+
+                    elif response.status_code == 403:
+                        response_json = response.json()
+                        error_msg = response_json.get('message', 'You are not allowed to upload')
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Permission denied: {error_msg}"
+                        return False
+
+                    elif response.status_code == 409:
+                        response_json = response.json()
+                        error_msg = response_json.get('message', 'Torrent already exists')
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Duplicate: {error_msg}"
+                        return False
+
+                    elif response.status_code == 413:
+                        response_json = response.json()
+                        error_msg = response_json.get('message', 'Torrent file is too big or has too many files')
+                        meta['tracker_status'][self.tracker]['status_message'] = f"File size error: {error_msg}"
+                        return False
+
+                    elif response.status_code == 422:
+                        response_json = response.json()
+                        error_msg = response_json.get('message', 'Upload rejected based on rules')
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Upload rejected: {error_msg}"
+                        return False
+
+                    else:
+                        # Handle any other status codes
+                        try:
+                            response_json = response.json()
+                            error_msg = response_json.get('message', f'HTTP {response.status_code}')
+                        except Exception:
+                            error_msg = f'HTTP {response.status_code}: {response.text[:200]}'
+
+                        console.print(f"[bold red]Unexpected response: {error_msg}")
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Unexpected response: {error_msg}"
+                        return False
+
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = "data error: RTF request timed out while uploading."
                 return False
             except httpx.RequestError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: An error occurred while making the request: {e}"
                 return False
-            except Exception:
-                meta['tracker_status'][self.tracker]['status_message'] = "data error - It may have uploaded, go check"
+            except Exception as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error - Unexpected error: {e}"
                 return False
 
         else:
