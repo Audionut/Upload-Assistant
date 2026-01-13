@@ -32,22 +32,23 @@ class CBR(UNIT3D):
     async def get_category_id(
         self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
-        category = meta.get("category", "")
-        if meta.get('anime', False) is True and category == 'TV':
-            category = 'ANIMES'
-
         category_id: dict[str, str] = {
-            'MOVIE': '1',
-            'TV': '2',
-            'ANIMES': '4'
+            "MOVIE": "1",
+            "TV": "2",
+            "ANIMES": "4"
         }
 
         if mapping_only:
             return category_id
         elif reverse:
             return {v: k for k, v in category_id.items()}
-        elif category:
-            return {"category_id": category_id.get(category, "0")}
+
+        resolved_category = category if category else meta.get("category", "")
+        if meta.get("anime", False) is True and resolved_category == "TV":
+            resolved_category = "ANIMES"
+
+        if resolved_category:
+            return {"category_id": category_id.get(resolved_category, "0")}
         else:
             meta_category = meta.get("category", "")
             resolved_id = category_id.get(meta_category, "0")
