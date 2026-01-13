@@ -1306,6 +1306,9 @@ async def capture_screenshot(args):
                     "-an",
                     "-sn",
                 ]
+                # Strip Dolby Vision metadata when using zscale tonemapping (libplacebo can handle DV)
+                if hdr_tonemap and "DV" in meta.get('hdr', '') and not use_libplacebo:
+                    cmd_local += ["-bsf:v", "hevc_metadata=delete_dovi=1"]
                 if use_libplacebo and meta.get('libplacebo', False):
                     cmd_local += ["-init_hw_device", "vulkan"]
                 cmd_local += [
@@ -1466,12 +1469,20 @@ async def capture_screenshot(args):
             "-hide_banner",
             "-ss", str(ss_time),
             "-i", path,
+        ]
+
+        # Strip Dolby Vision metadata when using zscale tonemapping (libplacebo can handle DV)
+        # Frame overlay path doesn't use libplacebo, so always strip DV here when tonemapping
+        if hdr_tonemap and "DV" in meta.get('hdr', ''):
+            cmd.extend(["-bsf:v", "hevc_metadata=delete_dovi=1"])
+
+        cmd.extend([
             "-vframes", "1",
             "-vf", vf_chain,
             "-compression_level", ffmpeg_compression,
             "-pred", "mixed",
             image_path
-        ]
+        ])
 
         if ffmpeg_limit:
             # Insert threads before compression options
