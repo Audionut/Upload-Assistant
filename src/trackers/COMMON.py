@@ -6,6 +6,7 @@ import click
 import hashlib
 import httpx
 import json
+import langcodes
 import os
 import re
 import secrets
@@ -1024,6 +1025,7 @@ class COMMON():
         check_audio=False,
         check_subtitle=False,
         require_both=False,
+        original_language=False,
     ):
         """Check if the given media meets language requirements."""
         try:
@@ -1033,6 +1035,27 @@ class COMMON():
             languages_to_check = [lang.lower() for lang in languages_to_check]
             audio_languages = [lang.lower() for lang in meta.get("audio_languages", [])]
             subtitle_languages = [lang.lower() for lang in meta.get("subtitle_languages", [])]
+            language_display = None
+            original_ok = False
+            if original_language:
+                # Get just the first original language
+                original_language_list = meta.get("original_language", [])
+                first_lang = ""
+                if original_language_list:
+                    first_lang = original_language_list[0].lower() if isinstance(original_language_list[0], str) else ""
+
+                try:
+                    # Clean up the language code - take only the first part before any dash or underscore
+                    clean_lang = first_lang.split('-')[0].split('_')[0].strip().lower()
+                    if clean_lang:
+                        lang = langcodes.Language.get(clean_lang)
+                        language_display = lang.display_name()
+                except (langcodes.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Debug: Unable to convert language code '{first_lang}' to full name: {e}[/yellow]")
+
+            if language_display:
+                original_ok = any(lang in audio_languages for lang in languages_to_check)
 
             audio_ok = (
                 not check_audio
@@ -1061,6 +1084,20 @@ class COMMON():
                         f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
                     )
+
+            if not audio_ok and original_ok:
+                if subtitle_ok:
+                    return subtitle_ok
+                else:
+                    console.print(
+                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                        f"[yellow]Required subtitles in one of the following with an original audio track:[/yellow] "
+                        f"{', '.join(languages_to_check)}\n"
+                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
+                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}\n"
+                        f"[cyan]Original Audio Track:[/cyan] {language_display}"
+                    )
+                    return False
 
             if require_both:
                 return audio_ok and subtitle_ok

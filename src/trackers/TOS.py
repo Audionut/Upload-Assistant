@@ -125,7 +125,7 @@ class TOS(UNIT3D):
 
         return files
 
-    async def upload(self, meta, disctype):
+    async def get_additional_checks(self, meta):
         # Check language requirements: must be French audio OR original audio with French subtitles
         french_languages = ["french", "fre", "fra", "fr", "français", "francais"]
         if not await self.common.check_language_requirements(
@@ -134,8 +134,11 @@ class TOS(UNIT3D):
             languages_to_check=french_languages,
             check_audio=True,
             check_subtitle=True,
+            require_both=False,
+            original_language=True,
         ):
-            return
+            console.print(f"[bold red]Language requirements not met for {self.tracker}.[/bold red]")
+            return False
 
         # Check if it's a Scene release without NFO - TOS requires NFO for Scene releases
         is_scene = bool(meta.get("scene_name"))
@@ -145,11 +148,10 @@ class TOS(UNIT3D):
             console.print(
                 f"[red]{self.tracker}: Scene release detected but no NFO file found. TOS requires NFO files for Scene releases.[/red]"
             )
-            meta["tracker_status"][self.tracker][
-                "status_message"
-            ] = "Skipped: Scene release requires NFO file"
-            return
+            return False
+        return True
 
+    async def upload(self, meta, disctype):
         data = await self.get_data(meta)
 
         if meta["isdir"]:
