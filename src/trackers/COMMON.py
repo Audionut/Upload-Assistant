@@ -1039,23 +1039,27 @@ class COMMON():
             original_ok = False
             if original_language:
                 # Get just the first original language
-                original_language_list = meta.get("original_language", [])
+                original_language_raw = meta.get("original_language", [])
                 first_lang = ""
-                if original_language_list:
-                    first_lang = original_language_list[0].lower() if isinstance(original_language_list[0], str) else ""
+                if original_language_raw:
+                    # Handle both string and list cases
+                    if isinstance(original_language_raw, str):
+                        first_lang = original_language_raw.lower()
+                    elif isinstance(original_language_raw, list) and original_language_raw:
+                        first_lang = original_language_raw[0].lower() if isinstance(original_language_raw[0], str) else ""
 
                 try:
                     # Clean up the language code - take only the first part before any dash or underscore
-                    clean_lang = first_lang.split('-')[0].split('_')[0].strip().lower()
+                    clean_lang = first_lang.split('-')[0].split('_')[0].split(',')[0].split(' ')[0].strip().lower()
                     if clean_lang:
                         lang = langcodes.Language.get(clean_lang)
-                        language_display = lang.display_name()
+                        language_display = lang.display_name().lower()
                 except (langcodes.LanguageTagError, LookupError, AttributeError, ValueError) as e:
                     if meta.get('debug'):
                         console.print(f"[yellow]Debug: Unable to convert language code '{first_lang}' to full name: {e}[/yellow]")
 
             if language_display:
-                original_ok = any(lang in audio_languages for lang in languages_to_check)
+                original_ok = language_display in audio_languages
 
             audio_ok = (
                 not check_audio
@@ -1065,6 +1069,12 @@ class COMMON():
                 not check_subtitle
                 or any(lang in subtitle_languages for lang in languages_to_check)
             )
+
+            if meta.get('debug'):
+                console.print(f"[blue]Debug: Audio Languages Found: {audio_languages}[/blue]")
+                console.print(f"[blue]Debug: Subtitle Languages Found: {subtitle_languages}[/blue]")
+                console.print(f"[blue]Debug: Original Audio Language: {language_display}[/blue]")
+                console.print(f"[blue]Debug: Audio OK: {audio_ok}, Subtitle OK: {subtitle_ok}, Original OK: {original_ok}[/blue]")
 
             if require_both:
                 if not (audio_ok and subtitle_ok):
