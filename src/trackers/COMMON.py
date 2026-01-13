@@ -40,7 +40,7 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
-    async def async_input(self, prompt: str = ""):
+    async def async_input(self, prompt: str = "") -> str:
         """Gets user input in a non-blocking way using asyncio.to_thread"""
         if prompt:
             console.print(prompt)

@@ -29,6 +29,9 @@ async def get_name(meta):
         region, distributor, trackers_to_remove = await missing_disc_info(meta, active_trackers)
         for tracker in trackers_to_remove:
             if tracker in meta['trackers']:
+                if meta.get('unattended', False):
+                    console.print()
+                    console.print(f"[yellow]Removing tracker {tracker} due to missing distributor/region info.[/yellow]")
                 meta['trackers'].remove(tracker)
         if distributor and 'SKIPPED' not in distributor:
             meta['distributor'] = distributor

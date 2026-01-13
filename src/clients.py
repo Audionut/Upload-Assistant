@@ -2223,7 +2223,7 @@ class Clients():
                 else:
                     qbt_client = potential_qbt_client
 
-            search_term = meta['uuid']
+            search_term = meta['uuid'].replace('[', '.').replace(']', '.')
             try:
                 if proxy_url:
                     # Build qui's enhanced filter options with expression support

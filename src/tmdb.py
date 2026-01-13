@@ -1764,20 +1764,21 @@ async def set_tmdb_metadata(meta, filename=None):
                     raise RuntimeError(error_msg) from e
 
 
-async def get_tmdb_localized_data(meta, data_type, language, append_to_response):
+async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language: str, append_to_response: str) -> dict[str, Any]:
+    tmdb_data: dict[str, Any] = {}
     endpoint = None
     if data_type == 'main':
         endpoint = f'/{meta["category"].lower()}/{meta["tmdb"]}'
     elif data_type == 'season':
         season = meta.get('season_int')
         if season is None:
-            return None
+            return tmdb_data
         endpoint = f'/tv/{meta["tmdb"]}/season/{season}'
     elif data_type == 'episode':
         season = meta.get('season_int')
         episode = meta.get('episode_int')
         if season is None or episode is None:
-            return None
+            return tmdb_data
         endpoint = f'/tv/{meta["tmdb"]}/season/{season}/episode/{episode}'
 
     url = f'{TMDB_BASE_URL}{endpoint}'
@@ -1811,7 +1812,7 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
 
     async with cache_lock:
         # Re-read the cache file while holding the lock
-        localized_data = {}
+        localized_data: dict[str, Any] = {}
         if os.path.exists(filename):
             try:
                 async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
@@ -1826,7 +1827,7 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
                 localized_data = {}
 
         # Re-check if we have cached data for this specific language and data_type
-        cached_result = localized_data.get(language, {}).get(data_type)
+        cached_result: dict[str, Any] = localized_data.get(language, {}).get(data_type, {})
         if cached_result:
             return cached_result
 
@@ -1835,10 +1836,10 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url, params=params)
                 if response.status_code == 200:
-                    data = response.json()
+                    tmdb_data = response.json()
 
                     # Merge the fetched data into existing cache
-                    localized_data.setdefault(language, {})[data_type] = data
+                    localized_data.setdefault(language, {})[data_type] = tmdb_data
 
                     # Attempt to write to disk, but don't fail if write errors occur
                     try:
@@ -1848,14 +1849,14 @@ async def get_tmdb_localized_data(meta, data_type, language, append_to_response)
                     except (OSError, IOError, Exception) as e:
                         console.print(f'[red]Warning: Failed to write cache to {filename}: {e}[/red]')
 
-                    return data
+                    return tmdb_data
                 else:
                     console.print(f'[red]Request failed for {url}: Status code {response.status_code}[/red]')
-                    return None
+                    return tmdb_data
 
         except httpx.RequestError as e:
             console.print(f'[red]Request failed for {url}: {e}[/red]')
-            return None
+            return tmdb_data
         finally:
             # Optional cleanup: remove the lock if it's no longer being used
             # Only clean up if this is the only reference to avoid race conditions

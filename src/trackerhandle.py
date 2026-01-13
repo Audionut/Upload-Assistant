@@ -104,7 +104,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     modq, draft, tracker_caps = await check_mod_q_and_draft(tracker_class, meta, debug, disctype)
                     if tracker_caps.get('mod_q') and modq == "Yes":
                         console.print(f"{tracker} (modq: {modq})")
-                    if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft", "Live"]:
+                    if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:
                         console.print(f"{tracker} (draft: {draft})")
                     is_uploaded = False
                     try:

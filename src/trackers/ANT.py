@@ -283,7 +283,13 @@ class ANT:
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True
         except Exception as e:
-            meta['tracker_status'][self.tracker]['status_message'] = f"data error: ANT upload failed: {e}"
+            import traceback
+            error_type = type(e).__name__
+            error_msg = str(e) if str(e) else "No error message"
+            traceback_str = traceback.format_exc()
+            console.print(f"[bold red]ANT upload exception ({error_type}): {error_msg}[/bold red]")
+            console.print(f"[red]Traceback:\n{traceback_str}[/red]")
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: double check if it uploaded"
             return False
 
     async def get_audio(self, meta: dict[str, Any]) -> str:

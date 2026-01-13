@@ -311,7 +311,7 @@ async def extract_product_id(url, meta):
 
 async def get_bluray_releases(meta):
     console.print("[blue]===== Starting blu-ray.com release search =====[/blue]")
-    console.print(f"[blue]Movie: {meta.get('filename', 'Unknown')}, IMDB ID: tt{meta.get('imdb_id', '0000000'):07d}[/blue]")
+    console.print(f"[blue]Movie: {meta.get('uuid', 'Unknown')}, IMDB ID: tt{meta.get('imdb_id', '0000000'):07d}[/blue]")
 
     html_content = await search_bluray(meta)
 
