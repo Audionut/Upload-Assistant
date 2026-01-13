@@ -1076,6 +1076,20 @@ class COMMON():
                 console.print(f"[blue]Debug: Original Audio Language: {language_display}[/blue]")
                 console.print(f"[blue]Debug: Audio OK: {audio_ok}, Subtitle OK: {subtitle_ok}, Original OK: {original_ok}[/blue]")
 
+            if not audio_ok and original_ok:
+                if subtitle_ok:
+                    return subtitle_ok
+                else:
+                    console.print(
+                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                        f"[yellow]Required subtitles in one of the following with an original audio track:[/yellow] "
+                        f"{', '.join(languages_to_check)}\n"
+                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
+                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}\n"
+                        f"[cyan]Original Audio Language:[/cyan] {language_display}"
+                    )
+                    return False
+
             if require_both:
                 if not (audio_ok and subtitle_ok):
                     console.print(
@@ -1094,20 +1108,6 @@ class COMMON():
                         f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
                     )
-
-            if not audio_ok and original_ok:
-                if subtitle_ok:
-                    return subtitle_ok
-                else:
-                    console.print(
-                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
-                        f"[yellow]Required subtitles in one of the following with an original audio track:[/yellow] "
-                        f"{', '.join(languages_to_check)}\n"
-                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
-                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}\n"
-                        f"[cyan]Original Audio Language:[/cyan] {language_display}"
-                    )
-                    return False
 
             if require_both:
                 return audio_ok and subtitle_ok
