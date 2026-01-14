@@ -135,8 +135,12 @@ class CBR(UNIT3D):
 
         if not meta.get('is_disc'):
             audio_tag = ""
-            if meta.get("audio_languages"):
-                audio_languages: set[str] = set(meta["audio_languages"])
+            audio_langs = meta.get("audio_languages")
+            if audio_langs:
+                try:
+                    audio_languages: set[str] = set(audio_langs)
+                except TypeError:
+                    audio_languages = set()
 
                 if any(lang.lower() == "portuguese" or lang == "português" for lang in audio_languages):
                     if len(audio_languages) >= 3:
