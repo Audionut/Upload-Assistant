@@ -64,10 +64,11 @@ Many thanks to all who have contributed.
 |ShareIsland|SHRI|SkipTheCommerials|STC|
 |SpeedApp|SPD|Swarmazon|SN|
 |The Leach Zone|TLZ|ToTheGlory|TTG|
-|TorrentHR|THR|Torrenteros|TTR|
-|TorrentLeech|TL|TVChaosUK|TVC|
-|ULCX|ULCX|UTOPIA|UTP|
-|YOiNKED|YOINK|YUSCENE|YUS|
+|TheOldSchool|TOS|TorrentHR|THR|
+|Torrenteros|TTR|TorrentLeech|TL|
+|TVChaosUK|TVC|ULCX|ULCX|
+|UTOPIA|UTP|YOiNKED|YOINK|
+|YUSCENE|YUS|||
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**

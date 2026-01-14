@@ -168,39 +168,50 @@ async def create_torrent(
             include: list[str] = []
             exclude: list[str] = []
 
-            if meta['isdir']:
-                if meta['keep_folder']:
-                    cli_ui.info('--keep-folder was specified. Using complete folder for torrent creation.')
-                    if not meta.get('tv_pack', False):
-                        folder_name = os.path.basename(str(path))
-                        include = [
-                            f"{folder_name}/{os.path.basename(f)}"
-                            for f in meta['filelist']
-                        ]
-                        exclude = ["*", "*/**"]
+            if meta['keep_folder']:
+                console.print('--keep-folder was specified. Using complete folder for torrent creation.')
+                # specific nfo catch for certain trackers. BASE catch should prevent unintentional inclusion by default
+                if meta.get('keep_nfo', False) and "BASE" not in output_filename:
+                    console.print('--keep-nfo was specified. Including NFO files in torrent.')
+                    include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
+                    exclude = ["*.*", "*sample.mkv"]
+                    meta['mkbrr'] = False
+                elif not meta.get('tv_pack', False):
+                    folder_name = os.path.basename(str(path))
+                    include = [
+                        f"{folder_name}/{os.path.basename(f)}"
+                        for f in meta['filelist']
+                    ]
+                    exclude = ["*", "*/**"]
+
+            elif meta['isdir']:
+                if meta.get('keep_nfo', False) and not meta.get('is_disc', False) and "BASE" not in output_filename:
+                    console.print('--keep-nfo was specified. Including NFO files in torrent.')
+                    include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
+                    exclude = ["*.*", "*sample.mkv"]
+                    meta['mkbrr'] = False
+                elif meta.get('is_disc', False):
+                    include = []
+                    exclude = []
+                elif not meta.get('tv_pack', False):
+                    path_dir = os.fspath(path)
+                    os.chdir(path_dir)
+                    globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
+                    no_sample_globs = [
+                        os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
+                        if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
+                    ]
+                    if len(no_sample_globs) == 1:
+                        path = meta['filelist'][0]
+                    exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
+                    include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
                 else:
-                    if meta.get('is_disc', False):
-                        include = []
-                        exclude = []
-                    elif not meta.get('tv_pack', False):
-                        path_dir = os.fspath(path)
-                        os.chdir(path_dir)
-                        globs = glob.glob1(path_dir, "*.mkv") + glob.glob1(path_dir, "*.mp4") + glob.glob1(path_dir, "*.ts")
-                        no_sample_globs = [
-                            os.path.abspath(f"{path_dir}{os.sep}{file}") for file in globs
-                            if not file.lower().endswith('sample.mkv') or "!sample" in file.lower()
-                        ]
-                        if len(no_sample_globs) == 1:
-                            path = meta['filelist'][0]
-                        exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
-                        include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []
-                    else:
-                        folder_name = os.path.basename(str(path))
-                        include = [
-                            f"{folder_name}/{os.path.basename(f)}"
-                            for f in meta['filelist']
-                        ]
-                        exclude = ["*", "*/**"]
+                    folder_name = os.path.basename(str(path))
+                    include = [
+                        f"{folder_name}/{os.path.basename(f)}"
+                        for f in meta['filelist']
+                    ]
+                    exclude = ["*", "*/**"]
             else:
                 exclude = ["*.*", "*sample.mkv", "!sample*.*"] if not meta['is_disc'] else []
                 include = ["*.mkv", "*.mp4", "*.ts"] if not meta['is_disc'] else []

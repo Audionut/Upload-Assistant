@@ -430,6 +430,16 @@ class UNIT3D:
         for r in results:
             merged.update(r)
 
+        # Handle exclusive flag centrally for all UNIT3D trackers
+        # Priority: meta['exclusive'] > tracker config > default (not set)
+        exclusive_flag = None
+        if meta.get("exclusive", False):
+            exclusive_flag = "1"
+        elif self.tracker_config.get("exclusive", False):
+            exclusive_flag = "1"
+        if exclusive_flag:
+            merged["exclusive"] = exclusive_flag
+
         return merged
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
@@ -438,6 +448,10 @@ class UNIT3D:
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
+        if not nfo_files and meta.get('keep_nfo', False):
+            if meta.get('keep_folder', False) or meta.get('isdir', False):
+                search_dir = os.path.dirname(meta["path"])
+                nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
             async with aiofiles.open(nfo_files[0], "rb") as f:
@@ -461,7 +475,7 @@ class UNIT3D:
 
         if meta["debug"] is False:
             response_data = {}
-            max_retries = 1
+            max_retries = 2
             retry_delay = 5
             timeout = 40.0
 

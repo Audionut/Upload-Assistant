@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
 # import discord
+from typing import Any, Optional
 import aiofiles
 import asyncio
 import base64
@@ -21,7 +22,12 @@ class RTF():
         Upload
     """
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
+        """Initialize the RTF tracker handler.
+
+        Args:
+            config: Configuration dictionary containing tracker settings and API credentials.
+        """
         self.config = config
         self.tracker = 'RTF'
         self.source_flag = 'sunshine'
@@ -29,10 +35,19 @@ class RTF():
         self.search_url = 'https://retroflix.club/api/torrent'
         self.torrent_url = 'https://retroflix.club/browse/t/'
         self.forum_link = 'https://retroflix.club/forums.php?action=viewtopic&topicid=3619'
-        self.banned_groups = []
+        self.banned_groups: list[str] = []
         pass
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+        """Upload a torrent to RetroFlix tracker.
+
+        Args:
+            meta: Metadata dictionary containing torrent information (name, mediainfo, screenshots, etc.).
+            disctype: Type of disc (e.g., 'BD', 'DVD').
+
+        Returns:
+            True if upload was successful, False otherwise.
+        """
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, signature=self.forum_link)
@@ -54,13 +69,13 @@ class RTF():
             'name': meta['name'],
             # description does not work for some reason
             # 'description' : meta['overview'] + "\n\n" + desc + "\n\n" + "Uploaded by L4G Upload Assistant",
-            'description': "this is a description",
+            'description': "",
             # editing mediainfo so that instead of 1 080p its 1,080p as site mediainfo parser wont work other wise.
             'mediaInfo': re.sub(r"(\d+)\s+(\d+)", r"\1,\2", mi_dump or "") if bd_dump is None else f"{bd_dump}",
             "nfo": "",
             "url": str(meta.get('imdb_info', {}).get('imdb_url', '') + '/'),
             # auto pulled from IMDB
-            "descr": "This is short description",
+            "descr": "",
             "poster": meta["poster"] if meta["poster"] is not None else "",
             "type": "401" if meta['category'] == 'MOVIE'else "402",
             "screenshots": screenshots,
@@ -169,7 +184,20 @@ class RTF():
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, Any]]:
+        """Search for existing torrents on RetroFlix tracker.
+
+        Validates content eligibility (age requirements, no adult content) and searches
+        for duplicate torrents using IMDB ID or title.
+
+        Args:
+            meta: Metadata dictionary containing torrent information.
+            disctype: Type of disc (e.g., 'BD', 'DVD').
+
+        Returns:
+            List of dictionaries containing information about existing torrents (dupes).
+            Returns empty list if content is ineligible or search fails.
+        """
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
@@ -192,16 +220,26 @@ class RTF():
             years.append(int(tvdb_episode_year))
 
         # Get most recent aired date from all TVDB episodes
+        most_recent_aired_date = None
         tvdb_episodes = meta.get('tvdb_episode_data', {}).get('episodes', [])
         if tvdb_episodes:
             for episode in tvdb_episodes:
                 aired_date = episode.get('aired', '')
                 if aired_date and '-' in aired_date:
                     try:
-                        episode_year = int(aired_date.split('-')[0])
-                        years.append(episode_year)
-                    except (ValueError, IndexError):
-                        continue
+                        episode_date = datetime.datetime.strptime(aired_date, '%Y-%m-%d').date()
+                        if most_recent_aired_date is None or episode_date > most_recent_aired_date:
+                            most_recent_aired_date = episode_date
+                    except (ValueError, AttributeError):
+                        try:
+                            episode_year = int(aired_date.split('-')[0])
+                            years.append(episode_year)
+                        except (ValueError, AttributeError):
+                            continue
+
+        # Add the year from most recent aired date if found
+        if most_recent_aired_date:
+            years.append(most_recent_aired_date.year)
 
         # Use the most recent year found, fallback to meta year
         most_recent_year = max(years) if years else year
@@ -209,11 +247,45 @@ class RTF():
         # Update year with the most recent year for TV shows
         if meta.get('category') == "TV":
             year = most_recent_year
-        if datetime.date.today().year - year <= 9:
-            if not meta.get('unattended', False):
-                console.print("[red]Content must be older than 10 Years to upload at RTF")
-            meta['skipping'] = "RTF"
-            return []
+
+        # Check if content is at least 10 years old using actual date comparison
+        if meta.get('category') == "MOVIE" and meta.get('release_date'):
+            try:
+                release_date = datetime.datetime.strptime(meta['release_date'], '%Y-%m-%d').date()
+                year = release_date.year
+                # Calculate date exactly 10 years ago from today
+                ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+                if release_date > ten_years_ago:
+                    if not meta.get('unattended', False):
+                        console.print("[red]Content must be older than 10 Years to upload at RTF")
+                    meta['skipping'] = "RTF"
+                    return []
+            except (ValueError, AttributeError):
+                # If date parsing fails, fall back to year comparison
+                release_year = meta['release_date'].split('-')[0]
+                if release_year.isdigit():
+                    year = int(release_year)
+                    if datetime.date.today().year - year <= 9:
+                        if not meta.get('unattended', False):
+                            console.print("[red]Content must be older than 10 Years to upload at RTF")
+                        meta['skipping'] = "RTF"
+                        return []
+
+        elif meta.get('category') == "TV" and most_recent_aired_date:
+            # For TV shows, use the most recent aired date for comparison if available
+            ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+            if most_recent_aired_date > ten_years_ago:
+                if not meta.get('unattended', False):
+                    console.print("[red]Content must be older than 10 Years to upload at RTF")
+                meta['skipping'] = "RTF"
+                return []
+
+        else:
+            if year is not None and datetime.date.today().year - year <= 9:
+                if not meta.get('unattended', False):
+                    console.print("[red]Content must be older than 10 Years to upload at RTF")
+                meta['skipping'] = "RTF"
+                return []
 
         dupes = []
         headers = {
@@ -269,8 +341,18 @@ class RTF():
 
         return dupes
 
-    # Tests if stored API key is valid. Site API key expires every week so a new one has to be generated.
-    async def api_test(self, meta):
+    async def api_test(self, meta: dict[str, Any]) -> Optional[bool]:
+        """Test if the stored API key is valid.
+
+        RetroFlix API keys expire weekly, so this method validates the current key
+        and generates a new one if needed.
+
+        Args:
+            meta: Metadata dictionary containing base directory path.
+
+        Returns:
+            True if API key is valid, None if key generation was attempted.
+        """
         headers = {
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
@@ -283,16 +365,30 @@ class RTF():
                 if response.status_code != 200:
                     console.print('[bold red]Your API key is incorrect SO generating a new one')
                     await self.generate_new_api(meta)
+                    return None
                 else:
                     return True
         except httpx.RequestError as e:
             console.print(f'[bold red]Error testing API: {str(e)}')
             await self.generate_new_api(meta)
+            return None
         except Exception as e:
             console.print(f'[bold red]Unexpected error testing API: {str(e)}')
             await self.generate_new_api(meta)
+            return None
 
-    async def generate_new_api(self, meta):
+    async def generate_new_api(self, meta: dict[str, Any]) -> Optional[bool]:
+        """Generate a new API key for RetroFlix tracker.
+
+        Authenticates using username/password and retrieves a new API token,
+        then updates both the in-memory config and the config file on disk.
+
+        Args:
+            meta: Metadata dictionary containing base directory path for config file location.
+
+        Returns:
+            True if new API key was successfully generated and saved, None otherwise.
+        """
         headers = {
             'accept': 'application/json',
         }
@@ -337,11 +433,15 @@ class RTF():
                     return True
                 else:
                     console.print('[bold red]API response does not contain a token.')
+                    return None
             else:
                 console.print(f'[bold red]Error getting new API key: {response.status_code}, please check username and password in the config.')
+                return None
 
         except httpx.RequestError as e:
             console.print(f'[bold red]An error occurred while requesting the API: {str(e)}')
+            return None
 
         except Exception as e:
             console.print(f'[bold red]An unexpected error occurred: {str(e)}')
+            return None

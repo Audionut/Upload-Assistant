@@ -430,7 +430,7 @@ def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
     if isinstance(audio_languages, str):
         audio_languages = [audio_languages]
 
-    bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SHRI", "SP", "TL"]
+    bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SHRI", "SP", "TL", "TOS"]
     tracker_allowed_bloat_language = {
         "AITHER": "en",
         "ANT": "en",

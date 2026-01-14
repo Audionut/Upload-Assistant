@@ -6,10 +6,12 @@ import click
 import hashlib
 import httpx
 import json
+import langcodes
 import os
 import re
 import secrets
 import sys
+from langcodes import tag_parser
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
@@ -1024,8 +1026,34 @@ class COMMON():
         check_audio: bool = False,
         check_subtitle: bool = False,
         require_both: bool = False,
+        original_language: bool = False,
     ) -> bool:
-        """Check if the given media meets language requirements."""
+        """
+        Check if the media metadata meets specific language requirements for audio and/or subtitles.
+
+        The function evaluates whether the provided media contains the required languages.
+        It can also handle logic for original language tracks and cross-reference them
+        with subtitles if the primary audio requirement isn't met.
+
+        :param meta: Dictionary containing media metadata (audio_languages, subtitle_languages, etc.).
+        :type meta: dict[str, Any]
+        :param tracker: Name of the tracker being processed, used for logging/output.
+        :type tracker: str
+        :param languages_to_check: A list of language names or codes to search for.
+        :type languages_to_check: List[str]
+        :param check_audio: If True, validates if required languages are present in audio tracks.
+        :type check_audio: bool
+        :param check_subtitle: If True, validates if required languages are present in subtitle tracks.
+        :type check_subtitle: bool
+        :param require_both: If True, both audio AND subtitle requirements must be satisfied.
+                             If False, satisfying either is enough (OR logic).
+        :type require_both: bool
+        :param original_language: If True, checks if the media's original language matches the audio
+                                  track, allowing a fallback to subtitle-only validation.
+        :type original_language: bool
+        :return: True if language requirements are met, False otherwise.
+        :rtype: bool
+        """
         try:
             if not meta.get("language_checked", False):
                 await process_desc_language(meta, tracker=tracker)
@@ -1036,6 +1064,31 @@ class COMMON():
             languages_to_check = [lang.lower() for lang in languages_to_check]
             audio_languages = [lang.lower() for lang in meta_audio_languages]
             subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
+            language_display = None
+            original_ok = False
+            if original_language:
+                # Get just the first original language
+                original_language_raw = meta.get("original_language", [])
+                first_lang = ""
+                if original_language_raw:
+                    # Handle both string and list cases
+                    if isinstance(original_language_raw, str):
+                        first_lang = original_language_raw.lower()
+                    elif isinstance(original_language_raw, list) and original_language_raw:
+                        first_lang = original_language_raw[0].lower() if isinstance(original_language_raw[0], str) else ""
+
+                try:
+                    # Clean up the language code - take only the first part before any dash or underscore
+                    clean_lang = first_lang.split('-')[0].split('_')[0].split(',')[0].split(' ')[0].strip().lower()
+                    if clean_lang:
+                        lang = langcodes.Language.get(clean_lang)
+                        language_display = lang.display_name().lower()
+                except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Debug: Unable to convert language code '{first_lang}' to full name: {e}[/yellow]")
+
+            if language_display:
+                original_ok = language_display in audio_languages
 
             audio_ok = (
                 not check_audio
@@ -1045,6 +1098,26 @@ class COMMON():
                 not check_subtitle
                 or any(lang in subtitle_languages for lang in languages_to_check)
             )
+
+            if meta.get('debug'):
+                console.print(f"[blue]Debug: Audio Languages Found: {audio_languages}[/blue]")
+                console.print(f"[blue]Debug: Subtitle Languages Found: {subtitle_languages}[/blue]")
+                console.print(f"[blue]Debug: Original Audio Language: {language_display}[/blue]")
+                console.print(f"[blue]Debug: Audio OK: {audio_ok}, Subtitle OK: {subtitle_ok}, Original OK: {original_ok}[/blue]")
+
+            if not audio_ok and original_ok:
+                if subtitle_ok:
+                    return subtitle_ok
+                else:
+                    console.print(
+                        f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                        f"[yellow]Required subtitles in one of the following with an original audio track:[/yellow] "
+                        f"{', '.join(languages_to_check)}\n"
+                        f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
+                        f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}\n"
+                        f"[cyan]Original Audio Language:[/cyan] {language_display}"
+                    )
+                    return False
 
             if require_both:
                 if not (audio_ok and subtitle_ok):
