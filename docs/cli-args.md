@@ -107,13 +107,14 @@ Note: if a manual TMDb or IMDb id is present in the incoming `meta` before parsi
 
 ### Misc metadata flags
 
-- `--not-anime`: Manually mark release as not anime. NOTE: invokes a quicker processing path for TV content when metadata ids (such as TMDB) are also provided
+- `--not-anime`: Manually mark release as not anime. NOTE: invokes a quicker processing path for TV content when metadata ids (such as TMDB) are also provided.
 - `-year`, `--year YYYY`: Override the year found.
 - `-mc`, `--commentary`: Manually indicate commentary tracks are included.
 - `-sfxs`, `--sfx-subtitles`: Manually indicate “SFX subtitles” are included.
 - `-e`, `--extras`: Indicates extras are included (mainly Blu-ray discs).
-- `-sort`, `--sorted-filelist`: Use the largest video file instead of the first video file found. NOTE: useful for anime content when additional content is present in a folder
+- `-sort`, `--sorted-filelist`: Use the largest video file instead of the first video file found. NOTE: useful for anime content when additional content is present in a folder.
 - `-kf`, `--keep-folder`: Keep the folder containing the single file (only when supplying a directory).
+- `-knfo`, `--keep-nfo`: Keep nfo file where applicable for specific tracker/s. With single files, must be used in conjunction with `--keep-folder` above.
 - `-reg`, `--region REGION`: Region for discs.
 
 ## Tracker-specific references (existing torrent ids/links)

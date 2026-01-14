@@ -10,7 +10,7 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class TOS(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name="TOS")
         self.config = config
         self.common = COMMON(config)
@@ -80,9 +80,9 @@ class TOS(UNIT3D):
             }.get(meta["type"], "0")
         return {"type_id": type_id}
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         is_scene = bool(meta.get("scene_name"))
-        base_name = meta.get("scene_name") if is_scene else meta.get("uuid")
+        base_name: str = str(meta.get("scene_name") if is_scene else meta.get("uuid"))
 
         if is_scene is False:
             replacements = {
@@ -111,7 +111,7 @@ class TOS(UNIT3D):
 
         return {"name": base_name}
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         # Check language requirements: must be French audio OR original audio with French subtitles
         french_languages = ["french", "fre", "fra", "fr", "français", "francais"]
         if not await self.common.check_language_requirements(
