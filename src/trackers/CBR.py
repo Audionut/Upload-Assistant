@@ -27,7 +27,6 @@ class CBR(UNIT3D):
             "SkipTT", "SM737", "SPDVD", "STUTTERSHIT", "SWTYBLZ", "t3nzin", "TAoE", "TEKNO3D", "Telly", "TGx",
             "Tigole", "TSP", "TSPxL", "TWA", "UnKn0wn", "VXT", "Vyndros", "W32", "Will1869", "x0r", "YIFY", "YTS.MX", "YTS"
         ]
-        pass
 
     async def get_category_id(
         self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
@@ -49,10 +48,8 @@ class CBR(UNIT3D):
 
         if resolved_category:
             return {"category_id": category_id.get(resolved_category, "0")}
-        else:
-            meta_category = meta.get("category", "")
-            resolved_id = category_id.get(meta_category, "0")
-            return {"category_id": resolved_id}
+
+        return {"category_id": "0"}
 
     async def get_type_id(
         self, meta: dict[str, Any], type: str = "", reverse: bool = False, mapping_only: bool = False
