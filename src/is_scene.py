@@ -7,7 +7,7 @@ import time
 import urllib.parse
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
-from typing import Any, Mapping, cast
+from typing import Any, Dict, Mapping, Optional, Tuple, cast
 from data.config import config
 from src.console import console
 
@@ -27,7 +27,8 @@ def _attr_to_string(value: Any) -> str:
     return str(value)
 
 
-async def is_scene(video, meta, imdb=None, lower=False):
+async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None, lower: bool = False) -> Tuple[str, bool, Optional[int]]:
+    scene_start_time = 0.0
     if meta['debug']:
         scene_start_time = time.time()
 
@@ -88,7 +89,8 @@ async def is_scene(video, meta, imdb=None, lower=False):
                     meta['we_need_tag'] = True
                 if first_result.get('imdbId'):
                     imdb_str = first_result['imdbId']
-                    imdb = int(imdb_str) if (imdb_str.isdigit() and not meta.get('imdb_manual')) else 0
+                    imdb_val = int(imdb_str) if (imdb_str.isdigit() and not meta.get('imdb_manual')) else 0
+                    imdb = imdb_val if imdb_val != 0 else None
 
                 # NFO Download Handling
                 if not meta.get('nfo') and not meta.get('emby', False):
@@ -152,7 +154,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
                     console.print("[yellow]SRRDB: No match found")
 
         elif not scene and lower and not meta.get('emby_debug', False):
-            release_name = None
+            release_name: str = ""
             name_value = meta.get('filename') if hasattr(meta, 'get') else None
             name = name_value.replace(" ", ".") if isinstance(name_value, str) else None
             tag_value = meta.get('tag') if hasattr(meta, 'get') else None
@@ -198,19 +200,19 @@ async def is_scene(video, meta, imdb=None, lower=False):
                                     except Exception as e:
                                         console.print("[yellow]Failed to download NFO file:", e)
 
-                        return release_name
+                        return release_name, True, imdb
                     else:
                         if meta['debug']:
                             console.print("[yellow]SRRDB: No match found with lower/tag search")
-                        return None
+                        return video, scene, imdb
 
                 except Exception as e:
                     console.print(f"[yellow]SRRDB search failed: {e}")
-                    return None
+                    return video, scene, imdb
             else:
                 if meta['debug']:
                     console.print("[yellow]SRRDB: Missing name or tag for lower/tag search")
-                return None
+                return video, scene, imdb
 
     check_predb = bool(DEFAULT_CONFIG.get('check_predb', False))
     if not scene and check_predb and not meta.get('emby_debug', False):
@@ -225,7 +227,7 @@ async def is_scene(video, meta, imdb=None, lower=False):
     return video, scene, imdb
 
 
-async def predb_check(meta, video):
+async def predb_check(meta: Dict[str, Any], video: str) -> bool:
     url = f"https://predb.pw/search.php?search={urllib.parse.quote(os.path.basename(video))}"
     if meta['debug']:
         console.print("Using predb url", url)

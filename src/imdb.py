@@ -5,7 +5,7 @@ import httpx
 import json
 import sys
 
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from anitopy import parse as anitopy_parse
 from datetime import datetime
@@ -16,7 +16,7 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 
 
-async def safe_get(data, path, default=None):
+async def safe_get(data: Any, path: List[str], default: Any = None) -> Any:
     for key in path:
         if isinstance(data, dict):
             data = data.get(key, default)
@@ -25,7 +25,7 @@ async def safe_get(data, path, default=None):
     return data
 
 
-async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
+async def get_imdb_info_api(imdbID: Union[int, str], manual_language: Optional[Union[str, Dict[str, Any]]] = None, debug: bool = False) -> Dict[str, Any]:
     imdb_info: dict[str, Any] = {}
 
     if not imdbID or imdbID == 0:
@@ -298,7 +298,7 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
 
     imdb_info['rating'] = await safe_get(title_data, ['ratingsSummary', 'aggregateRating'], 'N/A')
 
-    async def get_credits(title_data, category_keyword):
+    async def get_credits(title_data: Dict[str, Any], category_keyword: str) -> Tuple[List[str], List[str]]:
         people_list: list[str] = []
         people_id_list: list[str] = []
         principal_credits = await safe_get(title_data, ['principalCredits'], [])
@@ -456,7 +456,19 @@ async def get_imdb_info_api(imdbID, manual_language=None, debug=False):
     return imdb_info
 
 
-async def search_imdb(filename, search_year, quickie=False, category=None, debug=False, secondary_title=None, path=None, untouched_filename=None, attempted=0, duration=None, unattended=False):
+async def search_imdb(
+    filename: str,
+    search_year: Optional[Union[str, int]],
+    quickie: bool = False,
+    category: Optional[str] = None,
+    debug: bool = False,
+    secondary_title: Optional[str] = None,
+    path: Optional[str] = None,
+    untouched_filename: Optional[str] = None,
+    attempted: Optional[int] = 0,
+    duration: Optional[Union[str, int]] = None,
+    unattended: bool = False,
+) -> int:
     search_results: list[dict[str, Any]] = []
     imdbID = imdb_id = 0
     if attempted is None:
@@ -466,7 +478,15 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     if attempted:
         await asyncio.sleep(1)  # Whoa baby, slow down
 
-    async def run_imdb_search(filename, search_year, category=None, debug=False, attempted=0, duration=None, wide_search=False):
+    async def run_imdb_search(
+        filename: str,
+        search_year: Optional[Union[str, int]],
+        category: Optional[str] = None,
+        debug: bool = False,
+        attempted: Optional[int] = 0,
+        duration: Optional[Union[str, int]] = None,
+        wide_search: bool = False,
+    ) -> list[dict[str, Any]]:
         search_results: list[dict[str, Any]] = []
         if secondary_title is not None:
             filename = secondary_title
@@ -765,8 +785,8 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
             # Show sorted results to user
             console.print("[bold yellow]Multiple IMDb results found. Please select the correct entry:[/bold yellow]")
 
-            for idx, result in enumerate(sorted_results):
-                node = await safe_get(result, ["node"], {})
+            for idx, candidate in enumerate(sorted_results):
+                node = await safe_get(candidate, ["node"], {})
                 title = await safe_get(node, ["title"], {})
                 title_text = await safe_get(title, ["titleText", "text"], "")
                 year = await safe_get(title, ["releaseYear", "year"], None)
@@ -846,7 +866,7 @@ async def search_imdb(filename, search_year, quickie=False, category=None, debug
     return imdbID if imdbID else 0
 
 
-async def get_imdb_from_episode(imdb_id, debug=False):
+async def get_imdb_from_episode(imdb_id: Union[int, str], debug: bool = False) -> Optional[Dict[str, Any]]:
     if not imdb_id or imdb_id == 0:
         return None
 

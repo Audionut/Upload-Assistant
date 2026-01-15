@@ -6,6 +6,7 @@ import os
 import datetime
 import sys
 import re
+from typing import Dict, Any, List, Tuple, Optional, cast, Sequence
 from src.console import console
 
 
@@ -15,10 +16,10 @@ class ShortHelpFormatter(argparse.HelpFormatter):
     Only displays essential options.
     """
 
-    def __init__(self, prog):
+    def __init__(self, prog: str) -> None:
         super().__init__(prog, max_help_position=40, width=80)
 
-    def format_help(self):
+    def format_help(self) -> str:
         """
         Customize short help output (only show essential arguments).
         """
@@ -30,7 +31,7 @@ Common options:
   -tvmaze, --tvmaze          Specify the TVMaze id to use
   -tvdb, --tvdb              Specify the TVDB id to use
   --queue (queue name)       Process an entire folder (including files/subfolders) in a queue
-  -mf, --manual_frames       Comma-seperated list of frame numbers to use for screenshots
+  -mf, --manual_frames       Comma-separated list of frame numbers to use for screenshots
   -df, --descfile            Path to custom description file
   -serv, --service           Streaming service
   --no-aka                   Remove AKA from title
@@ -51,7 +52,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
     Custom ArgumentParser to handle short (-h) and long (--help) help messages.
     """
 
-    def print_help(self, file=None):
+    def print_help(self, file: Any = None) -> None:
         """
         Show short help for `-h` and full help for `--help`
         """
@@ -69,12 +70,12 @@ class Args():
     Parse Args
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
         pass
 
-    def parse(self, args, meta):
-        input = args
+    def parse(self, argv: Sequence[str], meta: Dict[str, Any]) -> Tuple[Dict[str, Any], CustomArgumentParser, List[str]]:
+        input = list(argv)
         parser = CustomArgumentParser(
             usage="upload.py [path...] [options]",
         )
@@ -193,19 +194,19 @@ class Args():
         parser.add_argument('-emby_cat', '--emby_cat', nargs=1, required=False, help="Set the expected category for Emby (e.g., 'movie', 'tv')")
         parser.add_argument('-emby_debug', '--emby_debug', action='store_true', required=False, help="Does debugging stuff for Audionut")
         parser.add_argument('-ch', '--channel', nargs=1, required=False, help="SPD only: Channel ID number or tag to upload to (preferably the ID), without '@'. Example: '-ch spd' when using a tag, or '-ch 1' when using an ID.", type=str, dest='spd_channel', default="")
-        args, before_args = parser.parse_known_args(input)
-        args = vars(args)
+        parsed_args_ns, before_args = parser.parse_known_args(input)
+        parsed_args: Dict[str, Any] = vars(parsed_args_ns)
         # console.print(args)
 
         # Validation: require either path or site_upload
-        if not args.get('path') and not args.get('site_upload'):
+        if not parsed_args.get('path') and not parsed_args.get('site_upload'):
             console.print("[red]Error: Either a path must be provided or --site-upload must be specified.[/red]")
             parser.print_help()
             sys.exit(1)
 
         # For site upload mode, provide a dummy path if none given
-        if args.get('site_upload') and not args.get('path'):
-            args['path'] = ['dummy_path_for_site_upload']
+        if parsed_args.get('site_upload') and not parsed_args.get('path'):
+            parsed_args['path'] = ['dummy_path_for_site_upload']
 
         if meta.get('manual_frames') is not None:
             try:
@@ -218,20 +219,20 @@ class Args():
                 sys.exit(1)
         else:
             meta['manual_frames'] = None  # Explicitly set it to None if not provided
-        if len(before_args) >= 1 and not os.path.exists(' '.join(args['path'])):
+        if len(before_args) >= 1 and not os.path.exists(' '.join(parsed_args['path'])):
             for each in before_args:
-                args['path'].append(each)
-                if os.path.exists(' '.join(args['path'])):
+                parsed_args['path'].append(each)
+                if os.path.exists(' '.join(parsed_args['path'])):
                     if any(".mkv" in x for x in before_args):
-                        if ".mkv" in ' '.join(args['path']):
+                        if ".mkv" in ' '.join(parsed_args['path']):
                             break
                     else:
                         break
 
         if meta.get('tmdb_manual') is not None or meta.get('imdb_manual') is not None:
             meta['tmdb_manual'] = meta['tmdb_id'] = meta['tmdb'] = meta['imdb_id'] = meta['imdb'] = None
-        for key in args:
-            value = args.get(key)
+        for key in parsed_args:
+            value = parsed_args[key]
             if value not in (None, []):
                 if isinstance(value, list):
                     value2 = self.list_to_string(value)
@@ -413,7 +414,7 @@ class Args():
                     meta[key] = ""
             if key in ("freeleech"):
                 if isinstance(value, list) and len(value) == 1:
-                    meta[key] = int(value[0])
+                    meta[key] = int(str(cast(Any, value[0])))
                 elif value not in (None, [], 0):
                     meta[key] = int(value)
                 else:
@@ -463,7 +464,7 @@ class Args():
                 # parser.print_help()
         return meta, parser, before_args
 
-    def list_to_string(self, list):
+    def list_to_string(self, list: List[str]) -> str:
         if len(list) == 1:
             return str(list[0])
         try:
@@ -472,10 +473,12 @@ class Args():
             result = "None"
         return result
 
-    def parse_tmdb_id(self, id, category):
-        id = str(id).lower().strip()
-        if id.startswith('http'):
-            parsed = urllib.parse.urlparse(id)
+    def parse_tmdb_id(self, id_str: str, category: Optional[str]) -> Tuple[str, int]:
+        if category is None:
+            category = ''
+        parsed_id: str = str(id_str).lower().strip()
+        if parsed_id.startswith('http'):
+            parsed = urllib.parse.urlparse(parsed_id)
             path = parsed.path.strip('/')
 
             if '/' in path:
@@ -489,20 +492,20 @@ class Args():
                     elif type_part == 'movie':
                         category = 'MOVIE'
 
-                    id = id_part
+                    parsed_id = id_part
 
-        if id.startswith('tv'):
-            id = id.split('/')[1]
+        if parsed_id.startswith('tv'):
+            parsed_id = parsed_id.split('/')[1]
             category = 'TV'
-        elif id.startswith('movie'):
-            id = id.split('/')[1]
+        elif parsed_id.startswith('movie'):
+            parsed_id = parsed_id.split('/')[1]
             category = 'MOVIE'
         else:
-            id = id
+            parsed_id = parsed_id
 
-        if isinstance(id, str) and id.isdigit():
-            id = int(id)
+        if isinstance(parsed_id, str) and parsed_id.isdigit():
+            parsed_id_int = int(parsed_id)
         else:
-            id = 0
+            parsed_id_int = 0
 
-        return category, id
+        return category, parsed_id_int

@@ -4,6 +4,7 @@ from awsmfunc import ScreenGen, DynamicTonemap, zresize
 import random
 import os
 from functools import partial
+from typing import Any, Dict, Optional
 
 core = vs.core
 
@@ -12,8 +13,8 @@ core = vs.core
 # core.std.LoadPlugin(path="/usr/local/lib/vapoursynth/libimwri.so")
 
 
-def CustomFrameInfo(clip, text):
-    def FrameProps(n, f, clip):
+def CustomFrameInfo(clip: vs.VideoNode, text: str) -> vs.VideoNode:
+    def FrameProps(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         # Modify the frame properties extraction here to avoid the decode issue
         info = f"Frame {n} of {clip.num_frames}\nPicture type: {f.props['_PictType']}"
         # Adding the frame information as text to the clip
@@ -23,7 +24,7 @@ def CustomFrameInfo(clip, text):
     return core.std.FrameEval(clip, partial(FrameProps, clip=clip), prop_src=clip)
 
 
-def optimize_images(image, config):
+def optimize_images(image: str, config: Dict[str, Any]) -> None:
     import platform  # Ensure platform is imported here
     if config.get('optimize_images', True):
         if os.path.exists(image):
@@ -40,7 +41,7 @@ def optimize_images(image, config):
     return
 
 
-def vs_screengn(source, encode=None, num=5, dir=".", config=None):
+def vs_screengn(source: str, encode: Optional[str] = None, num: int = 5, dir: str = ".", config: Optional[Dict[str, Any]] = None) -> None:
     if config is None:
         config = {'optimize_images': True}  # Default configuration
 

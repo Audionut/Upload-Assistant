@@ -2,11 +2,12 @@
 import os
 import re
 import json
+from typing import Any, Dict
 from guessit import guessit
 from src.console import console
 
 
-async def get_tag(video, meta, season_pack_check=False):
+async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = False) -> str:
     # Using regex from cross-seed (https://github.com/cross-seed/cross-seed/tree/master?tab=Apache-2.0-1-ov-file)
     release_group = None
     basename = os.path.basename(video)
@@ -81,7 +82,7 @@ async def get_tag(video, meta, season_pack_check=False):
     return tag
 
 
-async def tag_override(meta):
+async def tag_override(meta: Dict[str, Any]) -> Dict[str, Any]:
     try:
         with open(f"{meta['base_dir']}/data/tags.json", 'r', encoding="utf-8") as f:
             tags = json.load(f)
@@ -110,5 +111,5 @@ async def tag_override(meta):
     return meta
 
 
-def _is_true(value):
+def _is_true(value: Any) -> bool:
     return str(value).strip().lower() == "true"

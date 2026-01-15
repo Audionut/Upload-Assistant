@@ -1,9 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from typing import Any, Dict, Optional, Tuple, Union
 from guessit import guessit
 
 
-async def get_region(bdinfo, region=None):
+async def get_region(bdinfo: Dict[str, Any], region: Optional[str] = None) -> str:
     label = bdinfo.get('label', bdinfo.get('title', bdinfo.get('path', ''))).replace('.', ' ')
     if region is not None:
         region = region.upper()
@@ -54,7 +55,7 @@ async def get_region(bdinfo, region=None):
     return region
 
 
-async def get_distributor(distributor_in):
+async def get_distributor(distributor_in: Optional[str]) -> str:
     distributor_list = [
         '01 DISTRIBUTION', '100 DESTINATIONS TRAVEL FILM', '101 FILMS', '1FILMS', '2 ENTERTAIN VIDEO', '20TH CENTURY FOX', '2L', '3D CONTENT HUB', '3D MEDIA', '3L FILM', '4DIGITAL', '4DVD', '4K ULTRA HD MOVIES', '4K UHD', '8-FILMS', '84 ENTERTAINMENT', '88 FILMS', '@ANIME', 'ANIME', 'A CONTRACORRIENTE', 'A CONTRACORRIENTE FILMS', 'A&E HOME VIDEO', 'A&E', 'A&M RECORDS', 'A+E NETWORKS', 'A+R', 'A-FILM', 'AAA', 'AB VIDÉO', 'AB VIDEO', 'ABC - (AUSTRALIAN BROADCASTING CORPORATION)', 'ABC', 'ABKCO', 'ABSOLUT MEDIEN', 'ABSOLUTE', 'ACCENT FILM ENTERTAINMENT', 'ACCENTUS', 'ACORN MEDIA', 'AD VITAM', 'ADA', 'ADITYA VIDEOS', 'ADSO FILMS', 'AFM RECORDS', 'AGFA', 'AIX RECORDS',
         'ALAMODE FILM', 'ALBA RECORDS', 'ALBANY RECORDS', 'ALBATROS', 'ALCHEMY', 'ALIVE', 'ALL ANIME', 'ALL INTERACTIVE ENTERTAINMENT', 'ALLEGRO', 'ALLIANCE', 'ALPHA MUSIC', 'ALTERDYSTRYBUCJA', 'ALTERED INNOCENCE', 'ALTITUDE FILM DISTRIBUTION', 'ALUCARD RECORDS', 'AMAZING D.C.', 'AMAZING DC', 'AMMO CONTENT', 'AMUSE SOFT ENTERTAINMENT', 'ANCONNECT', 'ANEC', 'ANIMATSU', 'ANIME HOUSE', 'ANIME LTD', 'ANIME WORKS', 'ANIMEIGO', 'ANIPLEX', 'ANOLIS ENTERTAINMENT', 'ANOTHER WORLD ENTERTAINMENT', 'AP INTERNATIONAL', 'APPLE', 'ARA MEDIA', 'ARBELOS', 'ARC ENTERTAINMENT', 'ARP SÉLECTION', 'ARP SELECTION', 'ARROW', 'ART SERVICE', 'ART VISION', 'ARTE ÉDITIONS', 'ARTE EDITIONS', 'ARTE VIDÉO',
@@ -72,14 +73,14 @@ async def get_distributor(distributor_in):
         'MASTERS OF CINEMA', 'MOC'
     ]
     distributor_out = ""
-    if distributor_in not in [None, "None", ""]:
+    if distributor_in is not None and distributor_in not in ["None", ""]:
         for each in distributor_list:
             if distributor_in.upper() == each:
                 distributor_out = each
     return distributor_out
 
 
-async def get_service(video=None, tag=None, audio=None, guess_title=None, get_services_only=False):
+async def get_service(video: Optional[str] = None, tag: Optional[str] = None, audio: Optional[str] = None, guess_title: Optional[str] = None, get_services_only: bool = False) -> Union[Dict[str, str], Tuple[str, str]]:
     services = {
         '9NOW': '9NOW', '9Now': '9NOW', 'ADN': 'ADN', 'Animation Digital Network': 'ADN', 'AE': 'AE', 'A&E': 'AE', 'AJAZ': 'AJAZ', 'Al Jazeera English': 'AJAZ',
         'ALL4': 'ALL4', 'Channel 4': 'ALL4', 'AMBC': 'AMBC', 'ABC': 'AMBC', 'AMC': 'AMC', 'AMZN': 'AMZN',
@@ -134,10 +135,14 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
 
     if get_services_only:
         return services
+
+    if video is None:
+        return "", ""
+
     service = guessit(video).get('streaming_service', "")
 
-    video_name = re.sub(r"[.()]", " ", video.replace(tag, '').replace(guess_title, ''))
-    if "DTS-HD MA" in audio:
+    video_name = re.sub(r"[.()]", " ", video.replace(tag or '', '').replace(guess_title or '', ''))
+    if audio and "DTS-HD MA" in audio:
         video_name = video_name.replace("DTS-HD.MA.", "").replace("DTS-HD MA ", "")
     for key, value in services.items():
         if (' ' + key + ' ') in video_name and key not in guessit(video, {"excludes": ["country", "language"]}).get('title', ''):

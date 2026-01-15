@@ -2,12 +2,12 @@
 from guessit import guessit
 import os
 import re
-from typing import Any, Union
+from typing import Any, Dict, List, Tuple, Union
 from src.console import console
 from src.region import get_distributor
 
 
-async def get_edition(video, bdinfo, filelist, manual_edition, meta):
+async def get_edition(video: str, bdinfo: Dict[str, Any], filelist: List[str], manual_edition: Union[str, List[str]], meta: Dict[str, Any]) -> Tuple[str, str, bool]:
     edition = ""
 
     if meta.get('category') == "MOVIE" and not meta.get('anime'):
@@ -348,7 +348,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
         repack = "RERIP"
 
     # Only remove REPACK, RERIP, or PROPER from edition if not in manual edition
-    if not manual_edition or all(tag.lower() not in ['repack', 'repack2', 'repack3', 'proper', 'proper2', 'proper3', 'rerip'] for tag in manual_edition.strip().lower().split()):
+    if not manual_edition or (isinstance(manual_edition, str) and all(tag.lower() not in ['repack', 'repack2', 'repack3', 'proper', 'proper2', 'proper3', 'rerip'] for tag in manual_edition.strip().lower().split())):
         edition = re.sub(r"(\bREPACK\d?\b|\bRERIP\b|\bPROPER\b)", "", edition, flags=re.IGNORECASE).strip()
 
     if not meta.get('webdv', False):
@@ -382,7 +382,7 @@ async def get_edition(video, bdinfo, filelist, manual_edition, meta):
     return edition, repack, hybrid
 
 
-def format_duration(seconds):
+def format_duration(seconds: float) -> str:
     """Convert seconds to a human-readable HH:MM:SS format."""
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
@@ -390,7 +390,7 @@ def format_duration(seconds):
     return f"{hours}:{minutes:02d}:{secs:02d}"
 
 
-def smart_title(s):
+def smart_title(s: str) -> str:
     """Custom title function that doesn't capitalize after apostrophes"""
     result = s.title()
     # Fix capitalization after apostrophes

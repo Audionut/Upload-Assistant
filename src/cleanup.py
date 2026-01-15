@@ -24,7 +24,7 @@ thread_executor: Optional[ThreadPoolExecutor] = None
 IS_MACOS = sys.platform == 'darwin'
 
 
-async def cleanup():
+async def cleanup() -> None:
     """Ensure all running tasks, threads, and subprocesses are properly cleaned up before exiting."""
     # console.print("[yellow]Cleaning up tasks before exiting...[/yellow]")
 
@@ -132,7 +132,7 @@ async def cleanup():
     # console.print("[green]Cleanup completed. Exiting safely.[/green]")
 
 
-def kill_all_threads():
+def kill_all_threads() -> None:
     """Forcefully kill any lingering threads and subprocesses before exit."""
     # console.print("[yellow]Checking for remaining background threads...[/yellow]")
 
@@ -226,7 +226,7 @@ if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
         pass
 
 
-def reset_terminal():
+def reset_terminal() -> None:
     """Reset the terminal while allowing the script to continue running (Linux/macOS only)."""
     if os.name != "posix" or IS_ANDROID:
         return  # Skip terminal reset on Windows and Android

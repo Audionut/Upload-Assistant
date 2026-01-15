@@ -9,7 +9,7 @@ import os
 import re
 import requests
 import sys
-from typing import Any, cast as typing_cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast as typing_cast
 
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -35,11 +35,20 @@ parser = Args(config=config)
 _cache_locks = {}
 
 
-async def normalize_title(title):
+async def normalize_title(title: str) -> str:
     return title.lower().replace('&', 'and').replace('  ', ' ').strip()
 
 
-async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=None, debug=False, mode="discord", category_preference=None, imdb_info=None):
+async def get_tmdb_from_imdb(
+    imdb_id: Union[str, int],
+    tvdb_id: Optional[int] = None,
+    search_year: Optional[Union[str, int]] = None,
+    filename: Optional[str] = None,
+    debug: bool = False,
+    mode: str = "discord",
+    category_preference: Optional[str] = None,
+    imdb_info: Optional[dict[str, Any]] = None
+) -> Tuple[str, Union[int, str], str, bool]:
     """Fetches TMDb ID using IMDb or TVDb ID.
 
     - Returns `(category, tmdb_id, original_language)`
@@ -52,7 +61,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             imdb_id = f"tt{imdb_id:07d}"
     filename_search = False
 
-    async def _tmdb_find_by_external_source(external_id, source):
+    async def _tmdb_find_by_external_source(external_id: Union[str, int], source: str) -> dict[str, Any]:
         """Helper function to find a movie or TV show on TMDb by external ID."""
         url = f"{TMDB_BASE_URL}/find/{external_id}"
         params = {"api_key": TMDB_API_KEY, "external_source": source}
@@ -61,7 +70,7 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
             try:
                 response = await client.get(url, params=params, timeout=10)
                 response.raise_for_status()
-                return response.json()
+                return typing_cast(dict[str, Any], response.json())
             except Exception:
                 console.print(f"[bold red]Failed to fetch TMDb data: {response.status_code}[/bold red]")
                 return {}
@@ -109,41 +118,34 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     filename_search = True
 
     # If both TMDb and TVDb fail, fetch IMDb info and attempt a title search
-    imdb_id = imdb_id.replace("tt", "")
-    imdb_id = int(imdb_id) if imdb_id.isdigit() else 0
+    imdb_id_str = str(imdb_id)
+    imdb_id_clean = imdb_id_str.replace("tt", "")
+    imdb_id = int(imdb_id_clean) if imdb_id_clean.isdigit() else 0
     imdb_info = imdb_info or await get_imdb_info_api(imdb_id, {})
-    title = imdb_info.get("title") or filename
+    title = str(imdb_info.get("title") or filename or "")
     year = imdb_info.get("year") or search_year
-    original_language = imdb_info.get("original language", "en")
+    original_language = imdb_info.get("original language") or "en"
 
     console.print(f"[yellow]TMDb was unable to find anything from external IDs, searching TMDb for {title} ({year})[/yellow]")
 
-    # Create meta dictionary with minimal required fields
-    meta = {
-        'tmdb_id': 0,
-        'category': "MOVIE",  # Default to MOVIE
-        'debug': debug,
-        'mode': mode
-    }
-
     # Try as movie first
+    fallback_movie_title = str(imdb_info.get('original title') or imdb_info.get('localized title') or "")
     tmdb_id, category = await get_tmdb_id(
         title,
         year,
-        meta,
         "MOVIE",
-        imdb_info.get('original title', imdb_info.get('localized title', None))
+        secondary_title=fallback_movie_title,
+        debug=debug
     )
 
     # If no results, try as TV
     if tmdb_id == 0:
-        meta['category'] = "TV"
         tmdb_id, category = await get_tmdb_id(
             title,
             year,
-            meta,
             "TV",
-            imdb_info.get('original title', imdb_info.get('localized title', None))
+            secondary_title=fallback_movie_title,
+            debug=debug
         )
 
     # Extract necessary values from the result
@@ -153,27 +155,54 @@ async def get_tmdb_from_imdb(imdb_id, tvdb_id=None, search_year=None, filename=N
     # **User Prompt for Manual TMDb ID Entry**
     if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
         console.print('[yellow]Unable to find a matching TMDb entry[/yellow]')
-        tmdb_id = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ")
-        category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
+        tmdb_input = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ") or ""
+        category, tmdb_id = parser.parse_tmdb_id(tmdb_input, category)
 
     return category, tmdb_id, original_language, filename_search
 
 
-async def get_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
+async def get_tmdb_id(
+    filename: str,
+    search_year: Optional[Union[str, int]],
+    category: Union[str, Dict[str, Any]],
+    untouched_filename: Optional[str] = "",
+    attempted: int = 0,
+    debug: bool = False,
+    secondary_title: Optional[str] = None,
+    path: Optional[str] = None,
+    final_attempt: Optional[bool] = None,
+    new_category: Optional[str] = None,
+    unattended: bool = False,
+) -> Tuple[int, str]:
     search_results: dict[str, Any] = {"results": []}
-    original_category = category
+    if isinstance(category, dict):
+        category_value = category.get("category", "MOVIE") or "MOVIE"
+    else:
+        category_value = category
+    original_category = category_value
+    category = category_value
     if new_category:
         category = new_category
     else:
         category = original_category
     if final_attempt is None:
         final_attempt = False
-    if attempted is None:
-        attempted = 0
     if attempted:
         await asyncio.sleep(1)  # Whoa baby, slow down
 
-    async def search_tmdb_id(filename, search_year, category, untouched_filename="", attempted=0, debug=False, secondary_title=None, path=None, final_attempt=None, new_category=None, unattended=False):
+    async def search_tmdb_id(
+        filename: str,
+        search_year: Optional[Union[str, int]],
+        category: str,
+        untouched_filename: Optional[str] = "",
+        attempted: int = 0,
+        debug: bool = False,
+        secondary_title: Optional[str] = None,
+        path: Optional[str] = None,
+        final_attempt: Optional[bool] = None,
+        new_category: Optional[str] = None,
+        unattended: bool = False,
+    ) -> Tuple[int, str]:
         search_results: dict[str, Any] = {"results": []}
         original_category = category
         if new_category:
@@ -182,8 +211,6 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             category = original_category
         if final_attempt is None:
             final_attempt = False
-        if attempted is None:
-            attempted = 0
         if attempted:
             await asyncio.sleep(1)  # Whoa baby, slow down
         async with httpx.AsyncClient() as client:
@@ -239,7 +266,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
                 if results:
                     # Filter results by year if search_year is provided
                     if search_year:
-                        def get_result_year(result):
+                        def get_result_year(result: dict[str, Any]) -> int:
                             return int((result.get('release_date') or result.get('first_air_date') or '0000')[:4] or 0)
                         filtered_results = [
                             r for r in results
@@ -542,6 +569,8 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
             except Exception:
                 search_results = {"results": []}  # Reset search_results on exception
 
+        return 0, category
+
     # TMDb doesn't do roman
     if not search_results.get('results'):
         try:
@@ -605,7 +634,7 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     # Try searching with year + 1 if search_year is provided
     if not search_results.get('results'):
         try:
-            year_int = int(search_year)
+            year_int = int(search_year) if search_year is not None else 0
         except Exception:
             year_int = 0
 
@@ -694,35 +723,37 @@ async def get_tmdb_id(filename, search_year, category, untouched_filename="", at
     # No match found, prompt user if in CLI mode
     console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
     try:
-        tmdb_id = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+        tmdb_input = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
     except EOFError:
         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
         await cleanup()
         reset_terminal()
         sys.exit(1)
-    category, tmdb_id = parser.parse_tmdb_id(id=tmdb_id, category=category)
+    if tmdb_input is None:
+        tmdb_input = ""
+    category, tmdb_id = parser.parse_tmdb_id(tmdb_input, category)
 
     return tmdb_id, category
 
 
 async def tmdb_other_meta(
-    tmdb_id,
-    path=None,
-    search_year=None,
-    category=None,
-    imdb_id=0,
-    manual_language=None,
-    anime=False,
-    mal_manual=None,
-    aka='',
-    original_language=None,
-    poster=None,
-    debug=False,
-    mode="discord",
-    tvdb_id=0,
-    quickie_search=False,
-    filename=None
-):
+    tmdb_id: int,
+    path: Optional[str] = None,
+    search_year: Optional[Union[str, int]] = None,
+    category: Optional[str] = None,
+    imdb_id: Union[int, str] = 0,
+    manual_language: Optional[str] = None,
+    anime: bool = False,
+    mal_manual: Optional[int] = None,
+    aka: str = '',
+    original_language: Optional[str] = None,
+    poster: Optional[str] = None,
+    debug: bool = False,
+    mode: str = "discord",
+    tvdb_id: int = 0,
+    quickie_search: bool = False,
+    filename: Optional[str] = None
+) -> dict[str, Any]:
     """
     Fetch metadata from TMDB for a movie or TV show.
     Returns a dictionary containing metadata that can be used to update the meta object.
@@ -763,22 +794,20 @@ async def tmdb_other_meta(
         try:
             title = guessit(path, {"excludes": ["country", "language"]})['title'].lower()
             title = title.split('aka')[0]
-            result = await get_tmdb_id(
+            tmdb_id, _ = await get_tmdb_id(
                 guessit(title, {"excludes": ["country", "language"]})['title'],
                 search_year,
                 {'tmdb_id': 0, 'search_year': search_year, 'debug': debug, 'category': category, 'mode': mode},
                 category
             )
 
-            if result['tmdb_id'] == 0:
-                result = await get_tmdb_id(
+            if tmdb_id == 0:
+                tmdb_id, _ = await get_tmdb_id(
                     title,
                     "",
                     {'tmdb_id': 0, 'search_year': "", 'debug': debug, 'category': category, 'mode': mode},
                     category
                 )
-
-            tmdb_id = result['tmdb_id']
 
             if tmdb_id == 0:
                 if mode == 'cli':
@@ -1012,7 +1041,7 @@ async def tmdb_other_meta(
         if DEFAULT_CFG.get('add_logo', False) and logo_data and not isinstance(logo_data, Exception):
             try:
                 logo_json = typing_cast(dict[str, Any], logo_data.json())  # type: ignore
-                logo_path = await get_logo(tmdb_id, category, debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
+                logo_path = await get_logo(tmdb_id, category or "MOVIE", debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
                 tmdb_logo = logo_path.split('/')[-1]
             except Exception:
                 console.print("[yellow]Failed to process logo[/yellow]")
@@ -1088,7 +1117,7 @@ async def tmdb_other_meta(
     return tmdb_metadata
 
 
-async def get_keywords(tmdb_id, category):
+async def get_keywords(tmdb_id: int, category: str) -> str:
     """Get keywords for a movie or TV show using httpx"""
     endpoint = "movie" if category == "MOVIE" else "tv"
     url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}/keywords"
@@ -1114,7 +1143,7 @@ async def get_keywords(tmdb_id, category):
             return ''
 
 
-async def get_genres(response_data):
+async def get_genres(response_data: Optional[dict[str, Any]]) -> dict[str, str]:
     """Extract genres from TMDB response data"""
     if response_data is not None:
         tmdb_genres = response_data.get('genres', [])
@@ -1137,7 +1166,7 @@ async def get_genres(response_data):
     }
 
 
-async def get_directors(tmdb_id, category):
+async def get_directors(tmdb_id: int, category: str) -> list[str]:
     """Get directors for a movie or TV show using httpx"""
     endpoint = "movie" if category == "MOVIE" else "tv"
     url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}/credits"
@@ -1162,7 +1191,7 @@ async def get_directors(tmdb_id, category):
             return []
 
 
-async def get_anime(response, meta):
+async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> Tuple[int, str, bool, str]:
     tmdb_name = meta['title']
     if meta.get('aka', "") == "":
         alt_name = ""
@@ -1184,11 +1213,11 @@ async def get_anime(response, meta):
     else:
         mal_id = 0
     if meta.get('mal_id', 0) != 0:
-        mal_id = meta.get('mal_id')
+        mal_id = int(meta.get('mal_id', 0) or 0)
     return mal_id, alt_name, anime, demographic
 
 
-async def get_romaji(tmdb_name, mal, meta):
+async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -> Tuple[str, int, str, str, int, str]:
     media = []
     demographic = 'Mina'  # Default to Mina if no tags are found
 
@@ -1228,7 +1257,7 @@ async def get_romaji(tmdb_name, mal, meta):
                 }
             }
             '''
-            variables = {'search': cleaned_name}
+            variables: dict[str, Union[str, int]] = {'search': cleaned_name}
         else:
             query = '''
                 query ($search: Int) {
@@ -1357,14 +1386,21 @@ async def get_romaji(tmdb_name, mal, meta):
     return romaji, mal_id, eng_title, season_year, episodes, demographic
 
 
-async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imdbid, tvdbid):
+async def get_tmdb_imdb_from_mediainfo(
+    mediainfo: dict[str, Any],
+    category: str,
+    is_disc: bool,
+    tmdbid: int,
+    imdbid: Optional[int],
+    tvdbid: Optional[int],
+) -> Tuple[str, int, Optional[int], Optional[int]]:
     if not is_disc:
         if mediainfo['media']['track'][0].get('extra'):
             extra = mediainfo['media']['track'][0]['extra']
             for each in extra:
                 try:
                     if each.lower().startswith('tmdb') and not tmdbid:
-                        category, tmdbid = parser.parse_tmdb_id(id=extra[each], category=category)
+                        category, tmdbid = parser.parse_tmdb_id(extra[each], category)
                     if each.lower().startswith('imdb') and not imdbid:
                         try:
                             imdb_id = extract_imdb_id(extra[each])
@@ -1385,7 +1421,7 @@ async def get_tmdb_imdb_from_mediainfo(mediainfo, category, is_disc, tmdbid, imd
     return category, tmdbid, imdbid, tvdbid
 
 
-def extract_imdb_id(value):
+def extract_imdb_id(value: str) -> Optional[int]:
     """Extract IMDb ID from various formats"""
     patterns = [
         r'/title/(tt\d+)',  # URL format
@@ -1404,7 +1440,7 @@ def extract_imdb_id(value):
     return None
 
 
-async def daily_to_tmdb_season_episode(tmdbid, date):
+async def daily_to_tmdb_season_episode(tmdbid: int, date: Union[str, datetime]) -> Tuple[int, int]:
     date = datetime.fromisoformat(str(date))
 
     async with httpx.AsyncClient() as client:
@@ -1456,7 +1492,12 @@ async def daily_to_tmdb_season_episode(tmdbid, date):
     return season, episode
 
 
-async def get_episode_details(tmdb_id, season_number, episode_number, debug=False):
+async def get_episode_details(
+    tmdb_id: int,
+    season_number: int,
+    episode_number: int,
+    debug: bool = False,
+) -> dict[str, Any]:
     if debug:
         console.print(f"[cyan]Fetching episode details for TMDb ID: {tmdb_id}, Season: {season_number}, Episode: {episode_number}[/cyan]")
     async with httpx.AsyncClient() as client:
@@ -1527,7 +1568,11 @@ async def get_episode_details(tmdb_id, season_number, episode_number, debug=Fals
             return {}
 
 
-async def get_season_details(tmdb_id, season_number, debug=False):
+async def get_season_details(
+    tmdb_id: int,
+    season_number: int,
+    debug: bool = False,
+) -> dict[str, Any]:
     if debug:
         console.print(f"[cyan]Fetching season details for TMDb ID: {tmdb_id}, Season: {season_number}[/cyan]")
     async with httpx.AsyncClient() as client:
@@ -1598,7 +1643,15 @@ async def get_season_details(tmdb_id, season_number, debug=False):
             return {}
 
 
-async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API_KEY=None, TMDB_BASE_URL=None, logo_json=None):
+async def get_logo(
+    tmdb_id: int,
+    category: str,
+    debug: bool = False,
+    logo_languages: Optional[Union[List[str], str]] = None,
+    TMDB_API_KEY: Optional[str] = None,
+    TMDB_BASE_URL: Optional[str] = None,
+    logo_json: Optional[dict[str, Any]] = None,
+) -> str:
     logo_path = ""
     if logo_languages and isinstance(logo_languages, str) and ',' in logo_languages:
         logo_languages = [lang.strip() for lang in logo_languages.split(',')]
@@ -1671,7 +1724,12 @@ async def get_logo(tmdb_id, category, debug=False, logo_languages=None, TMDB_API
     return logo_path
 
 
-async def get_tmdb_translations(tmdb_id, category, target_language='en', debug=False):
+async def get_tmdb_translations(
+    tmdb_id: int,
+    category: str,
+    target_language: str = 'en',
+    debug: bool = False,
+) -> str:
     """Get translations from TMDb API"""
     endpoint = "movie" if category == "MOVIE" else "tv"
     url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}/translations"
@@ -1703,7 +1761,7 @@ async def get_tmdb_translations(tmdb_id, category, target_language='en', debug=F
             return ""
 
 
-async def set_tmdb_metadata(meta, filename=None):
+async def set_tmdb_metadata(meta: dict[str, Any], filename: Optional[str] = None) -> None:
     if not meta.get('edit', False):
         # if we have these fields already, we probably got them from a multi id searching
         # and don't need to fetch them again

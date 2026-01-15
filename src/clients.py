@@ -19,7 +19,7 @@ import traceback
 import transmission_rpc
 import urllib.parse
 import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
-from typing import Any, Dict, DefaultDict, Tuple, Union
+from typing import Any, Dict, DefaultDict, Tuple, Union, Optional, List, Callable, Awaitable
 
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
@@ -36,10 +36,10 @@ qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections
 
 
 class Clients():
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
 
-    def create_ssl_context_for_client(self, client_config):
+    def create_ssl_context_for_client(self, client_config: Dict[str, Any]) -> ssl.SSLContext:
         """Create SSL context for qBittorrent client based on VERIFY_WEBUI_CERTIFICATE setting."""
         ssl_context = ssl.create_default_context()
         if not client_config.get('VERIFY_WEBUI_CERTIFICATE', True):
@@ -47,7 +47,7 @@ class Clients():
             ssl_context.verify_mode = ssl.CERT_NONE
         return ssl_context
 
-    async def retry_qbt_operation(self, operation_func, operation_name, max_retries=2, initial_timeout=10.0):
+    async def retry_qbt_operation(self, operation_func: Callable[[], Awaitable[Any]], operation_name: str, max_retries: int = 2, initial_timeout: float = 10.0) -> Any:
         for attempt in range(max_retries + 1):
             timeout = initial_timeout * (2 ** attempt)  # Exponential backoff: 10s, 20s, 40s
             try:
@@ -63,7 +63,7 @@ class Clients():
                     console.print(f"[bold red]{operation_name} failed after {max_retries + 1} attempts (final timeout: {timeout}s)")
                     raise  # Re-raise the TimeoutError so caller can handle it
 
-    async def init_qbittorrent_client(self, client):
+    async def init_qbittorrent_client(self, client: Dict[str, Any]) -> Optional[qbittorrentapi.Client]:
         # Creates and logs into a qbittorrent client, with caching to avoid redundant logins
         # If login fails, returns None
         client_key = (client['qbit_url'], client['qbit_port'], client['qbit_user'])
@@ -98,7 +98,7 @@ class Clients():
                 qbittorrent_cached_clients[client_key] = qbt_client
                 return qbt_client
 
-    async def add_to_client(self, meta, tracker, cross=False):
+    async def add_to_client(self, meta: Dict[str, Any], tracker: str, cross: bool = False) -> None:
         if cross:
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
         elif meta['debug']:
@@ -191,7 +191,7 @@ class Clients():
                 console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
         return
 
-    async def find_existing_torrent(self, meta):
+    async def find_existing_torrent(self, meta: Dict[str, Any]) -> Optional[str]:
         # Determine piece size preferences
         mtv_config = self.config['TRACKERS'].get('MTV')
         piece_limit = self.config['DEFAULT'].get('prefer_max_16_torrent', False)
@@ -261,7 +261,7 @@ class Clients():
         console.print("[bold yellow]No Valid .torrent found")
         return None
 
-    async def _search_single_client_for_torrent(self, meta, client_name, prefer_small_pieces, mtv_torrent, piece_limit, best_match):
+    async def _search_single_client_for_torrent(self, meta: Dict[str, Any], client_name: str, prefer_small_pieces: bool, mtv_torrent: bool, piece_limit: bool, best_match: Optional[Dict[str, Any]]) -> Union[Dict[str, Any], str, None]:
         """Search a single client for an existing torrent by hash or via API search (qbit only)."""
 
         client = self.config['TORRENT_CLIENTS'][client_name]
@@ -329,7 +329,7 @@ class Clients():
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client_name)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client)
 
                 if valid:
                     return resolved_path
@@ -443,7 +443,7 @@ class Clients():
                 # Only validate if we still have a hash (export succeeded or file already existed)
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
-                        meta, found_torrent_path, found_hash, torrent_client, client_name
+                        meta, found_torrent_path, found_hash, torrent_client, client
                     )
                 else:
                     valid = False
@@ -473,7 +473,7 @@ class Clients():
 
         return best_match
 
-    async def is_valid_torrent(self, meta, torrent_path, torrenthash, torrent_client, client):
+    async def is_valid_torrent(self, meta: Dict[str, Any], torrent_path: str, torrenthash: str, torrent_client: str, client: Dict[str, Any]) -> Tuple[bool, str]:
         valid = False
         wrong_file = False
 
@@ -592,7 +592,7 @@ class Clients():
 
         return valid, torrent_path
 
-    async def search_qbit_for_torrent(self, meta, client, qbt_client=None, qbt_session=None, proxy_url=None):
+    async def search_qbit_for_torrent(self, meta: Dict[str, Any], client: Dict[str, Any], qbt_client: Optional[qbittorrentapi.Client] = None, qbt_session: Optional[aiohttp.ClientSession] = None, proxy_url: Optional[str] = None) -> Optional[str]:
         mtv_config = self.config['TRACKERS'].get('MTV')
         if isinstance(mtv_config, dict):
             prefer_small_pieces = mtv_config.get('prefer_mtv_torrent', False)
@@ -708,7 +708,7 @@ class Clients():
         torrent_hash = None
         for matching_torrent in matching_torrents:
             try:
-                torrent_hash = matching_torrent['hash']
+                torrent_hash = str(matching_torrent['hash'])
                 if torrent_hash in processed_hashes:
                     continue  # Avoid processing duplicates
 
@@ -772,7 +772,7 @@ class Clients():
                         torrent_data = Torrent.read(torrent_file_path)
                         piece_size = torrent_data.piece_size
                         if isinstance(piece_size, int):
-                            best_piece_size = best_match.get('piece_size') if best_match else None
+                            best_piece_size: Optional[int] = best_match.get('piece_size') if best_match else None
                             if best_match is None or (isinstance(best_piece_size, int) and piece_size < best_piece_size):
                                 best_match = {
                                     'hash': torrent_hash,
@@ -805,7 +805,7 @@ class Clients():
 
         return result
 
-    def rtorrent(self, path, torrent_path, torrent, meta, local_path, remote_path, client, tracker):
+    def rtorrent(self, path: str, torrent_path: str, torrent: Torrent, meta: Dict[str, Any], local_path: str, remote_path: str, client: Dict[str, Any], tracker: str) -> None:
         # Get the appropriate source path (same as in qbittorrent method)
         if len(meta.get('filelist', [])) == 1 and os.path.isfile(meta['filelist'][0]) and not meta.get('keep_folder'):
             # If there's a single file and not keep_folder, use the file itself as the source
@@ -1081,7 +1081,7 @@ class Clients():
             console.print(f"[cyan]Path: {path}")
         return
 
-    async def qbittorrent(self, path, torrent, local_path, remote_path, client, is_disc, filelist, meta, tracker, cross=False):
+    async def qbittorrent(self, path: str, torrent: Torrent, local_path: str, remote_path: str, client: Dict[str, Any], is_disc: bool, filelist: List[str], meta: Dict[str, Any], tracker: str, cross: bool = False) -> None:
         if meta.get('keep_folder'):
             path = os.path.dirname(path)
         else:
@@ -1530,7 +1530,7 @@ class Clients():
         if qbt_session:
             await qbt_session.close()
 
-    def deluge(self, path, torrent_path, torrent, local_path, remote_path, client, meta):
+    def deluge(self, path: str, torrent_path: str, torrent: Torrent, local_path: str, remote_path: str, client: Dict[str, Any], meta: Dict[str, Any]) -> None:
         client = DelugeRPCClient(client['deluge_url'], int(client['deluge_port']), client['deluge_user'], client['deluge_pass'])
         # client = LocalDelugeRPCClient()
         client.connect()
@@ -1550,7 +1550,7 @@ class Clients():
         else:
             console.print("[bold red]Unable to connect to deluge")
 
-    def transmission(self, path, torrent, local_path, remote_path, client, meta):
+    def transmission(self, path: str, torrent: Torrent, local_path: str, remote_path: str, client: Dict[str, Any], meta: Dict[str, Any]) -> None:
         try:
             tr_client = transmission_rpc.Client(
                 protocol=client['transmission_protocol'],
@@ -1588,7 +1588,7 @@ class Clients():
         if meta['debug']:
             console.print(f"[cyan]Path: {path}")
 
-    def add_fast_resume(self, metainfo, datapath, torrent):
+    def add_fast_resume(self, metainfo: Dict[str, Any], datapath: str, torrent: Torrent) -> Dict[str, Any]:
         """ Add fast resume data to a metafile dict.
         """
         # Get list of files
@@ -1634,7 +1634,7 @@ class Clients():
 
         return metainfo
 
-    async def remote_path_map(self, meta, torrent_client_name=None):
+    async def remote_path_map(self, meta: Dict[str, Any], torrent_client_name: Optional[Union[str, Dict[str, Any]]] = None) -> Tuple[str, str]:
         if isinstance(torrent_client_name, dict):
             client_config = torrent_client_name
         elif isinstance(torrent_client_name, str) and torrent_client_name:
@@ -1669,7 +1669,7 @@ class Clients():
 
         return local_path, remote_path
 
-    async def get_ptp_from_hash(self, meta, pathed=False):
+    async def get_ptp_from_hash(self, meta: Dict[str, Any], pathed: bool = False) -> Dict[str, Any]:
         default_torrent_client = self.config['DEFAULT']['default_torrent_client']
         client = self.config['TORRENT_CLIENTS'][default_torrent_client]
         torrent_client = client['torrent_client']
@@ -1891,7 +1891,7 @@ class Clients():
         else:
             return meta
 
-    async def get_ptp_from_hash_rtorrent(self, meta, pathed=False):
+    async def get_ptp_from_hash_rtorrent(self, meta: Dict[str, Any], pathed: bool = False) -> Dict[str, Any]:
         default_torrent_client = self.config['DEFAULT']['default_torrent_client']
         client = self.config['TORRENT_CLIENTS'][default_torrent_client]
         torrent_storage_dir = client.get('torrent_storage_dir')
@@ -2025,7 +2025,7 @@ class Clients():
 
         return meta
 
-    async def get_pathed_torrents(self, path, meta):
+    async def get_pathed_torrents(self, path: str, meta: Dict[str, Any]) -> None:
         try:
             matching_torrents = await self.find_qbit_torrents_by_path(path, meta)
 
@@ -2047,7 +2047,7 @@ class Clients():
             console.print(f"[red]Error searching for torrents: {str(e)}[/red]")
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
-    async def find_qbit_torrents_by_path(self, content_path, meta):
+    async def find_qbit_torrents_by_path(self, content_path: str, meta: Dict[str, Any]) -> None:
         if meta.get('debug'):
             console.print(f"[yellow]Searching for torrents in qBittorrent for path: {content_path}[/yellow]")
         try:

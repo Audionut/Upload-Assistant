@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import platform
 import os
+from typing import Any, Dict, List, Optional
 from src.console import console
 
 
@@ -9,21 +10,21 @@ class Search():
     Logic for searching
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
         pass
 
-    async def searchFile(self, filename):
+    async def searchFile(self, filename: str) -> Optional[List[str]]:
         os_info = platform.platform()  # noqa F841
         filename = filename.lower()
         files_total: list[str] = []
         if filename == "":
             console.print("nothing entered")
-            return
+            return None
         file_found = False  # noqa F841
         words = filename.split()
 
-        async def search_file(search_dir):
+        async def search_file(search_dir: str) -> List[str]:
             files_total_search: list[str] = []
             console.print(f"Searching {search_dir}")
             for root, dirs, files in os.walk(search_dir, topdown=False):
@@ -47,17 +48,17 @@ class Search():
             files_total = await search_file(config_dir)
         return files_total
 
-    async def searchFolder(self, foldername):
+    async def searchFolder(self, foldername: str) -> Optional[List[str]]:
         os_info = platform.platform()  # noqa F841
         foldername = foldername.lower()
         folders_total: list[str] = []
         if foldername == "":
             console.print("nothing entered")
-            return
+            return None
         folders_found = False  # noqa F841
         words = foldername.split()
 
-        async def search_dir(search_dir):
+        async def search_dir(search_dir: str) -> List[str]:
             console.print(f"Searching {search_dir}")
             folders_total_search: list[str] = []
             for root, dirs, files in os.walk(search_dir, topdown=False):
@@ -86,7 +87,7 @@ class Search():
 
         return folders_total
 
-    async def file_search(self, name, name_words):
+    async def file_search(self, name: str, name_words: List[str]) -> bool:
         check = True
         for word in name_words:
             if word not in name:

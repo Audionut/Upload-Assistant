@@ -410,7 +410,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
-        meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta))
+        meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta))
         if not meta.get('trackers'):
             meta['trackers'] = previous_trackers
         if isinstance(meta.get('trackers'), str):
@@ -1123,10 +1123,10 @@ async def do_the_thing(base_dir):
         # If cleanup is the only operation, use a dummy path to satisfy the parser
         if cleanup_only:
             args_list = sys.argv[1:] + ['dummy_path']
-            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(args_list).split(' ')), meta))
+            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(args_list).split(' ')), meta))
             meta['path'] = None  # Clear the dummy path after parsing
         else:
-            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(tuple(' '.join(sys.argv[1:]).split(' ')), meta))
+            meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')), meta))
 
         # Validate config structure and types (after args parsed so we have trackers list)
         from src.configvalidator import validate_config, group_warnings

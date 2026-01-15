@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
 import traceback
+from typing import Any, Dict, Tuple
 from guessit import guessit
 from src.console import console
 from src.exceptions import *  # noqa: F403
 
 
-async def get_source(type, video, path, is_disc, meta, folder_id, base_dir):
+async def get_source(type: str, video: str, path: str, is_disc: str, meta: Dict[str, Any], folder_id: str, base_dir: str) -> Tuple[str, str]:
     if not meta.get('is_disc') == "BDMV":
         try:
             with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', 'r', encoding='utf-8') as f:

@@ -9,7 +9,7 @@ try:
     import sys
     import traceback
     import time
-    from typing import Any, cast
+    from typing import Any, Dict, Optional, cast
 
     from difflib import SequenceMatcher
     from guessit import guessit
@@ -61,7 +61,7 @@ class Prep():
         Create Name
     """
 
-    def __init__(self, screens, img_host, config):
+    def __init__(self, screens: int, img_host: str, config: Dict[str, Any]) -> None:
         self.screens = screens
         self.config = config
         self.img_host = img_host.lower()
@@ -1118,7 +1118,7 @@ class Prep():
 
         return meta
 
-    async def get_cat(self, video, meta):
+    async def get_cat(self, video: str, meta: Dict[str, Any]) -> Optional[str]:
         if meta.get('manual_category'):
             return meta.get('manual_category').upper()
 
@@ -1156,14 +1156,14 @@ class Prep():
 
         return "MOVIE"
 
-    async def stream_optimized(self, stream_opt):
+    async def stream_optimized(self, stream_opt: bool) -> int:
         if stream_opt is True:
             stream = 1
         else:
             stream = 0
         return stream
 
-    async def parse_scene_nfo(self, meta):
+    async def parse_scene_nfo(self, meta: Dict[str, Any]) -> None:
         try:
             nfo_file = meta.get('scene_nfo_file', '')
 
