@@ -65,7 +65,7 @@ class TOS(UNIT3D):
                 "REMUX": "2",
                 "ENCODE": "3",
                 "WEBDL": "4",
-                "WEBRIP": "5",
+                "WEBRIP": "4",
                 "HDTV": "6",
             }.get(meta["type"], "0")
         return {"type_id": type_id}
