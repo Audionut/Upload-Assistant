@@ -59,6 +59,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                 'type': d.get('type', None),
                 'res': d.get('res', None),
                 'internal': d.get('internal', 0),
+                "bd_info": d.get("bd_info", ""),
             }
 
             # Case 3: Dict with files and file_count
@@ -330,7 +331,7 @@ async def filter_dupes(dupes, meta, tracker_name):
             await log_exclusion("file extension mismatch (is_disc=True)", each)
             return True
 
-        if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
+        if meta.get('is_disc') == "BDMV" and tracker_name in ["HDB", "BHD"]:
             if len(each) >= 1 and tag == "":
                 return False
             if tag and tag.strip() and tag.strip() in normalized:

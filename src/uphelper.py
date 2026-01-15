@@ -11,6 +11,7 @@ from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackersetup import tracker_class_map
+from src.bdinfo_comparator import compare_bdinfo
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):
@@ -157,6 +158,16 @@ class UploadHelper:
                             console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
                         if meta.get('dupe', False) is False:
                             try:
+                                if meta.get('is_disc') == "BDMV":
+                                    if cli_ui.ask_yes_no("Do you want to compare the BDinfo?", default=True):
+                                        warnings: list[str] = []
+                                        for entry in dupes:
+                                            warnings.append(compare_bdinfo(meta, entry))
+                                        if warnings:
+                                            console.print()
+                                            console.print("\n".join(warnings))
+                                            console.print()
+
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
                             except EOFError:

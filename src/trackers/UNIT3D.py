@@ -162,6 +162,7 @@ class UNIT3D:
                                 "type": attributes.get("type", None),
                                 "res": attributes.get("resolution", None),
                                 "internal": attributes.get("internal", False),
+                                "bd_info": attributes.get("bd_info", ""),
                             }
                         dupes.append(result)
                 else:
