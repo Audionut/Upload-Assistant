@@ -18,5 +18,7 @@ ignore = ["E501"]
 [tool.pyright]
 pythonVersion = "3.9"
 typeCheckingMode = "strict"
-reportMissingImports = false
+reportMissingImports = true
 reportMissingTypeStubs = false
+reportUnknownMemberType = true
+reportUnknownVariableType = true

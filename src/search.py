@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
-import platform
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from src.console import console
 
@@ -15,14 +14,21 @@ class Search:
         self.config = config
         pass
 
+    def _get_search_dirs(self) -> list[str]:
+        config_dir = self.config.get('DISCORD', {}).get('search_dir', [])
+        if isinstance(config_dir, str):
+            return [config_dir]
+        if isinstance(config_dir, list):
+            config_list = cast(list[Any], config_dir)
+            return [str(entry) for entry in config_list]
+        return []
+
     async def searchFile(self, filename: str) -> Optional[list[str]]:
-        os_info = platform.platform()  # noqa F841
         filename = filename.lower()
         files_total: list[str] = []
         if filename == "":
             console.print("nothing entered")
             return None
-        file_found = False  # noqa F841
         words = filename.split()
 
         async def search_file(search_dir: str) -> list[str]:
@@ -32,31 +38,20 @@ class Search:
                 for name in files:
                     if not name.endswith('.nfo'):
                         l_name = name.lower()
-                        os_info = platform.platform()
                         if await self.file_search(l_name, words):
-                            file_found = True  # noqa F841
-                            if ('Windows' in os_info):
-                                files_total_search.append(root + '\\' + name)
-                            else:
-                                files_total_search.append(root + '/' + name)
+                            files_total_search.append(os.path.join(root, name))
             return files_total_search
-        config_dir = self.config['DISCORD']['search_dir']
-        if isinstance(config_dir, list):
-            for each in config_dir:
-                files = await search_file(each)
-                files_total = files_total + files
-        else:
-            files_total = await search_file(config_dir)
+        for each in self._get_search_dirs():
+            files = await search_file(each)
+            files_total.extend(files)
         return files_total
 
     async def searchFolder(self, foldername: str) -> Optional[list[str]]:
-        os_info = platform.platform()  # noqa F841
         foldername = foldername.lower()
         folders_total: list[str] = []
         if foldername == "":
             console.print("nothing entered")
             return None
-        folders_found = False  # noqa F841
         words = foldername.split()
 
         async def search_dir(search_dir: str) -> list[str]:
@@ -67,24 +62,13 @@ class Search:
                 for name in dirs:
                     l_name = name.lower()
 
-                    os_info = platform.platform()
-
                     if await self.file_search(l_name, words):
-                        folder_found = True  # noqa F841
-                        if ('Windows' in os_info):
-                            folders_total_search.append(root + '\\' + name)
-                        else:
-                            folders_total_search.append(root + '/' + name)
+                        folders_total_search.append(os.path.join(root, name))
 
             return folders_total_search
-        config_dir = self.config['DISCORD']['search_dir']
-        if isinstance(config_dir, list):
-            for each in config_dir:
-                folders = await search_dir(each)
-
-                folders_total = folders_total + folders
-        else:
-            folders_total = await search_dir(config_dir)
+        for each in self._get_search_dirs():
+            folders = await search_dir(each)
+            folders_total.extend(folders)
 
         return folders_total
 
