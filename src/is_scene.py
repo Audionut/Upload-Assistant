@@ -270,3 +270,5 @@ async def predb_check(meta: dict[str, Any], video: str) -> bool:
     except httpx.RequestError as e:
         console.print(f"[red]Predb: Request failed: {e}")
         return False
+
+    return False

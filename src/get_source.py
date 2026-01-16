@@ -1,15 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
 import traceback
-from typing import Any
+from typing import Any, cast
 
-from guessit import guessit
+import guessit
 
 from src.console import console
-from src.exceptions import *  # noqa: F403
+from src.exceptions import WeirdSystem
+
+guessit_fn: Any = cast(Any, guessit).guessit
 
 
 async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[str, Any], folder_id: str, base_dir: str) -> tuple[str, str]:
+    source = "BluRay"
+    system = ""
+    mi: dict[str, Any] = {}
     if meta.get('is_disc') != "BDMV":
         try:
             with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
@@ -19,13 +24,13 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                 console.print("No mediainfo.json")
     try:
         if meta.get('manual_source'):
-            source = meta['manual_source']
+            source = str(meta['manual_source'])
         else:
             try:
-                source = guessit(video)['source']
+                source = cast(dict[str, Any], guessit_fn(video)).get('source', source)
             except Exception:
                 try:
-                    source = guessit(path)['source']
+                    source = cast(dict[str, Any], guessit_fn(path)).get('source', source)
                 except Exception:
                     source = "BluRay"
         if source in ("Blu-ray", "Ultra HD Blu-ray", "BluRay", "BR") or is_disc == "BDMV":
@@ -38,21 +43,21 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                 mediainfo = mi
                 for track in mediainfo['media']['track']:
                     if track['@type'] == "Video":
-                        system = track.get('Standard', '')
+                        system = str(track.get('Standard', ''))
                 if system not in ("PAL", "NTSC"):
                     raise WeirdSystem  # noqa: F405
             except Exception:
                 try:
-                    other = guessit(video)['other']
+                    other = cast(list[str], cast(dict[str, Any], guessit_fn(video)).get('other', []))
                     if "PAL" in other:
                         system = "PAL"
                     elif "NTSC" in other:
                         system = "NTSC"
                 except Exception:
                     system = ""
-                if system == "" or system is None or system not in ("PAL", "NTSC"):
+                if system == "" or system not in ("PAL", "NTSC"):
                     try:
-                        framerate = mi['media']['track'][1].get('FrameRate', '')
+                        framerate = str(mi['media']['track'][1].get('FrameRate', ''))
                         if '25' in framerate or '50' in framerate:
                             system = "PAL"
                         elif framerate:
@@ -62,7 +67,7 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                     except Exception:
                         system = ""
             finally:
-                if system is None:
+                if system == "":
                     system = ""
                 if type == "REMUX":
                     system = f"{system} DVD".strip()
