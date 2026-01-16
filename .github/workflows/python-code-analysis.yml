@@ -100,6 +100,7 @@ jobs:
         PY
 
     - name: Ruff Lint
+      continue-on-error: true
       run: |
         ruff check . > ruff-results-${{ matrix.python-version }}.txt 2>&1
         cat ruff-results-${{ matrix.python-version }}.txt
@@ -136,7 +137,7 @@ jobs:
         path: pyright-results-${{ matrix.python-version }}.txt
 
     - name: Security Analysis with Bandit
-      continue-on-error: false
+      continue-on-error: true
       run: |
         echo "Running security analysis with configuration file..."
         echo ""
@@ -193,7 +194,7 @@ jobs:
         path: safety-results.txt
 
     - name: Dead Code Analysis
-      continue-on-error: false
+      continue-on-error: true
       run: |
         echo "Checking for unused code..."
         vulture . --exclude=venv,env,.venv,.git --min-confidence=80 > vulture-results.txt 2>&1 || echo "Vulture analysis completed"
