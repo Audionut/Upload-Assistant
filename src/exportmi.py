@@ -1,13 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import json
 import os
 import platform
 import subprocess
 from pathlib import Path
-from pymediainfo import MediaInfo
-from src.console import console
 from typing import Any, Optional, Union, cast
+
+import aiofiles
+from pymediainfo import MediaInfo
+
+from src.console import console
 
 
 def validate_file_path(file_path: str) -> str:
@@ -125,7 +127,7 @@ async def mi_resolution(
         "4320p": "4320p",
         "OTHER": "OTHER",
     }
-    resolution = res_map.get(res, None)
+    resolution = res_map.get(res)
     if resolution is None:
         try:
             resolution = guess["screen_size"]
@@ -520,7 +522,7 @@ async def exportInfo(
         if debug:
             console.print(f"[green]JSON file written to: {base_dir}/tmp/{folder_id}/MediaInfo.json[/green]")
 
-    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", "r", encoding="utf-8") as f:
+    async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", encoding="utf-8") as f:
         mi = cast(dict[str, Any], json.loads(await f.read()))
 
     # Cleanup: Reset library configuration if we modified it
