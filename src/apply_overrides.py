@@ -1,17 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
 import traceback
+from typing import Any, Optional, cast
 
 from data.config import config
 from src.args import Args
 from src.console import console
 
+Meta = dict[str, Any]
+UserArgsEntry = dict[str, Any]
 
-async def get_source_override(meta, other_id=False):
+
+async def get_source_override(meta: Meta, other_id: bool = False) -> Meta:
     try:
         with open(f"{meta['base_dir']}/data/templates/user-args.json", encoding="utf-8") as f:
             console.print("[green]Found user-args.json")
-            user_args = json.load(f)
+            user_args = cast(dict[str, Any], json.load(f))
 
         current_tmdb_id = meta.get('tmdb_id', 0)
         current_imdb_id = meta.get('imdb_id', 0)
@@ -28,9 +32,9 @@ async def get_source_override(meta, other_id=False):
             current_tvdb_id = int(current_tvdb_id)
 
         if not other_id:
-            for entry in user_args.get('entries', []):
+            for entry in cast(list[UserArgsEntry], user_args.get('entries', [])):
                 entry_tmdb_id = entry.get('tmdb_id')
-                args = entry.get('args', [])
+                args = cast(list[str], entry.get('args', []))
 
                 if not entry_tmdb_id:
                     continue
@@ -51,10 +55,10 @@ async def get_source_override(meta, other_id=False):
                     break
 
         else:
-            for entry in user_args.get('other_ids', []):
+            for entry in cast(list[UserArgsEntry], user_args.get('other_ids', [])):
                 # Check for TVDB ID match
                 if 'tvdb_id' in entry and str(entry['tvdb_id']) == str(current_tvdb_id) and current_tvdb_id != 0:
-                    args = entry.get('args', [])
+                    args = cast(list[str], entry.get('args', []))
                     console.print(f"[green]Found matching override for TVDb ID: {current_tvdb_id}")
                     console.print(f"[yellow]Applying arguments: {' '.join(args)}")
                     meta = await apply_args_to_meta(meta, args)
@@ -67,7 +71,7 @@ async def get_source_override(meta, other_id=False):
                         entry_imdb = entry_imdb[2:]
 
                     if str(entry_imdb) == str(current_imdb_id) and current_imdb_id != 0:
-                        args = entry.get('args', [])
+                        args = cast(list[str], entry.get('args', []))
                         console.print(f"[green]Found matching override for IMDb ID: {current_imdb_id}")
                         console.print(f"[yellow]Applying arguments: {' '.join(args)}")
                         meta = await apply_args_to_meta(meta, args)
@@ -79,12 +83,12 @@ async def get_source_override(meta, other_id=False):
     return meta
 
 
-async def parse_tmdb_id(tmdb_id, category=None):
+async def parse_tmdb_id(tmdb_id: Optional[Any], category: Optional[str] = None) -> tuple[Optional[str], int]:
     if tmdb_id is None:
         return category, 0
 
     tmdb_id = str(tmdb_id).strip().lower()
-    if not tmdb_id or tmdb_id == 0:
+    if not tmdb_id:
         return category, 0
 
     if '/' in tmdb_id:
@@ -111,10 +115,10 @@ async def parse_tmdb_id(tmdb_id, category=None):
         return category, 0
 
 
-async def apply_args_to_meta(meta, args):
+async def apply_args_to_meta(meta: Meta, args: list[str]) -> Meta:
     try:
-        arg_keys_to_track = set()
-        arg_values = {}
+        arg_keys_to_track: set[str] = set()
+        arg_values: dict[str, str] = {}
 
         i = 0
         while i < len(args):
@@ -138,7 +142,7 @@ async def apply_args_to_meta(meta, args):
         full_args = ['upload.py'] + args
         updated_meta, _, _ = arg_processor.parse(full_args, meta.copy())
         updated_meta['path'] = meta.get('path')
-        modified_keys = []
+        modified_keys: list[str] = []
 
         # Handle ID arguments specifically
         id_mappings = {
@@ -152,7 +156,7 @@ async def apply_args_to_meta(meta, args):
             # Special handling for ID fields
             if key in id_mappings:
                 if key in arg_values:  # Check if we have a value for this key
-                    value = arg_values[key]
+                    value: Any = arg_values[key]
                     # Convert to int if possible
                     try:
                         if isinstance(value, str) and value.isdigit():
