@@ -14,3 +14,9 @@ select = [
   "PERF",# performance
 ]
 ignore = ["E501"]
+
+[tool.pyright]
+pythonVersion = "3.9"
+typeCheckingMode = "strict"
+reportMissingImports = false
+reportMissingTypeStubs = false

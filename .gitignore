@@ -25,4 +25,4 @@ data/nfos/*
 data/*.json
 .venv/*
 venv/*
-.mypy_cache
+.pyright

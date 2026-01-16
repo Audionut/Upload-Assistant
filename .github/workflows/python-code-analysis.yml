@@ -47,7 +47,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # Install code analysis tools
-        pip install mypy bandit vulture pycodestyle autopep8
+        pip install pyright bandit vulture pycodestyle autopep8
 
     - name: Python Syntax Check
       run: |
@@ -89,22 +89,22 @@ jobs:
             print('All Python files have valid syntax and imports')
         "
 
-    - name: Type Checking with MyPy
+    - name: Type Checking with Pyright
       continue-on-error: true
       run: |
         echo "Running type checking for Python ${{ matrix.python-version }}..."
-        # Override python_version in mypy to match the matrix version
-        mypy --config-file mypy.ini --python-version ${{ matrix.python-version }} . > mypy-results-${{ matrix.python-version }}.txt 2>&1 || echo "MyPy scan completed with results saved"
+        # Override pythonVersion in Pyright to match the matrix version
+        pyright --pythonversion ${{ matrix.python-version }} . > pyright-results-${{ matrix.python-version }}.txt 2>&1 || echo "Pyright scan completed with results saved"
         
         # Display results
-        cat mypy-results-${{ matrix.python-version }}.txt
+        cat pyright-results-${{ matrix.python-version }}.txt
 
-    - name: Upload MyPy Results
+    - name: Upload Pyright Results
       if: github.event_name == 'pull_request_target'
       uses: actions/upload-artifact@v4
       with:
-        name: mypy-results-${{ matrix.python-version }}
-        path: mypy-results-${{ matrix.python-version }}.txt
+        name: pyright-results-${{ matrix.python-version }}
+        path: pyright-results-${{ matrix.python-version }}.txt
 
     - name: Security Analysis with Bandit
       continue-on-error: false
@@ -229,10 +229,10 @@ jobs:
         pattern: safety-results-*
         merge-multiple: true
         
-    - name: Download MyPy Results
+    - name: Download Pyright Results
       uses: actions/download-artifact@v4
       with:
-        pattern: mypy-results-*
+        pattern: pyright-results-*
         merge-multiple: true
         
     - name: Post Bandit Results to PR
@@ -371,26 +371,26 @@ jobs:
             }
           }
           
-          // Check for mypy results files (one per Python version)
+          // Check for pyright results files (one per Python version)
           // Collect results per version, then deduplicate identical outputs
-          let mypyResults = '';
-          const mypyFiles = fs.readdirSync('.').filter(f => f.startsWith('mypy-results-') && f.endsWith('.txt'));
+          let pyrightResults = '';
+          const pyrightFiles = fs.readdirSync('.').filter(f => f.startsWith('pyright-results-') && f.endsWith('.txt'));
           
           // Map: content -> [versions]
-          const mypyByContent = new Map();
+          const pyrightByContent = new Map();
           
-          if (mypyFiles.length > 0) {
-            for (const file of mypyFiles) {
+          if (pyrightFiles.length > 0) {
+            for (const file of pyrightFiles) {
               try {
                 const content = fs.readFileSync(file, 'utf8').trim();
                 if (content) {
-                  // Extract version from filename (e.g., mypy-results-3.9.txt -> 3.9)
-                  const version = file.replace('mypy-results-', '').replace('.txt', '');
-                  if (!mypyByContent.has(content)) {
-                    mypyByContent.set(content, []);
+                  // Extract version from filename (e.g., pyright-results-3.9.txt -> 3.9)
+                  const version = file.replace('pyright-results-', '').replace('.txt', '');
+                  if (!pyrightByContent.has(content)) {
+                    pyrightByContent.set(content, []);
                   }
-                  mypyByContent.get(content).push(version);
-                  console.log(`Found MyPy results for Python ${version}`);
+                  pyrightByContent.get(content).push(version);
+                  console.log(`Found Pyright results for Python ${version}`);
                 }
               } catch (error) {
                 console.log(`Error reading ${file}: ${error.message}`);
@@ -398,8 +398,8 @@ jobs:
             }
           } else {
             // Fallback: look for individual result directories
-            console.log('No MyPy result files found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('mypy-results-'));
+            console.log('No Pyright result files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('pyright-results-'));
             
             for (const item of items) {
               try {
@@ -412,36 +412,36 @@ jobs:
                     const filePath = path.join(itemPath, file);
                     const content = fs.readFileSync(filePath, 'utf8').trim();
                     if (content) {
-                      const version = item.replace('mypy-results-', '');
-                      if (!mypyByContent.has(content)) {
-                        mypyByContent.set(content, []);
+                      const version = item.replace('pyright-results-', '');
+                      if (!pyrightByContent.has(content)) {
+                        pyrightByContent.set(content, []);
                       }
-                      mypyByContent.get(content).push(version);
-                      console.log(`Found MyPy results in ${item}/${file}`);
+                      pyrightByContent.get(content).push(version);
+                      console.log(`Found Pyright results in ${item}/${file}`);
                     }
                   }
                 }
               } catch (error) {
-                console.log(`Error reading MyPy ${item}: ${error.message}`);
+                console.log(`Error reading Pyright ${item}: ${error.message}`);
               }
             }
           }
           
-          // Build deduplicated mypy output
-          for (const [content, versions] of mypyByContent.entries()) {
+          // Build deduplicated pyright output
+          for (const [content, versions] of pyrightByContent.entries()) {
             // Sort versions for consistent display
             versions.sort((a, b) => parseFloat(a) - parseFloat(b));
             if (versions.length === 1) {
-              mypyResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+              pyrightResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
             } else {
-              mypyResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+              pyrightResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
             }
           }
           
           banditResults = banditResults.trim();
           vultureResults = vultureResults.trim();
           safetyResults = safetyResults.trim();
-          mypyResults = mypyResults.trim();
+          pyrightResults = pyrightResults.trim();
           
           // Filter out manager warnings about test comments from Bandit results
           let cleanBanditResults = '';
@@ -455,9 +455,9 @@ jobs:
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
           const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
-          const hasMyPyIssues = mypyResults && !mypyResults.includes('Success: no issues found') && mypyResults.trim() !== '';
+          const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
           
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasMyPyIssues) {
+          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues) {
             console.log('No security, dead code, dependency, or type issues found, skipping PR comment.');
             return;
           }
@@ -465,8 +465,8 @@ jobs:
           // Build the comment body
           let body = '## 🔍 Code Analysis Results\n\n';
           
-          if (hasMyPyIssues) {
-            body += '### 🔍 MyPy Type Checking\n\n```\n' + mypyResults + '\n```\n\n';
+          if (hasPyrightIssues) {
+            body += '### 🔍 Pyright Type Checking\n\n```\n' + pyrightResults + '\n```\n\n';
           }
           
           if (hasBanditIssues) {
