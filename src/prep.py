@@ -8,7 +8,7 @@ try:
     import time
     import traceback
     from difflib import SequenceMatcher
-    from typing import Any, Dict, Optional, cast
+    from typing import Any, Optional, cast
 
     import cli_ui
     from guessit import guessit
@@ -38,7 +38,7 @@ try:
     from src.tmdb import tmdb_manager
     from src.tvdb import tvdb_data
     from src.tvmaze import tvmaze_manager
-    from src.video import get_container, get_hdr, get_resolution, get_type, get_uhd, get_video, get_video_codec, get_video_duration, get_video_encode, is_3d, is_sd
+    from src.video import video_manager
 
     config = cast(dict[str, Any], raw_config)
 
@@ -181,7 +181,7 @@ class Prep:
             else:
                 meta['resolution'] = "1080p"
 
-            meta['sd'] = await is_sd(meta['resolution'])
+            meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
             mi = None
 
@@ -236,8 +236,8 @@ class Prep:
                     mi = meta['mediainfo']
 
                 meta['dvd_size'] = await disc_info_manager.get_dvd_size(meta['discs'], meta.get('manual_dvds'))
-                meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
-                meta['sd'] = await is_sd(meta['resolution'])
+                meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit(video), meta['uuid'], base_dir)
+                meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         elif meta['is_disc'] == "HDDVD":
             video, meta['scene'], meta['imdb_id'] = await is_scene(meta['path'], meta, meta.get('imdb_id', 0))
@@ -257,11 +257,11 @@ class Prep:
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']
-            meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
-            meta['sd'] = await is_sd(meta['resolution'])
+            meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit(video), meta['uuid'], base_dir)
+            meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         else:
-            videopath, meta['filelist'] = await get_video(videoloc, meta.get('mode', 'discord'), meta.get('sorted_filelist', False))
+            videopath, meta['filelist'] = await video_manager.get_video(videoloc, meta.get('mode', 'discord'), meta.get('sorted_filelist', False))
             search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
             search_file_folder = 'file'
 
@@ -282,7 +282,7 @@ class Prep:
                     guess_name = ntpath.basename(video).replace('-', ' ')
             except Exception as e:
                 console.print(f"[red]Error extracting title and year: {e}[/red]")
-                raise Exception(f"Error extracting title and year: {e}")
+                raise Exception(f"Error extracting title and year: {e}") from e
 
             try:
                 if title:
@@ -299,12 +299,12 @@ class Prep:
                             filename = guessit(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get("title", guessit(re.sub("[^0-9a-zA-Z]+", " ", guess_name), {"excludes": ["country", "language"]})["title"])
                         except Exception as e:
                             console.print(f"[red]Error extracting title from video name: {e}[/red]")
-                            raise Exception(f"Error extracting title from video name: {e}")
+                            raise Exception(f"Error extracting title from video name: {e}") from e
 
                 untouched_filename = os.path.basename(video)
             except Exception as e:
                 console.print(f"[red]Error processing filename: {e}[/red]")
-                raise Exception(f"Error processing filename: {e}")
+                raise Exception(f"Error processing filename: {e}") from e
 
             try:
                 if not meta.get('emby', False):
@@ -321,15 +321,15 @@ class Prep:
                         mi = meta['mediainfo']
 
                     if meta.get('resolution') is None:
-                        meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
+                        meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit(video), meta['uuid'], base_dir)
 
-                    meta['sd'] = await is_sd(meta['resolution'])
+                    meta['sd'] = await video_manager.is_sd(meta['resolution'])
                 else:
                     meta['resolution'] = "1080p"
                     meta['search_year'] = ""
             except Exception as e:
                 console.print(f"[red]Error processing Mediainfo: {e}[/red]")
-                raise Exception(f"Error processing Mediainfo: {e}")
+                raise Exception(f"Error processing Mediainfo: {e}") from e
 
         source_size = 0
         if not meta['is_disc']:
@@ -407,7 +407,7 @@ class Prep:
                 valid_mi = validate_mediainfo(meta, debug=meta['debug'])
             except Exception as e:
                 console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
-                raise Exception(f"Upload Assistant does not support no audio media. Details: {str(e)}")
+                raise Exception(f"Upload Assistant does not support no audio media. Details: {str(e)}") from e
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
@@ -416,11 +416,12 @@ class Prep:
         # Check if there's a language restriction
         if meta['has_languages'] is not None and not meta.get('emby', False):
             try:
-                audio_languages = []
                 parsed_info = await parsed_mediainfo(meta)
-                for audio_track in parsed_info.get('audio', []):
-                    if 'language' in audio_track and audio_track['language']:
-                        audio_languages.append(audio_track['language'].lower())
+                audio_languages = [
+                    audio_track['language'].lower()
+                    for audio_track in parsed_info.get('audio', [])
+                    if 'language' in audio_track and audio_track['language']
+                ]
                 any_of_languages = meta['has_languages'].lower().split(",")
                 if all(len(lang.strip()) == 2 for lang in any_of_languages):
                     raise Exception(f"Warning: Languages should be full names, not ISO codes. Found: {any_of_languages}")
@@ -430,7 +431,7 @@ class Prep:
                     raise Exception("No matching languages")
             except Exception as e:
                 console.print(f"[red]{e}[/red]")
-                raise Exception("Language check failed")
+                raise Exception("Language check failed") from e
 
         if not meta.get('emby', False):
             if 'description' not in meta or meta.get('description') is None:
@@ -463,10 +464,7 @@ class Prep:
             trackers = [tracker.strip() for tracker in default_trackers.split(',')]
 
         if isinstance(trackers, str):
-            if "," in trackers:
-                trackers = [t.strip().upper() for t in trackers.split(',')]
-            else:
-                trackers = [trackers.strip().upper()]  # Make it a list with one element
+            trackers = [t.strip().upper() for t in trackers.split(',')] if "," in trackers else [trackers.strip().upper()]
         else:
             trackers = [t.strip().upper() for t in trackers]
         meta['trackers'] = trackers
@@ -674,7 +672,7 @@ class Prep:
         if isinstance(manual_language, str) and manual_language:
             meta['original_language'] = manual_language.lower()
 
-        meta['type'] = await get_type(video, meta['scene'], meta['is_disc'], meta)
+        meta['type'] = await video_manager.get_type(video, meta['scene'], meta['is_disc'], meta)
 
         # if it's not an anime, we can run season/episode checks now to speed the process
         if meta.get("not_anime", False) and meta.get("category") == "TV":
@@ -690,7 +688,7 @@ class Prep:
         if meta.get('imdb_id', 0) == 0 and meta.get('tvdb_id', 0) == 0 and meta.get('tmdb_id', 0) == 0 and meta.get('tvmaze_id', 0) == 0 and meta.get('mal_id', 0) == 0 and meta.get('emby', False):
             meta['no_ids'] = True
 
-        meta['video_duration'] = await get_video_duration(meta)
+        meta['video_duration'] = await video_manager.get_video_duration(meta)
         duration = meta.get('video_duration', None)
 
         unattended = not (not meta['unattended'] or meta['unattended'] and meta.get('unattended_confirm', False))
@@ -766,7 +764,7 @@ class Prep:
                 meta['imdb_id'] = await imdb_manager.search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, attempted=0, duration=duration, unattended=unattended)
             except Exception as e:
                 console.print(f"[red]Error searching IMDb: {e}[/red]")
-                raise Exception(f"Error searching IMDb: {e}")
+                raise Exception(f"Error searching IMDb: {e}") from e
 
         # user might have skipped tmdb earlier, lets double check
         if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
@@ -962,9 +960,8 @@ class Prep:
         if meta.get('is_disc') in ("BDMV", "DVD") and get_bluray_info and (meta.get('distributor') is None or meta.get('region') is None) and meta.get('imdb_id') != 0 and not meta.get('emby', False) and not meta.get('edit', False) and not meta.get('site_check', False):
             releases = await get_bluray_releases(meta)
 
-            if releases:
+            if releases and meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
                 # and if we getting bluray/dvd images, we'll rehost them
-                if meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
                     from src.rehostimages import check_hosts
                     url_host_mapping = {
                         "ibb.co": "imgbb",
@@ -982,24 +979,24 @@ class Prep:
         meta['video'] = video
 
         if not meta.get('emby', False):
-            meta['container'] = await get_container(meta)
+            meta['container'] = await video_manager.get_container(meta)
 
             meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi, meta, bdinfo)
 
-            meta['3D'] = await is_3d(mi, bdinfo)
+            meta['3D'] = await video_manager.is_3d(mi, bdinfo)
 
             meta['source'], meta['type'] = await get_source(meta['type'], video, meta['path'], meta['is_disc'], meta, folder_id, base_dir)
 
-            meta['uhd'] = await get_uhd(meta['type'], guessit(meta['path']), meta['resolution'], meta['path'])
-            meta['hdr'] = await get_hdr(mi, bdinfo)
+            meta['uhd'] = await video_manager.get_uhd(meta['type'], guessit(meta['path']), meta['resolution'], meta['path'])
+            meta['hdr'] = await video_manager.get_hdr(mi, bdinfo)
 
             meta['distributor'] = await get_distributor(meta['distributor'])
 
             if meta.get('is_disc', None) == "BDMV":  # Blu-ray Specific
                 meta['region'] = await get_region(bdinfo, meta.get('region', None))
-                meta['video_codec'] = await get_video_codec(bdinfo)
+                meta['video_codec'] = await video_manager.get_video_codec(bdinfo)
             else:
-                meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await get_video_encode(mi, meta['type'], bdinfo)
+                meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await video_manager.get_video_encode(mi, meta['type'], bdinfo)
 
             if meta.get('no_edition') is False:
                 meta['edition'], meta['repack'], meta['webdv'] = await get_edition(meta['uuid'], bdinfo, meta['filelist'], meta.get('manual_edition'), meta)
