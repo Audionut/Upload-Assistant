@@ -4,6 +4,7 @@
 import contextlib
 import os
 import sys
+from collections.abc import Mapping
 from typing import Any, Optional, cast
 
 from typing_extensions import TypeAlias
@@ -168,7 +169,7 @@ from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
 from src.queuemanage import QueueManager  # noqa: E402
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots  # noqa: E402
-from src.torrentcreate import create_base_from_existing_torrent, create_random_torrents, create_torrent  # noqa: E402
+from src.torrentcreate import TorrentCreator  # noqa: E402
 from src.trackerhandle import process_trackers  # noqa: E402
 from src.trackers.AR import AR  # noqa: E402
 from src.trackers.COMMON import COMMON  # noqa: E402
@@ -916,15 +917,15 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             if meta.get('rehash', False) is False and not meta['base_torrent_created'] and not meta['we_checked_them_all']:
                 reuse_torrent = await client.find_existing_torrent(meta)
                 if reuse_torrent is not None:
-                    await create_base_from_existing_torrent(reuse_torrent, meta['base_dir'], meta['uuid'])
+                    await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta['base_dir'], meta['uuid'])
 
             if meta['nohash'] is False and reuse_torrent is None:
-                await create_torrent(meta, Path(meta['path']), "BASE")
+                await TorrentCreator.create_torrent(meta, Path(meta['path']), "BASE")
             if meta['nohash']:
                 meta['client'] = "none"
 
         elif os.path.exists(torrent_path) and meta.get('rehash', False) is True and meta['nohash'] is False:
-            await create_torrent(meta, Path(meta['path']), "BASE")
+            await TorrentCreator.create_torrent(meta, Path(meta['path']), "BASE")
 
         if os.path.exists(torrent_path):
             raw_trackers = meta.get('trackers')
@@ -956,7 +957,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         return
 
         if int(meta.get('randomized', 0)) >= 1 and not meta['mkbrr']:
-            create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
+            TorrentCreator.create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
         meta = await gen_desc(meta)
 

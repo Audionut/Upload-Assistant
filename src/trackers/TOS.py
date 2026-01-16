@@ -4,7 +4,7 @@
 import asyncio
 from typing import Any
 from src.console import console
-from src.torrentcreate import create_torrent
+from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -107,7 +107,7 @@ class TOS(UNIT3D):
             if cooldown > 0:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
-            await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)
+            await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)
 
         return {"name": base_name}
 

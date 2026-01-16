@@ -24,7 +24,7 @@ from typing import Any, Dict, DefaultDict, Tuple, Union, Optional, List, Callabl
 from cogs.redaction import redact_private_info
 from deluge_client import DelugeRPCClient
 from src.console import console
-from src.torrentcreate import create_base_from_existing_torrent
+from src.torrentcreate import TorrentCreator
 from torf import Torrent
 
 # Secure XML-RPC client using defusedxml to prevent XML attacks
@@ -1900,7 +1900,7 @@ class Clients():
                                             console.print(f"[bold red]Validation failed for {torrent_file_path}")
                                         os.remove(torrent_file_path)  # Remove invalid file
                                     else:
-                                        await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                                        await TorrentCreator.create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
                                 except asyncio.TimeoutError:
                                     console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
@@ -2042,7 +2042,7 @@ class Clients():
                     base_torrent_path = os.path.join(extracted_torrent_dir, "BASE.torrent")
 
                     try:
-                        await create_base_from_existing_torrent(resolved_path, meta['base_dir'], meta['uuid'])
+                        await TorrentCreator.create_base_from_existing_torrent(resolved_path, meta['base_dir'], meta['uuid'])
                         if meta['debug']:
                             console.print("[green]Created BASE.torrent from existing torrent")
                     except Exception as e:
@@ -2704,7 +2704,7 @@ class Clients():
                                 else:
                                     # If piece preference is disabled, return first valid torrent
                                     try:
-                                        await create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                                        await TorrentCreator.create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
                                         if meta['debug']:
                                             console.print(f"[green]Created BASE.torrent from first valid torrent: {torrent_hash}")
                                         meta['base_torrent_created'] = True
@@ -2820,7 +2820,7 @@ class Clients():
                                         else:
                                             # If piece preference is disabled, return first valid torrent
                                             try:
-                                                await create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
+                                                await TorrentCreator.create_base_from_existing_torrent(alt_torrent_file_path, meta['base_dir'], meta['uuid'])
                                                 if meta['debug']:
                                                     console.print(f"[green]Created BASE.torrent from alternative torrent {alt_torrent_hash}")
                                                 meta['infohash'] = alt_torrent_hash
@@ -2846,7 +2846,7 @@ class Clients():
                             try:
                                 preference_type = "MTV preference" if prefer_small_pieces else "16 MiB piece limit"
                                 console.print(f"[green]Using best match torrent ({preference_type}) with hash: {piece_size_best_match['hash']}")
-                                await create_base_from_existing_torrent(piece_size_best_match['torrent_path'], meta['base_dir'], meta['uuid'])
+                                await TorrentCreator.create_base_from_existing_torrent(piece_size_best_match['torrent_path'], meta['base_dir'], meta['uuid'])
                                 if meta['debug']:
                                     piece_size_mib = piece_size_best_match['piece_size'] / 1024 / 1024
                                     console.print(f"[green]Created BASE.torrent from best match torrent: {piece_size_best_match['hash']} (piece size: {piece_size_mib:.1f} MiB)")

@@ -14,7 +14,7 @@ from urllib.parse import urlparse, quote
 from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import *  # noqa F403
-from src.torrentcreate import create_torrent
+from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
 
@@ -243,7 +243,7 @@ class HDB():
             if cooldown > 0:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
-            await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+            await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
         else:
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)

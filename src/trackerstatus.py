@@ -14,7 +14,7 @@ from src.clients import Clients
 from src.console import console
 from src.dupe_checking import filter_dupes
 from src.imdb import get_imdb_info_api
-from src.torrentcreate import create_base_from_existing_torrent
+from src.torrentcreate import TorrentCreator
 from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP, tracker_class_map
 from src.uphelper import UploadHelper
@@ -161,7 +161,7 @@ async def process_all_trackers(meta):
                                 check_torrent = await client.find_existing_torrent(local_meta)
                                 if check_torrent:
                                     console.print(f"[yellow]Existing torrent found on {check_torrent}[yellow]")
-                                    await create_base_from_existing_torrent(check_torrent, local_meta['base_dir'], local_meta['uuid'])
+                                    await TorrentCreator.create_base_from_existing_torrent(check_torrent, local_meta['base_dir'], local_meta['uuid'])
                                     torrent = Torrent.read(torrent_path)
                                     if torrent.piece_size > 8388608:
                                         console.print("[yellow]No existing torrent found with piece size lesser than 8MB[yellow]")
