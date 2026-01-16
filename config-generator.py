@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-
 import ast
 import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 
 class LinkedSetting(TypedDict):
@@ -14,10 +13,15 @@ class LinkedSetting(TypedDict):
     settings: list[str]
 
 
-def read_example_config():
+ConfigDict = dict[str, Any]
+ConfigComments = dict[str, list[str]]
+UnexpectedKey = tuple[str, ConfigDict, str]
+
+
+def read_example_config() -> tuple[Optional[ConfigDict], ConfigComments]:
     """Read the example config file and return its structure and comments"""
     example_path = Path("data/example-config.py")
-    comments: dict[str, list[str]] = {}
+    comments: ConfigComments = {}
 
     if not example_path.exists():
         print("[!] Warning: Could not find data/example-config.py")
@@ -76,15 +80,18 @@ def read_example_config():
 
         config_dict_str = match.group(1)
         example_config = ast.literal_eval(config_dict_str)
+        if not isinstance(example_config, dict):
+            print("[!] Warning: Example config is not a dict")
+            return None, comments
 
         print("[✓] Successfully loaded example config template")
-        return example_config, comments
+        return cast(ConfigDict, example_config), comments
     except Exception as e:
         print(f"[!] Error parsing example config: {str(e)}")
         return None, comments
 
 
-def load_existing_config():
+def load_existing_config() -> tuple[Optional[ConfigDict], Optional[Path]]:
     """Load an existing config file if available"""
     config_paths = [
         Path("data/config.py"),
@@ -103,15 +110,18 @@ def load_existing_config():
                     config_dict_str = match.group(1)
                     # Convert to proper Python dict
                     config_dict = ast.literal_eval(config_dict_str)
+                    if not isinstance(config_dict, dict):
+                        print(f"\n[!] Error loading config from {path}: config is not a dict")
+                        continue
                     print(f"\n[✓] Found existing config at {path}")
-                    return config_dict, path
+                    return cast(ConfigDict, config_dict), path
             except Exception as e:
                 print(f"\n[!] Error loading config from {path}: {e}")
 
     return None, None
 
 
-def validate_config(existing_config, example_config):
+def validate_config(existing_config: ConfigDict, example_config: ConfigDict) -> ConfigDict:
     """
     Validate the existing config against the example structure.
     Returns a cleaned version with only valid keys.
@@ -119,12 +129,10 @@ def validate_config(existing_config, example_config):
     if not existing_config or not example_config:
         return existing_config
 
-    unexpected_keys = []
+    unexpected_keys: list[UnexpectedKey] = []
 
     # Helper function to find unexpected keys at any level
-    def find_unexpected_keys(existing_section, example_section, path=""):
-        if not isinstance(existing_section, dict) or not isinstance(example_section, dict):
-            return
+    def find_unexpected_keys(existing_section: ConfigDict, example_section: ConfigDict, path: str = "") -> None:
 
         for key in existing_section:
             current_path = f"{path}.{key}" if path else key
@@ -133,7 +141,7 @@ def validate_config(existing_config, example_config):
                 unexpected_keys.append((current_path, existing_section, key))
             elif isinstance(existing_section[key], dict) and isinstance(example_section.get(key), dict):
                 # Recursively check nested dictionaries
-                find_unexpected_keys(existing_section[key], example_section[key], current_path)
+                find_unexpected_keys(cast(ConfigDict, existing_section[key]), cast(ConfigDict, example_section[key]), current_path)
 
     # Check main sections first
     for section in existing_config:
@@ -141,12 +149,12 @@ def validate_config(existing_config, example_config):
             unexpected_keys.append((section, existing_config, section))
         elif isinstance(existing_config[section], dict) and isinstance(example_config[section], dict):
             # Check keys within valid sections
-            find_unexpected_keys(existing_config[section], example_config[section], section)
+            find_unexpected_keys(cast(ConfigDict, existing_config[section]), cast(ConfigDict, example_config[section]), section)
 
     # If unexpected keys were found, ask about each one individually
     if unexpected_keys:
         print("\n[!] The following keys in your existing configuration are not in the example config:")
-        for i, (key_path, parent_dict, key) in enumerate(unexpected_keys):
+        for i, (key_path, _parent_dict, _key) in enumerate(unexpected_keys):
             print(f"  {i+1}. {key_path}")
 
         print("\n\n[i] The keys have been removed or renamed.")
@@ -178,14 +186,12 @@ def validate_config(existing_config, example_config):
     return existing_config
 
 
-def find_missing_keys(existing_config, example_config):
+def find_missing_keys(existing_config: ConfigDict, example_config: ConfigDict) -> list[str]:
     """Find keys that exist in example config but are missing in existing config"""
-    missing_keys = []
+    missing_keys: list[str] = []
 
     # Helper function to find missing keys at any level
-    def find_missing_recursive(example_section, existing_section, path=""):
-        if not isinstance(example_section, dict) or not isinstance(existing_section, dict):
-            return
+    def find_missing_recursive(example_section: ConfigDict, existing_section: ConfigDict, path: str = "") -> None:
 
         for key in example_section:
             current_path = f"{path}.{key}" if path else key
@@ -194,7 +200,7 @@ def find_missing_keys(existing_config, example_config):
                 missing_keys.append(current_path)
             elif isinstance(example_section[key], dict) and isinstance(existing_section.get(key), dict):
                 # Recursively check nested dictionaries
-                find_missing_recursive(example_section[key], existing_section[key], current_path)
+                find_missing_recursive(cast(ConfigDict, example_section[key]), cast(ConfigDict, existing_section[key]), current_path)
 
     # Check main sections first
     for section in example_config:
@@ -202,32 +208,40 @@ def find_missing_keys(existing_config, example_config):
             missing_keys.append(section)
         elif isinstance(example_config[section], dict) and isinstance(existing_config[section], dict):
             # Check keys within valid sections
-            find_missing_recursive(example_config[section], existing_config[section], section)
+            find_missing_recursive(cast(ConfigDict, example_config[section]), cast(ConfigDict, existing_config[section]), section)
 
     return missing_keys
 
 
-def get_user_input(prompt, default="", is_password=False, is_announce_url=False, existing_value=None):
+def get_user_input(
+    prompt: str,
+    default: str = "",
+    is_password: bool = False,
+    is_announce_url: bool = False,
+    existing_value: Optional[Any] = None,
+) -> str:
     """Get input from user with default value and optional existing value"""
     display = prompt
 
     # If we have an existing value, show it as an option
     if existing_value is not None:
+        existing_value_str = str(existing_value)
+        display_value = existing_value_str
         # For password fields: show first 6 chars and mask the rest
-        if is_password and existing_value:
-            visible_part = existing_value[:6]
-            masked_part = "*" * min(8, max(0, len(existing_value) - 6))
-            display_value = f"{visible_part}{masked_part}" if len(existing_value) > 6 else existing_value
-        elif is_announce_url and existing_value:
+        if is_password and existing_value_str:
+            visible_part = existing_value_str[:6]
+            masked_part = "*" * min(8, max(0, len(existing_value_str) - 6))
+            display_value = f"{visible_part}{masked_part}" if len(existing_value_str) > 6 else existing_value_str
+        elif is_announce_url and existing_value_str:
             # For announce_urls, show the first 10 chars and last 6 chars with * in between
-            if len(existing_value) > 20:  # Only mask if long enough
-                visible_prefix = existing_value[:15]
-                visible_suffix = existing_value[-6:]
-                masked_length = len(existing_value) - 16
+            if len(existing_value_str) > 20:  # Only mask if long enough
+                visible_prefix = existing_value_str[:15]
+                visible_suffix = existing_value_str[-6:]
+                masked_length = len(existing_value_str) - 16
                 masked_part = "*" * min(masked_length, 15)  # Limit number of asterisks
                 display_value = f"{visible_prefix}...{masked_part}...{visible_suffix}"
         else:
-            display_value = existing_value
+            display_value = existing_value_str
         display = f"{prompt} [existing: {display_value}]"
 
     # Show default if available
@@ -241,16 +255,21 @@ def get_user_input(prompt, default="", is_password=False, is_announce_url=False,
 
     # Use existing value if user just pressed Enter and we have an existing value
     if value == "" and existing_value is not None:
-        return existing_value
+        return str(existing_value)
 
     # Use default if no input and no existing value
     if value == "" and default:
-        return default
+        return str(default)
 
-    return value
+    return str(value)
 
 
-def configure_default_section(existing_defaults, example_defaults, config_comments, quick_setup=False):
+def configure_default_section(
+    existing_defaults: ConfigDict,
+    example_defaults: ConfigDict,
+    config_comments: ConfigComments,
+    quick_setup: bool = False,
+) -> ConfigDict:
     """
     Helper to configure the DEFAULT section.
     Returns a dict with the configured DEFAULT values.
@@ -363,8 +382,13 @@ def configure_default_section(existing_defaults, example_defaults, config_commen
 
 
 # Process image hosts
-def get_img_host(config_defaults, existing_defaults, example_defaults, config_comments):
-    img_host_api_map = {
+def get_img_host(
+    config_defaults: ConfigDict,
+    existing_defaults: ConfigDict,
+    example_defaults: ConfigDict,
+    config_comments: ConfigComments,
+) -> None:
+    img_host_api_map: dict[str, Union[str, list[str], None]] = {
         "imgbb": "imgbb_api",
         "ptpimg": "ptpimg_api",
         "lensdump": "lensdump_api",
@@ -384,17 +408,17 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
     print("[i] Note: imgbox and pixhost don't require API keys")
 
     # Get existing image hosts if available
-    existing_hosts = []
+    existing_hosts: list[str] = []
     for i in range(1, 11):
         key = f"img_host_{i}"
         if key in existing_defaults and existing_defaults[key]:
-            existing_hosts.append(existing_defaults[key].strip().lower())
+            existing_hosts.append(str(existing_defaults[key]).strip().lower())
 
     if existing_hosts:
         print(f"\n[i] Your existing image hosts: {', '.join(existing_hosts)}")
 
+    default_count = len(existing_hosts) if existing_hosts else 1
     try:
-        default_count = len(existing_hosts) if existing_hosts else 1
         number_hosts = int(input(f"\n[i] How many image hosts would you like to configure? (1-10) [default: {default_count}]: ") or default_count)
         number_hosts = max(1, min(10, number_hosts))  # Limit between 1 and 10
     except ValueError:
@@ -458,7 +482,11 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
                 config_defaults[api_key] = ""
 
 
-def configure_trackers(existing_trackers, example_trackers, config_comments):
+def configure_trackers(
+    existing_trackers: ConfigDict,
+    example_trackers: ConfigDict,
+    config_comments: ConfigComments,
+) -> ConfigDict:
     """
     Helper to configure the TRACKERS section.
     Returns a dict with the configured trackers.
@@ -475,7 +503,9 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
         print("\n[i] (default trackers list) Only add the trackers you want to upload to on a regular basis.")
         print("[i] You can add other tracker configs later if needed.")
 
-    existing_tracker_list = existing_trackers.get("default_trackers", "").split(",") if existing_trackers.get("default_trackers") else []
+    existing_trackers_value = existing_trackers.get("default_trackers", "")
+    existing_tracker_str = str(existing_trackers_value) if existing_trackers_value else ""
+    existing_tracker_list = existing_tracker_str.split(",") if existing_tracker_str else []
     existing_tracker_list = [t.strip() for t in existing_tracker_list if t.strip()]
     existing_trackers_str = ", ".join(existing_tracker_list)
 
@@ -509,11 +539,11 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
             continue
 
         print(f"\n\nConfiguring **{tracker}**:")
-        existing_tracker_config: dict[str, Any] = existing_trackers.get(tracker, {})
-        example_tracker: dict[str, Any] = example_trackers.get(tracker, {})
+        existing_tracker_config: ConfigDict = cast(ConfigDict, existing_trackers.get(tracker, {}))
+        example_tracker: ConfigDict = cast(ConfigDict, example_trackers.get(tracker, {}))
         tracker_config: dict[str, Any] = {}
 
-        if example_tracker and isinstance(example_tracker, dict):
+        if example_tracker:
             for key, default_value in example_tracker.items():
                 # Skip keys that should not be prompted
                 if tracker == "HDT" and key == "announce_url":
@@ -561,9 +591,9 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
             if tracker in trackers_config:
                 continue  # Already configured
             print(f"\n\nConfiguring **{tracker}**:")
-            example_tracker = example_trackers.get(tracker, {})
+            example_tracker = cast(ConfigDict, example_trackers.get(tracker, {}))
             additional_tracker_config: dict[str, Any] = {}
-            if example_tracker and isinstance(example_tracker, dict):
+            if example_tracker:
                 for key, default_value in example_tracker.items():
                     if tracker == "HDT" and key == "announce_url":
                         additional_tracker_config[key] = example_tracker[key]
@@ -593,12 +623,17 @@ def configure_trackers(existing_trackers, example_trackers, config_comments):
     return trackers_config
 
 
-def configure_torrent_clients(existing_clients=None, example_clients=None, default_client_name=None, config_comments=None):
+def configure_torrent_clients(
+    existing_clients: Optional[ConfigDict] = None,
+    example_clients: Optional[ConfigDict] = None,
+    default_client_name: Optional[str] = None,
+    config_comments: Optional[ConfigComments] = None,
+) -> tuple[ConfigDict, Optional[str]]:
     """
     Helper to configure the TORRENT_CLIENTS section.
     Returns a dict with the configured client(s) and the selected default client name.
     """
-    config_clients: dict[str, Any] = {}
+    config_clients: ConfigDict = {}
     existing_clients = existing_clients or {}
     example_clients = example_clients or {}
     config_comments = config_comments or {}
@@ -665,11 +700,17 @@ def configure_torrent_clients(existing_clients=None, example_clients=None, defau
     return config_clients, default_client_name
 
 
-def configure_single_client(client_name, existing_clients, example_clients, config_clients, config_comments):
+def configure_single_client(
+    client_name: str,
+    existing_clients: ConfigDict,
+    example_clients: ConfigDict,
+    config_clients: ConfigDict,
+    config_comments: ConfigComments,
+) -> ConfigDict:
     """Helper function to configure a single torrent client"""
     # Use existing config for the selected client if present, else use example config
-    existing_client_config = existing_clients.get(client_name, {})
-    example_client_config = example_clients.get(client_name, {})
+    existing_client_config = cast(ConfigDict, existing_clients.get(client_name, {}))
+    example_client_config = cast(ConfigDict, example_clients.get(client_name, {}))
 
     if not example_client_config:
         print(f"[!] No example config found for client '{client_name}'.")
@@ -714,7 +755,11 @@ def configure_single_client(client_name, existing_clients, example_clients, conf
     return config_clients
 
 
-def configure_discord(existing_discord, example_discord, config_comments):
+def configure_discord(
+    existing_discord: ConfigDict,
+    example_discord: ConfigDict,
+    config_comments: ConfigComments,
+) -> ConfigDict:
     """
     Helper to configure the DISCORD section.
     Returns a dict with the configured Discord settings.
@@ -722,7 +767,7 @@ def configure_discord(existing_discord, example_discord, config_comments):
     print("\n====== DISCORD CONFIGURATION ======")
     print("[i] Configure Discord bot settings for upload notifications")
 
-    discord_config = {}
+    discord_config: ConfigDict = {}
     existing_use_discord = existing_discord.get("use_discord", False)
     enable_discord = get_user_input(
         "Enable Discord bot functionality? (True/False)",
@@ -734,9 +779,7 @@ def configure_discord(existing_discord, example_discord, config_comments):
     # If Discord is disabled, set defaults and return
     if enable_discord.lower() != "true":
         print("[i] Discord disabled. Setting default values for other Discord settings.")
-        for key, default_value in example_discord.items():
-            if key != "use_discord":
-                discord_config[key] = default_value
+        discord_config = {key: default_value for key, default_value in example_discord.items() if key != "use_discord"}
         return discord_config
 
     # Configure other Discord settings if enabled
@@ -769,7 +812,7 @@ def configure_discord(existing_discord, example_discord, config_comments):
     return discord_config
 
 
-def generate_config_file(config_data, existing_path=None):
+def generate_config_file(config_data: ConfigDict, existing_path: Optional[Path] = None) -> bool:
     """Generate the config.py file from the config dictionary"""
     # Create output directory if it doesn't exist
     os.makedirs("data", exist_ok=True)
@@ -794,13 +837,15 @@ def generate_config_file(config_data, existing_path=None):
                 print(f"\n[✓] Created backup of existing config at {backup_path}")
 
     # Convert boolean values in config to proper Python booleans
-    def format_config(obj):
+    def format_config(obj: Any) -> Any:
         if isinstance(obj, dict):
             # Process each key-value pair in dictionaries
-            return {k: format_config(v) for k, v in obj.items()}
+            obj_dict = cast(dict[Any, Any], obj)
+            return {str(k): format_config(v) for k, v in obj_dict.items()}
         elif isinstance(obj, list):
             # Process each item in lists
-            return [format_config(item) for item in obj]
+            obj_list = cast(list[Any], obj)
+            return [format_config(item) for item in obj_list]
         elif isinstance(obj, str):
             # Convert string "true"/"false" to Python True/False
             if obj.lower() == "true":
@@ -811,21 +856,21 @@ def generate_config_file(config_data, existing_path=None):
         return obj
 
     # Format config with proper Python booleans
-    formatted_config = format_config(config_data)
+    formatted_config = cast(ConfigDict, format_config(config_data))
 
     # Generate the config file with properly formatted Python syntax
     with open(config_path, "w", encoding="utf-8") as file:
         file.write("config = {\n")
 
         # Custom formatting function to create Python dict with trailing commas
-        def write_dict(d, indent_level=1):
+        def write_dict(d: ConfigDict, indent_level: int = 1) -> None:
             indent = "    " * indent_level
             for key, value in d.items():
                 file.write(f"{indent}{json.dumps(key)}: ")
 
                 if isinstance(value, dict):
                     file.write("{\n")
-                    write_dict(value, indent_level + 1)
+                    write_dict(cast(ConfigDict, value), indent_level + 1)
                     file.write(f"{indent}}},\n")
                 elif isinstance(value, bool):
                     # Ensure booleans are capitalized
@@ -850,6 +895,10 @@ if __name__ == "__main__":
 
     # Get example configuration structure first
     example_config, config_comments = read_example_config()
+
+    if not example_config:
+        print("[!] Example config is missing or invalid. Exiting.")
+        raise SystemExit(1)
 
     # Try to load existing config
     existing_config, existing_path = load_existing_config()
@@ -953,14 +1002,14 @@ if __name__ == "__main__":
                     print("[i] Keeping existing DISCORD section")
                     print()
 
-                missing_discord_keys = []
-                missing_default_keys = []
+                missing_discord_keys: list[str] = []
+                missing_default_keys: list[str] = []
                 if "DEFAULT" in example_config and "DEFAULT" in config_data:
-                    def find_missing_default_keys(example_section, existing_section, path=""):
+                    def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, path: str = "") -> None:
                         for key in example_section:
                             if key not in existing_section:
                                 missing_default_keys.append(key)
-                    find_missing_default_keys(example_config["DEFAULT"], config_data["DEFAULT"])
+                    find_missing_default_keys(cast(ConfigDict, example_config["DEFAULT"]), cast(ConfigDict, config_data["DEFAULT"]))
 
                 if missing_default_keys:
                     print("\n\n[!] Your existing config is missing these keys from example-config:")
@@ -983,11 +1032,11 @@ if __name__ == "__main__":
                             config_data["DISCORD"] = example_config["DISCORD"].copy()
                     else:
                         # Check for missing keys within DISCORD section
-                        def find_missing_discord_keys(example_section, existing_section):
+                        def find_missing_discord_keys(example_section: ConfigDict, existing_section: ConfigDict) -> None:
                             for key in example_section:
                                 if key not in existing_section:
                                     missing_discord_keys.append(key)
-                        find_missing_discord_keys(example_config["DISCORD"], config_data["DISCORD"])
+                        find_missing_discord_keys(cast(ConfigDict, example_config["DISCORD"]), cast(ConfigDict, config_data["DISCORD"]))
 
                 if missing_discord_keys:
                     print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}")
@@ -1005,13 +1054,13 @@ if __name__ == "__main__":
         else:
             existing_config = validate_config(existing_config, example_config)
             config_data = existing_config.copy()
-            missing_default_keys = []
+            missing_default_keys: list[str] = []
             if "DEFAULT" in example_config and "DEFAULT" in config_data:
-                def find_missing_default_keys(example_section, existing_section, path=""):
+                def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, path: str = "") -> None:
                     for key in example_section:
                         if key not in existing_section:
                             missing_default_keys.append(key)
-                find_missing_default_keys(example_config["DEFAULT"], config_data["DEFAULT"])
+                find_missing_default_keys(cast(ConfigDict, example_config["DEFAULT"]), cast(ConfigDict, config_data["DEFAULT"]))
 
             if missing_default_keys:
                 print("\n[!] Your existing config is missing these keys from example-config:")
@@ -1027,7 +1076,7 @@ if __name__ == "__main__":
                 print("[i] Added DISCORD section with default values")
             elif "DISCORD" in config_data and "DISCORD" in example_config:
                 # Check for missing DISCORD keys
-                missing_discord_keys = []
+                missing_discord_keys: list[str] = []
                 for key in example_config["DISCORD"]:
                     if key not in config_data["DISCORD"]:
                         missing_discord_keys.append(key)
@@ -1045,7 +1094,7 @@ if __name__ == "__main__":
         print("\n[i] No existing configuration found. Creating a new one.")
         print("[i] Enter to accept the default values/skip, or enter your own values.")
 
-        config_data = {}
+        config_data: ConfigDict = {}
 
         # DEFAULT section
         example_defaults = example_config.get("DEFAULT", {})
