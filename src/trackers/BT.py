@@ -17,22 +17,23 @@ from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
+from typing import Any, Optional
 
 
 class BT:
     secret_token: str = ''
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config: dict[str, Any] = config
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'BT'
-        self.banned_groups = []
+        self.banned_groups: list[str] = []
         self.source_flag = 'BT'
         self.base_url = 'https://brasiltracker.org'
         self.torrent_url = f'{self.base_url}/torrents.php?id='
-        self.auth_token = None
+        self.auth_token: Optional[str] = None
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
@@ -92,15 +93,18 @@ class BT:
             ('Vietnamese', 'vie', 'vi'): 'vietnamese',
         }
 
-        self.ultimate_lang_map = {}
+        self.ultimate_lang_map: dict[str, str] = {}
         for aliases_tuple, canonical_name in source_alias_map.items():
             if canonical_name in target_site_ids:
                 correct_id = target_site_ids[canonical_name]
                 for alias in aliases_tuple:
                     self.ultimate_lang_map[alias.lower()] = correct_id
 
-    async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def validate_credentials(self, meta: dict[str, Any]) -> bool:
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar is None:
+            return False
+        self.session.cookies = cookie_jar
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
@@ -109,7 +113,7 @@ class BT:
             token_pattern=r'name="auth" value="([^"]+)"'  # nosec B106
         )
 
-    async def load_localized_data(self, meta):
+    async def load_localized_data(self, meta: dict[str, Any]) -> None:
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
         main_ptbr_data = {}
         episode_ptbr_data = {}
@@ -153,14 +157,15 @@ class BT:
 
         return
 
-    async def get_container(self, meta):
+    async def get_container(self, meta: dict[str, Any]) -> str:
         container = meta.get('container', '')
-        if container in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
-            return container.upper()
+        container_str = str(container) if container is not None else ''
+        if container_str in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
+            return container_str.upper()
 
         return 'Outro'
 
-    async def get_type(self, meta):
+    async def get_type(self, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('anime'):
             return '5'
 
@@ -171,7 +176,7 @@ class BT:
 
         return category_map.get(meta['category'])
 
-    async def get_languages(self, meta):
+    async def get_languages(self, meta: dict[str, Any]) -> Optional[str]:
         lang_code = self.main_tmdb_data.get('original_language')
 
         if not lang_code:
@@ -181,9 +186,9 @@ class BT:
             return langcodes.Language.make(lang_code).display_name('pt').capitalize()
 
         except LanguageTagError:
-            return lang_code
+            return str(lang_code)
 
-    async def get_audio(self, meta):
+    async def get_audio(self, meta: dict[str, Any]) -> str:
         if not meta.get('language_checked', False):
             await process_desc_language(meta, tracker=self.tracker)
 
@@ -206,7 +211,7 @@ class BT:
 
         return 'Legendado'
 
-    async def get_subtitle(self, meta):
+    async def get_subtitle(self, meta: dict[str, Any]) -> tuple[str, list[str]]:
         if not meta.get('language_checked', False):
             await process_desc_language(meta, tracker=self.tracker)
 
@@ -227,7 +232,9 @@ class BT:
 
         return has_pt_subtitles, subtitle_id_list
 
-    async def get_resolution(self, meta):
+    async def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
+        width = ''
+        height = ''
         if meta.get('is_disc') == 'BDMV':
             resolution_str = meta.get('resolution', '')
             try:
@@ -241,12 +248,12 @@ class BT:
 
         else:
             video_mi = meta['mediainfo']['media']['track'][1]
-            width = video_mi['Width']
-            height = video_mi['Height']
+            width = str(video_mi.get('Width', ''))
+            height = str(video_mi.get('Height', ''))
 
         return width, height
 
-    async def get_video_codec(self, meta):
+    async def get_video_codec(self, meta: dict[str, Any]) -> str:
         video_encode = meta.get('video_encode', '').strip().lower()
         codec_final = meta.get('video_codec', '')
         is_hdr = bool(meta.get('hdr'))
@@ -281,7 +288,7 @@ class BT:
 
         return codec_final if codec_final else "Outro"
 
-    async def get_audio_codec(self, meta):
+    async def get_audio_codec(self, meta: dict[str, Any]) -> str:
         priority_order = [
             'DTS-X', 'E-AC-3 JOC', 'TrueHD', 'DTS-HD', 'PCM', 'FLAC', 'DTS-ES',
             'DTS', 'E-AC-3', 'AC3', 'AAC', 'Opus', 'Vorbis', 'MP3', 'MP2'
@@ -319,12 +326,12 @@ class BT:
 
         return 'Outro'
 
-    async def get_title(self, meta):
+    async def get_title(self, meta: dict[str, Any]) -> str:
         title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
@@ -370,7 +377,7 @@ class BT:
 
         return description
 
-    async def get_trailer(self, meta):
+    async def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
@@ -385,7 +392,7 @@ class BT:
 
         return youtube
 
-    async def get_tags(self, meta):
+    async def get_tags(self, meta: dict[str, Any]) -> str:
         tags = ''
 
         if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
@@ -409,14 +416,17 @@ class BT:
 
         return tags
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[str]:
         is_tv_pack = bool(meta.get('tv_pack'))
 
         search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
 
         found_items = []
         try:
-            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+            cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+            if cookie_jar is None:
+                return []
+            self.session.cookies = cookie_jar
 
             response = await self.session.get(search_url)
             response.raise_for_status()
@@ -492,7 +502,7 @@ class BT:
 
         return found_items
 
-    async def get_media_info(self, meta):
+    async def get_media_info(self, meta: dict[str, Any]) -> str:
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
@@ -510,7 +520,7 @@ class BT:
             console.print(f'[bold red]Arquivo de info não encontrado: {info_file_path}[/bold red]')
             return ''
 
-    async def get_edition(self, meta):
+    async def get_edition(self, meta: dict[str, Any]) -> str:
         edition_str = meta.get('edition', '').lower()
         if not edition_str:
             return ''
@@ -532,13 +542,13 @@ class BT:
 
         return ''
 
-    async def get_bitrate(self, meta):
+    async def get_bitrate(self, meta: dict[str, Any]) -> str:
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
 
             if is_disc_type == 'BDMV':
                 disctype = meta.get('disctype')
-                if disctype in ['BD100', 'BD66', 'BD50', 'BD25']:
+                if isinstance(disctype, str) and disctype in ['BD100', 'BD66', 'BD50', 'BD25']:
                     return disctype
 
                 try:
@@ -557,7 +567,7 @@ class BT:
 
             elif is_disc_type == 'DVD':
                 dvd_size = meta.get('dvd_size')
-                if dvd_size in ['DVD9', 'DVD5']:
+                if isinstance(dvd_size, str) and dvd_size in ['DVD9', 'DVD5']:
                     return dvd_size
                 return 'DVD9'
 
@@ -583,7 +593,7 @@ class BT:
 
         return keyword_map.get(source_type.lower(), 'Outro')
 
-    async def get_screens(self, meta):
+    async def get_screens(self, meta: dict[str, Any]) -> list[str]:
         urls = []
         for image in meta.get('menu_images', []) + meta.get('image_list', []):
             if image.get('raw_url'):
@@ -591,7 +601,7 @@ class BT:
 
         return urls
 
-    async def get_credits(self, meta):
+    async def get_credits(self, meta: dict[str, Any]) -> str:
         director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
         if director:
             unique_names = list(dict.fromkeys(director))[:5]
@@ -599,7 +609,7 @@ class BT:
         else:
             return 'N/A'
 
-    async def get_data(self, meta):
+    async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
         has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
         resolution_width, resolution_height = await self.get_resolution(meta)
@@ -683,8 +693,11 @@ class BT:
 
         return data
 
-    async def upload(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar is None:
+            return False
+        self.session.cookies = cookie_jar
         data = await self.get_data(meta)
 
         is_uploaded = await self.cookie_auth_uploader.handle_upload(

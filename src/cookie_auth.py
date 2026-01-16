@@ -15,7 +15,7 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
-from typing import Any, Union, Optional
+from typing import Any, Union, Optional, cast
 
 
 def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
@@ -28,11 +28,11 @@ def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
 
 
 class CookieValidator:
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         pass
 
-    async def load_session_cookies(self, meta: dict[str, Any], tracker: str):
+    async def load_session_cookies(self, meta: dict[str, Any], tracker: str) -> Optional[http.cookiejar.MozillaCookieJar]:
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
         cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
@@ -41,7 +41,7 @@ class CookieValidator:
         except http.cookiejar.LoadError as e:
             console.print(f"{tracker}: Failed to load the cookie file: {e}")
             console.print(f"{tracker}: Please ensure the cookie file is in the correct format (Netscape).")
-            return False
+            return None
         except FileNotFoundError:
             # Attempt automatic login for AR tracker
             if tracker == 'AR':
@@ -53,21 +53,21 @@ class CookieValidator:
                         return cookie_jar
                     except Exception as e:
                         console.print(f"{tracker}: Failed to load cookies after login: {e}")
-                        return False
+                        return None
                 else:
                     console.print(f"{tracker}: Automatic login failed.")
-                    return False
+                    return None
 
             console.print(
                 f"{tracker}: [red]Cookie file not found.[/red]\n"
                 f"{tracker}: You must first log in through your usual browser and export the cookies to: [yellow]{cookie_file}[/yellow]\n"
                 f'{tracker}: Cookies can be exported using browser extensions like "cookies.txt" (Firefox) or "Get cookies.txt LOCALLY" (Chrome).'
             )
-            return False
+            return None
 
         return cookie_jar
 
-    async def save_session_cookies(self, tracker, cookie_jar):
+    async def save_session_cookies(self, tracker: str, cookie_jar: Optional[http.cookiejar.MozillaCookieJar]) -> None:
         """Save updated cookies after a successful validation."""
         if not cookie_jar:
             console.print(f"{tracker}: Cookie jar not initialized, cannot save cookies.")
@@ -78,7 +78,7 @@ class CookieValidator:
         except Exception as e:
             console.print(f"{tracker}: Failed to update the cookie file: {e}")
 
-    async def get_ar_auth_key(self, meta, tracker):
+    async def get_ar_auth_key(self, meta: dict[str, Any], tracker: str) -> Optional[str]:
         """Retrieve the saved auth key for AR tracker."""
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
         auth_file = cookie_file.replace('.txt', '_auth.txt')
@@ -87,7 +87,7 @@ class CookieValidator:
             try:
                 async with aiofiles.open(auth_file, 'r', encoding='utf-8') as f:
                     auth_key = await f.read()
-                    auth_key = auth_key.strip()
+                    auth_key = str(auth_key).strip()
                     if auth_key:
                         return auth_key
             except Exception as e:
@@ -95,7 +95,7 @@ class CookieValidator:
 
         return None
 
-    async def ar_login(self, meta, tracker, cookie_file):
+    async def ar_login(self, meta: dict[str, Any], tracker: str, cookie_file: str) -> bool:
         """Perform automatic login to AR and save cookies in Netscape format."""
         username = self.config['TRACKERS'][tracker].get('username', '').strip()
         password = self.config['TRACKERS'][tracker].get('password', '').strip()
@@ -307,7 +307,7 @@ class CookieValidator:
 
         return False
 
-    async def handle_validation_failure(self, meta, tracker, text):
+    async def handle_validation_failure(self, meta: dict[str, Any], tracker: str, text: str) -> None:
         console.print(
             f"{tracker}: Validation failed. The cookie appears to be expired or invalid.\n"
             f"{tracker}: Please log in through your usual browser and export the cookies again."
@@ -324,7 +324,7 @@ class CookieValidator:
 
         return
 
-    async def find_html_token(self, tracker, token_pattern, response):
+    async def find_html_token(self, tracker: str, token_pattern: str, response: str) -> Optional[str]:
         """Find the auth token in a web page using a regular expression pattern."""
         auth_match = re.search(token_pattern, response)
         if not auth_match:
@@ -332,11 +332,11 @@ class CookieValidator:
                 f"{tracker}: The required token could not be found in the page's HTML. Pattern used: {token_pattern}\n"
                 f"{tracker}: This can happen if the site HTML has changed or if the login failed silently."
             )
-            return False
+            return None
         else:
             return str(auth_match.group(1))
 
-    def _save_cookies_secure(self, session_cookies, cookiefile):
+    def _save_cookies_secure(self, session_cookies: Any, cookiefile: str) -> None:
         """Securely save session cookies using JSON instead of pickle"""
         try:
             # Convert RequestsCookieJar to dictionary for JSON serialization
@@ -363,7 +363,7 @@ class CookieValidator:
             console.print(f"[red]Error encoding cookies to JSON: {e}[/red]")
             raise
 
-    def _load_cookies_secure(self, session, cookiefile, tracker):
+    def _load_cookies_secure(self, session: Any, cookiefile: str, tracker: str) -> None:
         """Securely load session cookies from JSON instead of pickle"""
 
         # Check for legacy pickle file and migrate if needed
@@ -452,12 +452,12 @@ class CookieValidator:
             console.print(f"[red]Error decoding JSON from cookie file: {e}[/red]")
             raise
 
-    def _load_cookies_dict_secure(self, cookiefile):
+    def _load_cookies_dict_secure(self, cookiefile: str) -> dict[str, Any]:
         """Securely load cookies as dictionary from JSON instead of pickle"""
         try:
             with open(cookiefile, 'r', encoding='utf-8') as f:
                 cookie_dict = json.load(f)
-            return cookie_dict
+            return cast(dict[str, Any], cookie_dict)
         except OSError as e:
             console.print(f"[red]Error reading cookie file: {e}[/red]")
             raise
@@ -467,7 +467,7 @@ class CookieValidator:
 
 
 class CookieAuthUploader:
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
         pass
@@ -608,7 +608,7 @@ class CookieAuthUploader:
         await self.common.create_torrent_ready_to_seed(meta, tracker, source_flag, user_announce_url, torrent_url)
         return False
 
-    def upload_debug(self, tracker, data):
+    def upload_debug(self, tracker: str, data: Any) -> None:
         try:
             if isinstance(data, dict):
                 sensitive_keywords = ['password', 'passkey', 'auth', 'csrf', 'token']
@@ -634,8 +634,14 @@ class CookieAuthUploader:
             raise
 
     async def load_torrent_file(
-        self, meta, tracker, torrent_field_name, torrent_name, source_flag, default_announce
-    ):
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        torrent_field_name: str,
+        torrent_name: str,
+        source_flag: str,
+        default_announce: str,
+    ) -> dict[str, tuple[str, bytes, str]]:
         """Load the torrent file into memory."""
         await self.common.create_torrent_for_upload(meta, tracker, source_flag, announce_url=default_announce)
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
@@ -653,8 +659,16 @@ class CookieAuthUploader:
         }
 
     async def handle_successful_upload(
-        self, meta, tracker, response, id_pattern, hash_is_id, source_flag, user_announce_url, torrent_url
-    ):
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        response: httpx.Response,
+        id_pattern: str,
+        hash_is_id: bool,
+        source_flag: str,
+        user_announce_url: str,
+        torrent_url: str,
+    ) -> bool:
         torrent_id = ""
         if id_pattern:
             # First try to match the pattern in the response URL (for redirects)
@@ -681,8 +695,14 @@ class CookieAuthUploader:
         return True
 
     async def handle_failed_upload(
-        self, meta, tracker, success_status_code, success_text, error_text, response
-    ):
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        success_status_code: str,
+        success_text: str,
+        error_text: str,
+        response: httpx.Response,
+    ) -> bool:
         message = ["data error: The upload appears to have failed. It may have uploaded, go check."]
         if success_text:
             message.append(f"Could not find the success text '{success_text}' in the response.")

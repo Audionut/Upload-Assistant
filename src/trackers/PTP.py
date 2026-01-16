@@ -12,7 +12,7 @@ import requests
 
 from pathlib import Path
 from pymediainfo import MediaInfo
-from typing import Union
+from typing import Any, Optional, Union
 from cogs.redaction import redact_private_info
 from src.bbcode import BBCODE
 from src.console import console
@@ -27,7 +27,7 @@ from src.uploadscreens import upload_screens
 
 class PTP():
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.tracker = 'PTP'
         self.source_flag = 'PTP'
@@ -96,10 +96,15 @@ class PTP():
 
         self.cookie_validator = CookieValidator(config)
 
-    def _is_true(self, value):
+    def _is_true(self, value: Any) -> bool:
         return str(value).strip().lower() in {"true", "1", "yes"}
 
-    async def get_ptp_id_imdb(self, search_term, search_file_folder, meta):
+    async def get_ptp_id_imdb(
+        self,
+        search_term: str,
+        search_file_folder: str,
+        meta: dict[str, Any],
+    ) -> tuple[Optional[int], Optional[Union[int, str]], Optional[str]]:
         imdb_id = ptp_torrent_id = None
         filename = str(os.path.basename(search_term))
         params = {
@@ -172,7 +177,7 @@ class PTP():
         console.print(f'[yellow]Could not find any release matching [bold yellow]{filename}[/bold yellow] on PTP')
         return None, None, None
 
-    async def get_imdb_from_torrent_id(self, ptp_torrent_id):
+    async def get_imdb_from_torrent_id(self, ptp_torrent_id: Union[int, str]) -> tuple[Optional[int], Optional[str]]:
         params = {
             'torrentid': ptp_torrent_id
         }
@@ -204,7 +209,7 @@ class PTP():
         except Exception:
             return None, None
 
-    async def get_ptp_description(self, ptp_torrent_id, meta, is_disc):
+    async def get_ptp_description(self, ptp_torrent_id: Union[int, str], meta: dict[str, Any], is_disc: str) -> list[Any]:
         params = {
             'id': ptp_torrent_id,
             'action': 'get_description'
@@ -222,7 +227,7 @@ class PTP():
         ptp_desc = response.text
         # console.print(f"[yellow]Raw description received:\n{ptp_desc}...")  # Show first 500 characters for brevity
         desc = None
-        imagelist = []
+        imagelist: list[Any] = []
         bbcode = BBCODE()
         desc, imagelist = bbcode.clean_ptp_description(ptp_desc, is_disc)
 
@@ -259,7 +264,7 @@ class PTP():
 
         return imagelist
 
-    async def get_group_by_imdb(self, imdb):
+    async def get_group_by_imdb(self, imdb: Union[int, str]) -> Optional[str]:
         params = {
             'imdb': imdb,
         }
@@ -281,7 +286,7 @@ class PTP():
                 elif total_results == 1:
                     # Single result - use it
                     movie = response.get('Movies', [{}])[0]
-                    groupID = movie.get('GroupId')
+                    groupID: Optional[str] = str(movie.get('GroupId')) if movie.get('GroupId') is not None else None
                     title = movie.get('Title', 'Unknown')
                     year = movie.get('Year', 'Unknown')
                     console.print(f"[green]Found single match for IMDb: [yellow]tt{imdb}[/yellow] -> Group ID: [yellow]{groupID}[/yellow][/green]")
@@ -314,7 +319,7 @@ class PTP():
                             year = movie.get('Year', 'Unknown')
                             group_id = movie.get('GroupId', 'Unknown')
                             if f"{title} ({year}) - Group ID: {group_id}" == selected:
-                                groupID = group_id
+                                groupID = str(group_id)
                                 break
 
                         console.print(f"[green]User selected: Group ID [yellow]{groupID}[/yellow][/green]")
@@ -329,13 +334,15 @@ class PTP():
                 groupID = response.get('GroupId')
                 console.print(f"[green]Matched IMDb: [yellow]tt{imdb}[/yellow] to Group ID: [yellow]{groupID}[/yellow][/green]")
                 console.print(f"[green]Title: [yellow]{response.get('Name')}[/yellow] ([yellow]{response.get('Year')}[/yellow])")
-                return groupID
+                return str(groupID) if groupID is not None else None
         except Exception:
             console.print("[red]An error has occurred trying to find a group ID")
             console.print("[red]Please check that the site is online and your ApiUser/ApiKey values are correct")
             return None
 
-    async def get_torrent_info(self, imdb, meta):
+        return None
+
+    async def get_torrent_info(self, imdb: Union[int, str], meta: dict[str, Any]) -> dict[str, Any]:
         params = {
             'imdb': imdb,
             'action': 'torrent_info',
@@ -358,13 +365,13 @@ class PTP():
                 if value not in (None, ""):
                     tinfo[key] = value
             if tinfo['tags'] == "":
-                tags = self.get_tags([meta.get("genres", ""), meta.get("keywords", ""), meta['imdb_info']['genres']])
+                tags = await self.get_tags([meta.get("genres", ""), meta.get("keywords", ""), meta['imdb_info']['genres']])
                 tinfo['tags'] = ", ".join(tags)
         except Exception:
             pass
         return tinfo
 
-    async def get_torrent_info_tmdb(self, meta):
+    async def get_torrent_info_tmdb(self, meta: dict[str, Any]) -> dict[str, Any]:
         tinfo = {
             "title": meta.get("title", ""),
             "year": meta.get("year", ""),
@@ -374,7 +381,7 @@ class PTP():
         tinfo['tags'] = ", ".join(tags)
         return tinfo
 
-    async def get_tags(self, check_against):
+    async def get_tags(self, check_against: Any) -> list[str]:
         tags = []
         ptp_tags = [
             "action", "adventure", "animation", "arthouse", "asian", "biography", "camp", "comedy",
@@ -395,7 +402,7 @@ class PTP():
 
         return tags
 
-    async def search_existing(self, groupID, meta, disctype):
+    async def search_existing(self, groupID: Union[int, str], meta: dict[str, Any], disctype: str) -> list[str]:
         # Map resolutions to SD / HD / UHD
         quality = None
         if meta.get('sd', 0) == 1:  # 1 is SD
@@ -443,7 +450,7 @@ class PTP():
 
         return []
 
-    async def ptpimg_url_rehost(self, image_url):
+    async def ptpimg_url_rehost(self, image_url: str) -> str:
         payload = {
             'format': 'json',
             'api_key': self.config["DEFAULT"]["ptpimg_api"],
@@ -464,7 +471,7 @@ class PTP():
             # img_url = ptpimg_upload(image_url, ptpimg_api)
         return img_url
 
-    def get_type(self, imdb_info, meta):
+    def get_type(self, imdb_info: dict[str, Any], meta: dict[str, Any]) -> Optional[str]:
         ptpType = None
         if imdb_info['type'] is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
@@ -505,7 +512,7 @@ class PTP():
                     ptpType = "Live Performance"
         return ptpType
 
-    def get_codec(self, meta):
+    def get_codec(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -525,13 +532,14 @@ class PTP():
                 "HEVC": "H.265",
                 "H.265": "H.265",
             }
-            searchcodec = meta.get('video_codec', meta.get('video_encode'))
+            searchcodec_value = meta.get('video_codec', meta.get('video_encode'))
+            searchcodec = searchcodec_value if isinstance(searchcodec_value, str) else ''
             codec = codecmap.get(searchcodec, searchcodec)
             if meta.get('has_encode_settings') is True:
                 codec = codec.replace("H.", "x")
         return codec
 
-    def get_resolution(self, meta):
+    def get_resolution(self, meta: dict[str, Any]) -> tuple[str, Optional[str]]:
         other_res = None
         res = meta.get('resolution', "OTHER")
         if (res == "OTHER" and meta['is_disc'] != "BDMV") or (meta['sd'] == 1 and meta['type'] == "WEBDL") or (meta['sd'] == 1 and meta['type'] == "DVDRIP"):
@@ -542,7 +550,7 @@ class PTP():
             res = meta["source"].replace(" DVD", "")
         return res, other_res
 
-    def get_container(self, meta):
+    def get_container(self, meta: dict[str, Any]) -> Optional[str]:
         container = None
         if meta["is_disc"] == "BDMV":
             container = "m2ts"
@@ -557,7 +565,7 @@ class PTP():
             container = containermap.get(ext, 'Other')
         return container
 
-    def get_source(self, source):
+    def get_source(self, source: str) -> str:
         sources = {
             "Blu-ray": "Blu-ray",
             "BluRay": "Blu-ray",
@@ -572,7 +580,7 @@ class PTP():
         source_id = sources.get(source, "OtherR")
         return source_id
 
-    def get_subtitles(self, meta):
+    def get_subtitles(self, meta: dict[str, Any]) -> list[int]:
         sub_lang_map = self.sub_lang_map
 
         sub_langs = []
@@ -602,7 +610,7 @@ class PTP():
             sub_langs = [44]  # No Subtitle
         return sub_langs
 
-    def get_trumpable(self, sub_langs):
+    def get_trumpable(self, sub_langs: list[int]) -> tuple[Optional[list[int]], list[int]]:
         trumpable_values = {
             "English Hardcoded Subs (Full)": 4,
             "English Hardcoded Subs (Forced)": 50,
@@ -642,7 +650,7 @@ class PTP():
         trumpable_result: Union[list[int], None] = trumpable_unique if trumpable_unique else None
         return trumpable_result, sub_langs_result
 
-    def get_remaster_title(self, meta):
+    def get_remaster_title(self, meta: dict[str, Any]) -> str:
         remaster_title = []
         # Collections
         # Masters of Cinema, The Criterion Collection, Warner Archive Collection
@@ -713,7 +721,7 @@ class PTP():
             output = ""
         return output
 
-    def convert_bbcode(self, desc):
+    def convert_bbcode(self, desc: str) -> str:
         desc = desc.replace("[spoiler", "[hide").replace("[/spoiler]", "[/hide]")
         desc = desc.replace("[center]", "[align=center]").replace("[/center]", "[/align]")
         desc = desc.replace("[left]", "[align=left]").replace("[/left]", "[/align]")
@@ -731,7 +739,7 @@ class PTP():
         desc = re.sub(r"\[img=[^\]]+\]", "[img]", desc)
         return desc
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
             "ptpimg.me": "ptpimg",
             "pixhost.to": "pixhost",
@@ -740,7 +748,7 @@ class PTP():
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
-    async def edit_desc(self, meta):
+    async def edit_desc(self, meta: dict[str, Any]) -> None:
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
         if meta.get('scene_nfo_file', None):
             # Remove NFO from description
@@ -838,7 +846,7 @@ class PTP():
                     bdinfo_keys = [key for key in each if key.startswith("bdinfo")]
                     bdinfo = meta.get('bdinfo')
                     if len(bdinfo_keys) > 1:
-                        edition = bdinfo.get("edition", "Unknown Edition")
+                        edition = bdinfo.get("edition", "Unknown Edition") if isinstance(bdinfo, dict) else "Unknown Edition"
                         desc.write(f"[b]{edition}[/b]\n\n")
                     desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
                     base2ptp = self.convert_bbcode(base)
@@ -1216,7 +1224,12 @@ class PTP():
                         with open(meta_filename, 'w') as f:
                             json.dump(meta, f, indent=4)
 
-    async def save_image_links(self, meta, image_key, image_list=None):
+    async def save_image_links(
+        self,
+        meta: dict[str, Any],
+        image_key: str,
+        image_list: Optional[list[dict[str, Any]]] = None,
+    ) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -1275,7 +1288,7 @@ class PTP():
             console.print(f"[bold red]Error saving image links: {e}[/bold red]")
             return None
 
-    async def get_AntiCsrfToken(self, meta):
+    async def get_AntiCsrfToken(self, meta: dict[str, Any]) -> str:
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
         cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
@@ -1337,7 +1350,7 @@ class PTP():
                     raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
-    async def validate_login(self, response):
+    async def validate_login(self, response: requests.Response) -> bool:
         loggedIn = False
         if response.text.find("""<a href="login.php?act=recover">""") != -1:
             console.print("Looks like you are not logged in to PTP. Probably due to the bad user name, password, or expired session.")
@@ -1347,7 +1360,7 @@ class PTP():
             loggedIn = True
         return loggedIn
 
-    async def fill_upload_form(self, groupID, meta):
+    async def fill_upload_form(self, groupID: Optional[Union[int, str]], meta: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         resolution, other_resolution = self.get_resolution(meta)
         await self.edit_desc(meta)
         file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
@@ -1422,7 +1435,7 @@ class PTP():
         if meta['debug']:
             console.print("ptp_trumpable", ptp_trumpable)
             console.print("ptp_subtitles", ptp_subtitles)
-        data = {
+        data: dict[str, Any] = {
             "submit": "true",
             "remaster_year": "",
             "remaster_title": self.get_remaster_title(meta),  # Eg.: Hardcoded English
@@ -1450,28 +1463,31 @@ class PTP():
             data["internalrip"] = "on"
         # IF SPECIAL (idk how to check for this automatically)
             # data["special"] = "on"
-        if int(meta.get("imdb_id")) == 0:
+        imdb_id_value = meta.get("imdb_id")
+        imdb_id_int = int(imdb_id_value) if isinstance(imdb_id_value, (int, str)) else 0
+        if imdb_id_int == 0:
             data["imdb"] = "0"
         else:
-            data["imdb"] = str(meta["imdb_id"]).zfill(7)
+            data["imdb"] = str(imdb_id_int).zfill(7)
         if groupID is None:  # If need to make new group
             url = "https://passthepopcorn.me/upload.php"
             if data["imdb"] == '0':
                 tinfo = await self.get_torrent_info_tmdb(meta)
             else:
-                tinfo = await self.get_torrent_info(meta.get("imdb"), meta)
+                imdb_value = meta.get("imdb") or "0"
+                tinfo = await self.get_torrent_info(imdb_value, meta)
             if meta.get('youtube', None) is None or "youtube" not in str(meta.get('youtube', '')):
                 youtube = "" if meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
                 meta['youtube'] = youtube
             cover = meta["imdb_info"].get("cover")
             if cover is None:
                 cover = meta.get('poster')
-            if cover is not None and "ptpimg" not in cover:
+            if isinstance(cover, str) and "ptpimg" not in cover:
                 cover = await self.ptpimg_url_rehost(cover)
             while cover is None:
                 cover = cli_ui.ask_string("No Poster was found. Please input a link to a poster: \n", default="")
                 if "ptpimg" not in str(cover) and str(cover).endswith(('.jpg', '.png')):
-                    cover = await self.ptpimg_url_rehost(cover)
+                    cover = await self.ptpimg_url_rehost(str(cover))
             new_data = {
                 "title": tinfo.get("title", meta["imdb_info"].get("title", meta["title"])),
                 "year": tinfo.get("year", meta["imdb_info"].get("year", meta["year"])),
@@ -1503,7 +1519,7 @@ class PTP():
 
         return url, data
 
-    async def upload(self, meta, url, data, disctype):
+    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], disctype: str) -> bool:
         common = COMMON(config=self.config)
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"

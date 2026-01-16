@@ -6,7 +6,7 @@ import json
 import os
 import re
 import ssl
-from typing import Union
+from typing import Any, Optional, Union
 from urllib.error import URLError
 from pathlib import Path
 from tvdb_v4_official import TVDB
@@ -34,6 +34,14 @@ tvdb: Union[TVDB, None] = None
 _TVDB_INIT_ERROR: Union[Exception, None] = None
 _TVDB_ERROR_REPORTED = False
 
+
+def _coerce_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 try:
     tvdb = TVDB(_get_tvdb_k())
 except (ssl.SSLError, URLError) as e:
@@ -42,7 +50,7 @@ except Exception as e:
     _TVDB_INIT_ERROR = e
 
 
-def _get_tvdb_or_warn():
+def _get_tvdb_or_warn() -> Optional[TVDB]:
     global _TVDB_ERROR_REPORTED
 
     if tvdb is not None:
@@ -67,11 +75,16 @@ def _get_tvdb_or_warn():
 
 
 class tvdb_data:
-    def __init__(self, config):
+    def __init__(self, config: Any) -> None:
         self.config = config
         pass
 
-    async def search_tvdb_series(self, filename, year=None, debug=False):
+    async def search_tvdb_series(
+        self,
+        filename: str,
+        year: Optional[str] = None,
+        debug: bool = False,
+    ) -> tuple[Optional[list[dict[str, Any]]], Optional[int]]:
         if debug:
             console.print(f"filename for TVDB search: {filename} year: {year}")
         client = _get_tvdb_or_warn()
@@ -122,7 +135,16 @@ class tvdb_data:
             console.print(f"[red]Error: {e}[/red]")
             return None, None
 
-    async def get_tvdb_episodes(self, series_id, base_dir=None, debug=False, season=None, episode=None, absolute_number=None, aired_date=None):
+    async def get_tvdb_episodes(
+        self,
+        series_id: Union[int, str],
+        base_dir: Optional[Union[str, bool]] = None,
+        debug: bool = False,
+        season: Optional[Union[int, str]] = None,
+        episode: Optional[Union[int, str]] = None,
+        absolute_number: Optional[Union[int, str]] = None,
+        aired_date: Optional[str] = None,
+    ) -> tuple[Optional[dict[str, Any]], Optional[str]]:
         # Backward compat: older call sites used (series_id, debug)
         if isinstance(base_dir, bool) and debug is False:
             debug = base_dir
@@ -180,7 +202,7 @@ class tvdb_data:
             return False
 
         cache_path = None
-        if base_dir:
+        if isinstance(base_dir, str) and base_dir:
             try:
                 cache_dir = Path(base_dir) / 'data' / 'tvdb'
                 cache_path = cache_dir / f"{series_id}.json"
@@ -348,7 +370,13 @@ class tvdb_data:
             console.print(f"[red]Error getting episodes: {e}[/red]")
             return None, None
 
-    async def get_tvdb_by_external_id(self, imdb, tmdb, debug=False, tv_movie=False):
+    async def get_tvdb_by_external_id(
+        self,
+        imdb: Optional[Union[int, str]],
+        tmdb: Optional[Union[int, str]],
+        debug: bool = False,
+        tv_movie: bool = False,
+    ) -> Optional[int]:
         client = _get_tvdb_or_warn()
         if client is None:
             return None
@@ -381,7 +409,7 @@ class tvdb_data:
                             series_id = result['series']['id']
                             if debug:
                                 console.print(f"[blue]TVDB series ID from IMDB: {series_id}[/blue]")
-                            return series_id
+                            return _coerce_int(series_id)
 
                     # If tv_movie is True, check for episode with seriesId first, then movie
                     if tv_movie:
@@ -391,7 +419,7 @@ class tvdb_data:
                                 series_id = result['episode']['seriesId']
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
-                                return series_id
+                                return _coerce_int(series_id)
 
                         # If no episode with seriesId, accept movie results
                         for result in results:
@@ -399,7 +427,7 @@ class tvdb_data:
                                 movie_id = result['movie']['id']
                                 if debug:
                                     console.print(f"[blue]TVDB movie ID from IMDB (tv_movie): {movie_id}[/blue]")
-                                return movie_id
+                                return _coerce_int(movie_id)
 
                     if debug:
                         result_types = [list(result.keys())[0] for result in results if result]
@@ -431,7 +459,7 @@ class tvdb_data:
                             series_id = result['series']['id']
                             if debug:
                                 console.print(f"[blue]TVDB series ID from TMDB: {series_id}[/blue]")
-                            return series_id
+                            return _coerce_int(series_id)
 
                     # If tv_movie is True, check for episode with seriesId first, then movie
                     if tv_movie:
@@ -441,7 +469,7 @@ class tvdb_data:
                                 series_id = result['episode']['seriesId']
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
-                                return series_id
+                                return _coerce_int(series_id)
 
                         # If no episode with seriesId, accept movie results
                         for result in results:
@@ -449,7 +477,7 @@ class tvdb_data:
                                 movie_id = result['movie']['id']
                                 if debug:
                                     console.print(f"[blue]TVDB movie ID from TMDB (tv_movie): {movie_id}[/blue]")
-                                return movie_id
+                                return _coerce_int(movie_id)
 
                     if debug:
                         result_types = [list(result.keys())[0] for result in results if result]
@@ -465,7 +493,11 @@ class tvdb_data:
         console.print(f"[yellow]No TVDB {result_type_str} found for any available external ID[/yellow]")
         return None
 
-    async def get_imdb_id_from_tvdb_episode_id(self, episode_id, debug=False):
+    async def get_imdb_id_from_tvdb_episode_id(
+        self,
+        episode_id: Union[int, str],
+        debug: bool = False,
+    ) -> Optional[str]:
         try:
             client = _get_tvdb_or_warn()
             if client is None:
@@ -494,7 +526,22 @@ class tvdb_data:
             console.print(f"[red]Error getting IMDB ID from TVDB episode ID: {e}[/red]")
             return None
 
-    async def get_specific_episode_data(self, data, season, episode, debug=False, aired_date=None):
+    async def get_specific_episode_data(
+        self,
+        data: Any,
+        season: Optional[Union[int, str]],
+        episode: Optional[Union[int, str]],
+        debug: bool = False,
+        aired_date: Optional[str] = None,
+    ) -> tuple[
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+    ]:
         if debug:
             console.print("[yellow]Getting specific episode data from TVDB data[/yellow]")
 

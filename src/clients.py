@@ -248,15 +248,17 @@ class Clients():
                     # so stop searching after finding the first valid torrent
                     if not prefer_small_pieces:
                         console.print(f"[green]Found valid torrent in client '{client_name}', stopping search[/green]")
-                        return best_match['torrent_path']
+                        torrent_path = best_match.get('torrent_path')
+                        return torrent_path if isinstance(torrent_path, str) else None
                 else:
                     # Got a path - this means we found a torrent with ideal piece size
                     console.print(f"[green]Found valid torrent with preferred piece size in client '{client_name}', stopping search[/green]")
-                    return result
+                    return result if isinstance(result, str) else None
 
         if prefer_small_pieces and best_match:
             console.print(f"[yellow]Using best match torrent with hash: [bold yellow]{best_match['torrenthash']}[/bold yellow]")
-            return best_match['torrent_path']
+            torrent_path = best_match.get('torrent_path')
+            return torrent_path if isinstance(torrent_path, str) else None
 
         console.print("[bold yellow]No Valid .torrent found")
         return None
@@ -267,16 +269,19 @@ class Clients():
         client = self.config['TORRENT_CLIENTS'][client_name]
         torrent_client = client.get('torrent_client', '').lower()
         torrent_storage_dir = client.get('torrent_storage_dir')
+        qbt_client: Optional[qbittorrentapi.Client] = None
+        proxy_url: Optional[str] = None
 
         # Iterate through pre-specified hashes
         for hash_key in ['torrenthash', 'ext_torrenthash']:
             hash_value = meta.get(hash_key)
             if hash_value:
+                hash_value_str = str(hash_value)
                 # If no torrent_storage_dir defined, use saved torrent from qbit
                 extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
 
                 if torrent_storage_dir:
-                    torrent_path = os.path.join(torrent_storage_dir, f"{hash_value}.torrent")
+                    torrent_path = os.path.join(torrent_storage_dir, f"{hash_value_str}.torrent")
                 else:
                     if torrent_client != 'qbit':
                         return None
@@ -288,7 +293,7 @@ class Clients():
                             async with aiohttp.ClientSession() as session:
                                 try:
                                     async with session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
-                                                            data={'hash': hash_value}) as response:
+                                                            data={'hash': hash_value_str}) as response:
                                         if response.status == 200:
                                             torrent_file_content = await response.read()
                                         else:
@@ -304,20 +309,25 @@ class Clients():
                             else:
                                 qbt_client = potential_qbt_client
 
+                            if qbt_client is None:
+                                console.print("[bold red]qBittorrent client not initialized")
+                                continue
+                            qbt_client_local: qbittorrentapi.Client = qbt_client
+
                             try:
                                 torrent_file_content = await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=hash_value),
-                                    f"Export torrent {hash_value}"
+                                    lambda: asyncio.to_thread(qbt_client_local.torrents_export, torrent_hash=hash_value_str),
+                                    f"Export torrent {hash_value_str}"
                                 )
                             except (asyncio.TimeoutError, qbittorrentapi.APIError):
                                 continue
                         if not torrent_file_content:
-                            console.print(f"[bold red]qBittorrent returned an empty response for hash {hash_value}")
+                            console.print(f"[bold red]qBittorrent returned an empty response for hash {hash_value_str}")
                             continue  # Skip to the next hash
 
                         # Save the .torrent file
                         os.makedirs(extracted_torrent_dir, exist_ok=True)
-                        torrent_path = os.path.join(extracted_torrent_dir, f"{hash_value}.torrent")
+                        torrent_path = os.path.join(extracted_torrent_dir, f"{hash_value_str}.torrent")
 
                         with open(torrent_path, "wb") as f:
                             f.write(torrent_file_content)
@@ -325,11 +335,11 @@ class Clients():
                         console.print(f"[green]Successfully saved .torrent file: {torrent_path}")
 
                     except qbittorrentapi.APIError as e:
-                        console.print(f"[bold red]Failed to fetch .torrent from qBittorrent for hash {hash_value}: {e}")
+                        console.print(f"[bold red]Failed to fetch .torrent from qBittorrent for hash {hash_value_str}: {e}")
                         continue
 
                 # Validate the .torrent file
-                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value, torrent_client, client)
+                valid, resolved_path = await self.is_valid_torrent(meta, torrent_path, hash_value_str, torrent_client, client)
 
                 if valid:
                     return resolved_path
@@ -337,7 +347,7 @@ class Clients():
         # Search the client if no pre-specified hash matches
         if torrent_client == 'qbit' and client.get('enable_search'):
             try:
-                qbt_client, qbt_session, proxy_url = None, None, None
+                qbt_session: Optional[aiohttp.ClientSession] = None
 
                 proxy_url = client.get('qui_proxy_url')
 
@@ -627,6 +637,13 @@ class Clients():
             console.print("[bold red]APIConnectionError: INCORRECT HOST/PORT")
             return None
 
+        if proxy_url and qbt_session is None:
+            console.print("[bold red]Proxy URL configured but session was not created")
+            return None
+        if not proxy_url and qbt_client is None:
+            console.print("[bold red]qBittorrent client is not initialized")
+            return None
+
         # Ensure extracted torrent directory exists
         os.makedirs(extracted_torrent_dir, exist_ok=True)
 
@@ -636,6 +653,9 @@ class Clients():
 
         try:
             if proxy_url:
+                if qbt_session is None:
+                    console.print("[bold red]Proxy session not initialized")
+                    return None
                 qbt_proxy_url = proxy_url.rstrip('/')
                 async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
                     if response.status == 200:
@@ -664,6 +684,9 @@ class Clients():
                         console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
                         return None
             else:
+                if qbt_client is None:
+                    console.print("[bold red]qBittorrent client not initialized")
+                    return None
                 torrents = await self.retry_qbt_operation(
                     lambda: asyncio.to_thread(qbt_client.torrents_info),
                     "Get torrents list",
@@ -716,6 +739,10 @@ class Clients():
 
             except Exception as e:
                 console.print(f"[bold red]Unexpected error while handling torrent{f' {torrent_hash}' if torrent_hash else ''}: {e}")
+                torrent_hash = None
+
+            if not torrent_hash:
+                continue
 
             # **Use `torrent_storage_dir` if available**
             if torrent_storage_dir:
@@ -730,6 +757,9 @@ class Clients():
 
                 torrent_file_content = None
                 if proxy_url:
+                    if qbt_session is None:
+                        console.print("[bold red]Proxy session not initialized")
+                        continue
                     qbt_proxy_url = proxy_url.rstrip('/')
                     try:
                         async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
@@ -741,6 +771,9 @@ class Clients():
                     except Exception as e:
                         console.print(f"[red]Error exporting torrent via proxy: {e}")
                 else:
+                    if qbt_client is None:
+                        console.print("[bold red]qBittorrent client not initialized")
+                        continue
                     torrent_file_content = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
                         f"Export torrent {torrent_hash}"
@@ -772,7 +805,8 @@ class Clients():
                         torrent_data = Torrent.read(torrent_file_path)
                         piece_size = torrent_data.piece_size
                         if isinstance(piece_size, int):
-                            best_piece_size: Optional[int] = best_match.get('piece_size') if best_match else None
+                            best_piece_size_raw_value: Any = best_match.get('piece_size') if best_match else None
+                            best_piece_size: Optional[int] = best_piece_size_raw_value if isinstance(best_piece_size_raw_value, int) else None
                             if best_match is None or (isinstance(best_piece_size, int) and piece_size < best_piece_size):
                                 best_match = {
                                     'hash': torrent_hash,
@@ -795,7 +829,7 @@ class Clients():
         # **Return the best match if `prefer_small_pieces` is enabled**
         if best_match:
             console.print(f"[green]Using best match torrent with hash: {best_match['hash']}")
-            result = best_match['hash']
+            result = str(best_match['hash']) if 'hash' in best_match else None
         else:
             console.print("[yellow]No valid torrents found.")
             result = None
@@ -1531,10 +1565,10 @@ class Clients():
             await qbt_session.close()
 
     def deluge(self, path: str, torrent_path: str, torrent: Torrent, local_path: str, remote_path: str, client: Dict[str, Any], meta: Dict[str, Any]) -> None:
-        client = DelugeRPCClient(client['deluge_url'], int(client['deluge_port']), client['deluge_user'], client['deluge_pass'])
-        # client = LocalDelugeRPCClient()
-        client.connect()
-        if client.connected is True:
+        deluge_client = DelugeRPCClient(client['deluge_url'], int(client['deluge_port']), client['deluge_user'], client['deluge_pass'])
+        # deluge_client = LocalDelugeRPCClient()
+        deluge_client.connect()
+        if deluge_client.connected is True:
             console.print("Connected to Deluge")
             isdir = os.path.isdir(path)  # noqa F841
             # Remote path mount
@@ -1544,7 +1578,7 @@ class Clients():
 
             path = os.path.dirname(path)
 
-            client.call('core.add_torrent_file', torrent_path, base64.b64encode(torrent.dump()), {'download_location': path, 'seed_mode': True})
+            deluge_client.call('core.add_torrent_file', torrent_path, base64.b64encode(torrent.dump()), {'download_location': path, 'seed_mode': True})
             if meta['debug']:
                 console.print(f"[cyan]Path: {path}")
         else:
@@ -1700,13 +1734,13 @@ class Clients():
                 console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
 
             class TorrentInfo:
-                def __init__(self, properties_data):
+                def __init__(self, properties_data: Dict[str, Any]) -> None:
                     self.hash = properties_data.get('hash', info_hash_v1)
                     self.infohash_v1 = properties_data.get('infohash_v1', info_hash_v1)
                     self.name = properties_data.get('name', '')
                     self.comment = properties_data.get('comment', '')
                     self.tracker = ''
-                    self.files = []
+                    self.files: list[Any] = []
 
             try:
                 if proxy_url:
@@ -2047,7 +2081,7 @@ class Clients():
             console.print(f"[red]Error searching for torrents: {str(e)}[/red]")
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
-    async def find_qbit_torrents_by_path(self, content_path: str, meta: Dict[str, Any]) -> None:
+    async def find_qbit_torrents_by_path(self, content_path: str, meta: Dict[str, Any]) -> List[Dict[str, Any]]:
         if meta.get('debug'):
             console.print(f"[yellow]Searching for torrents in qBittorrent for path: {content_path}[/yellow]")
         try:
@@ -2175,7 +2209,7 @@ class Clients():
                 console.print(traceback.format_exc())
             return []
 
-    async def _search_single_qbit_client(self, client_config, content_path, meta, client_name):
+    async def _search_single_qbit_client(self, client_config: Dict[str, Any], content_path: str, meta: Dict[str, Any], client_name: str) -> List[Dict[str, Any]]:
         """Search a single qBittorrent client for matching torrents."""
         try:
             tracker_patterns = {
@@ -2198,6 +2232,9 @@ class Clients():
 
             tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
 
+            qbt_session: Optional[aiohttp.ClientSession] = None
+            qbt_client: Optional[qbittorrentapi.Client] = None
+            qbt_proxy_url = ''
             proxy_url = client_config.get('qui_proxy_url', '').strip()
             if proxy_url:
                 try:
@@ -2268,6 +2305,8 @@ class Clients():
                     if meta['debug']:
                         console.print(f"[cyan]Searching qBittorrent via proxy: {redact_private_info(url)}...")
 
+                    if qbt_session is None:
+                        return []
                     async with qbt_session.get(url) as response:
                         if response.status == 200:
                             response_data = await response.json()
@@ -2311,10 +2350,12 @@ class Clients():
                             else:
                                 if meta['debug']:
                                     console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
-                            if proxy_url and 'qbt_session' in locals():
+                            if qbt_session:
                                 await qbt_session.close()
                             return []
                 else:
+                    if qbt_client is None:
+                        return []
                     torrents = await self.retry_qbt_operation(
                         lambda: asyncio.to_thread(qbt_client.torrents_info),
                         "Get torrents list",
@@ -2322,12 +2363,12 @@ class Clients():
                     )
             except asyncio.TimeoutError:
                 console.print("[bold red]Getting torrents list timed out after retries")
-                if proxy_url and 'qbt_session' in locals():
+                if qbt_session:
                     await qbt_session.close()
                 return []
             except Exception as e:
                 console.print(f"[bold red]Error getting torrents list: {e}")
-                if proxy_url and 'qbt_session' in locals():
+                if qbt_session:
                     await qbt_session.close()
                 return []
 
@@ -2520,7 +2561,7 @@ class Clients():
                     continue
 
             if matching_torrents:
-                def get_priority_score(torrent):
+                def get_priority_score(torrent: Dict[str, Any]) -> Tuple[bool, int, bool]:
                     # Start with a high score for torrents with no matching trackers
                     priority_score = 100
 
@@ -2590,6 +2631,9 @@ class Clients():
 
                             torrent_file_content = None
                             if proxy_url:
+                                if qbt_session is None:
+                                    console.print("[bold red]Proxy session not initialized")
+                                    return []
                                 qbt_proxy_url = proxy_url.rstrip('/')
                                 try:
                                     async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
@@ -2601,6 +2645,9 @@ class Clients():
                                 except Exception as e:
                                     console.print(f"[red]Error exporting torrent via proxy: {e}")
                             else:
+                                if qbt_client is None:
+                                    console.print("[bold red]qBittorrent client not initialized")
+                                    return []
                                 torrent_file_content = await self.retry_qbt_operation(
                                     lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
                                     f"Export torrent {torrent_hash}"
@@ -2699,6 +2746,8 @@ class Clients():
                                 if not alt_torrent_file_path:
                                     alt_torrent_file_content = None
                                     if proxy_url:
+                                        if qbt_session is None:
+                                            return []
                                         qbt_proxy_url = proxy_url.rstrip('/')
                                         try:
                                             async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
@@ -2710,6 +2759,8 @@ class Clients():
                                         except Exception as e:
                                             console.print(f"[red]Error exporting alternative torrent via proxy: {e}")
                                     else:
+                                        if qbt_client is None:
+                                            return []
                                         alt_torrent_file_content = await self.retry_qbt_operation(
                                             lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
                                             f"Export alternative torrent {alt_torrent_hash}"
@@ -2832,25 +2883,25 @@ class Clients():
                 else:
                     console.print(f"[yellow]No matching torrents found in {client_name}")
 
-            if proxy_url and 'qbt_session' in locals():
+            if qbt_session:
                 await qbt_session.close()
 
             return matching_torrents
 
         except asyncio.TimeoutError:
-            if proxy_url and 'qbt_session' in locals():
+            if qbt_session:
                 await qbt_session.close()
             raise
         except Exception as e:
             console.print(f"[bold red]Error finding torrents in {client_name}: {str(e)}")
             if meta['debug']:
                 console.print(traceback.format_exc())
-            if proxy_url and 'qbt_session' in locals():
+            if qbt_session:
                 await qbt_session.close()
             return []
 
 
-async def create_cross_seed_links(meta, torrent, tracker_dir, use_hardlink):
+async def create_cross_seed_links(meta: Dict[str, Any], torrent: Torrent, tracker_dir: str, use_hardlink: bool) -> bool:
     debug = meta.get('debug', False)
     metainfo = getattr(torrent, 'metainfo', {})
     if not isinstance(metainfo, dict):
@@ -2865,7 +2916,7 @@ async def create_cross_seed_links(meta, torrent, tracker_dir, use_hardlink):
     multi_file = bool(info.get('files'))
     torrent_files = []
 
-    def decode_component(value):
+    def decode_component(value: Any) -> str:
         if isinstance(value, bytes):
             return value.decode('utf-8', errors='ignore')
         return str(value)
@@ -2946,7 +2997,7 @@ async def create_cross_seed_links(meta, torrent, tracker_dir, use_hardlink):
         console.print("[bold red]Unable to find source files for cross-seed linking")
         return False
 
-    def pick_candidate(filename, length):
+    def pick_candidate(filename: Optional[str], length: Optional[int]) -> tuple[Optional[str], Optional[str]]:
         lower_name = (filename or '').lower()
 
         if lower_name:
@@ -3019,7 +3070,7 @@ async def create_cross_seed_links(meta, torrent, tracker_dir, use_hardlink):
     return True
 
 
-async def async_link_directory(src, dst, use_hardlink=True, debug=False):
+async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, debug: bool = False) -> bool:
     try:
         # Create destination directory
         await asyncio.to_thread(os.makedirs, os.path.dirname(dst), exist_ok=True)
@@ -3110,7 +3161,7 @@ async def async_link_directory(src, dst, use_hardlink=True, debug=False):
         return False
 
 
-async def match_tracker_url(tracker_urls, meta):
+async def match_tracker_url(tracker_urls: List[str], meta: Dict[str, Any]) -> None:
     tracker_url_patterns = {
         'acm': ["https://eiga.moi"],
         'aither': ["https://aither.cc"],

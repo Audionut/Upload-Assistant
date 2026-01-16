@@ -5,7 +5,7 @@ import json
 import aiofiles
 import asyncio
 import re
-from typing import Any, Mapping, Union, cast
+from typing import Any, Iterable, Mapping, Optional, Union, cast
 from src.console import console
 from urllib.parse import urlparse
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
@@ -22,24 +22,32 @@ def _as_str(value: Any) -> Union[str, None]:
     return value if isinstance(value, str) else None
 
 
-async def match_host(hostname, approved_hosts):
+async def match_host(hostname: str, approved_hosts: Iterable[str]) -> str:
     for approved_host in approved_hosts:
         if hostname == approved_host or hostname.endswith(f".{approved_host}"):
             return approved_host
     return hostname
 
 
-async def sanitize_filename(filename):
+async def sanitize_filename(filename: str) -> str:
     # Replace invalid characters like colons with an underscore
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def check_hosts(meta: dict[str, Any], tracker, url_host_mapping, img_host_index=1, approved_image_hosts=None):
+async def check_hosts(
+    meta: dict[str, Any],
+    tracker: str,
+    url_host_mapping: dict[str, str],
+    img_host_index: int = 1,
+    approved_image_hosts: Optional[list[str]] = None,
+) -> tuple[list[dict[str, str]], bool, bool]:
+    if approved_image_hosts is None:
+        approved_image_hosts = []
+    new_images_key = f'{tracker}_images_key'
     if meta.get('skip_imghost_upload', False):
         if meta['debug']:
             console.print(f"[yellow]Skipping image host upload for {tracker} as per meta['skip_imghost_upload'] setting.")
-        return
-    new_images_key = f'{tracker}_images_key'
+        return meta.get(new_images_key, []), False, False
     if new_images_key not in meta:
         meta[new_images_key] = []
 
@@ -142,7 +150,7 @@ async def check_hosts(meta: dict[str, Any], tracker, url_host_mapping, img_host_
         for image in meta[new_images_key]:
             netloc = urlparse(image.get('raw_url', '')).netloc
             matched_host = await match_host(netloc, url_host_mapping.keys())
-            mapped_host = url_host_mapping.get(matched_host, None)
+            mapped_host = url_host_mapping.get(matched_host, matched_host)
             valid_hosts.append(mapped_host in approved_image_hosts)
 
         # Then check if all are valid
@@ -185,7 +193,16 @@ async def check_hosts(meta: dict[str, Any], tracker, url_host_mapping, img_host_
     return meta.get(new_images_key, []), False, images_reuploaded
 
 
-async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, approved_image_hosts=None, img_host_index=1, file=None):
+async def handle_image_upload(
+    meta: dict[str, Any],
+    tracker: str,
+    url_host_mapping: dict[str, str],
+    approved_image_hosts: Optional[list[str]] = None,
+    img_host_index: int = 1,
+    file: Optional[str] = None,
+) -> tuple[list[dict[str, str]], bool, bool]:
+    if approved_image_hosts is None:
+        approved_image_hosts = []
     original_imghost = meta.get('imghost')
     retry_mode = False
     images_reuploaded = False
@@ -418,7 +435,7 @@ async def handle_image_upload(meta: dict[str, Any], tracker, url_host_mapping, a
             console.print(f"  {i+1}. {os.path.basename(screenshot)}")
 
     if not meta.get('skip_imghost_upload', False):
-        uploaded_images = []
+        uploaded_images: list[dict[str, str]] = []
 
         # Add a max retry limit to prevent infinite loop
         max_retries = len(approved_image_hosts)

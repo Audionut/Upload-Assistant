@@ -44,7 +44,7 @@ class UNIT3D:
         should_continue = True
         return should_continue
 
-    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: dict[str, Any], _: Any) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
 
         # Ensure tracker_status keys exist before any potential writes
@@ -460,7 +460,7 @@ class UNIT3D:
 
         return files
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _: Any) -> bool:
         data = await self.get_data(meta)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         async with aiofiles.open(torrent_file_path, "rb") as f:
@@ -586,7 +586,9 @@ class UNIT3D:
             )
             return True  # Debug mode - simulated success
 
-    async def get_torrent_id(self, response_data: dict[str, Any]):
+        return False
+
+    async def get_torrent_id(self, response_data: dict[str, Any]) -> str:
         """Matches /12345.abcde and returns 12345"""
         torrent_id = ""
         try:

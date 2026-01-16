@@ -15,11 +15,11 @@ from src.languages import process_desc_language
 from src.rehostimages import check_hosts
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Dict
+from typing import Any, Dict, Optional, Union
 
 
 class GPW():
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
         self.tracker = 'GPW'
@@ -47,14 +47,14 @@ class GPW():
             'yes.ilikeshots.club': 'ilikeshots',
         }
 
-    async def load_cookies(self, meta):
+    async def load_cookies(self, meta: dict[str, Any]) -> Any:
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{self.tracker}.txt")
         if not os.path.exists(cookie_file):
             return False
 
         return await self.common.parseCookieFile(cookie_file)
 
-    async def load_localized_data(self, meta):
+    async def load_localized_data(self, meta: dict[str, Any]) -> None:
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
         main_ch_data = {}
         data = {}
@@ -85,8 +85,9 @@ class GPW():
 
         return
 
-    async def get_container(self, meta):
-        container = meta.get('container', '')
+    async def get_container(self, meta: dict[str, Any]) -> str:
+        container_value = meta.get('container', '')
+        container = container_value if isinstance(container_value, str) else ''
         if container == 'm2ts':
             return container
         elif container == 'vob':
@@ -96,7 +97,7 @@ class GPW():
 
         return 'Other'
 
-    async def get_subtitle(self, meta):
+    async def get_subtitle(self, meta: dict[str, Any]) -> list[str]:
         if not meta.get('language_checked', False):
             await process_desc_language(meta, tracker=self.tracker)
 
@@ -107,7 +108,7 @@ class GPW():
         else:
             return []
 
-    async def get_ch_dubs(self, meta):
+    async def get_ch_dubs(self, meta: dict[str, Any]) -> bool:
         if not meta.get('language_checked', False):
             await process_desc_language(meta, tracker=self.tracker)
 
@@ -119,7 +120,7 @@ class GPW():
                 return True
         return False
 
-    async def get_codec(self, meta):
+    async def get_codec(self, meta: dict[str, Any]) -> str:
         video_encode = meta.get('video_encode', '').strip().lower()
         codec_final = meta.get('video_codec', '').strip().lower()
 
@@ -139,7 +140,7 @@ class GPW():
 
         return 'Other'
 
-    async def get_audio_codec(self, meta):
+    async def get_audio_codec(self, meta: dict[str, Any]) -> str:
         priority_order = [
             'DTS-X', 'E-AC-3 JOC', 'TrueHD', 'DTS-HD', 'PCM', 'FLAC', 'DTS-ES',
             'DTS', 'E-AC-3', 'AC3', 'AAC', 'Opus', 'Vorbis', 'MP3', 'MP2'
@@ -177,17 +178,17 @@ class GPW():
 
         return 'Outro'
 
-    async def get_title(self, meta):
+    async def get_title(self, meta: dict[str, Any]) -> str:
         title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
 
         return title if title and title != meta.get('title') else ''
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
         await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
-    async def get_release_desc(self, meta):
+    async def get_release_desc(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts = []
 
@@ -254,7 +255,7 @@ class GPW():
 
         return description
 
-    async def get_trailer(self, meta):
+    async def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results = self.tmdb_data.get('videos', {}).get('results', [])
 
         youtube = ''
@@ -269,7 +270,7 @@ class GPW():
 
         return youtube
 
-    async def get_tags(self, meta):
+    async def get_tags(self, meta: dict[str, Any]) -> str:
         tags = ''
 
         genres = meta.get('genres', '')
@@ -290,11 +291,11 @@ class GPW():
 
         return tags
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], disctype: str) -> Optional[list[Any]]:
         if meta['category'] != 'MOVIE':
             console.print(f'{self.tracker}: Only feature films, short films, and live performances are permitted on {self.tracker}')
             meta['skipping'] = f'{self.tracker}'
-            return
+            return None
 
         group_id = await self.get_groupid(meta)
         if not group_id:
@@ -385,7 +386,7 @@ class GPW():
                 print(f'An unexpected error occurred while processing the search: {e}')
                 return []
 
-    async def get_slots(self, meta, client, group_id):
+    async def get_slots(self, meta: dict[str, Any], client: httpx.AsyncClient, group_id: str) -> None:
         url = f'{self.base_url}/torrents.php?id={group_id}'
 
         try:
@@ -438,7 +439,7 @@ class GPW():
                     console.print(f'\n[green]Available Slots for[/green] {resolution}:')
                     console.print(f'{final_slots}\n')
 
-    async def get_media_info(self, meta):
+    async def get_media_info(self, meta: dict[str, Any]) -> str:
         info_file_path = ''
         if meta.get('is_disc') == 'BDMV':
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/BD_SUMMARY_00.txt"
@@ -456,7 +457,7 @@ class GPW():
             console.print(f'[bold red]Info file not found: {info_file_path}[/bold red]')
             return ''
 
-    async def get_edition(self, meta):
+    async def get_edition(self, meta: dict[str, Any]) -> str:
         edition_str = meta.get('edition', '').lower()
         if not edition_str:
             return ''
@@ -478,13 +479,13 @@ class GPW():
 
         return ''
 
-    async def get_processing_other(self, meta):
+    async def get_processing_other(self, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
 
             if is_disc_type == 'BDMV':
                 disctype = meta.get('disctype')
-                if disctype in ['BD100', 'BD66', 'BD50', 'BD25']:
+                if isinstance(disctype, str) and disctype in ['BD100', 'BD66', 'BD50', 'BD25']:
                     return disctype
 
                 try:
@@ -503,11 +504,13 @@ class GPW():
 
             elif is_disc_type == 'DVD':
                 dvd_size = meta.get('dvd_size')
-                if dvd_size in ['DVD9', 'DVD5']:
+                if isinstance(dvd_size, str) and dvd_size in ['DVD9', 'DVD5']:
                     return dvd_size
                 return 'DVD9'
 
-    async def get_screens(self, meta):
+        return None
+
+    async def get_screens(self, meta: dict[str, Any]) -> list[str]:
         screenshot_urls = [
             image.get('raw_url')
             for image in meta.get('image_list', [])
@@ -516,7 +519,7 @@ class GPW():
 
         return screenshot_urls
 
-    async def get_credits(self, meta):
+    async def get_credits(self, meta: dict[str, Any]) -> str:
         director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
         if director:
             unique_names = list(dict.fromkeys(director))[:5]
@@ -524,10 +527,10 @@ class GPW():
         else:
             return 'N/A'
 
-    async def get_remaster_title(self, meta):
-        found_tags = []
+    async def get_remaster_title(self, meta: dict[str, Any]) -> Union[str, tuple[str, str]]:
+        found_tags: list[str] = []
 
-        def add_tag(tag_id):
+        def add_tag(tag_id: str) -> None:
             if tag_id and tag_id not in found_tags:
                 found_tags.append(tag_id)
 
@@ -579,7 +582,7 @@ class GPW():
 
         return remaster_title_show
 
-    async def get_groupid(self, meta):
+    async def get_groupid(self, meta: dict[str, Any]) -> Optional[str]:
         search_url = f"{self.base_url}/api.php?api_key={self.api_key}&action=torrent&req=group&imdbID={meta.get('imdb_info', {}).get('imdbID')}"
 
         try:
@@ -604,7 +607,7 @@ class GPW():
             return str(data['response']['ID'])
         return None
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         poster_url = ''
         while True:
             poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
@@ -628,7 +631,7 @@ class GPW():
 
         return data
 
-    async def _get_artist_data(self, meta) -> Dict[str, str]:
+    async def _get_artist_data(self, meta: dict[str, Any]) -> Dict[str, str]:
         directors = meta.get('imdb_info', {}).get('directors', [])
         directors_id = meta.get('imdb_info', {}).get('directors_id', [])
 
@@ -651,7 +654,7 @@ class GPW():
 
         return post_data
 
-    def _get_movie_type(self, meta):
+    def _get_movie_type(self, meta: dict[str, Any]) -> str:
         movie_type = ''
         imdb_info = meta.get('imdb_info', {})
         if imdb_info:
@@ -664,7 +667,7 @@ class GPW():
 
         return movie_type
 
-    async def get_source(self, meta):
+    async def get_source(self, meta: dict[str, Any]) -> str:
         source_type = meta.get('type', '').lower()
 
         if source_type == 'disc':
@@ -697,7 +700,7 @@ class GPW():
 
         return keyword_map.get(source_type, 'Other')
 
-    async def get_processing(self, meta):
+    async def get_processing(self, meta: dict[str, Any]) -> str:
         type_map = {
             'ENCODE': 'Encode',
             'REMUX': 'Remux',
@@ -707,7 +710,7 @@ class GPW():
         release_type = meta.get('type', '').strip().upper()
         return type_map.get(release_type, 'Untouched')
 
-    def get_media_flags(self, meta):
+    def get_media_flags(self, meta: dict[str, Any]) -> dict[str, str]:
         audio = meta.get('audio', '').lower()
         hdr = meta.get('hdr', '')
         bit_depth = meta.get('bit_depth', '')
@@ -740,7 +743,7 @@ class GPW():
 
         return flags
 
-    async def fetch_data(self, meta, disctype):
+    async def fetch_data(self, meta: dict[str, Any], disctype: str) -> dict[str, Any]:
         await self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
@@ -801,7 +804,7 @@ class GPW():
 
         return data
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         data = await self.fetch_data(meta, disctype)
 

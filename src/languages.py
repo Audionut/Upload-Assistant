@@ -11,7 +11,7 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 
 
-async def parse_blu_ray(meta):
+async def parse_blu_ray(meta: dict[str, Any]) -> dict[str, Any]:
     try:
         bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
         if not os.path.exists(bd_summary_file):
@@ -109,7 +109,7 @@ async def parse_blu_ray(meta):
     return parsed_data
 
 
-async def parsed_mediainfo(meta):
+async def parsed_mediainfo(meta: dict[str, Any]) -> dict[str, Any]:
     try:
         mediainfo_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
         if os.path.exists(mediainfo_file):
@@ -178,7 +178,7 @@ async def parsed_mediainfo(meta):
     return parsed_data
 
 
-async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
+async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None:
     if 'language_checked' not in meta:
         meta['language_checked'] = False
     if 'tracker_status' not in meta:
@@ -429,7 +429,7 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = ""):
         return None
 
 
-async def has_english_language(languages: Union[list[str], str]):
+async def has_english_language(languages: Union[list[str], str]) -> bool:
     """Check if any language in the list contains 'english'"""
     if isinstance(languages, str):
         languages = [languages]
@@ -438,7 +438,7 @@ async def has_english_language(languages: Union[list[str], str]):
     return any('english' in lang.lower() for lang in languages)
 
 
-def extract_language_from_title(title):
+def extract_language_from_title(title: Optional[str]) -> Optional[str]:
     """Extract language from title field using langcodes library"""
     if not title:
         return None

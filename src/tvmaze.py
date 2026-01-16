@@ -2,9 +2,19 @@
 from src.console import console
 import httpx
 import json
+from typing import Any, Optional, Union
 
 
-async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze_manual=None, debug=False, return_full_tuple=False):
+async def search_tvmaze(
+    filename: str,
+    year: str,
+    imdbID: Optional[Union[int, str]],
+    tvdbID: Optional[Union[int, str]],
+    manual_date: Optional[str] = None,
+    tvmaze_manual: Optional[Union[int, str]] = None,
+    debug: bool = False,
+    return_full_tuple: bool = False,
+) -> Union[int, tuple[int, int, int]]:
     """Searches TVMaze for a show using TVDB ID, IMDb ID, or a title query.
 
     - If `return_full_tuple=True`, returns `(tvmaze_id, imdbID, tvdbID)`.
@@ -13,19 +23,24 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     if debug:
         console.print(f"[cyan]Searching TVMaze for TVDB {tvdbID} or IMDB {imdbID} or {filename} ({year}) and returning {return_full_tuple}.[/cyan]")
     # Convert TVDB ID to integer
-    try:
-        tvdbID = int(tvdbID) if tvdbID not in (None, '', '0') else 0
-    except ValueError:
-        console.print(f"[red]Error: tvdbID is not a valid integer. Received: {tvdbID}[/red]")
+    if isinstance(tvdbID, (int, str)) and tvdbID not in ('', '0'):
+        try:
+            tvdbID = int(tvdbID)
+        except (ValueError, TypeError):
+            console.print(f"[red]Error: tvdbID is not a valid integer. Received: {tvdbID}[/red]")
+            tvdbID = 0
+    else:
         tvdbID = 0
 
     # Handle IMDb ID - ensure it's an integer without tt prefix
     try:
         if isinstance(imdbID, str) and imdbID.startswith('tt'):
             imdbID = int(imdbID[2:])
+        elif isinstance(imdbID, (int, str)) and imdbID not in ('', '0'):
+            imdbID = int(imdbID)
         else:
-            imdbID = int(imdbID) if imdbID not in (None, '', '0') else 0
-    except ValueError:
+            imdbID = 0
+    except (ValueError, TypeError):
         console.print(f"[red]Error: imdbID is not a valid integer. Received: {imdbID}[/red]")
         imdbID = 0
 
@@ -42,7 +57,7 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     tvmaze_id = 0
     results = []
 
-    async def fetch_tvmaze_data(url, params):
+    async def fetch_tvmaze_data(url: str, params: dict[str, Any]) -> list[Any]:
         """Helper function to fetch data from TVMaze API."""
         response = await _make_tvmaze_request(url, params)
         if response:
@@ -121,15 +136,17 @@ async def search_tvmaze(filename, year, imdbID, tvdbID, manual_date=None, tvmaze
     return (tvmaze_id, imdbID, tvdbID) if return_full_tuple else tvmaze_id
 
 
-async def _make_tvmaze_request(url, params):
+async def _make_tvmaze_request(url: str, params: dict[str, Any]) -> Optional[Union[dict[str, Any], list[Any]]]:
     """Sync function to make the request inside ThreadPoolExecutor."""
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
             resp = await client.get(url, params=params, timeout=10)
             if resp.status_code == 200:
-                return resp.json()
-            else:
+                data: Any = resp.json()
+                if isinstance(data, (dict, list)):
+                    return data
                 return None
+            return None
     except httpx.HTTPStatusError as e:
         print(f"[ERROR] TVmaze API error: {e.response.status_code}")
     except httpx.RequestError as e:
@@ -137,7 +154,12 @@ async def _make_tvmaze_request(url, params):
     return {}
 
 
-async def get_tvmaze_episode_data(tvmaze_id, season, episode, meta=None):
+async def get_tvmaze_episode_data(
+    tvmaze_id: int,
+    season: int,
+    episode: int,
+    meta: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
     url = f"https://api.tvmaze.com/shows/{tvmaze_id}/episodebynumber"
     params = {
         "season": season,
@@ -241,7 +263,7 @@ async def get_tvmaze_episode_data(tvmaze_id, season, episode, meta=None):
         return None
 
 
-async def get_tvmaze_episode_data_by_date(tvmaze_id, airdate):
+async def get_tvmaze_episode_data_by_date(tvmaze_id: int, airdate: str) -> Optional[dict[str, Any]]:
     url = f"https://api.tvmaze.com/shows/{tvmaze_id}/episodesbydate"
     params = {"date": airdate}
 

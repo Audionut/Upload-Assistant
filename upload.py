@@ -216,7 +216,7 @@ async def merge_meta(meta: Meta, saved_meta: Meta) -> Dict[str, Any]:
     return sanitized_saved_meta
 
 
-async def print_progress(message, interval=10):
+async def print_progress(message: str, interval: int = 10) -> None:
     """Prints a progress message every `interval` seconds until cancelled."""
     try:
         while True:
@@ -226,7 +226,7 @@ async def print_progress(message, interval=10):
         pass
 
 
-def update_oeimg_to_onlyimage():
+def update_oeimg_to_onlyimage() -> None:
     """Update all img_host_* values from 'oeimg' to 'onlyimage' in the config file."""
     config_path = f"{base_dir}/data/config.py"
     with open(config_path, "r", encoding="utf-8") as f:
@@ -265,7 +265,7 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
 
     if valid_trackers:
 
-        async def validate_single_tracker(tracker_name):
+        async def validate_single_tracker(tracker_name: str) -> tuple[str, bool]:
             """Validate credentials for a single tracker."""
             try:
                 if tracker_name not in meta['tracker_status']:
@@ -410,7 +410,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         # Tracks multiple edits
         editargs_tracking = editargs_tracking + editargs
         # Carry original args over, let parse handle duplicates
-        meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')) + editargs_tracking, meta))
+        meta, _help, _before_args = cast(
+            tuple[Meta, Any, Any],
+            parser.parse(list(' '.join(sys.argv[1:]).split(' ')) + list(editargs_tracking), meta)
+        )
         if not meta.get('trackers'):
             meta['trackers'] = previous_trackers
         if isinstance(meta.get('trackers'), str):
@@ -985,7 +988,7 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
         json.dump(processed_files, f, indent=4)
 
 
-def get_local_version(version_file):
+def get_local_version(version_file: str) -> Optional[str]:
     """Extracts the local version from the version.py file."""
     try:
         with open(version_file, "r", encoding="utf-8") as f:
@@ -1001,7 +1004,7 @@ def get_local_version(version_file):
         return None
 
 
-def get_remote_version(url):
+def get_remote_version(url: str) -> tuple[Optional[str], Optional[str]]:
     """Fetches the latest version information from the remote repository."""
     try:
         response = requests.get(url, timeout=30)
@@ -1021,7 +1024,7 @@ def get_remote_version(url):
         return None, None
 
 
-def extract_changelog(content, to_version):
+def extract_changelog(content: str, to_version: str) -> Optional[str]:
     """Extracts the changelog entries between the specified versions."""
     # Try to find the to_version with 'v' prefix first (current format)
     patterns_to_try = [
@@ -1040,7 +1043,7 @@ def extract_changelog(content, to_version):
     return None
 
 
-async def update_notification(base_dir):
+async def update_notification(base_dir: str) -> Optional[str]:
     version_file = os.path.join(base_dir, 'data', 'version.py')
     remote_version_url = 'https://raw.githubusercontent.com/Audionut/Upload-Assistant/master/data/version.py'
 
@@ -1049,7 +1052,7 @@ async def update_notification(base_dir):
 
     local_version = get_local_version(version_file)
     if not local_version:
-        return
+        return None
 
     if not notice:
         return local_version
@@ -1073,7 +1076,7 @@ async def update_notification(base_dir):
     return local_version
 
 
-async def do_the_thing(base_dir):
+async def do_the_thing(base_dir: str) -> None:
     await asyncio.sleep(0.1)  # Ensure it's not racing
 
     tmp_dir = os.path.join(base_dir, "tmp")
@@ -1087,7 +1090,7 @@ async def do_the_thing(base_dir):
         if os.name != 'nt':
             os.chmod(tmp_dir, 0o700)
 
-    def ensure_secure_tmp_subdir(subdir_path):
+    def ensure_secure_tmp_subdir(subdir_path: str) -> None:
         """Ensure tmp subdirectories are created with secure permissions (0o700)"""
         if not os.path.exists(subdir_path):
             if os.name != 'nt':
@@ -1520,7 +1523,7 @@ async def do_the_thing(base_dir):
             reset_terminal()
 
 
-async def process_cross_seeds(meta):
+async def process_cross_seeds(meta: Meta) -> None:
     all_trackers = api_trackers | http_trackers | other_api_trackers
 
     # Get list of trackers to exclude (already in client)
@@ -1585,7 +1588,7 @@ async def process_cross_seeds(meta):
 
         helper = UploadHelper()
 
-        async def check_tracker_for_dupes(tracker):
+        async def check_tracker_for_dupes(tracker: str) -> None:
             try:
                 tracker_class = tracker_class_map[tracker](config=config)
                 disctype = meta.get('disctype', '')
@@ -1635,7 +1638,7 @@ async def process_cross_seeds(meta):
     semaphore = asyncio.Semaphore(max(1, concurrency_limit))
     debug = meta.get('debug', False)
 
-    async def handle_cross_seed(tracker):
+    async def handle_cross_seed(tracker: str) -> None:
         cross_seed_key = f'{tracker}_cross_seed'
         cross_seed_value = meta.get(cross_seed_key, False)
 
@@ -1704,23 +1707,23 @@ async def process_cross_seeds(meta):
             console.print(f"[red]Cross-seed handling failed for {tracker}: {result}[/red]")
 
 
-async def get_mkbrr_path(meta, base_dir=None):
+async def get_mkbrr_path(meta: Meta, base_dir: Optional[str] = None) -> Optional[str]:
     try:
         mkbrr_path = await ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.18.0")
-        return mkbrr_path
+        return str(mkbrr_path) if mkbrr_path else None
     except Exception as e:
         console.print(f"[red]Error setting up mkbrr binary: {e}[/red]")
         return None
 
 
-def check_python_version():
+def check_python_version() -> None:
     pyver = platform.python_version_tuple()
     if int(pyver[0]) != 3 or int(pyver[1]) < 9:
         console.print("[bold red]Python version is too low. Please use Python 3.9 or higher.")
         sys.exit(1)
 
 
-async def main():
+async def main() -> None:
     try:
         await do_the_thing(base_dir)
     except asyncio.CancelledError:

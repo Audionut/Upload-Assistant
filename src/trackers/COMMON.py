@@ -20,8 +20,8 @@ from torf import Torrent
 from typing import Any, List, Optional, Union
 
 
-class COMMON():
-    def __init__(self, config):
+class COMMON:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.parser = self.MediaInfoParser()
         pass
@@ -31,7 +31,7 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.path.exists, path)
 
-    async def remove_file(self, path):
+    async def remove_file(self, path: str) -> None:
         """Async wrapper for os.remove"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.remove, path)
@@ -48,7 +48,14 @@ class COMMON():
         user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
-    async def create_torrent_for_upload(self, meta: dict[str, Any], tracker: str, source_flag: str, torrent_filename: str = "BASE", announce_url: str = ""):
+    async def create_torrent_for_upload(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        source_flag: str,
+        torrent_filename: str = "BASE",
+        announce_url: str = "",
+    ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
@@ -83,14 +90,15 @@ class COMMON():
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
     async def download_tracker_torrent(
-            self,
-            meta: dict[str, Any],
-            tracker: str,
-            headers: Any = None,
-            params: Any = None,
-            downurl: str = "",
-            hash_is_id: bool = False,
-            cross: bool = False):
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        headers: Optional[dict[str, str]] = None,
+        params: Optional[dict[str, str]] = None,
+        downurl: str = "",
+        hash_is_id: bool = False,
+        cross: bool = False,
+    ) -> Optional[str]:
         if cross:
             path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
         else:
@@ -117,6 +125,8 @@ class COMMON():
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
 
+        return None
+
     async def create_torrent_ready_to_seed(
         self,
         meta: dict[str, Any],
@@ -125,7 +135,7 @@ class COMMON():
         new_tracker: Union[str, list[str]],
         comment: str = "",
         hash_is_id: bool = False,
-    ):
+    ) -> Optional[str]:
         """
         Modifies the torrent file to include the tracker's announce URL, a comment, and a source flag.
         """
@@ -160,7 +170,7 @@ class COMMON():
 
         return None
 
-    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str):
+    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str) -> str:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         async with aiofiles.open(torrent_path, 'rb') as torrent_file:
             torrent_content = await torrent_file.read()
@@ -336,7 +346,16 @@ class COMMON():
             distributor_id_value = distributor_map.get(distributor)
             return str(distributor_id_value) if distributor_id_value else ""
 
-    async def prompt_user_for_id_selection(self, meta: dict[str, Any], tmdb=None, imdb=None, tvdb=None, mal=None, filename=None, tracker_name=None):
+    async def prompt_user_for_id_selection(
+        self,
+        meta: dict[str, Any],
+        tmdb: Optional[Union[str, int]] = None,
+        imdb: Optional[Union[str, int]] = None,
+        tvdb: Optional[Union[str, int]] = None,
+        mal: Optional[Union[str, int]] = None,
+        filename: Optional[Union[str, list[str]]] = None,
+        tracker_name: Optional[str] = None,
+    ) -> bool:
         if not tracker_name:
             tracker_name = "Tracker"  # Fallback if tracker_name is not provided
 
@@ -370,13 +389,13 @@ class COMMON():
         else:
             return True
 
-    async def prompt_user_for_confirmation(self, message):
+    async def prompt_user_for_confirmation(self, message: str) -> bool:
         response = input(f"{message} (Y/n): ").strip().lower()
         if response == '' or response == 'y':
             return True
         return False
 
-    async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = ""):
+    async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
         api_key = str(raw_api_key).strip() if raw_api_key else ''
@@ -452,9 +471,28 @@ class COMMON():
             console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
             return
 
-    async def unit3d_torrent_info(self, tracker, torrent_url, search_url, meta: dict[str, Any], id=None, file_name=None, only_id=False):
+    async def unit3d_torrent_info(
+        self,
+        tracker: str,
+        torrent_url: str,
+        search_url: str,
+        meta: dict[str, Any],
+        id: Optional[Union[str, int]] = None,
+        file_name: Optional[Union[str, list[str]]] = None,
+        only_id: bool = False,
+    ) -> tuple[
+        Optional[int],
+        Optional[int],
+        Optional[int],
+        Optional[int],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        list[dict[str, str]],
+        Optional[Union[str, list[str]]],
+    ]:
         tmdb = imdb = tvdb = description = category = infohash = mal = files = None  # noqa F841
-        imagelist = []
+        imagelist: list[dict[str, str]] = []
 
         # Build the params for the API request
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
@@ -474,7 +512,7 @@ class COMMON():
         else:
             if meta.get('debug'):
                 console.print("[red]No ID or file name provided for search.[/red]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
         # Make the GET request with proper encoding handled by 'params'
         try:
@@ -483,16 +521,16 @@ class COMMON():
                 json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_torrent_info: {e}[/yellow]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
         except ValueError:
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
         try:
             # Handle response when searching by file name (which might return a 'data' array)
             data: Union[list[dict[str, Any]], str] = json_response.get('data', [])
             if data == "404":
                 console.print("[yellow]No data found (404). Returning None.[/yellow]")
-                return None, None, None, None, None, None, None, None, None
+                return None, None, None, None, None, None, None, [], None
 
             if data and isinstance(data, list):  # Ensure data is a list before accessing it
                 attributes = data[0].get('attributes', {})
@@ -563,7 +601,7 @@ class COMMON():
                     try:
                         if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
                             console.print("[yellow]User chose to skip based on IDs.[/yellow]")
-                            return None, None, None, None, None, None, None, None, None
+                            return None, None, None, None, None, None, None, [], None
                     except (KeyboardInterrupt, EOFError):
                         sys.exit(1)
 
@@ -601,9 +639,9 @@ class COMMON():
         except Exception as e:
             console.print_exception()
             console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
-    async def parseCookieFile(self, cookiefile):
+    async def parseCookieFile(self, cookiefile: str) -> dict[str, str]:
         """Parse a cookies.txt file and return a dictionary of key value pairs
         compatible with requests."""
 
@@ -616,7 +654,7 @@ class COMMON():
                     cookies[lineFields[5]] = lineFields[6]
         return cookies
 
-    async def ptgen(self, meta: dict[str, Any], ptgen_site="", ptgen_retry=3):
+    async def ptgen(self, meta: dict[str, Any], ptgen_site: str = "", ptgen_retry: int = 3) -> str:
         ptgen_text = ""
         url = 'https://ptgen.zhenzhen.workers.dev'
         if ptgen_site != '':
@@ -939,7 +977,7 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[List[str]] = None, char_limit: int = 0):
+    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[List[str]] = None, char_limit: int = 0) -> str:
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
@@ -973,7 +1011,7 @@ class COMMON():
                 )
 
             # Helper to read and filter lines from the export file
-            async def read_and_clean():
+            async def read_and_clean() -> str:
                 if not os.path.isfile(mi_path):
                     return ""
 

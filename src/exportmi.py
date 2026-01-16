@@ -7,9 +7,10 @@ import subprocess
 from pathlib import Path
 from pymediainfo import MediaInfo
 from src.console import console
+from typing import Any, Optional, Union, cast
 
 
-def validate_file_path(file_path):
+def validate_file_path(file_path: str) -> str:
     if not file_path:
         raise ValueError("File path cannot be empty")
 
@@ -33,7 +34,7 @@ def validate_file_path(file_path):
     return str(path)
 
 
-def setup_mediainfo_library(base_dir, debug=False):
+def setup_mediainfo_library(base_dir: str, debug: bool = False) -> Optional[dict[str, Any]]:
     system = platform.system().lower()
 
     if system == 'windows':
@@ -85,7 +86,14 @@ def setup_mediainfo_library(base_dir, debug=False):
     return None
 
 
-async def mi_resolution(res, guess, width, scan, height, actual_height):
+async def mi_resolution(
+    res: str,
+    guess: dict[str, Any],
+    width: Union[str, int],
+    scan: str,
+    height: Union[str, int],
+    actual_height: Union[str, int],
+) -> str:
     res_map = {
         "3840x2160p": "2160p", "2160p": "2160p",
         "2560x1440p": "1440p", "1440p": "1440p",
@@ -159,21 +167,46 @@ async def mi_resolution(res, guess, width, scan, height, actual_height):
     return resolution
 
 
-async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=False):
+async def exportInfo(
+    video: str,
+    isdir: bool,
+    folder_id: str,
+    base_dir: str,
+    is_dvd: bool = False,
+    debug: bool = False,
+) -> dict[str, Any]:
 
-    def filter_mediainfo(data):
-        filtered = {
-            "creatingLibrary": data.get("creatingLibrary"),
-            "media": {
-                "@ref": data["media"]["@ref"],
-                "track": []
+    def filter_mediainfo(data: dict[str, Any]) -> dict[str, Any]:
+        media = data.get("media")
+        if not isinstance(media, dict):
+            return {
+                "creatingLibrary": data.get("creatingLibrary"),
+                "media": {"@ref": "", "track": []},
             }
+
+        media_dict = cast(dict[str, Any], media)
+        raw_tracks = media_dict.get("track", [])
+        tracks: list[dict[str, Any]] = []
+        if isinstance(raw_tracks, list):
+            for item in raw_tracks:
+                if isinstance(item, dict):
+                    tracks.append(item)
+
+        media_tracks: list[dict[str, Any]] = []
+        media_section: dict[str, Any] = {
+            "@ref": media_dict.get("@ref", ""),
+            "track": media_tracks,
+        }
+        filtered: dict[str, Any] = {
+            "creatingLibrary": data.get("creatingLibrary"),
+            "media": media_section,
         }
 
-        for track in data["media"]["track"]:
-            if track["@type"] == "General":
-                filtered["media"]["track"].append({
-                    "@type": track["@type"],
+        for track in tracks:
+            track_type = track.get("@type")
+            if track_type == "General":
+                media_tracks.append({
+                    "@type": track_type,
                     "UniqueID": track.get("UniqueID", {}),
                     "VideoCount": track.get("VideoCount", {}),
                     "AudioCount": track.get("AudioCount", {}),
@@ -197,9 +230,9 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
                     "Encoded_Library": track.get("Encoded_Library", {}),
                     "extra": track.get("extra", {}),
                 })
-            elif track["@type"] == "Video":
-                filtered["media"]["track"].append({
-                    "@type": track["@type"],
+            elif track_type == "Video":
+                media_tracks.append({
+                    "@type": track_type,
                     "StreamOrder": track.get("StreamOrder", {}),
                     "ID": track.get("ID", {}),
                     "UniqueID": track.get("UniqueID", {}),
@@ -269,9 +302,9 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
                     "Encoded_Library": track.get("Encoded_Library", {}),
                     "Encoded_Library_Name": track.get("Encoded_Library_Name", {}),
                 })
-            elif track["@type"] == "Audio":
-                filtered["media"]["track"].append({
-                    "@type": track["@type"],
+            elif track_type == "Audio":
+                media_tracks.append({
+                    "@type": track_type,
                     "StreamOrder": track.get("StreamOrder", {}),
                     "ID": track.get("ID", {}),
                     "UniqueID": track.get("UniqueID", {}),
@@ -308,9 +341,9 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
                     "Forced": track.get("Forced", {}),
                     "extra": track.get("extra", {}),
                 })
-            elif track["@type"] == "Text":
-                filtered["media"]["track"].append({
-                    "@type": track["@type"],
+            elif track_type == "Text":
+                media_tracks.append({
+                    "@type": track_type,
                     "@typeorder": track.get("@typeorder", {}),
                     "StreamOrder": track.get("StreamOrder", {}),
                     "ID": track.get("ID", {}),
@@ -328,9 +361,9 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
                     "Default": track.get("Default", {}),
                     "Forced": track.get("Forced", {}),
                 })
-            elif track["@type"] == "Menu":
-                filtered["media"]["track"].append({
-                    "@type": track["@type"],
+            elif track_type == "Menu":
+                media_tracks.append({
+                    "@type": track_type,
                     "extra": track.get("extra", {}),
                 })
         return filtered
@@ -471,7 +504,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
             console.print(f"[green]JSON file written to: {base_dir}/tmp/{folder_id}/MediaInfo.json[/green]")
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", 'r', encoding='utf-8') as f:
-        mi = json.loads(await f.read())
+        mi = cast(dict[str, Any], json.loads(await f.read()))
 
     # Cleanup: Reset library configuration if we modified it
     if is_dvd and platform.system().lower() in ['linux', 'windows']:
@@ -484,7 +517,7 @@ async def exportInfo(video, isdir, folder_id, base_dir, is_dvd=False, debug=Fals
     return mi
 
 
-def validate_mediainfo(meta, debug, settings=False):
+def validate_mediainfo(meta: dict[str, Any], debug: bool, settings: bool = False) -> bool:
     if not any(str(f).lower().endswith('.mkv') for f in meta.get('filelist', [])):
         if debug:
             console.print(f"[yellow]Skipping {meta.get('path')} (not an .mkv file)[/yellow]")
@@ -533,7 +566,7 @@ def validate_mediainfo(meta, debug, settings=False):
     return bool(valid_settings) if settings else bool(unique_id)
 
 
-async def get_conformance_error(meta):
+async def get_conformance_error(meta: dict[str, Any]) -> bool:
     if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
         general_track = next((track for track in meta['mediainfo']['media']['track']
                               if track.get('@type') == 'General'), None)

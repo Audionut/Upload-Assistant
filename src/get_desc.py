@@ -225,7 +225,7 @@ class DescriptionBuilder:
             console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
         return ""
 
-    async def get_logo_section(self, meta: dict[str, Any]):
+    async def get_logo_section(self, meta: dict[str, Any]) -> tuple[str, str]:
         """Returns the logo URL and size if applicable."""
         logo, logo_size = "", ""
         try:
@@ -244,7 +244,7 @@ class DescriptionBuilder:
 
         return logo, logo_size
 
-    async def get_tv_info(self, meta: dict[str, Any], resize: bool = False):
+    async def get_tv_info(self, meta: dict[str, Any], resize: bool = False) -> tuple[str, str, str]:
         title: str = ""
         image: str = ""
         overview: str = ""
@@ -296,7 +296,7 @@ class DescriptionBuilder:
 
         return title, image, overview
 
-    async def get_mediainfo_section(self, meta: dict[str, Any]):
+    async def get_mediainfo_section(self, meta: dict[str, Any]) -> str:
         """Returns the mediainfo/bdinfo section, using a cache file if available."""
         if meta.get("is_disc") == "BDMV":
             return ""
@@ -307,7 +307,7 @@ class DescriptionBuilder:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             if await self.common.path_exists(mi_path):
                 async with aiofiles.open(mi_path, "r", encoding="utf-8") as mi:
-                    return await mi.read()
+                    return str(await mi.read())
 
         cache_file_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
         cache_file_path = os.path.join(cache_file_dir, "MEDIAINFO_SHORT.txt")
@@ -318,7 +318,7 @@ class DescriptionBuilder:
         if file_exists and file_size > 0:
             try:
                 async with aiofiles.open(cache_file_path, mode="r", encoding="utf-8") as f:
-                    media_info_content = await f.read()
+                    media_info_content = str(await f.read())
                 return media_info_content
             except Exception:
                 pass
@@ -354,18 +354,18 @@ class DescriptionBuilder:
                 cleanpath_exists = await self.common.path_exists(mi_file_path)
                 if cleanpath_exists:
                     async with aiofiles.open(mi_file_path, "r", encoding="utf-8") as f:
-                        return await f.read()
+                        return str(await f.read())
 
         else:
             cleanpath_exists = await self.common.path_exists(mi_file_path)
             if cleanpath_exists:
                 async with aiofiles.open(mi_file_path, "r", encoding="utf-8") as f:
-                    tech_info = await f.read()
+                    tech_info = str(await f.read())
                     return tech_info
 
         return ""
 
-    async def get_bdinfo_section(self, meta: dict[str, Any]):
+    async def get_bdinfo_section(self, meta: dict[str, Any]) -> str:
         """Returns the bdinfo section if applicable."""
         try:
             if meta.get("is_disc") == "BDMV":
@@ -381,20 +381,20 @@ class DescriptionBuilder:
 
         return ""
 
-    async def screenshot_header(self):
+    async def screenshot_header(self) -> str:
         """Returns the screenshot header if applicable."""
         try:
             screenheader = self.tracker_config.get(
                 "custom_screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
             )
             if screenheader:
-                return screenheader
+                return str(screenheader)
         except Exception as e:
             console.print(f"[yellow]Warning: Error getting screenshot header: {str(e)}[/yellow]")
 
         return ""
 
-    async def menu_screenshot_header(self, meta: dict[str, Any]):
+    async def menu_screenshot_header(self, meta: dict[str, Any]) -> str:
         """Returns the screenshot header for menus if applicable."""
         try:
             if meta.get("is_disc", "") and meta.get('menu_images', []):
@@ -402,7 +402,7 @@ class DescriptionBuilder:
                     "disc_menu_header", self.config["DEFAULT"].get("disc_menu_header", None)
                 )
                 if disc_menu_header:
-                    return disc_menu_header
+                    return str(disc_menu_header)
         except Exception as e:
             console.print(f"[yellow]Warning: Error getting menus screenshot header: {str(e)}[/yellow]")
 
@@ -495,7 +495,7 @@ class DescriptionBuilder:
         desc_header: str = "",
         image_list: Union[list[dict[str, str]], None] = None,
         approved_image_hosts: Union[list[str], None] = None,
-    ):
+    ) -> str:
         if image_list is None:
             image_list = []
         if approved_image_hosts is None:
@@ -713,7 +713,7 @@ class DescriptionBuilder:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
         return pack_images_data
 
-    async def _handle_discs_and_screenshots(self, meta: dict[str, Any], approved_image_hosts: list[str], images: list[dict[str, str]], multi_screens: int):
+    async def _handle_discs_and_screenshots(self, meta: dict[str, Any], approved_image_hosts: list[str], images: list[dict[str, str]], multi_screens: int) -> str:
         try:
             screenheader = await self.screenshot_header()
         except Exception:
@@ -1309,7 +1309,7 @@ class DescriptionBuilder:
 
         return description
 
-    async def get_screens_per_row(self):
+    async def get_screens_per_row(self) -> int:
         try:
             # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
             screensPerRow = int(self.config["DEFAULT"].get("screens_per_row", 2))
@@ -1322,7 +1322,7 @@ class DescriptionBuilder:
             screensPerRow = 2
         return screensPerRow
 
-    async def menu_section(self, meta: dict[str, Any]):
+    async def menu_section(self, meta: dict[str, Any]) -> str:
         menu_image_section = ""
         try:
             disc_menu_header = await self.menu_screenshot_header(meta)

@@ -10,7 +10,7 @@ import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 from pymediainfo import MediaInfo
-from typing import Union
+from typing import Any, Optional, Union, cast
 from src.console import console
 from src.cookie_auth import CookieValidator, CookieAuthUploader
 from src.languages import process_desc_language
@@ -19,14 +19,14 @@ from src.trackers.COMMON import COMMON
 
 
 class ASC:
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'ASC'
         self.source_flag = 'ASC'
-        self.banned_groups = []
+        self.banned_groups: list[str] = []
         self.base_url = 'https://cliente.amigos-share.club'
         self.torrent_url = 'https://cliente.amigos-share.club/torrents-details.php?id='
         self.requests_url = f'{self.base_url}/pedidos.php'
@@ -54,7 +54,7 @@ class ASC:
             'ru': '2', 'zh': '9',
         }
 
-    async def validate_credentials(self, meta):
+    async def validate_credentials(self, meta: dict[str, Any]) -> bool:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         return await self.cookie_validator.cookie_validation(
             meta=meta,
@@ -63,7 +63,7 @@ class ASC:
             error_text='Esqueceu sua senha',
         )
 
-    async def load_localized_data(self, meta):
+    async def load_localized_data(self, meta: dict[str, Any]) -> None:
         localized_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/tmdb_localized_data.json"
         tmdb_data = {}
         self.main_tmdb_data = {}
@@ -136,7 +136,7 @@ class ASC:
                 if not self.episode_tmdb_data:
                     self.episode_tmdb_data = {}
 
-    async def get_container(self, meta):
+    async def get_container(self, meta: dict[str, Any]) -> Optional[str]:
         if meta['is_disc'] == 'BDMV':
             return '5'
         elif meta['is_disc'] == 'DVD':
@@ -153,7 +153,7 @@ class ASC:
             return None
         return None
 
-    async def get_type(self, meta):
+    async def get_type(self, meta: dict[str, Any]) -> Union[str, int]:
         bd_disc_map = {'BD25': '40', 'BD50': '41', 'BD66': '42', 'BD100': '43'}
         standard_map = {'ENCODE': '9', 'REMUX': '39', 'WEBDL': '23', 'WEBRIP': '38', 'BDRIP': '8', 'DVDRIP': '3'}
         dvd_map = {'DVD5': '45', 'DVD9': '46'}
@@ -188,7 +188,7 @@ class ASC:
         else:
             return standard_map.get(meta['type'], '0')
 
-    async def get_languages(self, meta):
+    async def get_languages(self, meta: dict[str, Any]) -> Optional[dict[str, str]]:
         if meta.get('anime'):
             if meta['category'] == 'MOVIE':
                 type_ = '116'
@@ -208,7 +208,9 @@ class ASC:
                 'lang': lang
             }
 
-    async def get_audio(self, meta):
+        return None
+
+    async def get_audio(self, meta: dict[str, Any]) -> str:
         subtitles = '1'
         dual_audio = '2'
         dubbed = '3'
@@ -237,7 +239,7 @@ class ASC:
         else:
             return original
 
-    async def get_subtitle(self, meta):
+    async def get_subtitle(self, meta: dict[str, Any]) -> str:
         portuguese_languages = {'portuguese', 'português', 'pt'}
 
         found_languages = {lang.lower() for lang in meta.get('subtitle_languages', [])}
@@ -246,7 +248,9 @@ class ASC:
             return 'Embutida'
         return 'S_legenda'
 
-    async def get_resolution(self, meta):
+    async def get_resolution(self, meta: dict[str, Any]) -> dict[str, str]:
+        width = ''
+        height = ''
         if meta.get('is_disc') == 'BDMV':
             resolution_str = meta.get('resolution', '')
             try:
@@ -268,7 +272,7 @@ class ASC:
             'height': height
         }
 
-    async def get_video_codec(self, meta):
+    async def get_video_codec(self, meta: dict[str, Any]) -> str:
         codec_video_map = {
             'MPEG-4': '31', 'AV1': '29', 'AVC': '30', 'DivX': '9',
             'H264': '17', 'H265': '18', 'HEVC': '27', 'M4V': '20',
@@ -289,6 +293,9 @@ class ASC:
         if not codec_video:
             codec_video = meta.get('video_codec')
 
+        if not isinstance(codec_video, str):
+            codec_video = ''
+
         codec_id = codec_video_map.get(codec_video, '16')
 
         is_hdr = bool(meta.get('hdr'))
@@ -301,7 +308,7 @@ class ASC:
 
         return codec_id
 
-    async def get_audio_codec(self, meta):
+    async def get_audio_codec(self, meta: dict[str, Any]) -> str:
         audio_type = (meta['audio'] or '').upper()
 
         codec_map = {
@@ -327,7 +334,7 @@ class ASC:
 
         return '20'
 
-    async def get_title(self, meta):
+    async def get_title(self, meta: dict[str, Any]) -> str:
         name = meta['title']
         base_name = name
 
@@ -345,7 +352,7 @@ class ASC:
 
             return f"{base_name}"
 
-    async def build_description(self, meta):
+    async def build_description(self, meta: dict[str, Any]) -> str:
         user_layout = await self.fetch_layout_data(meta)
         fileinfo_dump = await self.media_info(meta)
 
@@ -355,7 +362,7 @@ class ASC:
         layout_image = {k: v for k, v in user_layout.items() if k.startswith('BARRINHA_')}
         description_parts = ['[center]']
 
-        async def append_section(key: str, content: Union[str, None]):
+        async def append_section(key: str, content: Union[str, None]) -> None:
             if content and (img := layout_image.get(key)):
                 description_parts.append(f'\n{await self.format_image(img)}')
                 description_parts.append(f'\n{content}\n')
@@ -499,7 +506,7 @@ class ASC:
 
         return final_description
 
-    async def get_trailer(self, meta):
+    async def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
         if youtube_code:
@@ -509,7 +516,7 @@ class ASC:
 
         return youtube
 
-    async def get_tags(self, meta):
+    async def get_tags(self, meta: dict[str, Any]) -> str:
         tags = ', '.join(
             g.get('name', '')
             for g in self.main_tmdb_data.get('genres', [])
@@ -521,7 +528,7 @@ class ASC:
 
         return tags
 
-    async def _fetch_file_info(self, torrent_id, torrent_link, size):
+    async def _fetch_file_info(self, torrent_id: str, torrent_link: str, size: str) -> dict[str, str]:
         '''
         Helper function to fetch file info for a single release in parallel.
         '''
@@ -550,7 +557,7 @@ class ASC:
             'link': torrent_link
         }
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, str]]:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
 
         found_items: list[dict[str, str]] = []
@@ -645,7 +652,7 @@ class ASC:
 
         return found_items
 
-    async def get_upload_url(self, meta):
+    async def get_upload_url(self, meta: dict[str, Any]) -> str:
         if meta.get('anime'):
             return f'{self.base_url}/enviar-anime.php'
         elif meta['category'] == 'MOVIE':
@@ -653,10 +660,10 @@ class ASC:
         else:
             return f'{self.base_url}/enviar-series.php'
 
-    async def format_image(self, url: Union[str, None]):
+    async def format_image(self, url: Union[str, None]) -> str:
         return f'[img]{url}[/img]' if isinstance(url, str) and url else ''
 
-    async def format_date(self, date_str):
+    async def format_date(self, date_str: Optional[str]) -> str:
         if not date_str or date_str == 'N/A':
             return 'N/A'
         for fmt in ('%Y-%m-%d', '%d %b %Y'):
@@ -666,7 +673,7 @@ class ASC:
                 continue
         return str(date_str)
 
-    async def media_info(self, meta):
+    async def media_info(self, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('is_disc') == 'BDMV':
             summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(summary_path):
@@ -686,14 +693,14 @@ class ASC:
 
         return None
 
-    async def fetch_layout_data(self, meta):
+    async def fetch_layout_data(self, meta: dict[str, Any]) -> Optional[dict[str, Any]]:
         url = f'{self.base_url}/search.php'
 
-        async def _fetch(payload):
+        async def _fetch(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
             try:
                 response = await self.session.post(url, data=payload, timeout=20)
                 response.raise_for_status()
-                return response.json().get('ASC')
+                return cast(Optional[dict[str, Any]], response.json().get('ASC'))
             except Exception:
                 return None
 
@@ -706,7 +713,7 @@ class ASC:
         fallback_payload = {'imdb': 'tt0013442', 'layout': self.layout}
         return await _fetch(fallback_payload)
 
-    async def build_ratings_bbcode(self, meta, ratings_list):
+    async def build_ratings_bbcode(self, meta: dict[str, Any], ratings_list: list[dict[str, Any]]) -> str:
         if not ratings_list:
             return ''
 
@@ -719,6 +726,8 @@ class ASC:
         parts = []
         for rating in ratings_list:
             source = rating.get('Source')
+            if not isinstance(source, str):
+                continue
             value = rating.get('Value', '').strip()
             img_tag = ratings_map.get(source)
             if not img_tag:
@@ -732,7 +741,7 @@ class ASC:
                 parts.append(f"{img_tag}\n[b]{value}[/b]\n")
         return "\n".join(parts)
 
-    async def build_cast_bbcode(self, cast_list):
+    async def build_cast_bbcode(self, cast_list: list[dict[str, Any]]) -> str:
         if not cast_list:
             return ''
 
@@ -746,7 +755,7 @@ class ASC:
             parts.append(f'[url={tmdb_url}]{img_tag}[/url]\n[size=2][b]{character_info}[/b][/size]\n')
         return ''.join(parts)
 
-    async def get_requests(self, meta):
+    async def get_requests(self, meta: dict[str, Any]) -> Union[bool, list[dict[str, str]]]:
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
@@ -814,7 +823,7 @@ class ASC:
                 console.print(traceback.format_exc())
                 return []
 
-    async def get_data(self, meta):
+    async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
         if not meta.get('language_checked', False):
             await process_desc_language(meta, tracker=self.tracker)
@@ -844,11 +853,12 @@ class ASC:
 
         if meta.get('anime'):
             anime_info = await self.get_languages(meta)
-            data.update({
-                'idioma': anime_info['idioma'],
-                'lang': anime_info['lang'],
-                'type': anime_info['type'],
-            })
+            if anime_info:
+                data.update({
+                    'idioma': anime_info['idioma'],
+                    'lang': anime_info['lang'],
+                    'type': anime_info['type'],
+                })
 
         # Screenshots
         for i, img in enumerate(meta.get('image_list', [])[:4]):
@@ -856,7 +866,7 @@ class ASC:
 
         return data
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
         self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         data = await self.get_data(meta)
         upload_url = await self.get_upload_url(meta)
@@ -889,7 +899,7 @@ class ASC:
 
         return True
 
-    async def auto_approval(self, meta):
+    async def auto_approval(self, meta: dict[str, Any]) -> None:
         if meta.get('debug', False):
             console.print(
                 f'{self.tracker}: Debug mode, skipping automatic approval.'
@@ -903,7 +913,7 @@ class ASC:
             except Exception as e:
                 console.print(f'{self.tracker}: [bold red]Error during automatic approval attempt: {e}[/bold red]')
 
-    async def get_approval(self, meta):
+    async def get_approval(self, meta: dict[str, Any]) -> bool:
         if not self.config['TRACKERS'][self.tracker].get('uploader_status', False):
             return False
 
@@ -913,7 +923,7 @@ class ASC:
 
         return True
 
-    async def set_internal_flag(self, meta):
+    async def set_internal_flag(self, meta: dict[str, Any]) -> None:
         if meta.get('debug', False):
             console.print(
                 f'{self.tracker}: [bold yellow]Debug mode, skipping setting internal flag.[/bold yellow]'

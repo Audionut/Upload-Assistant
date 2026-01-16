@@ -12,13 +12,13 @@ import gc
 import json
 import httpx
 import aiofiles
-from typing import Any, Union, cast
+from typing import Any, Sequence, Union, cast
 from data.config import config as raw_config
 
 config = cast(dict[str, Any], raw_config)
 
 
-async def upload_image_task(args):
+async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
     image, img_host, config, meta = args
     try:
         timeout = 60  # Default timeout
@@ -552,7 +552,7 @@ async def upload_screens(
         retry_mode: bool = False,
         max_retries: int = 3,
         allowed_hosts: Union[list[str], None] = None
-):
+) -> tuple[list[dict[str, Any]], int]:
     default_config = config.get('DEFAULT', {})
     if 'image_list' not in meta:
         meta['image_list'] = []
@@ -619,7 +619,7 @@ async def upload_screens(
         image_glob = list(set(image_glob))
 
         # Sort images by numeric suffix
-        def extract_numeric_suffix(filename):
+        def extract_numeric_suffix(filename: str) -> float:
             match = re.search(r"-(\d+)\.png$", filename)
             return int(match.group(1)) if match else float('inf')
 
@@ -655,7 +655,10 @@ async def upload_screens(
     # Track running tasks for cancellation
     running_tasks = set()
 
-    async def async_upload(task, max_retries=3):
+    async def async_upload(
+        task: tuple[int, str, str, dict[str, Any], dict[str, Any]],
+        max_retries: int = 3,
+    ) -> Union[tuple[int, dict[str, Any]], None]:
         """Upload image with concurrency control and retry logic."""
         index, *task_args = task
         retry_count = 0
@@ -720,6 +723,8 @@ async def upload_screens(
                     else:
                         console.print(f"[red]Error during upload for image {index} after {max_retries} attempts: {str(e)}[/red]")
                         return None
+
+        return None
 
     try:
         max_retries = 3
@@ -800,7 +805,12 @@ async def upload_screens(
         gc.collect()
 
 
-async def imgbox_upload(chdir, image_glob, meta, return_dict):
+async def imgbox_upload(
+    chdir: str,
+    image_glob: list[str],
+    meta: dict[str, Any],
+    return_dict: dict[str, Any],
+) -> list[dict[str, str]]:
     try:
         os.chdir(chdir)
         image_list = []
