@@ -55,10 +55,7 @@ def setup_mediainfo_library(base_dir: str, debug: bool = False) -> Optional[dict
             return None
 
     elif system == "linux":
-        if base_dir.endswith("bin/MI") or base_dir.endswith("bin\\MI"):
-            lib_dir = os.path.join(base_dir, "linux")
-        else:
-            lib_dir = os.path.join(base_dir, "bin", "MI", "linux")
+        lib_dir = os.path.join(base_dir, "linux") if base_dir.endswith("bin/MI") or base_dir.endswith("bin\\MI") else os.path.join(base_dir, "bin", "MI", "linux")
 
         mediainfo_lib = os.path.join(lib_dir, "libmediainfo.so.0")
         mediainfo_cli = os.path.join(lib_dir, "mediainfo")
@@ -415,9 +412,8 @@ async def exportInfo(
                         if debug:
                             console.print(f"[green]Configured specialized MediaInfo library (can_parse: {test_parse})[/green]")
 
-                        if not test_parse:
-                            if debug:
-                                console.print("[yellow]Library test failed, may fall back to system MediaInfo[/yellow]")
+                        if not test_parse and debug:
+                            console.print("[yellow]Library test failed, may fall back to system MediaInfo[/yellow]")
 
                     except Exception as e:
                         if debug:
@@ -586,7 +582,7 @@ def validate_mediainfo(meta: dict[str, Any], debug: bool, settings: bool = False
 
 
 async def get_conformance_error(meta: dict[str, Any]) -> bool:
-    if not meta.get("is_disc") == "BDMV" and meta.get("mediainfo", {}).get("media", {}).get("track"):
+    if meta.get("is_disc") != "BDMV" and meta.get("mediainfo", {}).get("media", {}).get("track"):
         general_track = next((track for track in meta["mediainfo"]["media"]["track"] if track.get("@type") == "General"), None)
         if general_track and general_track.get("extra", {}).get("ConformanceErrors", {}):
             try:
