@@ -16,7 +16,7 @@ from pymediainfo import MediaInfo
 from src.bbcode import BBCODE
 from src.console import console
 from src.languages import languages_manager
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.takescreens import takescreens_manager
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
 
@@ -818,7 +818,7 @@ class DescriptionBuilder:
                             if not new_screens:
                                 use_vs = meta.get("vapoursynth", False)
                                 try:
-                                    await disc_screenshots(
+                                    await takescreens_manager.disc_screenshots(
                                         meta,
                                         f"PLAYLIST_{i}",
                                         bdinfo,
@@ -1005,7 +1005,7 @@ class DescriptionBuilder:
                                 if each["type"] == "BDMV":
                                     use_vs = meta.get("vapoursynth", False)
                                     try:
-                                        await disc_screenshots(
+                                        await takescreens_manager.disc_screenshots(
                                             meta,
                                             f"FILE_{i}",
                                             each["bdinfo"],
@@ -1024,7 +1024,7 @@ class DescriptionBuilder:
                                     )]
                                 if each["type"] == "DVD":
                                     try:
-                                        await dvd_screenshots(meta, i, multi_screens, True)
+                                        await takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during DVD screenshot capture: {e}")
                                     new_screens = [os.path.basename(f) for f in glob.glob(
@@ -1174,7 +1174,7 @@ class DescriptionBuilder:
                                 f"[yellow]No existing screenshots for {new_images_key}; generating new ones."
                             )
                         try:
-                            await screenshots(
+                            await takescreens_manager.screenshots(
                                 file,
                                 f"FILE_{i}",
                                 meta["uuid"],

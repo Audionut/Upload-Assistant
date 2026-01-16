@@ -168,7 +168,7 @@ from src.languages import languages_manager  # noqa: E402
 from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
 from src.queuemanage import QueueManager  # noqa: E402
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots  # noqa: E402
+from src.takescreens import takescreens_manager  # noqa: E402
 from src.torrentcreate import TorrentCreator  # noqa: E402
 from src.trackerhandle import process_trackers  # noqa: E402
 from src.trackers.AR import AR  # noqa: E402
@@ -651,7 +651,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     if meta['is_disc'] == "BDMV":
                         use_vs = meta.get('vapoursynth', False)
                         try:
-                            await disc_screenshots(
+                            await takescreens_manager.disc_screenshots(
                                 meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
                                 meta.get('image_list', []), meta.get('ffdebug', False), 0
                             )
@@ -672,7 +672,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                     elif meta['is_disc'] == "DVD":
                         try:
-                            await dvd_screenshots(
+                            await takescreens_manager.dvd_screenshots(
                                 meta,
                                 disc_num=0,
                                 num_screens=0,
@@ -698,7 +698,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                             if meta['debug']:
                                 console.print(f"videopath: {videopath}, filename: {filename}, meta: {meta['uuid']}, base_dir: {base_dir}, manual_frames: {manual_frames}")
 
-                            await screenshots(
+                            await takescreens_manager.screenshots(
                                 videopath, filename, meta['uuid'], base_dir, meta,
                                 manual_frames=manual_frames  # Pass additional kwargs directly
                             )

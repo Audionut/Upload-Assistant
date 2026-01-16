@@ -13,7 +13,7 @@ from aiofiles import os as aio_os
 
 from data.config import config
 from src.console import console
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.takescreens import takescreens_manager
 from src.type_utils import to_int
 from src.uploadscreens import upload_screens
 
@@ -358,13 +358,13 @@ async def handle_image_upload(
 
         try:
             if meta['is_disc'] == "BDMV":
-                await disc_screenshots(meta, filename, meta['bdinfo'], folder_id, base_dir,
+                await takescreens_manager.disc_screenshots(meta, filename, meta['bdinfo'], folder_id, base_dir,
                                        meta.get('vapoursynth', False), [], meta.get('ffdebug', False),
                                        needed_screenshots, True)
             elif meta['is_disc'] == "DVD":
-                await dvd_screenshots(meta, disc_num=0, retry_cap=True)
+                await takescreens_manager.dvd_screenshots(meta, disc_num=0, retry_cap=True)
             else:
-                await screenshots(path, filename, meta['uuid'], base_dir, meta,
+                await takescreens_manager.screenshots(path, filename, meta['uuid'], base_dir, meta,
                                   needed_screenshots, True, "")
 
             if meta['is_disc'] == "DVD":
