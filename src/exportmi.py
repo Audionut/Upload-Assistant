@@ -194,9 +194,7 @@ async def exportInfo(
 
         media_dict = cast(dict[str, Any], media)
         raw_tracks = media_dict.get("track", [])
-        tracks: list[dict[str, Any]] = []
-        if isinstance(raw_tracks, list):
-            tracks.extend(item for item in raw_tracks if isinstance(item, dict))
+        tracks: list[dict[str, Any]] = cast(list[dict[str, Any]], raw_tracks) if isinstance(raw_tracks, list) else []
 
         media_tracks: list[dict[str, Any]] = []
         media_section: dict[str, Any] = {
@@ -403,7 +401,7 @@ async def exportInfo(
                 if mediainfo_config["lib"]:
                     try:
                         if hasattr(MediaInfo, "_library_file"):
-                            MediaInfo._library_file = mediainfo_config["lib"]
+                            cast(Any, MediaInfo)._library_file = mediainfo_config["lib"]
 
                         test_parse = MediaInfo.can_parse()
                         if debug:
@@ -431,6 +429,7 @@ async def exportInfo(
         os.chdir(os.path.dirname(video))
 
     if mediainfo_cmd and is_dvd:
+        result: Optional[subprocess.CompletedProcess[str]] = None
         try:
             # Validate and sanitize the video path
             safe_video_path = validate_file_path(video)
@@ -452,7 +451,7 @@ async def exportInfo(
             media_info = MediaInfo.parse(video, output="STRING", full=False)
         except (subprocess.CalledProcessError, Exception) as e:
             console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
-            if debug and "result" in locals():
+            if debug and result is not None:
                 console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
                 console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
             console.print("[bold yellow]Falling back to standard MediaInfo for text...")
@@ -471,6 +470,7 @@ async def exportInfo(
         console.print("[bold green]MediaInfo Exported.")
 
     if mediainfo_cmd and is_dvd:
+        result: Optional[subprocess.CompletedProcess[str]] = None
         try:
             # Validate and sanitize the video path
             safe_video_path = validate_file_path(video)
@@ -495,7 +495,7 @@ async def exportInfo(
             media_info_dict = json.loads(media_info_json)
         except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
             console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
-            if debug and "result" in locals():
+            if debug and result is not None:
                 console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
                 console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
                 if result.stdout:
@@ -522,7 +522,7 @@ async def exportInfo(
     if is_dvd and platform.system().lower() in ["linux", "windows"]:
         # Reset MediaInfo library file to default (Linux only)
         if hasattr(MediaInfo, "_library_file"):
-            MediaInfo._library_file = None
+            cast(Any, MediaInfo)._library_file = None
         if debug:
             console.print("[blue]Reset MediaInfo library configuration[/blue]")
 
