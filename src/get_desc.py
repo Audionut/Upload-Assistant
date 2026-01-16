@@ -5,7 +5,7 @@ import json
 import os
 import re
 import urllib.parse
-from typing import Any, Union
+from typing import Any, Union, cast
 from urllib.parse import ParseResult
 
 import aiofiles
@@ -190,13 +190,14 @@ class DescriptionBuilder:
         trackers_config = self.config.get('TRACKERS')
         if not isinstance(trackers_config, dict):
             raise KeyError("Missing 'TRACKERS' section in config")
+        trackers_config_map = cast(dict[str, Any], trackers_config)
 
-        tracker_cfg = trackers_config.get(tracker)
+        tracker_cfg = trackers_config_map.get(tracker)
         if tracker_cfg is None:
-            available = list(trackers_config.keys())
+            available = list(trackers_config_map.keys())
             raise KeyError(f"Missing tracker config for '{tracker}'; available trackers: {available}")
 
-        self.tracker_config: dict[str, Any] = tracker_cfg if isinstance(tracker_cfg, dict) else {}
+        self.tracker_config: dict[str, Any] = cast(dict[str, Any], tracker_cfg) if isinstance(tracker_cfg, dict) else {}
         self.parser = self.common.parser
 
     async def get_custom_header(self) -> str:
@@ -988,6 +989,7 @@ class DescriptionBuilder:
                                 )
                             desc_parts.append("[/center]\n\n")
                             # Check if new screenshots already exist before running prep.screenshots
+                            new_screens: list[str] = []
                             if each["type"] == "BDMV":
                                 new_screens = [os.path.basename(f) for f in glob.glob(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
