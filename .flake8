@@ -1,8 +1,0 @@
-[flake8]
-max-line-length = 6000
-exclude = 
-    .git,
-    __pycache__,
-    build,
-    dist,
-    data/version.py

@@ -1,0 +1,15 @@
+[tool.ruff]
+target-version = "py39"
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "W",   # pycodestyle warnings
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "C4",  # comprehensions
+  "SIM", # simplify
+  "PERF",# performance
+]
+ignore = ["E501"]
