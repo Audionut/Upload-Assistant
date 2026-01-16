@@ -26,7 +26,7 @@ try:
     from src.get_name import extract_title_and_year
     from src.get_source import get_source
     from src.get_tracker_data import tracker_data_manager
-    from src.getseasonep import check_season_pack_completeness, get_season_episode
+    from src.getseasonep import season_episode_manager
     from src.imdb import get_imdb_from_episode, get_imdb_info_api, search_imdb
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
@@ -678,7 +678,7 @@ class Prep:
 
         # if it's not an anime, we can run season/episode checks now to speed the process
         if meta.get("not_anime", False) and meta.get("category") == "TV":
-            meta = await get_season_episode(video, meta)
+            meta = await season_episode_manager.get_season_episode(video, meta)
 
         # Run a check against mediainfo to see if it has tmdb/imdb
         if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
@@ -836,10 +836,10 @@ class Prep:
 
         # if it was skipped earlier, make sure we have the season/episode data
         if not meta.get('not_anime', False) and meta.get('category') == "TV":
-            meta = await get_season_episode(video, meta)
+            meta = await season_episode_manager.get_season_episode(video, meta)
 
         if meta['category'] == "TV" and meta.get('tv_pack'):
-            await check_season_pack_completeness(meta)
+            await season_episode_manager.check_season_pack_completeness(meta)
 
         # lets check for tv movies
         meta['tv_movie'] = False

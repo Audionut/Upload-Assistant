@@ -516,15 +516,3 @@ class SeasonEpisodeManager:
 
 
 season_episode_manager = SeasonEpisodeManager()
-
-
-async def get_season_episode(video: str, meta: Meta) -> Meta:
-    return await season_episode_manager.get_season_episode(video, meta)
-
-
-async def check_season_pack_completeness(meta: Meta) -> None:
-    await season_episode_manager.check_season_pack_completeness(meta)
-
-
-async def check_season_pack_detail(meta: Meta) -> dict[str, object]:
-    return await season_episode_manager.check_season_pack_detail(meta)
