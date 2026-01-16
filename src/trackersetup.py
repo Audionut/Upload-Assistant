@@ -11,7 +11,7 @@ import aiofiles
 import cli_ui
 import httpx
 
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
@@ -286,8 +286,8 @@ class TRACKER_SETUP:
                         return False
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
+                    await cleanup_manager.cleanup()
+                    cleanup_manager.reset_terminal()
                     sys.exit(1)
                 return True
 

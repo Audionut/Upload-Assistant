@@ -11,7 +11,7 @@ from torf import Torrent
 from typing_extensions import TypeAlias
 
 from data.config import config
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.clients import Clients
 from src.console import console
 from src.dupe_checking import DupeChecker
@@ -68,8 +68,8 @@ class TrackerStatusManager:
                             )
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                            await cleanup()
-                            reset_terminal()
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
                             sys.exit(1)
 
                         if imdb_id is None or imdb_id.strip() == "":
@@ -212,8 +212,8 @@ class TrackerStatusManager:
                                     local_tracker_status['upload'] = False
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
                         else:
                             local_tracker_status['upload'] = True

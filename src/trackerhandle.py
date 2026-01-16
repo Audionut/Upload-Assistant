@@ -9,7 +9,7 @@ from typing import Any, Optional, cast
 import cli_ui
 
 from cogs.redaction import Redaction
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.get_desc import DescriptionBuilder
 from src.manualpackage import package
 from src.trackers.PTP import PTP
@@ -235,8 +235,8 @@ async def process_trackers(
                     do_manual = cli_ui.ask_yes_no("Get files for manual upload?", default=True)
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
+                    await cleanup_manager.cleanup()
+                    cleanup_manager.reset_terminal()
                     sys.exit(1)
             if do_manual:
                 for manual_tracker in enabled_trackers:

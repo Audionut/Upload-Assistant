@@ -8,7 +8,7 @@ import aiofiles
 import cli_ui
 import langcodes
 
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 
 
@@ -262,8 +262,8 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
                                 audio_lang = cli_ui.ask_string('for all audio tracks, eg: English, Spanish:')
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
                             if audio_lang:
                                 audio_languages.extend([lang.strip() for lang in audio_lang.split(',')])
@@ -305,8 +305,8 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
                                     subtitle_lang = cli_ui.ask_string('for all subtitle tracks, eg: English, Spanish:')
                                 except EOFError:
                                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                    await cleanup()
-                                    reset_terminal()
+                                    await cleanup_manager.cleanup()
+                                    cleanup_manager.reset_terminal()
                                     sys.exit(1)
                                 if subtitle_lang:
                                     subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
@@ -331,8 +331,8 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
                                 hc_lang = cli_ui.ask_string("What language/s are the hardcoded subtitles?")
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
                             if hc_lang:
                                 meta['subtitle_languages'] = [hc_lang]
@@ -395,8 +395,8 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
                                 audio_language_set.discard(lang)
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                            await cleanup()
-                            reset_terminal()
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
                             sys.exit(1)
                     else:
                         audio_language_set.discard(lang)

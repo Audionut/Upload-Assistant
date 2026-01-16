@@ -18,7 +18,7 @@ from guessit import guessit
 
 from data.config import config
 from src.args import Args
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.imdb import get_imdb_info_api
 
@@ -518,8 +518,8 @@ async def get_tmdb_id(
                                 selection = cli_ui.ask_string("Or push enter to try a different search: ") or ""
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
                             try:
                                 # Check if it's a manual TMDb ID entry
@@ -712,8 +712,8 @@ async def get_tmdb_id(
         tmdb_input = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
     except EOFError:
         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-        await cleanup()
-        reset_terminal()
+        await cleanup_manager.cleanup()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     if tmdb_input is None:
         tmdb_input = ""

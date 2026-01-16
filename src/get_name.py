@@ -11,7 +11,7 @@ import guessit
 from typing_extensions import TypeAlias
 
 from data.config import config
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -478,6 +478,6 @@ async def _prompt_for_field(meta: Meta, field_name: str, is_mandatory: bool) -> 
         return value.upper() if value else "SKIPPED"
     except EOFError:
         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-        await cleanup()
-        reset_terminal()
+        await cleanup_manager.cleanup()
+        cleanup_manager.reset_terminal()
         sys.exit(1)

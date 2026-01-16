@@ -13,7 +13,7 @@ import requests
 
 from data.config import config
 from src.btnid import BtnIdManager
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackermeta import update_metadata_from_tracker
 from src.trackersetup import tracker_class_map
@@ -303,8 +303,8 @@ class TrackerDataManager:
                                             meta['matched_tracker'] = "BTN"
                                     except EOFError:
                                         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                        await cleanup()
-                                        reset_terminal()
+                                        await cleanup_manager.cleanup()
+                                        cleanup_manager.reset_terminal()
                                         sys.exit(1)
                                 else:
                                     if imdb != 0:
@@ -327,8 +327,8 @@ class TrackerDataManager:
                                         meta['matched_tracker'] = "ANT"
                                 except EOFError:
                                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                    await cleanup()
-                                    reset_terminal()
+                                    await cleanup_manager.cleanup()
+                                    cleanup_manager.reset_terminal()
                                     sys.exit(1)
                             else:
                                 for d in imdb_tmdb_list:

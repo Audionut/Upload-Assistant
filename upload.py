@@ -156,7 +156,7 @@ from cogs.redaction import Redaction  # noqa: E402
 from discordbot import DiscordNotifier  # noqa: E402
 from src.add_comparison import add_comparison  # noqa: E402
 from src.args import Args  # noqa: E402
-from src.cleanup import cleanup, reset_terminal  # noqa: E402
+from src.cleanup import cleanup_manager  # noqa: E402
 from src.clients import Clients  # noqa: E402
 from src.console import console  # noqa: E402
 from src.disc_menus import process_disc_menus  # noqa: E402
@@ -399,16 +399,16 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         confirm = await helper.get_confirmation(meta)
     except EOFError:
         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-        await cleanup()
-        reset_terminal()
+        await cleanup_manager.cleanup()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     while confirm is False:
         try:
             editargs_str = cli_ui.ask_string("Input args that need correction e.g. (--tag NTb --category tv --tmdb 12345)")
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            await cleanup()
-            reset_terminal()
+            await cleanup_manager.cleanup()
+            cleanup_manager.reset_terminal()
             sys.exit(1)
 
         if editargs_str == "continue":
@@ -449,8 +449,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             confirm = await helper.get_confirmation(meta)
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            await cleanup()
-            reset_terminal()
+            await cleanup_manager.cleanup()
+            cleanup_manager.reset_terminal()
             sys.exit(1)
 
     if meta.get('emby', False):
@@ -658,16 +658,16 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             raise Exception(f"Error during screenshot capture: {e}") from e
 
                     elif meta['is_disc'] == "DVD":
@@ -681,16 +681,16 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             raise Exception(f"Error during screenshot capture: {e}") from e
 
                     else:
@@ -705,17 +705,17 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             console.print(traceback.format_exc())
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
-                            await cleanup()
+                            await cleanup_manager.cleanup()
                             gc.collect()
-                            reset_terminal()
+                            cleanup_manager.reset_terminal()
                             if "workers" in str(e):
                                 console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
                             raise Exception(f"Error during screenshot capture: {e}") from e
@@ -723,22 +723,22 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 except asyncio.CancelledError as e:
                     await cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
-                    await cleanup()
+                    await cleanup_manager.cleanup()
                     gc.collect()
-                    reset_terminal()
+                    cleanup_manager.reset_terminal()
                     raise Exception("Error during screenshot capture") from e
                 except Exception as e:
                     await cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
-                    await cleanup()
+                    await cleanup_manager.cleanup()
                     gc.collect()
-                    reset_terminal()
+                    cleanup_manager.reset_terminal()
                     raise Exception("Error during screenshot capture") from e
                 finally:
                     await asyncio.sleep(0.1)
-                    await cleanup()
+                    await cleanup_manager.cleanup()
                     gc.collect()
-                    reset_terminal()
+                    cleanup_manager.reset_terminal()
 
                 if 'image_list' not in meta:
                     meta['image_list'] = []
@@ -879,7 +879,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     except Exception as e:
                         raise e
                     finally:
-                        reset_terminal()
+                        cleanup_manager.reset_terminal()
                         if meta['debug']:
                             console.print("[yellow]Cleaning up resources...[/yellow]")
                         gc.collect()
@@ -1285,7 +1285,7 @@ async def do_the_thing(base_dir: str) -> None:
 
             except Exception as e:
                 console.print(f"[red]Exception: '{path}': {e}")
-                reset_terminal()
+                cleanup_manager.reset_terminal()
 
             discord_bot_token = discord_config.get('discord_bot_token') if discord_config is not None else None
             only_unattended = bool(discord_config.get('only_unattended', False)) if discord_config is not None else False
@@ -1526,9 +1526,9 @@ async def do_the_thing(base_dir: str) -> None:
                         meta = await Redaction.clean_meta_for_export(meta)
                     except Exception as e:
                         console.print(f"[red]Error cleaning meta for export: {e}")
-                await cleanup()
+                await cleanup_manager.cleanup()
                 gc.collect()
-                reset_terminal()
+                cleanup_manager.reset_terminal()
                 break
 
             if sanitize_meta and not meta.get('emby', False):
@@ -1537,16 +1537,16 @@ async def do_the_thing(base_dir: str) -> None:
                     meta = await Redaction.clean_meta_for_export(meta)
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
-            await cleanup()
+            await cleanup_manager.cleanup()
             gc.collect()
-            reset_terminal()
+            cleanup_manager.reset_terminal()
 
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")
         if sanitize_meta:
             meta = await Redaction.clean_meta_for_export(meta)
         console.print(traceback.format_exc())
-        reset_terminal()
+        cleanup_manager.reset_terminal()
 
     finally:
         if bot is not None:
@@ -1556,7 +1556,7 @@ async def do_the_thing(base_dir: str) -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await connect_task
         if not sys.stdin.closed:
-            reset_terminal()
+            cleanup_manager.reset_terminal()
 
 
 async def process_cross_seeds(meta: Meta) -> None:
@@ -1790,7 +1790,7 @@ if __name__ == "__main__":
     except BaseException as e:
         console.print(f"[bold red]Critical error: {e}[/bold red]")
     finally:
-        asyncio.run(cleanup())
+        asyncio.run(cleanup_manager.cleanup())
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(0)

@@ -7,7 +7,7 @@ import sys
 
 import cli_ui
 
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.exportmi import mi_resolution
 
@@ -158,8 +158,8 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                                     filelist.remove(f)
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
         for file in filelist:
             if any(tag in file for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
@@ -169,8 +169,8 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                         pass
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
+                    await cleanup_manager.cleanup()
+                    cleanup_manager.reset_terminal()
                     sys.exit(1)
         try:
             video = sorted(filelist, key=os.path.getsize, reverse=True)[0] if sorted_filelist else sorted(filelist)[0]
@@ -188,8 +188,8 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                     pass
             except EOFError:
                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                await cleanup()
-                reset_terminal()
+                await cleanup_manager.cleanup()
+                cleanup_manager.reset_terminal()
                 sys.exit(1)
     filelist = sorted(filelist, key=os.path.getsize, reverse=True) if sorted_filelist else sorted(filelist)
     return video, filelist

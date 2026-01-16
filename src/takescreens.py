@@ -18,7 +18,7 @@ import psutil
 from pymediainfo import MediaInfo
 
 from data.config import config as _config
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 
 config: dict[str, Any] = _config
@@ -319,7 +319,7 @@ async def disc_screenshots(
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
 
 
 async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str, keyframe: str, loglevel: str, hdr_tonemap: bool, meta: dict[str, Any]) -> Optional[tuple[int, str]]:
@@ -690,7 +690,7 @@ async def dvd_screenshots(
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
 
 
 async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
@@ -1018,19 +1018,19 @@ async def screenshots(
         await kill_all_child_processes()
         console.print("[red]All tasks cancelled. Exiting.[/red]")
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     except asyncio.CancelledError:
         await asyncio.sleep(0.1)
         await kill_all_child_processes()
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     except Exception:
         await asyncio.sleep(0.1)
         await kill_all_child_processes()
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     finally:
         await asyncio.sleep(0.1)
@@ -1191,7 +1191,7 @@ async def screenshots(
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
 
     return valid_results if valid_results else None
 

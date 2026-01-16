@@ -10,7 +10,7 @@ import cli_ui
 
 from cogs.redaction import Redaction
 from data.config import config
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackersetup import tracker_class_map
 
@@ -113,8 +113,8 @@ class UploadHelper:
                                     meta['matched_episode_ids'] = []
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                            await cleanup()
-                            reset_terminal()
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
                             sys.exit(1)
 
                 if not meta.get('were_trumping', False):
@@ -135,8 +135,8 @@ class UploadHelper:
                                 meta['we_asked'] = True
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                            await cleanup()
-                            reset_terminal()
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
                             sys.exit(1)
                     elif dupes:
                         # Rebuild dupe_text in case dupes was filtered after trump decline
@@ -163,8 +163,8 @@ class UploadHelper:
                                 meta['we_asked'] = True
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
+                                await cleanup_manager.cleanup()
+                                cleanup_manager.reset_terminal()
                                 sys.exit(1)
                         else:
                             upload = True

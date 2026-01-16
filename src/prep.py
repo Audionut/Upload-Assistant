@@ -17,7 +17,7 @@ try:
     from src.apply_overrides import get_source_override
     from src.audio import get_audio_v2
     from src.bluray_com import get_bluray_releases
-    from src.cleanup import cleanup, reset_terminal
+    from src.cleanup import cleanup_manager
     from src.clients import Clients
     from src.console import console
     from src.edition import get_edition
@@ -381,8 +381,8 @@ class Prep:
                     upload = cli_ui.ask_yes_no("Found Conformance errors in mediainfo (possible cause: corrupted file, incomplete download, new codec, etc...), proceed to upload anyway?", default=False)
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
+                    await cleanup_manager.cleanup()
+                    cleanup_manager.reset_terminal()
                     sys.exit(1)
             if upload is False:
                 console.print("[red]Not uploading. Check if the file has finished downloading and can be played back properly (uncorrupted).")

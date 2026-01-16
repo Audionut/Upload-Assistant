@@ -11,7 +11,7 @@ import httpx
 from anitopy import parse as anitopy_parse
 from guessit import guessit
 
-from src.cleanup import cleanup, reset_terminal
+from src.cleanup import cleanup_manager
 from src.console import console
 
 
@@ -803,8 +803,8 @@ async def search_imdb(
                         selection = cli_ui.ask_string("Enter the number of the correct entry, 0 for none, or manual IMDb ID (tt1234567): ") or ""
                     except (EOFError, KeyboardInterrupt):
                         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                        await cleanup()
-                        reset_terminal()
+                        await cleanup_manager.cleanup()
+                        cleanup_manager.reset_terminal()
                         sys.exit(1)
                     try:
                         # Check if it's a manual IMDb ID entry
@@ -843,8 +843,8 @@ async def search_imdb(
                     selection = cli_ui.ask_string("No results found. Please enter a manual IMDb ID (tt1234567) or 0 to skip: ") or ""
                 except (EOFError, KeyboardInterrupt):
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                    await cleanup()
-                    reset_terminal()
+                    await cleanup_manager.cleanup()
+                    cleanup_manager.reset_terminal()
                     sys.exit(1)
                 if selection.lower().startswith('tt') and len(selection) >= 3:
                     try:
