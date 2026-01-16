@@ -2,7 +2,7 @@
 import asyncio
 import os
 import traceback
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 
 import aiohttp
 import qbittorrentapi
@@ -21,24 +21,18 @@ class Wait:
         self.qbt_client = self._connect_qbittorrent()
 
     def _connect_qbittorrent(self) -> Optional[qbittorrentapi.Client]:
-        if not isinstance(config, dict):
-            raise TypeError("config must be a dictionary")
-
-        default_section = config.get('DEFAULT', {})
-        if not isinstance(default_section, dict):
-            raise TypeError("DEFAULT section must be a dictionary")
-
-        clients_section = config.get('TORRENT_CLIENTS', {})
-        if not isinstance(clients_section, dict):
-            raise TypeError("TORRENT_CLIENTS section must be a dictionary")
+        config_map = cast(dict[str, Any], config)
+        default_section = cast(dict[str, Any], config_map.get('DEFAULT', {}))
+        clients_section = cast(dict[str, Any], config_map.get('TORRENT_CLIENTS', {}))
 
         default_torrent_client = default_section.get('default_torrent_client', '')
         if not isinstance(default_torrent_client, str) or not default_torrent_client:
             raise ValueError("DEFAULT.default_torrent_client is not configured")
 
-        client = clients_section.get(default_torrent_client)
-        if not isinstance(client, dict):
+        client_obj = clients_section.get(default_torrent_client)
+        if not isinstance(client_obj, dict):
             raise ValueError(f"No torrent client configuration for '{default_torrent_client}'")
+        client = cast(dict[str, Any], client_obj)
 
         proxy_value = client.get('qui_proxy_url')
         self.proxy_url = proxy_value if isinstance(proxy_value, str) and proxy_value else None
@@ -59,11 +53,26 @@ class Wait:
             verify_cert_value = client.get('VERIFY_WEBUI_CERTIFICATE', True)
             verify_cert = verify_cert_value.strip().lower() in {'1', 'true', 'yes'} if isinstance(verify_cert_value, str) else bool(verify_cert_value)
 
+            host = str(client.get('qbit_url', '')).strip()
+            if not host:
+                raise ValueError("qbit_url is not configured")
+            port_value = client.get('qbit_port')
+            if isinstance(port_value, (int, str)):
+                port: Optional[Union[int, str]] = port_value
+            elif port_value is None:
+                port = None
+            else:
+                port = str(port_value)
+            username_value = client.get('qbit_user')
+            password_value = client.get('qbit_pass')
+            username = str(username_value) if username_value is not None else None
+            password = str(password_value) if password_value is not None else None
+
             qbt_client = qbittorrentapi.Client(
-                host=client['qbit_url'],
-                port=client['qbit_port'],
-                username=client['qbit_user'],
-                password=client['qbit_pass'],
+                host=host,
+                port=port,
+                username=username,
+                password=password,
                 VERIFY_WEBUI_CERTIFICATE=verify_cert
             )
 
@@ -73,7 +82,7 @@ class Wait:
             except qbittorrentapi.LoginFailed as e:
                 raise RuntimeError(f"qBittorrent login failed: {e}") from e
 
-    async def wait_for_completion(self, infohash, check_interval=3):
+    async def wait_for_completion(self, infohash: str, check_interval: int = 3) -> None:
         if not self.proxy_url and not self.qbt_client:
             raise Exception("[ERROR] qBittorrent is not configured.")
 
@@ -81,8 +90,6 @@ class Wait:
 
         if self.proxy_url:
             self.qbt_session = aiohttp.ClientSession()
-            if self.qbt_session is None:
-                raise RuntimeError("Failed to create aiohttp ClientSession")
 
         try:
             while True:
@@ -94,7 +101,7 @@ class Wait:
                         params={'hashes': infohash}
                     ) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            torrents_data = cast(list[dict[str, Any]], await response.json())
                             target_torrent = torrents_data[0] if torrents_data else None
                         else:
                             print(f"[ERROR] Failed to get torrent info via proxy: {response.status}")
@@ -106,10 +113,15 @@ class Wait:
                     target_torrent = next((t for t in torrents if t.hash == infohash), None)
 
                 if target_torrent:
-                    state = target_torrent.get('state') if self.proxy_url else target_torrent.state
-                    print(f"[DEBUG] Torrent {infohash} state: {state}")
+                    if self.proxy_url:
+                        target_dict = cast(dict[str, Any], target_torrent)
+                        state_value = target_dict.get('state')
+                    else:
+                        state_value = getattr(target_torrent, 'state', None)
+                    state_str = str(state_value) if state_value is not None else 'unknown'
+                    print(f"[DEBUG] Torrent {infohash} state: {state_str}")
 
-                    if state in {'pausedUP', 'seeding', 'completed', 'stalledUP', 'uploading'}:
+                    if state_str in {'pausedUP', 'seeding', 'completed', 'stalledUP', 'uploading'}:
                         print(f"[INFO] Torrent {infohash} has completed!")
                         return
                 else:
@@ -130,6 +142,11 @@ class Wait:
         if not isinstance(torrent_comments, list):
             console.print("[red]No torrent comments found in metadata[/red]")
             return False
+        torrent_comments_list: list[dict[str, Any]] = [
+            cast(dict[str, Any], tc)
+            for tc in cast(list[Any], torrent_comments)
+            if isinstance(tc, dict)
+        ]
 
         target_path = path
         if not target_path:
@@ -143,15 +160,15 @@ class Wait:
         else:
             meta_name = meta.get('name')
             meta_name_lower = meta_name.lower() if isinstance(meta_name, str) else None
-            for tc in torrent_comments:
-                if not isinstance(tc, dict):
-                    continue
-                content_path = tc.get('content_path', '')
+            for tc in torrent_comments_list:
+                content_path = str(tc.get('content_path', '') or '')
 
                 if not tc.get('has_working_tracker', False):
                     continue
-
-                if content_path and isinstance(content_path, str) and os.path.normpath(content_path).lower() == os.path.normpath(target_path).lower() or tc.get('name') and meta_name_lower and isinstance(tc.get('name'), str) and tc['name'].lower() == meta_name_lower:
+                tc_name = tc.get('name')
+                matches_path = bool(content_path) and os.path.normpath(content_path).lower() == os.path.normpath(target_path).lower()
+                matches_name = isinstance(tc_name, str) and meta_name_lower is not None and tc_name.lower() == meta_name_lower
+                if matches_path or matches_name:
                     matching_torrents.append(tc)
 
             if not matching_torrents:
@@ -215,7 +232,7 @@ class Wait:
                         params={'hashes': torrent_hash}
                     ) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            torrents_data = cast(list[dict[str, Any]], await response.json())
                             if torrents_data:
                                 torrent = torrents_data[0]
                                 state = torrent.get('state')
@@ -237,7 +254,12 @@ class Wait:
                     torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                     if torrent_list_raw is None:
                         raise Exception("qBittorrent returned no torrent info")
-                    torrent_candidates = list(torrent_list_raw) if isinstance(torrent_list_raw, (list, tuple)) else [torrent_list_raw]
+                    if isinstance(torrent_list_raw, list):
+                        torrent_candidates = cast(list[Any], torrent_list_raw)
+                    elif isinstance(torrent_list_raw, tuple):
+                        torrent_candidates = list(cast(tuple[Any, ...], torrent_list_raw))
+                    else:
+                        torrent_candidates = [torrent_list_raw]
                     if not torrent_candidates:
                         raise Exception("No torrents found in TorrentInfoList")
                     torrent = torrent_candidates[0]
@@ -267,7 +289,7 @@ class Wait:
                     params={'hashes': torrent_hash}
                 ) as response:
                     if response.status == 200:
-                        torrents_data = await response.json()
+                        torrents_data = cast(list[dict[str, Any]], await response.json())
                         if torrents_data:
                             torrent = torrents_data[0]
                             final_state = torrent.get('state')
@@ -284,7 +306,12 @@ class Wait:
                 torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                 if torrent_list_raw is None:
                     raise Exception("qBittorrent returned no torrent info")
-                torrent_candidates = list(torrent_list_raw) if isinstance(torrent_list_raw, (list, tuple)) else [torrent_list_raw]
+                if isinstance(torrent_list_raw, list):
+                    torrent_candidates = cast(list[Any], torrent_list_raw)
+                elif isinstance(torrent_list_raw, tuple):
+                    torrent_candidates = list(cast(tuple[Any, ...], torrent_list_raw))
+                else:
+                    torrent_candidates = [torrent_list_raw]
                 if not torrent_candidates:
                     raise Exception("No torrents found in TorrentInfoList")
                 torrent = torrent_candidates[0]
