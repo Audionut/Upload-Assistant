@@ -27,10 +27,9 @@ def validate_file_path(file_path: str) -> str:
         raise ValueError(f"File does not exist: {path}")
 
     # Ensure it's a file (not a directory, unless specifically allowed)
-    if not path.is_file():
-        # Allow directories for DVD/Blu-ray structures
-        if not path.is_dir():
-            raise ValueError(f"Path is neither a file nor directory: {path}")
+    # Allow directories for DVD/Blu-ray structures
+    if not path.is_file() and not path.is_dir():
+        raise ValueError(f"Path is neither a file nor directory: {path}")
 
     # Convert back to string
     return str(path)
@@ -197,9 +196,7 @@ async def exportInfo(
         raw_tracks = media_dict.get("track", [])
         tracks: list[dict[str, Any]] = []
         if isinstance(raw_tracks, list):
-            for item in raw_tracks:
-                if isinstance(item, dict):
-                    tracks.append(item)
+            tracks.extend(item for item in raw_tracks if isinstance(item, dict))
 
         media_tracks: list[dict[str, Any]] = []
         media_section: dict[str, Any] = {
