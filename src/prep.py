@@ -31,9 +31,9 @@ try:
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
     from src.metadata_searching import all_ids, get_tv_data, get_tvmaze_tvdb, imdb_tmdb, imdb_tmdb_tvdb, imdb_tvdb
-    from src.radarr import get_radarr_data
+    from src.radarr import radarr_manager
     from src.region import get_distributor, get_region, get_service
-    from src.sonarr import get_sonarr_data
+    from src.sonarr import sonarr_manager
     from src.tags import get_tag, tag_override
     from src.tmdb import get_tmdb_from_imdb, get_tmdb_id, get_tmdb_imdb_from_mediainfo, set_tmdb_metadata
     from src.tvdb import tvdb_data
@@ -532,7 +532,7 @@ class Prep:
         ids = None
         if not meta.get('skip_trackers', False):
             if meta.get('category') == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
-                ids = await get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename'), debug=meta.get('debug', False))
+                ids = await sonarr_manager.get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename'), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"TVDB ID: {ids['tvdb_id']}")
@@ -558,7 +558,7 @@ class Prep:
                     ids = None
 
             if meta.get('category') == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
-                ids = await get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
+                ids = await radarr_manager.get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"IMDB ID: {ids['imdb_id']}")
@@ -590,7 +590,7 @@ class Prep:
                 await tracker_data_manager.get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-                ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
+                ids = await sonarr_manager.get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"TVDB ID: {ids['tvdb_id']}")
@@ -614,7 +614,7 @@ class Prep:
                     ids = None
 
             if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-                ids = await get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
+                ids = await radarr_manager.get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"IMDB ID: {ids['imdb_id']}")
