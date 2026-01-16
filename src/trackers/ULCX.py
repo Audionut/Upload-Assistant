@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from typing import Any
 
 import aiofiles
 import cli_ui
@@ -8,9 +9,12 @@ from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class ULCX(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='ULCX')
         self.config = config
         self.tracker = 'ULCX'
@@ -28,7 +32,7 @@ class ULCX(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if 'concert' in meta['keywords']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -69,14 +73,14 @@ class ULCX(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: Meta) -> dict[str, str]:
         desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
@@ -84,7 +88,7 @@ class ULCX(UNIT3D):
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             pattern = r'(\[center\](?:\s*\[url=[^\]]+\]\[img(?:=[0-9]+)?\][^\]]+\[/img\]\[/url\]\s*)+\[/center\])'
 
-            def wrap_in_spoiler(match):
+            def wrap_in_spoiler(match: re.Match[str]) -> str:
                 center_block = match.group(1)
                 return f'[center][spoiler=Screenshots]{center_block}[/spoiler][/center]'
 
@@ -94,7 +98,7 @@ class ULCX(UNIT3D):
 
         return {'description': desc}
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))

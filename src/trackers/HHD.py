@@ -1,14 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
+from typing import Any, Optional
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class HHD(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='HHD')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'HHD'
         self.base_url = 'https://homiehelpdesk.net'
@@ -27,7 +32,7 @@ class HHD(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if meta['type'] == "DVDRIP":
             console.print("[bold red]DVDRIP uploads are not allowed on HHD.[/bold red]")
@@ -35,7 +40,13 @@ class HHD(UNIT3D):
 
         return should_continue
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

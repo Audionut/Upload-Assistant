@@ -3,7 +3,7 @@ import json
 import os
 import re
 import unicodedata
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import httpx
@@ -30,6 +30,7 @@ class GPW:
         self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
         self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
         self.auth_token = None
+        self.tmdb_data: dict[str, Any] = {}
         self.banned_groups = [
             'ALT', 'aXXo', 'BATWEB', 'BlackTV', 'BitsTV', 'BMDRu', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'CTRLHD',
             'DDHDTV', 'DNL', 'DreamHD', 'ENTHD', 'FaNGDiNG0', 'FGT', 'FRDS', 'HD2DVD', 'HDTime',
@@ -57,14 +58,15 @@ class GPW:
 
     async def load_localized_data(self, meta: dict[str, Any]) -> None:
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
-        main_ch_data = {}
-        data = {}
+        main_ch_data: dict[str, Any] = {}
+        data: dict[str, Any] = {}
 
         if os.path.isfile(localized_data_file):
             try:
                 async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
-                    data = json.loads(content)
+                    loaded_data = json.loads(content)
+                    data = cast(dict[str, Any], loaded_data) if isinstance(loaded_data, dict) else {}
             except json.JSONDecodeError:
                 print(f'Warning: Could not decode JSON from {localized_data_file}')
                 data = {}
@@ -72,15 +74,20 @@ class GPW:
                 print(f'Error reading file {localized_data_file}: {e}')
                 data = {}
 
-        main_ch_data = data.get('zh-cn', {}).get('main')
+        ch_data = data.get('zh-cn')
+        if isinstance(ch_data, dict):
+            ch_dict = cast(dict[str, Any], ch_data)
+            main_value = ch_dict.get('main')
+            main_ch_data = cast(dict[str, Any], main_value) if isinstance(main_value, dict) else {}
 
         if not main_ch_data:
-            main_ch_data = await tmdb_manager.get_tmdb_localized_data(
+            localized_main = await tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='zh-cn',
                 append_to_response='credits'
             )
+            main_ch_data = localized_main or {}
 
         self.tmdb_data = main_ch_data
 
@@ -102,18 +109,23 @@ class GPW:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        found_language_strings = meta.get('subtitle_languages', [])
-
-        if found_language_strings:
-            return [lang.lower() for lang in found_language_strings]
-        else:
+        found_language_strings_raw = meta.get('subtitle_languages')
+        if not isinstance(found_language_strings_raw, list):
             return []
+
+        found_language_strings_list = cast(list[Any], found_language_strings_raw)
+        found_language_strings = [lang for lang in found_language_strings_list if isinstance(lang, str)]
+        return [lang.lower() for lang in found_language_strings]
 
     async def get_ch_dubs(self, meta: dict[str, Any]) -> bool:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        found_language_strings = meta.get('audio_languages', [])
+        found_language_strings_raw = meta.get('audio_languages')
+        if not isinstance(found_language_strings_raw, list):
+            return False
+        found_language_strings_list = cast(list[Any], found_language_strings_raw)
+        found_language_strings = [lang for lang in found_language_strings_list if isinstance(lang, str)]
 
         chinese_languages = {'mandarin', 'chinese', 'zh', 'zh-cn', 'zh-hans', 'zh-hant', 'putonghua', '国语', '普通话'}
         return any(lang.strip().lower() in chinese_languages for lang in found_language_strings)
@@ -177,7 +189,8 @@ class GPW:
         return 'Outro'
 
     async def get_title(self, meta: dict[str, Any]) -> str:
-        title = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
+        title_value = self.tmdb_data.get('name') or self.tmdb_data.get('title') or ''
+        title = title_value if isinstance(title_value, str) else ''
 
         return title if title and title != meta.get('title') else ''
 
@@ -188,10 +201,11 @@ class GPW:
 
     async def get_release_desc(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        custom_header = await builder.get_custom_header()
+        desc_parts.append(custom_header)
 
         # Logo
         logo, logo_size = await builder.get_logo_section(meta)
@@ -199,36 +213,55 @@ class GPW:
             desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
 
         # NFO
-        if meta.get('description_nfo_content', ''):
-            desc_parts.append(f"[pre]{meta.get('description_nfo_content')}[/pre]")
+        nfo_content = meta.get('description_nfo_content')
+        if isinstance(nfo_content, str) and nfo_content:
+            desc_parts.append(f"[pre]{nfo_content}[/pre]")
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        user_description = await builder.get_user_description(meta)
+        desc_parts.append(user_description)
 
         # Disc menus screenshots header
-        desc_parts.append(await builder.menu_screenshot_header(meta))
+        menu_header = await builder.menu_screenshot_header(meta)
+        desc_parts.append(menu_header)
 
         # Disc menus screenshots
-        menu_images = meta.get(f'{self.tracker}_menu_images_key', []) if f'{self.tracker}_menu_images_key' in meta else meta.get('menu_images', [])
-        if menu_images:
+        menu_key = f'{self.tracker}_menu_images_key'
+        menu_images_value = meta.get(menu_key) if menu_key in meta else meta.get('menu_images', [])
+        if isinstance(menu_images_value, list) and menu_images_value:
             menu_screenshots_block = ''
-            for image in menu_images:
-                menu_screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            menu_images_list = cast(list[Any], menu_images_value)
+            for image in menu_images_list:
+                if not isinstance(image, dict):
+                    continue
+                image_dict = cast(dict[str, Any], image)
+                raw_url = image_dict.get('raw_url')
+                if isinstance(raw_url, str) and raw_url:
+                    menu_screenshots_block += f"[img]{raw_url}[/img]\n"
             desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header())
+        screenshot_header = await builder.screenshot_header()
+        desc_parts.append(screenshot_header)
 
         # Screenshots
-        images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
-        if images:
+        images_key = f'{self.tracker}_images_key'
+        images_value = meta.get(images_key) if images_key in meta else meta.get('image_list', [])
+        if isinstance(images_value, list) and images_value:
             screenshots_block = ''
-            for image in images:
-                screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            images_list = cast(list[Any], images_value)
+            for image in images_list:
+                if not isinstance(image, dict):
+                    continue
+                image_dict = cast(dict[str, Any], image)
+                raw_url = image_dict.get('raw_url')
+                if isinstance(raw_url, str) and raw_url:
+                    screenshots_block += f"[img]{raw_url}[/img]\n"
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        tonemapped_header = await builder.get_tonemapped_header(meta)
+        desc_parts.append(tonemapped_header)
 
         # Signature
         desc_parts.append(f"[align=right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/align]")
@@ -248,12 +281,24 @@ class GPW:
         return description
 
     async def get_trailer(self, meta: dict[str, Any]) -> str:
-        video_results = self.tmdb_data.get('videos', {}).get('results', [])
+        video_results: list[dict[str, Any]] = []
+        videos = self.tmdb_data.get('videos')
+        if isinstance(videos, dict):
+            videos_dict = cast(dict[str, Any], videos)
+            results = videos_dict.get('results')
+            if isinstance(results, list):
+                results_list = cast(list[Any], results)
+                video_results.extend(
+                    cast(dict[str, Any], result)
+                    for result in results_list
+                    if isinstance(result, dict)
+                )
 
         youtube = ''
 
         if video_results:
-            youtube = video_results[-1].get('key', '')
+            youtube_value = video_results[-1].get('key', '')
+            youtube = youtube_value if isinstance(youtube_value, str) else ''
 
         if not youtube:
             meta_trailer = meta.get('youtube', '')
@@ -293,7 +338,9 @@ class GPW:
         if not group_id:
             return []
 
-        imdb = meta.get("imdb_info", {}).get("imdbID")
+        imdb_info = meta.get("imdb_info", {})
+        imdb_info_dict = cast(dict[str, Any], imdb_info) if isinstance(imdb_info, dict) else {}
+        imdb = imdb_info_dict.get("imdbID")
 
         cookies = await self.load_cookies(meta)
         if not cookies:
@@ -303,17 +350,23 @@ class GPW:
                     response = await client.get(search_url)
                     response.raise_for_status()
                     data = response.json()
+                    data_dict = cast(dict[str, Any], data) if isinstance(data, dict) else {}
 
-                    if data.get('status') == 200 and 'response' in data:
-                        results = []
-                        for item in data['response']:
-                            name = item.get('Name', '')
-                            year = item.get('Year', '')
-                            resolution = item.get('Resolution', '')
-                            source = item.get('Source', '')
-                            processing = item.get('Processing', '')
-                            remaster = item.get('RemasterTitle', '')
-                            codec = item.get('Codec', '')
+                    if data_dict.get('status') == 200 and 'response' in data_dict:
+                        results: list[str] = []
+                        response_list_raw = data_dict.get('response')
+                        response_list = cast(list[Any], response_list_raw) if isinstance(response_list_raw, list) else []
+                        for item in response_list:
+                            if not isinstance(item, dict):
+                                continue
+                            item_dict = cast(dict[str, Any], item)
+                            name = item_dict.get('Name', '')
+                            year = item_dict.get('Year', '')
+                            resolution = item_dict.get('Resolution', '')
+                            source = item_dict.get('Source', '')
+                            processing = item_dict.get('Processing', '')
+                            remaster = item_dict.get('RemasterTitle', '')
+                            codec = item_dict.get('Codec', '')
 
                             formatted = f'{name} {year} {resolution} {source} {processing} {remaster} {codec}'.strip()
                             formatted = re.sub(r'\s{2,}', ' ', formatted)
@@ -326,8 +379,9 @@ class GPW:
             return []
 
         else:
-            search_url = f'{self.base_url}/torrents.php?groupname={imdb.upper()}'  # using TT in imdb returns the search page instead of redirecting to the group page
-            found_items = []
+            imdb_value = str(imdb or '')
+            search_url = f'{self.base_url}/torrents.php?groupname={imdb_value.upper()}'  # using TT in imdb returns the search page instead of redirecting to the group page
+            found_items: list[dict[str, Any]] = []
 
             try:
                 async with httpx.AsyncClient(cookies=cookies, timeout=30, headers={'User-Agent': 'Upload Assistant/2.3'}) as client:
@@ -407,7 +461,7 @@ class GPW:
                 if slot_type_tag:
                     resolution = slot_type_tag.get_text(strip=True).replace('empty slots:', '').strip()
 
-            slot_names = []
+            slot_names: list[str] = []
 
             i_tags = row.find_all('i')
             for tag in i_tags:
@@ -503,21 +557,37 @@ class GPW:
         return None
 
     async def get_screens(self, meta: dict[str, Any]) -> list[str]:
-        screenshot_urls = [
-            image.get('raw_url')
-            for image in meta.get('image_list', [])
-            if image.get('raw_url')
-        ]
+        images_value = meta.get('image_list', [])
+        images_list: list[Any] = cast(list[Any], images_value) if isinstance(images_value, list) else []
+        screenshot_urls: list[str] = []
+        for image in images_list:
+            if not isinstance(image, dict):
+                continue
+            image_dict = cast(dict[str, Any], image)
+            raw_url = image_dict.get('raw_url')
+            if isinstance(raw_url, str) and raw_url:
+                screenshot_urls.append(raw_url)
 
         return screenshot_urls
 
     async def get_credits(self, meta: dict[str, Any]) -> str:
-        director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
-        if director:
-            unique_names = list(dict.fromkeys(director))[:5]
+        director_entries: list[str] = []
+
+        imdb_directors = meta.get('imdb_info', {}).get('directors')
+        if isinstance(imdb_directors, list):
+            imdb_directors_list = cast(list[Any], imdb_directors)
+            director_entries.extend(name for name in imdb_directors_list if isinstance(name, str))
+
+        tmdb_directors = meta.get('tmdb_directors')
+        if isinstance(tmdb_directors, list):
+            tmdb_directors_list = cast(list[Any], tmdb_directors)
+            director_entries.extend(name for name in tmdb_directors_list if isinstance(name, str))
+
+        if director_entries:
+            unique_names = list(dict.fromkeys(director_entries))[:5]
             return ', '.join(unique_names)
-        else:
-            return 'N/A'
+
+        return 'N/A'
 
     async def get_remaster_title(self, meta: dict[str, Any]) -> Union[str, tuple[str, str]]:
         found_tags: list[str] = []
@@ -652,10 +722,8 @@ class GPW:
         if imdb_info:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie', 'video'):
-                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
-                    movie_type = '1'  # Feature Film
-                else:
-                    movie_type = '2'  # Short Film
+                runtime = int(imdb_info.get('runtime', '60'))
+                movie_type = '1' if runtime >= 45 or runtime == 0 else '2'  # Feature Film/Short Film
 
         return movie_type
 
@@ -703,12 +771,12 @@ class GPW:
         return type_map.get(release_type, 'Untouched')
 
     def get_media_flags(self, meta: dict[str, Any]) -> dict[str, str]:
-        audio = meta.get('audio', '').lower()
-        hdr = meta.get('hdr', '')
-        bit_depth = meta.get('bit_depth', '')
-        channels = meta.get('channels', '')
+        audio = str(meta.get('audio', '')).lower()
+        hdr = str(meta.get('hdr', ''))
+        bit_depth = str(meta.get('bit_depth', ''))
+        channels = str(meta.get('channels', ''))
 
-        flags = {}
+        flags: dict[str, str] = {}
 
         # audio flags
         if 'atmos' in audio:
@@ -742,7 +810,7 @@ class GPW:
         container = await self.get_container(meta)
         groupid = await self.get_groupid(meta)
 
-        data = {}
+        data: dict[str, Any] = {}
 
         if not groupid:
             console.print(f'{self.tracker}: This movie is not registered in the database, please enter additional information.')

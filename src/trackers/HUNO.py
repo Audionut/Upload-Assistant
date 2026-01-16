@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 import aiofiles
 
@@ -141,9 +141,12 @@ class HUNO(UNIT3D):
 
     async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = 0
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                internal = 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', []))
+        ):
+            internal = 1
 
         return {'internal': str(internal)}
 
@@ -159,7 +162,8 @@ class HUNO(UNIT3D):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta.get('audio_languages')
         if isinstance(audio_languages, list):
-            normalized_languages = {str(lang) for lang in audio_languages}
+            audio_languages_list = cast(list[Any], audio_languages)
+            normalized_languages = {str(lang) for lang in audio_languages_list}
             if "zxx" in normalized_languages:
                 languages_result = "NONE"
             elif len(normalized_languages) > 2:

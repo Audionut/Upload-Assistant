@@ -470,7 +470,7 @@ class UNIT3D:
             timeout = 40.0
 
             for attempt in range(max_retries):
-                try:
+                try:  # noqa: PERF203
                     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
                         response = await client.post(
                             url=self.upload_url, files=files, data=data, headers=headers
@@ -497,7 +497,7 @@ class UNIT3D:
                         )
                         return True  # Success
 
-                except httpx.HTTPStatusError as e:
+                except httpx.HTTPStatusError as e:  # noqa: PERF203
                     if e.response.status_code in [403, 302]:
                         # Don't retry auth/permission errors
                         if e.response.status_code == 403:

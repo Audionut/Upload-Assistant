@@ -1,17 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import re
+from typing import Any, Optional
 
 import aiofiles
 
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class LCD(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='LCD')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'LCD'
         self.base_url = 'https://locadora.cc'
@@ -22,8 +26,9 @@ class LCD(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_name(self, meta):
-        name = meta.get('name') if meta.get('is_disc', '') == 'BDMV' else meta['uuid']
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        name_value = meta.get('name', '') if meta.get('is_disc', '') == 'BDMV' else meta.get('uuid', '')
+        name = str(name_value)
 
         replacements = {
             '.mkv': '',
@@ -57,27 +62,28 @@ class LCD(UNIT3D):
         for old, new in replacements.items():
             name = name.replace(old, new)
 
-        tag_lower = meta['tag'].lower()
+        tag_lower = str(meta.get('tag', '')).lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+        if meta.get('tag') == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
                 name = re.sub(f"-{invalid_tag}", "", name, flags=re.IGNORECASE)
             name = f'{name}-NoGroup'
 
         return {'name': name}
 
-    async def get_region_id(self, meta):
+    async def get_region_id(self, meta: Meta) -> dict[str, str]:
         if meta.get('region') == 'EUR':
             return {}
 
-        region_id = await self.common.unit3d_region_ids(meta.get('region'))
+        region_value = str(meta.get('region', ''))
+        region_id = await self.common.unit3d_region_ids(region_value)
         if region_id:
             return {'region_id': region_id}
 
         return {}
 
-    async def get_mediainfo(self, meta):
-        if meta['bdinfo'] is not None:
+    async def get_mediainfo(self, meta: Meta) -> dict[str, str]:
+        if meta.get('bdinfo') is not None:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
@@ -85,7 +91,13 @@ class LCD(UNIT3D):
 
         return {'mediainfo': mediainfo}
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -95,7 +107,13 @@ class LCD(UNIT3D):
             category_id = '6'
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -106,7 +124,13 @@ class LCD(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
             # '8640p':'10',
             '4320p': '1',

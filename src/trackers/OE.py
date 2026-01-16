@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
+from typing import Any, Optional, cast
 
 import aiofiles
 
@@ -11,11 +12,14 @@ from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class OE(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='OE')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'OE'
         self.base_url = 'https://onlyencodes.cc'
@@ -41,7 +45,7 @@ class OE(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
@@ -51,7 +55,7 @@ class OE(UNIT3D):
 
         return not (meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True))
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: Meta) -> None:
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -65,7 +69,7 @@ class OE(UNIT3D):
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
         return
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: Meta) -> dict[str, str]:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
             base = await f.read()
 
@@ -88,20 +92,21 @@ class OE(UNIT3D):
                             await descfile.write(f"{each['name']}:\n")
                             await descfile.write(f"[spoiler={os.path.basename(each['largest_evo'])}][code][{each['evo_mi']}[/code][/spoiler]\n\n")
 
-            desc = base
-            desc = bbcode.convert_pre_to_code(desc)
-            desc = bbcode.convert_hide_to_spoiler(desc)
-            desc = bbcode.convert_comparison_to_collapse(desc, 1000)
+            desc = str(base)
+            desc = str(bbcode.convert_pre_to_code(desc))
+            desc = str(bbcode.convert_hide_to_spoiler(desc))
+            desc = str(bbcode.convert_comparison_to_collapse(desc, 1000))
             try:
-                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                    desc = desc + tonemapped_header
+                tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                if meta.get('tonemapped', False) and tonemapped_header:
+                    desc = desc + str(tonemapped_header)
                     desc = desc + "\n\n"
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
             desc = desc.replace('[img]', '[img=300]')
             await descfile.write(desc)
-            images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
+            images_value = meta.get(f'{self.tracker}_images_key', meta.get('image_list', []))
+            images = cast(list[dict[str, Any]], images_value) if isinstance(images_value, list) else []
             if len(images) > 0:
                 await descfile.write("[center]")
                 for each in range(len(images[:int(meta['screens'])])):
@@ -117,20 +122,21 @@ class OE(UNIT3D):
 
         return {'description': desc}
 
-    async def get_name(self, meta):
-        oe_name = meta.get('name')
-        resolution = meta.get('resolution')
-        video_encode = meta.get('video_encode')
-        name_type = meta.get('type', "")
-        source = meta.get('source', "")
-        audio = meta.get('audio', "")
-        video_codec = meta.get('video_codec', "")
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        oe_name = str(meta.get('name', ''))
+        resolution = str(meta.get('resolution', ''))
+        video_encode = str(meta.get('video_encode', ''))
+        name_type = str(meta.get('type', ""))
+        source = str(meta.get('source', ""))
+        audio = str(meta.get('audio', ""))
+        video_codec = str(meta.get('video_codec', ""))
 
-        imdb_name = meta.get('imdb_info', {}).get('title', "")
-        imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
-        imdb_aka = meta.get('imdb_info', {}).get('aka', "")
+        imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+        imdb_name = str(imdb_info.get('title', ""))
+        imdb_year = str(imdb_info.get('year', ""))
+        imdb_aka = str(imdb_info.get('aka', ""))
         year = str(meta.get('year', ""))
-        aka = meta.get('aka', "")
+        aka = str(meta.get('aka', ""))
         if imdb_name and imdb_name.strip():
             if aka:
                 oe_name = oe_name.replace(f"{aka} ", "", 1)
@@ -153,28 +159,37 @@ class OE(UNIT3D):
         if not meta.get('audio_languages'):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
         elif meta.get('audio_languages'):
-            audio_languages = meta['audio_languages']
+            audio_languages_value = meta.get('audio_languages', [])
+            audio_languages = cast(list[str], audio_languages_value) if isinstance(audio_languages_value, list) else []
             if audio_languages and not await languages_manager.has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
-                foreign_lang = meta['audio_languages'][0].upper()
+                foreign_lang = str(audio_languages[0]).upper()
                 oe_name = oe_name.replace(f"{resolution}", f"{foreign_lang} {resolution}", 1)
 
-        scale = "DS4K" if "DS4K" in meta['uuid'].upper() else "RM4K" if "RM4K" in meta['uuid'].upper() else ""
+        uuid_value = str(meta.get('uuid', ''))
+        scale = "DS4K" if "DS4K" in uuid_value.upper() else "RM4K" if "RM4K" in uuid_value.upper() else ""
         if name_type in ["ENCODE", "WEBDL", "WEBRIP"] and scale != "":
             oe_name = oe_name.replace(f"{resolution}", f"{scale}", 1)
 
-        tag_lower = meta['tag'].lower()
+        tag_value = str(meta.get('tag', ''))
+        tag_lower = tag_value.lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+        if tag_value == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
                 oe_name = re.sub(f"-{invalid_tag}", "", oe_name, flags=re.IGNORECASE)
             oe_name = f"{oe_name}-NOGRP"
 
         return {'name': oe_name}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
-        video_codec = meta.get('video_codec', 'N/A')
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        video_codec = str(meta.get('video_codec', 'N/A'))
 
-        meta_type = meta['type']
+        meta_type = str(meta['type'])
         if meta_type == "DVDRIP":
             meta_type = "ENCODE"
 

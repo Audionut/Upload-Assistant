@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import cli_ui
@@ -7,6 +8,9 @@ import httpx
 
 from src.console import console
 from src.trackers.COMMON import COMMON
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class NBL:
@@ -18,13 +22,13 @@ class NBL:
         Upload
     """
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
         self.tracker = 'NBL'
         self.source_flag = 'NBL'
         self.upload_url = 'https://nebulance.io/upload.php'
         self.search_url = 'https://nebulance.io/api.php'
-        self.api_key = self.config['TRACKERS'][self.tracker]['api_key'].strip()
+        self.api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         self.banned_groups = ['0neshot', '3LTON', '4yEo', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time', 'AnimeRG', 'AniURL', 'ASW', 'BakedFish',
                               'bonkai77', 'Cleo', 'DeadFish', 'DeeJayAhmed', 'ELiTE', 'EMBER', 'eSc', 'EVO', 'FGT', 'FUM', 'GERMini', 'HAiKU', 'Hi10', 'ION10',
                               'JacobSwaggedUp', 'JIVE', 'Judas', 'LOAD', 'MeGusta', 'Mr.Deadpool', 'mSD', 'NemDiggers', 'neoHEVC', 'NhaNc3', 'NOIVTC',
@@ -34,15 +38,15 @@ class NBL:
 
         pass
 
-    async def get_cat_id(self, meta):
+    async def get_cat_id(self, meta: Meta) -> int:
         cat_id = 3 if meta.get('tv_pack', 0) == 1 else 1
         return cat_id
 
-    async def edit_desc(self, meta):
+    async def edit_desc(self, meta: Meta) -> None:
         # Leave this in so manual works
         return
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: Meta, disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
@@ -55,8 +59,10 @@ class NBL:
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
-        files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
-        data = {
+        files: dict[str, tuple[str, bytes, str]] = {
+            'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')
+        }
+        data: dict[str, Any] = {
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
             'mediainfo': mi_dump,
@@ -93,7 +99,7 @@ class NBL:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
             return False
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: Meta, disctype: str) -> Union[list[dict[str, Any]], bool]:
         if meta['category'] != 'TV':
             if meta['tvmaze_id'] != 0:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -122,15 +128,15 @@ class NBL:
             meta['skipping'] = "NBL"
             return []
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
-        if int(meta.get('tvmaze_id', 0)) != 0:
-            search_term = {'tvmaze': int(meta['tvmaze_id'])}
-        elif int(meta.get('imdb_id')) != 0:
+        if int(meta.get('tvmaze_id', 0) or 0) != 0:
+            search_term: dict[str, Any] = {'tvmaze': int(meta['tvmaze_id'])}
+        elif int(meta.get('imdb_id', 0) or 0) != 0:
             search_term = {'imdb': meta.get('imdb')}
         else:
             search_term = {'series': meta['title']}
-        payload = {
+        payload: dict[str, Any] = {
             'jsonrpc': '2.0',
             'id': 1,
             'method': 'getTorrents',
@@ -140,22 +146,29 @@ class NBL:
             ]
         }
 
+        response: Optional[httpx.Response] = None
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(self.search_url, json=payload)
                 if response.status_code == 200:
                     try:
-                        data = response.json()
-                        for each in data.get('result', {}).get('items', []):
-                            if meta['resolution'] in each.get('tags', []):
-                                file_list = each.get('file_list', [])
+                        data = cast(dict[str, Any], response.json())
+                        result = cast(dict[str, Any], data.get('result', {}))
+                        items = cast(list[dict[str, Any]], result.get('items', []))
+                        for each in items:
+                            tags_value = each.get('tags', [])
+                            tags = cast(list[Any], tags_value) if isinstance(tags_value, list) else []
+                            if meta['resolution'] in tags:
+                                file_list_value = each.get('file_list', [])
+                                file_list = cast(list[Any], file_list_value) if isinstance(file_list_value, list) else []
+                                files_str = ', '.join(str(item) for item in file_list) if file_list else str(cast(Any, file_list_value))
                                 result = {
-                                    'name': each.get('rls_name', ''),
-                                    'files': ', '.join(file_list) if isinstance(file_list, list) else str(file_list),
+                                    'name': str(each.get('rls_name', '')),
+                                    'files': files_str,
                                     'size': int(each.get('size', 0)),
-                                    'link': f'https://nebulance.io/torrents.php?id={each.get("group_id", "")}',
-                                    'file_count': len(file_list) if isinstance(file_list, list) else 1,
-                                    'download': each.get('download', ''),
+                                    'link': f"https://nebulance.io/torrents.php?id={each.get('group_id', '')}",
+                                    'file_count': len(file_list) if file_list else 1,
+                                    'download': str(each.get('download', '')),
                                 }
                                 dupes.append(result)
                     except json.JSONDecodeError:
@@ -173,7 +186,7 @@ class NBL:
             meta['skipping'] = "NBL"
         except KeyError as e:
             console.print(f"[bold red]Unexpected KeyError: {e}")
-            if 'result' not in response.json():
+            if response is not None and 'result' not in response.json():
                 console.print("[red]NBL API returned an unexpected response. Please manually check for dupes.")
                 dupes.append({
                     'name': "ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY",

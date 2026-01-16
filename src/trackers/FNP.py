@@ -1,10 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+from typing import Any, Optional
+
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
 class FNP(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name='FNP')
         self.config = config
         self.common = COMMON(config)
@@ -21,7 +23,13 @@ class FNP(UNIT3D):
         ]
         pass
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: dict[str, Any],
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -44,7 +52,7 @@ class FNP(UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, '10')
             return {'resolution_id': resolved_id}
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
             'modq': await self.get_flag(meta, 'modq'),
         }

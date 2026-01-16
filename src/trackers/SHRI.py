@@ -50,9 +50,10 @@ class SHRI(UNIT3D):
     def _get_language_code(self, track_or_string: Any) -> str:
         """Extract and normalize language to ISO alpha-2 code"""
         if isinstance(track_or_string, dict):
-            lang = track_or_string.get("Language", "")
+            track_dict = cast(dict[str, Any], track_or_string)
+            lang = track_dict.get("Language", "")
             if isinstance(lang, dict):
-                lang = lang.get("String", "")
+                lang = cast(dict[str, Any], lang).get("String", "")
         else:
             lang = track_or_string
         if not lang:
@@ -103,25 +104,28 @@ class SHRI(UNIT3D):
         if italian_title and use_italian_title:
             title = italian_title
 
-        year = str(meta.get("year", ""))
-        resolution = meta.get("resolution", "")
-        source = meta.get("source", "")
-        if isinstance(source, list):
-            source = source[0] if source else ""
-        video_codec = meta.get("video_codec", "")
-        video_encode = meta.get("video_encode", "")
+        year_value: Any = meta.get("year", "")
+        resolution_value: Any = meta.get("resolution", "")
+        source_value: Any = meta.get("source", "")
+        year = str(year_value)
+        resolution = str(resolution_value)
+        source = (
+            str(cast(Any, source_value[0])) if source_value else ""
+        ) if isinstance(source_value, list) else str(source_value)
+        video_codec = str(meta.get("video_codec", ""))
+        video_encode = str(meta.get("video_encode", ""))
 
         # TV specific
-        season = meta.get("season") or ""
-        episode = meta.get("episode") or ""
-        episode_title = meta.get("episode_title") or ""
-        part = meta.get("part") or ""
+        season = str(meta.get("season") or "")
+        episode = str(meta.get("episode") or "")
+        episode_title = str(meta.get("episode_title") or "")
+        part = str(meta.get("part") or "")
 
         # Optional fields
-        edition = meta.get("edition") or ""
-        hdr = meta.get("hdr") or ""
-        uhd = meta.get("uhd") or ""
-        three_d = meta.get("3D") or ""
+        edition = str(meta.get("edition") or "")
+        hdr = str(meta.get("hdr") or "")
+        uhd = str(meta.get("uhd") or "")
+        three_d = str(meta.get("3D") or "")
 
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = await self._get_best_italian_audio_format(meta)
@@ -130,18 +134,17 @@ class SHRI(UNIT3D):
         audio_lang_str = ""
         if meta.get("audio_languages"):
             # Normalize all to full names
-            audio_langs = [
-                self._get_language_name(lang.upper())
-                for lang in meta["audio_languages"]
-            ]
+            audio_langs_value = meta.get("audio_languages", [])
+            audio_langs_raw = cast(list[Any], audio_langs_value) if isinstance(audio_langs_value, list) else []
+            audio_langs = [self._get_language_name(str(lang).upper()) for lang in audio_langs_raw]
             audio_langs = [lang for lang in audio_langs if lang]  # Remove empty
             audio_langs = list(dict.fromkeys(audio_langs))  # Dedupe preserving order
 
             orig_lang_iso = meta.get("original_language", "").upper()
             orig_lang_full = self._get_language_name(orig_lang_iso)
 
-            result = []
-            remaining = audio_langs.copy()
+            result: list[str] = []
+            remaining: list[str] = audio_langs.copy()
 
             # Priority 1: Original language
             if orig_lang_full and orig_lang_full in remaining:
@@ -221,7 +224,7 @@ class SHRI(UNIT3D):
 
         elif effective_type == "CINEMA_NEWS":
             basename_upper = self.get_basename(meta).upper()
-            markers = []
+            markers: list[str] = []
 
             video_match = self.CINEMA_VIDEO_PATTERN.search(basename_upper)
             if video_match:
@@ -238,11 +241,11 @@ class SHRI(UNIT3D):
 
         else:
             # Fallback: use original name with cleaned audio
-            name = meta["name"].replace("Dual-Audio", "").strip()
+            name = str(meta["name"]).replace("Dual-Audio", "").strip()
 
         # Ensure name is always a string
         if not name:
-            name = meta.get("name", "UNKNOWN")
+            name = str(meta.get("name", "UNKNOWN"))
 
         # Add [SUBS] for Italian subtitles without Italian audio
         if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
@@ -431,14 +434,16 @@ class SHRI(UNIT3D):
             return True
 
         # Check for MakeMKV + no encoding
-        mi = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+        mediainfo = cast(dict[str, Any], meta.get("mediainfo", {}))
+        media = cast(dict[str, Any], mediainfo.get("media", {}))
+        mi = cast(list[dict[str, Any]], media.get("track", []))
         if mi:
             general = mi[0]
             encoded_app = str(general.get("Encoded_Application", "")).lower()
             encoded_lib = str(general.get("Encoded_Library", "")).lower()
 
             if "makemkv" in encoded_app or "makemkv" in encoded_lib:
-                video: dict[str, Any] = next((t for t in mi if t.get("@type") == "Video"), {})
+                video: dict[str, Any] = next((t for t in mi if t.get("@type") == "Video"), cast(dict[str, Any], {}))
                 settings = video.get("Encoded_Library_Settings")
                 if not settings or isinstance(settings, dict):
                     return True
@@ -469,14 +474,19 @@ class SHRI(UNIT3D):
             return any(tool in tool_string for tool in tools)
 
         try:
-            mi = meta.get("mediainfo", {})
-            tracks = mi.get("media", {}).get("track", [])
-            general_track = tracks[0]
-            video_track = tracks[1]
+            mi = cast(dict[str, Any], meta.get("mediainfo", {}))
+            media = cast(dict[str, Any], mi.get("media", {}))
+            tracks = cast(list[dict[str, Any]], media.get("track", []))
+            general_track = tracks[0] if len(tracks) > 0 else {}
+            video_track = tracks[1] if len(tracks) > 1 else {}
 
             # Normalize source list
-            source = meta.get("source", "")
-            source = [s.upper() for s in source] if isinstance(source, list) else [source.upper()] if source else []
+            source_value = meta.get("source", "")
+            source = (
+                [str(s).upper() for s in cast(list[Any], source_value)]
+                if isinstance(source_value, list)
+                else [str(source_value).upper()] if source_value else []
+            )
 
             service = str(meta.get("service", "")).upper()
 
@@ -485,22 +495,25 @@ class SHRI(UNIT3D):
             raw_library = video_track.get("Encoded_Library", "")
             has_settings = raw_settings and not isinstance(raw_settings, dict)
             has_library = raw_library and not isinstance(raw_library, dict)
-            encoding_settings = str(raw_settings).lower() if has_settings else ""
-            encoded_library = str(raw_library).lower() if has_library else ""
+            encoding_settings = (
+                str(cast(Any, raw_settings)).lower() if has_settings else ""
+            )
+            encoded_library = (
+                str(cast(Any, raw_library)).lower() if has_library else ""
+            )
 
             # ===== Priority 1: DV streaming profiles =====
             # DV profiles 5/7/8 indicate streaming sources (overrides source field)
-            hdr_profile = video_track.get("HDR_Format_Profile", "")
+            hdr_profile = str(video_track.get("HDR_Format_Profile", ""))
             has_streaming_dv = any(
                 prof in hdr_profile for prof in ["dvhe.05", "dvhe.07", "dvhe.08"]
             )
 
-            if has_streaming_dv and not encoding_settings:
-                # Ensure not re-encoded by user tools
-                if not has_encoding_tools(
-                    general_track, ["handbrake", "staxrip", "megatagger"]
-                ):
-                    return "WEBDL"
+            # Ensure not re-encoded by user tools
+            if has_streaming_dv and not encoding_settings and not has_encoding_tools(
+                general_track, ["handbrake", "staxrip", "megatagger"]
+            ):
+                return "WEBDL"
 
             # ===== Priority 2: CRF detection =====
             # CRF (Constant Rate Factor) indicates user re-encode
@@ -593,17 +606,18 @@ class SHRI(UNIT3D):
         country_match: Optional[str] = None
         language_match: Optional[str] = None
 
-        for aka in imdb_info.get("akas", []):
-            if isinstance(aka, dict):
-                if aka.get("country") == "Italy" and not aka.get("attributes"):
-                    title = aka.get("title")
-                    if isinstance(title, str):
-                        country_match = title
-                    break  # Country match takes priority
-                elif aka.get("language") == "Italy" and not language_match and not aka.get("attributes"):
-                    title = aka.get("title")
-                    if isinstance(title, str):
-                        language_match = title
+        akas_value = imdb_info.get("akas", [])
+        akas = cast(list[dict[str, Any]], akas_value) if isinstance(akas_value, list) else []
+        for aka in akas:
+            if aka.get("country") == "Italy" and not aka.get("attributes"):
+                title = aka.get("title")
+                if isinstance(title, str):
+                    country_match = title
+                break  # Country match takes priority
+            elif aka.get("language") == "Italy" and not language_match and not aka.get("attributes"):
+                title = aka.get("title")
+                if isinstance(title, str):
+                    language_match = title
 
         return country_match or language_match
 
@@ -693,7 +707,7 @@ class SHRI(UNIT3D):
         def clean(audio_str: str) -> str:
             return re.sub(r"\s*-[A-Z]{3}(-[A-Z]{3})*$", "", audio_str.replace("Dual-Audio", "").replace("Dubbed", "")).strip()
 
-        bdinfo = meta.get("bdinfo")
+        bdinfo = cast(dict[str, Any], meta.get("bdinfo", {}))
 
         if bdinfo and bdinfo.get("audio"):
             italian = [t for t in bdinfo["audio"] if t.get("language", "").lower() in ITALIAN_LANGS]
@@ -701,7 +715,7 @@ class SHRI(UNIT3D):
                 audio_value = meta.get("audio", "")
                 return clean(audio_value if isinstance(audio_value, str) else "")
             best = max(italian, key=lambda t: extract_quality(t, True))
-            audio_str, _, _ = await get_audio_v2(None, meta, {"audio": [best]})
+            audio_str, _, _ = await get_audio_v2({}, meta, {"audio": [best]})
         else:
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             italian = [
@@ -728,19 +742,20 @@ class SHRI(UNIT3D):
         category = meta.get("category", "MOVIE")
 
         # Build info line: resolution, source, codec, audio, language
-        info_parts = []
+        info_parts: list[str] = []
         if meta.get("resolution"):
-            info_parts.append(meta["resolution"])
+            info_parts.append(str(meta["resolution"]))
 
-        source = meta.get("source", "")
-        if isinstance(source, list):
-            source = source[0] if source else ""
+        source_value: Any = meta.get("source", "")
+        source = (
+            str(cast(Any, source_value[0])) if source_value else ""
+        ) if isinstance(source_value, list) else str(source_value)
         if source:
             info_parts.append(
                 source.replace("Blu-ray", "BluRay").replace("Web", "WEB-DL")
             )
 
-        video_codec = meta.get("video_codec", "")
+        video_codec = str(meta.get("video_codec", ""))
         if "HEVC" in video_codec or "H.265" in video_codec:
             info_parts.append("x265")
         elif "AVC" in video_codec or "H.264" in video_codec:
@@ -756,9 +771,11 @@ class SHRI(UNIT3D):
             info_parts.append(audio)
 
         if meta.get("audio_languages"):
+            audio_langs_value = meta.get("audio_languages", [])
+            audio_langs = cast(list[Any], audio_langs_value) if isinstance(audio_langs_value, list) else []
             langs = [
                 self._get_italian_language_name(self._get_language_code(lang))
-                for lang in meta["audio_languages"]
+                for lang in audio_langs
             ]
             langs = [lang for lang in langs if lang]
             if "Italiano" in langs:
@@ -865,11 +882,12 @@ class SHRI(UNIT3D):
 
     async def _format_screens_italian(self, meta: dict[str, Any]) -> str:
         """Format up to 6 screenshots in 2-column grid with [img=350]"""
-        images = meta.get("image_list", [])
+        images_value = meta.get("image_list", [])
+        images = cast(list[dict[str, Any]], images_value) if isinstance(images_value, list) else []
         if not images:
             return "[center]Nessuno screenshot disponibile[/center]"
 
-        screens = []
+        screens: list[str] = []
         for img in images[:6]:
             raw_url = img.get("raw_url", "")
             web_url = img.get("web_url", raw_url)
@@ -924,12 +942,13 @@ class SHRI(UNIT3D):
             return fmt_map.get(fmt_raw, (fmt_raw, fmt_raw))
 
         try:
-            mi = meta.get("mediainfo", {}).get("media", {})
-            tracks = mi.get("track", [])
+            mediainfo = cast(dict[str, Any], meta.get("mediainfo", {}))
+            media = cast(dict[str, Any], mediainfo.get("media", {}))
+            tracks = cast(list[dict[str, Any]], media.get("track", []))
 
             # Parse track types
-            general: dict[str, Any] = next((t for t in tracks if t.get("@type") == "General"), {})
-            video: dict[str, Any] = next((t for t in tracks if t.get("@type") == "Video"), {})
+            general: dict[str, Any] = next((t for t in tracks if t.get("@type") == "General"), cast(dict[str, Any], {}))
+            video: dict[str, Any] = next((t for t in tracks if t.get("@type") == "Video"), cast(dict[str, Any], {}))
             audio_tracks = [t for t in tracks if t.get("@type") == "Audio"]
             text_tracks = [t for t in tracks if t.get("@type") == "Text"]
 
@@ -1026,7 +1045,7 @@ class SHRI(UNIT3D):
 
             # Subtitle languages
             if text_tracks:
-                sub_langs = set()
+                sub_langs: set[str] = set()
                 for t in text_tracks:
                     lang_code = self._get_language_code(t)
                     if lang_code:

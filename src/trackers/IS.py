@@ -3,7 +3,7 @@ import glob
 import os
 import platform
 import re
-from typing import Union
+from typing import IO, Any, Union, cast
 
 import aiofiles
 import httpx
@@ -14,10 +14,13 @@ from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class IS:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'IS'
@@ -29,8 +32,11 @@ class IS:
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30)
 
-    async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def validate_credentials(self, meta: Meta) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
@@ -38,9 +44,9 @@ class IS:
             error_text='Forget your password',
         )
 
-    async def generate_description(self, meta):
+    async def generate_description(self, meta: Meta) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
         desc_parts.append(await builder.get_custom_header())
@@ -64,11 +70,23 @@ class IS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Screenshots
-        images = meta.get('image_list', [])
+        images_value = meta.get('image_list', [])
+        images: list[dict[str, Any]] = []
+        if isinstance(images_value, list):
+            images_list = cast(list[Any], images_value)
+            images.extend(
+                [
+                    cast(dict[str, Any], item)
+                    for item in images_list
+                    if isinstance(item, dict)
+                ]
+            )
         if images:
             screenshots_block = ''
             for image in images:
-                screenshots_block += f"{image['raw_url']}\n"
+                raw_url = str(image.get('raw_url', ''))
+                if raw_url:
+                    screenshots_block += f"{raw_url}\n"
             desc_parts.append('Screenshots:\n' + screenshots_block)
 
         # Tonemapped Header
@@ -84,17 +102,26 @@ class IS:
 
         return description
 
-    async def search_existing(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Union[str, None]]]:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         dupes: list[dict[str, Union[str, None]]] = []
 
-        if meta['category'] == "MOVIE":
-            search_type = 't_genre'
-            search_query = meta.get('imdb_info', {}).get('imdbID', '')
+        search_type = ''
+        search_query = ''
+        category = str(meta.get('category', ''))
 
-        elif meta['category'] == "TV":
+        if category == "MOVIE":
+            search_type = 't_genre'
+            search_query = str(meta.get('imdb_info', {}).get('imdbID', ''))
+
+        elif category == "TV":
             search_type = 't_name'
-            search_query = meta.get('title') + f" {meta.get('season', '')}{meta.get('episode', '')}"
+            search_query = f"{meta.get('title', '')} {meta.get('season', '')}{meta.get('episode', '')}"
+        else:
+            return dupes
 
         search_url = f'{self.base_url}/browse.php?do=search&keywords={search_query}&search_type={search_type}'
 
@@ -134,15 +161,15 @@ class IS:
 
         return dupes
 
-    async def get_category_id(self, meta):
-        resolution = meta.get('resolution')
-        category = meta.get('category')
-        genres = meta.get('genres', '').lower()
-        keywords = meta.get('keywords', '').lower()
-        is_anime = meta.get('anime')
+    async def get_category_id(self, meta: Meta) -> int:
+        resolution = str(meta.get('resolution', ''))
+        category = str(meta.get('category', ''))
+        genres = str(meta.get('genres', '')).lower()
+        keywords = str(meta.get('keywords', '')).lower()
+        is_anime = bool(meta.get('anime'))
         non_eng = False
-        sd = meta.get('sd', False)
-        if meta.get('original_language') != "en":
+        sd = bool(meta.get('sd', False))
+        if str(meta.get('original_language', '')) != "en":
             non_eng = True
 
         anime = 32
@@ -223,15 +250,17 @@ class IS:
             elif resolution in ["1080p", "1080i", "720p"]:
                 return tv_hd
             elif sd:
-                if "xvid" in meta.get("video_encode", '').lower():
+                if "xvid" in str(meta.get("video_encode", '')).lower():
                     return tv_sd_xvid
                 else:
                     return tv_sd_x264
             else:
                 return tv_480p
 
-    async def get_nfo(self, meta):
-        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+        return 0
+
+    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, Union[IO[bytes], bytes], str]]:
+        nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
         if nfo_files:
@@ -243,17 +272,20 @@ class IS:
             nfo_filename = f"{meta.get('scene_name', meta['uuid'])}.nfo"
             return {'nfofile': (nfo_filename, nfo_bytes, "application/octet-stream")}
 
-    def get_name(self, meta):
-        if meta.get('scene_name'):
-            return meta.get('scene_name')
+    def get_name(self, meta: Meta) -> str:
+        scene_name = meta.get('scene_name')
+        if scene_name:
+            return str(scene_name)
         else:
-            is_name = meta.get('name').replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+            name_value = str(meta.get('name', ''))
+            aka_value = str(meta.get('aka', ''))
+            is_name = name_value.replace(aka_value, '').replace('Dubbed', '').replace('Dual-Audio', '')
             is_name = re.sub(r"\s{2,}", " ", is_name)
             is_name = is_name.replace(' ', '.')
         return is_name
 
-    async def get_data(self, meta):
-        data = {
+    async def get_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'UseNFOasDescr': 'no',
             'message': f"{meta.get('overview', '')}\n\n[youtube]{meta.get('youtube', '')}[/youtube]",
             'category': await self.get_category_id(meta),
@@ -263,11 +295,11 @@ class IS:
             'submit': 'Upload Torrent',
         }
 
-        if meta['category'] == "MOVIE":
-            data['t_link'] = meta['imdb_info']['imdb_url']
+        if meta.get('category') == "MOVIE":
+            data['t_link'] = str(meta.get('imdb_info', {}).get('imdb_url', ''))
 
         # Anon
-        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+        anon = not (int(meta.get('anon', 0) or 0) == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:
             data.update({
                 'anonymous': 'yes'
@@ -279,8 +311,11 @@ class IS:
 
         return data
 
-    async def upload(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def upload(self, meta: Meta, disctype: str) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 

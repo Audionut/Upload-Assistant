@@ -1,14 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from typing import Any, cast
 
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class SAM(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name="SAM")
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = "SAM"
         self.base_url = "https://samaritano.cc"
@@ -20,9 +24,9 @@ class SAM(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         name = (
-            meta["name"]
+            str(meta.get("name", ""))
             .replace("DD+ ", "DDP")
             .replace("DD ", "DD")
             .replace("AAC ", "AAC")
@@ -39,22 +43,26 @@ class SAM(UNIT3D):
 
         # Remove the AKA title, unless it is Brazilian
         if meta.get("original_language") != "pt":
-            name = name.replace(meta["aka"], "")
+            name = name.replace(str(meta.get("aka", "")), "")
 
         # If it is Brazilian, use only the AKA title, deleting the foreign title
         if meta.get("original_language") == "pt" and meta.get("aka"):
-            aka_clean = meta["aka"].replace("AKA", "").strip()
-            title = meta.get("title")
-            name = name.replace(meta["aka"], "").replace(title, aka_clean).strip()
+            aka_value = str(meta.get("aka", ""))
+            aka_clean = aka_value.replace("AKA", "").strip()
+            title = str(meta.get("title", ""))
+            name = name.replace(aka_value, "").replace(title, aka_clean).strip()
 
         sam_name = name
-        tag_lower = meta["tag"].lower()
+        tag_value = str(meta.get("tag", ""))
+        tag_lower = tag_value.lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
         if not meta.get('is_disc'):
             audio_tag = ""
             if meta.get("audio_languages"):
-                audio_languages = set(meta["audio_languages"])
+                audio_languages_value = meta.get("audio_languages", [])
+                audio_languages_list = [str(lang) for lang in cast(list[Any], audio_languages_value)] if isinstance(audio_languages_value, list) else []
+                audio_languages = set(audio_languages_list)
 
                 if "Portuguese" in audio_languages:
                     if len(audio_languages) >= 3:
@@ -68,10 +76,10 @@ class SAM(UNIT3D):
                     if "-" in sam_name:
                         parts = sam_name.rsplit("-", 1)
 
-                        custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
+                        custom_tag = str(self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", ""))
                         if custom_tag and custom_tag in name:
                             match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
-                            if match and match.group(1) != meta["tag"]:
+                            if match and match.group(1) != tag_value:
                                 original_group_tag = match.group(1)
                                 sam_name = f"{parts[0]}-{original_group_tag}{audio_tag}-{parts[1]}"
                             else:
@@ -81,7 +89,7 @@ class SAM(UNIT3D):
                     else:
                         sam_name += audio_tag
 
-        if meta["tag"] == "" or any(
+        if tag_value == "" or any(
             invalid_tag in tag_lower for invalid_tag in invalid_tags
         ):
             for invalid_tag in invalid_tags:
@@ -90,14 +98,14 @@ class SAM(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", sam_name)}
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             "mod_queue_opt_in": await self.get_flag(meta, "modq"),
         }
 
         return data
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         return await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
         )

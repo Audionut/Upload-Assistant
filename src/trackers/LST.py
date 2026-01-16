@@ -1,13 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+from typing import Any, Optional
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class LST(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='LST')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'LST'
         self.base_url = 'https://lst.gg'
@@ -19,7 +24,7 @@ class LST(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -27,7 +32,13 @@ class LST(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -39,8 +50,8 @@ class LST(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
             'draft_queue_opt_in': await self.get_flag(meta, 'draft'),
         }
@@ -52,7 +63,7 @@ class LST(UNIT3D):
 
         return data
 
-    async def get_edition(self, meta):
+    async def get_edition(self, meta: Meta) -> Optional[int]:
         edition_mapping = {
             'Alternative Cut': 12,
             'Collector\'s Edition': 1,
@@ -74,18 +85,18 @@ class LST(UNIT3D):
         else:
             return None
 
-    async def get_name(self, meta):
-        lst_name = meta['name']
-        resolution = meta.get('resolution')
-        video_encode = meta.get('video_encode')
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        lst_name = str(meta.get('name', ''))
+        resolution = str(meta.get('resolution', ''))
+        video_encode = str(meta.get('video_encode', ''))
         name_type = meta.get('type', "")
 
         if name_type == "DVDRIP":
             if meta.get('category') == "MOVIE":
-                lst_name = lst_name.replace(f"{meta['source']}{meta['video_encode']}", f"{resolution}", 1)
-                lst_name = lst_name.replace((meta['audio']), f"{meta['audio']}{video_encode}", 1)
+                lst_name = lst_name.replace(f"{meta.get('source', '')}{meta.get('video_encode', '')}", f"{resolution}", 1)
+                lst_name = lst_name.replace(str(meta.get('audio', '')), f"{meta.get('audio', '')}{video_encode}", 1)
             else:
-                lst_name = lst_name.replace(f"{meta['source']}", f"{resolution}", 1)
-                lst_name = lst_name.replace(f"{meta['video_codec']}", f"{meta['audio']} {meta['video_codec']}", 1)
+                lst_name = lst_name.replace(str(meta.get('source', '')), f"{resolution}", 1)
+                lst_name = lst_name.replace(str(meta.get('video_codec', '')), f"{meta.get('audio', '')} {meta.get('video_codec', '')}", 1)
 
         return {'name': lst_name}

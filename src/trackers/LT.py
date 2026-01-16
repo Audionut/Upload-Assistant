@@ -1,14 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from typing import Any, Optional, cast
 
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class LT(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='LT')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'LT'
         self.base_url = 'https://lat-team.com'
@@ -19,17 +23,24 @@ class LT(UNIT3D):
         self.banned_groups = ["EVO"]
         pass
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(meta['category'], '0')
 
-        keywords = meta.get('keywords', '').lower()
-        overview = meta.get('overview', '').lower()
-        genres = meta.get('genres', '').lower()
+        keywords = str(meta.get('keywords', '')).lower()
+        overview = str(meta.get('overview', '')).lower()
+        genres = str(meta.get('genres', '')).lower()
         soap_keywords = ['telenovela', 'novela', 'soap', 'culebrón', 'culebron']
-        origin_countries = meta.get('origin_country', [])
+        origin_countries_value = meta.get('origin_country', [])
+        origin_countries = cast(list[str], origin_countries_value) if isinstance(origin_countries_value, list) else []
 
         if meta['category'] == 'TV':
             # Anime
@@ -49,18 +60,20 @@ class LT(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        aka_value = str(meta.get('aka', ''))
         lt_name = (
-            meta['name']
+            str(meta.get('name', ''))
             .replace('Dual-Audio', '')
             .replace('Dubbed', '')
-            .replace(meta['aka'], '')
+            .replace(aka_value, '')
         )
 
         if meta['type'] != 'DISC':  # DISC don't have mediainfo
             # Check if original language is "es" if true replace title for AKA if available
-            if meta.get('original_language') == 'es' and meta.get('aka') != "":
-                lt_name = lt_name.replace(meta.get('title'), meta.get('aka').replace('AKA', '')).strip()
+            title_value = str(meta.get('title', ''))
+            if meta.get('original_language') == 'es' and aka_value:
+                lt_name = lt_name.replace(title_value, aka_value.replace('AKA', '')).strip()
             # Check if audio Spanish exists
 
             audio_latino_check = {
@@ -76,15 +89,20 @@ class LT(UNIT3D):
             # "castellano" matches any title explicitly labeled as such.
             castilian_keywords = ["castellano"]
 
-            audios = []
+            audios: list[dict[str, Any]] = []
             has_latino = False
             has_castilian = False
 
-            for audio in meta['mediainfo']['media']['track'][2:]:
-                if audio.get("@type") != "Audio":
+            tracks_value = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            tracks_list = cast(list[Any], tracks_value) if isinstance(tracks_value, list) else []
+            for audio in tracks_list[2:]:
+                if not isinstance(audio, dict):
                     continue
-                lang = audio.get("Language", "").lower()
-                title = str(audio.get("Title", "")).lower()
+                audio_map = cast(dict[str, Any], audio)
+                if audio_map.get("@type") != "Audio":
+                    continue
+                lang = str(audio_map.get("Language", "")).lower()
+                title = str(audio_map.get("Title", "")).lower()
 
                 if "commentary" in title:
                     continue
@@ -96,38 +114,40 @@ class LT(UNIT3D):
                 # 1. Check strict Latino language codes or Edge Case: Language is 'es' but Title contains Latino keywords
                 if lang in audio_latino_check or (lang == 'es' and is_latino_title):
                     has_latino = True
-                    audios.append(audio)
+                    audios.append(audio_map)
 
                 # 2. Edge Case: Language is 'es' and Title contains Castilian keywords or Fallback: Check strict Castilian codes (includes 'es' as default)
                 elif (lang == 'es' and is_castilian_title) or lang in audio_castilian_check:
                     has_castilian = True
-                    audios.append(audio)
+                    audios.append(audio_map)
 
             if len(audios) > 0:  # If there is at least 1 audio spanish
                 if not has_latino and has_castilian:
-                    lt_name = lt_name.replace(meta['tag'], f" [CAST]{meta['tag']}") if meta.get('tag') else f"{lt_name} [CAST]"
+                    tag_value = str(meta.get('tag', ''))
+                    lt_name = lt_name.replace(tag_value, f" [CAST]{tag_value}") if tag_value else f"{lt_name} [CAST]"
                 # else: no special tag needed for Latino-only or mixed audio
             # if not audio Spanish exists, add "[SUBS]"
             elif not meta.get('tag'):
                 lt_name = lt_name + " [SUBS]"
             else:
-                lt_name = lt_name.replace(meta['tag'], f" [SUBS]{meta['tag']}")
+                tag_value = str(meta.get('tag', ''))
+                lt_name = lt_name.replace(tag_value, f" [SUBS]{tag_value}")
 
         return {"name": re.sub(r"\s{2,}", " ", lt_name)}
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         spanish_languages = ["spanish", "spanish (latin america)"]
         return await self.common.check_language_requirements(meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True)
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_distributor_ids(self, meta):
+    async def get_distributor_ids(self, meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_region_id(self, meta):
+    async def get_region_id(self, meta: Meta) -> dict[str, str]:
         return {}

@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
+from typing import Any, Optional
 
 import cli_ui
 
@@ -7,9 +8,12 @@ from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class YUS(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='YUS')
         self.config = config
         self.common = COMMON(config)
@@ -27,7 +31,7 @@ class YUS(UNIT3D):
             'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
@@ -44,7 +48,13 @@ class YUS(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '17',
             'REMUX': '2',
