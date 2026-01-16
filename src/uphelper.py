@@ -11,7 +11,7 @@ from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackersetup import tracker_class_map
-from src.bdinfo_comparator import compare_bdinfo
+from src.bdinfo_comparator import compare_bdinfo, has_bdinfo_content
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):
@@ -159,15 +159,7 @@ class UploadHelper:
                         if meta.get('dupe', False) is False:
                             try:
                                 if meta.get('is_disc') == "BDMV":
-                                    if cli_ui.ask_yes_no("Do you want to compare the BDinfo?", default=True):
-                                        warnings: list[str] = []
-                                        for entry in dupes:
-                                            warnings.append(compare_bdinfo(meta, entry))
-                                        if warnings:
-                                            console.print()
-                                            console.print("\n".join(warnings))
-                                            console.print()
-
+                                    self.ask_bdinfo_comparison(meta, dupes)
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
                             except EOFError:
@@ -245,6 +237,40 @@ class UploadHelper:
                         meta['name'] = f"{meta['name']} DUPE?"
 
                 return False, meta
+
+    def ask_bdinfo_comparison(self, meta, dupes) -> None:
+        """
+        Check if any duplicate has BDInfo content and ask the user
+        if they want to perform a comparison.
+        """
+        possible = any(
+            isinstance(entry, dict) and has_bdinfo_content(entry)
+            for entry in dupes
+        )
+
+        if not possible:
+            return
+
+        if cli_ui.ask_yes_no("Do you want to compare the BDinfo?", default=True):
+            warnings: list[str] = []
+            results: list[str] = []
+
+            for entry in dupes:
+                warning_message, results_message = compare_bdinfo(meta, entry)
+
+                if warning_message:
+                    warnings.append(warning_message)
+                if results_message:
+                    results.append(results_message)
+
+            if warnings:
+                console.print()
+                console.print("\n\n".join(warnings))
+
+            if results:
+                console.print()
+                console.print("\n".join(results))
+                console.print()
 
     async def get_confirmation(self, meta):
         if meta['debug'] is True:

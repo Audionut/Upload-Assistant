@@ -314,6 +314,13 @@ class AZTrackerBase:
                         'link': torrent_link
                     }
 
+                    if meta.get('is_disc') == "BDMV":
+                        bd_info = await self.get_dupe_bdinfo(meta, torrent_link)
+                        if bd_info:
+                            dupe_entry.update({
+                                'bd_info': bd_info
+                            })
+
                     duplicates.append(dupe_entry)
 
                 next_page_tag = soup.select_one("a[rel='next']")
@@ -328,6 +335,33 @@ class AZTrackerBase:
                 return duplicates
 
         return duplicates
+
+    async def get_dupe_bdinfo(self, meta: dict[str, Any], torrent_link: str) -> str:
+        """
+        Fetch the BDInfo/MediaInfo content from the torrent page.
+        """
+        try:
+            response = await self.session.get(torrent_link, follow_redirects=True)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            mediainfo_container = soup.find('div', id='collapseMediaInfo')
+
+            if mediainfo_container:
+                pre_tag = mediainfo_container.find('pre')
+                if pre_tag:
+                    return pre_tag.get_text(strip=True)
+
+            console.print(f'[yellow]{self.tracker}: MediaInfo/BDInfo block not found at {torrent_link}[/yellow]')
+            return ''
+
+        except httpx.HTTPStatusError as e:
+            console.print(f'[red]{self.tracker}: HTTP error {e.response.status_code} from {torrent_link}[/red]')
+        except httpx.RequestError as e:
+            console.print(f'[red]{self.tracker}: Request failed to {torrent_link}. {e}[/red]')
+        except Exception as e:
+            console.print(f'[red]{self.tracker}: Unexpected error parsing {torrent_link}. {e}[/red]')
+
+        return ''
 
     async def get_cat_id(self, category_name: str) -> str:
         category_id = {

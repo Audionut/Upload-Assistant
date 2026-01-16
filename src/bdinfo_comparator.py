@@ -1,143 +1,190 @@
 import difflib
-import os
 import re
+from pathlib import Path
+from typing import Any, Tuple, List, Dict
 from src.console import console
-from typing import Any
+
+PLAYLIST_VARIATION_PATTERN = re.compile(r"/\s*DN\s*-\d+dB", re.IGNORECASE)
+BITRATE_VARIATION_PATTERN = re.compile(r"\d+([.,]\d+)?(?=\s*kbps)", re.IGNORECASE)
+BBCODE_PATTERN = re.compile(r"\[[^\]]*\]")
 
 
-def get_relevant_lines(bd_info_text: str) -> list[str]:
+def get_relevant_lines(meta: Dict[str, Any], duplicate_content: str) -> Tuple[List[str], List[str]]:
     """
-    Parses BDInfo text to extract and normalize relevant video, audio, and subtitle tracks.
-
-    Args:
-        bd_info_text: The raw string content of a BDInfo report.
-
-    Returns:
-        A list of normalized strings containing video lines followed by sorted audio and subtitle lines.
+    Extracts and normalizes relevant BDInfo lines for comparison between source and duplicate content.
     """
-    tracks: list[str] = []
+    summary, extended_summary = load_bdinfo_file(meta)
+    clean_duplicate = remove_bbcode(duplicate_content)
 
-    clean_bd_info_text = remove_bbcode(bd_info_text)
+    clean_sum, clean_ext, clean_dup = remove_playlist_variations(summary, extended_summary, clean_duplicate)
 
-    for line in clean_bd_info_text.splitlines():
+    is_extended = any(key in clean_dup for key in ("PLAYLIST REPORT:", "DISC INFO:"))
+    is_full = is_extended and "Video:" in clean_dup
+
+    target_lines = normalize_and_filter(clean_dup, strict_mode=is_full)
+    source_content = clean_ext if (is_extended and not is_full) else clean_sum
+    source_lines = normalize_and_filter(source_content)
+
+    return source_lines, target_lines
+
+
+def normalize_and_filter(content: str, strict_mode: bool = False) -> List[str]:
+    """
+    Filters content to keep only relevant technical lines and normalizes whitespace.
+    """
+    results: List[str] = []
+    keywords = ("Video:", "Audio:", "Subtitle:")
+
+    for line in content.splitlines():
         clean_line = line.strip()
+        line_lower = clean_line.lower()
 
-        if "kbps" in clean_line:
-            normalized_line = " ".join(clean_line.split())
-            tracks.append(normalized_line)
+        if any(x in line_lower for x in ("kbps", "presentation graphics", "subtitle:")):
+            if strict_mode and not any(k in clean_line for k in keywords):
+                continue
+            results.append(" ".join(clean_line.split()))
 
-    return tracks
+    return results
 
 
-def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> str:
+def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> Tuple[str, str, str]:
     """
-    Compares the current BDInfo against a duplicate release's BDInfo and prints a diff to the console.
-
-    Args:
-        entry: dict[str, Any],
-        entry: A dictionary containing information about the duplicate release, including its BDInfo.
-
-    Returns:
-        A formatted warning string if differences are not found or if data is missing.
+    Removes technical variations that differ between playlists but represent the same media content.
     """
-    warning_message = ""
+    def process_content(text: str) -> str:
+        if not text:
+            return ""
+
+        text = re.sub(PLAYLIST_VARIATION_PATTERN, "", text)
+        cleaned_lines: List[str] = []
+
+        for line in text.splitlines():
+            line_lower = line.lower()
+
+            if "presentation graphics" in line_lower or "subtitle:" in line_lower:
+                line = re.sub(BITRATE_VARIATION_PATTERN, "", line).rstrip()
+                if line.endswith('kbps'):
+                    line = line[:-4].rstrip()
+                if line.endswith('/'):
+                    line = line[:-1].rstrip()
+
+            if line.startswith('*'):
+                line = line[:1].rstrip()
+
+            cleaned_lines.append(line)
+
+        return "\n".join(cleaned_lines)
+
+    return process_content(summary), process_content(extended), process_content(duplicate)
+
+
+def compare_bdinfo(meta: Dict[str, Any], entry: Dict[str, Any]) -> Tuple[str, str]:
+    """
+    Performs a visual comparison between local BDInfo and a duplicate entry, returning status messages.
+    """
     release_name = str(entry.get("name", "") or "")
-    duplicate_bdinfo_content = str(entry.get("bd_info", "") or "")
+    duplicate_content = has_bdinfo_content(entry)
+    source_lines, target_lines = get_relevant_lines(meta, duplicate_content)
 
-    source_bd_content = ""
-
-    is_extended_report = (
-        "PLAYLIST REPORT:" in duplicate_bdinfo_content or "DISC INFO:" in duplicate_bdinfo_content
-    )
-
-    file_prefix = "BD_SUMMARY_EXT_00" if is_extended_report else "BD_SUMMARY_00"
-    local_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/{file_prefix}.txt"
-
-    if os.path.exists(local_info_path):
-        with open(local_info_path, "r", encoding="utf-8") as file_handle:
-            source_bd_content = file_handle.read()
-
-    source_parsed_lines = get_relevant_lines(source_bd_content)
-    target_parsed_lines = get_relevant_lines(duplicate_bdinfo_content)
-
-    diff_generator = difflib.ndiff(source_parsed_lines, target_parsed_lines)
+    diff_generator = difflib.ndiff(source_lines, target_lines)
 
     console.print(f"\n[bold yellow]RELEASE:[/bold yellow] {release_name}")
     console.print("[dim]Comparison Details:[/dim]\n")
 
-    comparison_results: list[dict[str, str]] = []
+    comparison_results: List[Dict[str, str]] = []
+    stats = {"+ ": 0, "- ": 0}
 
     for line in diff_generator:
-        # Ignore difflib's internal hint lines (starting with '? ')
         if line.startswith("? "):
             continue
 
-        prefix = line[:2]  # "- ", "+ ", or "  "
-        content = line[2:].strip()
-
+        prefix, content = line[:2], line[2:].strip()
         if not content:
             continue
 
         comparison_results.append({"prefix": prefix, "content": content})
+        if prefix in stats:
+            stats[prefix] += 1
 
-    has_detected_changes = False
-
-    def sorting_priority(item: dict[str, str]) -> tuple[int, str]:
-        """
-        Define priority: 0 for Video, 1 for Audio, 2 for Subtitles.
-        Then sorts alphabetically within those groups.
-        """
-        content = item["content"].lower()
-        if "fps" in content:
-            priority = 0
-        elif "subtitle" in content or "presentation graphics" in content:
-            priority = 2
-        else:
-            priority = 1
-
-        return (priority, content)
-
-    # Sort using the custom priority function
     comparison_results.sort(key=sorting_priority)
 
+    has_detected_changes = False
     for item in comparison_results:
-        prefix = item["prefix"]
-        content = item["content"]
-
-        if prefix == "- ":
+        prefix, content = item["prefix"], item["content"]
+        if prefix != "  ":
             has_detected_changes = True
-            console.print(f"[bold red][-] YOURS:     {content}[/bold red]")
-        elif prefix == "+ ":
-            has_detected_changes = True
-            console.print(f"[bold green][+] DUPLICATE: {content}[/bold green]")
-        else:
-            # "  " indicates a match in ndiff
-            console.print(f"[bold white][ ] MATCH:     {content}[/bold white]")
 
-    if not duplicate_bdinfo_content:
-        warning_message = (
-            f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]:\n"
-            "No BDInfo found for duplicate release!"
-        )
-    elif not has_detected_changes:
-        warning_message = (
-            f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]:\n"
-            "No differences found between your BDInfo and the duplicate release BDInfo."
-        )
+        style = "bold red" if prefix == "- " else "bold green" if prefix == "+ " else "bold white"
+        label = "YOURS" if prefix == "- " else "DUPLICATE" if prefix == "+ " else "MATCH"
+        symbol = prefix.strip() or " "
 
-    return warning_message
+        console.print(f"[{style}][{symbol}] {label.ljust(10)}: {content}[/{style}]")
+
+    warning_message = generate_warning(release_name, duplicate_content, has_detected_changes)
+
+    add_val = f"+{stats['+ ']}".ljust(3)
+    rem_val = f"-{stats['- ']}".ljust(3)
+    diff_summary = f"[bold green]{add_val}[/bold green] [bold red]{rem_val}[/bold red]"
+
+    status_icon = "[yellow]⚠  [/yellow]" if not (stats['+ '] or stats['- ']) else " "
+    results = f"{diff_summary} | {status_icon}{release_name}"
+
+    return warning_message, results
 
 
-def remove_bbcode(text: str):
+def generate_warning(release_name: str, has_content: str, has_changes: bool) -> str:
     """
-    Removes BBCode tags from a string using regular expressions.
-    Matches any content inside square brackets.
+    Generates user-friendly warning messages based on the comparison state.
     """
-    if not text:
-        return ""
+    if not has_content:
+        return f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]: [red]No BDInfo found![/red]"
+    if not has_changes:
+        return f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]: [red]No differences found.[/red]"
+    return ""
 
-    bbcode_pattern = re.compile(r"\[[^\]]*\]")
 
-    clean_text = re.sub(bbcode_pattern, "", text)
+def load_bdinfo_file(meta: Dict[str, Any]) -> Tuple[str, str]:
+    """
+    Reads summary and extended summary files from the temporary metadata directory.
+    """
+    base_path = Path(meta.get('base_dir', '')) / 'tmp' / str(meta.get('uuid', ''))
 
-    return clean_text
+    def read_file(name: str) -> str:
+        file_path = base_path / name
+        return file_path.read_text(encoding="utf-8") if file_path.exists() else ""
+
+    return read_file("BD_SUMMARY_00.txt"), read_file("BD_SUMMARY_EXT_00.txt")
+
+
+def has_bdinfo_content(entry: Dict[str, Any]) -> str:
+    """
+    Attempts to locate BDInfo content within an entry's fields.
+    """
+    content = str(entry.get("bd_info", "") or "")
+    if not content:
+        description = str(entry.get("description", "") or "")
+        keywords = ["Disc Title:", "Disc Label:", "Disc Size: "]
+        if any(keyword in description for keyword in keywords):
+            content = description
+    return content
+
+
+def remove_bbcode(content: str) -> str:
+    """
+    Strips BBCode tags from the provided string.
+    """
+    return re.sub(BBCODE_PATTERN, "", content)
+
+
+def sorting_priority(item: Dict[str, str]) -> Tuple[int, str]:
+    """
+    Determines the display order of differences (Video first, then General, then Subtitles).
+    """
+    content = item["content"].lower()
+    if "fps" in content:
+        priority = 0
+    elif any(x in content for x in ("subtitle", "presentation graphics")):
+        priority = 2
+    else:
+        priority = 1
+    return priority, content
