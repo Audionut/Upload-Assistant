@@ -13,7 +13,7 @@ from PIL import Image
 
 from data.config import config
 from src.bbcode import BBCODE
-from src.btnid import get_bhd_torrents
+from src.btnid import BtnIdManager
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.type_utils import to_int
@@ -260,9 +260,14 @@ async def update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id
         valid_images = await check_images_concurrently(imagelist, meta)
         if valid_images:
             meta['image_list'] = valid_images
-            if meta.get('image_list'):  # Double-check if image_list is set before handling it
-                if not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx')) or meta['unattended']:
-                    await handle_image_list(meta, tracker_name, valid_images)
+            if (
+                meta.get('image_list')
+                and (
+                    not (meta.get('blu') or meta.get('aither') or meta.get('lst') or meta.get('oe') or meta.get('huno') or meta.get('ulcx'))
+                    or meta['unattended']
+                )
+            ):
+                await handle_image_list(meta, tracker_name, valid_images)
 
     if filename:
         meta[f'{tracker_name.lower()}_filename'] = filename
@@ -362,16 +367,16 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                           meta.get('isdir') is True)
 
         if meta.get('bhd'):
-            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, torrent_id=meta['bhd'])
+            imdb, tmdb = await BtnIdManager.get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, torrent_id=meta['bhd'])
         elif use_foldername:
             # Use folder name from path if available, fall back to UUID
             folder_path = meta.get('path', '')
             foldername = os.path.basename(folder_path) if folder_path else meta.get('uuid', '')
-            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, foldername=foldername)
+            imdb, tmdb = await BtnIdManager.get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, foldername=foldername)
         else:
             # Only use filename if none of the folder conditions are met
             filename = os.path.basename(meta['filelist'][0]) if meta.get('filelist') else None
-            imdb, tmdb = await get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, filename=filename)
+            imdb, tmdb = await BtnIdManager.get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id, filename=filename)
 
         if (imdb and int(imdb) != 0) or (tmdb and int(tmdb) != 0):
             if not meta['unattended']:

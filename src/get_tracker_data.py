@@ -12,7 +12,7 @@ import cli_ui
 import requests
 
 from data.config import config
-from src.btnid import get_btn_torrents
+from src.btnid import BtnIdManager
 from src.cleanup import cleanup, reset_terminal
 from src.clients import Clients
 from src.console import console
@@ -261,7 +261,7 @@ async def get_tracker_data(video, meta, search_term=None, search_file_folder=Non
                     btn_id = meta.get('btn')
                     btn_api = DEFAULT_CONFIG.get('btn_api')
                     if isinstance(btn_api, str) and len(btn_api) > 25:
-                        imdb, tvdb = await get_btn_torrents(btn_api, btn_id, meta)
+                        imdb, tvdb = await BtnIdManager.get_btn_torrents(btn_api, btn_id, meta)
                         if imdb != 0 or tvdb != 0:
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[green]Found BTN IDs: IMDb={imdb}, TVDb={tvdb}[/green]")
