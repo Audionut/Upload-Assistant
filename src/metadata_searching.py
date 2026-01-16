@@ -9,7 +9,7 @@ from src.console import console
 from src.imdb import imdb_manager
 from src.tmdb import tmdb_manager
 from src.tvdb import tvdb_data
-from src.tvmaze import get_tvmaze_episode_data, search_tvmaze
+from src.tvmaze import tvmaze_manager
 
 tvdb_handler = tvdb_data(config)
 
@@ -72,7 +72,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
         episode_int = _coerce_int(meta.get('episode_int'))
         if tvmaze_id is not None and season_int is not None and episode_int is not None:
             all_tasks.append(
-                get_tvmaze_episode_data(
+                tvmaze_manager.get_tvmaze_episode_data(
                     tvmaze_id,
                     season_int,
                     episode_int
@@ -220,7 +220,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
 
     if meta.get('category') == 'TV':
         tasks.append(
-            search_tvmaze(
+            tvmaze_manager.search_tvmaze(
                 filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
                 manual_date=meta.get('manual_date'),
                 tvmaze_manual=meta.get('tvmaze_manual'),
@@ -361,7 +361,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             mode=meta.get('mode', 'discord'),
             category_preference=meta.get('category')
         ),
-        search_tvmaze(
+        tvmaze_manager.search_tvmaze(
             filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
             manual_date=meta.get('manual_date'),
             tvmaze_manual=meta.get('tvmaze_manual'),
@@ -452,7 +452,7 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     # Add TVMaze search if it's a TV category
     if meta['category'] == 'TV':
         coroutines.append(
-            search_tvmaze(
+            tvmaze_manager.search_tvmaze(
                 filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
                 manual_date=meta.get('manual_date'),
                 tvmaze_manual=meta.get('tvmaze_manual'),
@@ -587,7 +587,7 @@ async def get_tvmaze_tvdb(
         console.print("[yellow]Finding both TVMaze and TVDb IDs[/yellow]")
     # Core metadata tasks that run in parallel
     tasks: list[Awaitable[Any]] = [
-        search_tvmaze(
+        tvmaze_manager.search_tvmaze(
             filename, search_year, imdb, 0,
             manual_date=manual_date,
             tvmaze_manual=tvmaze_manual,
@@ -719,7 +719,7 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
             season_int = _coerce_int(meta.get('season_int'))
             episode_int = _coerce_int(meta.get('episode_int'))
             if tvmaze_id is not None and season_int is not None and episode_int is not None:
-                tvmaze_episode_data = await get_tvmaze_episode_data(
+                tvmaze_episode_data = await tvmaze_manager.get_tvmaze_episode_data(
                     tvmaze_id,
                     season_int,
                     episode_int,
@@ -830,7 +830,7 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, A
         episode_int = _coerce_int(meta.get('episode_int'))
         if tvmaze_id is not None and season_int is not None and episode_int is not None:
             tasks.append(
-                get_tvmaze_episode_data(
+                tvmaze_manager.get_tvmaze_episode_data(
                     tvmaze_id,
                     season_int,
                     episode_int

@@ -37,7 +37,7 @@ try:
     from src.tags import get_tag, tag_override
     from src.tmdb import tmdb_manager
     from src.tvdb import tvdb_data
-    from src.tvmaze import search_tvmaze
+    from src.tvmaze import tvmaze_manager
     from src.video import get_container, get_hdr, get_resolution, get_type, get_uhd, get_video, get_video_codec, get_video_duration, get_video_encode, is_3d, is_sd
 
     config = cast(dict[str, Any], raw_config)
@@ -870,7 +870,7 @@ class Prep:
             if meta.get('tvmaze_id', 0) == 0 and not both_ids_searched:
                 if meta['debug']:
                     console.print("[yellow]No TVMAZE ID found, attempting to fetch...[/yellow]")
-                meta['tvmaze_id'] = await search_tvmaze(
+                meta['tvmaze_id'] = await tvmaze_manager.search_tvmaze(
                     filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
                     manual_date=meta.get('manual_date'),
                     tvmaze_manual=meta.get('tvmaze_manual'),
