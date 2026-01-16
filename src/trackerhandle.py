@@ -5,7 +5,7 @@ import sys
 import traceback
 import time
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.cleanup import cleanup, reset_terminal
 from src.get_desc import DescriptionBuilder
 from src.manualpackage import package
@@ -67,7 +67,7 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
                     message = f"[green]{torrent_url}{status['torrent_id']}[/green]"
                 elif 'status_message' in status and "data error" not in str(status['status_message']):
                     if print_messages or (print_links and 'torrent_id' not in status):
-                        message = f"{tracker}: {redact_private_info(status['status_message'])}"
+                        message = f"{tracker}: {Redaction.redact_private_info(status['status_message'])}"
             else:
                 if 'status_message' in status and "data error" in str(status['status_message']):
                     console.print(f"[red]{tracker}: {str(status['status_message'])}[/red]")

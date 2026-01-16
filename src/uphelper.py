@@ -6,7 +6,7 @@ import sys
 from difflib import SequenceMatcher
 from typing import Any, Mapping, cast
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -196,7 +196,7 @@ class UploadHelper:
                         if similarity > 0.9 and meta.get('size_match', False) and tracker_download_link:
                             meta[f'{tracker_name}_cross_seed'] = tracker_download_link
                             if meta['debug']:
-                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {Redaction.redact_private_info(tracker_download_link)}.[/bold red]')
                             break
 
             elif meta.get('filename_match', False) and meta.get('file_count_match', False):
@@ -207,7 +207,7 @@ class UploadHelper:
                     if isinstance(d, dict) and tracker_download_link:
                         meta[f'{tracker_name}_cross_seed'] = tracker_download_link
                         if meta['debug']:
-                            console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                            console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {Redaction.redact_private_info(tracker_download_link)}.[/bold red]')
                         break
 
             elif meta.get('size_match', False):
@@ -222,7 +222,7 @@ class UploadHelper:
                         if similarity > 0.9 and tracker_download_link:
                             meta[f'{tracker_name}_cross_seed'] = tracker_download_link
                             if meta['debug']:
-                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {redact_private_info(tracker_download_link)}.[/bold red]')
+                                console.print(f'[bold red]Cross-seed link saved for {tracker_name}: {Redaction.redact_private_info(tracker_download_link)}.[/bold red]')
                             break
 
             if upload is False:

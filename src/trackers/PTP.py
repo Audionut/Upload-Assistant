@@ -13,7 +13,7 @@ import requests
 from pathlib import Path
 from pymediainfo import MediaInfo
 from typing import Any, Optional, Union
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator
@@ -1335,18 +1335,18 @@ class PTP():
                     except Exception:
                         try:
                             parsed = json.loads(loginresponse.text)
-                            redacted = redact_private_info(parsed)
+                            redacted = Redaction.redact_private_info(parsed)
                             redacted_text = json.dumps(redacted)
                         except json.JSONDecodeError:
-                            redacted_text = redact_private_info(loginresponse.text)
+                            redacted_text = Redaction.redact_private_info(loginresponse.text)
                         raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
                 except Exception:
                     try:
                         parsed = json.loads(loginresponse.text)
-                        redacted = redact_private_info(parsed)
+                        redacted = Redaction.redact_private_info(parsed)
                         redacted_text = json.dumps(redacted)
                     except json.JSONDecodeError:
-                        redacted_text = redact_private_info(loginresponse.text)
+                        redacted_text = Redaction.redact_private_info(loginresponse.text)
                     raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
@@ -1558,7 +1558,7 @@ class PTP():
                 if 'AntiCsrfToken' in debug_data:
                     debug_data['AntiCsrfToken'] = '[REDACTED]'
                 console.log(url)
-                console.log(redact_private_info(debug_data))
+                console.log(Redaction.redact_private_info(debug_data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
                 await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success

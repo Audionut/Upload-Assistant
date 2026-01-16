@@ -4,7 +4,7 @@ import asyncio
 import httpx
 import requests
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -124,7 +124,7 @@ class SN():
                 return False
         else:
             console.print("[cyan]SN Request Data:")
-            console.print(redact_private_info(data))
+            console.print(Redaction.redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success

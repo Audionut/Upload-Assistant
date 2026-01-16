@@ -152,7 +152,7 @@ from packaging import version  # noqa: E402
 from torf import Torrent  # noqa: E402
 
 from bin.get_mkbrr import MkbrrBinaryManager  # noqa: E402
-from cogs.redaction import clean_meta_for_export, redact_private_info  # noqa: E402
+from cogs.redaction import Redaction  # noqa: E402
 from discordbot import DiscordNotifier  # noqa: E402
 from src.add_comparison import add_comparison  # noqa: E402
 from src.args import Args  # noqa: E402
@@ -1450,7 +1450,7 @@ async def do_the_thing(base_dir: str) -> None:
                         return f"{tracker}: {torrent_url}{status['torrent_id']}\n"
 
                     if status_message is not None and "data error" not in str(status_message) and tracker != "MTV":
-                        return f"{tracker}: {redact_private_info(status_message)}\n"
+                        return f"{tracker}: {Redaction.redact_private_info(status_message)}\n"
 
                     if status_message is not None and "data error" in str(status_message):
                         return f"{tracker}: {str(status_message)}\n"
@@ -1521,7 +1521,7 @@ async def do_the_thing(base_dir: str) -> None:
                 if sanitize_meta and not meta.get('emby', False):
                     try:
                         await asyncio.sleep(0.2)  # We can't race the status prints
-                        meta = await clean_meta_for_export(meta)
+                        meta = await Redaction.clean_meta_for_export(meta)
                     except Exception as e:
                         console.print(f"[red]Error cleaning meta for export: {e}")
                 await cleanup()
@@ -1532,7 +1532,7 @@ async def do_the_thing(base_dir: str) -> None:
             if sanitize_meta and not meta.get('emby', False):
                 try:
                     await asyncio.sleep(0.2)
-                    meta = await clean_meta_for_export(meta)
+                    meta = await Redaction.clean_meta_for_export(meta)
                 except Exception as e:
                     console.print(f"[red]Error cleaning meta for export: {e}")
             await cleanup()
@@ -1542,7 +1542,7 @@ async def do_the_thing(base_dir: str) -> None:
     except Exception as e:
         console.print(f"[bold red]An unexpected error occurred: {e}")
         if sanitize_meta:
-            meta = await clean_meta_for_export(meta)
+            meta = await Redaction.clean_meta_for_export(meta)
         console.print(traceback.format_exc())
         reset_terminal()
 
@@ -1680,7 +1680,7 @@ async def process_cross_seeds(meta: Meta) -> None:
         cross_seed_value = meta.get(cross_seed_key, False)
 
         if debug:
-            console.print(f"[cyan]Debug: {tracker} - cross_seed: {redact_private_info(cross_seed_value)}")
+            console.print(f"[cyan]Debug: {tracker} - cross_seed: {Redaction.redact_private_info(cross_seed_value)}")
 
         if not cross_seed_value:
             return

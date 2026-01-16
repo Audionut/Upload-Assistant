@@ -3,7 +3,7 @@ import os
 import re
 from typing import Any, Callable, TypedDict, cast
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from data.config import config
 from src.console import console
 from src.trackers.HUNO import HUNO
@@ -29,12 +29,12 @@ async def filter_dupes(dupes, meta, tracker_name):
             for dupe in dupes:
                 if isinstance(dupe, dict) and 'files' in dupe and isinstance(dupe['files'], list):
                     # Limit files list to first 10 items
-                    limited_dupe = redact_private_info(dupe).copy()
+                    limited_dupe = Redaction.redact_private_info(dupe).copy()
                     if len(limited_dupe['files']) > 10:
                         limited_dupe['files'] = limited_dupe['files'][:10] + [f"... and {len(dupe['files']) - 10} more files"]
                     dupes_to_print.append(limited_dupe)
                 else:
-                    dupes_to_print.append(redact_private_info(dupe))
+                    dupes_to_print.append(Redaction.redact_private_info(dupe))
             console.log(dupes_to_print)
         else:
             console.log(dupes)
@@ -526,12 +526,12 @@ async def filter_dupes(dupes, meta, tracker_name):
         for dupe in new_dupes:
             if isinstance(dupe, dict) and 'files' in dupe and isinstance(dupe['files'], list):
                 # Limit files list to first 10 items
-                limited_dupe = redact_private_info(dupe).copy()
+                limited_dupe = Redaction.redact_private_info(dupe).copy()
                 if len(limited_dupe['files']) > 10:
                     limited_dupe['files'] = limited_dupe['files'][:10] + [f"... and {len(dupe['files']) - 10} more files"]
                 filtered_dupes_to_print.append(limited_dupe)
             else:
-                filtered_dupes_to_print.append(redact_private_info(dupe))
+                filtered_dupes_to_print.append(Redaction.redact_private_info(dupe))
         console.log(f"[yellow]Filtered dupes on {tracker_name}: {filtered_dupes_to_print}")
 
     return new_dupes

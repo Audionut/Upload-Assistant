@@ -6,7 +6,7 @@ from pymediainfo import MediaInfo
 import requests
 import traceback
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -99,7 +99,7 @@ class BHDTV():
                     except Exception:
                         console.print("[cyan]It may have uploaded, go check")
                         # cprint(f"Request Data:", 'cyan')
-                        console.print(redact_private_info(data))
+                        console.print(Redaction.redact_private_info(data))
                         traceback.print_exc()
 
                 open_torrent.close()
@@ -122,7 +122,7 @@ class BHDTV():
 
             else:
                 console.print("[cyan]BHDTV Request Data:")
-                console.print(redact_private_info(data))
+                console.print(Redaction.redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
                 await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True

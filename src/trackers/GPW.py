@@ -7,7 +7,7 @@ import os
 import re
 import unicodedata
 from bs4 import BeautifulSoup
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -840,7 +840,7 @@ class GPW():
 
         else:
             console.print("[cyan]GPW Request Data:")
-            console.print(redact_private_info(data))
+            console.print(Redaction.redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
             await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True

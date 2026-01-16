@@ -21,7 +21,7 @@ import urllib.parse
 import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
 from typing import Any, Dict, DefaultDict, Tuple, Union, Optional, List, Callable, Awaitable
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from deluge_client import DelugeRPCClient
 from src.console import console
 from src.torrentcreate import TorrentCreator
@@ -1052,8 +1052,8 @@ class Clients():
         rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl.create_default_context())
         metainfo = bencode.bread(torrent_path)
         if meta['debug']:
-            print(f"{rtorrent}: {redact_private_info(rtorrent)}")
-            print(f"{metainfo}: {redact_private_info(metainfo)}")
+            print(f"{rtorrent}: {Redaction.redact_private_info(rtorrent)}")
+            print(f"{metainfo}: {Redaction.redact_private_info(metainfo)}")
         try:
             # Use dst path if linking was successful, otherwise use original path
             resume_path = dst if (use_symlink or use_hardlink) and os.path.exists(dst) else path
@@ -1408,7 +1408,7 @@ class Clients():
                     data.add_field('tags', tag)
                 data.add_field('torrents', torrent.dump(), filename='torrent.torrent', content_type='application/x-bittorrent')
                 if meta['debug']:
-                    console.print(f"[cyan]POSTing to {redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}")
+                    console.print(f"[cyan]POSTing to {Redaction.redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}")
 
                 async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add",
                                             data=data) as response:
@@ -2303,7 +2303,7 @@ class Clients():
                     url = f"{qbt_proxy_url}/api/v2/torrents/search?{query_string}"
 
                     if meta['debug']:
-                        console.print(f"[cyan]Searching qBittorrent via proxy: {redact_private_info(url)}...")
+                        console.print(f"[cyan]Searching qBittorrent via proxy: {Redaction.redact_private_info(url)}...")
 
                     if qbt_session is None:
                         return []
@@ -3226,7 +3226,7 @@ async def match_tracker_url(tracker_urls: List[str], meta: Dict[str, Any]) -> No
                 if pattern in tracker:
                     found_ids.add(tracker_id.upper())
                     if meta.get('debug'):
-                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {redact_private_info(tracker)}")
+                        console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {Redaction.redact_private_info(tracker)}")
                     if tracker_id.upper() == 'PTP' and 'passthepopcorn.me' in tracker:
                         if tracker.startswith('http://'):
                             console.print("[red]Found PTP announce URL using plaintext HTTP.\n")

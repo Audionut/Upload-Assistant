@@ -11,7 +11,7 @@ import re
 import uuid
 
 from bs4 import BeautifulSoup
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from pathlib import Path
 from src.console import console
 from src.cookie_auth import CookieValidator
@@ -1044,7 +1044,7 @@ class AZTrackerBase:
 
             else:
                 console.print(f"[cyan]{self.tracker} Request Data:")
-                console.print(redact_private_info(data))
+                console.print(Redaction.redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True

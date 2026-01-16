@@ -6,7 +6,7 @@ import httpx
 import os
 import re
 import platform
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -402,7 +402,7 @@ class TL:
 
             else:
                 console.print("[cyan]TL Request Data:")
-                console.print(redact_private_info(data))
+                console.print(Redaction.redact_private_info(data))
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
         return False
@@ -447,7 +447,7 @@ class TL:
 
         if meta['debug']:
             console.print("[cyan]TL Request Data:")
-            console.print(redact_private_info(data))
+            console.print(Redaction.redact_private_info(data))
             await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
         else:
