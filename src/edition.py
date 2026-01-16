@@ -1,21 +1,26 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any, Union
+from typing import Any, Optional, Union, cast
 
-from guessit import guessit
+from guessit import guessit as _guessit  # type: ignore[reportUnknownVariableType]
 
 from src.console import console
 from src.region import get_distributor
 
+guessit_fn: Any = cast(Any, _guessit)
 
-async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], manual_edition: Union[str, list[str]], meta: dict[str, Any]) -> tuple[str, str, bool]:
+
+async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: list[str], manual_edition: Union[str, list[str]], meta: dict[str, Any]) -> tuple[str, str, bool]:
     edition = ""
+    imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+    edition_details = cast(dict[str, dict[str, Any]], imdb_info.get('edition_details', {}))
 
-    if meta.get('category') == "MOVIE" and not meta.get('anime') and meta.get('imdb_info', {}).get('edition_details') and not manual_edition:
+    if meta.get('category') == "MOVIE" and not meta.get('anime') and edition_details and not manual_edition:
         if meta.get('is_disc') != "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
-                general_track = next((track for track in meta['mediainfo']['media']['track']
-                                      if track.get('@type') == 'General'), None)
+                mediainfo = cast(dict[str, Any], meta.get('mediainfo', {}))
+                tracks = cast(list[dict[str, Any]], mediainfo.get('media', {}).get('track', []))
+                general_track = next((track for track in tracks if track.get('@type') == 'General'), None)
 
                 if general_track and general_track.get('Duration'):
                     try:
@@ -25,27 +30,29 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
                             console.print(f"[cyan]Found media duration: {formatted_duration} ({media_duration_seconds} seconds)[/cyan]")
 
                         leeway_seconds = 50
-                        matching_editions = []
+                        matching_editions: list[dict[str, Any]] = []
 
                         # Find all matching editions
-                        for edition_info in meta['imdb_info']['edition_details'].values():
-                            edition_seconds = edition_info.get('seconds', 0)
+                        for edition_info in edition_details.values():
+                            edition_seconds = float(edition_info.get('seconds', 0) or 0)
                             edition_formatted = format_duration(edition_seconds)
                             difference = abs(media_duration_seconds - edition_seconds)
 
                             if difference <= leeway_seconds:
-                                has_attributes = bool(edition_info.get('attributes') and len(edition_info['attributes']) > 0)
+                                attributes = edition_info.get('attributes')
+                                attributes_list = cast(list[Any], attributes) if isinstance(attributes, list) else []
+                                has_attributes = bool(attributes_list)
                                 if meta['debug']:
-                                    console.print(f"[green]Potential match: {edition_info['display_name']} - duration {edition_formatted}, difference: {format_duration(difference)}[/green]")
+                                    console.print(f"[green]Potential match: {edition_info.get('display_name', '')} - duration {edition_formatted}, difference: {format_duration(difference)}[/green]")
 
                                 if has_attributes:
-                                    edition_name = " ".join(smart_title(attr) for attr in edition_info['attributes'])
+                                    edition_name = " ".join(smart_title(str(attr)) for attr in attributes_list)
 
                                     matching_editions.append({
                                         'name': edition_name,
-                                        'display_name': edition_info['display_name'],
+                                        'display_name': str(edition_info.get('display_name', '')),
                                         'has_attributes': bool(edition_info.get('attributes') and len(edition_info['attributes']) > 0),
-                                        'minutes': edition_info['minutes'],
+                                        'minutes': edition_info.get('minutes'),
                                         'difference': difference,
                                         'formatted_duration': edition_formatted
                                     })
@@ -57,8 +64,8 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[yellow]Media file duration {formatted_duration} matches multiple editions:[/yellow]")
                                 for i, ed in enumerate(matching_editions):
-                                    diff_formatted = format_duration(ed['difference'])
-                                    console.print(f"[yellow]{i+1}. [green]{ed['name']} ({ed['display_name']}, duration: {ed['formatted_duration']}, diff: {diff_formatted})[/yellow]")
+                                    diff_formatted = format_duration(float(ed.get('difference', 0) or 0))
+                                    console.print(f"[yellow]{i+1}. [green]{ed.get('name', '')} ({ed.get('display_name', '')}, duration: {ed.get('formatted_duration', '')}, diff: {diff_formatted})[/yellow]")
 
                                 try:
                                     choice = console.input(f"[yellow]Select edition number (1-{len(matching_editions)}) or press Enter to use the closest match: [/yellow]")
@@ -66,22 +73,22 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
                                     if choice.strip() and choice.isdigit() and 1 <= int(choice) <= len(matching_editions):
                                         selected = matching_editions[int(choice)-1]
                                     else:
-                                        selected = min(matching_editions, key=lambda x: x['difference'])
-                                        console.print(f"[yellow]Using closest match: {selected['name']}[/yellow]")
+                                        selected = min(matching_editions, key=lambda x: float(x.get('difference', 0) or 0))
+                                        console.print(f"[yellow]Using closest match: {selected.get('name', '')}[/yellow]")
                                 except Exception as e:
                                     console.print(f"[red]Error processing selection: {e}. Using closest match.[/red]")
-                                    selected = min(matching_editions, key=lambda x: x['difference'])
+                                    selected = min(matching_editions, key=lambda x: float(x.get('difference', 0) or 0))
                             else:
-                                selected = min(matching_editions, key=lambda x: x['difference'])
-                                console.print(f"[yellow]Multiple matches found in unattended mode. Using closest match: {selected['name']}[/yellow]")
+                                selected = min(matching_editions, key=lambda x: float(x.get('difference', 0) or 0))
+                                console.print(f"[yellow]Multiple matches found in unattended mode. Using closest match: {selected.get('name', '')}[/yellow]")
 
-                            edition = selected['name'] if selected['has_attributes'] else ""
+                            edition = str(selected.get('name', '')) if selected.get('has_attributes') else ""
 
                             console.print(f"[bold green]Setting edition from duration match: {edition}[/bold green]")
 
                         elif len(matching_editions) == 1:
                             selected = matching_editions[0]
-                            edition = selected['name'] if selected['has_attributes'] else ""  # No special edition for single matches without attributes
+                            edition = str(selected.get('name', '')) if selected.get('has_attributes') else ""  # No special edition for single matches without attributes
 
                             console.print(f"[bold green]Setting edition from duration match: {edition}[/bold green]")
 
@@ -97,14 +104,17 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
                 console.print("[cyan]Checking BDMV playlists for edition matches...[/cyan]")
             matched_editions: list[str] = []
 
-            all_playlists = []
-            for disc in meta['discs']:
+            all_playlists: list[dict[str, Any]] = []
+            discs = cast(list[dict[str, Any]], meta.get('discs', []))
+            for disc in discs:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    if disc.get('playlists'):
-                        all_playlists.extend(disc['playlists'])
+                    playlists = disc.get('playlists')
+                    if isinstance(playlists, list):
+                        all_playlists.extend(cast(list[dict[str, Any]], playlists))
                 else:
-                    if disc.get('all_valid_playlists'):
-                        all_playlists.extend(disc['all_valid_playlists'])
+                    valid_playlists = disc.get('all_valid_playlists')
+                    if isinstance(valid_playlists, list):
+                        all_playlists.extend(cast(list[dict[str, Any]], valid_playlists))
             if meta['debug']:
                 console.print(f"[cyan]Found {len(all_playlists)} playlists to check against IMDb editions[/cyan]")
 
@@ -113,32 +123,34 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
             matched_editions_without_attributes: list[str] = []
 
             for playlist in all_playlists:
-                playlist_file = playlist['file'] if playlist.get('file', None) else ""
-                playlist_edition = playlist['edition'] if playlist.get('edition') else ""
+                playlist_file = str(playlist.get('file') or "")
+                playlist_edition = str(playlist.get('edition') or "")
                 if playlist.get('duration'):
-                    playlist_duration = float(playlist['duration'])
+                    playlist_duration = float(playlist.get('duration') or 0)
                     formatted_duration = format_duration(playlist_duration)
                     if meta['debug']:
                         console.print(f"[cyan]Checking playlist duration: {formatted_duration} seconds[/cyan]")
 
                     playlist_matching_editions: list[dict[str, Any]] = []
 
-                    for edition_info in meta['imdb_info']['edition_details'].values():
-                        edition_seconds = edition_info.get('seconds', 0)
+                    for edition_info in edition_details.values():
+                        edition_seconds = float(edition_info.get('seconds', 0) or 0)
                         difference = abs(playlist_duration - edition_seconds)
 
                         if difference <= leeway_seconds:
                             # Store the complete edition info
-                            if edition_info.get('attributes') and len(edition_info['attributes']) > 0:
-                                edition_name = " ".join(smart_title(attr) for attr in edition_info['attributes'])
+                            attributes = edition_info.get('attributes')
+                            attributes_list = cast(list[Any], attributes) if isinstance(attributes, list) else []
+                            if attributes_list:
+                                edition_name = " ".join(smart_title(str(attr)) for attr in attributes_list)
                             else:
-                                edition_name = f"{edition_info['minutes']} Minute Version (Theatrical)"
+                                edition_name = f"{edition_info.get('minutes')} Minute Version (Theatrical)"
 
                             playlist_matching_editions.append({
                                 'name': edition_name,
-                                'display_name': edition_info['display_name'],
+                                'display_name': str(edition_info.get('display_name', '')),
                                 'has_attributes': bool(edition_info.get('attributes') and len(edition_info['attributes']) > 0),
-                                'minutes': edition_info['minutes'],
+                                'minutes': edition_info.get('minutes'),
                                 'difference': difference
                             })
 
@@ -271,15 +283,15 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
         if video.lower().startswith('dc'):
             video = video.lower().replace('dc', '', 1)
 
-        guess: Any = guessit(video)
+        guess: Any = guessit_fn(video)
 
         tag_value: Any = guess.get('release_group', 'NOGROUP')
-        tag = " ".join(str(t) for t in tag_value) if isinstance(tag_value, list) else str(tag_value)
+        tag = " ".join(str(t) for t in cast(list[Any], tag_value)) if isinstance(tag_value, list) else str(tag_value)
         repack = ""
 
         if bdinfo is not None:
             try:
-                edition_value: Any = guessit(bdinfo['label']).get('edition', '')
+                edition_value: Any = guessit_fn(bdinfo['label']).get('edition', '')
             except Exception as e:
                 if meta['debug']:
                     print(f"BDInfo Edition Guess Error: {e}")
@@ -292,7 +304,7 @@ async def get_edition(video: str, bdinfo: dict[str, Any], filelist: list[str], m
                     print(f"Video Edition Guess Error: {e}")
                 edition_value = ""
 
-        edition = " ".join(str(e) for e in edition_value) if isinstance(edition_value, list) else str(edition_value or "")
+        edition = " ".join(str(e) for e in cast(list[Any], edition_value)) if isinstance(edition_value, list) else str(edition_value or "")
 
         if len(filelist) == 1:
             video = os.path.basename(video)
