@@ -32,7 +32,7 @@ def read_example_config():
         key_stack: list[str] = []
         indent_stack = [0]
 
-        for idx, line in enumerate(lines):
+        for _idx, line in enumerate(lines):
             line = line.rstrip("\n")
             stripped = line.lstrip()
             indent = len(line) - len(stripped)
@@ -446,15 +446,12 @@ def get_img_host(config_defaults, existing_defaults, example_defaults, config_co
                 print(f"[!] Invalid host: {host_input}. Available hosts: {', '.join(img_host_api_map.keys())}")
 
     # Set unused image host API keys to empty string
-    for host, api_key_item in img_host_api_map.items():
+    for api_key_item in img_host_api_map.values():
         if api_key_item is None:
             # Skip hosts that don't need API keys
             continue
 
-        if isinstance(api_key_item, str):
-            api_keys = [api_key_item]
-        else:
-            api_keys = api_key_item
+        api_keys = [api_key_item] if isinstance(api_key_item, str) else api_key_item
 
         for api_key in api_keys:
             if api_key in example_defaults and api_key not in config_defaults:

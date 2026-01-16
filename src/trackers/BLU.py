@@ -32,28 +32,26 @@ class BLU(UNIT3D):
 
     async def get_additional_checks(self, meta):
         should_continue = True
-        if meta['type'] in ['ENCODE', 'REMUX']:
-            if 'HDR' in meta.get('hdr', '') and 'DV' in meta.get('hdr', ''):
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print('[bold red]Releases using a Dolby Vision layer from a different source have specific description requirements.[/bold red]')
-                    console.print('[bold red]See rule 12.5. You must have a correct pre-formatted description if this release has a derived layer[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        return False
-                    if cli_ui.ask_yes_no("Is this a derived layer release?", default=False):
-                        meta['tracker_status'][self.tracker]['other'] = True
-
-        if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
-            if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        return False
+        if meta['type'] in ['ENCODE', 'REMUX'] and 'HDR' in meta.get('hdr', '') and 'DV' in meta.get('hdr', ''):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Releases using a Dolby Vision layer from a different source have specific description requirements.[/bold red]')
+                console.print('[bold red]See rule 12.5. You must have a correct pre-formatted description if this release has a derived layer[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     return False
+                if cli_ui.ask_yes_no("Is this a derived layer release?", default=False):
+                    meta['tracker_status'][self.tracker]['other'] = True
+
+        if meta['type'] not in ['WEBDL'] and not meta['is_disc'] and meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    return False
+            else:
+                return False
 
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -79,7 +77,7 @@ class BLU(UNIT3D):
             if imdb_aka and imdb_aka.strip() and imdb_aka != imdb_name and not meta.get('no_aka', False):
                 blu_name = blu_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
 
-        if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
+        if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             blu_name = blu_name.replace(f"{year}", imdb_year, 1)
 
         if webdv:

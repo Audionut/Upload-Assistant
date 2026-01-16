@@ -111,10 +111,7 @@ class ANT:
         if imdb_info.get('type') is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie'):
-                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
-                    antType = 0
-                else:
-                    antType = 1
+                antType = 0 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0 else 1
             if imdbType == "short":
                 antType = 1
             elif imdbType == "tv mini series":
@@ -125,10 +122,7 @@ class ANT:
             keywords = meta.get("keywords", "").lower()
             tmdb_type = meta.get("tmdb_type", "movie").lower()
             if tmdb_type == "movie":
-                if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0:
-                    antType = 0
-                else:
-                    antType = 1
+                antType = 0 if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0 else 1
             if tmdb_type == "miniseries" or "miniseries" in keywords:
                 antType = 2
             if "short" in keywords or "short film" in keywords:

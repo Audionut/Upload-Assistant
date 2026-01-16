@@ -29,9 +29,7 @@ expected_images = to_int(DEFAULT_CONFIG.get('screens', 0))
 async def prompt_user_for_confirmation(message: str) -> bool:
     try:
         response = input(f"{message} (Y/n): ").strip().lower()
-        if response in ["y", "yes", ""]:
-            return True
-        return False
+        return response in ["y", "yes", ""]
     except EOFError:
         sys.exit(1)
 
@@ -526,10 +524,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
             if meta['debug']:
                 console.print(f"[green]Valid data found on {tracker_name}[/green]")
             selected = await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
-            if selected:
-                found_match = True
-            else:
-                found_match = False
+            found_match = bool(selected)
         else:
             if meta['debug']:
                 console.print(f"[yellow]No valid data found on {tracker_name}[/yellow]")

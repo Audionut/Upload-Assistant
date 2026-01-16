@@ -182,10 +182,7 @@ async def get_tvmaze_episode_data(
                     show_name = data["_links"]["show"].get("name", "")
 
                     show_response = await client.get(show_url, timeout=10.0)
-                    if show_response.status_code == 200:
-                        show_data = show_response.json()
-                    else:
-                        show_data = {"name": show_name}
+                    show_data = show_response.json() if show_response.status_code == 200 else {"name": show_name}
 
                 # Clean HTML tags from summary
                 summary = data.get("summary", "")
@@ -242,9 +239,8 @@ async def get_tvmaze_episode_data(
                                 console.print(f"[cyan]Found airdate from TVDB episode data: {airdate}[/cyan]")
                             break
 
-                if not airdate:
-                    if meta.get('debug'):
-                        console.print(f"[yellow]Could not find airdate for TVDB episode ID {tvdb_episode_id}[/yellow]")
+                if not airdate and meta.get('debug'):
+                    console.print(f"[yellow]Could not find airdate for TVDB episode ID {tvdb_episode_id}[/yellow]")
 
             # Try date-based lookup if we have an airdate
             if airdate:
@@ -286,10 +282,7 @@ async def get_tvmaze_episode_data_by_date(tvmaze_id: int, airdate: str) -> Optio
                     show_name = episode_data["_links"]["show"].get("name", "")
 
                     show_response = await client.get(show_url, timeout=10.0)
-                    if show_response.status_code == 200:
-                        show_data = show_response.json()
-                    else:
-                        show_data = {"name": show_name}
+                    show_data = show_response.json() if show_response.status_code == 200 else {"name": show_name}
 
                 # Clean HTML tags from summary
                 summary = episode_data.get("summary", "")

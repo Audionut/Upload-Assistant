@@ -198,10 +198,7 @@ class ASC:
 
             anime_language = self.anime_language_map.get(meta.get('original_language', '').lower(), '6')
 
-            if await self.get_audio(meta) in ('2', '3', '4'):
-                lang = '8'
-            else:
-                lang = self.language_map.get(meta.get('original_language', '').lower(), '11')
+            lang = '8' if await self.get_audio(meta) in ('2', '3', '4') else self.language_map.get(meta.get('original_language', '').lower(), '11')
 
             return {
                 'type': type_,
@@ -458,12 +455,10 @@ class ASC:
 
         # Ratings
         ratings_list = user_layout.get('Ratings', [])
-        if not ratings_list:
-            if imdb_rating := meta.get('imdb_info', {}).get('rating'):
-                ratings_list.append({'Source': 'Internet Movie Database', 'Value': f'{imdb_rating}/10'})
-        if self.main_tmdb_data and (tmdb_rating := self.main_tmdb_data.get('vote_average')):
-            if not any(r.get('Source') == 'TMDb' for r in ratings_list):
-                ratings_list.append({'Source': 'TMDb', 'Value': f'{tmdb_rating:.1f}/10'})
+        if not ratings_list and (imdb_rating := meta.get('imdb_info', {}).get('rating')):
+            ratings_list.append({'Source': 'Internet Movie Database', 'Value': f'{imdb_rating}/10'})
+        if self.main_tmdb_data and (tmdb_rating := self.main_tmdb_data.get('vote_average')) and not any(r.get('Source') == 'TMDb' for r in ratings_list):
+            ratings_list.append({'Source': 'TMDb', 'Value': f'{tmdb_rating:.1f}/10'})
 
         criticas_key = 'BARRINHA_INFORMACOES' if meta['category'] == 'MOVIE' and 'BARRINHA_INFORMACOES' in layout_image else 'BARRINHA_CRITICAS'
         await append_section(criticas_key, await self.build_ratings_bbcode(meta, ratings_list))
@@ -510,10 +505,7 @@ class ASC:
     async def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
-        if youtube_code:
-            youtube = f'http://www.youtube.com/watch?v={youtube_code}'
-        else:
-            youtube = meta.get('youtube') or ''
+        youtube = f'http://www.youtube.com/watch?v={youtube_code}' if youtube_code else meta.get('youtube') or ''
 
         return youtube
 
@@ -544,10 +536,7 @@ class ASC:
 
             if file_li_tag and file_li_tag.contents:
                 first_content = file_li_tag.contents[0]
-                if isinstance(first_content, str):
-                    filename = first_content.strip()
-                else:
-                    filename = first_content.get_text(strip=True)
+                filename = first_content.strip() if isinstance(first_content, str) else first_content.get_text(strip=True)
 
         except Exception as e:
             console.print(f'[bold red]Falha ao obter nome do arquivo para ID {torrent_id}: {e}[/bold red]')

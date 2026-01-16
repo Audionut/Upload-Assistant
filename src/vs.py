@@ -2,7 +2,7 @@
 import os
 import random
 from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import vapoursynth as vs
 from awsmfunc import DynamicTonemap, ScreenGen, zresize
@@ -25,24 +25,23 @@ def CustomFrameInfo(clip: vs.VideoNode, text: str) -> vs.VideoNode:
     return core.std.FrameEval(clip, partial(FrameProps, clip=clip), prop_src=clip)
 
 
-def optimize_images(image: str, config: Dict[str, Any]) -> None:
+def optimize_images(image: str, config: dict[str, Any]) -> None:
     import platform  # Ensure platform is imported here
-    if config.get('optimize_images', True):
-        if os.path.exists(image):
-            try:
-                pyver = platform.python_version_tuple()
-                if int(pyver[0]) == 3 and int(pyver[1]) >= 7:
-                    import oxipng
-                if os.path.getsize(image) >= 16000000:
-                    oxipng.optimize(image, level=6)
-                else:
-                    oxipng.optimize(image, level=3)
-            except Exception as e:
-                print(f"Image optimization failed: {e}")
+    if config.get('optimize_images', True) and os.path.exists(image):
+        try:
+            pyver = platform.python_version_tuple()
+            if int(pyver[0]) == 3 and int(pyver[1]) >= 7:
+                import oxipng
+            if os.path.getsize(image) >= 16000000:
+                oxipng.optimize(image, level=6)
+            else:
+                oxipng.optimize(image, level=3)
+        except Exception as e:
+            print(f"Image optimization failed: {e}")
     return
 
 
-def vs_screengn(source: str, encode: Optional[str] = None, num: int = 5, dir: str = ".", config: Optional[Dict[str, Any]] = None) -> None:
+def vs_screengn(source: str, encode: Optional[str] = None, num: int = 5, dir: str = ".", config: Optional[dict[str, Any]] = None) -> None:
     if config is None:
         config = {'optimize_images': True}  # Default configuration
 
@@ -102,18 +101,17 @@ def vs_screengn(source: str, encode: Optional[str] = None, num: int = 5, dir: st
         print(f"Generated and saved new frame numbers to {screens_file}")
 
     # If an encode exists and is provided, crop and resize
-    if encode:
-        if src.width != enc.width or src.height != enc.height:
-            ref = zresize(enc, preset=src.height)
-            crop = [(src.width - ref.width) / 2, (src.height - ref.height) / 2]
-            src = src.std.Crop(left=crop[0], right=crop[0], top=crop[1], bottom=crop[1])
-            if enc.width / enc.height > 16 / 9:
-                width = enc.width
-                height = None
-            else:
-                width = None
-                height = enc.height
-            src = zresize(src, width=width, height=height)
+    if encode and (src.width != enc.width or src.height != enc.height):
+        ref = zresize(enc, preset=src.height)
+        crop = [(src.width - ref.width) / 2, (src.height - ref.height) / 2]
+        src = src.std.Crop(left=crop[0], right=crop[0], top=crop[1], bottom=crop[1])
+        if enc.width / enc.height > 16 / 9:
+            width = enc.width
+            height = None
+        else:
+            width = None
+            height = enc.height
+        src = zresize(src, width=width, height=height)
 
     # Apply tonemapping if the source is HDR
     tonemapped = False

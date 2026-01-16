@@ -341,18 +341,17 @@ class SHRI(UNIT3D):
             region_name = meta.get("region")
 
             # Prompt for region if not in meta
-            if not region_name:
-                if not meta.get("unattended") or meta.get("unattended_confirm"):
-                    while True:
-                        region_name = cli_ui.ask_string(
-                            "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
-                        )
-                        region_name = (
-                            region_name.strip().upper() if region_name else None
-                        )
-                        if region_name:
-                            break
-                        print("Region code is required.")
+            if not region_name and (not meta.get("unattended") or meta.get("unattended_confirm")):
+                while True:
+                    region_name = cli_ui.ask_string(
+                        "SHRI: Region code not found for disc. Please enter it manually (mandatory): "
+                    )
+                    region_name = (
+                        region_name.strip().upper() if region_name else None
+                    )
+                    if region_name:
+                        break
+                    print("Region code is required.")
 
             # Validate region name was provided
             if not region_name:
@@ -477,10 +476,7 @@ class SHRI(UNIT3D):
 
             # Normalize source list
             source = meta.get("source", "")
-            if isinstance(source, list):
-                source = [s.upper() for s in source]
-            else:
-                source = [source.upper()] if source else []
+            source = [s.upper() for s in source] if isinstance(source, list) else [source.upper()] if source else []
 
             service = str(meta.get("service", "")).upper()
 
@@ -525,9 +521,8 @@ class SHRI(UNIT3D):
 
             # Netflix fingerprint detection
             format_profile = video_track.get("Format_Profile", "")
-            if "Main@L4.0" in format_profile and "rc=2pass" in encoding_settings:
-                if "core 118" in encoded_library or "core 148" in encoded_library:
-                    return "WEBDL"
+            if "Main@L4.0" in format_profile and "rc=2pass" in encoding_settings and ("core 118" in encoded_library or "core 148" in encoded_library):
+                return "WEBDL"
 
             # ===== Priority 4: BluRay encoding detection =====
             if any(s in ("BLURAY", "BLU-RAY") for s in source):
@@ -541,19 +536,17 @@ class SHRI(UNIT3D):
 
             # ===== Priority 5: Encoding tools (source-aware) =====
             # Check general track for encoding tools (Handbrake, Staxrip, etc)
-            if any(s in ("BLURAY", "BLU-RAY") for s in source):
-                if has_encoding_tools(
-                    general_track,
-                    ["x264", "x265", "handbrake", "staxrip", "megatagger"],
-                ):
-                    return "ENCODE"
+            if any(s in ("BLURAY", "BLU-RAY") for s in source) and has_encoding_tools(
+                general_track,
+                ["x264", "x265", "handbrake", "staxrip", "megatagger"],
+            ):
+                return "ENCODE"
 
             # WEB sources: only explicit user tools indicate re-encode
-            if any("WEB" in s for s in source):
-                if has_encoding_tools(
-                    general_track, ["handbrake", "staxrip", "megatagger"]
-                ):
-                    return "WEBRIP"
+            if any("WEB" in s for s in source) and has_encoding_tools(
+                general_track, ["handbrake", "staxrip", "megatagger"]
+            ):
+                return "WEBRIP"
 
             # ===== Priority 6: No encoding + WEB = WEB-DL =====
             if any("WEB" in s for s in source):
@@ -570,9 +563,8 @@ class SHRI(UNIT3D):
                 return "REMUX"
 
             # DVD REMUX detection
-            if any(s in ("NTSC", "PAL", "NTSC DVD", "PAL DVD", "DVD") for s in source):
-                if not has_settings and not has_library:
-                    return "REMUX"
+            if any(s in ("NTSC", "PAL", "NTSC DVD", "PAL DVD", "DVD") for s in source) and not has_settings and not has_library:
+                return "REMUX"
 
         except (IndexError, KeyError):
             # Fallback on mediainfo parsing errors

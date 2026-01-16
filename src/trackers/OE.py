@@ -49,13 +49,7 @@ class OE(UNIT3D):
                 console.print('[bold red]Erotic not allowed at OE.')
             return False
 
-        if not meta['is_disc'] == "BDMV":
-            if not await self.common.check_language_requirements(
-                meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
-            ):
-                return False
-
-        return True
+        return not (meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True))
 
     async def check_image_hosts(self, meta):
         url_host_mapping = {
@@ -107,10 +101,7 @@ class OE(UNIT3D):
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
             desc = desc.replace('[img]', '[img=300]')
             await descfile.write(desc)
-            if f'{self.tracker}_images_key' in meta:
-                images = meta[f'{self.tracker}_images_key']
-            else:
-                images = meta['image_list']
+            images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
             if len(images) > 0:
                 await descfile.write("[center]")
                 for each in range(len(images[:int(meta['screens'])])):
@@ -148,7 +139,7 @@ class OE(UNIT3D):
             if imdb_aka and imdb_aka.strip() and imdb_aka != imdb_name and not meta.get('no_aka', False):
                 oe_name = oe_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
 
-        if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
+        if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             oe_name = oe_name.replace(f"{year}", imdb_year, 1)
 
         if name_type == "DVDRIP":
@@ -163,7 +154,7 @@ class OE(UNIT3D):
             await process_desc_language(meta, tracker=self.tracker)
         elif meta.get('audio_languages'):
             audio_languages = meta['audio_languages']
-            if audio_languages and not await has_english_language(audio_languages) and not meta.get('is_disc') == "BDMV":
+            if audio_languages and not await has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
                 foreign_lang = meta['audio_languages'][0].upper()
                 oe_name = oe_name.replace(f"{resolution}", f"{foreign_lang} {resolution}", 1)
 

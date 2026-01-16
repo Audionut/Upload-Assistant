@@ -116,12 +116,11 @@ async def get_video_encode(mi, type, bdinfo):
             codec = 'x264'
         elif format == 'HEVC':
             codec = 'x265'
-        elif format == 'MPEG-4 Visual':
-            if encoded_library_name:
-                if 'xvid' in encoded_library_name.lower():
-                    codec = 'XviD'
-                elif 'divx' in encoded_library_name.lower():
-                    codec = 'DivX'
+        elif format == 'MPEG-4 Visual' and encoded_library_name:
+            if 'xvid' in encoded_library_name.lower():
+                codec = 'XviD'
+            elif 'divx' in encoded_library_name.lower():
+                codec = 'DivX'
     elif type in ('WEBDL', 'HDTV'):  # WEB-DL
         if format == 'AVC':
             codec = 'H.264'
@@ -130,10 +129,7 @@ async def get_video_encode(mi, type, bdinfo):
 
         if type == 'HDTV' and has_encode_settings is True:
             codec = codec.replace('H.', 'x')
-    if format_profile == 'High 10':
-        profile = "Hi10P"
-    else:
-        profile = ""
+    profile = "Hi10P" if format_profile == 'High 10' else ""
     video_encode = f"{profile} {codec}"
     video_codec = format
     if video_codec == "MPEG Video":
@@ -177,10 +173,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                     reset_terminal()
                     sys.exit(1)
         try:
-            if sorted_filelist:
-                video = sorted(filelist, key=os.path.getsize, reverse=True)[0]
-            else:
-                video = sorted(filelist)[0]
+            video = sorted(filelist, key=os.path.getsize, reverse=True)[0] if sorted_filelist else sorted(filelist)[0]
         except IndexError:
             console.print("[bold red]No Video files found")
             if mode == 'cli':
@@ -198,10 +191,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
                 await cleanup()
                 reset_terminal()
                 sys.exit(1)
-    if sorted_filelist:
-        filelist = sorted(filelist, key=os.path.getsize, reverse=True)
-    else:
-        filelist = sorted(filelist)
+    filelist = sorted(filelist, key=os.path.getsize, reverse=True) if sorted_filelist else sorted(filelist)
     return video, filelist
 
 
@@ -307,15 +297,12 @@ async def is_3d(mi, bdinfo):
 
 
 async def is_sd(resolution):
-    if resolution in ("480i", "480p", "576i", "576p", "540p"):
-        sd = 1
-    else:
-        sd = 0
+    sd = 1 if resolution in ("480i", "480p", "576i", "576p", "540p") else 0
     return sd
 
 
 async def get_video_duration(meta):
-    if not meta.get('is_disc') == "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
+    if meta.get('is_disc') != "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
         general_track = next((track for track in meta['mediainfo']['media']['track']
                               if track.get('@type') == 'General'), None)
 

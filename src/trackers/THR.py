@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import glob
 import json
 import os
@@ -92,10 +93,7 @@ class THR:
         if subs != []:
             payload['subs[]'] = tuple(subs)
 
-        if meta['debug'] is False:
-            thr_upload_prompt = True
-        else:
-            thr_upload_prompt = cli_ui.ask_yes_no("send to takeupload.php?", default=False)
+        thr_upload_prompt = True if meta['debug'] is False else cli_ui.ask_yes_no("send to takeupload.php?", default=False)
 
         if thr_upload_prompt is True:
             await asyncio.sleep(0.5)
@@ -135,10 +133,8 @@ class THR:
                 console.print(f"[red]Error during upload: {str(e)}")
                 console.print_exception()
                 if meta['debug']:
-                    try:
+                    with contextlib.suppress(Exception):
                         console.print(f"[red]Response: {response.text[:500]}...")
-                    except Exception:
-                        pass
                 console.print("[yellow]It may have uploaded, please check THR manually")
                 return False
         else:
@@ -160,15 +156,9 @@ class THR:
             elif meta.get('is_disc') == "DVD" or meta.get('is_disc') == "HDDVD":
                 cat = '14'
             else:
-                if meta.get('sd') == 1:
-                    cat = '4'
-                else:
-                    cat = '17'
+                cat = '4' if meta.get('sd') == 1 else '17'
         elif meta['category'] == "TV":
-            if meta.get('sd') == 1:
-                cat = '7'
-            else:
-                cat = '34'
+            cat = '7' if meta.get('sd') == 1 else '34'
         elif meta.get('anime') is not False:
             cat = '31'
         return cat
@@ -183,9 +173,8 @@ class THR:
                 if track['@type'] == "Text":
                     language = track.get('Language')
                     language = language.split('-')[0] if language else language
-                    if language in ['hr', 'en', 'bs', 'sr', 'sl']:
-                        if language not in sub_langs:
-                            sub_langs.append(language)
+                    if language in ['hr', 'en', 'bs', 'sr', 'sl'] and language not in sub_langs:
+                        sub_langs.append(language)
         else:
             for sub in meta['bdinfo']['subtitles']:
                 if sub not in sub_langs:
@@ -207,14 +196,8 @@ class THR:
         bbcode = BBCODE()
         base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
-            if meta['tag'] == "":
-                tag = ""
-            else:
-                tag = f" / {meta['tag'][1:]}"
-            if meta['is_disc'] == "DVD":
-                res = meta['source']
-            else:
-                res = meta['resolution']
+            tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
+            res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
             desc.write("[quote=Info]")
             name_aka = f"{meta['title']} {meta['aka']} {meta['year']}"
             name_aka = unidecode(name_aka)

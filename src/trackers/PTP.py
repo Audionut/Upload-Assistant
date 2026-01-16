@@ -258,10 +258,7 @@ class PTP:
             else:
                 meta['description'] = desc
                 meta['saved_description'] = True
-        if meta.get('keep_images'):
-            imagelist = imagelist
-        else:
-            imagelist = []
+        imagelist = imagelist if meta.get('keep_images') else []
 
         return imagelist
 
@@ -298,7 +295,7 @@ class PTP:
                     console.print(f"[yellow]Found {total_results} matches for IMDb: tt{imdb}[/yellow]")
                     movies = response.get('Movies', [])
                     choices = []
-                    for i, movie in enumerate(movies):
+                    for _i, movie in enumerate(movies):
                         title = movie.get('Title', 'Unknown')
                         year = movie.get('Year', 'Unknown')
                         group_id = movie.get('GroupId', 'Unknown')
@@ -477,10 +474,7 @@ class PTP:
         if imdb_info['type'] is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie'):
-                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
-                    ptpType = "Feature Film"
-                else:
-                    ptpType = "Short Film"
+                ptpType = "Feature Film" if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0 else "Short Film"
             if imdbType == "short":
                 ptpType = "Short Film"
             elif imdbType == "tv mini series":
@@ -493,10 +487,7 @@ class PTP:
             keywords = meta.get("keywords", "").lower()
             tmdb_type = meta.get("tmdb_type", "movie").lower()
             if tmdb_type == "movie":
-                if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0:
-                    ptpType = "Feature Film"
-                else:
-                    ptpType = "Short Film"
+                ptpType = "Feature Film" if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0 else "Short Film"
             if tmdb_type == "miniseries" or "miniseries" in keywords:
                 ptpType = "Miniseries"
             if "short" in keywords or "short film" in keywords:
@@ -505,12 +496,11 @@ class PTP:
                 ptpType = "Stand-up Comedy"
             elif "concert" in keywords:
                 ptpType = "Live Performance"
-        if ptpType is None:
-            if meta.get('mode', 'discord') == 'cli':
-                ptpTypeList = ["Feature Film", "Short Film", "Miniseries", "Stand-up Comedy", "Concert", "Movie Collection"]
-                ptpType = cli_ui.ask_choice("Select the proper type", choices=ptpTypeList)
-                if ptpType == "Concert":
-                    ptpType = "Live Performance"
+        if ptpType is None and meta.get('mode', 'discord') == 'cli':
+            ptpTypeList = ["Feature Film", "Short Film", "Miniseries", "Stand-up Comedy", "Concert", "Movie Collection"]
+            ptpType = cli_ui.ask_choice("Select the proper type", choices=ptpTypeList)
+            if ptpType == "Concert":
+                ptpType = "Live Performance"
         return ptpType
 
     def get_codec(self, meta: dict[str, Any]) -> str:
@@ -714,10 +704,7 @@ class PTP:
         if meta.get('has_commentary', False) is True:
             remaster_title.append('With Commentary')
 
-        if remaster_title != []:
-            output = " / ".join(remaster_title)
-        else:
-            output = ""
+        output = " / ".join(remaster_title) if remaster_title != [] else ""
         return output
 
     def convert_bbcode(self, desc: str) -> str:
@@ -763,13 +750,7 @@ class PTP:
             multi_screens = 2
             console.print("[yellow]PTP requires at least 2 screenshots for multi disc/file content, overriding config")
 
-        if not meta.get('skip_imghost_upload', False):
-            if 'PTP_images_key' in meta:
-                image_list = meta['PTP_images_key']
-            else:
-                image_list = meta['image_list']
-        else:
-            image_list = []
+        image_list = (meta['PTP_images_key'] if 'PTP_images_key' in meta else meta['image_list']) if not meta.get('skip_imghost_upload', False) else []
         images = image_list
 
         # Check for saved pack_image_links.json file
@@ -1105,29 +1086,28 @@ class PTP:
                 if base2ptp.strip() != "":
                     desc.write(base2ptp)
                     desc.write("\n\n")
-                if meta.get('comparison'):
-                    if 'comparison_groups' in meta and meta['comparison_groups']:
+                if meta.get('comparison') and 'comparison_groups' in meta and meta['comparison_groups']:
+                    desc.write("\n")
+
+                    comparison_groups = meta['comparison_groups']
+                    group_keys = sorted(comparison_groups.keys(), key=lambda x: int(x))
+                    comparison_names = [comparison_groups[key].get('name', f'Group {key}') for key in group_keys]
+                    comparison_header = ', '.join(comparison_names)
+                    desc.write(f"[comparison={comparison_header}]\n")
+
+                    num_images = min([len(comparison_groups[key]['urls']) for key in group_keys])
+
+                    for img_index in range(num_images):
+                        for key in group_keys:
+                            group = comparison_groups[key]
+                            if img_index < len(group['urls']):
+                                img_data = group['urls'][img_index]
+                                raw_url = img_data.get('raw_url', '')
+                                if raw_url:
+                                    desc.write(f"[img]{raw_url}[/img] ")
                         desc.write("\n")
 
-                        comparison_groups = meta['comparison_groups']
-                        group_keys = sorted(comparison_groups.keys(), key=lambda x: int(x))
-                        comparison_names = [comparison_groups[key].get('name', f'Group {key}') for key in group_keys]
-                        comparison_header = ', '.join(comparison_names)
-                        desc.write(f"[comparison={comparison_header}]\n")
-
-                        num_images = min([len(comparison_groups[key]['urls']) for key in group_keys])
-
-                        for img_index in range(num_images):
-                            for key in group_keys:
-                                group = comparison_groups[key]
-                                if img_index < len(group['urls']):
-                                    img_data = group['urls'][img_index]
-                                    raw_url = img_data.get('raw_url', '')
-                                    if raw_url:
-                                        desc.write(f"[img]{raw_url}[/img] ")
-                            desc.write("\n")
-
-                        desc.write("[/comparison]\n\n")
+                    desc.write("[/comparison]\n\n")
 
                 try:
                     if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
@@ -1411,9 +1391,8 @@ class PTP:
             if ptp_trumpable and 50 in ptp_trumpable:
                 ptp_trumpable.remove(50)
                 ptp_trumpable.append(4)
-            if ptp_trumpable and 14 in ptp_trumpable:
-                if 44 in ptp_subtitles:
-                    ptp_subtitles.remove(44)
+            if ptp_trumpable and 14 in ptp_trumpable and 44 in ptp_subtitles:
+                ptp_subtitles.remove(44)
             if ptp_trumpable and 15 in ptp_trumpable:
                 ptp_trumpable.remove(15)
                 ptp_trumpable.append(4)

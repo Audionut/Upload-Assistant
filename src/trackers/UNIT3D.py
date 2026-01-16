@@ -81,7 +81,7 @@ class UNIT3D:
         resolution_id = str(resolutions["resolution_id"])
         if resolution_id in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys
-            params_list = [(k, v) for k, v in params_dict.items()]
+            params_list = list(params_dict.items())
             params_list.append(("resolutions[]", "3"))
             params_list.append(("resolutions[]", "4"))
         else:
@@ -106,10 +106,7 @@ class UNIT3D:
                 params_dict["name"] = params_dict["name"] + season_value
 
         request_params: ParamsList
-        if params_list is not None:
-            request_params = params_list
-        else:
-            request_params = [(k, v) for k, v in params_dict.items()]
+        request_params = params_list if params_list is not None else list(params_dict.items())
 
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
@@ -284,10 +281,7 @@ class UNIT3D:
             return {"resolution_id": resolved_id}
 
     async def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta["anon"] == 0 and not self.tracker_config.get("anon", False):
-            anonymous = "0"
-        else:
-            anonymous = "1"
+        anonymous = "0" if meta["anon"] == 0 and not self.tracker_config.get("anon", False) else "1"
         return {"anonymous": anonymous}
 
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -357,11 +351,10 @@ class UNIT3D:
 
     async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = "0"
-        if self.tracker_config.get("internal", False) is True:
-            if meta["tag"] != "" and (
-                meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
-            ):
-                internal = "1"
+        if self.tracker_config.get("internal", False) is True and meta["tag"] != "" and (
+            meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
+        ):
+            internal = "1"
 
         return {"internal": internal}
 
@@ -446,10 +439,9 @@ class UNIT3D:
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
-        if not nfo_files and meta.get('keep_nfo', False):
-            if meta.get('keep_folder', False) or meta.get('isdir', False):
-                search_dir = os.path.dirname(meta["path"])
-                nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
+        if not nfo_files and meta.get('keep_nfo', False) and (meta.get('keep_folder', False) or meta.get('isdir', False)):
+            search_dir = os.path.dirname(meta["path"])
+            nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
             async with aiofiles.open(nfo_files[0], "rb") as f:

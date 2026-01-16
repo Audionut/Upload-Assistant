@@ -159,10 +159,7 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
                     content_written = True
 
         if not content_written:
-            if meta.get("description"):
-                description_text = meta.get("description", "").strip()
-            else:
-                description_text = ""
+            description_text = meta.get("description", "").strip() if meta.get("description") else ""
             if description_text:
                 description.write(description_text + "\n")
 
@@ -1172,11 +1169,10 @@ class DescriptionBuilder:
                         new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
                         # If no screenshots exist, create them
-                        if not new_screens:
-                            if meta["debug"]:
-                                console.print(
-                                    f"[yellow]No existing screenshots for {new_images_key}; generating new ones."
-                                )
+                        if not new_screens and meta["debug"]:
+                            console.print(
+                                f"[yellow]No existing screenshots for {new_images_key}; generating new ones."
+                            )
                         try:
                             await screenshots(
                                 file,
@@ -1237,12 +1233,10 @@ class DescriptionBuilder:
                 )
 
                 # If we are beyond the file limit, add all further files in a spoiler
-                if multi_screens != 0:
-                    if i >= file_limit:
-                        if not other_files_spoiler_open:
-                            desc_parts.append("[center][spoiler=Other files]\n")
-                            char_count += len("[center][spoiler=Other files]\n")
-                            other_files_spoiler_open = True
+                if multi_screens != 0 and i >= file_limit and not other_files_spoiler_open:
+                    desc_parts.append("[center][spoiler=Other files]\n")
+                    char_count += len("[center][spoiler=Other files]\n")
+                    other_files_spoiler_open = True
 
                 # Write filename in BBCode format with MediaInfo in spoiler if not the first file
                 if multi_screens != 0:
@@ -1284,18 +1278,17 @@ class DescriptionBuilder:
                                 desc_parts.append("\n")
                         desc_parts.append("[/center]\n\n")
                         char_count += len("[/center]\n\n")
-                elif multi_screens != 0:
-                    if new_images_key in meta and meta[new_images_key]:
-                        desc_parts.append("[center]")
-                        char_count += len("[center]")
-                        for img in meta[new_images_key]:
-                            web_url = img["web_url"]
-                            raw_url = img["raw_url"]
-                            image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
-                            desc_parts.append(image_str)
-                            char_count += len(image_str)
-                        desc_parts.append("[/center]\n\n")
-                        char_count += len("[/center]\n\n")
+                elif multi_screens != 0 and new_images_key in meta and meta[new_images_key]:
+                    desc_parts.append("[center]")
+                    char_count += len("[center]")
+                    for img in meta[new_images_key]:
+                        web_url = img["web_url"]
+                        raw_url = img["raw_url"]
+                        image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
+                        desc_parts.append(image_str)
+                        char_count += len(image_str)
+                    desc_parts.append("[/center]\n\n")
+                    char_count += len("[/center]\n\n")
 
             if other_files_spoiler_open:
                 desc_parts.append("[/spoiler][/center]\n")

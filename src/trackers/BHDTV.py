@@ -144,10 +144,7 @@ class BHDTV:
         type_id = '0'
         test = meta['type']  # noqa F841
         if meta['type'] == 'DISC':
-            if meta['3D']:
-                type_id = '46'
-            else:
-                type_id = '2'
+            type_id = '46' if meta['3D'] else '2'
         elif meta['type'] == 'REMUX':
             if str(meta['name']).__contains__('265'):
                 type_id = '48'

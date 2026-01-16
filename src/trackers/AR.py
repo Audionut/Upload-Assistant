@@ -322,10 +322,7 @@ class AR:
 
                 if logout_link:
                     href_value = logout_link.get('href')
-                    if isinstance(href_value, str):
-                        match = re.search(r'auth=([^&]+)', href_value)
-                    else:
-                        match = None
+                    match = re.search(r'auth=([^&]+)', href_value) if isinstance(href_value, str) else None
                     if match:
                         auth_key = match.group(1)
                         # Save it for next time
@@ -443,10 +440,7 @@ class AR:
             id_pattern=r'torrents\.php\?id=(\d+)',
             success_status_code="200",
         )
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded
 
     async def parse_mediainfo_async(self, video_path, template_path):
         """Parse MediaInfo asynchronously using thread executor"""

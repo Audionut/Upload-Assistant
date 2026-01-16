@@ -430,10 +430,10 @@ class DiscParse:
         return bdinfo_files
 
     def parse_bdinfo(self, bdinfo_input, files, path):
-        bdinfo: dict[str, Any] = dict()
-        bdinfo['video'] = list()
-        bdinfo['audio'] = list()
-        bdinfo['subtitles'] = list()
+        bdinfo: dict[str, Any] = {}
+        bdinfo['video'] = []
+        bdinfo['audio'] = []
+        bdinfo['subtitles'] = []
         bdinfo['path'] = path
         lines = bdinfo_input.splitlines()
         for l in lines:  # noqa E741

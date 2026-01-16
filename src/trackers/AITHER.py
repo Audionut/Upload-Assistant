@@ -56,7 +56,7 @@ class AITHER(UNIT3D):
             foreign_lang = audio_languages[0].upper()
             if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
                 aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {foreign_lang}", 1)
-            elif not meta.get('is_disc') == "BDMV":
+            elif meta.get('is_disc') != "BDMV":
                 aither_name = aither_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
 
         if name_type == "DVDRIP":

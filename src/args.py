@@ -6,7 +6,7 @@ import re
 import sys
 import urllib.parse
 from collections.abc import Sequence
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Optional, cast
 
 from src.console import console
 
@@ -71,11 +71,11 @@ class Args:
     Parse Args
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         pass
 
-    def parse(self, argv: Sequence[str], meta: Dict[str, Any]) -> Tuple[Dict[str, Any], CustomArgumentParser, List[str]]:
+    def parse(self, argv: Sequence[str], meta: dict[str, Any]) -> tuple[dict[str, Any], CustomArgumentParser, list[str]]:
         input = list(argv)
         parser = CustomArgumentParser(
             usage="upload.py [path...] [options]",
@@ -196,7 +196,7 @@ class Args:
         parser.add_argument('-emby_debug', '--emby_debug', action='store_true', required=False, help="Does debugging stuff for Audionut")
         parser.add_argument('-ch', '--channel', nargs=1, required=False, help="SPD only: Channel ID number or tag to upload to (preferably the ID), without '@'. Example: '-ch spd' when using a tag, or '-ch 1' when using an ID.", type=str, dest='spd_channel', default="")
         parsed_args_ns, before_args = parser.parse_known_args(input)
-        parsed_args: Dict[str, Any] = vars(parsed_args_ns)
+        parsed_args: dict[str, Any] = vars(parsed_args_ns)
         # console.print(args)
 
         # Validation: require either path or site_upload
@@ -428,10 +428,7 @@ class Args:
             if key == 'trackers':
                 if value:
                     # Extract from list if it's a single-item list (from nargs=1)
-                    if isinstance(value, list) and len(value) == 1:
-                        tracker_value = value[0]
-                    else:
-                        tracker_value = value
+                    tracker_value = value[0] if isinstance(value, list) and len(value) == 1 else value
 
                     if isinstance(tracker_value, str):
                         tracker_value = tracker_value.strip('"\'')
@@ -463,7 +460,7 @@ class Args:
                 # parser.print_help()
         return meta, parser, before_args
 
-    def list_to_string(self, list: List[str]) -> str:
+    def list_to_string(self, list: list[str]) -> str:
         if len(list) == 1:
             return str(list[0])
         try:
@@ -472,7 +469,7 @@ class Args:
             result = "None"
         return result
 
-    def parse_tmdb_id(self, id_str: str, category: Optional[str]) -> Tuple[str, int]:
+    def parse_tmdb_id(self, id_str: str, category: Optional[str]) -> tuple[str, int]:
         if category is None:
             category = ''
         parsed_id: str = str(id_str).lower().strip()
@@ -502,9 +499,6 @@ class Args:
         else:
             parsed_id = parsed_id
 
-        if isinstance(parsed_id, str) and parsed_id.isdigit():
-            parsed_id_int = int(parsed_id)
-        else:
-            parsed_id_int = 0
+        parsed_id_int = int(parsed_id) if isinstance(parsed_id, str) and parsed_id.isdigit() else 0
 
         return category, parsed_id_int

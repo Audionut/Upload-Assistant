@@ -2,14 +2,14 @@
 import json
 import os
 import re
-from typing import Any, Dict
+from typing import Any
 
 from guessit import guessit
 
 from src.console import console
 
 
-async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = False) -> str:
+async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = False) -> str:
     # Using regex from cross-seed (https://github.com/cross-seed/cross-seed/tree/master?tab=Apache-2.0-1-ov-file)
     release_group = None
     basename = os.path.basename(video)
@@ -26,7 +26,7 @@ async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = Fa
             if meta['debug']:
                 console.print(f"Anime regex match: {release_group}")
     if not meta.get('anime', False) or not matched_anime:
-        if not meta.get('is_disc') == "BDMV":
+        if meta.get('is_disc') != "BDMV":
             # Non-anime pattern: group at the end after last hyphen, avoiding resolutions and numbers
             if os.path.isdir(video):
                 # If video is a directory, use the directory name as basename
@@ -38,18 +38,14 @@ async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = Fa
                 basename_no_path = os.path.basename(video)
                 name, ext = os.path.splitext(basename_no_path)
                 # If the extension contains a hyphen, it's not a real extension
-                if ext and '-' in ext:
-                    basename_stripped = basename_no_path
-                else:
-                    basename_stripped = name
+                basename_stripped = basename_no_path if ext and '-' in ext else name
             non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
             if non_anime_match:
                 release_group = non_anime_match.group(1).strip()
                 if "Z0N3" in release_group:
                     release_group = release_group.replace("Z0N3", "D-Z0N3")
-                if not meta.get('scene', False):
-                    if release_group and len(release_group) > 12:
-                        release_group = None
+                if not meta.get('scene', False) and release_group and len(release_group) > 12:
+                    release_group = None
                 if meta['debug']:
                     console.print(f"Non-anime regex match: {release_group}")
 
@@ -66,9 +62,8 @@ async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = Fa
             release_group = None
 
     # BDMV validation
-    if meta['is_disc'] == "BDMV" and release_group:
-        if f"{release_group}" not in video:
-            release_group = None
+    if meta['is_disc'] == "BDMV" and release_group and f"{release_group}" not in video:
+        release_group = None
 
     # Format the tag
     tag = f"-{release_group}" if release_group else ""
@@ -84,7 +79,7 @@ async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = Fa
     return tag
 
 
-async def tag_override(meta: Dict[str, Any]) -> Dict[str, Any]:
+async def tag_override(meta: dict[str, Any]) -> dict[str, Any]:
     try:
         with open(f"{meta['base_dir']}/data/tags.json", encoding="utf-8") as f:
             tags = json.load(f)

@@ -142,7 +142,7 @@ def extract_bluray_links(html_content):
         if not movie_divs:
             return None
 
-        for i, movie_div in enumerate(movie_divs, 1):
+        for _i, movie_div in enumerate(movie_divs, 1):
             link = movie_div.find('a', class_='alphaborder')
 
             if link and 'href' in link.attrs:
@@ -242,7 +242,7 @@ async def extract_bluray_release_info(html_content, meta):
             console.print("[yellow]No sections match exact media type, using all available sections[/yellow]")
             filtered_sections = selected_sections
 
-        for section_idx, section in enumerate(filtered_sections, 1):
+        for _section_idx, section in enumerate(filtered_sections, 1):
             parent_tr = section.find_parent('tr')
             if not parent_tr:
                 console.print(f"[red]Could not find parent tr for {release_type_debug} section[/red]")
@@ -250,12 +250,12 @@ async def extract_bluray_release_info(html_content, meta):
 
             release_links = []
             current = section.find_next()
-            while current and (not current.name == 'h3'):
+            while current and (current.name != 'h3'):
                 if current.name == 'a' and current.has_attr('href') and ('blu-ray.com/movies/' in current['href'] or 'blu-ray.com/dvd/' in current['href']):
                     release_links.append(current)
                 current = current.find_next()
 
-            for link_idx, link in enumerate(release_links, 1):
+            for _link_idx, link in enumerate(release_links, 1):
                 try:
                     release_url = link['href']
                     title = link.get('title', link.text.strip())
@@ -686,9 +686,8 @@ async def parse_release_details(response_text, release, meta):
                 specs['playback']['region_notes'] = region_match.group(2).strip() if region_match.group(2) else ""
                 if meta['debug']:
                     console.print(f"[blue]Region: {specs['playback']['region']}[/blue]")
-                if specs['playback']['region_notes']:
-                    if meta['debug']:
-                        console.print(f"[dim]Region Notes: {specs['playback']['region_notes']}[/dim]")
+                if specs['playback']['region_notes'] and meta['debug']:
+                    console.print(f"[dim]Region Notes: {specs['playback']['region_notes']}[/dim]")
 
         if meta.get('use_bluray_images', False):
             cover_images = extract_cover_images(response_text)
@@ -1217,10 +1216,7 @@ async def process_all_releases(releases, meta):
                             elif 'dolby' in meta_format:
                                 meta_format = 'dolby atmos'
                             if meta_channels.strip() in ['atmos audio', 'atmos', '']:
-                                if meta_sample_rate in ['7.1', '5.1', '2.0', '1.0']:
-                                    meta_channels = meta_sample_rate
-                                else:
-                                    meta_channels = '7.1'
+                                meta_channels = meta_sample_rate if meta_sample_rate in ['7.1', '5.1', '2.0', '1.0'] else '7.1'
 
                             if 'khz' in meta_bitrate and 'khz' not in meta_sample_rate:
                                 meta_sample_rate = meta_bitrate
@@ -1231,10 +1227,7 @@ async def process_all_releases(releases, meta):
                                 if bitrate_part:
                                     meta_bitrate = bitrate_part.group(1)
                                     bit_depth_part = re.search(r'(\d+)-bit', meta_bit_depth)
-                                    if bit_depth_part:
-                                        meta_bit_depth = bit_depth_part.group(1) + "-bit"
-                                    else:
-                                        meta_bit_depth = ""
+                                    meta_bit_depth = bit_depth_part.group(1) + "-bit" if bit_depth_part else ""
 
                         # Skip bit depth if it contains "DN -" (Dolby Digital Normalization)
                         if 'dn -' in meta_bit_depth:
@@ -1413,10 +1406,7 @@ async def process_all_releases(releases, meta):
                     if total_subs > 0:
                         match_percentage = (sub_matches / total_subs) * 100
                         missing_tracks = total_subs - sub_matches
-                        if total_subs == 1 and sub_matches == 0:
-                            sub_penalty = 10.0
-                        else:
-                            sub_penalty = 5.0 * missing_tracks
+                        sub_penalty = 10.0 if total_subs == 1 and sub_matches == 0 else 5.0 * missing_tracks
                         if meta['debug']:
                             log_and_print(f"[dim]Subtitle penalty: {sub_penalty:.1f}[/dim]", release_logs)
                         score -= sub_penalty

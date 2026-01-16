@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import multiprocessing
 import os
 import platform
@@ -8,7 +9,7 @@ import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Set
+from typing import Optional
 
 import psutil
 
@@ -22,7 +23,7 @@ IS_ANDROID = ('android' in platform.platform().lower() or
               os.path.exists('/system/build.prop') or
               'ANDROID_ROOT' in os.environ)
 
-running_subprocesses: Set[subprocess.Popen] = set()
+running_subprocesses: set[subprocess.Popen] = set()
 thread_executor: Optional[ThreadPoolExecutor] = None
 IS_MACOS = sys.platform == 'darwin'
 
@@ -75,10 +76,8 @@ async def cleanup() -> None:
         # 🔹 Close process streams safely
         for stream in (proc.stdout, proc.stderr, proc.stdin):
             if stream:
-                try:
+                with contextlib.suppress(Exception):
                     stream.close()
-                except Exception:
-                    pass
 
     # 🔹 Step 4: Ensure subprocess transport cleanup
     try:
@@ -162,10 +161,8 @@ def kill_all_threads() -> None:
 
             for child in children:
                 # console.print(f"[yellow]Terminating process {child.pid}...[/yellow]")
-                try:
+                with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
                     child.terminate()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
-                    pass
 
             # Wait for a short time for processes to terminate
             if not IS_MACOS:
@@ -173,10 +170,8 @@ def kill_all_threads() -> None:
                     _, still_alive = psutil.wait_procs(children, timeout=3)
                     for child in still_alive:
                         # console.print(f"[red]Force killing stubborn process: {child.pid}[/red]")
-                        try:
+                        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
                             child.kill()
-                        except (psutil.NoSuchProcess, psutil.AccessDenied, PermissionError):
-                            pass
                 except (psutil.AccessDenied, PermissionError):
                     # Handle systems where we can't wait for processes
                     pass
@@ -261,10 +256,8 @@ def reset_terminal() -> None:
                 pass
 
         # Kill background jobs
-        try:
+        with contextlib.suppress(Exception):
             os.system("jobs -p | xargs -r kill 2>/dev/null")
-        except Exception:
-            pass
 
         if not sys.stderr.closed:
             sys.stderr.flush()

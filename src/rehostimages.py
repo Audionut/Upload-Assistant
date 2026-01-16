@@ -117,14 +117,13 @@ async def check_hosts(
             continue
 
         # For covers, verify the release_url matches
-        if tracker == "covers" and "release_url" in meta:
-            if "release_url" not in image or image["release_url"] != meta["release_url"]:
-                if meta.get('debug'):
-                    if "release_url" not in image:
-                        console.print(f"[yellow]Skipping image without release_url: {raw_url}")
-                    else:
-                        console.print(f"[yellow]Skipping image with mismatched release_url: {image['release_url']} != {meta['release_url']}")
-                continue
+        if tracker == "covers" and "release_url" in meta and ("release_url" not in image or image["release_url"] != meta["release_url"]):
+            if meta.get('debug'):
+                if "release_url" not in image:
+                    console.print(f"[yellow]Skipping image without release_url: {raw_url}")
+                else:
+                    console.print(f"[yellow]Skipping image with mismatched release_url: {image['release_url']} != {meta['release_url']}")
+            continue
 
         parsed_url = urlparse(raw_url)
         hostname = parsed_url.netloc
@@ -426,10 +425,7 @@ async def handle_image_upload(
         remaining = [s for s in all_screenshots if s not in final_screenshots]
         final_screenshots.extend(remaining[:multi_screens - len(final_screenshots)])
 
-    if tracker == "covers":
-        all_screenshots = all_screenshots
-    else:
-        all_screenshots = final_screenshots[:multi_screens]
+    all_screenshots = all_screenshots if tracker == "covers" else final_screenshots[:multi_screens]
 
     if meta.get('debug'):
         console.print(f"[green]Using {len(all_screenshots)} screenshots:")
@@ -494,10 +490,7 @@ async def handle_image_upload(
             mapped_host = url_host_mapping.get(matched_host, matched_host)
             valid_hosts.append(mapped_host in approved_image_hosts)
         if all(valid_hosts) and new_images_key in meta and isinstance(meta[new_images_key], list):
-            if tracker == "covers":
-                output_file = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "covers.json")
-            else:
-                output_file = os.path.join(screenshots_dir, "reuploaded_images.json")
+            output_file = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "covers.json") if tracker == "covers" else os.path.join(screenshots_dir, "reuploaded_images.json")
 
             try:
                 async with aiofiles.open(output_file, encoding='utf-8') as f:
@@ -536,9 +529,8 @@ async def handle_image_upload(
                         except Exception as e:
                             console.print(f"[yellow]Failed to delete cover image file {screenshot}: {str(e)}[/yellow]")
 
-                    if deleted_count > 0:
-                        if meta['debug']:
-                            console.print(f"[green]Cleaned up {deleted_count} cover image files after successful upload[/green]")
+                    if deleted_count > 0 and meta['debug']:
+                        console.print(f"[green]Cleaned up {deleted_count} cover image files after successful upload[/green]")
 
             except Exception as e:
                 console.print(f"[red]Failed to save reuploaded images: {e}")

@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
 import traceback
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from guessit import guessit
 
@@ -9,8 +9,8 @@ from src.console import console
 from src.exceptions import *  # noqa: F403
 
 
-async def get_source(type: str, video: str, path: str, is_disc: str, meta: Dict[str, Any], folder_id: str, base_dir: str) -> Tuple[str, str]:
-    if not meta.get('is_disc') == "BDMV":
+async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[str, Any], folder_id: str, base_dir: str) -> tuple[str, str]:
+    if meta.get('is_disc') != "BDMV":
         try:
             with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
                 mi = json.load(f)
@@ -67,9 +67,8 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: Dict[
                 if type == "REMUX":
                     system = f"{system} DVD".strip()
                 source = system
-        if source in ("Web", "WEB"):
-            if type == "ENCODE":
-                type = "WEBRIP"
+        if source in ("Web", "WEB") and type == "ENCODE":
+            type = "WEBRIP"
         if source in ("HD-DVD", "HD DVD", "HDDVD"):
             if is_disc == "HDDVD":
                 source = "HD DVD"

@@ -118,10 +118,7 @@ class TTG:
         #
         # POST > upload/upload
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 'no'
-        else:
-            anon = 'yes'
+        anon = 'no' if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 'yes'
 
         if meta['bdinfo'] is not None:
             mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8')
@@ -194,10 +191,7 @@ class TTG:
             return []
         cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)
 
-        if int(meta['imdb_id']) != 0:
-            imdb = f"imdb{meta['imdb']}"
-        else:
-            imdb = ""
+        imdb = f"imdb{meta['imdb']}" if int(meta['imdb_id']) != 0 else ""
         if meta.get('is_disc', '') == "BDMV":
             res_type = f"{meta['resolution']} Blu-ray"
         elif meta.get('is_disc', '') == "DVD":
@@ -261,10 +255,7 @@ class TTG:
                 if meta['debug']:
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
-                if resp.text.find("""<a href="/logout.php">Logout</a>""") != -1:
-                    return True
-                else:
-                    return False
+                return resp.text.find('''<a href="/logout.php">Logout</a>''') != -1
         else:
             return False
 

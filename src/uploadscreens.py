@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import base64
+import contextlib
 import gc
 import glob
 import json
@@ -757,7 +758,7 @@ async def upload_screens(
 
         # Process and store successfully uploaded images
         new_images = []
-        for index, upload in successfully_uploaded:
+        for _index, upload in successfully_uploaded:
             raw_url = upload['raw_url']
             new_image = {
                 'img_url': upload['img_url'],
@@ -791,10 +792,8 @@ async def upload_screens(
         # Cancel running tasks
         for task in running_tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         return meta['image_list'], len(meta['image_list'])
 

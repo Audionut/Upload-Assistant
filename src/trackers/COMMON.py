@@ -6,7 +6,7 @@ import os
 import re
 import secrets
 import sys
-from typing import Any, List, Optional, Union
+from typing import Any, Optional, Union
 
 import aiofiles
 import bencodepy
@@ -101,10 +101,7 @@ class COMMON:
         hash_is_id: bool = False,
         cross: bool = False,
     ) -> Optional[str]:
-        if cross:
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
-        else:
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent" if cross else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl:
             try:
                 async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
@@ -180,7 +177,7 @@ class COMMON:
             info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
-    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[List[dict[str, str]]]) -> Optional[str]:
+    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -381,10 +378,7 @@ class COMMON:
         if not meta['unattended']:
             selection = input(f"Do you want to use these IDs from {tracker_name}? (Y/n): ").strip().lower()
             try:
-                if selection == '' or selection == 'y' or selection == 'yes':
-                    return True
-                else:
-                    return False
+                return bool(selection == '' or selection == 'y' or selection == 'yes')
             except (KeyboardInterrupt, EOFError):
                 sys.exit(1)
         else:
@@ -392,9 +386,7 @@ class COMMON:
 
     async def prompt_user_for_confirmation(self, message: str) -> bool:
         response = input(f"{message} (Y/n): ").strip().lower()
-        if response == '' or response == 'y':
-            return True
-        return False
+        return bool(response == '' or response == 'y')
 
     async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
@@ -596,15 +588,14 @@ class COMMON:
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-            if tmdb or imdb or tvdb:
-                if not id:
-                    # Only prompt the user for ID selection if not searching by ID
-                    try:
-                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
-                            console.print("[yellow]User chose to skip based on IDs.[/yellow]")
-                            return None, None, None, None, None, None, None, [], None
-                    except (KeyboardInterrupt, EOFError):
-                        sys.exit(1)
+            if (tmdb or imdb or tvdb) and not id:
+                # Only prompt the user for ID selection if not searching by ID
+                try:
+                    if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
+                        console.print("[yellow]User chose to skip based on IDs.[/yellow]")
+                        return None, None, None, None, None, None, None, [], None
+                except (KeyboardInterrupt, EOFError):
+                    sys.exit(1)
 
             if description:
                 bbcode = BBCODE()
@@ -974,7 +965,7 @@ class COMMON:
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[List[str]] = None, char_limit: int = 0) -> str:
+    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[list[str]] = None, char_limit: int = 0) -> str:
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
@@ -1057,7 +1048,7 @@ class COMMON:
         self,
         meta: dict[str, Any],
         tracker: str,
-        languages_to_check: List[str],
+        languages_to_check: list[str],
         check_audio: bool = False,
         check_subtitle: bool = False,
         require_both: bool = False,

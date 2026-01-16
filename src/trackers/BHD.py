@@ -59,10 +59,7 @@ class BHD:
         tags = await self.get_tags(meta)
         custom, edition = await self.get_edition(meta, tags)
         bhd_name = await self.edit_name(meta)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         mi_dump = None
         if meta['is_disc'] == "BDMV":
@@ -205,10 +202,7 @@ class BHD:
                 if bdinfo['size'] < each:
                     bd_size = each
                     break
-            if meta['uhd'] == "UHD" and bd_size != 25:
-                type_id = f"UHD {bd_size}"
-            else:
-                type_id = f"BD {bd_size}"
+            type_id = f"UHD {bd_size}" if meta['uhd'] == "UHD" and bd_size != 25 else f"BD {bd_size}"
             if type_id not in ['UHD 100', 'UHD 66', 'UHD 50', 'BD 50', 'BD 25']:
                 type_id = "Other"
         elif meta['is_disc'] == "DVD":
@@ -228,10 +222,7 @@ class BHD:
                     type_id = "Other"
             else:
                 acceptable_res = ["2160p", "1080p", "1080i", "720p", "576p", "576i", "540p", "480p", "Other"]
-                if meta['resolution'] in acceptable_res:
-                    type_id = meta['resolution']
-                else:
-                    type_id = "Other"
+                type_id = meta['resolution'] if meta['resolution'] in acceptable_res else "Other"
         return type_id
 
     async def edit_desc(self, meta):
@@ -295,10 +286,7 @@ class BHD:
                     await desc.write("\n\n")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-            if f'{self.tracker}_images_key' in meta:
-                images = meta[f'{self.tracker}_images_key']
-            else:
-                images = meta['image_list']
+            images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
             if len(images) > 0:
                 await desc.write("[align=center]")
                 for each in range(len(images[:int(meta['screens'])])):
@@ -339,18 +327,17 @@ class BHD:
             meta['skipping'] = "BHD"
             return []
 
-        if meta['type'] not in ['WEBDL']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        meta['skipping'] = "BHD"
-                        return []
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     meta['skipping'] = "BHD"
                     return []
+            else:
+                meta['skipping'] = "BHD"
+                return []
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
@@ -438,10 +425,7 @@ class BHD:
 
     async def get_live(self, meta):
         draft_value = self.config['TRACKERS'][self.tracker].get('draft_default', False)
-        if isinstance(draft_value, bool):
-            draft_bool = draft_value
-        else:
-            draft_bool = self._is_true(str(draft_value).strip())
+        draft_bool = draft_value if isinstance(draft_value, bool) else self._is_true(str(draft_value).strip())
 
         draft_int = 0 if draft_bool or meta.get('draft') else 1
 

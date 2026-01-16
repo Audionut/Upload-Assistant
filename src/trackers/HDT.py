@@ -351,7 +351,4 @@ class HDT:
             additional_files=files,
         )
 
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded

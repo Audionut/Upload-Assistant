@@ -2,7 +2,7 @@
 import asyncio
 import os
 import traceback
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Optional, cast
 
 import aiohttp
 import qbittorrentapi
@@ -57,10 +57,7 @@ class Wait:
                 raise ValueError(f"Missing required qBittorrent config keys: {', '.join(missing_keys)}")
 
             verify_cert_value = client.get('VERIFY_WEBUI_CERTIFICATE', True)
-            if isinstance(verify_cert_value, str):
-                verify_cert = verify_cert_value.strip().lower() in {'1', 'true', 'yes'}
-            else:
-                verify_cert = bool(verify_cert_value)
+            verify_cert = verify_cert_value.strip().lower() in {'1', 'true', 'yes'} if isinstance(verify_cert_value, str) else bool(verify_cert_value)
 
             qbt_client = qbittorrentapi.Client(
                 host=client['qbit_url'],
@@ -124,7 +121,7 @@ class Wait:
             if self.qbt_session:
                 await self.qbt_session.close()
 
-    async def select_and_recheck_best_torrent(self, meta: Dict[str, Any], path: str, check_interval: int = 5) -> bool:
+    async def select_and_recheck_best_torrent(self, meta: dict[str, Any], path: str, check_interval: int = 5) -> bool:
         if not self.proxy_url and not self.qbt_client:
             console.print("[red]qBittorrent is not configured.[/red]")
             return False
@@ -139,7 +136,7 @@ class Wait:
             console.print("[red]No target path available for matching torrents[/red]")
             return False
 
-        matching_torrents: List[Dict[str, Any]] = []
+        matching_torrents: list[dict[str, Any]] = []
         hash_used = meta.get('hash_used')
         if isinstance(hash_used, str) and hash_used:
             torrent_hash = hash_used.lower()
@@ -240,10 +237,7 @@ class Wait:
                     torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                     if torrent_list_raw is None:
                         raise Exception("qBittorrent returned no torrent info")
-                    if isinstance(torrent_list_raw, (list, tuple)):
-                        torrent_candidates = list(torrent_list_raw)
-                    else:
-                        torrent_candidates = [torrent_list_raw]
+                    torrent_candidates = list(torrent_list_raw) if isinstance(torrent_list_raw, (list, tuple)) else [torrent_list_raw]
                     if not torrent_candidates:
                         raise Exception("No torrents found in TorrentInfoList")
                     torrent = torrent_candidates[0]
@@ -290,10 +284,7 @@ class Wait:
                 torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                 if torrent_list_raw is None:
                     raise Exception("qBittorrent returned no torrent info")
-                if isinstance(torrent_list_raw, (list, tuple)):
-                    torrent_candidates = list(torrent_list_raw)
-                else:
-                    torrent_candidates = [torrent_list_raw]
+                torrent_candidates = list(torrent_list_raw) if isinstance(torrent_list_raw, (list, tuple)) else [torrent_list_raw]
                 if not torrent_candidates:
                     raise Exception("No torrents found in TorrentInfoList")
                 torrent = torrent_candidates[0]

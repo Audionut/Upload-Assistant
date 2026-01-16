@@ -193,10 +193,7 @@ class EMUW(UNIT3D):
                 imdb_lang = imdb_lang[0]
 
             if imdb_lang:
-                if isinstance(imdb_lang, dict):
-                    original_lang = imdb_lang.get('text', '')
-                else:
-                    original_lang = str(imdb_lang).strip()
+                original_lang = imdb_lang.get('text', '') if isinstance(imdb_lang, dict) else str(imdb_lang).strip()
 
         if original_lang:
             return self._map_language(original_lang)
@@ -244,18 +241,16 @@ class EMUW(UNIT3D):
                 return f"MULTI {codecs[0]} {channels}"
 
         # VOSE - Single audio (original) + Spanish subs + NO Spanish audio
-        if num_audio_tracks == 1 and original_lang and not has_spanish_audio and has_spanish_subs:
-            if audio_langs[0] == original_lang:
-                codec = self._map_audio_codec(audio_tracks[0])
-                channels = self._get_audio_channels(audio_tracks[0])
-                return f"VOSE {original_lang} {codec} {channels}"
+        if num_audio_tracks == 1 and original_lang and not has_spanish_audio and has_spanish_subs and audio_langs[0] == original_lang:
+            codec = self._map_audio_codec(audio_tracks[0])
+            channels = self._get_audio_channels(audio_tracks[0])
+            return f"VOSE {original_lang} {codec} {channels}"
 
         # V.O. - Single audio (original) + NO Spanish subs + NO Spanish audio
-        if num_audio_tracks == 1 and original_lang and not has_spanish_audio and not has_spanish_subs:
-            if audio_langs[0] == original_lang:
-                codec = self._map_audio_codec(audio_tracks[0])
-                channels = self._get_audio_channels(audio_tracks[0])
-                return f"V.O. {original_lang} {codec} {channels}"
+        if num_audio_tracks == 1 and original_lang and not has_spanish_audio and not has_spanish_subs and audio_langs[0] == original_lang:
+            codec = self._map_audio_codec(audio_tracks[0])
+            channels = self._get_audio_channels(audio_tracks[0])
+            return f"V.O. {original_lang} {codec} {channels}"
 
         # Normal listing
         audio_parts = []
@@ -362,16 +357,10 @@ class EMUW(UNIT3D):
         for track in tracks:
             if track.get('@type') == 'Text':
                 lang = track.get('Language', '')
-                if isinstance(lang, str):
-                    lang = lang.lower()
-                else:
-                    lang = ''
+                lang = lang.lower() if isinstance(lang, str) else ''
 
                 title = track.get('Title', '')
-                if isinstance(title, str):
-                    title = title.lower()
-                else:
-                    title = ''
+                title = title.lower() if isinstance(title, str) else ''
 
                 if lang in ['es', 'spa', 'spanish', 'es-es', 'español']:
                     return True

@@ -5,7 +5,7 @@ import re
 import time
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Optional, cast
 
 import httpx
 from bs4 import BeautifulSoup
@@ -29,7 +29,7 @@ def _attr_to_string(value: Any) -> str:
     return str(value)
 
 
-async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None, lower: bool = False) -> Tuple[str, bool, Optional[int]]:
+async def is_scene(video: str, meta: dict[str, Any], imdb: Optional[int] = None, lower: bool = False) -> tuple[str, bool, Optional[int]]:
     scene_start_time = 0.0
     if meta['debug']:
         scene_start_time = time.time()
@@ -95,62 +95,61 @@ async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None,
                     imdb = imdb_val if imdb_val != 0 else None
 
                 # NFO Download Handling
-                if not meta.get('nfo') and not meta.get('emby', False):
-                    if first_result.get("hasNFO") == "yes":
-                        try:
-                            release = first_result['release']
-                            release_lower = release.lower()
+                if not meta.get('nfo') and not meta.get('emby', False) and first_result.get("hasNFO") == "yes":
+                    try:
+                        release = first_result['release']
+                        release_lower = release.lower()
 
-                            # Details Cache
-                            details_cache_file = os.path.join(details_cache_dir, f"{release}.json")
-                            release_details_dict = None
+                        # Details Cache
+                        details_cache_file = os.path.join(details_cache_dir, f"{release}.json")
+                        release_details_dict = None
 
-                            if os.path.exists(details_cache_file):
-                                try:
-                                    with open(details_cache_file, encoding='utf-8') as f:
-                                        release_details_dict = json.load(f)
-                                except Exception:
-                                    release_details_dict = None
+                        if os.path.exists(details_cache_file):
+                            try:
+                                with open(details_cache_file, encoding='utf-8') as f:
+                                    release_details_dict = json.load(f)
+                            except Exception:
+                                release_details_dict = None
 
-                            if release_details_dict is None:
-                                release_details_url = f"https://api.srrdb.com/v1/details/{release}"
-                                release_details_response = await client.get(release_details_url, timeout=30.0)
-                                if release_details_response.status_code == 200:
-                                    release_details_dict = release_details_response.json()
-                                    with open(details_cache_file, 'w', encoding='utf-8') as f:
-                                        json.dump(release_details_dict, f)
+                        if release_details_dict is None:
+                            release_details_url = f"https://api.srrdb.com/v1/details/{release}"
+                            release_details_response = await client.get(release_details_url, timeout=30.0)
+                            if release_details_response.status_code == 200:
+                                release_details_dict = release_details_response.json()
+                                with open(details_cache_file, 'w', encoding='utf-8') as f:
+                                    json.dump(release_details_dict, f)
 
-                            if release_details_dict:
-                                try:
-                                    for file in release_details_dict.get('files', []):
-                                        if file['name'].endswith('.nfo'):
-                                            release_lower = os.path.splitext(file['name'])[0]
-                                except (KeyError, ValueError):
-                                    pass
+                        if release_details_dict:
+                            try:
+                                for file in release_details_dict.get('files', []):
+                                    if file['name'].endswith('.nfo'):
+                                        release_lower = os.path.splitext(file['name'])[0]
+                            except (KeyError, ValueError):
+                                pass
 
-                            nfo_url = f"https://www.srrdb.com/download/file/{release}/{release_lower}.nfo"
-                            save_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
-                            os.makedirs(save_path, exist_ok=True)
-                            nfo_file_path = os.path.join(save_path, f"{release_lower}.nfo")
-                            meta['scene_nfo_file'] = nfo_file_path
+                        nfo_url = f"https://www.srrdb.com/download/file/{release}/{release_lower}.nfo"
+                        save_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+                        os.makedirs(save_path, exist_ok=True)
+                        nfo_file_path = os.path.join(save_path, f"{release_lower}.nfo")
+                        meta['scene_nfo_file'] = nfo_file_path
 
-                            # Check if NFO already exists (Local Cache)
-                            if os.path.exists(nfo_file_path):
-                                meta['nfo'] = True
-                                meta['auto_nfo'] = True
+                        # Check if NFO already exists (Local Cache)
+                        if os.path.exists(nfo_file_path):
+                            meta['nfo'] = True
+                            meta['auto_nfo'] = True
+                        else:
+                            nfo_response = await client.get(nfo_url, timeout=30.0)
+                            if nfo_response.status_code == 200:
+                                with open(nfo_file_path, 'wb') as f:
+                                    f.write(nfo_response.content)
+                                    meta['nfo'] = True
+                                    meta['auto_nfo'] = True
+                                if meta['debug']:
+                                    console.print(f"[green]NFO downloaded to {nfo_file_path}")
                             else:
-                                nfo_response = await client.get(nfo_url, timeout=30.0)
-                                if nfo_response.status_code == 200:
-                                    with open(nfo_file_path, 'wb') as f:
-                                        f.write(nfo_response.content)
-                                        meta['nfo'] = True
-                                        meta['auto_nfo'] = True
-                                    if meta['debug']:
-                                        console.print(f"[green]NFO downloaded to {nfo_file_path}")
-                                else:
-                                    console.print("[yellow]NFO file not available for download.")
-                        except Exception as e:
-                            console.print("[yellow]Failed to download NFO file:", e)
+                                console.print("[yellow]NFO file not available for download.")
+                    except Exception as e:
+                        console.print("[yellow]Failed to download NFO file:", e)
             else:
                 if meta['debug'] and response_json:
                     console.print("[yellow]SRRDB: No match found")
@@ -178,29 +177,28 @@ async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None,
                             meta['scene'] = True
                             release_name = first_result['release']
 
-                            if not meta.get('nfo'):
-                                if first_result.get("hasNFO") == "yes":
-                                    try:
-                                        release = first_result['release']
-                                        release_lower = release.lower()
-                                        nfo_url = f"https://www.srrdb.com/download/file/{release}/{quoted_base}.nfo"
-                                        save_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
-                                        os.makedirs(save_path, exist_ok=True)
-                                        nfo_file_path = os.path.join(save_path, f"{release_lower}.nfo")
+                            if not meta.get('nfo') and first_result.get("hasNFO") == "yes":
+                                try:
+                                    release = first_result['release']
+                                    release_lower = release.lower()
+                                    nfo_url = f"https://www.srrdb.com/download/file/{release}/{quoted_base}.nfo"
+                                    save_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+                                    os.makedirs(save_path, exist_ok=True)
+                                    nfo_file_path = os.path.join(save_path, f"{release_lower}.nfo")
 
-                                        if not os.path.exists(nfo_file_path):
-                                            nfo_response = await client.get(nfo_url, timeout=30.0)
-                                            if nfo_response.status_code == 200:
-                                                with open(nfo_file_path, 'wb') as f:
-                                                    f.write(nfo_response.content)
-                                                    meta['nfo'] = True
-                                                    meta['auto_nfo'] = True
-                                                console.print(f"[green]NFO downloaded to {nfo_file_path}")
-                                        else:
-                                            meta['nfo'] = True
-                                            meta['auto_nfo'] = True
-                                    except Exception as e:
-                                        console.print("[yellow]Failed to download NFO file:", e)
+                                    if not os.path.exists(nfo_file_path):
+                                        nfo_response = await client.get(nfo_url, timeout=30.0)
+                                        if nfo_response.status_code == 200:
+                                            with open(nfo_file_path, 'wb') as f:
+                                                f.write(nfo_response.content)
+                                                meta['nfo'] = True
+                                                meta['auto_nfo'] = True
+                                            console.print(f"[green]NFO downloaded to {nfo_file_path}")
+                                    else:
+                                        meta['nfo'] = True
+                                        meta['auto_nfo'] = True
+                                except Exception as e:
+                                    console.print("[yellow]Failed to download NFO file:", e)
 
                         return release_name, True, imdb
                     else:
@@ -229,7 +227,7 @@ async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None,
     return video, scene, imdb
 
 
-async def predb_check(meta: Dict[str, Any], video: str) -> bool:
+async def predb_check(meta: dict[str, Any], video: str) -> bool:
     url = f"https://predb.pw/search.php?search={urllib.parse.quote(os.path.basename(video))}"
     if meta['debug']:
         console.print("Using predb url", url)

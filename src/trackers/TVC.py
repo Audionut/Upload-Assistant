@@ -280,9 +280,8 @@ class TVC:
             raise ValueError(f"Unsupported category for TVC: {meta.get('category')}")
 
         # Add original language title if foreign
-        if cat_id == self.tv_type_map["foreign"]:
-            if meta.get('original_title') and meta['original_title'] != meta['title']:
-                tvc_name = tvc_name.replace(meta['title'], f"{meta['title']} ({meta['original_title']})")
+        if cat_id == self.tv_type_map["foreign"] and meta.get('original_title') and meta['original_title'] != meta['title']:
+            tvc_name = tvc_name.replace(meta['title'], f"{meta['title']} ({meta['original_title']})")
 
         if not meta['is_disc']:
             # Pass the full MediaInfo dict; get_subs_info handles missing/invalid data internally
@@ -293,10 +292,7 @@ class TVC:
         if meta.get('eng_subs'):
             tvc_name = tvc_name.replace(']', ' SUBS]')
         if meta.get('sdh_subs'):
-            if meta.get('eng_subs'):
-                tvc_name = tvc_name.replace(' SUBS]', ' (ENG + SDH SUBS)]')
-            else:
-                tvc_name = tvc_name.replace(']', ' (SDH SUBS)]')
+            tvc_name = tvc_name.replace(' SUBS]', ' (ENG + SDH SUBS)]') if meta.get('eng_subs') else tvc_name.replace(']', ' (SDH SUBS)]')
 
         tvc_name = await self.append_country_code(meta, tvc_name)
 

@@ -85,16 +85,7 @@ async def get_bhd_torrents(bhd_api, bhd_rss_key, meta, only_id=False, info_hash=
         print("Fetching BHD data...")
     post_query_url = f"https://beyond-hd.me/api/torrents/{bhd_api}"
 
-    if torrent_id is not None:
-        post_data = {
-            "action": "details",
-            "torrent_id": torrent_id,
-        }
-    else:
-        post_data = {
-            "action": "search",
-            "rsskey": bhd_rss_key,
-        }
+    post_data = {"action": "details", "torrent_id": torrent_id} if torrent_id is not None else {"action": "search", "rsskey": bhd_rss_key}
 
     if info_hash:
         post_data["info_hash"] = info_hash

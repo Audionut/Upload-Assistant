@@ -71,10 +71,7 @@ def _webui_auth_ok() -> bool:
     # Constant-time compare to avoid leaking timing info.
     if not hmac.compare_digest(auth.username or '', expected_username):
         return False
-    if not hmac.compare_digest(auth.password or '', expected_password):
-        return False
-
-    return True
+    return hmac.compare_digest(auth.password or '', expected_password)
 
 
 def _auth_required_response():

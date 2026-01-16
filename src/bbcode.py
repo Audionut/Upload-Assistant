@@ -3,7 +3,7 @@ import html
 import os
 import re
 import urllib.parse
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from src.console import console
 
@@ -40,7 +40,7 @@ class BBCODE:
     def __init__(self) -> None:
         pass
 
-    def clean_hdb_description(self, description: str) -> Tuple[str, List[Dict[str, Any]]]:
+    def clean_hdb_description(self, description: str) -> tuple[str, list[dict[str, Any]]]:
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
@@ -134,7 +134,7 @@ class BBCODE:
             return "", imagelist
         return description, imagelist
 
-    def clean_bhd_description(self, description: str, meta: Dict[str, Any]) -> Tuple[str, List[Dict[str, Any]]]:
+    def clean_bhd_description(self, description: str, meta: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
@@ -210,7 +210,7 @@ class BBCODE:
 
         return description, imagelist
 
-    def clean_ptp_description(self, desc: str, is_disc: str) -> Tuple[str, List[Dict[str, Any]]]:
+    def clean_ptp_description(self, desc: str, is_disc: str) -> tuple[str, list[dict[str, Any]]]:
         # console.print("[yellow]Cleaning PTP description...")
 
         # Convert Bullet Points to -
@@ -272,18 +272,18 @@ class BBCODE:
             comp_placeholders.append(comp)
 
         # as the name implies, protect image links while doing regex things
-        def protect_links(desc: str) -> Tuple[str, List[str]]:
-            links: List[str] = re.findall(r'https?://\S+', desc)
+        def protect_links(desc: str) -> tuple[str, list[str]]:
+            links: list[str] = re.findall(r'https?://\S+', desc)
             for i, link in enumerate(links):
                 desc = desc.replace(link, f'__LINK_PLACEHOLDER_{i}__')
             return desc, links
 
-        def restore_links(desc: str, links: List[str]) -> str:
+        def restore_links(desc: str, links: list[str]) -> str:
             for i, link in enumerate(links):
                 desc = desc.replace(f'__LINK_PLACEHOLDER_{i}__', link)
             return desc
 
-        links: List[str] = []
+        links: list[str] = []
 
         if is_disc == "DVD":
             desc = re.sub(r"\[mediainfo\][\s\S]*?\[\/mediainfo\]", "", desc)
@@ -415,7 +415,7 @@ class BBCODE:
 
         return desc, imagelist
 
-    def clean_unit3d_description(self, desc: str, site: str) -> Tuple[str, List[Dict[str, Any]]]:
+    def clean_unit3d_description(self, desc: str, site: str) -> tuple[str, list[dict[str, Any]]]:
         # Unescape HTML
         desc = html.unescape(desc)
         # Replace carriage returns with newlines
@@ -503,10 +503,7 @@ class BBCODE:
                 cleaned_center = re.sub(r'\[center\]\s*\[\/center\]', '', center)
                 cleaned_center = re.sub(r'\[center\]\s+', '[center]', cleaned_center)
                 cleaned_center = re.sub(r'\s*\[\/center\]', '[/center]', cleaned_center)
-                if cleaned_center == '[center][/center]':
-                    desc = desc.replace(center, '')
-                else:
-                    desc = desc.replace(center, cleaned_center.strip())
+                desc = desc.replace(center, '') if cleaned_center == '[center][/center]' else desc.replace(center, cleaned_center.strip())
 
         # Remove bot signatures
         bot_signature_regex = r"""

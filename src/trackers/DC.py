@@ -65,10 +65,7 @@ class DC:
         if menu_images:
             all_images.extend(menu_images)
 
-        if f"{self.tracker}_images_key" in meta:
-            images = meta.get(f"{self.tracker}_images_key")
-        else:
-            images = meta.get("image_list")
+        images = meta.get(f"{self.tracker}_images_key") if f"{self.tracker}_images_key" in meta else meta.get("image_list")
         if images:
             all_images.extend(images)
 

@@ -100,10 +100,7 @@ class HUNO(UNIT3D):
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
-        if 'HUNO_images_key' in meta:
-            image_list = meta['HUNO_images_key']
-        else:
-            image_list = meta['image_list']
+        image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']
 
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
@@ -187,10 +184,7 @@ class HUNO(UNIT3D):
 
         name = ""
         basename = self.get_basename(meta)
-        if meta.get('hardcoded_subs'):
-            hc = "Hardsubbed"
-        else:
-            hc = ""
+        hc = "Hardsubbed" if meta.get('hardcoded_subs') else ""
         type = meta.get('type', "").upper()
         title = meta.get('title', "")
         year = meta.get('year', "")
@@ -224,13 +218,10 @@ class HUNO(UNIT3D):
         hdr = meta.get('hdr', "")
         if not hdr.strip():
             hdr = "SDR"
-        if distributor_name and distributor_name.upper() in ['CRITERION', 'BFI', 'SHOUT FACTORY']:
-            distributor = distributor_name.title()
-        else:
-            distributor = ""
+        distributor = distributor_name.title() if distributor_name and distributor_name.upper() in ['CRITERION', 'BFI', 'SHOUT FACTORY'] else ""
         video_codec = meta.get('video_codec', "")
         video_encode = meta.get('video_encode', "").replace(".", "")
-        if 'x265' in basename and not meta.get('type') == "WEBDL":
+        if 'x265' in basename and meta.get('type') != "WEBDL":
             video_encode = video_encode.replace('H', 'x')
         dvd_size = meta.get('dvd_size', "")
         edition = meta.get('edition', "")

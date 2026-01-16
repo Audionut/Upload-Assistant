@@ -200,7 +200,7 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
         meta['write_subtitle_languages'] = False
     if 'write_hc_languages' not in meta:
         meta['write_hc_languages'] = False
-    if not meta['is_disc'] == "BDMV":
+    if meta['is_disc'] != "BDMV":
         try:
             parsed_info = await parsed_mediainfo(meta)
             audio_languages = []
@@ -387,21 +387,20 @@ async def process_desc_language(meta: dict[str, Any], tracker: str = "") -> None
                             bitrate_num = int(value)
 
                 lang = track.get("language", "")
-                if bitrate_num is not None and bitrate_num < 258:
-                    if lang and lang in audio_language_set and len(lang) > 1 and not meta['bluray_audio_skip']:
-                        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                            console.print(f"Audio track '{lang}' has a bitrate of {bitrate_num} kbps. Probably commentary and should be removed.")
-                            try:
-                                if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
-                                    audio_language_set.discard(lang)
-                            except EOFError:
-                                console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                await cleanup()
-                                reset_terminal()
-                                sys.exit(1)
-                        else:
-                            audio_language_set.discard(lang)
-                        meta['bluray_audio_skip'] = True
+                if bitrate_num is not None and bitrate_num < 258 and lang and lang in audio_language_set and len(lang) > 1 and not meta['bluray_audio_skip']:
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                        console.print(f"Audio track '{lang}' has a bitrate of {bitrate_num} kbps. Probably commentary and should be removed.")
+                        try:
+                            if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
+                                audio_language_set.discard(lang)
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup()
+                            reset_terminal()
+                            sys.exit(1)
+                    else:
+                        audio_language_set.discard(lang)
+                    meta['bluray_audio_skip'] = True
 
             subtitle_tracks = bluray.get("subtitles", [])
             sub_commentary_tracks = [track for track in subtitle_tracks if track.get("is_commentary")]

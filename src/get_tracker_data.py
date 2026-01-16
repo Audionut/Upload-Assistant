@@ -430,10 +430,8 @@ async def ping_unit3d(meta: dict[str, Any]):
                 had_distributor = bool(meta.get('distributor'))
                 await common.unit3d_region_distributor(meta, tracker_name, tracker_instance.torrent_url, str(tracker_id))
 
-                if meta.get('region') and not had_region:
-                    if meta.get('debug', False):
-                        console.print(f"[green]Found region '{meta['region']}' from {tracker_name}[/green]")
+                if meta.get('region') and not had_region and meta.get('debug', False):
+                    console.print(f"[green]Found region '{meta['region']}' from {tracker_name}[/green]")
 
-                if meta.get('distributor') and not had_distributor:
-                    if meta.get('debug', False):
-                        console.print(f"[green]Found distributor '{meta['distributor']}' from {tracker_name}[/green]")
+                if meta.get('distributor') and not had_distributor and meta.get('debug', False):
+                    console.print(f"[green]Found distributor '{meta['distributor']}' from {tracker_name}[/green]")

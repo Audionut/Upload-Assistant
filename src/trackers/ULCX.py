@@ -58,11 +58,10 @@ class ULCX(UNIT3D):
                 console.print(f'[bold red]DVDRIPs are not allowed for {self.tracker}.[/bold red]')
             return False
 
-        if not meta['is_disc'] == "BDMV":
-            if not await self.common.check_language_requirements(
-                meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
-            ):
-                return False
+        if meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
+        ):
+            return False
 
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -110,7 +109,7 @@ class ULCX(UNIT3D):
                 ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
         if "Hybrid" in ulcx_name:
             ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
-        if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
+        if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
 
         return {'name': ulcx_name}

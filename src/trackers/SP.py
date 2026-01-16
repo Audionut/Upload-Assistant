@@ -56,10 +56,7 @@ class SP(UNIT3D):
             r'.*overtake.*'
         ]
 
-        for pattern in patterns:
-            if re.search(pattern, release_title, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, release_title, re.IGNORECASE) for pattern in patterns)
 
     async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
         type_id = {
@@ -76,17 +73,11 @@ class SP(UNIT3D):
     async def get_name(self, meta):
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
         if meta['scene'] is True:
-            if meta.get('scene_name') != "":
-                name = meta.get('scene_name')
-            else:
-                name = meta['uuid'].replace(" ", ".")
+            name = meta.get('scene_name') if meta.get('scene_name') != "" else meta['uuid'].replace(" ", ".")
         elif meta.get('is_disc') is True:
             name = meta['name'].replace(" ", ".")
         else:
-            if meta.get('mal_id', 0) != 0:
-                name = meta['name'].replace(" ", ".")
-            else:
-                name = meta['uuid'].replace(" ", ".")
+            name = meta['name'].replace(" ", ".") if meta.get('mal_id', 0) != 0 else meta['uuid'].replace(" ", ".")
         base, ext = os.path.splitext(name)
         if ext.lower() in KNOWN_EXTENSIONS:
             name = base.replace(" ", ".")

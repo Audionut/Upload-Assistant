@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import gc
 import glob
 import json
@@ -10,7 +11,7 @@ import re
 import sys
 import time
 import traceback
-from typing import Any, Optional, Tuple, Union, cast
+from typing import Any, Optional, Union, cast
 
 import ffmpeg
 import psutil
@@ -39,7 +40,7 @@ algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
 desat = float(config['DEFAULT'].get('desat', 10.0))
 
 
-async def run_ffmpeg(command: Any) -> Tuple[Optional[int], bytes, bytes]:
+async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
     if platform.system() == 'Linux':
         ffmpeg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bin', 'ffmpeg', 'ffmpeg')
         if os.path.exists(ffmpeg_path):
@@ -107,7 +108,7 @@ async def disc_screenshots(
 
         if int_length > length:
             length = int_length
-            for root, dirs, files in os.walk(bdinfo['path']):
+            for root, _dirs, files in os.walk(bdinfo['path']):
                 for name in files:
                     if name.lower() == each['file'].lower():
                         file = os.path.join(root, name)
@@ -127,10 +128,7 @@ async def disc_screenshots(
     os.chdir(f"{base_dir}/tmp/{folder_id}")
     existing_screens = glob.glob(f"{sanitized_filename}-*.png")
     total_existing = len(existing_screens) + len(existing_images)
-    if not force_screenshots:
-        num_screens = max(0, screens - total_existing)
-    else:
-        num_screens = num_screens
+    num_screens = max(0, screens - total_existing) if not force_screenshots else num_screens
 
     if num_screens == 0 and not force_screenshots:
         console.print('[bold green]Reusing existing screenshots. No additional screenshots needed.')
@@ -177,17 +175,14 @@ async def disc_screenshots(
         from src.vs import vs_screengn
         vs_screengn(source=file, encode=None, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
     else:
-        if ffdebug:
-            loglevel = 'verbose'
-        else:
-            loglevel = 'quiet'
+        loglevel = 'verbose' if ffdebug else 'quiet'
 
         existing_indices = {int(p.split('-')[-1].split('.')[0]) for p in existing_screens}
 
         # Create semaphore to limit concurrent tasks
         semaphore = asyncio.Semaphore(task_limit)
 
-        async def capture_disc_with_semaphore(*args) -> Optional[Tuple[int, str]]:  # type: ignore
+        async def capture_disc_with_semaphore(*args) -> Optional[tuple[int, str]]:  # type: ignore
             async with semaphore:
                 return await capture_disc_task(*args)
 
@@ -327,7 +322,7 @@ async def disc_screenshots(
         await cleanup()
 
 
-async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str, keyframe: str, loglevel: str, hdr_tonemap: bool, meta: dict[str, Any]) -> Optional[Tuple[int, str]]:
+async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str, keyframe: str, loglevel: str, hdr_tonemap: bool, meta: dict[str, Any]) -> Optional[tuple[int, str]]:
     try:
         # Build filter chain
         vf_filters = []
@@ -489,7 +484,7 @@ async def dvd_screenshots(
         w_sar = sar
         h_sar = 1.0
 
-    async def _is_vob_good(n: int, loops: int, num_screens: int) -> Tuple[float, float]:
+    async def _is_vob_good(n: int, loops: int, num_screens: int) -> tuple[float, float]:
         max_loops = 6
         fallback_duration = 300
         valid_tracks = []
@@ -582,7 +577,7 @@ async def dvd_screenshots(
         # Create semaphore to limit concurrent tasks
         semaphore = asyncio.Semaphore(task_limit)
 
-        async def capture_dvd_with_semaphore(args: Tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> Tuple[int, Optional[str]]:
+        async def capture_dvd_with_semaphore(args: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
             async with semaphore:
                 return await capture_dvd_screenshot(args)
 
@@ -698,7 +693,7 @@ async def dvd_screenshots(
         await cleanup()
 
 
-async def capture_dvd_screenshot(task: Tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> Tuple[int, Optional[str]]:
+async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
     index, input_file, image, seek_time_str, meta, width, height, w_sar, h_sar = task
     seek_time = float(seek_time_str)
 
@@ -992,7 +987,7 @@ async def screenshots(
     # Create semaphore to limit concurrent tasks
     semaphore = asyncio.Semaphore(num_workers)
 
-    async def capture_with_semaphore(args: Tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[Tuple[int, Optional[str]]]:
+    async def capture_with_semaphore(args: tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[tuple[int, Optional[str]]]:
         async with semaphore:
             return await capture_screenshot(args)
 
@@ -1201,7 +1196,7 @@ async def screenshots(
     return valid_results if valid_results else None
 
 
-async def capture_screenshot(args: Tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[Tuple[int, Optional[str]]]:
+async def capture_screenshot(args: tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[tuple[int, Optional[str]]]:
     index, path, ss_time, image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta = args
 
     try:
@@ -1322,7 +1317,7 @@ async def capture_screenshot(args: Tuple[int, str, float, str, float, float, flo
                 console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
 
             # --- Execute with retry/fallback if libplacebo fails ---
-            async def run_cmd(run_cmd_list: list[str], timeout_sec: float) -> Tuple[Optional[int], bytes, bytes]:
+            async def run_cmd(run_cmd_list: list[str], timeout_sec: float) -> tuple[Optional[int], bytes, bytes]:
                 proc = await asyncio.create_subprocess_exec(
                     *run_cmd_list,
                     stdout=asyncio.subprocess.PIPE,
@@ -1332,10 +1327,8 @@ async def capture_screenshot(args: Tuple[int, str, float, str, float, float, flo
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
                 except asyncio.TimeoutError:
                     proc.kill()
-                    try:
+                    with contextlib.suppress(Exception):
                         await proc.wait()
-                    except Exception:
-                        pass
                     return -1, b"", b"Timeout"
                 return proc.returncode, stdout, stderr
 
@@ -1513,10 +1506,7 @@ async def capture_screenshot(args: Tuple[int, str, float, str, float, float, flo
 
 
 async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, frame_rate: float, meta: dict[str, Any], retake: bool = False) -> list[str]:
-    if meta['is_disc']:
-        total_screens = num_screens + 1
-    else:
-        total_screens = num_screens
+    total_screens = num_screens + 1 if meta['is_disc'] else num_screens
     total_frames = int(length * frame_rate)
 
     # Track retake calls and adjust start frame accordingly
@@ -1549,10 +1539,7 @@ async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, fr
     usable_frames = end_frame - start_frame
     chosen_frames = []
 
-    if total_screens > 1:
-        frame_interval = usable_frames // total_screens
-    else:
-        frame_interval = usable_frames
+    frame_interval = usable_frames // total_screens if total_screens > 1 else usable_frames
 
     result_times = ss_times.copy()
 
@@ -1657,7 +1644,7 @@ async def get_frame_info(path: str, ss_time: str, meta: dict[str, Any]) -> dict[
         }
 
 
-async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any]) -> Tuple[bool, bool]:
+async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any]) -> tuple[bool, bool]:
     test_image_path = image_path.replace('.png', '_test.png')
 
     async def run_check(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any], try_libplacebo: bool = False, test_image_path: str = "") -> bool:
@@ -1721,10 +1708,8 @@ async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: floa
         except asyncio.TimeoutError:
             console.print("[red]libplacebo compatibility test timed out after 30 seconds[/red]")
             process.kill()
-            try:
+            with contextlib.suppress(Exception):
                 await process.wait()
-            except Exception:
-                pass
             return False
 
     if not meta['is_disc']:
@@ -1784,10 +1769,8 @@ async def libplacebo_warmup(path: str, meta: dict[str, Any], loglevel: str) -> N
             await asyncio.wait_for(proc.communicate(), timeout=40)
         except asyncio.TimeoutError:
             proc.kill()
-            try:
+            with contextlib.suppress(Exception):
                 await proc.wait()
-            except Exception:
-                pass
             if loglevel == 'verbose' or meta.get('debug', False):
                 console.print("[yellow]libplacebo warm-up timed out (continuing anyway)[/yellow]")
         meta['_libplacebo_warmed'] = True

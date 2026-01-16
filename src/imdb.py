@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import cli_ui
 import httpx
@@ -15,7 +15,7 @@ from src.cleanup import cleanup, reset_terminal
 from src.console import console
 
 
-async def safe_get(data: Any, path: List[str], default: Any = None) -> Any:
+async def safe_get(data: Any, path: list[str], default: Any = None) -> Any:
     for key in path:
         if isinstance(data, dict):
             data = data.get(key, default)
@@ -24,7 +24,7 @@ async def safe_get(data: Any, path: List[str], default: Any = None) -> Any:
     return data
 
 
-async def get_imdb_info_api(imdbID: Union[int, str], manual_language: Optional[Union[str, Dict[str, Any]]] = None, debug: bool = False) -> Dict[str, Any]:
+async def get_imdb_info_api(imdbID: Union[int, str], manual_language: Optional[Union[str, dict[str, Any]]] = None, debug: bool = False) -> dict[str, Any]:
     imdb_info: dict[str, Any] = {}
 
     if not imdbID or imdbID == 0:
@@ -297,7 +297,7 @@ async def get_imdb_info_api(imdbID: Union[int, str], manual_language: Optional[U
 
     imdb_info['rating'] = await safe_get(title_data, ['ratingsSummary', 'aggregateRating'], 'N/A')
 
-    async def get_credits(title_data: Dict[str, Any], category_keyword: str) -> Tuple[List[str], List[str]]:
+    async def get_credits(title_data: dict[str, Any], category_keyword: str) -> tuple[list[str], list[str]]:
         people_list: list[str] = []
         people_id_list: list[str] = []
         principal_credits = await safe_get(title_data, ['principalCredits'], [])
@@ -423,7 +423,7 @@ async def get_imdb_info_api(imdbID: Union[int, str], manual_language: Optional[U
 
         seasons_summary = []
         for season_num in sorted(seasons_data.keys()):
-            years = sorted(list(seasons_data[season_num]))
+            years = sorted(seasons_data[season_num])
             season_entry = {
                 'season': season_num,
                 'year': years[0],
@@ -506,12 +506,11 @@ async def search_imdb(
             end_year = search_year_int + 1
             constraints_parts.append(f'releaseDateConstraint: {{releaseDateRange: {{start: "{start_year}-01-01", end: "{end_year}-12-31"}}}}')
 
-        if not wide_search and duration:
-            if isinstance(duration, int):
-                duration = str(duration)
-                start_duration = int(duration) - 10
-                end_duration = int(duration) + 10
-                constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
+        if not wide_search and duration and isinstance(duration, int):
+            duration = str(duration)
+            start_duration = int(duration) - 10
+            end_duration = int(duration) + 10
+            constraints_parts.append(f'runtimeConstraint: {{runtimeRangeMinutes: {{min: {start_duration}, max: {end_duration}}}}}')
 
         constraints_string = ', '.join(constraints_parts)
 
@@ -863,7 +862,7 @@ async def search_imdb(
     return imdbID if imdbID else 0
 
 
-async def get_imdb_from_episode(imdb_id: Union[int, str], debug: bool = False) -> Optional[Dict[str, Any]]:
+async def get_imdb_from_episode(imdb_id: Union[int, str], debug: bool = False) -> Optional[dict[str, Any]]:
     if not imdb_id or imdb_id == 0:
         return None
 

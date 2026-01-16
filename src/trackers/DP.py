@@ -59,10 +59,9 @@ class DP(UNIT3D):
                 console.print(f"[bold red]{self.tracker} does not allow EVO for non-WEBDL types, skipping upload.")
             return False
 
-        if meta.get('hardcoded_subs', False):
-            if not meta['unattended']:
-                console.print(f"[bold red]{self.tracker} does not allow hardcoded subtitles.")
-                return False
+        if meta.get('hardcoded_subs', False) and not meta['unattended']:
+            console.print(f"[bold red]{self.tracker} does not allow hardcoded subtitles.")
+            return False
 
         return should_continue
 

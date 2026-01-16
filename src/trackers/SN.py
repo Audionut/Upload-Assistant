@@ -62,10 +62,7 @@ class SN:
             sub_cat_id = await self.get_type_id(meta['source'])
         elif meta['category'] == 'TV':
             cat_id = '2'
-            if meta['tv_pack']:
-                sub_cat_id = '6'
-            else:
-                sub_cat_id = '5'
+            sub_cat_id = '6' if meta['tv_pack'] else '5'
             # todo need to do a check for docs and add as subcat
 
         if meta['bdinfo'] is not None:

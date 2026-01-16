@@ -3,7 +3,7 @@
 Config validation helper for Upload Assistant.
 Validates the user's config.py against expected structure and types.
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # Required top-level sections
 REQUIRED_SECTIONS = ["DEFAULT", "TRACKERS"]
@@ -12,12 +12,12 @@ REQUIRED_SECTIONS = ["DEFAULT", "TRACKERS"]
 OPTIONAL_SECTIONS = ["IMAGES", "TORRENT_CLIENTS", "DISCORD"]
 
 # Required keys in DEFAULT section (critical for operation)
-REQUIRED_DEFAULT_KEYS: Dict[str, type] = {
+REQUIRED_DEFAULT_KEYS: dict[str, type] = {
     "tmdb_api": str,
 }
 
 # Expected types for common DEFAULT keys (for type validation, not required)
-DEFAULT_KEY_TYPES: Dict[str, Tuple[type, ...]] = {
+DEFAULT_KEY_TYPES: dict[str, tuple[type, ...]] = {
     "update_notification": (bool,),
     "verbose_notification": (bool,),
     "tmdb_api": (str,),
@@ -90,7 +90,7 @@ VALID_IMAGE_HOSTS = [
 ]
 
 # Image hosts that require API keys and their corresponding config key names
-IMAGE_HOST_API_KEYS: Dict[str, str] = {
+IMAGE_HOST_API_KEYS: dict[str, str] = {
     "imgbb": "imgbb_api",
     "ptpimg": "ptpimg_api",
     "lensdump": "lensdump_api",
@@ -134,9 +134,9 @@ class ConfigValidationWarning:
 
 def validate_config(
     config: Any,
-    active_trackers: Optional[List[str]] = None,
+    active_trackers: Optional[list[str]] = None,
     active_imghost: Optional[str] = None
-) -> Tuple[bool, List[str], List[ConfigValidationWarning]]:
+) -> tuple[bool, list[str], list[ConfigValidationWarning]]:
     """
     Validate the config dictionary structure and types.
 
@@ -153,8 +153,8 @@ def validate_config(
         - errors: List of critical error messages
         - warnings: List of non-critical warnings
     """
-    errors: List[str] = []
-    warnings: List[ConfigValidationWarning] = []
+    errors: list[str] = []
+    warnings: list[ConfigValidationWarning] = []
 
     # Check if config is a dictionary
     if not isinstance(config, dict):
@@ -216,7 +216,7 @@ def validate_config(
 
         # Validate injecting_client_list
         injecting_list = default_section.get("injecting_client_list")
-        injecting_clients: List[str] = []
+        injecting_clients: list[str] = []
         if injecting_list is not None:
             if isinstance(injecting_list, str):
                 # String is valid - gets converted to single-item list at runtime
@@ -244,7 +244,7 @@ def validate_config(
 
         # Validate searching_client_list
         searching_list = default_section.get("searching_client_list")
-        searching_clients: List[str] = []
+        searching_clients: list[str] = []
         if searching_list is not None:
             if isinstance(searching_list, list):
                 for i, item in enumerate(searching_list):
@@ -309,7 +309,7 @@ def validate_config(
 
     # Check for unknown top-level sections (warning only)
     known_sections = set(REQUIRED_SECTIONS + OPTIONAL_SECTIONS)
-    for section in config.keys():
+    for section in config:
         if section not in known_sections:
             warnings.append(ConfigValidationWarning(
                 f"Unknown config section '{section}' - this may be intentional",
@@ -320,7 +320,7 @@ def validate_config(
     default_section = config.get("DEFAULT", {})
     if isinstance(default_section, dict):
         # Determine which image hosts are active
-        active_hosts: List[str] = []
+        active_hosts: list[str] = []
 
         # If imghost specified from command line, use that
         if active_imghost and active_imghost.strip():
@@ -347,10 +347,10 @@ def validate_config(
     return is_valid, errors, warnings
 
 
-def _validate_default_section(default: Dict[str, Any]) -> Tuple[List[str], List[ConfigValidationWarning]]:
+def _validate_default_section(default: dict[str, Any]) -> tuple[list[str], list[ConfigValidationWarning]]:
     """Validate the DEFAULT config section."""
-    errors: List[str] = []
-    warnings: List[ConfigValidationWarning] = []
+    errors: list[str] = []
+    warnings: list[ConfigValidationWarning] = []
 
     # Check required keys
     for key, expected_type in REQUIRED_DEFAULT_KEYS.items():
@@ -412,12 +412,12 @@ def _validate_default_section(default: Dict[str, Any]) -> Tuple[List[str], List[
 
 
 def _validate_trackers_section(
-    trackers: Dict[str, Any],
-    active_trackers: List[str]
-) -> Tuple[List[str], List[ConfigValidationWarning]]:
+    trackers: dict[str, Any],
+    active_trackers: list[str]
+) -> tuple[list[str], list[ConfigValidationWarning]]:
     """Validate the TRACKERS config section."""
-    errors: List[str] = []
-    warnings: List[ConfigValidationWarning] = []
+    errors: list[str] = []
+    warnings: list[ConfigValidationWarning] = []
 
     # Normalize active trackers to uppercase for comparison
     active_set = {t.upper() for t in active_trackers}
@@ -458,13 +458,12 @@ def _validate_trackers_section(
         # Only check announce_url placeholders for active trackers
         if is_active and "announce_url" in tracker_config:
             announce = tracker_config["announce_url"]
-            if isinstance(announce, str):
-                if announce and "<" in announce and ">" in announce:
-                    # This is an error for active trackers, not just a warning
-                    errors.append(
-                        f"[TRACKERS][{tracker_name}] announce_url contains placeholder "
-                        f"(e.g., <PASSKEY>) - replace with actual value"
-                    )
+            if isinstance(announce, str) and announce and "<" in announce and ">" in announce:
+                # This is an error for active trackers, not just a warning
+                errors.append(
+                    f"[TRACKERS][{tracker_name}] announce_url contains placeholder "
+                    f"(e.g., <PASSKEY>) - replace with actual value"
+                )
 
         # Check boolean fields are actually booleans (must be real bool, not string)
         bool_fields = ["anon", "useAPI", "modq", "draft", "draft_default", "img_rehost"]
@@ -481,10 +480,10 @@ def _validate_trackers_section(
     return errors, warnings
 
 
-def _validate_torrent_clients_section(clients: Dict[str, Any]) -> Tuple[List[str], List[ConfigValidationWarning]]:
+def _validate_torrent_clients_section(clients: dict[str, Any]) -> tuple[list[str], list[ConfigValidationWarning]]:
     """Validate the TORRENT_CLIENTS config section."""
-    errors: List[str] = []
-    warnings: List[ConfigValidationWarning] = []
+    errors: list[str] = []
+    warnings: list[ConfigValidationWarning] = []
 
     for client_name, client_config in clients.items():
         if not isinstance(client_config, dict):
@@ -516,21 +515,20 @@ def _validate_torrent_clients_section(clients: Dict[str, Any]) -> Tuple[List[str
         # Check path mappings have matching lengths
         local_paths = client_config.get("local_path", [])
         remote_paths = client_config.get("remote_path", [])
-        if isinstance(local_paths, list) and isinstance(remote_paths, list):
-            if len(local_paths) != len(remote_paths) and local_paths and remote_paths:
-                warnings.append(ConfigValidationWarning(
-                    f"local_path ({len(local_paths)} items) and remote_path ({len(remote_paths)} items) should have matching lengths",
-                    key=client_name,
-                    section="TORRENT_CLIENTS"
-                ))
+        if isinstance(local_paths, list) and isinstance(remote_paths, list) and len(local_paths) != len(remote_paths) and local_paths and remote_paths:
+            warnings.append(ConfigValidationWarning(
+                f"local_path ({len(local_paths)} items) and remote_path ({len(remote_paths)} items) should have matching lengths",
+                key=client_name,
+                section="TORRENT_CLIENTS"
+            ))
 
     return errors, warnings
 
 
-def _validate_discord_section(discord: Dict[str, Any]) -> Tuple[List[str], List[ConfigValidationWarning]]:
+def _validate_discord_section(discord: dict[str, Any]) -> tuple[list[str], list[ConfigValidationWarning]]:
     """Validate the DISCORD config section."""
-    errors: List[str] = []
-    warnings: List[ConfigValidationWarning] = []
+    errors: list[str] = []
+    warnings: list[ConfigValidationWarning] = []
 
     use_discord = discord.get("use_discord", False)
     if use_discord:
@@ -551,7 +549,7 @@ def _validate_discord_section(discord: Dict[str, Any]) -> Tuple[List[str], List[
     return errors, warnings
 
 
-def group_warnings(warnings: List[ConfigValidationWarning]) -> List[str]:
+def group_warnings(warnings: list[ConfigValidationWarning]) -> list[str]:
     """
     Group warnings with the same section and message, combining keys.
 
@@ -561,7 +559,7 @@ def group_warnings(warnings: List[ConfigValidationWarning]) -> List[str]:
     from collections import defaultdict
 
     # Group by (section, message) -> list of keys
-    grouped: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+    grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
 
     for warning in warnings:
         group_key = (warning.section, warning.message)
@@ -571,7 +569,7 @@ def group_warnings(warnings: List[ConfigValidationWarning]) -> List[str]:
             # Warnings without keys get their own entry
             grouped[group_key].append("")
 
-    result: List[str] = []
+    result: list[str] = []
     for (section, message), keys in grouped.items():
         # Filter out empty keys and deduplicate
         non_empty_keys = [k for k in keys if k]
@@ -594,12 +592,12 @@ def group_warnings(warnings: List[ConfigValidationWarning]) -> List[str]:
 
 def format_validation_results(
     is_valid: bool,
-    errors: List[str],
-    warnings: List[ConfigValidationWarning],
+    errors: list[str],
+    warnings: list[ConfigValidationWarning],
     show_warnings: bool = True
 ) -> str:
     """Format validation results for display."""
-    lines: List[str] = []
+    lines: list[str] = []
 
     if errors:
         lines.append("Config Validation Errors:")

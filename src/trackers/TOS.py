@@ -41,21 +41,9 @@ class TOS(UNIT3D):
     ) -> dict[str, str]:
         tags_lower = meta["tag"].lower()
         if "vostfr" in tags_lower or "subfrench" in tags_lower:
-            if meta["category"] == "TV" and meta.get("tv_pack"):
-                category_id = "9"
-            else:
-                category_id = {
-                    "MOVIE": "6",
-                    "TV": "7",
-                }.get(meta["category"], "0")
+            category_id = "9" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "6", "TV": "7"}.get(meta["category"], "0")
         else:
-            if meta["category"] == "TV" and meta.get("tv_pack"):
-                category_id = "8"
-            else:
-                category_id = {
-                    "MOVIE": "1",
-                    "TV": "2",
-                }.get(meta["category"], "0")
+            category_id = "8" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "1", "TV": "2"}.get(meta["category"], "0")
         return {"category_id": category_id}
 
     async def get_type_id(

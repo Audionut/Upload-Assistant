@@ -173,18 +173,12 @@ class TIK(UNIT3D):
             print(f'Custom Description Link/File Path: {desc}')
             return {'description': desc}
 
-        if len(meta.get('discs', [])) > 0:
-            summary = meta['discs'][0].get('summary', '')
-        else:
-            summary = None
+        summary = meta['discs'][0].get('summary', '') if len(meta.get('discs', [])) > 0 else None
 
         # Proceed with matching Total Bitrate if the summary exists
         if summary:
             match = re.search(r"Total Bitrate: ([\d.]+ Mbps)", summary)
-            if match:
-                total_bitrate = match.group(1)
-            else:
-                total_bitrate = "Unknown"
+            total_bitrate = match.group(1) if match else "Unknown"
         else:
             total_bitrate = "Unknown"
 

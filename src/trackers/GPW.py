@@ -3,7 +3,7 @@ import json
 import os
 import re
 import unicodedata
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 import aiofiles
 import httpx
@@ -116,10 +116,7 @@ class GPW:
         found_language_strings = meta.get('audio_languages', [])
 
         chinese_languages = {'mandarin', 'chinese', 'zh', 'zh-cn', 'zh-hans', 'zh-hant', 'putonghua', '国语', '普通话'}
-        for lang in found_language_strings:
-            if lang.strip().lower() in chinese_languages:
-                return True
-        return False
+        return any(lang.strip().lower() in chinese_languages for lang in found_language_strings)
 
     async def get_codec(self, meta: dict[str, Any]) -> str:
         video_encode = meta.get('video_encode', '').strip().lower()
@@ -212,10 +209,7 @@ class GPW:
         desc_parts.append(await builder.menu_screenshot_header(meta))
 
         # Disc menus screenshots
-        if f'{self.tracker}_menu_images_key' in meta:
-            menu_images = meta.get(f'{self.tracker}_menu_images_key', [])
-        else:
-            menu_images = meta.get('menu_images', [])
+        menu_images = meta.get(f'{self.tracker}_menu_images_key', []) if f'{self.tracker}_menu_images_key' in meta else meta.get('menu_images', [])
         if menu_images:
             menu_screenshots_block = ''
             for image in menu_images:
@@ -226,10 +220,7 @@ class GPW:
         desc_parts.append(await builder.screenshot_header())
 
         # Screenshots
-        if f'{self.tracker}_images_key' in meta:
-            images = meta[f'{self.tracker}_images_key']
-        else:
-            images = meta['image_list']
+        images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
         if images:
             screenshots_block = ''
             for image in images:
@@ -430,7 +421,7 @@ class GPW:
                 if icon:
                     slot_names.append(icon.get_text(strip=True))
 
-            final_slots_list = sorted(list(set(slot_names)))
+            final_slots_list = sorted(set(slot_names))
             formatted_slots = [f'- {slot}' for slot in final_slots_list]
             final_slots = '\n'.join(formatted_slots)
 
@@ -632,7 +623,7 @@ class GPW:
 
         return data
 
-    async def _get_artist_data(self, meta: dict[str, Any]) -> Dict[str, str]:
+    async def _get_artist_data(self, meta: dict[str, Any]) -> dict[str, str]:
         directors = meta.get('imdb_info', {}).get('directors', [])
         directors_id = meta.get('imdb_info', {}).get('directors_id', [])
 

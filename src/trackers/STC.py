@@ -37,15 +37,9 @@ class STC(UNIT3D):
         if meta.get('tv_pack'):
             if meta.get('sd'):
                 # Season SD
-                if meta.get('type') not in ["WEBDL", "WEBRIP"]:
-                    type_id = '17'
-                else:
-                    type_id = '14'
+                type_id = '17' if meta.get('type') not in ["WEBDL", "WEBRIP"] else '14'
             else:
-                if meta.get('type') not in ["WEBDL", "WEBRIP"]:
-                    type_id = '18'
-                else:
-                    type_id = '13'
+                type_id = '18' if meta.get('type') not in ["WEBDL", "WEBRIP"] else '13'
 
         return {'type_id': type_id}
 
@@ -78,9 +72,6 @@ class STC(UNIT3D):
         await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
 
     async def get_description(self, meta):
-        if 'STC_images_key' in meta:
-            image_list = meta['STC_images_key']
-        else:
-            image_list = meta['image_list']
+        image_list = meta['STC_images_key'] if 'STC_images_key' in meta else meta['image_list']
 
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}

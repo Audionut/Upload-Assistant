@@ -235,10 +235,7 @@ class TL:
 
     def get_name(self, meta):
         is_scene = bool(meta.get('scene_name'))
-        if is_scene:
-            name = meta['scene_name']
-        else:
-            name = meta['name'].replace(meta['aka'], '')
+        name = meta['scene_name'] if is_scene else meta['name'].replace(meta['aka'], '')
 
         return name
 
@@ -338,16 +335,10 @@ class TL:
 
         if self.api_upload:
             is_uploaded = await self.upload_api(meta)
-            if not is_uploaded:
-                return False
-            else:
-                return True
+            return is_uploaded
         else:
             is_uploaded = await self.cookie_upload(meta)
-            if not is_uploaded:
-                return False
-            else:
-                return True
+            return is_uploaded
 
     async def upload_api(self, meta):
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"

@@ -181,9 +181,8 @@ class HDB:
             hdb_name = hdb_name.replace(f"{meta.get('service', '')} ", '', 1)
         if 'DV' in meta.get('hdr', ''):
             hdb_name = hdb_name.replace(' DV ', ' DoVi ')
-        if 'HDR' in meta.get('hdr', ''):
-            if 'HDR10+' not in meta['hdr']:
-                hdb_name = hdb_name.replace('HDR', 'HDR10')
+        if 'HDR' in meta.get('hdr', '') and 'HDR10+' not in meta['hdr']:
+            hdb_name = hdb_name.replace('HDR', 'HDR10')
         if meta.get('type') in ('WEBDL', 'WEBRIP', 'ENCODE'):
             hdb_name = hdb_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1).replace(' Atmos', ''))
         else:
@@ -219,10 +218,9 @@ class HDB:
             if each == 0:
                 console.print("[bold red]Something didn't map correctly, or this content is not allowed on HDB")
                 return
-        if "Dual-Audio" in meta['audio']:
-            if not (meta['anime'] or not meta['is_disc']):
-                console.print("[bold red]Dual-Audio Encodes are not allowed for non-anime and non-disc content")
-                return
+        if "Dual-Audio" in meta['audio'] and not (meta['anime'] or not meta['is_disc']):
+            console.print("[bold red]Dual-Audio Encodes are not allowed for non-anime and non-disc content")
+            return
 
         hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8').read()
 
@@ -431,10 +429,7 @@ class HDB:
             with requests.Session() as session:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
                 resp = session.get(url=url, timeout=30)
-                if resp.text.find("""<a href="/logout.php">Logout</a>""") != -1:
-                    return True
-                else:
-                    return False
+                return resp.text.find('''<a href="/logout.php">Logout</a>''') != -1
         else:
             console.print("[bold red]Missing Cookie File. (data/cookies/HDB.txt)")
             return False
@@ -740,7 +735,7 @@ class HDB:
                 # Upload each chunk
                 for chunk_idx, chunk in enumerate(chunks):
                     fileList = {}
-                    for j, (key, value) in enumerate(chunk):
+                    for j, (_key, value) in enumerate(chunk):
                         fileList[f'images_files[{j}]'] = value
 
                     if meta['debug']:

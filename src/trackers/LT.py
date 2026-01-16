@@ -105,10 +105,7 @@ class LT(UNIT3D):
 
             if len(audios) > 0:  # If there is at least 1 audio spanish
                 if not has_latino and has_castilian:
-                    if meta.get('tag'):
-                        lt_name = lt_name.replace(meta['tag'], f" [CAST]{meta['tag']}")
-                    else:
-                        lt_name = f"{lt_name} [CAST]"
+                    lt_name = lt_name.replace(meta['tag'], f" [CAST]{meta['tag']}") if meta.get('tag') else f"{lt_name} [CAST]"
                 # else: no special tag needed for Latino-only or mixed audio
             # if not audio Spanish exists, add "[SUBS]"
             elif not meta.get('tag'):
@@ -120,11 +117,7 @@ class LT(UNIT3D):
 
     async def get_additional_checks(self, meta):
         spanish_languages = ["spanish", "spanish (latin america)"]
-        if not await self.common.check_language_requirements(
-            meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True
-        ):
-            return False
-        return True
+        return await self.common.check_language_requirements(meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True)
 
     async def get_additional_data(self, meta):
         data = {

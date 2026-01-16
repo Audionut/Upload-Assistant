@@ -299,7 +299,4 @@ class IS:
             success_text="Thank you",
         )
 
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded

@@ -60,7 +60,7 @@ class Prep:
         Create Name
     """
 
-    def __init__(self, screens: int, img_host: str, config: Dict[str, Any]) -> None:
+    def __init__(self, screens: int, img_host: str, config: dict[str, Any]) -> None:
         self.screens = screens
         self.config = config
         self.img_host = img_host.lower()
@@ -693,14 +693,8 @@ class Prep:
         meta['video_duration'] = await get_video_duration(meta)
         duration = meta.get('video_duration', None)
 
-        if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-            unattended = False
-        else:
-            unattended = True
-        if meta.get('emby_debug', False) or meta['debug']:
-            debug = True
-        else:
-            debug = False
+        unattended = not (not meta['unattended'] or meta['unattended'] and meta.get('unattended_confirm', False))
+        debug = bool(meta.get('emby_debug', False) or meta['debug'])
 
         # run a search to find tmdb and imdb ids if we don't have them
         if meta.get('tmdb_id') == 0 and meta.get('imdb_id') == 0:
@@ -901,41 +895,40 @@ class Prep:
 
             if meta.get('tvdb_imdb_id', None):
                 imdb = meta['tvdb_imdb_id'].replace('tt', '')
-                if imdb.isdigit():
-                    if imdb != meta.get('imdb_id', 0):
-                        episode_info = await get_imdb_from_episode(imdb, debug=True)
-                        if episode_info:
-                            series_id = episode_info.get('series', {}).get('series_id', None)
-                            if series_id:
-                                series_imdb = series_id.replace('tt', '')
-                                if series_imdb.isdigit() and int(series_imdb) != meta.get('imdb_id', 0):
-                                    if meta['debug']:
-                                        console.print(f"[yellow]Updating IMDb ID from episode data: {series_imdb}")
-                                    meta['imdb_id'] = int(series_imdb)
-                                    imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
-                                    meta['imdb_info'] = imdb_info
-                                    check_valid_data = meta.get('imdb_info', {}).get('title', "")
-                                    if check_valid_data:
-                                        title = meta.get('title', "").strip()
-                                        aka = meta.get('imdb_info', {}).get('aka', "").strip()
-                                        year = str(meta.get('imdb_info', {}).get('year', ""))
+                if imdb.isdigit() and imdb != meta.get('imdb_id', 0):
+                    episode_info = await get_imdb_from_episode(imdb, debug=True)
+                    if episode_info:
+                        series_id = episode_info.get('series', {}).get('series_id', None)
+                        if series_id:
+                            series_imdb = series_id.replace('tt', '')
+                            if series_imdb.isdigit() and int(series_imdb) != meta.get('imdb_id', 0):
+                                if meta['debug']:
+                                    console.print(f"[yellow]Updating IMDb ID from episode data: {series_imdb}")
+                                meta['imdb_id'] = int(series_imdb)
+                                imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+                                meta['imdb_info'] = imdb_info
+                                check_valid_data = meta.get('imdb_info', {}).get('title', "")
+                                if check_valid_data:
+                                    title = meta.get('title', "").strip()
+                                    aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                                    year = str(meta.get('imdb_info', {}).get('year', ""))
 
-                                        if aka:
-                                            aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
-                                            difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
-                                            if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
-                                                aka = None
+                                    if aka:
+                                        aka_trimmed = aka[4:].strip().lower() if aka.lower().startswith("aka") else aka.lower()
+                                        difference = SequenceMatcher(None, title.lower(), aka_trimmed).ratio()
+                                        if difference >= 0.7 or not aka_trimmed or aka_trimmed in title:
+                                            aka = None
 
-                                            if aka is not None:
-                                                if f"({year})" in aka:
-                                                    aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
-                                                else:
-                                                    aka = meta.get('imdb_info', {}).get('aka', "").strip()
-                                                meta['aka'] = f"AKA {aka.strip()}"
+                                        if aka is not None:
+                                            if f"({year})" in aka:
+                                                aka = meta.get('imdb_info', {}).get('aka', "").replace(f"({year})", "").strip()
                                             else:
-                                                meta['aka'] = ""
+                                                aka = meta.get('imdb_info', {}).get('aka', "").strip()
+                                            meta['aka'] = f"AKA {aka.strip()}"
                                         else:
                                             meta['aka'] = ""
+                                    else:
+                                        meta['aka'] = ""
 
             if meta.get('tvdb_series_name') and meta['category'] == "TV":
                 series_name = meta.get('tvdb_series_name')
@@ -1117,7 +1110,7 @@ class Prep:
 
         return meta
 
-    async def get_cat(self, video: str, meta: Dict[str, Any]) -> Optional[str]:
+    async def get_cat(self, video: str, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('manual_category'):
             return meta.get('manual_category').upper()
 
@@ -1156,13 +1149,10 @@ class Prep:
         return "MOVIE"
 
     async def stream_optimized(self, stream_opt: bool) -> int:
-        if stream_opt is True:
-            stream = 1
-        else:
-            stream = 0
+        stream = 1 if stream_opt is True else 0
         return stream
 
-    async def parse_scene_nfo(self, meta: Dict[str, Any]) -> None:
+    async def parse_scene_nfo(self, meta: dict[str, Any]) -> None:
         try:
             nfo_file = meta.get('scene_nfo_file', '')
 

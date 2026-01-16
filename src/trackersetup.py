@@ -92,10 +92,7 @@ class TRACKER_SETUP:
         return tracker_class(self.config)
 
     def trackers_enabled(self, meta):
-        if meta.get('trackers') is not None:
-            trackers = meta['trackers']
-        else:
-            trackers = self.config['TRACKERS']['default_trackers']
+        trackers = meta['trackers'] if meta.get('trackers') is not None else self.config['TRACKERS']['default_trackers']
 
         if isinstance(trackers, str):
             trackers = trackers.split(',')
@@ -711,17 +708,11 @@ class TRACKER_SETUP:
                     api_claimed = each.get('claimed')
                     if meta['category'] == "TV":
                         season_value = each.get('season')
-                        if season_value is not None:
-                            api_season = int(season_value)
-                        else:
-                            api_season = 0
+                        api_season = int(season_value) if season_value is not None else 0
                         if api_season and meta.get('season_int') and api_season == meta.get('season_int'):
                             season = True
                         episode_value = each.get('episode')
-                        if episode_value is not None:
-                            api_episode = int(episode_value)
-                        else:
-                            api_episode = 0
+                        api_episode = int(episode_value) if episode_value is not None else 0
                         if api_episode and meta.get('episode_int') and api_episode == meta.get('episode_int'):
                             episode = True
                     if str(api_category) in [str(cid) for cid in category_ids]:

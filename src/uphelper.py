@@ -173,10 +173,7 @@ class UploadHelper:
                         upload = True
 
             else:
-                if meta.get('dupe', False) is False:
-                    upload = False
-                else:
-                    upload = True
+                upload = meta.get('dupe', False) is not False
 
             display_name = display_name if display_name is not None else meta.get('name', '')
 

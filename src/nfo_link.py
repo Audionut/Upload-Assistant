@@ -41,10 +41,7 @@ async def nfo_link(meta):
         # Get basic info
         imdb_info = meta.get('imdb_info', {})
         title = imdb_info.get('title', meta.get('title', ''))
-        if meta['category'] == "MOVIE":
-            year = imdb_info.get('year', meta.get('year', ''))
-        else:
-            year = meta.get('search_year', '')
+        year = imdb_info.get('year', meta.get('year', '')) if meta['category'] == "MOVIE" else meta.get('search_year', '')
         plot = meta.get('overview', '')
         rating = imdb_info.get('rating', '')
         runtime = imdb_info.get('runtime', meta.get('runtime', ''))
@@ -141,10 +138,7 @@ async def nfo_link(meta):
 
         # Add genres
         if genres:
-            if isinstance(genres, str):
-                genre_list = [g.strip() for g in genres.split(',')]
-            else:
-                genre_list = genres
+            genre_list = [g.strip() for g in genres.split(',')] if isinstance(genres, str) else genres
             for genre in genre_list:
                 if genre:
                     nfo_content += f'\n  <genre>{genre}</genre>'
@@ -245,10 +239,7 @@ async def linking(meta, movie_name, year):
             else:
                 folder_name = f"{movie_name} ({meta['search_year']}) - {meta['is_disc']}"
 
-    if meta['category'] == "TV":
-        target_base = config['DEFAULT'].get('emby_tv_dir', None)
-    else:
-        target_base = config['DEFAULT'].get('emby_dir', None)
+    target_base = config['DEFAULT'].get('emby_tv_dir', None) if meta['category'] == "TV" else config['DEFAULT'].get('emby_dir', None)
     if target_base is not None:
         if meta['category'] == "MOVIE":
             target_dir = os.path.join(target_base, folder_name)
@@ -291,7 +282,7 @@ async def linking(meta, movie_name, year):
             src_dir = path if os.path.isdir(path) else os.path.dirname(path)
 
             # Get all files in the source directory
-            for root, dirs, files in os.walk(src_dir):
+            for root, _dirs, files in os.walk(src_dir):
                 for file in files:
                     src_file = os.path.join(root, file)
                     # Create relative path structure in target

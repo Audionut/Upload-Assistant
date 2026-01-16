@@ -78,10 +78,7 @@ async def get_name(meta):
         edition = edition.replace('Hybrid', '').strip()
 
     if meta['category'] == "TV":
-        if meta['search_year'] != "":
-            year = meta['year']
-        else:
-            year = ""
+        year = meta['year'] if meta['search_year'] != "" else ""
         if meta.get('manual_date'):
             # Ignore season and year for --daily flagged shows, just use manual date stored in episode_name
             season = ''

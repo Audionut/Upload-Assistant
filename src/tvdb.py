@@ -2,6 +2,7 @@
 # Restricted-use credential — permitted only under UAPL v1.0 and associated service provider terms
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import re
@@ -196,9 +197,8 @@ class tvdb_data:
                 if absolute_int is not None and ep.get('absoluteNumber') == absolute_int:
                     return True
 
-                if season_int is not None and episode_int not in (None, 0):
-                    if ep.get('seasonNumber') == season_int and ep.get('number') == episode_int:
-                        return True
+                if season_int is not None and episode_int not in (None, 0) and ep.get('seasonNumber') == season_int and ep.get('number') == episode_int:
+                    return True
 
             return False
 
@@ -329,10 +329,8 @@ class tvdb_data:
                     # Ensure cache dir exists; on POSIX explicitly apply typical dir perms.
                     if os.name == 'posix':
                         cache_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                        try:
+                        with contextlib.suppress(Exception):
                             os.chmod(cache_path.parent, 0o700)
-                        except Exception:
-                            pass
                     else:
                         cache_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -340,10 +338,8 @@ class tvdb_data:
                         json.dump(episodes_data, f, ensure_ascii=False)
 
                     if os.name == 'posix':
-                        try:
+                        with contextlib.suppress(Exception):
                             os.chmod(cache_path, 0o644)
-                        except Exception:
-                            pass
                     if debug:
                         console.print(f"[green]Cached TVDB episodes to {cache_path}[/green]")
                 except Exception as cache_write_error:

@@ -286,10 +286,7 @@ class FL:
                 resp = session.get(url=url, timeout=30)
                 if meta['debug']:
                     console.print(resp.url)
-                if resp.text.find("Logout") != -1:
-                    return True
-                else:
-                    return False
+                return resp.text.find("Logout") != -1
         else:
             return False
 
@@ -386,12 +383,10 @@ class FL:
         if meta.get('is_disc', '') != 'BDMV':
             mi = meta['mediainfo']
             for track in mi['media']['track']:
-                if track['@type'] == "Text":
-                    if track.get('Language') == "ro":
-                        has_ro_sub = True
-                if track['@type'] == "Audio":
-                    if track.get('Audio') == 'ro':
-                        has_ro_audio = True
+                if track['@type'] == "Text" and track.get('Language') == "ro":
+                    has_ro_sub = True
+                if track['@type'] == "Audio" and track.get('Audio') == 'ro':
+                    has_ro_audio = True
         else:
             if "Romanian" in meta['bdinfo']['subtitles']:
                 has_ro_sub = True

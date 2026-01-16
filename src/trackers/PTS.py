@@ -91,10 +91,7 @@ class PTS:
             description_parts.append(manual_desc)
 
         # Screenshots
-        if f'{self.tracker}_images_key' in meta:
-            images = meta[f'{self.tracker}_images_key']
-        else:
-            images = meta['image_list']
+        images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
         if images:
             screenshots_block = "[center][b]Screenshots[/b]\n\n"
             for image in images:
@@ -208,7 +205,4 @@ class PTS:
             success_status_code="302, 303",
         )
 
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded

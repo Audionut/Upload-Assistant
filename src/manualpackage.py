@@ -25,14 +25,8 @@ if not isinstance(TRACKER_CONFIG, dict):
 
 
 async def package(meta: dict[str, Any]) -> Union[str, bool]:
-    if meta['tag'] == "":
-        tag = ""
-    else:
-        tag = f" / {meta['tag'][1:]}"
-    if meta['is_disc'] == "DVD":
-        res = meta['source']
-    else:
-        res = meta['resolution']
+    tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
+    res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
 
     with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/GENERIC_INFO.txt", 'w', encoding="utf-8") as generic:
         generic.write(f"Name: {meta['name']}\n\n")

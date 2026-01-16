@@ -141,42 +141,34 @@ class PHD(AZTrackerBase):
         if meta.get('sd', '') == 1:
             warnings.append('SD (Standard Definition) content is forbidden.')
 
-        if not is_bd_disc:
-            if meta.get('container') not in ['mkv', 'mp4']:
-                warnings.append('Allowed containers: MKV, MP4.')
+        if not is_bd_disc and meta.get('container') not in ['mkv', 'mp4']:
+            warnings.append('Allowed containers: MKV, MP4.')
 
         # Video codec
         # 1
-        if type == 'remux':
-            if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
-                warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
+        if type == 'remux' and video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
+            warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
 
         # 2
-        if type == 'encode' and source == 'bluray':
-            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
+        if type == 'encode' and source == 'bluray' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+            warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 3
-        if type in ('webdl', 'web-dl') and source == 'web':
-            if video_encode not in ('h.264', 'h.265', 'vp9'):
-                warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
+        if type in ('webdl', 'web-dl') and source == 'web' and video_encode not in ('h.264', 'h.265', 'vp9'):
+            warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
 
         # 4
-        if type == 'encode' and source == 'web':
-            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
+        if type == 'encode' and source == 'web' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+            warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 5
-        if type == 'encode':
-            if video_encode == 'x265':
-                if meta.get('bit_depth', '') != '10':
-                    warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
+        if type == 'encode' and video_encode == 'x265' and meta.get('bit_depth', '') != '10':
+            warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
 
         # 6
         resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-        if resolution > 1080:
-            if video_encode in ('h.264', 'x264'):
-                warnings.append('H.264/x264 only allowed for 1080p and below.')
+        if resolution > 1080 and video_encode in ('h.264', 'x264'):
+            warnings.append('H.264/x264 only allowed for 1080p and below.')
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
@@ -249,7 +241,7 @@ class PHD(AZTrackerBase):
                     invalid_codecs.append(codec)
 
             if invalid_codecs:
-                unique_invalid_codecs = sorted(list(set(invalid_codecs)))
+                unique_invalid_codecs = sorted(set(invalid_codecs))
                 warnings.append(
                     f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n'
@@ -306,14 +298,13 @@ class PHD(AZTrackerBase):
             warnings.append(rule)
 
         # Hybrid
-        if type in ('remux', 'encode'):
-            if 'hybrid' in meta.get('name', '').lower():
-                warnings.append(
-                    'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
-                    'Hybrid user releases are permitted, but are treated similarly to regular '
-                    'user releases and must be approved by staff before you upload them '
-                    '(please see the torrent approvals forum for details).'
-                )
+        if type in ('remux', 'encode') and 'hybrid' in meta.get('name', '').lower():
+            warnings.append(
+                'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
+                'Hybrid user releases are permitted, but are treated similarly to regular '
+                'user releases and must be approved by staff before you upload them '
+                '(please see the torrent approvals forum for details).'
+            )
 
         # Log
         if type == 'remux':

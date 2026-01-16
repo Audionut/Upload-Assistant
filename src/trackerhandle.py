@@ -85,15 +85,12 @@ async def process_trackers(meta, config, client, console, api_trackers, tracker_
             console.print(f"[red]Error printing {tracker} result: {e}[/red]")
 
     async def process_single_tracker(tracker):
-        if not tracker == "MANUAL":
+        if tracker != "MANUAL":
             tracker_class = tracker_class_map[tracker](config=config)
         if meta['name'].endswith('DUPE?'):
             meta['name'] = meta['name'].replace(' DUPE?', '')
 
-        if meta['debug']:
-            debug = "(DEBUG)"
-        else:
-            debug = ""
+        debug = "(DEBUG)" if meta['debug'] else ""
         disctype = meta.get('disctype', None)
         tracker = tracker.replace(" ", "").upper().strip()
 

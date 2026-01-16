@@ -142,16 +142,15 @@ class BT:
                 append_to_response='credits,videos,content_ratings'
             )
 
-        if self.config['DEFAULT']['episode_overview']:
-            if meta['category'] == 'TV' and not meta.get('tv_pack'):
-                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
-                if not episode_ptbr_data:
-                    episode_ptbr_data = await get_tmdb_localized_data(
-                        meta,
-                        data_type='episode',
-                        language='pt-BR',
-                        append_to_response=''
-                    )
+        if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
+            episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+            if not episode_ptbr_data:
+                episode_ptbr_data = await get_tmdb_localized_data(
+                    meta,
+                    data_type='episode',
+                    language='pt-BR',
+                    append_to_response=''
+                )
 
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
@@ -714,7 +713,4 @@ class BT:
             success_status_code="200, 302, 303",
         )
 
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded

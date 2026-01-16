@@ -22,9 +22,8 @@ def determine_channel_count(channels, channel_layout, additional, format):
     channel_layout = channel_layout.strip() if channel_layout else ""
 
     # Handle specific Atmos/immersive audio cases first
-    if is_atmos_or_immersive_audio(additional, format, channel_layout):
-        if channel_layout:
-            return handle_atmos_channel_count(channels, channel_layout)
+    if is_atmos_or_immersive_audio(additional, format, channel_layout) and channel_layout:
+        return handle_atmos_channel_count(channels, channel_layout)
 
     # Handle standard channel layouts with proper LFE detection
     if channel_layout:
@@ -44,9 +43,8 @@ def is_atmos_or_immersive_audio(additional, format, channel_layout):
     dtsx_indicators = ['DTS:X', 'XLL X']
 
     # Check in additional features
-    if additional:
-        if any(indicator in str(additional) for indicator in atmos_indicators + dtsx_indicators):
-            return True
+    if additional and any(indicator in str(additional) for indicator in atmos_indicators + dtsx_indicators):
+        return True
 
     # Check in format
     if format and any(indicator in str(format) for indicator in atmos_indicators + dtsx_indicators):
@@ -399,17 +397,13 @@ async def get_audio_v2(mi, meta, bdinfo):
         extra = format_extra.get(additional, "")
 
     format_settings = format_settings_extra.get(format_settings, "")
-    if format_settings == "EX" and chan == "5.1":
-        format_settings = "EX"
-    else:
-        format_settings = ""
+    format_settings = "EX" if format_settings == "EX" and chan == "5.1" else ""
 
     if codec == "":
         codec = format
 
-    if format.startswith("DTS"):
-        if additional and additional.endswith("X"):
-            codec = "DTS:X"
+    if format.startswith("DTS") and additional and additional.endswith("X"):
+        codec = "DTS:X"
 
     if format == "MPEG Audio":
         if format_profile == "Layer 2":
@@ -452,9 +446,8 @@ def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
         trackers_to_warn = []
 
         for tracker in meta.get("trackers", []):
-            if tracker in tracker_allowed_bloat_language:
-                if audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
-                    continue
+            if tracker in tracker_allowed_bloat_language and audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
+                continue
             if tracker not in bloat_is_allowed:
                 trackers_to_warn.append(tracker)
 

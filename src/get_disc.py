@@ -13,7 +13,7 @@ async def get_disc(meta):
     bd_summary = None  # noqa: F841
     discs = []
     parse = DiscParse()
-    for path, directories, files in sorted(os.walk(meta['path'])):
+    for path, directories, _files in sorted(os.walk(meta['path'])):
         for each in directories:
             if each.upper() == "BDMV":  # BDMVs
                 is_disc = "BDMV"

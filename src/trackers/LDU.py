@@ -40,10 +40,7 @@ class LDU(UNIT3D):
         if 'hentai' in genres.lower():
             category_id = '10'
         elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not await has_english_language(meta.get('subtitle_languages', [])):
-                category_id = '45'
-            else:
-                category_id = '6'
+            category_id = '45' if not await has_english_language(meta.get('subtitle_languages', [])) else '6'
         if meta['category'] == "MOVIE":
             if meta.get('3d') or "3D" in meta.get('edition', ''):
                 category_id = '21'

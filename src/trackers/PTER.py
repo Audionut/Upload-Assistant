@@ -57,10 +57,7 @@ class PTER:
                 session.cookies.update(await common.parseCookieFile(cookiefile))
                 resp = session.get(url=url, timeout=30)
 
-                if resp.text.find("""<a href="#" data-url="logout.php" id="logout-confirm">""") != -1:
-                    return True
-                else:
-                    return False
+                return resp.text.find('''<a href="#" data-url="logout.php" id="logout-confirm">''') != -1
         else:
             console.print("[bold red]Missing Cookie File. (data/cookies/PTER.txt)")
             return False
@@ -257,10 +254,7 @@ class PTER:
         return auth_token
 
     async def validate_login(self, response):
-        if response.text.find("""<a href="https://s3.pterclub.com/logout/?""") != -1:
-            loggedIn = True
-        else:
-            loggedIn = False
+        loggedIn = response.text.find('''<a href="https://s3.pterclub.com/logout/?''') != -1
         return loggedIn
 
     async def pterimg_upload(self, meta):
@@ -352,10 +346,7 @@ class PTER:
         if not os.path.exists(desc_file):
             await self.edit_desc(meta)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 'no'
-        else:
-            anon = 'yes'
+        anon = 'no' if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 'yes'
 
         pter_name = await self.edit_name(meta)
 

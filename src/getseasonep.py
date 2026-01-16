@@ -420,7 +420,7 @@ async def check_season_pack_detail(meta):
         return {'complete': True, 'missing_episodes': [], 'found_episodes': [], 'consistent_tags': True, 'tags_found': tags_found}
 
     # Remove duplicates and sort
-    found_episodes = sorted(list(set(found_episodes)))
+    found_episodes = sorted(set(found_episodes))
 
     missing_episodes = []
 

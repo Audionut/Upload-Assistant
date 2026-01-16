@@ -23,11 +23,7 @@ class LCD(UNIT3D):
         pass
 
     async def get_name(self, meta):
-        if meta.get('is_disc', '') == 'BDMV':
-            name = meta.get('name')
-
-        else:
-            name = meta['uuid']
+        name = meta.get('name') if meta.get('is_disc', '') == 'BDMV' else meta['uuid']
 
         replacements = {
             '.mkv': '',

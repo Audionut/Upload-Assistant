@@ -106,10 +106,7 @@ class MTV:
         group_desc = await self.edit_group_desc(meta)
         mtv_name = await self.edit_name(meta)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         async with aiofiles.open(desc_path, encoding='utf-8') as f:
@@ -243,10 +240,7 @@ class MTV:
                     await desc.write("\n\n")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-            if f'{self.tracker}_images_key' in meta:
-                images = meta[f'{self.tracker}_images_key']
-            else:
-                images = meta['image_list']
+            images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
             if len(images) > 0:
                 for image in images:
                     raw_url = image['raw_url']
@@ -313,11 +307,10 @@ class MTV:
             if 'DD+' in meta.get('audio', '') and 'DDP' in meta['uuid']:
                 mtv_name = mtv_name.replace('DD+', 'DDP')
 
-        if meta['source'].lower().replace('-', '') in mtv_name.replace('-', '').lower():
-            if not meta['isdir']:
-                # Check if there is a valid file extension, otherwise, skip the split
-                if '.' in mtv_name and mtv_name.split('.')[-1].isalpha() and len(mtv_name.split('.')[-1]) <= 4:
-                    mtv_name = os.path.splitext(mtv_name)[0]
+        if meta['source'].lower().replace('-', '') in mtv_name.replace('-', '').lower() and not meta['isdir']:
+            # Check if there is a valid file extension, otherwise, skip the split
+            if '.' in mtv_name and mtv_name.split('.')[-1].isalpha() and len(mtv_name.split('.')[-1]) <= 4:
+                mtv_name = os.path.splitext(mtv_name)[0]
 
         tag_lower = meta['tag'].lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
@@ -646,18 +639,17 @@ class MTV:
         return False
 
     async def search_existing(self, meta, disctype):
-        if meta['type'] not in ['WEBDL']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        meta['skipping'] = "MTV"
-                        return []
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     meta['skipping'] = "MTV"
                     return []
+            else:
+                meta['skipping'] = "MTV"
+                return []
 
         allowed_anime = ['Thighs', 'sam', 'Vanilla', 'OZR', 'Netaro', 'Datte13', 'UDF', 'Baws', 'ARC', 'Dae', 'MTBB',
                          'Okay-Subs', 'hchcsen', 'Noyr', 'TTGA', 'GJM', 'Kaleido-Subs', 'GJM-Kaleido', 'LostYears',

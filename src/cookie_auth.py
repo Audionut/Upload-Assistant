@@ -142,63 +142,62 @@ class CookieValidator:
 
                 # Validate we're logged in by checking the torrents page
                 test_response = await client.get(f'{base_url}/torrents.php')
-                if test_response.status_code == 200:
-                    if 'login.php?act=recover' not in test_response.text:
-                        console.print(f"{tracker}: [green]Login successful![/green]")
+                if test_response.status_code == 200 and 'login.php?act=recover' not in test_response.text:
+                    console.print(f"{tracker}: [green]Login successful![/green]")
 
-                        # Extract auth key from the response page
-                        auth_key = None
-                        soup = BeautifulSoup(test_response.text, 'html.parser')
-                        logout_link = soup.find('a', href=True, text='Logout')
-                        if logout_link:
-                            href = _attr_to_string(logout_link.get('href'))
-                            auth_match = re.search(r'auth=([^&]+)', href)
-                            if auth_match:
-                                auth_key = auth_match.group(1)
-                                console.print(f"{tracker}: [green]Auth key extracted successfully[/green]")
+                    # Extract auth key from the response page
+                    auth_key = None
+                    soup = BeautifulSoup(test_response.text, 'html.parser')
+                    logout_link = soup.find('a', href=True, text='Logout')
+                    if logout_link:
+                        href = _attr_to_string(logout_link.get('href'))
+                        auth_match = re.search(r'auth=([^&]+)', href)
+                        if auth_match:
+                            auth_key = auth_match.group(1)
+                            console.print(f"{tracker}: [green]Auth key extracted successfully[/green]")
 
-                        # Save cookies in Netscape format
-                        os.makedirs(os.path.dirname(cookie_file), exist_ok=True)
-                        cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
+                    # Save cookies in Netscape format
+                    os.makedirs(os.path.dirname(cookie_file), exist_ok=True)
+                    cookie_jar = http.cookiejar.MozillaCookieJar(cookie_file)
 
-                        # Convert httpx cookies to MozillaCookieJar format
-                        for cookie_name, cookie_value in client.cookies.items():
-                            # Get the cookie object for additional attributes
-                            for cookie in client.cookies.jar:
-                                if cookie.name == cookie_name:
-                                    ck = http.cookiejar.Cookie(
-                                        version=0,
-                                        name=cookie.name,
-                                        value=cookie.value,
-                                        port=None,
-                                        port_specified=False,
-                                        domain=cookie.domain if cookie.domain else '.alpharatio.cc',
-                                        domain_specified=True,
-                                        domain_initial_dot=(cookie.domain or '.alpharatio.cc').startswith('.'),
-                                        path=cookie.path if cookie.path else '/',
-                                        path_specified=True,
-                                        secure=bool(cookie._rest.get('secure')) if hasattr(cookie, '_rest') else True,
-                                        expires=None,
-                                        discard=False,
-                                        comment=None,
-                                        comment_url=None,
-                                        rest={},
-                                        rfc2109=False
-                                    )
-                                    cookie_jar.set_cookie(ck)
-                                    break
+                    # Convert httpx cookies to MozillaCookieJar format
+                    for cookie_name in client.cookies:
+                        # Get the cookie object for additional attributes
+                        for cookie in client.cookies.jar:
+                            if cookie.name == cookie_name:
+                                ck = http.cookiejar.Cookie(
+                                    version=0,
+                                    name=cookie.name,
+                                    value=cookie.value,
+                                    port=None,
+                                    port_specified=False,
+                                    domain=cookie.domain if cookie.domain else '.alpharatio.cc',
+                                    domain_specified=True,
+                                    domain_initial_dot=(cookie.domain or '.alpharatio.cc').startswith('.'),
+                                    path=cookie.path if cookie.path else '/',
+                                    path_specified=True,
+                                    secure=bool(cookie._rest.get('secure')) if hasattr(cookie, '_rest') else True,
+                                    expires=None,
+                                    discard=False,
+                                    comment=None,
+                                    comment_url=None,
+                                    rest={},
+                                    rfc2109=False
+                                )
+                                cookie_jar.set_cookie(ck)
+                                break
 
-                        cookie_jar.save(ignore_discard=True, ignore_expires=True)
-                        console.print(f"{tracker}: [green]Cookies saved to {cookie_file}[/green]")
+                    cookie_jar.save(ignore_discard=True, ignore_expires=True)
+                    console.print(f"{tracker}: [green]Cookies saved to {cookie_file}[/green]")
 
-                        # Save auth key to a separate file if found
-                        if auth_key:
-                            auth_file = cookie_file.replace('.txt', '_auth.txt')
-                            async with aiofiles.open(auth_file, 'w', encoding='utf-8') as f:
-                                await f.write(auth_key)
-                            console.print(f"{tracker}: [green]Auth key saved to {auth_file}[/green]")
+                    # Save auth key to a separate file if found
+                    if auth_key:
+                        auth_file = cookie_file.replace('.txt', '_auth.txt')
+                        async with aiofiles.open(auth_file, 'w', encoding='utf-8') as f:
+                            await f.write(auth_key)
+                        console.print(f"{tracker}: [green]Auth key saved to {auth_file}[/green]")
 
-                        return True
+                    return True
 
                 console.print(f"{tracker}: [red]Login validation failed.[/red]")
                 return False

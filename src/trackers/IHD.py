@@ -156,7 +156,7 @@ class IHD(UNIT3D):
                 console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             should_continue = False
 
-        if not meta['is_disc'] == "BDMV":
+        if meta['is_disc'] != "BDMV":
             if not meta.get('language_checked', False):
                 await process_desc_language(meta, tracker=self.tracker)
             original_language = self.original_language_check(meta)
@@ -174,10 +174,7 @@ class IHD(UNIT3D):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print(f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.')
                 yes = cli_ui.ask_yes_no(f'Do you have permission to upload this torrent to {self.tracker}?', default=False)
-                if yes:
-                    should_continue = True
-                else:
-                    should_continue = False
+                should_continue = bool(yes)
             else:
                 if not meta['unattended'] or meta['debug']:
                     console.print('[bold red]Pornographic content is not allowed at IHD, unless it follows strict rules.')
