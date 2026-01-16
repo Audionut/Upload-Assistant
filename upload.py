@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-
 # Pre-check config.py for syntax and common errors before any imports that depend on it
+import contextlib
 import os
 import sys
-from typing import Any, Dict, Optional, cast
+from typing import Any, Optional, cast
+
 from typing_extensions import TypeAlias
 
 _base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -46,12 +47,12 @@ def _print_config_error(error_type: str, message: str, lineno: Optional[int] = N
     print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}")
 
 
-config: Dict[str, Any]
+config: dict[str, Any]
 
 if os.path.exists(_config_path):
     try:
         from data.config import config as _imported_config  # noqa: E402
-        config = cast(Dict[str, Any], _imported_config)
+        config = cast(dict[str, Any], _imported_config)
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -132,23 +133,24 @@ else:
     print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
     sys.exit(1)
 
-import aiofiles  # noqa: E402
 import asyncio  # noqa: E402
-import cli_ui  # noqa: E402
-import discord  # noqa: E402
 import gc  # noqa: E402
 import json  # noqa: E402
 import platform  # noqa: E402
 import re  # noqa: E402
-import requests  # noqa: E402
 import shutil  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
-
-from packaging import version  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-from bin.get_mkbrr import ensure_mkbrr_binary  # noqa: E402
+import aiofiles  # noqa: E402
+import cli_ui  # noqa: E402
+import discord  # noqa: E402
+import requests  # noqa: E402
+from packaging import version  # noqa: E402
+from torf import Torrent  # noqa: E402
+
+from bin.get_mkbrr import MkbrrBinaryManager  # noqa: E402
 from cogs.redaction import clean_meta_for_export, redact_private_info  # noqa: E402
 from discordbot import send_discord_notification, send_upload_status_notification  # noqa: E402
 from src.add_comparison import add_comparison  # noqa: E402
@@ -158,41 +160,41 @@ from src.clients import Clients  # noqa: E402
 from src.console import console  # noqa: E402
 from src.disc_menus import process_disc_menus  # noqa: E402
 from src.dupe_checking import filter_dupes  # noqa: E402
-from src.get_name import get_name  # noqa: E402
 from src.get_desc import gen_desc  # noqa: E402
+from src.get_name import get_name  # noqa: E402
 from src.get_tracker_data import get_tracker_data  # noqa: E402
 from src.languages import process_desc_language  # noqa: E402
 from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
-from src.queuemanage import handle_queue, save_processed_path, process_site_upload_item  # noqa: E402
+from src.queuemanage import handle_queue, process_site_upload_item, save_processed_path  # noqa: E402
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots  # noqa: E402
-from src.torrentcreate import create_torrent, create_random_torrents, create_base_from_existing_torrent  # noqa: E402
+from src.torrentcreate import create_base_from_existing_torrent, create_random_torrents, create_torrent  # noqa: E402
 from src.trackerhandle import process_trackers  # noqa: E402
-from src.trackerstatus import process_all_trackers  # noqa: E402
-from src.trackersetup import TRACKER_SETUP, tracker_class_map, api_trackers, other_api_trackers, http_trackers  # noqa: E402
+from src.trackers.AR import AR  # noqa: E402
 from src.trackers.COMMON import COMMON  # noqa: E402
 from src.trackers.PTP import PTP  # noqa: E402
-from src.trackers.AR import AR  # noqa: E402
+from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, other_api_trackers, tracker_class_map  # noqa: E402
+from src.trackerstatus import process_all_trackers  # noqa: E402
 from src.uphelper import UploadHelper  # noqa: E402
 from src.uploadscreens import upload_screens  # noqa: E402
-from torf import Torrent  # noqa: E402
 
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
-Meta: TypeAlias = Dict[str, Any]
+Meta: TypeAlias = dict[str, Any]
 
 from src.prep import Prep  # noqa: E402
+
 client = Clients(config=config)
 parser = Args(config)
 use_discord = False
 discord_cfg_obj = config.get('DISCORD')
-discord_config: Optional[Dict[str, Any]] = discord_cfg_obj if isinstance(discord_cfg_obj, dict) else None
+discord_config: Optional[dict[str, Any]] = discord_cfg_obj if isinstance(discord_cfg_obj, dict) else None
 if discord_config is not None:
     use_discord = bool(discord_config.get('use_discord', False))
 
 
-async def merge_meta(meta: Meta, saved_meta: Meta) -> Dict[str, Any]:
+async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
     """Merges saved metadata with the current meta, respecting overwrite rules."""
     overwrite_list = [
         'trackers', 'dupe', 'debug', 'anon', 'category', 'type', 'screens', 'nohash', 'manual_edition', 'imdb', 'tmdb_manual', 'mal', 'manual',
@@ -229,7 +231,7 @@ async def print_progress(message: str, interval: int = 10) -> None:
 def update_oeimg_to_onlyimage() -> None:
     """Update all img_host_* values from 'oeimg' to 'onlyimage' in the config file."""
     config_path = f"{base_dir}/data/config.py"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         content = f.read()
 
     new_content = re.sub(
@@ -343,6 +345,16 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
     parser = Args(config)
     helper = UploadHelper()
+
+    raw_trackers = meta.get('trackers')
+    trackers: list[str]
+    if isinstance(raw_trackers, list):
+        trackers = [t for t in raw_trackers if isinstance(t, str)]
+    elif isinstance(raw_trackers, str):
+        trackers = [t.strip().upper() for t in raw_trackers.split(',') if t.strip()]
+        meta['trackers'] = trackers
+    else:
+        trackers = []
 
     if not meta.get('emby', False):
         if meta.get('trackers_remove', False):
@@ -496,10 +508,17 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         if meta.get('trackers_pass') is not None:
             meta['skip_uploading'] = meta.get('trackers_pass')
         else:
-            meta['skip_uploading'] = int(config['DEFAULT'].get('tracker_pass_checks', 1))
+            tracker_pass_checks = config['DEFAULT'].get('tracker_pass_checks')
+            if isinstance(tracker_pass_checks, (int, str)):
+                meta['skip_uploading'] = int(tracker_pass_checks)
+            else:
+                meta['skip_uploading'] = 1
 
-    if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
-        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
+    skip_uploading = meta.get('skip_uploading')
+    skip_uploading_int = int(skip_uploading) if isinstance(skip_uploading, (int, str)) else 0
+
+    if successful_trackers < skip_uploading_int and not meta['debug']:
+        console.print(f"[red]Not enough successful trackers ({successful_trackers}/{skip_uploading_int}). No uploads being processed.[/red]")
 
     else:
         meta['we_are_uploading'] = True
@@ -522,17 +541,14 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 search_data: list[dict[str, Any]] = []
                 if os.path.exists(log_path):
                     try:
-                        async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+                        async with aiofiles.open(log_path, encoding='utf-8') as f:
                             content = await f.read()
                             loaded = json.loads(content) if content.strip() else []
-                            if isinstance(loaded, list):
-                                search_data = [e for e in loaded if isinstance(e, dict)]
-                            else:
-                                search_data = []
+                            search_data = [e for e in loaded if isinstance(e, dict)] if isinstance(loaded, list) else []
                     except Exception:
                         search_data = []
 
-                existing_uuids = {entry.get('uuid') for entry in search_data if isinstance(entry, dict)}
+                existing_uuids = {entry.get('uuid') for entry in search_data}
 
                 if meta['uuid'] not in existing_uuids:
                     search_entry = {
@@ -570,10 +586,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         bdmv_mi_created = False
         for tracker in ["ANT", "DC", "HUNO", "LCD"]:
             upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
-            if tracker in trackers and upload_status is True:
-                if not bdmv_mi_created:
-                    await common.get_bdmv_mediainfo(meta)
-                    bdmv_mi_created = True
+            if tracker in trackers and upload_status is True and not bdmv_mi_created:
+                await common.get_bdmv_mediainfo(meta)
+                bdmv_mi_created = True
 
         progress_task = asyncio.create_task(print_progress("[yellow]Still processing, please wait...", interval=10))
         try:
@@ -588,7 +603,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
                 if os.path.exists(image_data_file) and not meta.get('image_list'):
                     try:
-                        with open(image_data_file, 'r') as img_file:
+                        with open(image_data_file) as img_file:
                             image_data = json.load(img_file)
 
                             if 'image_list' in image_data and not meta.get('image_list'):
@@ -613,7 +628,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
                     if os.path.exists(menus_data_file):
                         try:
-                            with open(menus_data_file, 'r') as menus_file:
+                            with open(menus_data_file) as menus_file:
                                 menu_image_file = json.load(menus_file)
 
                                 if 'menu_images' in menu_image_file and not meta.get('menu_images'):
@@ -635,20 +650,20 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
                                 meta.get('image_list', []), meta.get('ffdebug', False), 0
                             )
-                        except asyncio.CancelledError:
+                        except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception("Error during screenshot capture")
+                            raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}")
+                            raise Exception(f"Error during screenshot capture: {e}") from e
 
                     elif meta['is_disc'] == "DVD":
                         try:
@@ -658,20 +673,20 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 num_screens=0,
                                 retry_cap=False
                             )
-                        except asyncio.CancelledError:
+                        except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception("Error during screenshot capture")
+                            raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}")
+                            raise Exception(f"Error during screenshot capture: {e}") from e
 
                     else:
                         try:
@@ -682,13 +697,13 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 videopath, filename, meta['uuid'], base_dir, meta,
                                 manual_frames=manual_frames  # Pass additional kwargs directly
                             )
-                        except asyncio.CancelledError:
+                        except asyncio.CancelledError as e:
                             await cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            raise Exception("Error during screenshot capture")
+                            raise Exception("Error during screenshot capture") from e
                         except Exception as e:
                             console.print(traceback.format_exc())
                             await cleanup_screenshot_temp_files(meta)
@@ -696,27 +711,24 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                             await cleanup()
                             gc.collect()
                             reset_terminal()
-                            try:
-                                raise Exception(f"Error during screenshot capture: {e}")
-                            except Exception as e2:
-                                if "workers" in str(e2):
-                                    console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
-                                raise e2
+                            if "workers" in str(e):
+                                console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
+                            raise Exception(f"Error during screenshot capture: {e}") from e
 
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as e:
                     await cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
                     await cleanup()
                     gc.collect()
                     reset_terminal()
-                    raise Exception("Error during screenshot capture")
-                except Exception:
+                    raise Exception("Error during screenshot capture") from e
+                except Exception as e:
                     await cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
                     await cleanup()
                     gc.collect()
                     reset_terminal()
-                    raise Exception
+                    raise Exception("Error during screenshot capture") from e
                 finally:
                     await asyncio.sleep(0.1)
                     await cleanup()
@@ -834,7 +846,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                     return_dict: dict[str, Any] = {}
                     try:
-                        new_images, dummy_var = await upload_screens(
+                        await upload_screens(
                             meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict, allowed_hosts=allowed_hosts
                         )
                         if meta.get('debug'):
@@ -890,10 +902,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         console.print(f"[yellow]Failed to save image data: {str(e)}")
         finally:
             progress_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await progress_task
-            except asyncio.CancelledError:
-                pass
 
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         if meta.get('force_recheck', False):
@@ -943,9 +953,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         meta['we_are_uploading'] = False
                         return
 
-        if int(meta.get('randomized', 0)) >= 1:
-            if not meta['mkbrr']:
-                create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
+        if int(meta.get('randomized', 0)) >= 1 and not meta['mkbrr']:
+            create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
         meta = await gen_desc(meta)
 
@@ -973,7 +982,7 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
     Adds a processed file to the log, deduplicating and always appending to the end.
     """
     if os.path.exists(log_file):
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             try:
                 processed_files = json.load(f)
             except Exception:
@@ -991,7 +1000,7 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
 def get_local_version(version_file: str) -> Optional[str]:
     """Extracts the local version from the version.py file."""
     try:
-        with open(version_file, "r", encoding="utf-8") as f:
+        with open(version_file, encoding="utf-8") as f:
             content = f.read()
         match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
         if match:
@@ -1102,6 +1111,7 @@ async def do_the_thing(base_dir: str) -> None:
                 os.chmod(subdir_path, 0o700)
 
     bot: Any = None
+    connect_task: Optional[asyncio.Task[None]] = None
     meta: Meta = {}
     paths: list[str] = []
     for each in sys.argv[1:]:
@@ -1132,7 +1142,7 @@ async def do_the_thing(base_dir: str) -> None:
             meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')), meta))
 
         # Validate config structure and types (after args parsed so we have trackers list)
-        from src.configvalidator import validate_config, group_warnings
+        from src.configvalidator import group_warnings, validate_config
 
         # Get active trackers from meta (parsed from command line) or fall back to config default
         active_trackers: Optional[list[str]] = None
@@ -1179,7 +1189,7 @@ async def do_the_thing(base_dir: str) -> None:
         if not meta.get('path'):
             exit(0)
 
-        path = meta['path']
+        path = cast(str, meta['path'])
         path = os.path.abspath(path)
         if path.endswith('"'):
             path = path[:-1]
@@ -1198,22 +1208,23 @@ async def do_the_thing(base_dir: str) -> None:
             console.print()
             meta['mkbrr'] = False
 
-        queue, log_file = await handle_queue(path, meta, paths, base_dir)
+        queue, log_file = cast(tuple[list[str], Optional[str]], await handle_queue(path, meta, paths, base_dir))
 
         processed_files_count = 0
         skipped_files_count = 0
-        base_meta = {k: v for k, v in meta.items()}
+        base_meta = dict(meta.items())
 
         for queue_item in queue:
             total_files = len(queue)
             bot = None
+            current_item_path = ""
+            tmp_path = ""
             try:
                 meta = base_meta.copy()
 
                 if meta.get('site_upload_queue'):
                     # Extract path and metadata from site upload queue item
-                    path = await process_site_upload_item(queue_item, meta)
-                    path = cast(str, path)
+                    path = cast(str, await process_site_upload_item(queue_item, meta))
                     current_item_path = path  # Store for logging
                 else:
                     # Regular queue processing
@@ -1261,7 +1272,7 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[yellow]No metadata file found at {meta_file}")
 
                 if keep_meta and os.path.exists(meta_file):
-                    with open(meta_file, "r") as f:
+                    with open(meta_file) as f:
                         saved_meta = json.load(f)
                         console.print("[yellow]Existing metadata file found, it holds cached values")
                         await merge_meta(meta, saved_meta)
@@ -1273,32 +1284,39 @@ async def do_the_thing(base_dir: str) -> None:
             discord_bot_token = discord_config.get('discord_bot_token') if discord_config is not None else None
             only_unattended = bool(discord_config.get('only_unattended', False)) if discord_config is not None else False
 
-            if use_discord and discord_config is not None and isinstance(discord_bot_token, str) and discord_bot_token and not meta['debug']:
-                if (only_unattended and meta.get('unattended', False)) or not only_unattended:
+            if (
+                use_discord
+                and discord_config is not None
+                and isinstance(discord_bot_token, str)
+                and discord_bot_token
+                and not meta['debug']
+                and ((only_unattended and meta.get('unattended', False)) or not only_unattended)
+            ):
+                try:
+                    console.print("[cyan]Starting Discord bot initialization...")
+                    intents = discord.Intents.default()
+                    intents.message_content = True
+                    bot = discord.Client(intents=intents)
+                    token = discord_bot_token
+                    await asyncio.wait_for(bot.login(token), timeout=10)
+                    connect_task = asyncio.create_task(bot.connect())
+
                     try:
-                        console.print("[cyan]Starting Discord bot initialization...")
-                        intents = discord.Intents.default()
-                        intents.message_content = True
-                        bot = discord.Client(intents=intents)
-                        token = discord_bot_token
-                        await asyncio.wait_for(bot.login(token), timeout=10)
-                        connect_task = asyncio.create_task(bot.connect())
+                        await asyncio.wait_for(bot.wait_until_ready(), timeout=20)
+                        console.print("[green]Discord Bot is ready!")
+                    except asyncio.TimeoutError:
+                        console.print("[bold red]Bot failed to connect within timeout period.")
+                        console.print("[yellow]Continuing without Discord integration...")
+                        if 'connect_task' in locals():
+                            connect_task.cancel()
+                except discord.LoginFailure:
+                    console.print("[bold red]Discord bot token is invalid. Please check your configuration.")
+                except discord.ClientException as e:
+                    console.print(f"[bold red]Discord client exception: {e}")
+                except Exception as e:
+                    console.print(f"[bold red]Unexpected error during Discord bot initialization: {e}")
 
-                        try:
-                            await asyncio.wait_for(bot.wait_until_ready(), timeout=20)
-                            console.print("[green]Discord Bot is ready!")
-                        except asyncio.TimeoutError:
-                            console.print("[bold red]Bot failed to connect within timeout period.")
-                            console.print("[yellow]Continuing without Discord integration...")
-                            if 'connect_task' in locals():
-                                connect_task.cancel()
-                    except discord.LoginFailure:
-                        console.print("[bold red]Discord bot token is invalid. Please check your configuration.")
-                    except discord.ClientException as e:
-                        console.print(f"[bold red]Discord client exception: {e}")
-                    except Exception as e:
-                        console.print(f"[bold red]Unexpected error during Discord bot initialization: {e}")
-
+            start_time = 0.0
             if meta['debug']:
                 start_time = time.time()
 
@@ -1319,12 +1337,11 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[cyan]Processed {processed_files_count}/{total_files} files with {skipped_files_count} skipped uploading.")
                         else:
                             console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
-                        if not meta['debug'] or "debug" in os.path.basename(log_file):
-                            if log_file:
-                                if meta.get('site_upload_queue'):
-                                    await save_processed_path(log_file, current_item_path)
-                                else:
-                                    await save_processed_file(log_file, path)
+                        if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
+                            if meta.get('site_upload_queue'):
+                                await save_processed_path(log_file, current_item_path)
+                            else:
+                                await save_processed_file(log_file, path)
 
             else:
                 console.print()
@@ -1365,22 +1382,30 @@ async def do_the_thing(base_dir: str) -> None:
                 successful_trackers = 10
                 if meta.get('dupe_again', False):
                     console.print("[yellow]Performing double dupe check on trackers that passed initial upload checks.....[/yellow]")
-                    for tracker in list(meta.get('trackers', [])):
+                    trackers_list = meta.get('trackers', [])
+                    if not isinstance(trackers_list, list):
+                        trackers_list = []
+                        meta['trackers'] = trackers_list
+
+                    for tracker in list(trackers_list):
                         tracker_status = meta.get('tracker_status', {}).get(tracker, {})
                         if tracker_status.get('upload') is not True:
                             if meta.get('debug'):
                                 console.print(f"[yellow]{tracker} was previously marked to skip upload. Skipping double dupe check.[/yellow]")
-                            meta['trackers'].remove(tracker)
+                            trackers_list.remove(tracker)
                             meta['tracker_status'].pop(tracker, None)
                             continue
 
-                    if meta.get('trackers', []):
+                    if trackers_list:
                         successful_trackers = await process_all_trackers(meta)
                     else:
                         successful_trackers = 0
 
-                if successful_trackers < int(meta['skip_uploading']) and not meta['debug']:
-                    console.print(f"[red]Not enough successful trackers ({successful_trackers}/{meta['skip_uploading']}). No uploads being processed.[/red]")
+                skip_uploading = meta.get('skip_uploading')
+                skip_uploading_int = int(skip_uploading) if isinstance(skip_uploading, (int, str)) else 0
+
+                if successful_trackers < skip_uploading_int and not meta['debug']:
+                    console.print(f"[red]Not enough successful trackers ({successful_trackers}/{skip_uploading_int}). No uploads being processed.[/red]")
                 else:
                     await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                     if use_discord and bot:
@@ -1395,16 +1420,43 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count} of {meta['limit_queue']} in limit with {total_files} files.")
                         else:
                             console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
-                        if not meta['debug'] or "debug" in os.path.basename(log_file):
-                            if log_file:
-                                if meta.get('site_upload_queue'):
-                                    await save_processed_path(log_file, current_item_path)
-                                else:
-                                    await save_processed_file(log_file, path)
+                        if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
+                            if meta.get('site_upload_queue'):
+                                await save_processed_path(log_file, current_item_path)
+                            else:
+                                await save_processed_file(log_file, path)
 
             if meta['debug']:
                 finish_time = time.time()
                 console.print(f"Uploads processed in {finish_time - start_time:.4f} seconds")
+
+            def build_tracker_status_line(tracker: str, status: Any) -> str:
+                try:
+                    if not isinstance(status, dict):
+                        return f"Error printing {tracker} data: invalid status type\n"
+
+                    status_message = status.get('status_message')
+
+                    if tracker == "MTV" and status_message is not None and "data error" not in str(status_message):
+                        return f"{str(status_message)}\n"
+
+                    if 'torrent_id' in status:
+                        tracker_class = tracker_class_map[tracker](config=config)
+                        torrent_url = tracker_class.torrent_url
+                        return f"{tracker}: {torrent_url}{status['torrent_id']}\n"
+
+                    if status_message is not None and "data error" not in str(status_message) and tracker != "MTV":
+                        return f"{tracker}: {redact_private_info(status_message)}\n"
+
+                    if status_message is not None and "data error" in str(status_message):
+                        return f"{tracker}: {str(status_message)}\n"
+
+                    if status.get('skipping') is False:
+                        return f"{tracker} gave no useful message.\n"
+
+                    return ""
+                except Exception as exc:
+                    return f"Error printing {tracker} data: {exc}\n"
 
             if use_discord and bot:
                 send_upload_links = bool(discord_config.get('send_upload_links', False)) if discord_config is not None else False
@@ -1412,28 +1464,7 @@ async def do_the_thing(base_dir: str) -> None:
                     try:
                         discord_message = ""
                         for tracker, status in meta.get('tracker_status', {}).items():
-                            try:
-                                if tracker == "MTV" and 'status_message' in status and "data error" not in str(status['status_message']):
-                                    discord_message += f"{str(status['status_message'])}\n"
-                                if 'torrent_id' in status:
-                                    tracker_class = tracker_class_map[tracker](config=config)
-                                    torrent_url = tracker_class.torrent_url
-                                    discord_message += f"{tracker}: {torrent_url}{status['torrent_id']}\n"
-                                else:
-                                    if (
-                                        'status_message' in status
-                                        and 'torrent_id' not in status
-                                        and "data error" not in str(status['status_message'])
-                                        and tracker != "MTV"
-                                    ):
-                                        discord_message += f"{tracker}: {redact_private_info(status['status_message'])}\n"
-                                    elif 'status_message' in status and "data error" in str(status['status_message']):
-                                        discord_message += f"{tracker}: {str(status['status_message'])}\n"
-                                    else:
-                                        if 'skipping' in status and not status['skipping']:
-                                            discord_message += f"{tracker} gave no useful message.\n"
-                            except Exception as e:
-                                discord_message += f"Error printing {tracker} data: {e}\n"
+                            discord_message += build_tracker_status_line(tracker, status)
                         discord_message += "All tracker uploads processed.\n"
                         await send_discord_notification(config, bot, discord_message, debug=meta.get('debug', False), meta=meta)
                     except Exception as e:
@@ -1460,19 +1491,17 @@ async def do_the_thing(base_dir: str) -> None:
                         console.print(f"[cyan]Using trackers for request search: {trackers}[/cyan]")
                 await tracker_setup.tracker_request(meta, trackers)
 
-            if meta.get('site_check', False):
-                if 'queue' in meta and meta.get('queue') is not None:
-                    processed_files_count += 1
-                    skipped_files_count += 1
-                    console.print(f"[cyan]Processed {processed_files_count}/{total_files} files.")
-                    if not meta['debug'] or "debug" in os.path.basename(log_file):
-                        if log_file:
-                            if meta.get('site_upload_queue'):
-                                await save_processed_path(log_file, current_item_path)
-                            else:
-                                await save_processed_file(log_file, path)
+            if meta.get('site_check', False) and 'queue' in meta and meta.get('queue') is not None:
+                processed_files_count += 1
+                skipped_files_count += 1
+                console.print(f"[cyan]Processed {processed_files_count}/{total_files} files.")
+                if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
+                    if meta.get('site_upload_queue'):
+                        await save_processed_path(log_file, current_item_path)
+                    else:
+                        await save_processed_file(log_file, path)
 
-            if meta.get('delete_tmp', False) and os.path.exists(tmp_path) and meta.get('emby', False):
+            if meta.get('delete_tmp', False) and tmp_path and os.path.exists(tmp_path) and meta.get('emby', False):
                 try:
                     shutil.rmtree(tmp_path)
                     console.print(f"[yellow]Successfully deleted temp directory for {os.path.basename(path)}[/yellow]")
@@ -1480,18 +1509,17 @@ async def do_the_thing(base_dir: str) -> None:
                 except Exception as e:
                     console.print(f"[bold red]Failed to delete temp directory: {str(e)}")
 
-            if 'limit_queue' in meta and int(meta['limit_queue']) > 0:
-                if (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
-                    if sanitize_meta and not meta.get('emby', False):
-                        try:
-                            await asyncio.sleep(0.2)  # We can't race the status prints
-                            meta = await clean_meta_for_export(meta)
-                        except Exception as e:
-                            console.print(f"[red]Error cleaning meta for export: {e}")
-                    await cleanup()
-                    gc.collect()
-                    reset_terminal()
-                    break
+            if 'limit_queue' in meta and int(meta['limit_queue']) > 0 and (processed_files_count - skipped_files_count) >= int(meta['limit_queue']):
+                if sanitize_meta and not meta.get('emby', False):
+                    try:
+                        await asyncio.sleep(0.2)  # We can't race the status prints
+                        meta = await clean_meta_for_export(meta)
+                    except Exception as e:
+                        console.print(f"[red]Error cleaning meta for export: {e}")
+                await cleanup()
+                gc.collect()
+                reset_terminal()
+                break
 
             if sanitize_meta and not meta.get('emby', False):
                 try:
@@ -1513,12 +1541,10 @@ async def do_the_thing(base_dir: str) -> None:
     finally:
         if bot is not None:
             await bot.close()
-        if 'connect_task' in locals():
+        if connect_task is not None:
             connect_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await connect_task
-            except asyncio.CancelledError:
-                pass
         if not sys.stdin.closed:
             reset_terminal()
 
@@ -1598,14 +1624,17 @@ async def process_cross_seeds(meta: Meta) -> None:
                     dupes = await tracker_class.search_existing(meta, disctype)
                 else:
                     ptp = PTP(config=config)
-                    if not meta.get('ptp_groupID'):
-                        groupID = await ptp.get_group_by_imdb(meta['imdb'])
-                        meta['ptp_groupID'] = groupID
-                    dupes = await ptp.search_existing(meta['ptp_groupID'], meta, disctype)
+                    group_id = meta.get('ptp_groupID')
+                    if not group_id:
+                        group_id = await ptp.get_group_by_imdb(meta['imdb'])
+                        meta['ptp_groupID'] = group_id
+                    if group_id is None:
+                        return
+                    dupes = await ptp.search_existing(group_id, meta, disctype)
 
                 if dupes:
                     dupes = await filter_dupes(dupes, meta, tracker)
-                    is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
+                    _is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
                     # Persist any updates from dupe_check (defensive in case it returns a copy)
                     if isinstance(updated_meta, dict) and updated_meta is not meta:
                         meta.update(updated_meta)
@@ -1709,7 +1738,7 @@ async def process_cross_seeds(meta: Meta) -> None:
 
 async def get_mkbrr_path(meta: Meta, base_dir: Optional[str] = None) -> Optional[str]:
     try:
-        mkbrr_path = await ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.18.0")
+        mkbrr_path = await MkbrrBinaryManager.ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.18.0")
         return str(mkbrr_path) if mkbrr_path else None
     except Exception as e:
         console.print(f"[red]Error setting up mkbrr binary: {e}[/red]")
