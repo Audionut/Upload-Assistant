@@ -23,17 +23,25 @@ ComparisonData = dict[str, ComparisonGroup]
 
 async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData, list[ComparisonGroup]]:
     comparison_path = meta.get('comparison')
-    if not comparison_path or not os.path.isdir(comparison_path):
+    if not isinstance(comparison_path, str) or not os.path.isdir(comparison_path):
         return []
 
     comparison_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/comparison_data.json"
     if os.path.exists(comparison_data_file):
         try:
             with open(comparison_data_file) as f:
-                raw_data = json.load(f)
+                raw_data: Any = json.load(f)
                 saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
-                if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()) or isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
-                    saved_comparison_data = raw_data
+                if isinstance(raw_data, dict):
+                    raw_dict = cast(dict[str, Any], raw_data)
+                    if not all(isinstance(v, dict) for v in raw_dict.values()):
+                        raise ValueError("Invalid comparison data format: must be a dict of dicts")
+                    saved_comparison_data = cast(ComparisonData, raw_dict)
+                elif isinstance(raw_data, list):
+                    raw_list = cast(list[Any], raw_data)
+                    if not all(isinstance(item, dict) for item in raw_list):
+                        raise ValueError("Invalid comparison data format: must be a list of dicts")
+                    saved_comparison_data = cast(list[ComparisonGroup], raw_list)
                 else:
                     raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
                 if meta.get('debug'):
@@ -54,15 +62,17 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
 
                     if isinstance(saved_comparison_data, dict):
                         if comparison_index_str in saved_comparison_data:
-                            urls_to_add = saved_comparison_data[comparison_index_str].get('urls', [])
+                            group_data = saved_comparison_data[comparison_index_str]
+                            urls_to_add = cast(list[dict[str, Any]], group_data.get('urls', []))
                             found = True
                         else:
                             console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
-                    elif isinstance(saved_comparison_data, list):
+                    else:
                         try:
                             idx = int(comparison_index_str)
                             if 0 <= idx < len(saved_comparison_data):
-                                urls_to_add = saved_comparison_data[idx].get('urls', [])
+                                list_item = saved_comparison_data[idx]
+                                urls_to_add = cast(list[dict[str, Any]], list_item.get('urls', []))
                                 found = True
                             else:
                                 console.print(f"[yellow]Comparison index '{comparison_index_str}' out of range; valid range: 0-{len(saved_comparison_data) - 1}[/yellow]")
@@ -72,19 +82,21 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
                     if found and urls_to_add:
                         if meta.get('debug'):
                             console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
+                        image_list = cast(list[dict[str, Any]], meta.get('image_list', []))
+                        meta['image_list'] = image_list
                         for url_info in urls_to_add:
-                            if url_info not in meta['image_list']:
-                                meta['image_list'].append(url_info)
+                            if url_info not in image_list:
+                                image_list.append(url_info)
 
                 return saved_comparison_data
         except Exception as e:
             console.print(f"[yellow]Error loading saved comparison data: {e}")
 
-    files = [f for f in os.listdir(comparison_path) if f.lower().endswith('.png')]
+    files: list[str] = [f for f in os.listdir(comparison_path) if f.lower().endswith('.png')]
     pattern = re.compile(r"(\d+)-(\d+)-(.+)\.png", re.IGNORECASE)
 
-    groups = defaultdict(list)
-    suffixes = {}
+    groups: defaultdict[str, list[tuple[int, str]]] = defaultdict(list)
+    suffixes: dict[str, str] = {}
 
     for f in files:
         match = pattern.match(f)
@@ -102,7 +114,7 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
     if not img_host_indices:
         raise ValueError("No image hosts found in config. Please ensure at least one 'img_host_X' key is present in config.")
 
-    for idx, second in enumerate(sorted(groups, key=lambda x: int(x)), 1):
+    for _idx, second in enumerate(sorted(groups, key=lambda x: int(x)), 1):
         img_host_num = img_host_indices[0]
         current_img_host_key = f'img_host_{img_host_num}'
         current_img_host = DEFAULT_CONFIG.get(current_img_host_key)
@@ -110,7 +122,7 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
             current_img_host = str(current_img_host)
 
         group = sorted(groups[second], key=lambda x: x[0])
-        group_files = [f for _, f in group]
+        group_files: list[str] = [f for _, f in group]
         custom_img_list: list[str] = [os.path.join(comparison_path, filename) for filename in group_files]
         upload_meta = dict(meta)
         console.print(f"[cyan]Uploading comparison group {second} with files: {group_files}")
@@ -119,9 +131,10 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
             upload_meta, len(custom_img_list), img_host_num, 0, len(custom_img_list), custom_img_list, {}
         )
 
-        uploaded_infos = [
+        upload_result_list = cast(list[Mapping[str, Any]], upload_result)
+        uploaded_infos: list[dict[str, Any]] = [
             {k: item.get(k) for k in ("img_url", "raw_url", "web_url")}
-            for item in upload_result
+            for item in upload_result_list
         ]
 
         group_name = suffixes.get(second, "")
@@ -147,13 +160,15 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
         if 'image_list' not in meta:
             meta['image_list'] = []
 
-        urls_to_add = meta_comparisons[comparison_index].get('urls', [])
+        urls_to_add = cast(list[dict[str, Any]], meta_comparisons[comparison_index].get('urls', []))
         if meta.get('debug'):
             console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
 
+        image_list = cast(list[dict[str, Any]], meta.get('image_list', []))
+        meta['image_list'] = image_list
         for url_info in urls_to_add:
-            if url_info not in meta['image_list']:
-                meta['image_list'].append(url_info)
+            if url_info not in image_list:
+                image_list.append(url_info)
 
     meta["comparison_groups"] = meta_comparisons
 
