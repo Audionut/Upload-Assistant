@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# pyright: reportUnknownVariableType=false
-# pyright: reportUnknownMemberType=false
-# pyright: reportUnknownArgumentType=false
-# pyright: reportUnknownParameterType=false
-# pyright: reportUnknownLambdaType=false
 # Pre-check config.py for syntax and common errors before any imports that depend on it
 import contextlib
 import os
@@ -171,7 +166,7 @@ from src.get_tracker_data import get_tracker_data  # noqa: E402
 from src.languages import process_desc_language  # noqa: E402
 from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
-from src.queuemanage import handle_queue, process_site_upload_item, save_processed_path  # noqa: E402
+from src.queuemanage import QueueManager  # noqa: E402
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots  # noqa: E402
 from src.torrentcreate import create_base_from_existing_torrent, create_random_torrents, create_torrent  # noqa: E402
 from src.trackerhandle import process_trackers  # noqa: E402
@@ -1215,7 +1210,7 @@ async def do_the_thing(base_dir: str) -> None:
             console.print()
             meta['mkbrr'] = False
 
-        queue, log_file = cast(tuple[list[str], Optional[str]], await handle_queue(path, meta, paths, base_dir))
+        queue, log_file = await QueueManager.handle_queue(path, meta, paths, base_dir)
 
         processed_files_count = 0
         skipped_files_count = 0
@@ -1231,11 +1226,12 @@ async def do_the_thing(base_dir: str) -> None:
 
                 if meta.get('site_upload_queue'):
                     # Extract path and metadata from site upload queue item
-                    path = cast(str, await process_site_upload_item(queue_item, meta))
+                    queue_item_mapping = cast(Mapping[str, Any], queue_item)
+                    path = cast(str, await QueueManager.process_site_upload_item(queue_item_mapping, meta))
                     current_item_path = path  # Store for logging
                 else:
                     # Regular queue processing
-                    path = queue_item
+                    path = cast(str, queue_item)
                     current_item_path = path
 
                 meta['path'] = path
@@ -1346,7 +1342,7 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[cyan]Processed {processed_files_count}/{total_files}.")
                         if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
                             if meta.get('site_upload_queue'):
-                                await save_processed_path(log_file, current_item_path)
+                                await QueueManager.save_processed_path(log_file, current_item_path)
                             else:
                                 await save_processed_file(log_file, path)
 
@@ -1429,7 +1425,7 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[cyan]Successfully uploaded {processed_files_count - skipped_files_count}/{total_files} files.")
                         if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
                             if meta.get('site_upload_queue'):
-                                await save_processed_path(log_file, current_item_path)
+                                await QueueManager.save_processed_path(log_file, current_item_path)
                             else:
                                 await save_processed_file(log_file, path)
 
@@ -1508,7 +1504,7 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print(f"[cyan]Processed {processed_files_count}/{total_files} files.")
                 if log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
                     if meta.get('site_upload_queue'):
-                        await save_processed_path(log_file, current_item_path)
+                        await QueueManager.save_processed_path(log_file, current_item_path)
                     else:
                         await save_processed_file(log_file, path)
 
