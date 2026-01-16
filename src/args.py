@@ -236,7 +236,8 @@ class Args:
             value = parsed_args[key]
             if value not in (None, []):
                 if isinstance(value, list):
-                    value2 = self.list_to_string(value)
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    value2 = self.list_to_string(value_list)
                     if key == 'manual_type':
                         meta['manual_type'] = value2.upper().replace('-', '')
                     elif key == 'tag':
@@ -393,42 +394,70 @@ class Args:
                 else:
                     meta[key] = value
             if key == 'site_upload':
-                if isinstance(value, list) and len(value) == 1:
-                    meta[key] = value[0].upper()  # Extract the tracker acronym and uppercase it
+                if isinstance(value, list):
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    if len(value_list) == 1:
+                        meta[key] = value_list[0].upper()  # Extract the tracker acronym and uppercase it
+                    elif value_list:
+                        meta[key] = str(value_list).upper()
+                    else:
+                        meta[key] = None
                 elif value is not None:
                     meta[key] = str(value).upper()
                 else:
                     meta[key] = None
             if key in ("manual_edition"):
-                if isinstance(value, list) and len(value) == 1:
-                    meta[key] = value[0]
+                if isinstance(value, list):
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    if len(value_list) == 1:
+                        meta[key] = value_list[0]
+                    else:
+                        meta[key] = value_list
                 else:
                     meta[key] = value
             if key in ("manual_dvds"):
-                if isinstance(value, list) and len(value) == 1:
-                    meta[key] = value[0]
+                if isinstance(value, list):
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    if len(value_list) == 1:
+                        meta[key] = value_list[0]
+                    elif value_list:
+                        meta[key] = value_list
+                    else:
+                        meta[key] = ""
                 elif value not in (None, [], ""):
                     meta[key] = value
                 else:
                     meta[key] = ""
             if key in ("freeleech"):
-                if isinstance(value, list) and len(value) == 1:
-                    meta[key] = int(str(cast(Any, value[0])))
-                elif value not in (None, [], 0):
-                    meta[key] = int(value)
+                if isinstance(value, list):
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    if len(value_list) == 1 and value_list[0] != "":
+                        meta[key] = int(value_list[0])
+                    else:
+                        meta[key] = 0
+                elif value not in (None, [], 0, ""):
+                    meta[key] = int(str(value))
                 else:
                     meta[key] = 0
             if key in ["manual_episode_title"] and value == []:
                 meta[key] = ""
             if key in ["tvmaze_manual"]:
-                if isinstance(value, list) and len(value) == 1:
-                    meta[key] = value[0]
+                if isinstance(value, list):
+                    value_list = [str(item) for item in cast(list[Any], value)]
+                    if len(value_list) == 1:
+                        meta[key] = value_list[0]
+                    else:
+                        meta[key] = value_list
                 elif value not in (None, []):
                     meta[key] = value
             if key == 'trackers':
                 if value:
                     # Extract from list if it's a single-item list (from nargs=1)
-                    tracker_value = value[0] if isinstance(value, list) and len(value) == 1 else value
+                    if isinstance(value, list):
+                        value_list = cast(list[Any], value)
+                        tracker_value: Any = value_list[0] if len(value_list) == 1 else value_list
+                    else:
+                        tracker_value = value
 
                     if isinstance(tracker_value, str):
                         tracker_value = tracker_value.strip('"\'')
@@ -440,15 +469,13 @@ class Args:
                             meta[key] = [tracker_value.strip().upper()]
                     elif isinstance(tracker_value, list):
                         # Handle list of strings
-                        expanded = []
-                        for t in tracker_value:
-                            if isinstance(t, str):
-                                if ',' in t:
-                                    expanded.extend([x.strip().upper() for x in t.split(',')])
-                                else:
-                                    expanded.append(t.strip().upper())
+                        expanded: list[str] = []
+                        for t in cast(list[Any], tracker_value):
+                            t_str = str(t)
+                            if ',' in t_str:
+                                expanded.extend([x.strip().upper() for x in t_str.split(',')])
                             else:
-                                expanded.append(str(t).upper())
+                                expanded.append(t_str.strip().upper())
                         meta[key] = expanded
                     else:
                         meta[key] = [str(tracker_value).upper()]
@@ -499,6 +526,6 @@ class Args:
         else:
             parsed_id = parsed_id
 
-        parsed_id_int = int(parsed_id) if isinstance(parsed_id, str) and parsed_id.isdigit() else 0
+        parsed_id_int = int(parsed_id) if parsed_id.isdigit() else 0
 
         return category, parsed_id_int
