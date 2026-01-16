@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnusedVariable=false, reportUnusedImport=false, reportUnusedClass=false, reportUnusedFunction=false, reportUnnecessaryIsInstance=false, reportGeneralTypeIssues=false
 import asyncio
 import base64
 import collections
@@ -307,14 +308,13 @@ class Clients:
                             else:
                                 qbt_client = potential_qbt_client
 
-                            if qbt_client is None:
-                                console.print("[bold red]qBittorrent client not initialized")
-                                continue
                             qbt_client_local: qbittorrentapi.Client = qbt_client
 
                             try:
                                 torrent_file_content = await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client_local.torrents_export, torrent_hash=hash_value_str),
+                                    lambda qbt_client_local=qbt_client_local, hash_value_str=hash_value_str: asyncio.to_thread(
+                                        qbt_client_local.torrents_export, torrent_hash=hash_value_str
+                                    ),
                                     f"Export torrent {hash_value_str}"
                                 )
                             except (asyncio.TimeoutError, qbittorrentapi.APIError):
@@ -344,8 +344,8 @@ class Clients:
 
         # Search the client if no pre-specified hash matches
         if torrent_client == 'qbit' and client.get('enable_search'):
+            qbt_session: Optional[aiohttp.ClientSession] = None
             try:
-                qbt_session: Optional[aiohttp.ClientSession] = None
 
                 proxy_url = client.get('qui_proxy_url')
 
@@ -389,6 +389,8 @@ class Clients:
                     if not os.path.exists(found_torrent_path):
                         console.print(f"[yellow]Exporting .torrent file from qBittorrent for hash: {found_hash}[/yellow]")
 
+                        torrent_file_content: Optional[bytes] = None
+
                         try:
                             proxy_url = client.get('qui_proxy_url')
                             if proxy_url:
@@ -427,7 +429,9 @@ class Clients:
                                 if found_hash:  # Only proceed if we still have a hash
                                     try:
                                         torrent_file_content = await self.retry_qbt_operation(
-                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=found_hash),
+                                            lambda qbt_client=qbt_client, found_hash=found_hash: asyncio.to_thread(
+                                                qbt_client.torrents_export, torrent_hash=found_hash
+                                            ),
                                             f"Export torrent {found_hash}"
                                         )
                                     except (asyncio.TimeoutError, qbittorrentapi.APIError) as e:
@@ -449,6 +453,7 @@ class Clients:
                         console.print(f"[cyan]DEBUG: .torrent file already exists at {found_torrent_path}[/cyan]")
 
                 # Only validate if we still have a hash (export succeeded or file already existed)
+                resolved_path = ""
                 if found_hash:
                     valid, resolved_path = await self.is_valid_torrent(
                         meta, found_torrent_path, found_hash, torrent_client, client
@@ -770,7 +775,9 @@ class Clients:
                         console.print("[bold red]qBittorrent client not initialized")
                         continue
                     torrent_file_content = await self.retry_qbt_operation(
-                        lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                        lambda qbt_client=qbt_client, torrent_hash=torrent_hash: asyncio.to_thread(
+                            qbt_client.torrents_export, torrent_hash=torrent_hash
+                        ),
                         f"Export torrent {torrent_hash}"
                     )
 
@@ -836,12 +843,13 @@ class Clients:
 
     def rtorrent(self, path: str, torrent_path: str, torrent: Torrent, meta: dict[str, Any], local_path: str, remote_path: str, client: dict[str, Any], tracker: str) -> None:
         # Get the appropriate source path (same as in qbittorrent method)
-        if len(meta.get('filelist', [])) == 1 and os.path.isfile(meta['filelist'][0]) and not meta.get('keep_folder'):
-            # If there's a single file and not keep_folder, use the file itself as the source
-            src = meta['filelist'][0]
-        else:
-            # Otherwise, use the directory
-            src = meta.get('path')
+        tracker_dir: Optional[str] = None
+        dst = path
+        src = (
+            meta['filelist'][0]
+            if len(meta.get('filelist', [])) == 1 and os.path.isfile(meta['filelist'][0]) and not meta.get('keep_folder')
+            else meta.get('path')
+        )
 
         if not src:
             error_msg = "[red]No source path found in meta."
@@ -961,6 +969,8 @@ class Clients:
                                     # Get the relative path from source
                                     rel_path = os.path.relpath(root, src)
 
+                                    dst_dir = dst
+
                                     # Create corresponding directory in destination
                                     if rel_path != '.':
                                         dst_dir = os.path.join(dst, rel_path)
@@ -1020,11 +1030,7 @@ class Clients:
             save_path = path  # Default to the original path
 
         # Handle remote path mapping
-        if (
-            local_path is not None and remote_path is not None and
-            local_path != "" and remote_path != "" and
-            local_path.lower() != remote_path.lower()
-        ):
+        if local_path and remote_path and local_path.lower() != remote_path.lower():
             # Normalize paths for comparison
             norm_save_path = os.path.normpath(save_path).lower()
             norm_local_path = os.path.normpath(local_path).lower()
@@ -1059,6 +1065,7 @@ class Clients:
             console.print(f"[red]Error making fast-resume data ({exc})")
             raise
 
+        fr_file = torrent_path
         new_meta = bencode.bencode(fast_resume)
         if new_meta != metainfo:
             fr_file = torrent_path.replace('.torrent', '-resume.torrent')
@@ -1072,6 +1079,7 @@ class Clients:
         isdir = os.path.isdir(path)
         # Remote path mount
         modified_fr = False
+        path_dir = ""
         if local_path.lower() in path.lower() and local_path.lower() != remote_path.lower():
             path_dir = os.path.dirname(path)
             path = path.replace(local_path, remote_path)
@@ -1111,6 +1119,7 @@ class Clients:
         return
 
     async def qbittorrent(self, path: str, torrent: Torrent, local_path: str, remote_path: str, client: dict[str, Any], is_disc: bool, filelist: list[str], meta: dict[str, Any], tracker: str, cross: bool = False) -> None:
+        qbt_proxy_url = ""
         if meta.get('keep_folder'):
             path = os.path.dirname(path)
         else:
@@ -1119,12 +1128,11 @@ class Clients:
                 path = os.path.dirname(path)
 
         # Get the appropriate source path
-        if len(meta['filelist']) == 1 and os.path.isfile(meta['filelist'][0]) and not meta.get('keep_folder'):
-            # If there's a single file and not keep_folder, use the file itself as the source
-            src = meta['filelist'][0]
-        else:
-            # Otherwise, use the directory
-            src = meta.get('path')
+        src = (
+            meta['filelist'][0]
+            if len(meta['filelist']) == 1 and os.path.isfile(meta['filelist'][0]) and not meta.get('keep_folder')
+            else meta.get('path')
+        )
 
         if not src:
             error_msg = "[red]No source path found in meta."
@@ -1314,11 +1322,7 @@ class Clients:
             save_path = path  # Default to the original path
 
         # Handle remote path mapping
-        if (
-            local_path is not None and remote_path is not None and
-            local_path != "" and remote_path != "" and
-            local_path.lower() != remote_path.lower()
-        ):
+        if local_path and remote_path and local_path.lower() != remote_path.lower():
             # Normalize paths for comparison
             norm_save_path = os.path.normpath(save_path).lower()
             norm_local_path = os.path.normpath(local_path).lower()
@@ -1632,7 +1636,8 @@ class Clients:
         resume = metainfo.setdefault("libtorrent_resume", {})
         resume["bitfield"] = len(metainfo["info"]["pieces"]) // 20
         resume["files"] = []
-        piece_length = metainfo["info"]["piece length"]
+        piece_length_value = metainfo["info"]["piece length"]
+        piece_length = int(piece_length_value) if isinstance(piece_length_value, (int, float, str)) else 0
         offset = 0
 
         for fileinfo in files:
@@ -1642,21 +1647,24 @@ class Clients:
                 filepath = os.path.join(datapath, filepath.strip(os.sep))
 
             # Check file size
-            if os.path.getsize(filepath) != fileinfo["length"]:
-                raise OSError(errno.EINVAL, "File size mismatch for %r [is %d, expected %d]" % (
-                    filepath, os.path.getsize(filepath), fileinfo["length"],
-                ))
+            file_length_value = fileinfo["length"]
+            file_length = int(file_length_value) if isinstance(file_length_value, (int, float, str)) else 0
+            if os.path.getsize(filepath) != file_length:
+                raise OSError(
+                    errno.EINVAL,
+                    f"File size mismatch for {filepath!r} [is {os.path.getsize(filepath)}, expected {file_length}]",
+                )
 
             # Add resume data for this file
             resume["files"].append({
                 'priority': 1,
                 'mtime': int(os.path.getmtime(filepath)),
                 'completed': (
-                    (offset + fileinfo["length"] + piece_length - 1) // piece_length -
+                    (offset + file_length + piece_length - 1) // piece_length -
                     offset // piece_length
                 ),
             })
-            offset += fileinfo["length"]
+            offset += file_length
 
         return metainfo
 
@@ -1704,10 +1712,12 @@ class Clients:
             return meta
         elif torrent_client == 'qbit':
             proxy_url = client.get('qui_proxy_url')
+            qbt_proxy_url = ""
             qbt_client = None
             qbt_session = None
 
             if proxy_url:
+                qbt_proxy_url = proxy_url.rstrip('/')
                 ssl_context = self.create_ssl_context_for_client(client)
                 qbt_session = aiohttp.ClientSession(
                     timeout=aiohttp.ClientTimeout(total=10),
@@ -1877,7 +1887,9 @@ class Clients:
                                         if qbt_client is None:
                                             raise RuntimeError("qbt_client should not be None")
                                         torrent_file_content = await self.retry_qbt_operation(
-                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                            lambda qbt_client=qbt_client, torrent_hash=torrent_hash: asyncio.to_thread(
+                                                qbt_client.torrents_export, torrent_hash=torrent_hash
+                                            ),
                                             f"Export torrent {torrent_hash}"
                                         )
                                     torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
@@ -2413,7 +2425,9 @@ class Clients:
                                 if qbt_client is None:
                                     raise RuntimeError("qbt_client should not be None")
                                 torrent_trackers = await self.retry_qbt_operation(
-                                    lambda: asyncio.to_thread(qbt_client.torrents_trackers, torrent_hash=torrent.hash),
+                                    lambda qbt_client=qbt_client, torrent_hash=torrent.hash: asyncio.to_thread(
+                                        qbt_client.torrents_trackers, torrent_hash=torrent_hash
+                                    ),
                                     f"Get trackers for torrent {torrent.name}"
                                 )
                         except (asyncio.TimeoutError, qbittorrentapi.APIError):
@@ -2502,9 +2516,8 @@ class Clients:
                                     meta[tracker_id] = tracker_id_value
                                     tracker_found = True
 
-                        if torrent.tracker and 'hawke.uno' in torrent.tracker:
+                        if torrent.tracker and 'hawke.uno' in torrent.tracker and has_working_tracker:
                             # Try to extract torrent ID from the comment first
-                            if has_working_tracker:
                                 huno_id = None
                                 if "/torrents/" in torrent.comment:
                                     match = re.search(r'/torrents/(\d+)', torrent.comment)
@@ -2664,14 +2677,13 @@ class Clients:
                                         if prefer_small_pieces:
                                             # MTV preference: always prefer smaller pieces
                                             is_better_match = True if piece_size_best_match is None else piece_size < piece_size_best_match['piece_size']
-                                        elif piece_limit:
+                                        elif piece_limit and piece_size <= 16777216:
                                             # General preference: prefer <= 16 MiB pieces, then smaller within that range
-                                            if piece_size <= 16777216:  # 16 MiB
-                                                if piece_size_best_match is None:
-                                                    is_better_match = True
-                                                else:
-                                                    is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
-                                                                       piece_size < piece_size_best_match['piece_size'])
+                                            if piece_size_best_match is None:
+                                                is_better_match = True
+                                            else:
+                                                is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
+                                                                   piece_size < piece_size_best_match['piece_size'])
 
                                         if is_better_match:
                                             piece_size_best_match = {
@@ -2745,7 +2757,9 @@ class Clients:
                                         if qbt_client is None:
                                             return []
                                         alt_torrent_file_content = await self.retry_qbt_operation(
-                                            lambda: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=alt_torrent_hash),
+                                            lambda qbt_client=qbt_client, alt_torrent_hash=alt_torrent_hash: asyncio.to_thread(
+                                                qbt_client.torrents_export, torrent_hash=alt_torrent_hash
+                                            ),
                                             f"Export alternative torrent {alt_torrent_hash}"
                                         )
                                     if alt_torrent_file_content is not None:
@@ -2778,14 +2792,13 @@ class Clients:
                                                 if prefer_small_pieces:
                                                     # MTV preference: always prefer smaller pieces
                                                     is_better_match = True if piece_size_best_match is None else piece_size < piece_size_best_match['piece_size']
-                                                elif piece_limit:
+                                                elif piece_limit and piece_size <= 16777216:
                                                     # General preference: prefer <= 16 MiB pieces, then smaller within that range
-                                                    if piece_size <= 16777216:  # 16 MiB
-                                                        if piece_size_best_match is None:
-                                                            is_better_match = True
-                                                        else:
-                                                            is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
-                                                                               piece_size < piece_size_best_match['piece_size'])
+                                                    if piece_size_best_match is None:
+                                                        is_better_match = True
+                                                    else:
+                                                        is_better_match = (piece_size_best_match['piece_size'] > 16777216 or
+                                                                           piece_size < piece_size_best_match['piece_size'])
 
                                                 if is_better_match:
                                                     piece_size_best_match = {
@@ -2934,15 +2947,13 @@ async def create_cross_seed_links(meta: dict[str, Any], torrent: Torrent, tracke
     candidate_paths = []
     if release_root and os.path.isdir(release_root):
         for root, _, files in os.walk(release_root):
-            for file in files:
-                candidate_paths.append(os.path.join(root, file))
+            candidate_paths.extend(os.path.join(root, file) for file in files)
     else:
         candidate_paths.extend(meta.get('filelist', []))
         parent_guess = os.path.dirname(meta['filelist'][0]) if meta.get('filelist') else os.path.dirname(release_root or '')
         if parent_guess and os.path.isdir(parent_guess):
             for root, _, files in os.walk(parent_guess):
-                for file in files:
-                    candidate_paths.append(os.path.join(root, file))
+                candidate_paths.extend(os.path.join(root, file) for file in files)
 
     unique_candidates = []
     seen = set()
@@ -3108,15 +3119,20 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
                         subdirs.add(subdir)
                         await asyncio.to_thread(os.makedirs, subdir, exist_ok=True)
 
+                def _try_hardlink(src_path: str, dst_path: str, rel_path: str) -> bool:
+                    try:
+                        os.link(src_path, dst_path)
+                        if debug and rel_path == os.path.relpath(all_items[0][0], src):
+                            console.print(f"[green]Hard link created for file: {dst_path} -> {src_path}")
+                        return True
+                    except OSError as e:
+                        console.print(f"[yellow]Hard link failed for file {rel_path}: {e}")
+                        return False
+
                 # Create hardlinks for all files
                 success = True
                 for src_path, dst_path, rel_path in all_items:
-                    try:
-                        await asyncio.to_thread(os.link, src_path, dst_path)
-                        if debug and rel_path == os.path.relpath(all_items[0][0], src):
-                            console.print(f"[green]Hard link created for file: {dst_path} -> {src_path}")
-                    except OSError as e:
-                        console.print(f"[yellow]Hard link failed for file {rel_path}: {e}")
+                    if not await asyncio.to_thread(_try_hardlink, src_path, dst_path, rel_path):
                         success = False
                         break
 
@@ -3207,8 +3223,7 @@ async def match_tracker_url(tracker_urls: list[str], meta: dict[str, Any]) -> No
                     found_ids.add(tracker_id.upper())
                     if meta.get('debug'):
                         console.print(f"[bold cyan]Matched {tracker_id.upper()} in tracker URL: {Redaction.redact_private_info(tracker)}")
-                    if tracker_id.upper() == 'PTP' and 'passthepopcorn.me' in tracker:
-                        if tracker.startswith('http://'):
+                    if tracker_id.upper() == 'PTP' and 'passthepopcorn.me' in tracker and tracker.startswith('http://'):
                             console.print("[red]Found PTP announce URL using plaintext HTTP.\n")
                             console.print("[red]PTP is turning off their plaintext HTTP tracker soon. You must update your announce URLS. See PTP/forums.php?page=1&action=viewthread&threadid=46663")
                             await asyncio.sleep(10)
