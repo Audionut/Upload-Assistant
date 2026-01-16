@@ -30,7 +30,7 @@ try:
     from src.imdb import imdb_manager
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
-    from src.metadata_searching import all_ids, get_tv_data, get_tvmaze_tvdb, imdb_tmdb, imdb_tmdb_tvdb, imdb_tvdb
+    from src.metadata_searching import metadata_searching_manager
     from src.radarr import radarr_manager
     from src.region import get_distributor, get_region, get_service
     from src.sonarr import sonarr_manager
@@ -734,19 +734,19 @@ class Prep:
 
         # if we have all of the ids, search everything all at once
         if int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and int(meta['tvmaze_id']) != 0:
-            meta = await all_ids(meta)
+            meta = await metadata_searching_manager.all_ids(meta)
 
         # Check if IMDb, TMDb, and TVDb IDs are all present
         elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
-            meta = await imdb_tmdb_tvdb(meta, filename)
+            meta = await metadata_searching_manager.imdb_tmdb_tvdb(meta, filename)
 
         # Check if both IMDb and TVDB IDs are present
         elif int(meta['imdb_id']) != 0 and int(meta['tvdb_id']) != 0 and not meta.get('quickie_search', False):
-            meta = await imdb_tvdb(meta, filename)
+            meta = await metadata_searching_manager.imdb_tvdb(meta, filename)
 
         # Check if both IMDb and TMDb IDs are present
         elif int(meta['imdb_id']) != 0 and int(meta['tmdb_id']) != 0 and not meta.get('quickie_search', False):
-            meta = await imdb_tmdb(meta, filename)
+            meta = await metadata_searching_manager.imdb_tmdb(meta, filename)
 
         # we should have tmdb id one way or another, so lets get data if needed
         if int(meta['tmdb_id']) != 0:
@@ -853,7 +853,17 @@ class Prep:
         if meta['category'] == "TV" or meta.get('tv_movie', False):
             both_ids_searched = False
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
-                tvmaze, tvdb, tvdb_data = await get_tvmaze_tvdb(filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tmdb_id', 0), meta.get('manual_data'), meta.get('tvmaze_manual', 0), year=meta.get('year', ''), debug=meta.get('debug', False), tv_movie=meta.get('tv_movie', False))
+                tvmaze, tvdb, tvdb_data = await metadata_searching_manager.get_tvmaze_tvdb(
+                    filename,
+                    meta['search_year'],
+                    meta.get('imdb_id', 0),
+                    meta.get('tmdb_id', 0),
+                    meta.get('manual_data'),
+                    meta.get('tvmaze_manual', 0),
+                    year=meta.get('year', ''),
+                    debug=meta.get('debug', False),
+                    tv_movie=meta.get('tv_movie', False)
+                )
                 both_ids_searched = True
                 if tvmaze:
                     meta['tvmaze_id'] = tvmaze
@@ -891,7 +901,7 @@ class Prep:
                     console.print(f"[red]Error searching TVDB: {e}[/red]")
 
             # all your episode data belongs to us
-            meta = await get_tv_data(meta)
+            meta = await metadata_searching_manager.get_tv_data(meta)
 
             if meta.get('tvdb_imdb_id', None):
                 imdb = meta['tvdb_imdb_id'].replace('tt', '')

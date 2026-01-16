@@ -2,7 +2,7 @@
 import asyncio
 import re
 from collections.abc import Awaitable
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from data.config import config
 from src.console import console
@@ -19,6 +19,50 @@ def _coerce_int(value: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+class MetadataSearchingManager:
+    async def all_ids(self, meta: dict[str, Any]) -> dict[str, Any]:
+        return await all_ids(meta)
+
+    async def imdb_tmdb_tvdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
+        return await imdb_tmdb_tvdb(meta, filename)
+
+    async def imdb_tvdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
+        return await imdb_tvdb(meta, filename)
+
+    async def imdb_tmdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
+        return await imdb_tmdb(meta, filename)
+
+    async def get_tvmaze_tvdb(
+        self,
+        filename: str,
+        search_year: str,
+        imdb: Optional[Union[int, str]],
+        tmdb: Optional[Union[int, str]],
+        manual_date: Optional[str] = None,
+        tvmaze_manual: Optional[str] = None,
+        year: str = '',
+        debug: bool = False,
+        tv_movie: bool = False,
+    ) -> tuple[int, int, Optional[Any]]:
+        return await get_tvmaze_tvdb(
+            filename,
+            search_year,
+            imdb,
+            tmdb,
+            manual_date=manual_date,
+            tvmaze_manual=tvmaze_manual,
+            year=year,
+            debug=debug,
+            tv_movie=tv_movie,
+        )
+
+    async def get_tv_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+        return await get_tv_data(meta)
+
+    async def get_tvdb_tvmaze_tmdb_episode_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+        return await get_tvdb_tvmaze_tmdb_episode_data(meta)
 
 
 async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
@@ -111,12 +155,13 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
         console.print(f"[red]Error occurred while gathering tasks: {e}[/red]")
         return meta
 
+    tmdb_metadata: Any = None
+    imdb_info: Any = None
     # Process core metadata results
     try:
         tmdb_metadata, imdb_info = results[0:2]
     except Exception as e:
         console.print(f"[red]Error occurred while processing core metadata: {e}[/red]")
-        pass
     result_index = 2  # Start processing episode data from this index
 
     # Process TMDB metadata
@@ -142,14 +187,21 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
         result_index += 1
         if tvdb_episode_data and not isinstance(tvdb_episode_data, Exception):
             # tvdb_episode_data is a tuple: (episodes_list, series_name)
-            if isinstance(tvdb_episode_data, tuple) and len(tvdb_episode_data) == 2:
-                episodes_data, series_name = tvdb_episode_data
+            if isinstance(tvdb_episode_data, tuple):
+                tvdb_episode_tuple = cast(tuple[Any, Any], tvdb_episode_data)
+                if len(tvdb_episode_tuple) == 2:
+                    episodes_data, series_name = tvdb_episode_tuple
+                else:
+                    episodes_data, series_name = None, None
+            else:
+                episodes_data, series_name = None, None
+            if episodes_data is not None:
                 meta['tvdb_episode_data'] = episodes_data
                 if series_name:
                     meta['tvdb_series_name'] = series_name
                 meta['we_checked_tvdb'] = True
             else:
-                console.print(f"[yellow]Unexpected TVDb data format: {type(tvdb_episode_data)}[/yellow]")
+                console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
         elif isinstance(tvdb_episode_data, Exception):
             console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episode_data}[/yellow]")
 
@@ -309,14 +361,19 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
 
             if tvdb_episode_data and not isinstance(tvdb_episode_data, Exception):
                 # tvdb_episode_data is a tuple: (episodes_list, series_name)
-                if isinstance(tvdb_episode_data, tuple) and len(tvdb_episode_data) == 2:
-                    episodes_data, series_name = tvdb_episode_data
+                episodes_data: Any = None
+                series_name: Any = None
+                if isinstance(tvdb_episode_data, tuple):
+                    tvdb_episode_tuple = cast(tuple[Any, Any], tvdb_episode_data)
+                    if len(tvdb_episode_tuple) == 2:
+                        episodes_data, series_name = tvdb_episode_tuple
+                if episodes_data is not None:
                     meta['tvdb_episode_data'] = episodes_data
                     if series_name:
                         meta['tvdb_series_name'] = series_name
                     meta['we_checked_tvdb'] = True
                 else:
-                    console.print(f"[yellow]Unexpected TVDb data format: {type(tvdb_episode_data)}[/yellow]")
+                    console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
             elif isinstance(tvdb_episode_data, Exception):
                 console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episode_data}[/yellow]")
 
@@ -388,8 +445,10 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
 
     results: list[Any] = await asyncio.gather(*tasks, return_exceptions=True)
     tmdb_result, tvmaze_id, imdb_info_result = results[:3]
-    if isinstance(tmdb_result, tuple) and len(tmdb_result) == 3:
-        meta['category'], meta['tmdb_id'], meta['original_language'] = tmdb_result
+    if isinstance(tmdb_result, tuple):
+        tmdb_tuple = cast(tuple[Any, Any, Any], tmdb_result)
+        if len(tmdb_tuple) == 3:
+            meta['category'], meta['tmdb_id'], meta['original_language'] = tmdb_tuple
 
     meta['tvmaze_id'] = tvmaze_id if isinstance(tvmaze_id, int) else 0
 
@@ -408,14 +467,19 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
         tvdb_episode_data = results[3]
         if tvdb_episode_data and not isinstance(tvdb_episode_data, Exception):
             # tvdb_episode_data is a tuple: (episodes_list, series_name)
-            if isinstance(tvdb_episode_data, tuple) and len(tvdb_episode_data) == 2:
-                episodes_data, series_name = tvdb_episode_data
+            episodes_data: Any = None
+            series_name: Any = None
+            if isinstance(tvdb_episode_data, tuple):
+                tvdb_episode_tuple = cast(tuple[Any, Any], tvdb_episode_data)
+                if len(tvdb_episode_tuple) == 2:
+                    episodes_data, series_name = tvdb_episode_tuple
+            if episodes_data is not None:
                 meta['tvdb_episode_data'] = episodes_data
                 if series_name:
                     meta['tvdb_series_name'] = series_name
                 meta['we_checked_tvdb'] = True
             else:
-                console.print(f"[yellow]Unexpected TVDb data format: {type(tvdb_episode_data)}[/yellow]")
+                console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
         elif isinstance(tvdb_episode_data, Exception):
             console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episode_data}[/yellow]")
 
@@ -526,9 +590,16 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     if meta['category'] == 'TV':
         if len(results) > 2:
             tvmaze_result = results[2]
-            if isinstance(tvmaze_result, tuple) and len(tvmaze_result) == 3:
-                # Handle tuple return: (tvmaze_id, imdbID, tvdbID)
-                tvmaze_id, imdb_id, tvdb_id = tvmaze_result
+            if isinstance(tvmaze_result, tuple):
+                tvmaze_tuple = cast(tuple[Any, Any, Any], tvmaze_result)
+                if len(tvmaze_tuple) == 3:
+                    # Handle tuple return: (tvmaze_id, imdbID, tvdbID)
+                    tvmaze_id, _imdb_id, tvdb_id = tvmaze_tuple
+                else:
+                    tvmaze_id, tvdb_id = None, None
+            else:
+                tvmaze_id, tvdb_id = None, None
+            if tvmaze_id is not None:
                 meta['tvmaze_id'] = tvmaze_id if isinstance(tvmaze_id, int) else 0
 
                 # Set tvdb_id if not already set and we got a valid one
@@ -536,14 +607,13 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
                     meta['tvdb_id'] = tvdb_id
                     if meta.get('debug'):
                         console.print(f"[green]Set TVDb ID from TVMaze: {tvdb_id}[/green]")
-
             elif isinstance(tvmaze_result, int):
                 meta['tvmaze_id'] = tvmaze_result
             elif isinstance(tvmaze_result, Exception):
                 console.print(f"[red]TVMaze API call failed: {tvmaze_result}[/red]")
                 meta['tvmaze_id'] = 0  # Set default value if an exception occurred
             else:
-                console.print(f"[yellow]Unexpected TVMaze result type: {type(tvmaze_result)}[/yellow]")
+                console.print(f"[yellow]Unexpected TVMaze result type: {tvmaze_result!r}[/yellow]")
                 meta['tvmaze_id'] = 0
 
         # Process TMDb episode details if they were included
@@ -608,9 +678,11 @@ async def get_tvmaze_tvdb(
 
     # Process TVMaze results
     tvmaze_result = results[0]
-    if isinstance(tvmaze_result, tuple) and len(tvmaze_result) == 3:
-        # Handle tuple return: (tvmaze_id, imdbID, tvdbID)
-        tvmaze = tvmaze_result[0] if isinstance(tvmaze_result[0], int) else 0
+    if isinstance(tvmaze_result, tuple):
+        tvmaze_tuple = cast(tuple[Any, Any, Any], tvmaze_result)
+        if len(tvmaze_tuple) == 3:
+            # Handle tuple return: (tvmaze_id, imdbID, tvdbID)
+            tvmaze = tvmaze_tuple[0] if isinstance(tvmaze_tuple[0], int) else 0
 
     elif isinstance(tvmaze_result, int):
         tvmaze = tvmaze_result
@@ -637,10 +709,15 @@ async def get_tvmaze_tvdb(
         tvdb_result = results[1]
         if tvdb_result and not isinstance(tvdb_result, Exception):
             # Handle tuple return: (series_results, series_id)
-            if isinstance(tvdb_result, tuple) and len(tvdb_result) == 2:
-                series_results, series_id = tvdb_result
-                if series_id:
-                    tvdb = int(series_id)
+            if isinstance(tvdb_result, tuple):
+                tvdb_tuple = cast(tuple[Any, Any], tvdb_result)
+                if len(tvdb_tuple) == 2:
+                    series_results, series_id = tvdb_tuple
+                else:
+                    series_results, series_id = None, None
+                series_id_int = _coerce_int(series_id) if series_id is not None else None
+                if series_id_int is not None:
+                    tvdb = series_id_int
                     if debug:
                         console.print(f"[green]Got TVDb series ID: {series_id}[/green]")
                 if series_results:
@@ -650,8 +727,10 @@ async def get_tvmaze_tvdb(
         elif isinstance(tvdb_result, Exception):
             console.print(f"[yellow]TVDb series data retrieval failed: {tvdb_result}[/yellow]")
 
-    if not tvdb and tvmaze and isinstance(tvmaze_result, tuple) and len(tvmaze_result) == 3:
-        tvdb = tvmaze_result[2] if isinstance(tvmaze_result[2], int) else 0
+    if not tvdb and tvmaze and isinstance(tvmaze_result, tuple):
+        tvmaze_tuple = cast(tuple[Any, Any, Any], tvmaze_result)
+        if len(tvmaze_tuple) == 3:
+            tvdb = tvmaze_tuple[2] if isinstance(tvmaze_tuple[2], int) else 0
     if debug:
         console.print(f"[blue]TVMaze ID: {tvmaze} | TVDb ID: {tvdb}[/blue]")
 
@@ -677,9 +756,9 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
             if tvdb_name:
                 meta['tvdb_series_name'] = tvdb_name
 
-        if meta.get('tvdb_series_name', None):
-            year = meta['tvdb_series_name']
-            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', year)
+        tvdb_series_name = meta.get('tvdb_series_name')
+        if isinstance(tvdb_series_name, str):
+            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', tvdb_series_name)
             if year_match:
                 meta['search_year'] = year_match.group(0)
             else:
@@ -705,12 +784,14 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
                 meta['auto_episode_title'] = tvdb_episode_name
         if meta.get('tvdb_overview', None):
             meta['overview_meta'] = meta['tvdb_overview']
-        if meta.get('tvdb_season', None) is not None and meta['tvdb_season'] != meta.get('season_int', None) and not meta.get('season', None) and not meta.get('no_season', False) and not meta.get('manual_date', None):
-            meta['season_int'] = int(meta['tvdb_season'])
-            meta['season'] = f"S{meta['tvdb_season']:02d}"
-        if meta.get('tvdb_episode', None) is not None and meta['tvdb_episode'] != meta.get('episode_int', None) and not meta.get('episode', None) and not meta.get('manual_date', None):
-            meta['episode_int'] = int(meta['tvdb_episode'])
-            meta['episode'] = f"E{meta['tvdb_episode']:02d}"
+        tvdb_season_int = _coerce_int(meta.get('tvdb_season'))
+        if tvdb_season_int is not None and tvdb_season_int != meta.get('season_int', None) and not meta.get('season', None) and not meta.get('no_season', False) and not meta.get('manual_date', None):
+            meta['season_int'] = tvdb_season_int
+            meta['season'] = f"S{tvdb_season_int:02d}"
+        tvdb_episode_int = _coerce_int(meta.get('tvdb_episode'))
+        if tvdb_episode_int is not None and tvdb_episode_int != meta.get('episode_int', None) and not meta.get('episode', None) and not meta.get('manual_date', None):
+            meta['episode_int'] = tvdb_episode_int
+            meta['episode'] = f"E{tvdb_episode_int:02d}"
 
         # fallback to tvmaze data if tvdb data is available
         if 'tvmaze_episode_data' not in meta or meta['tvmaze_episode_data'] is None:
@@ -728,13 +809,15 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
                 if tvmaze_episode_data:
                     meta['tvmaze_episode_data'] = tvmaze_episode_data
         if meta.get('auto_episode_title') is None or meta.get('overview_meta') is None:
-            if meta.get('auto_episode_title') is None and meta['tvmaze_episode_data'].get('name') is not None:
-                if 'episode' in meta['tvmaze_episode_data'].get("name").lower() or 'tba' in meta['tvmaze_episode_data'].get("name").lower():
+            tvmaze_name = meta['tvmaze_episode_data'].get('name')
+            if meta.get('auto_episode_title') is None and isinstance(tvmaze_name, str):
+                if 'episode' in tvmaze_name.lower() or 'tba' in tvmaze_name.lower():
                     meta['auto_episode_title'] = None
                 else:
-                    meta['auto_episode_title'] = meta['tvmaze_episode_data']['name']
-            if meta.get('overview_meta') is None and meta['tvmaze_episode_data'].get('overview') is not None:
-                meta['overview_meta'] = meta['tvmaze_episode_data'].get('overview', None)
+                    meta['auto_episode_title'] = tvmaze_name
+            tvmaze_overview = meta['tvmaze_episode_data'].get('overview')
+            if meta.get('overview_meta') is None and tvmaze_overview is not None:
+                meta['overview_meta'] = tvmaze_overview
 
         # fallback to tmdb data if no other data is not available
         if (meta.get('auto_episode_title') is None or meta.get('overview_meta') is None) and meta.get('episode_overview', None):
@@ -759,11 +842,11 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
                         episode,
                         debug=meta.get('debug', False)
                     )
-                    if isinstance(episode_details_result, dict):
+                    if episode_details_result:
                         episode_details = episode_details_result
             else:
                 existing_episode_data = meta.get('tmdb_episode_data')
-                if isinstance(existing_episode_data, dict):
+                if existing_episode_data:
                     episode_details = existing_episode_data
             episode_name = episode_details.get("name")
             if meta.get('auto_episode_title') is None and isinstance(episode_name, str):
@@ -788,9 +871,9 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
                 meta['tvdb_episode_data'] = tvdb_episode_data
             if tvdb_name:
                 meta['tvdb_series_name'] = tvdb_name
-        if meta.get('tvdb_series_name', None):
-            year = meta['tvdb_series_name']
-            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', year)
+        tvdb_series_name = meta.get('tvdb_series_name')
+        if isinstance(tvdb_series_name, str):
+            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', tvdb_series_name)
             if year_match:
                 meta['search_year'] = year_match.group(0)
             else:
@@ -808,8 +891,9 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
             except Exception as e:
                 console.print(f"[red]Error fetching TVDb episode data: {e}[/red]")
 
-        if meta.get('tvdb_episode_id', None):
-            meta['tvdb_imdb_id'] = await tvdb_handler.get_imdb_id_from_tvdb_episode_id(meta['tvdb_episode_id'], debug=meta.get('debug', False))
+        tvdb_episode_id = meta.get('tvdb_episode_id')
+        if tvdb_episode_id is not None:
+            meta['tvdb_imdb_id'] = await tvdb_handler.get_imdb_id_from_tvdb_episode_id(tvdb_episode_id, debug=meta.get('debug', False))
 
     return meta
 
@@ -892,19 +976,24 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, A
     if 'tvdb' in task_map:
         tvdb_episodes_result = results[task_map['tvdb']]
         if tvdb_episodes_result and not isinstance(tvdb_episodes_result, Exception):
-            if isinstance(tvdb_episodes_result, tuple) and len(tvdb_episodes_result) == 2:
-                tvdb_episode_data, tvdb_name = tvdb_episodes_result
-                if tvdb_episode_data:
-                    meta['tvdb_episode_data'] = tvdb_episode_data
-                    meta['we_checked_tvdb'] = True
-                    if meta['debug']:
-                        console.print(f"[green]TVDb episodes list retrieved with {len(tvdb_episode_data)} episodes[/green]")
-                if tvdb_name:
-                    meta['tvdb_series_name'] = tvdb_name
-                    if meta['debug']:
-                        console.print(f"[green]TVDb series name: {tvdb_name}[/green]")
+            tvdb_episode_data: Any = None
+            tvdb_name: Any = None
+            if isinstance(tvdb_episodes_result, tuple):
+                tvdb_tuple = cast(tuple[Any, Any], tvdb_episodes_result)
+                if len(tvdb_tuple) == 2:
+                    tvdb_episode_data, tvdb_name = tvdb_tuple
+            if tvdb_episode_data is not None:
+                meta['tvdb_episode_data'] = tvdb_episode_data
+                meta['we_checked_tvdb'] = True
+                if meta['debug'] and isinstance(tvdb_episode_data, list):
+                    tvdb_episode_list = cast(list[Any], tvdb_episode_data)
+                    console.print(f"[green]TVDb episodes list retrieved with {len(tvdb_episode_list)} episodes[/green]")
             else:
                 console.print(f"[yellow]Unexpected TVDb episodes result format: {tvdb_episodes_result}[/yellow]")
+            if tvdb_name:
+                meta['tvdb_series_name'] = tvdb_name
+                if meta['debug']:
+                    console.print(f"[green]TVDb series name: {tvdb_name}[/green]")
         elif isinstance(tvdb_episodes_result, Exception):
             console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episodes_result}[/yellow]")
 
@@ -920,3 +1009,6 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, A
             console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
 
     return meta
+
+
+metadata_searching_manager = MetadataSearchingManager()
