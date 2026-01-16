@@ -165,6 +165,8 @@ class CookieValidator:
                         # Get the cookie object for additional attributes
                         for cookie in client.cookies.jar:
                             if cookie.name == cookie_name:
+                                rest = getattr(cookie, "_rest", {})
+                                rest_map = cast(dict[str, Any], rest) if isinstance(rest, dict) else {}
                                 ck = http.cookiejar.Cookie(
                                     version=0,
                                     name=cookie.name,
@@ -176,7 +178,7 @@ class CookieValidator:
                                     domain_initial_dot=(cookie.domain or '.alpharatio.cc').startswith('.'),
                                     path=cookie.path if cookie.path else '/',
                                     path_specified=True,
-                                    secure=bool(cookie._rest.get('secure')) if hasattr(cookie, '_rest') else True,
+                                    secure=bool(rest_map.get('secure')) if rest_map else True,
                                     expires=None,
                                     discard=False,
                                     comment=None,
@@ -608,6 +610,7 @@ class CookieAuthUploader:
     def upload_debug(self, tracker: str, data: Any) -> None:
         try:
             if isinstance(data, dict):
+                data_dict = cast(dict[str, Any], data)
                 sensitive_keywords = ['password', 'passkey', 'auth', 'csrf', 'token']
 
                 table_data = Table(
@@ -616,11 +619,12 @@ class CookieAuthUploader:
                 table_data.add_column("Key", style="cyan")
                 table_data.add_column("Value", style="magenta")
 
-                for k, v in data.items():
-                    if any(keyword in k.lower() for keyword in sensitive_keywords):
-                        table_data.add_row(k, "[REDACTED]")
+                for k, v in data_dict.items():
+                    key = str(k)
+                    if any(keyword in key.lower() for keyword in sensitive_keywords):
+                        table_data.add_row(key, "[REDACTED]")
                     else:
-                        table_data.add_row(k, str(v))
+                        table_data.add_row(key, str(v))
 
                 console.print(table_data, justify="center", markup=False)
             else:
