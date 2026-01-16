@@ -2,11 +2,13 @@
 import json
 import os
 import re
-from typing import Any
+from typing import Any, Callable, Optional, cast
 
-from guessit import guessit
+import guessit
 
 from src.console import console
+
+guessit_any = cast(Any, guessit)
 
 
 async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = False) -> str:
@@ -25,35 +27,35 @@ async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = Fa
             release_group = anime_match.group(1)
             if meta['debug']:
                 console.print(f"Anime regex match: {release_group}")
-    if not meta.get('anime', False) or not matched_anime:
-        if meta.get('is_disc') != "BDMV":
-            # Non-anime pattern: group at the end after last hyphen, avoiding resolutions and numbers
-            if os.path.isdir(video):
-                # If video is a directory, use the directory name as basename
-                basename_stripped = os.path.basename(os.path.normpath(video))
-            elif (meta.get('tv_pack', False) or meta.get('keep_folder', False)) and not season_pack_check:
-                basename_stripped = meta['uuid']
-            else:
-                # If video is a file, use the filename without extension
-                basename_no_path = os.path.basename(video)
-                name, ext = os.path.splitext(basename_no_path)
-                # If the extension contains a hyphen, it's not a real extension
-                basename_stripped = basename_no_path if ext and '-' in ext else name
-            non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
-            if non_anime_match:
-                release_group = non_anime_match.group(1).strip()
-                if "Z0N3" in release_group:
-                    release_group = release_group.replace("Z0N3", "D-Z0N3")
-                if not meta.get('scene', False) and release_group and len(release_group) > 12:
-                    release_group = None
-                if meta['debug']:
-                    console.print(f"Non-anime regex match: {release_group}")
+    if (not meta.get('anime', False) or not matched_anime) and meta.get('is_disc') != "BDMV":
+        # Non-anime pattern: group at the end after last hyphen, avoiding resolutions and numbers
+        if os.path.isdir(video):
+            # If video is a directory, use the directory name as basename
+            basename_stripped = os.path.basename(os.path.normpath(video))
+        elif (meta.get('tv_pack', False) or meta.get('keep_folder', False)) and not season_pack_check:
+            basename_stripped = meta['uuid']
+        else:
+            # If video is a file, use the filename without extension
+            basename_no_path = os.path.basename(video)
+            name, ext = os.path.splitext(basename_no_path)
+            # If the extension contains a hyphen, it's not a real extension
+            basename_stripped = basename_no_path if ext and '-' in ext else name
+        non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
+        if non_anime_match:
+            release_group = non_anime_match.group(1).strip()
+            if "Z0N3" in release_group:
+                release_group = release_group.replace("Z0N3", "D-Z0N3")
+            if not meta.get('scene', False) and release_group and len(release_group) > 12:
+                release_group = None
+            if meta['debug']:
+                console.print(f"Non-anime regex match: {release_group}")
 
     # If regex patterns didn't work, fall back to guessit
     if not release_group and meta.get('is_disc'):
         try:
-            parsed = guessit(video)
-            release_group = parsed.get('release_group')
+            guessit_fn = cast(Callable[[str], dict[str, Any]], guessit_any.guessit)
+            parsed = guessit_fn(video)
+            release_group = cast(Optional[str], parsed.get('release_group'))
             if meta['debug']:
                 console.print(f"Guessit match: {release_group}")
 
