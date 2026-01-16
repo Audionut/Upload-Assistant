@@ -7,7 +7,7 @@ import aiofiles
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -156,7 +156,7 @@ class HUNO(UNIT3D):
         languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta.get('audio_languages')
         if isinstance(audio_languages, list):
             normalized_languages = {str(lang) for lang in audio_languages}

@@ -6,7 +6,7 @@ import aiofiles
 
 from src.bbcode import BBCODE
 from src.console import console
-from src.languages import has_english_language, process_desc_language
+from src.languages import languages_manager
 from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -70,7 +70,7 @@ class OE(UNIT3D):
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
             bbcode = BBCODE()
             if meta.get('discs', []) != []:
@@ -151,10 +151,10 @@ class OE(UNIT3D):
                 oe_name = oe_name.replace(f"{video_codec}", f"{audio} {video_codec}", 1)
 
         if not meta.get('audio_languages'):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         elif meta.get('audio_languages'):
             audio_languages = meta['audio_languages']
-            if audio_languages and not await has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
+            if audio_languages and not await languages_manager.has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
                 foreign_lang = meta['audio_languages'][0].upper()
                 oe_name = oe_name.replace(f"{resolution}", f"{foreign_lang} {resolution}", 1)
 

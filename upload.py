@@ -164,7 +164,7 @@ from src.dupe_checking import DupeChecker  # noqa: E402
 from src.get_desc import gen_desc  # noqa: E402
 from src.get_name import get_name  # noqa: E402
 from src.get_tracker_data import tracker_data_manager  # noqa: E402
-from src.languages import process_desc_language  # noqa: E402
+from src.languages import languages_manager  # noqa: E402
 from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
 from src.queuemanage import QueueManager  # noqa: E402
@@ -485,7 +485,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
             if tracker in trackers:
                 if not audio_prompted:
-                    await process_desc_language(meta, tracker=tracker)
+                    await languages_manager.process_desc_language(meta, tracker=tracker)
                     audio_prompted = True
                 else:
                     if 'tracker_status' not in meta:

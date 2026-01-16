@@ -2,7 +2,7 @@
 import re
 
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -154,7 +154,7 @@ class ITT(UNIT3D):
 
     async def get_dubs(self, meta):
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         dubs = ''
         audio_languages = set(meta.get('audio_languages', []))
         if audio_languages:

@@ -13,7 +13,7 @@ from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.rehostimages import check_hosts
 from src.tmdb import tmdb_manager
 from src.trackers.COMMON import COMMON
@@ -100,7 +100,7 @@ class GPW:
 
     async def get_subtitle(self, meta: dict[str, Any]) -> list[str]:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         found_language_strings = meta.get('subtitle_languages', [])
 
@@ -111,7 +111,7 @@ class GPW:
 
     async def get_ch_dubs(self, meta: dict[str, Any]) -> bool:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         found_language_strings = meta.get('audio_languages', [])
 

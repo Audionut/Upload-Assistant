@@ -14,7 +14,7 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
 
 
 class FF:
@@ -482,7 +482,7 @@ class FF:
 
     async def languages(self, meta: dict[str, Any]) -> dict[str, list[str]]:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         lang_map = {
             'english': 'en',

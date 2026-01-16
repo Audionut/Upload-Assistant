@@ -15,7 +15,7 @@ from pymediainfo import MediaInfo
 
 from src.bbcode import BBCODE
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
@@ -518,7 +518,7 @@ class DescriptionBuilder:
         # Language
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, self.tracker)
+                await languages_manager.process_desc_language(meta, self.tracker)
             if meta.get("audio_languages") and meta.get("write_audio_languages"):
                 desc_parts.append(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]")
 

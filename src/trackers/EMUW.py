@@ -5,7 +5,7 @@ import re
 import cloudscraper
 
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.tmdb import tmdb_manager
 from src.trackers.UNIT3D import UNIT3D
 
@@ -49,7 +49,7 @@ class EMUW(UNIT3D):
 
         # Process language information
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         # Build audio string
         audio_str = await self._build_audio_string(meta)

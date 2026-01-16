@@ -14,7 +14,7 @@ from pymediainfo import MediaInfo
 
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.tmdb import tmdb_manager
 from src.trackers.COMMON import COMMON
 
@@ -816,7 +816,7 @@ class ASC:
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         resolution = await self.get_resolution(meta)
 
         data = {

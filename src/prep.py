@@ -29,7 +29,7 @@ try:
     from src.getseasonep import season_episode_manager
     from src.imdb import imdb_manager
     from src.is_scene import is_scene
-    from src.languages import parsed_mediainfo
+    from src.languages import languages_manager
     from src.metadata_searching import metadata_searching_manager
     from src.radarr import radarr_manager
     from src.region import get_distributor, get_region, get_service
@@ -416,7 +416,7 @@ class Prep:
         # Check if there's a language restriction
         if meta['has_languages'] is not None and not meta.get('emby', False):
             try:
-                parsed_info = await parsed_mediainfo(meta)
+                parsed_info = await languages_manager.parsed_mediainfo(meta)
                 audio_languages = [
                     audio_track['language'].lower()
                     for audio_track in parsed_info.get('audio', [])

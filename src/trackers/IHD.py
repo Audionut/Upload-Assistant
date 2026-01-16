@@ -5,7 +5,7 @@ import cli_ui
 import pycountry
 
 from src.console import console
-from src.languages import has_english_language, process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -135,9 +135,9 @@ class IHD(UNIT3D):
         resolution = meta.get('resolution')
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta['audio_languages']
-        if audio_languages and not await has_english_language(audio_languages):
+        if audio_languages and not await languages_manager.has_english_language(audio_languages):
             foreign_lang = meta['audio_languages'][0].upper()
             ihd_name = ihd_name.replace(resolution, f"{foreign_lang} {resolution}", 1)
 
@@ -158,10 +158,10 @@ class IHD(UNIT3D):
 
         if meta['is_disc'] != "BDMV":
             if not meta.get('language_checked', False):
-                await process_desc_language(meta, tracker=self.tracker)
+                await languages_manager.process_desc_language(meta, tracker=self.tracker)
             original_language = self.original_language_check(meta)
-            has_eng_audio = await has_english_language(meta.get('audio_languages'))
-            has_eng_subs = await has_english_language(meta.get('subtitle_languages'))
+            has_eng_audio = await languages_manager.has_english_language(meta.get('audio_languages'))
+            has_eng_subs = await languages_manager.has_english_language(meta.get('subtitle_languages'))
             # Require at least one English audio/subtitle track or an original language audio track
             if not (original_language or has_eng_audio or has_eng_subs):
                 if not meta['unattended'] or meta['debug']:

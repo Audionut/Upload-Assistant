@@ -5,7 +5,7 @@ import re
 import langcodes
 
 from src.console import console
-from src.languages import has_english_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -40,7 +40,7 @@ class LDU(UNIT3D):
         if 'hentai' in genres.lower():
             category_id = '10'
         elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            category_id = '45' if not await has_english_language(meta.get('subtitle_languages', [])) else '6'
+            category_id = '45' if not await languages_manager.has_english_language(meta.get('subtitle_languages', [])) else '6'
         if meta['category'] == "MOVIE":
             if meta.get('3d') or "3D" in meta.get('edition', ''):
                 category_id = '21'
@@ -60,7 +60,7 @@ class LDU(UNIT3D):
                 category_id = '20'
             elif "short film" in genres.lower() or int(meta.get('imdb_info', {}).get('runtime', 0)) < 5:
                 category_id = '19'
-            elif not await has_english_language(meta.get('audio_languages', [])) and not await has_english_language(meta.get('subtitle_languages', [])):
+            elif not await languages_manager.has_english_language(meta.get('audio_languages', [])) and not await languages_manager.has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '22'
             elif "dubbed" in meta.get('audio', '').lower():
                 category_id = '27'
@@ -71,7 +71,7 @@ class LDU(UNIT3D):
                 category_id = '9'
             elif "documentary" in genres.lower():
                 category_id = '40'
-            elif not await has_english_language(meta.get('audio_languages', [])) and not await has_english_language(meta.get('subtitle_languages', [])):
+            elif not await languages_manager.has_english_language(meta.get('audio_languages', [])) and not await languages_manager.has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '29'
             elif meta.get('tv_pack', False):
                 category_id = '2'
@@ -110,7 +110,7 @@ class LDU(UNIT3D):
                 try:
                     lang = langcodes.find(audio_language).to_alpha3()
                     iso_audio = lang.upper()
-                    if not await has_english_language(audio_language):
+                    if not await languages_manager.has_english_language(audio_language):
                         non_eng_audio = True
                 except Exception as e:
                     console.print(f"[bold red]Error extracting audio language: {e}[/bold red]")

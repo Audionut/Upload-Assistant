@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -117,7 +117,7 @@ class TTR(UNIT3D):
 
     async def get_additional_checks(self, meta):
         if not meta.get("language_checked", False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         if "Spanish" not in meta.get('audio_languages', []):
             if "Spanish" not in meta.get('subtitle_languages', []):

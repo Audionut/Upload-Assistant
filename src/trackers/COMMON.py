@@ -19,7 +19,7 @@ from torf import Torrent
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
-from src.languages import process_desc_language
+from src.languages import languages_manager
 
 
 class COMMON:
@@ -1082,7 +1082,7 @@ class COMMON:
         """
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, tracker=tracker)
+                await languages_manager.process_desc_language(meta, tracker=tracker)
 
             meta_audio_languages: list[str] = meta.get("audio_languages", [])
             meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])

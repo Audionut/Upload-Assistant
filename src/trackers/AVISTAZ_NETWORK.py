@@ -19,7 +19,7 @@ from cogs.redaction import Redaction
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 
 
@@ -355,7 +355,7 @@ class AZTrackerBase:
 
         if meta.get('is_disc', False):
             if not meta.get('language_checked', False):
-                await process_desc_language(meta, tracker=self.tracker)
+                await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
             found_subs_strings = meta.get('subtitle_languages', [])
             for lang_str in found_subs_strings:

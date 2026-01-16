@@ -14,7 +14,7 @@ from babel import Locale
 from babel.core import UnknownLocaleError
 
 from src.audio import get_audio_v2
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -92,7 +92,7 @@ class SHRI(UNIT3D):
         - DISC region injection
         """
         if not meta.get("language_checked", False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         # Title and basic info
         title = meta.get("title", "")
