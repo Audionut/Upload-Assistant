@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from src.get_desc import DescriptionBuilder
-from src.tmdb import get_logo
+from src.tmdb import tmdb_manager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -37,7 +37,14 @@ class RAS(UNIT3D):
             category = meta.get('category')
             debug = meta.get('debug')
             logo_languages = ['da', 'sv', 'no', 'fi', 'is', 'en']
-            logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
+            logo_path = await tmdb_manager.get_logo(
+                tmdb_id,
+                category,
+                debug,
+                logo_languages=logo_languages,
+                TMDB_API_KEY=TMDB_API_KEY,
+                TMDB_BASE_URL=TMDB_BASE_URL,
+            )
             if logo_path:
                 meta['logo'] = logo_path
 

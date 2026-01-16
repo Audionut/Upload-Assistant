@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 from data.config import config
 from src.console import console
 from src.imdb import imdb_manager
-from src.tmdb import get_episode_details, get_season_details, get_tmdb_from_imdb, tmdb_other_meta
+from src.tmdb import tmdb_manager
 from src.tvdb import tvdb_data
 from src.tvmaze import get_tvmaze_episode_data, search_tvmaze
 
@@ -27,7 +27,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
     # Create a list of all tasks to run in parallel
     all_tasks: list[Awaitable[Any]] = [
         # Core metadata tasks
-        tmdb_other_meta(
+        tmdb_manager.tmdb_other_meta(
             tmdb_id=meta['tmdb_id'],
             path=meta.get('path'),
             search_year=meta.get('search_year'),
@@ -84,7 +84,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
         episode_int = _coerce_int(meta.get('episode_int'))
         if tmdb_id is not None and season_int is not None and episode_int is not None:
             all_tasks.append(
-                get_episode_details(
+                tmdb_manager.get_episode_details(
                     tmdb_id,
                     season_int,
                     episode_int,
@@ -97,7 +97,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
         season_int = _coerce_int(meta.get('season_int'))
         if tmdb_id is not None and season_int is not None:
             all_tasks.append(
-                get_season_details(
+                tmdb_manager.get_season_details(
                     tmdb_id,
                     season_int,
                     debug=meta.get('debug', False)
@@ -194,7 +194,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
         console.print("[yellow]IMDb, TMDb, and TVDb IDs are all present[/yellow]")
     # Core metadata tasks that run in parallel
     tasks: list[Awaitable[Any]] = [
-        tmdb_other_meta(
+        tmdb_manager.tmdb_other_meta(
             tmdb_id=meta['tmdb_id'],
             path=meta.get('path'),
             search_year=meta.get('search_year'),
@@ -246,7 +246,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             season_int = _coerce_int(meta.get('season_int'))
             episode_int = _coerce_int(meta.get('episode_int'))
             if tmdb_id is not None and season_int is not None and episode_int is not None:
-                tmdb_episode_task = get_episode_details(
+                tmdb_episode_task = tmdb_manager.get_episode_details(
                     tmdb_id,
                     season_int,
                     episode_int,
@@ -259,7 +259,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             tmdb_id = _coerce_int(meta.get('tmdb_id'))
             season_int = _coerce_int(meta.get('season_int'))
             if tmdb_id is not None and season_int is not None:
-                tmdb_season_task = get_season_details(
+                tmdb_season_task = tmdb_manager.get_season_details(
                     tmdb_id,
                     season_int,
                     debug=meta.get('debug', False)
@@ -352,7 +352,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     if meta['debug']:
         console.print("[yellow]Both IMDb and TVDB IDs are present[/yellow]")
     tasks: list[Awaitable[Any]] = [
-        get_tmdb_from_imdb(
+        tmdb_manager.get_tmdb_from_imdb(
             meta['imdb_id'],
             meta.get('tvdb_id'),
             meta.get('search_year'),
@@ -425,7 +425,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
 async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     # Create a list of coroutines to run concurrently
     coroutines: list[Awaitable[Any]] = [
-        tmdb_other_meta(
+        tmdb_manager.tmdb_other_meta(
             tmdb_id=meta['tmdb_id'],
             path=meta.get('path'),
             search_year=meta.get('search_year'),
@@ -470,7 +470,7 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             episode_int = _coerce_int(meta.get('episode_int'))
             if tmdb_id is not None and season_int is not None and episode_int is not None:
                 coroutines.append(
-                    get_episode_details(
+                    tmdb_manager.get_episode_details(
                         tmdb_id,
                         season_int,
                         episode_int,
@@ -482,7 +482,7 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             season_int = _coerce_int(meta.get('season_int'))
             if tmdb_id is not None and season_int is not None:
                 coroutines.append(
-                    get_season_details(
+                    tmdb_manager.get_season_details(
                         tmdb_id,
                         season_int,
                         debug=meta.get('debug', False)
@@ -753,7 +753,7 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
             if not meta.get('tmdb_episode_data'):
                 tmdb_id = _coerce_int(meta.get('tmdb_id'))
                 if tmdb_id is not None and season is not None and episode is not None:
-                    episode_details_result = await get_episode_details(
+                    episode_details_result = await tmdb_manager.get_episode_details(
                         tmdb_id,
                         season,
                         episode,
@@ -862,7 +862,7 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, A
         episode_int = _coerce_int(meta.get('episode_int'))
         if tmdb_id is not None and season_int is not None and episode_int is not None:
             tasks.append(
-                get_episode_details(
+                tmdb_manager.get_episode_details(
                     tmdb_id,
                     season_int,
                     episode_int,

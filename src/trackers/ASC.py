@@ -15,7 +15,7 @@ from pymediainfo import MediaInfo
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.languages import process_desc_language
-from src.tmdb import get_tmdb_localized_data
+from src.tmdb import tmdb_manager
 from src.trackers.COMMON import COMMON
 
 
@@ -94,7 +94,7 @@ class ASC:
             self.main_tmdb_data = local_results['main']
         else:
             tasks_to_run.append(
-                ('main', get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings'))
+                ('main', tmdb_manager.get_tmdb_localized_data(meta, data_type='main', language='pt-BR', append_to_response='credits,videos,content_ratings'))
             )
 
         if meta.get('category') == 'TV':
@@ -102,7 +102,7 @@ class ASC:
                 self.season_tmdb_data = local_results['season']
             else:
                 tasks_to_run.append(
-                    ('season', get_tmdb_localized_data(meta, data_type='season', language='pt-BR', append_to_response=''))
+                    ('season', tmdb_manager.get_tmdb_localized_data(meta, data_type='season', language='pt-BR', append_to_response=''))
                 )
 
         if meta.get('category') == 'TV' and not meta.get('tv_pack', False):
@@ -110,7 +110,7 @@ class ASC:
                 self.episode_tmdb_data = local_results['episode']
             else:
                 tasks_to_run.append(
-                    ('episode', get_tmdb_localized_data(meta, data_type='episode', language='pt-BR', append_to_response=''))
+                    ('episode', tmdb_manager.get_tmdb_localized_data(meta, data_type='episode', language='pt-BR', append_to_response=''))
                 )
 
         if tasks_to_run:

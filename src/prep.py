@@ -35,7 +35,7 @@ try:
     from src.region import get_distributor, get_region, get_service
     from src.sonarr import sonarr_manager
     from src.tags import get_tag, tag_override
-    from src.tmdb import get_tmdb_from_imdb, get_tmdb_id, get_tmdb_imdb_from_mediainfo, set_tmdb_metadata
+    from src.tmdb import tmdb_manager
     from src.tvdb import tvdb_data
     from src.tvmaze import search_tvmaze
     from src.video import get_container, get_hdr, get_resolution, get_type, get_uhd, get_video, get_video_codec, get_video_duration, get_video_encode, is_3d, is_sd
@@ -682,7 +682,7 @@ class Prep:
 
         # Run a check against mediainfo to see if it has tmdb/imdb
         if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
-            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await get_tmdb_imdb_from_mediainfo(
+            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await tmdb_manager.get_tmdb_imdb_from_mediainfo(
                 mi, meta['category'], meta['is_disc'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id']
             )
 
@@ -704,7 +704,7 @@ class Prep:
                 year = ""
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
-            tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
+            tmdb_task = tmdb_manager.get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
             imdb_task = imdb_manager.search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
@@ -716,7 +716,7 @@ class Prep:
 
         # If we have an IMDb ID but no TMDb ID, fetch TMDb ID from IMDb
         if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
-            category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
+            category, tmdb_id, original_language, filename_search = await tmdb_manager.get_tmdb_from_imdb(
                 meta['imdb_id'],
                 meta.get('tvdb_id'),
                 meta.get('search_year'),
@@ -750,7 +750,7 @@ class Prep:
 
         # we should have tmdb id one way or another, so lets get data if needed
         if int(meta['tmdb_id']) != 0:
-            await set_tmdb_metadata(meta, filename)
+            await tmdb_manager.set_tmdb_metadata(meta, filename)
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
@@ -771,7 +771,7 @@ class Prep:
         # user might have skipped tmdb earlier, lets double check
         if meta.get('imdb_id') != 0 and meta.get('tmdb_id') == 0:
             console.print("[yellow]No TMDB ID found, attempting to fetch from IMDb...[/yellow]")
-            category, tmdb_id, original_language, filename_search = await get_tmdb_from_imdb(
+            category, tmdb_id, original_language, filename_search = await tmdb_manager.get_tmdb_from_imdb(
                 meta['imdb_id'],
                 meta.get('tvdb_id'),
                 meta.get('search_year'),
@@ -788,7 +788,7 @@ class Prep:
             meta['no_ids'] = filename_search
 
         if int(meta['tmdb_id']) != 0:
-            await set_tmdb_metadata(meta, filename)
+            await tmdb_manager.set_tmdb_metadata(meta, filename)
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:

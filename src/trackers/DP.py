@@ -67,14 +67,21 @@ class DP(UNIT3D):
 
     async def get_description(self, meta):
         if meta.get('logo', "") == "":
-            from src.tmdb import get_logo
+            from src.tmdb import tmdb_manager
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api', False)
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
             tmdb_id = meta.get('tmdb')
             category = meta.get('category')
             debug = meta.get('debug')
             logo_languages = ['da', 'sv', 'no', 'fi', 'is', 'en']
-            logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
+            logo_path = await tmdb_manager.get_logo(
+                tmdb_id,
+                category,
+                debug,
+                logo_languages=logo_languages,
+                TMDB_API_KEY=TMDB_API_KEY,
+                TMDB_BASE_URL=TMDB_BASE_URL,
+            )
             if logo_path:
                 meta['logo'] = logo_path
 

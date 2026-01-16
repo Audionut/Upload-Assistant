@@ -15,7 +15,7 @@ from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.rehostimages import check_hosts
-from src.tmdb import get_tmdb_localized_data
+from src.tmdb import tmdb_manager
 from src.trackers.COMMON import COMMON
 
 
@@ -75,7 +75,7 @@ class GPW:
         main_ch_data = data.get('zh-cn', {}).get('main')
 
         if not main_ch_data:
-            main_ch_data = await get_tmdb_localized_data(
+            main_ch_data = await tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='zh-cn',

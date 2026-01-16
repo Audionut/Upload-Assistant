@@ -6,7 +6,7 @@ import cloudscraper
 
 from src.console import console
 from src.languages import process_desc_language
-from src.tmdb import get_tmdb_translations
+from src.tmdb import tmdb_manager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -102,7 +102,7 @@ class EMUW(UNIT3D):
 
         # Try TMDb if not found
         if not spanish_title and meta.get('tmdb'):
-            spanish_title = await get_tmdb_translations(
+            spanish_title = await tmdb_manager.get_tmdb_translations(
                 tmdb_id=meta.get('tmdb'),
                 category=meta.get('category', 'MOVIE'),
                 target_language='es',
