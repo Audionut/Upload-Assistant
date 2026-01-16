@@ -4,7 +4,7 @@
 import contextlib
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any, Optional, cast
 
 from typing_extensions import TypeAlias
@@ -190,7 +190,7 @@ client = Clients(config=config)
 parser = Args(config)
 use_discord = False
 discord_cfg_obj = config.get('DISCORD')
-discord_config: Optional[dict[str, Any]] = discord_cfg_obj if isinstance(discord_cfg_obj, dict) else None
+discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
 if discord_config is not None:
     use_discord = bool(discord_config.get('use_discord', False))
 
@@ -203,7 +203,7 @@ async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
         'modq', 'region', 'freeleech', 'personalrelease', 'unattended', 'manual_season', 'manual_episode', 'torrent_creation', 'qbit_tag', 'qbit_cat',
         'skip_imghost_upload', 'imghost', 'manual_source', 'webdv', 'hardcoded-subs', 'dual_audio', 'manual_type', 'tvmaze_manual'
     ]
-    sanitized_saved_meta = {}
+    sanitized_saved_meta: dict[str, Any] = {}
     for key, value in saved_meta.items():
         clean_key = key.strip().strip("'").strip('"')
         if clean_key in overwrite_list:
@@ -352,7 +352,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
     raw_trackers = meta.get('trackers')
     trackers: list[str]
     if isinstance(raw_trackers, list):
-        trackers = [t for t in raw_trackers if isinstance(t, str)]
+        raw_trackers_list = cast(list[Any], raw_trackers)
+        trackers = [t for t in raw_trackers_list if isinstance(t, str)]
     elif isinstance(raw_trackers, str):
         trackers = [t.strip().upper() for t in raw_trackers.split(',') if t.strip()]
         meta['trackers'] = trackers
@@ -460,8 +461,13 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         return
 
     if 'remove_trackers' in meta and meta['remove_trackers']:
-        removed = []
-        for tracker in meta['remove_trackers']:
+        removed: list[str] = []
+        remove_trackers_list = (
+            [t for t in meta['remove_trackers'] if isinstance(t, str)]
+            if isinstance(meta.get('remove_trackers'), list)
+            else [str(meta['remove_trackers'])]
+        )
+        for tracker in remove_trackers_list:
             if tracker in meta['trackers']:
                 if meta['debug']:
                     console.print(f"[DEBUG] Would have removed {tracker} found in client")
@@ -529,14 +535,15 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         meta['we_are_uploading'] = True
         common = COMMON(config)
         if meta.get('site_check', False):
+            tracker_status = cast(dict[str, dict[str, Any]], meta.get('tracker_status', {}))
             for tracker in meta['trackers']:
-                upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+                upload_status = tracker_status.get(tracker, {}).get('upload', False)
                 if not upload_status:
                     if tracker == "AITHER" and meta.get('aither_trumpable') and len(meta.get('aither_trumpable', [])) > 0:
                         pass
                     else:
                         continue
-                if tracker not in meta['tracker_status']:
+                if tracker not in tracker_status:
                     continue
 
                 log_path = f"{base_dir}/tmp/{tracker}_search_results.json"
@@ -548,8 +555,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     try:
                         async with aiofiles.open(log_path, encoding='utf-8') as f:
                             content = await f.read()
-                            loaded = json.loads(content) if content.strip() else []
-                            search_data = [e for e in loaded if isinstance(e, dict)] if isinstance(loaded, list) else []
+                            loaded: Any = json.loads(content) if content.strip() else []
+                            search_data = [e for e in cast(list[Any], loaded) if isinstance(e, dict)] if isinstance(loaded, list) else []
                     except Exception:
                         search_data = []
 
@@ -577,20 +584,21 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         filename: str = meta.get('title', '')
         bdmv_filename = meta.get('filename', '')
         bdinfo = meta.get('bdinfo', '')
-        file_list: list[str] = meta.get('filelist', [])
+        file_list = [str(p) for p in cast(list[Any], meta.get('filelist', [])) if str(p)]
         videopath: str = file_list[0] if file_list else ""
         console.print(f"Processing {filename} for upload.....")
 
         meta['frame_overlay'] = config['DEFAULT'].get('frame_overlay', False)
+        tracker_status_map = cast(dict[str, dict[str, Any]], meta.get('tracker_status', {}))
         for tracker in ['AZ', 'CZ', 'PHD']:
-            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+            upload_status = tracker_status_map.get(tracker, {}).get('upload', False)
             if tracker in meta['trackers'] and meta['frame_overlay'] and upload_status is True:
                 meta['frame_overlay'] = False
                 console.print("[yellow]AZ, CZ, and PHD do not allow frame overlays. Frame overlay will be disabled for this upload.[/yellow]")
 
         bdmv_mi_created = False
         for tracker in ["ANT", "DC", "HUNO", "LCD"]:
-            upload_status = meta['tracker_status'].get(tracker, {}).get('upload', False)
+            upload_status = tracker_status_map.get(tracker, {}).get('upload', False)
             if tracker in trackers and upload_status is True and not bdmv_mi_created:
                 await common.get_bdmv_mediainfo(meta)
                 bdmv_mi_created = True
@@ -758,8 +766,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     trackers_with_image_host_requirements = {'BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC'}
 
                     relevant_trackers = [
-                        t for t in meta.get('trackers', [])
-                        if t in trackers_with_image_host_requirements and t in tracker_class_map
+                        t for t in cast(list[Any], meta.get('trackers', []))
+                        if isinstance(t, str) and t in trackers_with_image_host_requirements and t in tracker_class_map
                     ]
 
                     # If all relevant trackers share exactly one common approved host that the user has configured,
@@ -778,7 +786,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 console.print(f"[cyan]Image host debug: relevant_trackers={relevant_trackers}[/cyan]")
 
                             default_cfg_obj = config.get('DEFAULT', {})
-                            default_cfg: dict[str, Any] = default_cfg_obj if isinstance(default_cfg_obj, dict) else {}
+                            default_cfg: dict[str, Any] = cast(dict[str, Any], default_cfg_obj) if isinstance(default_cfg_obj, dict) else {}
                             configured_hosts: list[str] = []
                             for host_index in range(1, 10):
                                 host_key = f'img_host_{host_index}'
@@ -790,7 +798,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                             if meta.get('debug'):
                                 console.print(f"[cyan]Image host debug: configured_hosts={configured_hosts}[/cyan]")
 
-                            approved_sets = []
+                            approved_sets: list[set[str]] = []
                             all_known = True
                             for tracker_name in relevant_trackers:
                                 tracker_instance = tracker_instances[tracker_name]
@@ -798,13 +806,28 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 if not approved_hosts:
                                     all_known = False
                                     break
-                                approved_sets.append(set(approved_hosts))
+                                if isinstance(approved_hosts, (list, set, tuple)):
+                                    approved_hosts_list = [
+                                        str(host)
+                                        for host in cast(Iterable[Any], approved_hosts)
+                                    ]
+                                    approved_sets.append(set(approved_hosts_list))
+                                else:
+                                    all_known = False
+                                    break
 
                                 if meta.get('debug'):
-                                    console.print(f"[cyan]Image host debug: {tracker_name}.approved_image_hosts={list(approved_hosts)}[/cyan]")
+                                    console.print(
+                                        f"[cyan]Image host debug: {tracker_name}.approved_image_hosts={approved_hosts_list}[/cyan]"
+                                    )
 
                             if all_known and approved_sets and configured_hosts:
-                                common_hosts = set.intersection(*approved_sets)
+                                common_hosts: set[str] = set()
+                                for host_set in approved_sets:
+                                    if not common_hosts:
+                                        common_hosts = set(host_set)
+                                    else:
+                                        common_hosts &= host_set
                                 common_configured_hosts = [h for h in configured_hosts if h in common_hosts]
 
                                 if meta.get('debug'):
@@ -819,8 +842,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                                 # Prefer the user-selected host if it's valid for all relevant trackers; otherwise
                                 # fall back to the first common configured host by config priority (img_host_1..img_host_9).
-                                current_img_host = meta.get('imghost') or config['DEFAULT'].get('img_host_1')
-                                preferred_host = None
+                                current_img_host = str(meta.get('imghost') or config['DEFAULT'].get('img_host_1') or "")
+                                preferred_host: Optional[str] = None
 
                                 if common_configured_hosts and current_img_host not in common_configured_hosts:
                                     preferred_host = common_configured_hosts[0]
@@ -845,8 +868,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 console.print(f"[yellow]Could not determine a common approved image host: {e}[/yellow]")
 
                     if meta.get('debug'):
+                        image_list_for_debug = cast(list[Any], meta.get('image_list') or [])
                         console.print(
-                            f"[cyan]Image host debug: pre-upload_screens meta['imghost']={meta.get('imghost')} image_list={len(meta.get('image_list', []) or [])} cutoff={meta.get('cutoff')} screens={meta.get('screens')}[/cyan]"  # noqa: E501
+                            f"[cyan]Image host debug: pre-upload_screens meta['imghost']={meta.get('imghost')} image_list={len(image_list_for_debug)} cutoff={meta.get('cutoff')} screens={meta.get('screens')}[/cyan]"  # noqa: E501
                         )
 
                     return_dict: dict[str, Any] = {}
@@ -892,8 +916,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                 if 'image_list' in meta and meta['image_list']:
                     try:
+                        image_list = cast(list[Any], meta.get('image_list') or [])
                         image_data = {
-                            "image_list": meta.get('image_list', []),
+                            "image_list": image_list,
                             "image_sizes": meta.get('image_sizes', {}),
                             "tonemapped": meta.get('tonemapped', False)
                         }
@@ -902,7 +927,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                             json.dump(image_data, img_file, indent=4)
 
                         if meta.get('debug'):
-                            console.print(f"[cyan]Saved {len(meta['image_list'])} images to image_data.json")
+                            console.print(f"[cyan]Saved {len(image_list)} images to image_data.json")
                     except Exception as e:
                         console.print(f"[yellow]Failed to save image data: {str(e)}")
         finally:
@@ -931,7 +956,12 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         if os.path.exists(torrent_path):
             raw_trackers = meta.get('trackers')
-            trackers_list = [raw_trackers] if isinstance(raw_trackers, str) else (raw_trackers or [])
+            if isinstance(raw_trackers, str):
+                trackers_list = [raw_trackers]
+            elif isinstance(raw_trackers, list):
+                trackers_list = [str(t) for t in cast(list[Any], raw_trackers) if str(t).strip()]
+            else:
+                trackers_list = []
             trackers_upper = [str(t).strip().upper() for t in trackers_list if str(t).strip()]
 
             base_piece_mb: Optional[int] = cast(Optional[int], meta.get('base_torrent_piece_mb'))
@@ -949,7 +979,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 mtv_cfg = config.get('TRACKERS', {}).get('MTV', {})
                 if str(mtv_cfg.get('skip_if_rehash', 'false')).lower() == 'true' and base_piece_mb and base_piece_mb > 8:
                     meta['trackers'] = [t for t in trackers_list if str(t).strip().upper() != "MTV"]
-                    trackers_list = meta.get('trackers') or []
+                    trackers_list = [str(t) for t in cast(list[Any], meta.get('trackers') or []) if str(t).strip()]
                     trackers_upper = [str(t).strip().upper() for t in trackers_list if str(t).strip()]
                     if meta.get('debug', False):
                         console.print("[yellow]Removed MTV from trackers due to skip_if_rehash config and 8 MiB limit.[/yellow]")
@@ -989,17 +1019,18 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
     if os.path.exists(log_file):
         with open(log_file) as f:
             try:
-                processed_files = json.load(f)
+                loaded: Any = json.load(f)
+                processed_files = cast(list[Any], loaded) if isinstance(loaded, list) else []
             except Exception:
                 processed_files = []
     else:
         processed_files = []
 
-    processed_files = [entry for entry in processed_files if entry != file_path]
-    processed_files.append(file_path)
+    processed_files_clean: list[str] = [str(entry) for entry in processed_files if entry != file_path]
+    processed_files_clean.append(file_path)
 
     with open(log_file, "w") as f:
-        json.dump(processed_files, f, indent=4)
+        json.dump(processed_files_clean, f, indent=4)
 
 
 def get_local_version(version_file: str) -> Optional[str]:
@@ -1155,14 +1186,15 @@ async def do_the_thing(base_dir: str) -> None:
             if isinstance(meta['trackers'], str):
                 active_trackers = [t.strip().upper() for t in meta['trackers'].split(',') if t.strip()]
             elif isinstance(meta['trackers'], list):
-                active_trackers = [t.strip().upper() for t in meta['trackers'] if isinstance(t, str) and t.strip()]
+                trackers_list = cast(list[Any], meta['trackers'])
+                active_trackers = [str(t).strip().upper() for t in trackers_list if str(t).strip()]
 
         # Get active imghost from meta (parsed from command line)
         active_imghost: Optional[str] = None
         if meta.get('imghost'):
-            imghost_val = meta['imghost']
-            if isinstance(imghost_val, str) and imghost_val.strip():
-                active_imghost = imghost_val.strip()
+            imghost_val = str(meta.get('imghost', '')).strip()
+            if imghost_val:
+                active_imghost = imghost_val
 
         is_valid, config_errors, config_warnings = validate_config(config, active_trackers, active_imghost)
 
@@ -1214,13 +1246,14 @@ async def do_the_thing(base_dir: str) -> None:
             meta['mkbrr'] = False
 
         queue, log_file = await QueueManager.handle_queue(path, meta, paths, base_dir)
+        queue_list = cast(list[Any], queue)
 
         processed_files_count = 0
         skipped_files_count = 0
         base_meta = dict(meta.items())
 
-        for queue_item in queue:
-            total_files = len(queue)
+        for queue_item in queue_list:
+            total_files = len(queue_list)
             bot = None
             current_item_path = ""
             tmp_path = ""
@@ -1230,11 +1263,11 @@ async def do_the_thing(base_dir: str) -> None:
                 if meta.get('site_upload_queue'):
                     # Extract path and metadata from site upload queue item
                     queue_item_mapping = cast(Mapping[str, Any], queue_item)
-                    path = cast(str, await QueueManager.process_site_upload_item(queue_item_mapping, meta))
+                    path = await QueueManager.process_site_upload_item(queue_item_mapping, meta)
                     current_item_path = path  # Store for logging
                 else:
                     # Regular queue processing
-                    path = cast(str, queue_item)
+                    path = queue_item if isinstance(queue_item, str) else str(queue_item)
                     current_item_path = path
 
                 meta['path'] = path
@@ -1355,7 +1388,8 @@ async def do_the_thing(base_dir: str) -> None:
                 meta['are_we_trump_reporting'] = False
                 if meta.get('were_trumping', False):
                     console.print("[yellow]Checking for existing trump reports.....")
-                    is_trumping = await tracker_setup.process_trumpables(meta, trackers=meta['trackers'])
+                    trump_trackers = [t for t in cast(list[Any], meta.get('trackers', [])) if isinstance(t, str)]
+                    is_trumping = await tracker_setup.process_trumpables(meta, trackers=trump_trackers)
 
                     # Apply any per-tracker skip decisions made during trumpable processing
                     skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
@@ -1388,18 +1422,23 @@ async def do_the_thing(base_dir: str) -> None:
                 successful_trackers = 10
                 if meta.get('dupe_again', False):
                     console.print("[yellow]Performing double dupe check on trackers that passed initial upload checks.....[/yellow]")
-                    trackers_list = meta.get('trackers', [])
-                    if not isinstance(trackers_list, list):
+                    raw_trackers_list = meta.get('trackers', [])
+                    trackers_list: list[str]
+                    if isinstance(raw_trackers_list, list):
+                        trackers_list = [t for t in cast(list[Any], raw_trackers_list) if isinstance(t, str)]
+                    else:
                         trackers_list = []
                         meta['trackers'] = trackers_list
 
                     for tracker in list(trackers_list):
-                        tracker_status = meta.get('tracker_status', {}).get(tracker, {})
+                        tracker_status = cast(dict[str, Any], meta.get('tracker_status', {})).get(tracker, {})
                         if tracker_status.get('upload') is not True:
                             if meta.get('debug'):
                                 console.print(f"[yellow]{tracker} was previously marked to skip upload. Skipping double dupe check.[/yellow]")
                             trackers_list.remove(tracker)
-                            meta['tracker_status'].pop(tracker, None)
+                            tracker_status_map = cast(dict[str, Any], meta.get('tracker_status', {}))
+                            tracker_status_map.pop(tracker, None)
+                            meta['tracker_status'] = tracker_status_map
                             continue
 
                     if trackers_list:
@@ -1413,7 +1452,16 @@ async def do_the_thing(base_dir: str) -> None:
                 if successful_trackers < skip_uploading_int and not meta['debug']:
                     console.print(f"[red]Not enough successful trackers ({successful_trackers}/{skip_uploading_int}). No uploads being processed.[/red]")
                 else:
-                    await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
+                    await process_trackers(
+                        meta,
+                        config,
+                        client,
+                        console,
+                        list(api_trackers),
+                        tracker_class_map,
+                        list(http_trackers),
+                        list(other_api_trackers),
+                    )
                     if use_discord and bot:
                         await DiscordNotifier.send_upload_status_notification(config, bot, meta)
 
@@ -1441,15 +1489,16 @@ async def do_the_thing(base_dir: str) -> None:
                     if not isinstance(status, dict):
                         return f"Error printing {tracker} data: invalid status type\n"
 
-                    status_message = status.get('status_message')
+                    status_dict = cast(dict[str, Any], status)
+                    status_message = status_dict.get('status_message')
 
                     if tracker == "MTV" and status_message is not None and "data error" not in str(status_message):
                         return f"{str(status_message)}\n"
 
-                    if 'torrent_id' in status:
+                    if 'torrent_id' in status_dict:
                         tracker_class = tracker_class_map[tracker](config=config)
                         torrent_url = tracker_class.torrent_url
-                        return f"{tracker}: {torrent_url}{status['torrent_id']}\n"
+                        return f"{tracker}: {torrent_url}{status_dict['torrent_id']}\n"
 
                     if status_message is not None and "data error" not in str(status_message) and tracker != "MTV":
                         return f"{tracker}: {Redaction.redact_private_info(status_message)}\n"
@@ -1457,7 +1506,7 @@ async def do_the_thing(base_dir: str) -> None:
                     if status_message is not None and "data error" in str(status_message):
                         return f"{tracker}: {str(status_message)}\n"
 
-                    if status.get('skipping') is False:
+                    if status_dict.get('skipping') is False:
                         return f"{tracker} gave no useful message.\n"
 
                     return ""
@@ -1469,7 +1518,7 @@ async def do_the_thing(base_dir: str) -> None:
                 if send_upload_links:
                     try:
                         discord_message = ""
-                        for tracker, status in meta.get('tracker_status', {}).items():
+                        for tracker, status in cast(dict[str, Any], meta.get('tracker_status', {})).items():
                             discord_message += build_tracker_status_line(tracker, status)
                         discord_message += "All tracker uploads processed.\n"
                         await DiscordNotifier.send_discord_notification(
@@ -1496,7 +1545,7 @@ async def do_the_thing(base_dir: str) -> None:
                     if meta['debug']:
                         console.print(f"[cyan]Using requested trackers for site check: {trackers}[/cyan]")
                 else:
-                    trackers = meta['trackers']
+                    trackers = [t for t in cast(list[Any], meta.get('trackers', [])) if isinstance(t, str)]
                     if meta['debug']:
                         console.print(f"[cyan]Using trackers for request search: {trackers}[/cyan]")
                 await tracker_setup.tracker_request(meta, trackers)
@@ -1560,21 +1609,23 @@ async def do_the_thing(base_dir: str) -> None:
 
 
 async def process_cross_seeds(meta: Meta) -> None:
-    all_trackers = api_trackers | http_trackers | other_api_trackers
+    all_trackers: set[str] = set(api_trackers) | set(http_trackers) | set(other_api_trackers)
 
     # Get list of trackers to exclude (already in client)
-    remove_list = []
+    remove_list: list[str] = []
     if meta.get('remove_trackers', False):
         if isinstance(meta['remove_trackers'], str):
             remove_list = [t.strip().upper() for t in meta['remove_trackers'].split(',')]
         elif isinstance(meta['remove_trackers'], list):
-            remove_list = [t.strip().upper() for t in meta['remove_trackers'] if isinstance(t, str)]
+            remove_list = [t.strip().upper() for t in cast(list[Any], meta['remove_trackers']) if isinstance(t, str)]
 
     # Check for trackers that haven't been dupe-checked yet
-    dupe_checked_trackers = meta.get('dupe_checked_trackers', [])
+    dupe_checked_trackers = [
+        t for t in cast(list[Any], meta.get('dupe_checked_trackers', [])) if isinstance(t, str)
+    ]
 
     # Validate tracker configs and build list of valid unchecked trackers
-    valid_unchecked_trackers = []
+    valid_unchecked_trackers: list[str] = []
     for tracker in all_trackers:
         if tracker in dupe_checked_trackers or meta.get(f'{tracker}_cross_seed', None) is not None or tracker in remove_list:
             continue
@@ -1644,9 +1695,9 @@ async def process_cross_seeds(meta: Meta) -> None:
 
                 if dupes:
                     dupes = await DupeChecker.filter_dupes(dupes, meta, tracker)
-                    _is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
+                    _is_dupe, updated_meta = await helper.dupe_check(cast(list[Any], dupes), meta, tracker)
                     # Persist any updates from dupe_check (defensive in case it returns a copy)
-                    if isinstance(updated_meta, dict) and updated_meta is not meta:
+                    if updated_meta is not meta:
                         meta.update(updated_meta)
 
             except Exception as e:
