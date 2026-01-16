@@ -60,6 +60,7 @@ async def filter_dupes(dupes, meta, tracker_name):
                 'res': d.get('res', None),
                 'internal': d.get('internal', 0),
                 "bd_info": d.get("bd_info", ""),
+                "description": d.get("description", ""),
             }
 
             # Case 3: Dict with files and file_count
@@ -522,18 +523,22 @@ async def filter_dupes(dupes, meta, tracker_name):
             new_dupes.append(each)
 
     if new_dupes and not meta.get('unattended', False) and meta['debug']:
-        # Limit filtered dupe output for readability
+        console.log(f"[yellow]Filtered dupes on {tracker_name}: ")
         filtered_dupes_to_print = []
+
         for dupe in new_dupes:
-            if isinstance(dupe, dict) and 'files' in dupe and isinstance(dupe['files'], list):
-                # Limit files list to first 10 items
-                limited_dupe = redact_private_info(dupe).copy()
-                if len(limited_dupe['files']) > 10:
-                    limited_dupe['files'] = limited_dupe['files'][:10] + [f"... and {len(dupe['files']) - 10} more files"]
-                filtered_dupes_to_print.append(limited_dupe)
-            else:
-                filtered_dupes_to_print.append(redact_private_info(dupe))
-        console.log(f"[yellow]Filtered dupes on {tracker_name}: {filtered_dupes_to_print}")
+            limited_dupe = redact_private_info(dupe).copy()
+
+            if isinstance(limited_dupe.get('files'), list) and len(limited_dupe['files']) > 10:
+                count_remaining = len(limited_dupe['files']) - 10
+                limited_dupe['files'] = limited_dupe['files'][:10] + [f"... and {count_remaining} more files"]
+
+            if isinstance(limited_dupe.get('description'), str) and len(limited_dupe['description']) > 200:
+                limited_dupe['description'] = limited_dupe['description'][:200] + "..."
+
+            filtered_dupes_to_print.append(limited_dupe)
+
+        console.log(filtered_dupes_to_print)
 
     return new_dupes
 

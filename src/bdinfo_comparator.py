@@ -1,7 +1,8 @@
 import difflib
 import os
-from typing import Any
+import re
 from src.console import console
+from typing import Any
 
 
 def get_relevant_lines(bd_info_text: str) -> list[str]:
@@ -14,25 +15,18 @@ def get_relevant_lines(bd_info_text: str) -> list[str]:
     Returns:
         A list of normalized strings containing video lines followed by sorted audio and subtitle lines.
     """
-    video_tracks: list[str] = []
-    audio_tracks: list[str] = []
-    subtitle_tracks: list[str] = []
+    tracks: list[str] = []
 
-    for line in bd_info_text.splitlines():
+    clean_bd_info_text = remove_bbcode(bd_info_text)
+
+    for line in clean_bd_info_text.splitlines():
         clean_line = line.strip()
 
         if "kbps" in clean_line:
             normalized_line = " ".join(clean_line.split())
+            tracks.append(normalized_line)
 
-            if "fps" in normalized_line and "/" in normalized_line:
-                video_tracks.append(normalized_line)
-            elif "Presentation Graphics" in normalized_line or "Subtitle:" in normalized_line:
-                subtitle_tracks.append(normalized_line)
-            elif "/" in normalized_line and "kHz" in normalized_line:
-                audio_tracks.append(normalized_line)
-
-    # Return grouped result: video first, then sorted audio and subtitles for easier comparison
-    return video_tracks + sorted(audio_tracks) + sorted(subtitle_tracks)
+    return tracks
 
 
 def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> str:
@@ -47,14 +41,13 @@ def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> str:
         A formatted warning string if differences are not found or if data is missing.
     """
     warning_message = ""
-    release_name = str(entry.get('name', '') or '')
-    duplicate_bdinfo_content = str(entry.get('bd_info', '') or '')
+    release_name = str(entry.get("name", "") or "")
+    duplicate_bdinfo_content = str(entry.get("bd_info", "") or "")
 
     source_bd_content = ""
 
     is_extended_report = (
-        "PLAYLIST REPORT:" in duplicate_bdinfo_content or
-        "DISC INFO:" in duplicate_bdinfo_content
+        "PLAYLIST REPORT:" in duplicate_bdinfo_content or "DISC INFO:" in duplicate_bdinfo_content
     )
 
     file_prefix = "BD_SUMMARY_EXT_00" if is_extended_report else "BD_SUMMARY_00"
@@ -133,3 +126,18 @@ def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> str:
         )
 
     return warning_message
+
+
+def remove_bbcode(text: str):
+    """
+    Removes BBCode tags from a string using regular expressions.
+    Matches any content inside square brackets.
+    """
+    if not text:
+        return ""
+
+    bbcode_pattern = re.compile(r"\[[^\]]*\]")
+
+    clean_text = re.sub(bbcode_pattern, "", text)
+
+    return clean_text
