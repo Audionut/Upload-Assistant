@@ -3,15 +3,27 @@ import datetime
 import os
 import re
 import subprocess
-from typing import Any
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional, cast
 
 from data.config import config as _config
 from src.console import console
 
-config: dict[str, Any] = _config
+config: dict[str, Any] = cast(dict[str, Any], _config)
+DEFAULT_CONFIG: dict[str, Any] = cast(dict[str, Any], config.get('DEFAULT', {}))
+
+Meta = dict[str, Any]
 
 
-async def create_season_nfo(season_folder, season_number, season_year, tvdbid, tvmazeid, plot, outline):
+async def create_season_nfo(
+    season_folder: str,
+    season_number: str,
+    season_year: str,
+    tvdbid: str,
+    tvmazeid: str,
+    plot: str,
+    outline: str,
+) -> str:
     """Create a season.nfo file in the given season folder."""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     nfo_content = f'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
@@ -35,31 +47,36 @@ async def create_season_nfo(season_folder, season_number, season_year, tvdbid, t
     return nfo_path
 
 
-async def nfo_link(meta):
+async def nfo_link(meta: Meta) -> Optional[str]:
     """Create an Emby-compliant NFO file from metadata"""
     try:
         # Get basic info
-        imdb_info = meta.get('imdb_info', {})
-        title = imdb_info.get('title', meta.get('title', ''))
-        year = imdb_info.get('year', meta.get('year', '')) if meta['category'] == "MOVIE" else meta.get('search_year', '')
-        plot = meta.get('overview', '')
-        rating = imdb_info.get('rating', '')
-        runtime = imdb_info.get('runtime', meta.get('runtime', ''))
-        genres = imdb_info.get('genres', meta.get('genres', ''))
-        country = imdb_info.get('country', meta.get('country', ''))
-        aka = imdb_info.get('aka', title)  # Fallback to title if no aka
-        tagline = imdb_info.get('plot', '')
-        premiered = meta.get('release_date', '')
+        imdb_info = cast(dict[str, Any], meta.get('imdb_info') or {})
+        title = str(imdb_info.get('title') or meta.get('title') or '')
+        year = (
+            str(imdb_info.get('year') or meta.get('year') or '')
+            if meta['category'] == "MOVIE"
+            else str(meta.get('search_year') or '')
+        )
+        plot = str(meta.get('overview') or '')
+        rating = str(imdb_info.get('rating') or '')
+        runtime = imdb_info.get('runtime') or meta.get('runtime') or ''
+        genres = imdb_info.get('genres') or meta.get('genres') or ''
+        country = str(imdb_info.get('country') or meta.get('country') or '')
+        aka = str(imdb_info.get('aka') or title)
+        tagline = str(imdb_info.get('plot') or '')
+        premiered = str(meta.get('release_date') or '')
 
         # IDs
-        imdb_id = imdb_info.get('imdbID', meta.get('imdb_id', '')).replace('tt', '')
-        tmdb_id = meta.get('tmdb_id', '')
-        tvdb_id = meta.get('tvdb_id', '')
+        imdb_id_raw = imdb_info.get('imdbID') or meta.get('imdb_id') or ''
+        imdb_id = str(imdb_id_raw).replace('tt', '') if imdb_id_raw else ''
+        tmdb_id = str(meta.get('tmdb_id') or '')
+        tvdb_id = str(meta.get('tvdb_id') or '')
 
         # Cast and crew
-        cast = meta.get('cast', [])
-        directors = meta.get('directors', [])
-        studios = meta.get('studios', [])
+        cast_list = cast(list[dict[str, Any]], meta.get('cast') or [])
+        directors = cast(list[Any], meta.get('directors') or [])
+        studios = cast(list[Any], meta.get('studios') or [])
 
         # Build NFO XML content with proper structure
         nfo_content = '''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
@@ -79,10 +96,10 @@ async def nfo_link(meta):
         nfo_content += f'\n  <originaltitle>{aka}</originaltitle>'
 
         # Add cast/actors
-        for actor in cast:
-            name = actor.get('name', '')
-            role = actor.get('character', actor.get('role', ''))
-            tmdb_actor_id = actor.get('id', '')
+        for actor in cast_list:
+            name = str(actor.get('name') or '')
+            role = str(actor.get('character') or actor.get('role') or '')
+            tmdb_actor_id = str(actor.get('id') or '')
             if name:
                 nfo_content += '\n  <actor>'
                 nfo_content += f'\n    <name>{name}</name>'
@@ -95,8 +112,13 @@ async def nfo_link(meta):
 
         # Add directors
         for director in directors:
-            director_name = director.get('name', director) if isinstance(director, dict) else director
-            director_id = director.get('id', '') if isinstance(director, dict) else ''
+            if isinstance(director, Mapping):
+                director_map = cast(Mapping[str, Any], director)
+                director_name = str(director_map.get('name') or '')
+                director_id = str(director_map.get('id') or '')
+            else:
+                director_name = str(director)
+                director_id = ''
             if director_name:
                 nfo_content += '\n  <director'
                 if director_id:
@@ -127,7 +149,7 @@ async def nfo_link(meta):
         # Add runtime (convert to minutes if needed)
         if runtime:
             # Handle runtime in different formats
-            runtime_minutes = runtime
+            runtime_minutes = str(runtime)
             if isinstance(runtime, str) and 'min' in runtime:
                 runtime_minutes = runtime.replace('min', '').strip()
             nfo_content += f'\n  <runtime>{runtime_minutes}</runtime>'
@@ -138,14 +160,23 @@ async def nfo_link(meta):
 
         # Add genres
         if genres:
-            genre_list = [g.strip() for g in genres.split(',')] if isinstance(genres, str) else genres
+            if isinstance(genres, str):
+                genre_list: list[str] = [g.strip() for g in genres.split(',')]
+            elif isinstance(genres, Sequence):
+                genre_list = [str(g).strip() for g in cast(Sequence[Any], genres)]
+            else:
+                genre_list = []
             for genre in genre_list:
                 if genre:
                     nfo_content += f'\n  <genre>{genre}</genre>'
 
         # Add studios
         for studio in studios:
-            studio_name = studio.get('name', studio) if isinstance(studio, dict) else studio
+            studio_name = (
+                str(cast(Mapping[str, Any], studio).get('name') or '')
+                if isinstance(studio, Mapping)
+                else str(studio)
+            )
             if studio_name:
                 nfo_content += f'\n  <studio>{studio_name}</studio>'
 
@@ -164,14 +195,14 @@ async def nfo_link(meta):
         nfo_content += '\n</movie>'
 
         # Save NFO file
-        movie_name = meta.get('title', 'movie')
+        movie_name = str(meta.get('title') or 'movie')
         # Remove or replace invalid characters: < > : " | ? * \ /
         movie_name = re.sub(r'[<>:"|?*\\/]', '', movie_name)
         meta['linking_failed'] = False
         link_dir = await linking(meta, movie_name, year)
 
-        uuid = meta.get('uuid')
-        filelist = meta.get('filelist', [])
+        uuid = str(meta.get('uuid') or '')
+        filelist = cast(list[str], meta.get('filelist') or [])
         if len(filelist) == 1 and os.path.isfile(filelist[0]) and not meta.get('keep_folder'):
             # Single file - create symlink in the target folder
             src_file = filelist[0]
@@ -180,12 +211,12 @@ async def nfo_link(meta):
             filename = uuid
 
         if meta['category'] == "TV" and link_dir is not None and not meta.get('linking_failed', False):
-            season_number = meta.get('season_int') or meta.get('season') or "1"
-            season_year = meta.get('search_year') or meta.get('year') or ""
-            tvdbid = meta.get('tvdb_id', '')
-            tvmazeid = meta.get('tvmaze_id', '')
-            plot = meta.get('overview', '')
-            outline = imdb_info.get('plot', '')
+            season_number = str(meta.get('season_int') or meta.get('season') or "1")
+            season_year = str(meta.get('search_year') or meta.get('year') or "")
+            tvdbid = str(meta.get('tvdb_id') or '')
+            tvmazeid = str(meta.get('tvmaze_id') or '')
+            plot = str(meta.get('overview') or '')
+            outline = str(imdb_info.get('plot') or '')
 
             season_folder = link_dir
             if not os.path.exists(f"{season_folder}/season.nfo"):
@@ -215,7 +246,7 @@ async def nfo_link(meta):
         return None
 
 
-async def linking(meta, movie_name, year):
+async def linking(meta: Meta, movie_name: str, year: str) -> Optional[str]:
     if meta['category'] == "MOVIE":
         if not meta['is_disc']:
             folder_name = f"{movie_name} ({year})"
@@ -239,7 +270,7 @@ async def linking(meta, movie_name, year):
             else:
                 folder_name = f"{movie_name} ({meta['search_year']}) - {meta['is_disc']}"
 
-    target_base = config['DEFAULT'].get('emby_tv_dir', None) if meta['category'] == "TV" else config['DEFAULT'].get('emby_dir', None)
+    target_base = DEFAULT_CONFIG.get('emby_tv_dir') if meta['category'] == "TV" else DEFAULT_CONFIG.get('emby_dir')
     if target_base is not None:
         if meta['category'] == "MOVIE":
             target_dir = os.path.join(target_base, folder_name)
@@ -247,14 +278,15 @@ async def linking(meta, movie_name, year):
             if meta.get('season') == 'S00':
                 season = "Specials"
             else:
-                season_int = str(meta.get('season_int')).zfill(2)
+                season_value = meta.get('season_int')
+                season_int = str(season_value).zfill(2) if season_value is not None else "01"
                 season = f"Season {season_int}"
             target_dir = os.path.join(target_base, folder_name, season)
 
         os.makedirs(target_dir, exist_ok=True)
         # Get source path and files
-        path = meta.get('path')
-        filelist = meta.get('filelist', [])
+        path = cast(Optional[str], meta.get('path'))
+        filelist = cast(list[str], meta.get('filelist') or [])
 
         if not path:
             console.print("[red]No path found in meta.")
