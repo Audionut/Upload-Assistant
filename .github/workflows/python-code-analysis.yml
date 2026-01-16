@@ -47,47 +47,76 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         # Install code analysis tools
-        pip install pyright bandit vulture pycodestyle autopep8
+        pip install pyright bandit vulture pycodestyle autopep8 ruff
 
-    - name: Python Syntax Check
+    - name: Deprecation Warnings Scan
+      continue-on-error: true
       run: |
-        echo "Checking Python syntax errors..."
-        python -m py_compile $(find . -name "*.py" -not -path "./venv/*" -not -path "./.venv/*" -not -path "./env/*")
-
-    - name: Import Analysis
-      run: |
-        echo "Checking for import errors..."
-        python -c "
-        import os
-        import sys
+        python - <<'PY'
+        import re
+        import warnings
+        from pathlib import Path
         import importlib.util
-        
-        errors = []
-        for root, dirs, files in os.walk('.'):
-            # Skip virtual environments and cache directories
-            dirs[:] = [d for d in dirs if d not in ['.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env']]
-            
-            for file in files:
-                if file.endswith('.py'):
-                    filepath = os.path.join(root, file)
-                    try:
-                        spec = importlib.util.spec_from_file_location('module', filepath)
-                        if spec and spec.loader:
-                            module = importlib.util.module_from_spec(spec)
-                            # Just validate the module can be created, don't execute
-                            pass
-                    except SyntaxError as e:
-                        errors.append(f'Syntax Error in {filepath}: {e}')
-                    except Exception as e:
-                        errors.append(f'Import Error in {filepath}: {e}')
-        
-        if errors:
-            for error in errors:
-                print(error)
-            sys.exit(1)
-        else:
-            print('All Python files have valid syntax and imports')
-        "
+
+        warnings.simplefilter('default', DeprecationWarning)
+        warnings.simplefilter('default', PendingDeprecationWarning)
+
+        captured = []
+
+        def record_warning(message, category, filename, lineno, file=None, line=None):
+            captured.append(f"{category.__name__}: {message} ({filename}:{lineno})")
+
+        warnings.showwarning = record_warning
+
+        exclude_dirs = {'.git', '__pycache__', '.pytest_cache', 'venv', '.venv', 'env', 'tmp', 'tests', 'bin'}
+        roots = [Path('src'), Path('web_ui'), Path('cogs')]
+        files = []
+
+        for root in roots:
+            if root.exists():
+                for path in root.rglob('*.py'):
+                    if not any(part in exclude_dirs for part in path.parts):
+                        files.append(path)
+
+        files.extend([p for p in Path('.').glob('*.py') if p.is_file()])
+
+        def module_name_from_path(path: Path) -> str:
+            sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', path.as_posix())
+            return f"deprecation_scan_{sanitized}"
+
+        for path in sorted(set(files)):
+            try:
+                spec = importlib.util.spec_from_file_location(module_name_from_path(path), path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+            except Exception:
+                # Ignore import/runtime errors during deprecation scanning
+                continue
+
+        with open('deprecation-warnings.txt', 'w', encoding='utf-8') as f:
+            if captured:
+                f.write('\n'.join(captured))
+        PY
+
+    - name: Ruff Lint
+      run: |
+        ruff check . > ruff-results-${{ matrix.python-version }}.txt 2>&1
+        cat ruff-results-${{ matrix.python-version }}.txt
+
+    - name: Upload Deprecation Warnings
+      if: github.event_name == 'pull_request_target'
+      uses: actions/upload-artifact@v4
+      with:
+        name: deprecation-warnings-${{ matrix.python-version }}
+        path: deprecation-warnings.txt
+
+    - name: Upload Ruff Results
+      if: github.event_name == 'pull_request_target'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ruff-results-${{ matrix.python-version }}
+        path: ruff-results-${{ matrix.python-version }}.txt
 
     - name: Type Checking with Pyright
       continue-on-error: true
@@ -188,8 +217,8 @@ jobs:
     - name: Analysis Summary
       run: |
         echo "Python Code Analysis Summary:"
-        echo "✅ Syntax checking completed"
-        echo "✅ Import validation completed"
+        echo "✅ Ruff lint completed"
+        echo "✅ Deprecation warnings scan completed"
         echo "✅ Type checking completed"
         echo "✅ Security analysis with Bandit completed"
         echo "✅ Dependency security check with Safety completed"
@@ -233,6 +262,18 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         pattern: pyright-results-*
+        merge-multiple: true
+
+    - name: Download Ruff Results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ruff-results-*
+        merge-multiple: true
+
+    - name: Download Deprecation Warnings
+      uses: actions/download-artifact@v4
+      with:
+        pattern: deprecation-warnings-*
         merge-multiple: true
         
     - name: Post Bandit Results to PR
@@ -437,11 +478,134 @@ jobs:
               pyrightResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
             }
           }
+
+          // Check for ruff results files (one per Python version)
+          // Collect results per version, then deduplicate identical outputs
+          let ruffResults = '';
+          const ruffFiles = fs.readdirSync('.').filter(f => f.startsWith('ruff-results-') && f.endsWith('.txt'));
+          const ruffByContent = new Map();
+
+          if (ruffFiles.length > 0) {
+            for (const file of ruffFiles) {
+              try {
+                const content = fs.readFileSync(file, 'utf8').trim();
+                if (content) {
+                  const version = file.replace('ruff-results-', '').replace('.txt', '');
+                  if (!ruffByContent.has(content)) {
+                    ruffByContent.set(content, []);
+                  }
+                  ruffByContent.get(content).push(version);
+                  console.log(`Found Ruff results for Python ${version}`);
+                }
+              } catch (error) {
+                console.log(`Error reading ${file}: ${error.message}`);
+              }
+            }
+          } else {
+            console.log('No Ruff result files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('ruff-results-'));
+
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+
+                if (stat.isDirectory()) {
+                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
+                  for (const file of dirFiles) {
+                    const filePath = path.join(itemPath, file);
+                    const content = fs.readFileSync(filePath, 'utf8').trim();
+                    if (content) {
+                      const version = item.replace('ruff-results-', '');
+                      if (!ruffByContent.has(content)) {
+                        ruffByContent.set(content, []);
+                      }
+                      ruffByContent.get(content).push(version);
+                      console.log(`Found Ruff results in ${item}/${file}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading Ruff ${item}: ${error.message}`);
+              }
+            }
+          }
+
+          for (const [content, versions] of ruffByContent.entries()) {
+            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            if (versions.length === 1) {
+              ruffResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+            } else {
+              ruffResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+            }
+          }
+
+          // Check for deprecation warnings (one per Python version)
+          let deprecationResults = '';
+          const deprecationFiles = fs.readdirSync('.').filter(f => f.startsWith('deprecation-warnings-') && f.endsWith('.txt'));
+          const deprecationByContent = new Map();
+
+          if (deprecationFiles.length > 0) {
+            for (const file of deprecationFiles) {
+              try {
+                const content = fs.readFileSync(file, 'utf8').trim();
+                if (content) {
+                  const version = file.replace('deprecation-warnings-', '').replace('.txt', '');
+                  if (!deprecationByContent.has(content)) {
+                    deprecationByContent.set(content, []);
+                  }
+                  deprecationByContent.get(content).push(version);
+                  console.log(`Found deprecation warnings for Python ${version}`);
+                }
+              } catch (error) {
+                console.log(`Error reading ${file}: ${error.message}`);
+              }
+            }
+          } else {
+            console.log('No deprecation warning files found, checking individual directories...');
+            const items = fs.readdirSync('.').filter(item => item.startsWith('deprecation-warnings-'));
+
+            for (const item of items) {
+              try {
+                const itemPath = path.join('.', item);
+                const stat = fs.statSync(itemPath);
+
+                if (stat.isDirectory()) {
+                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
+                  for (const file of dirFiles) {
+                    const filePath = path.join(itemPath, file);
+                    const content = fs.readFileSync(filePath, 'utf8').trim();
+                    if (content) {
+                      const version = item.replace('deprecation-warnings-', '');
+                      if (!deprecationByContent.has(content)) {
+                        deprecationByContent.set(content, []);
+                      }
+                      deprecationByContent.get(content).push(version);
+                      console.log(`Found deprecation warnings in ${item}/${file}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`Error reading deprecation warnings ${item}: ${error.message}`);
+              }
+            }
+          }
+
+          for (const [content, versions] of deprecationByContent.entries()) {
+            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            if (versions.length === 1) {
+              deprecationResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
+            } else {
+              deprecationResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+            }
+          }
           
           banditResults = banditResults.trim();
           vultureResults = vultureResults.trim();
           safetyResults = safetyResults.trim();
           pyrightResults = pyrightResults.trim();
+          ruffResults = ruffResults.trim();
+          deprecationResults = deprecationResults.trim();
           
           // Filter out manager warnings about test comments from Bandit results
           let cleanBanditResults = '';
@@ -456,9 +620,11 @@ jobs:
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
           const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
           const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
+          const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
+          const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
           
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues) {
-            console.log('No security, dead code, dependency, or type issues found, skipping PR comment.');
+          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
+            console.log('No security, dead code, dependency, type issues, lint issues, or deprecation warnings found, skipping PR comment.');
             return;
           }
           
@@ -467,6 +633,14 @@ jobs:
           
           if (hasPyrightIssues) {
             body += '### 🔍 Pyright Type Checking\n\n```\n' + pyrightResults + '\n```\n\n';
+          }
+
+          if (hasRuffIssues) {
+            body += '### 🧹 Ruff Lint\n\n```\n' + ruffResults + '\n```\n\n';
+          }
+
+          if (hasDeprecationWarnings) {
+            body += '### ⚠️ Deprecation Warnings (Runtime)\n\n```\n' + deprecationResults + '\n```\n\n';
           }
           
           if (hasBanditIssues) {
