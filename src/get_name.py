@@ -2,16 +2,20 @@
 import os
 import re
 import sys
-from typing import Optional
+from collections.abc import MutableMapping, Sequence
+from typing import Any, Optional, cast
 
 import anitopy
 import cli_ui
-from guessit import guessit
+import guessit
+from typing_extensions import TypeAlias
 
 from data.config import config
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
 from src.trackers.COMMON import COMMON
+
+guessit_fn: Any = cast(Any, guessit).guessit
 
 TRACKER_DISC_REQUIREMENTS = {
     'ULCX': {'region': 'mandatory', 'distributor': 'mandatory'},
@@ -19,9 +23,11 @@ TRACKER_DISC_REQUIREMENTS = {
     'OTW': {'region': 'mandatory', 'distributor': 'optional'},
 }
 
+Meta: TypeAlias = MutableMapping[str, Any]
 
-async def get_name(meta):
-    active_trackers = [
+
+async def get_name(meta: Meta) -> tuple[str, str, str, list[str]]:
+    active_trackers: list[str] = [
         tracker for tracker in TRACKER_DISC_REQUIREMENTS
         if tracker in meta.get('trackers', [])
     ]
@@ -37,43 +43,48 @@ async def get_name(meta):
             meta['distributor'] = distributor
         if region and 'SKIPPED' not in region:
             meta['region'] = region
-    type = meta.get('type', "").upper()
-    title = meta.get('title', "")
-    alt_title = meta.get('aka', "")
-    year = meta.get('year', "")
-    if int(meta.get('manual_year')) > 0:
-        year = meta.get('manual_year')
-    resolution = meta.get('resolution', "")
+    type = str(meta.get('type', "")).upper()
+    title = str(meta.get('title', ""))
+    alt_title = str(meta.get('aka', ""))
+    year = str(meta.get('year', ""))
+    manual_year_value = meta.get('manual_year')
+    if manual_year_value is not None and int(manual_year_value) > 0:
+        year = str(manual_year_value)
+    resolution = str(meta.get('resolution', ""))
     if resolution == "OTHER":
         resolution = ""
-    audio = meta.get('audio', "")
-    service = meta.get('service', "")
-    season = meta.get('season', "")
-    episode = meta.get('episode', "")
-    part = meta.get('part', "")
-    repack = meta.get('repack', "")
-    three_d = meta.get('3D', "")
-    tag = meta.get('tag', "")
-    source = meta.get('source', "")
-    uhd = meta.get('uhd', "")
-    hdr = meta.get('hdr', "")
+    audio = str(meta.get('audio', ""))
+    service = str(meta.get('service', ""))
+    season = str(meta.get('season', ""))
+    episode = str(meta.get('episode', ""))
+    part = str(meta.get('part', ""))
+    repack = str(meta.get('repack', ""))
+    three_d = str(meta.get('3D', ""))
+    tag = str(meta.get('tag', ""))
+    source = str(meta.get('source', ""))
+    uhd = str(meta.get('uhd', ""))
+    hdr = str(meta.get('hdr', ""))
     hybrid = 'Hybrid' if meta.get('webdv', "") else ""
     if meta.get('manual_episode_title'):
-        episode_title = meta.get('manual_episode_title')
+        episode_title = str(meta.get('manual_episode_title', ""))
     elif meta.get('daily_episode_title'):
-        episode_title = meta.get('daily_episode_title')
+        episode_title = str(meta.get('daily_episode_title', ""))
     else:
         episode_title = ""
+    video_codec = ""
+    video_encode = ""
+    region = ""
+    dvd_size = ""
     if meta.get('is_disc', "") == "BDMV":  # Disk
-        video_codec = meta.get('video_codec', "")
-        region = meta.get('region', "") if meta.get('region', "") is not None else ""
+        video_codec = str(meta.get('video_codec', ""))
+        region = str(meta.get('region', "") or "")
     elif meta.get('is_disc', "") == "DVD":
-        region = meta.get('region', "") if meta.get('region', "") is not None else ""
-        dvd_size = meta.get('dvd_size', "")
+        region = str(meta.get('region', "") or "")
+        dvd_size = str(meta.get('dvd_size', ""))
     else:
-        video_codec = meta.get('video_codec', "")
-        video_encode = meta.get('video_encode', "")
-    edition = meta.get('edition', "")
+        video_codec = str(meta.get('video_codec', ""))
+        video_encode = str(meta.get('video_encode', ""))
+    edition = str(meta.get('edition', ""))
     if 'hybrid' in edition.upper():
         edition = edition.replace('Hybrid', '').strip()
 
@@ -97,6 +108,8 @@ async def get_name(meta):
         # console.log(meta)
 
     # YAY NAMING FUN
+    name = ""
+    potential_missing: list[str] = []
     if meta['category'] == "MOVIE":  # MOVIE SPECIFIC
         if type == "DISC":  # Disk
             if meta['is_disc'] == 'BDMV':
@@ -178,14 +191,14 @@ async def get_name(meta):
     return name_notag, name, clean_name, potential_missing
 
 
-async def clean_filename(name):
+async def clean_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
     for char in invalid:
         name = name.replace(char, '-')
     return name
 
 
-async def extract_title_and_year(meta, filename):
+async def extract_title_and_year(meta: Meta, filename: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     basename = os.path.basename(filename)
     basename = os.path.splitext(basename)[0]
 
@@ -213,19 +226,17 @@ async def extract_title_and_year(meta, filename):
                 else:
                     # Catch everything after AKA until it hits a year or release info
                     year_or_release_match = re.search(r'\b(19|20)\d{2}\b|\bBluRay\b|\bREMUX\b|\b\d+p\b|\bDTS-HD\b|\bAVC\b', secondary_part)
-                    if year_or_release_match:
-                        # Check if we found a year in the secondary part
-                        if re.match(r'\b(19|20)\d{2}\b', year_or_release_match.group(0)):
-                            # If no year was found in primary title, or we want to override
-                            if not year:
-                                year = year_or_release_match.group(0)
+                    if year_or_release_match and re.match(r'\b(19|20)\d{2}\b', year_or_release_match.group(0)) and not year:
+                        # If no year was found in primary title, or we want to override
+                        year = year_or_release_match.group(0)
 
                         secondary_title = secondary_part[:year_or_release_match.start()].strip()
                     else:
                         secondary_title = secondary_part
 
                 primary_title = primary_title.replace('.', ' ')
-                secondary_title = secondary_title.replace('.', ' ')
+                if secondary_title is not None:
+                    secondary_title = secondary_title.replace('.', ' ')
                 return primary_title, secondary_title, year
 
     # if not AKA, catch titles that begin with a year
@@ -239,16 +250,16 @@ async def extract_title_and_year(meta, filename):
         if year:
             return title, None, year
 
-    folder_name = os.path.basename(meta['uuid']) if meta['uuid'] else ""
+    folder_name = os.path.basename(str(meta.get('uuid', ''))) if meta.get('uuid') else ""
     if meta['debug']:
         console.print(f"[cyan]Extracting title and year from folder name: {folder_name}[/cyan]")
     # lets do some subsplease handling
     if 'subsplease' in folder_name.lower():
-        parsed_title = anitopy.parse(
-            guessit(folder_name, {"excludes": ["country", "language"]})['title']
-        )['anime_title']
+        guess_data = cast(dict[str, Any], guessit_fn(folder_name, {"excludes": ["country", "language"]}))
+        parsed = cast(Optional[dict[str, Any]], cast(Any, anitopy).parse(cast(str, guess_data.get('title', ''))))
+        parsed_title = parsed.get('anime_title') if parsed else None
         if parsed_title:
-            return parsed_title, None, None
+            return str(parsed_title), None, None
 
     year_pattern = r'(18|19|20)\d{2}'
     res_pattern = r'\b(480|576|720|1080|2160)[pi]\b'
@@ -287,7 +298,7 @@ async def extract_title_and_year(meta, filename):
             if double_year_match.start() == 0
             else double_year_match.start()
         )
-        indices = [('year', year_boundary, second_year)]
+        indices: list[tuple[str, int, str]] = [('year', year_boundary, second_year)]
         if res_match:
             indices.append(('res', res_match.start(), res_match.group()))
         if season_pattern_match:
@@ -311,7 +322,7 @@ async def extract_title_and_year(meta, filename):
         extension_match = re.search(extension_pattern, folder_name, re.IGNORECASE)
         type_match = re.search(type_pattern, folder_name, re.IGNORECASE)
 
-        indices = []
+        indices: list[tuple[str, int, str]] = []
         if date_match:
             indices.append(('date', date_match.start(), date_match.group()))
         if year_match and not date_match:
@@ -332,7 +343,7 @@ async def extract_title_and_year(meta, filename):
 
     if indices:
         indices.sort(key=lambda x: x[1])
-        first_type, first_index, first_value = indices[0]
+        _first_type, first_index, _first_value = indices[0]
         title_part = folder_name_for_title[:first_index]
         title_part = re.sub(r'[\.\-_ ]+$', '', title_part)
         # Handle unmatched opening parenthesis
@@ -414,19 +425,19 @@ async def extract_title_and_year(meta, filename):
     return None, None, None
 
 
-async def multi_replace(text, replacements):
+async def multi_replace(text: str, replacements: dict[str, str]) -> str:
     for old, new in replacements.items():
         text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
     return text
 
 
-async def missing_disc_info(meta, active_trackers):
+async def missing_disc_info(meta: Meta, active_trackers: Sequence[str]) -> tuple[str, str, list[str]]:
     common = COMMON(config=config)
-    distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-    region_id = await common.unit3d_region_ids(meta.get('region'))
-    region_name = meta.get('region', "")
-    distributor_name = meta.get('distributor', "")
-    trackers_to_remove = []
+    distributor_id = await common.unit3d_distributor_ids(str(meta.get('distributor', "")))
+    region_id = await common.unit3d_region_ids(str(meta.get('region', "")))
+    region_name = str(meta.get('region', ""))
+    distributor_name = str(meta.get('distributor', ""))
+    trackers_to_remove: list[str] = []
 
     if meta.get('is_disc') == "BDMV":
         strictest = {'region': 'optional', 'distributor': 'optional'}
@@ -456,7 +467,7 @@ async def missing_disc_info(meta, active_trackers):
     return region_name, distributor_name, trackers_to_remove
 
 
-async def _prompt_for_field(meta, field_name, is_mandatory):
+async def _prompt_for_field(meta: Meta, field_name: str, is_mandatory: bool) -> str:
     """Prompt user for disc field with appropriate mandatory/optional text."""
     if meta['unattended'] and not meta.get('unattended_confirm', False):
         return "SKIPPED"
