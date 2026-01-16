@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  pull_request_target:
+  pull_request:
     branches:
       - master
     types: [opened, synchronize, reopened]
@@ -12,12 +12,11 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+  actions: write
 
 jobs:
   code-analysis:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -126,14 +125,14 @@ jobs:
         echo "Exit code handling: Step will continue regardless of errors"
 
     - name: Upload Deprecation Warnings
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: deprecation-warnings-${{ matrix.python-version }}
         path: deprecation-warnings.txt
 
     - name: Upload Ruff Results
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: ruff-results-${{ matrix.python-version }}
@@ -150,7 +149,7 @@ jobs:
         cat pyright-results-${{ matrix.python-version }}.txt
 
     - name: Upload Pyright Results
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: pyright-results-${{ matrix.python-version }}
@@ -190,7 +189,7 @@ jobs:
         cat bandit-results.txt
 
     - name: Upload Bandit Results
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: bandit-results-${{ matrix.python-version }}
@@ -207,7 +206,7 @@ jobs:
         cat safety-results.txt
 
     - name: Upload Safety Results
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: safety-results-${{ matrix.python-version }}
@@ -223,7 +222,7 @@ jobs:
         cat vulture-results.txt
 
     - name: Upload Vulture Results
-      if: github.event_name == 'pull_request_target'
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: vulture-results-${{ matrix.python-version }}
@@ -247,446 +246,3 @@ jobs:
         echo "✅ Common issues check completed"
         echo ""
         echo "Check the job logs above for detailed results."
-
-  pr-comment:
-    if: github.event_name == 'pull_request_target' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    needs: code-analysis
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download Bandit Results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: bandit-results-*
-        merge-multiple: true
-        
-    - name: Download Vulture Results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: vulture-results-*
-        merge-multiple: true
-        
-    - name: Download Safety Results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: safety-results-*
-        merge-multiple: true
-        
-    - name: Download Pyright Results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: pyright-results-*
-        merge-multiple: true
-
-    - name: Download Ruff Results
-      uses: actions/download-artifact@v4
-      with:
-        pattern: ruff-results-*
-        merge-multiple: true
-
-    - name: Download Deprecation Warnings
-      uses: actions/download-artifact@v4
-      with:
-        pattern: deprecation-warnings-*
-        merge-multiple: true
-        
-    - name: Post Bandit Results to PR
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          const path = require('path');
-          
-          // Check for merged bandit-results.txt file
-          const banditFile = 'bandit-results.txt';
-          let banditResults = '';
-          
-          if (fs.existsSync(banditFile)) {
-            try {
-              banditResults = fs.readFileSync(banditFile, 'utf8');
-              console.log('Found merged Bandit results file');
-            } catch (error) {
-              console.log(`Error reading Bandit file: ${error.message}`);
-            }
-          } else {
-            // Fallback: look for individual result directories
-            console.log('Merged Bandit file not found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('bandit-results-'));
-            
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-                
-                if (stat.isDirectory()) {
-                  const filePath = path.join(itemPath, 'bandit-results.txt');
-                  if (fs.existsSync(filePath)) {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    if (content.trim()) {
-                      banditResults += content + '\n\n';
-                      console.log(`Found Bandit results in ${item}`);
-                    }
-                  }
-                } else if (stat.isFile() && item.endsWith('.txt')) {
-                  const content = fs.readFileSync(itemPath, 'utf8');
-                  if (content.trim()) {
-                    banditResults += content + '\n\n';
-                    console.log(`Found Bandit results in ${item}`);
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading Bandit ${item}: ${error.message}`);
-              }
-            }
-          }
-          
-          // Check for merged vulture-results.txt file
-          const vultureFile = 'vulture-results.txt';
-          let vultureResults = '';
-          
-          if (fs.existsSync(vultureFile)) {
-            try {
-              vultureResults = fs.readFileSync(vultureFile, 'utf8');
-              console.log('Found merged Vulture results file');
-            } catch (error) {
-              console.log(`Error reading Vulture file: ${error.message}`);
-            }
-          } else {
-            // Fallback: look for individual result directories
-            console.log('Merged Vulture file not found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('vulture-results-'));
-            
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-                
-                if (stat.isDirectory()) {
-                  const filePath = path.join(itemPath, 'vulture-results.txt');
-                  if (fs.existsSync(filePath)) {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    if (content.trim()) {
-                      vultureResults += content + '\n\n';
-                      console.log(`Found Vulture results in ${item}`);
-                    }
-                  }
-                } else if (stat.isFile() && item.endsWith('.txt')) {
-                  const content = fs.readFileSync(itemPath, 'utf8');
-                  if (content.trim()) {
-                    vultureResults += content + '\n\n';
-                    console.log(`Found Vulture results in ${item}`);
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading Vulture ${item}: ${error.message}`);
-              }
-            }
-          }
-          
-          // Check for merged safety-results.txt file
-          const safetyFile = 'safety-results.txt';
-          let safetyResults = '';
-          
-          if (fs.existsSync(safetyFile)) {
-            try {
-              safetyResults = fs.readFileSync(safetyFile, 'utf8');
-              console.log('Found merged Safety results file');
-            } catch (error) {
-              console.log(`Error reading Safety file: ${error.message}`);
-            }
-          } else {
-            // Fallback: look for individual result directories
-            console.log('Merged Safety file not found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('safety-results-'));
-            
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-                
-                if (stat.isDirectory()) {
-                  const filePath = path.join(itemPath, 'safety-results.txt');
-                  if (fs.existsSync(filePath)) {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    if (content.trim()) {
-                      safetyResults += content + '\n\n';
-                      console.log(`Found Safety results in ${item}`);
-                    }
-                  }
-                } else if (stat.isFile() && item.endsWith('.txt')) {
-                  const content = fs.readFileSync(itemPath, 'utf8');
-                  if (content.trim()) {
-                    safetyResults += content + '\n\n';
-                    console.log(`Found Safety results in ${item}`);
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading Safety ${item}: ${error.message}`);
-              }
-            }
-          }
-          
-          // Check for pyright results files (one per Python version)
-          // Collect results per version, then deduplicate identical outputs
-          let pyrightResults = '';
-          const pyrightFiles = fs.readdirSync('.').filter(f => f.startsWith('pyright-results-') && f.endsWith('.txt'));
-          
-          // Map: content -> [versions]
-          const pyrightByContent = new Map();
-          
-          if (pyrightFiles.length > 0) {
-            for (const file of pyrightFiles) {
-              try {
-                const content = fs.readFileSync(file, 'utf8').trim();
-                if (content) {
-                  // Extract version from filename (e.g., pyright-results-3.9.txt -> 3.9)
-                  const version = file.replace('pyright-results-', '').replace('.txt', '');
-                  if (!pyrightByContent.has(content)) {
-                    pyrightByContent.set(content, []);
-                  }
-                  pyrightByContent.get(content).push(version);
-                  console.log(`Found Pyright results for Python ${version}`);
-                }
-              } catch (error) {
-                console.log(`Error reading ${file}: ${error.message}`);
-              }
-            }
-          } else {
-            // Fallback: look for individual result directories
-            console.log('No Pyright result files found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('pyright-results-'));
-            
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-                
-                if (stat.isDirectory()) {
-                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
-                  for (const file of dirFiles) {
-                    const filePath = path.join(itemPath, file);
-                    const content = fs.readFileSync(filePath, 'utf8').trim();
-                    if (content) {
-                      const version = item.replace('pyright-results-', '');
-                      if (!pyrightByContent.has(content)) {
-                        pyrightByContent.set(content, []);
-                      }
-                      pyrightByContent.get(content).push(version);
-                      console.log(`Found Pyright results in ${item}/${file}`);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading Pyright ${item}: ${error.message}`);
-              }
-            }
-          }
-          
-          // Build deduplicated pyright output
-          for (const [content, versions] of pyrightByContent.entries()) {
-            // Sort versions for consistent display
-            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
-            if (versions.length === 1) {
-              pyrightResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
-            } else {
-              pyrightResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
-            }
-          }
-
-          // Check for ruff results files (one per Python version)
-          // Collect results per version, then deduplicate identical outputs
-          let ruffResults = '';
-          const ruffFiles = fs.readdirSync('.').filter(f => f.startsWith('ruff-results-') && f.endsWith('.txt'));
-          const ruffByContent = new Map();
-
-          if (ruffFiles.length > 0) {
-            for (const file of ruffFiles) {
-              try {
-                const content = fs.readFileSync(file, 'utf8').trim();
-                if (content) {
-                  const version = file.replace('ruff-results-', '').replace('.txt', '');
-                  if (!ruffByContent.has(content)) {
-                    ruffByContent.set(content, []);
-                  }
-                  ruffByContent.get(content).push(version);
-                  console.log(`Found Ruff results for Python ${version}`);
-                }
-              } catch (error) {
-                console.log(`Error reading ${file}: ${error.message}`);
-              }
-            }
-          } else {
-            console.log('No Ruff result files found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('ruff-results-'));
-
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-
-                if (stat.isDirectory()) {
-                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
-                  for (const file of dirFiles) {
-                    const filePath = path.join(itemPath, file);
-                    const content = fs.readFileSync(filePath, 'utf8').trim();
-                    if (content) {
-                      const version = item.replace('ruff-results-', '');
-                      if (!ruffByContent.has(content)) {
-                        ruffByContent.set(content, []);
-                      }
-                      ruffByContent.get(content).push(version);
-                      console.log(`Found Ruff results in ${item}/${file}`);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading Ruff ${item}: ${error.message}`);
-              }
-            }
-          }
-
-          for (const [content, versions] of ruffByContent.entries()) {
-            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
-            if (versions.length === 1) {
-              ruffResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
-            } else {
-              ruffResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
-            }
-          }
-
-          // Check for deprecation warnings (one per Python version)
-          let deprecationResults = '';
-          const deprecationFiles = fs.readdirSync('.').filter(f => f.startsWith('deprecation-warnings-') && f.endsWith('.txt'));
-          const deprecationByContent = new Map();
-
-          if (deprecationFiles.length > 0) {
-            for (const file of deprecationFiles) {
-              try {
-                const content = fs.readFileSync(file, 'utf8').trim();
-                if (content) {
-                  const version = file.replace('deprecation-warnings-', '').replace('.txt', '');
-                  if (!deprecationByContent.has(content)) {
-                    deprecationByContent.set(content, []);
-                  }
-                  deprecationByContent.get(content).push(version);
-                  console.log(`Found deprecation warnings for Python ${version}`);
-                }
-              } catch (error) {
-                console.log(`Error reading ${file}: ${error.message}`);
-              }
-            }
-          } else {
-            console.log('No deprecation warning files found, checking individual directories...');
-            const items = fs.readdirSync('.').filter(item => item.startsWith('deprecation-warnings-'));
-
-            for (const item of items) {
-              try {
-                const itemPath = path.join('.', item);
-                const stat = fs.statSync(itemPath);
-
-                if (stat.isDirectory()) {
-                  const dirFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.txt'));
-                  for (const file of dirFiles) {
-                    const filePath = path.join(itemPath, file);
-                    const content = fs.readFileSync(filePath, 'utf8').trim();
-                    if (content) {
-                      const version = item.replace('deprecation-warnings-', '');
-                      if (!deprecationByContent.has(content)) {
-                        deprecationByContent.set(content, []);
-                      }
-                      deprecationByContent.get(content).push(version);
-                      console.log(`Found deprecation warnings in ${item}/${file}`);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.log(`Error reading deprecation warnings ${item}: ${error.message}`);
-              }
-            }
-          }
-
-          for (const [content, versions] of deprecationByContent.entries()) {
-            versions.sort((a, b) => parseFloat(a) - parseFloat(b));
-            if (versions.length === 1) {
-              deprecationResults += `=== Python ${versions[0]} ===\n${content}\n\n`;
-            } else {
-              deprecationResults += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
-            }
-          }
-          
-          banditResults = banditResults.trim();
-          vultureResults = vultureResults.trim();
-          safetyResults = safetyResults.trim();
-          pyrightResults = pyrightResults.trim();
-          ruffResults = ruffResults.trim();
-          deprecationResults = deprecationResults.trim();
-          
-          // Filter out manager warnings about test comments from Bandit results
-          let cleanBanditResults = '';
-          if (banditResults) {
-            const lines = banditResults.split('\n');
-            const filteredLines = lines.filter(line => !line.includes('[manager]\tWARNING\tTest in comment'));
-            cleanBanditResults = filteredLines.join('\n').trim();
-          }
-          
-          // Check if we have any issues to report
-          const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
-          const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
-          const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
-          const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
-          const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
-          const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
-          
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
-            console.log('No security, dead code, dependency, type issues, lint issues, or deprecation warnings found, skipping PR comment.');
-            return;
-          }
-          
-          // Build the comment body
-          let body = '## 🔍 Code Analysis Results\n\n';
-          
-          if (hasPyrightIssues) {
-            body += '### 🔍 Pyright Type Checking\n\n```\n' + pyrightResults + '\n```\n\n';
-          }
-
-          if (hasRuffIssues) {
-            body += '### 🧹 Ruff Lint\n\n```\n' + ruffResults + '\n```\n\n';
-          }
-
-          if (hasDeprecationWarnings) {
-            body += '### ⚠️ Deprecation Warnings (Runtime)\n\n```\n' + deprecationResults + '\n```\n\n';
-          }
-          
-          if (hasBanditIssues) {
-            body += '### 🔒 Bandit Security Analysis\n\n```\n' + cleanBanditResults + '\n```\n\n';
-          }
-          
-          if (hasVultureIssues) {
-            body += '### 🧹 Dead Code Analysis (Vulture)\n\n```\n' + vultureResults + '\n```\n\n';
-          }
-          
-          if (hasSafetyIssues) {
-            body += '### 📦 Dependency Security Analysis (Safety)\n\n```\n' + safetyResults + '\n```\n\n';
-          }
-          
-          body += '*This comment was automatically generated by the CI pipeline.*';
-          
-          try {
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-            console.log('Successfully posted code analysis results to PR');
-          } catch (error) {
-            console.error(`Failed to post PR comment: ${error.message}`);
-            throw error;
-          }
