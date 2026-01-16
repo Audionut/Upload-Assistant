@@ -163,7 +163,7 @@ from src.disc_menus import process_disc_menus  # noqa: E402
 from src.dupe_checking import DupeChecker  # noqa: E402
 from src.get_desc import gen_desc  # noqa: E402
 from src.get_name import get_name  # noqa: E402
-from src.get_tracker_data import get_tracker_data  # noqa: E402
+from src.get_tracker_data import tracker_data_manager  # noqa: E402
 from src.languages import process_desc_language  # noqa: E402
 from src.nfo_link import nfo_link  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
@@ -389,7 +389,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             else:
                 search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
                 search_file_folder = 'file'
-            await get_tracker_data(meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'])
+            await tracker_data_manager.get_tracker_data(
+                meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id']
+            )
 
     editargs_tracking: tuple[str, ...] = ()
     previous_trackers = meta.get('trackers', [])

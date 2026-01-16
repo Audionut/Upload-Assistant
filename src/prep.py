@@ -25,7 +25,7 @@ try:
     from src.get_disc import get_disc, get_dvd_size
     from src.get_name import extract_title_and_year
     from src.get_source import get_source
-    from src.get_tracker_data import get_tracker_data, ping_unit3d
+    from src.get_tracker_data import tracker_data_manager
     from src.getseasonep import check_season_pack_completeness, get_season_episode
     from src.imdb import get_imdb_from_episode, get_imdb_info_api, search_imdb
     from src.is_scene import is_scene
@@ -587,7 +587,7 @@ class Prep:
 
             if not meta.get('edit', False) and not ids:
                 # Reuse information from trackers with fallback
-                await get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
+                await tracker_data_manager.get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
                 ids = await get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
@@ -634,7 +634,7 @@ class Prep:
         # if there's no region/distributor info, lets ping some unit3d trackers and see if we get it
         ping_unit3d_config = self.config['DEFAULT'].get('ping_unit3d', False)
         if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False) and not meta.get('emby', False) and not meta.get('site_check', False):
-            await ping_unit3d(meta)
+            await tracker_data_manager.ping_unit3d(meta)
 
         # the first user override check that allows to set metadata ids.
         # it relies on imdb or tvdb already being set.
