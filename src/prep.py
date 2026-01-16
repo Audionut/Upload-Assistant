@@ -27,7 +27,7 @@ try:
     from src.get_source import get_source
     from src.get_tracker_data import tracker_data_manager
     from src.getseasonep import season_episode_manager
-    from src.imdb import get_imdb_from_episode, get_imdb_info_api, search_imdb
+    from src.imdb import imdb_manager
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
     from src.metadata_searching import all_ids, get_tv_data, get_tvmaze_tvdb, imdb_tmdb, imdb_tmdb_tvdb, imdb_tvdb
@@ -705,7 +705,7 @@ class Prep:
             else:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
             tmdb_task = get_tmdb_id(filename, year, meta.get('category', None), untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
-            imdb_task = search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
+            imdb_task = imdb_manager.search_imdb(filename, year, quickie=True, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -763,7 +763,7 @@ class Prep:
         # Get IMDb ID if not set
         if meta.get('imdb_id') == 0:
             try:
-                meta['imdb_id'] = await search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, attempted=0, duration=duration, unattended=unattended)
+                meta['imdb_id'] = await imdb_manager.search_imdb(filename, meta['search_year'], quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, attempted=0, duration=duration, unattended=unattended)
             except Exception as e:
                 console.print(f"[red]Error searching IMDb: {e}[/red]")
                 raise Exception(f"Error searching IMDb: {e}")
@@ -792,7 +792,7 @@ class Prep:
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
         if meta.get('imdb_info', None) is None and int(meta['imdb_id']) != 0:
-            imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+            imdb_info = await imdb_manager.get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
             meta['imdb_info'] = imdb_info
 
         check_valid_data = meta.get('imdb_info', {}).get('title', "")
@@ -896,7 +896,7 @@ class Prep:
             if meta.get('tvdb_imdb_id', None):
                 imdb = meta['tvdb_imdb_id'].replace('tt', '')
                 if imdb.isdigit() and imdb != meta.get('imdb_id', 0):
-                    episode_info = await get_imdb_from_episode(imdb, debug=True)
+                    episode_info = await imdb_manager.get_imdb_from_episode(imdb, debug=True)
                     if episode_info:
                         series_id = episode_info.get('series', {}).get('series_id', None)
                         if series_id:
@@ -905,7 +905,7 @@ class Prep:
                                 if meta['debug']:
                                     console.print(f"[yellow]Updating IMDb ID from episode data: {series_imdb}")
                                 meta['imdb_id'] = int(series_imdb)
-                                imdb_info = await get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
+                                imdb_info = await imdb_manager.get_imdb_info_api(meta['imdb_id'], manual_language=meta.get('manual_language'), debug=meta.get('debug', False))
                                 meta['imdb_info'] = imdb_info
                                 check_valid_data = meta.get('imdb_info', {}).get('title', "")
                                 if check_valid_data:

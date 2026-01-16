@@ -6,7 +6,7 @@ from typing import Any, Optional, Union
 
 from data.config import config
 from src.console import console
-from src.imdb import get_imdb_info_api
+from src.imdb import imdb_manager
 from src.tmdb import get_episode_details, get_season_details, get_tmdb_from_imdb, tmdb_other_meta
 from src.tvdb import tvdb_data
 from src.tvmaze import get_tvmaze_episode_data, search_tvmaze
@@ -43,7 +43,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
             mode=meta.get('mode', 'cli'),
             tvdb_id=meta.get('tvdb_id', 0)
         ),
-        get_imdb_info_api(
+        imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
             manual_language=meta.get('manual_language'),
             debug=meta.get('debug', False)
@@ -211,7 +211,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             tvdb_id=meta.get('tvdb_id', 0)
         ),
 
-        get_imdb_info_api(
+        imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
             manual_language=meta.get('manual_language'),
             debug=meta.get('debug', False)
@@ -368,7 +368,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             debug=meta.get('debug', False),
             return_full_tuple=False
         ),
-        get_imdb_info_api(
+        imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
             manual_language=meta.get('manual_language'),
             debug=meta.get('debug', False)
@@ -442,7 +442,7 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
             tvdb_id=meta.get('tvdb_id', 0),
             quickie_search=meta.get('quickie_search', False)
         ),
-        get_imdb_info_api(
+        imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
             manual_language=meta.get('manual_language'),
             debug=meta.get('debug', False)

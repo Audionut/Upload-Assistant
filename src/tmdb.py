@@ -20,7 +20,7 @@ from data.config import config
 from src.args import Args
 from src.cleanup import cleanup_manager
 from src.console import console
-from src.imdb import get_imdb_info_api
+from src.imdb import imdb_manager
 
 DEFAULT_CFG: dict[str, Any] = typing_cast(dict[str, Any], config["DEFAULT"])
 TMDB_API_KEY = DEFAULT_CFG.get('tmdb_api', False)
@@ -122,7 +122,7 @@ async def get_tmdb_from_imdb(
     imdb_id_str = str(imdb_id)
     imdb_id_clean = imdb_id_str.replace("tt", "")
     imdb_id = int(imdb_id_clean) if imdb_id_clean.isdigit() else 0
-    imdb_info = imdb_info or await get_imdb_info_api(imdb_id, {})
+    imdb_info = imdb_info or await imdb_manager.get_imdb_info_api(imdb_id, {})
     title = str(imdb_info.get("title") or filename or "")
     year = imdb_info.get("year") or search_year
     original_language = imdb_info.get("original language") or "en"
