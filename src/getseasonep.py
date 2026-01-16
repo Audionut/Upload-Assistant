@@ -9,21 +9,21 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 import anitopy
+import guessit
 import requests
-from guessit import guessit as _guessit  # type: ignore[reportUnknownVariableType]
 
 from src.console import console
 from src.exceptions import *  # noqa: F403
 from src.tags import get_tag
 from src.tmdb import daily_to_tmdb_season_episode, get_romaji, get_tmdb_id
 
-guessit: Any = cast(Any, _guessit)
+guessit_fn: Any = cast(Any, guessit).guessit
 
 Meta = dict[str, Any]
 
 
 def _guessit_data(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    return cast(dict[str, Any], guessit(value, options))
+    return cast(dict[str, Any], guessit_fn(value, options))
 
 
 def _anitopy_parse(value: str) -> dict[str, Any]:
@@ -261,7 +261,7 @@ class SeasonEpisodeManager:
                             if meta['debug']:
                                 console.print_exception()
                             try:
-                                season = guessit(video).get('season', '1')
+                                season = guessit_fn(video).get('season', '1')
                                 season_int = int(season)  # Convert to integer
                             except Exception:
                                 season_int = 1  # Default to 1 if error occurs
