@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownParameterType=false
+# pyright: reportUnknownLambdaType=false
 # Pre-check config.py for syntax and common errors before any imports that depend on it
 import contextlib
 import os
@@ -152,7 +157,7 @@ from torf import Torrent  # noqa: E402
 
 from bin.get_mkbrr import MkbrrBinaryManager  # noqa: E402
 from cogs.redaction import clean_meta_for_export, redact_private_info  # noqa: E402
-from discordbot import send_discord_notification, send_upload_status_notification  # noqa: E402
+from discordbot import DiscordNotifier  # noqa: E402
 from src.add_comparison import add_comparison  # noqa: E402
 from src.args import Args  # noqa: E402
 from src.cleanup import cleanup, reset_terminal  # noqa: E402
@@ -297,7 +302,9 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
 async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
     """Process the metadata for each queued path."""
     if use_discord and bot:
-        await send_discord_notification(config, bot, f"Starting upload process for: {meta['path']}", debug=meta.get('debug', False), meta=meta)
+        await DiscordNotifier.send_discord_notification(
+            config, bot, f"Starting upload process for: {meta['path']}", debug=meta.get('debug', False), meta=meta
+        )
 
     if meta['imghost'] is None:
         meta['imghost'] = config['DEFAULT']['img_host_1']
@@ -1409,7 +1416,7 @@ async def do_the_thing(base_dir: str) -> None:
                 else:
                     await process_trackers(meta, config, client, console, api_trackers, tracker_class_map, http_trackers, other_api_trackers)
                     if use_discord and bot:
-                        await send_upload_status_notification(config, bot, meta)
+                        await DiscordNotifier.send_upload_status_notification(config, bot, meta)
 
                     if config['DEFAULT'].get('cross_seeding', True):
                         await process_cross_seeds(meta)
@@ -1466,11 +1473,15 @@ async def do_the_thing(base_dir: str) -> None:
                         for tracker, status in meta.get('tracker_status', {}).items():
                             discord_message += build_tracker_status_line(tracker, status)
                         discord_message += "All tracker uploads processed.\n"
-                        await send_discord_notification(config, bot, discord_message, debug=meta.get('debug', False), meta=meta)
+                        await DiscordNotifier.send_discord_notification(
+                            config, bot, discord_message, debug=meta.get('debug', False), meta=meta
+                        )
                     except Exception as e:
                         console.print(f"[red]Error in tracker print loop: {e}[/red]")
                 else:
-                    await send_discord_notification(config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta)
+                    await DiscordNotifier.send_discord_notification(
+                        config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta
+                    )
 
             if meta.get('are_we_trump_reporting', False):
                 console.print()
@@ -1738,7 +1749,10 @@ async def process_cross_seeds(meta: Meta) -> None:
 
 async def get_mkbrr_path(meta: Meta, base_dir: Optional[str] = None) -> Optional[str]:
     try:
-        mkbrr_path = await MkbrrBinaryManager.ensure_mkbrr_binary(base_dir, debug=meta['debug'], version="v1.18.0")
+        resolved_base_dir = base_dir or os.path.abspath(os.path.dirname(__file__))
+        mkbrr_path = await MkbrrBinaryManager.ensure_mkbrr_binary(
+            resolved_base_dir, debug=meta['debug'], version="v1.18.0"
+        )
         return str(mkbrr_path) if mkbrr_path else None
     except Exception as e:
         console.print(f"[red]Error setting up mkbrr binary: {e}[/red]")
