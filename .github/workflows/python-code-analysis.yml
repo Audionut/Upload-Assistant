@@ -102,7 +102,12 @@ jobs:
     - name: Ruff Lint
       continue-on-error: true
       run: |
-        ruff check . > ruff-results-${{ matrix.python-version }}.txt 2>&1
+        echo "Ruff version:"
+        ruff --version
+        echo "Checking for pyproject.toml:"
+        ls -la pyproject.toml
+        echo "Running ruff check:"
+        ruff check --config pyproject.toml . > ruff-results-${{ matrix.python-version }}.txt 2>&1
         cat ruff-results-${{ matrix.python-version }}.txt
 
     - name: Upload Deprecation Warnings
