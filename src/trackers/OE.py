@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import os
 import re
+
+import aiofiles
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.languages import process_desc_language, has_english_language
+from src.languages import has_english_language, process_desc_language
 from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -71,7 +72,7 @@ class OE(UNIT3D):
         return
 
     async def get_description(self, meta):
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
@@ -120,7 +121,7 @@ class OE(UNIT3D):
 
             await descfile.write(f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as f:
             desc = await f.read()
 
         return {'description': desc}

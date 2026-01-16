@@ -1,23 +1,24 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
-import httpx
+import asyncio
 import json
 import os
 import platform
 import re
-import asyncio
-from rich.prompt import Prompt
 import urllib.parse
-from src.exceptions import *  # noqa F403
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
-from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
-from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
+from rich.prompt import Prompt
+
+from src.console import console
+from src.cookie_auth import CookieAuthUploader, CookieValidator
+from src.exceptions import *  # noqa F403
+from src.trackers.COMMON import COMMON
 
 
-class AR():
+class AR:
     def __init__(self, config):
         self.config = config
         self.cookie_validator = CookieValidator(config)
@@ -137,7 +138,7 @@ class AR():
         heading = "[color=green][size=6]"
         subheading = "[color=red][size=4]"
         heading_end = "[/size][/color]"
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
             base = await f.read()
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         base = re.sub(r'\[center\]\[spoiler=FraMeSToR NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
@@ -171,14 +172,14 @@ class AR():
                     media_info = await self.parse_mediainfo_async(video, mi_template)
                     description += (f"""[code]\n{media_info}\n[/code]\n""")
                     # adding full mediainfo as spoiler
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
+                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as MI:
                         full_mediainfo = await MI.read()
                     description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
                 else:
                     console.print("[bold red]Couldn't find the MediaInfo template")
                     console.print("[green]Using normal MediaInfo for the description.")
 
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
+                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as MI:
                         cleaned_mediainfo = await MI.read()
                         description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
 
@@ -210,7 +211,7 @@ class AR():
         audio_lang = ""
         if meta['is_disc'] != "BDMV":
             try:
-                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", encoding='utf-8') as f:
                     mi_content = await f.read()
                     mi = json.loads(mi_content)
                 for track in mi['media']['track']:
@@ -353,7 +354,7 @@ class AR():
         # Read the description
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         try:
-            async with aiofiles.open(desc_path, 'r', encoding='utf-8') as desc_file:
+            async with aiofiles.open(desc_path, encoding='utf-8') as desc_file:
                 desc = await desc_file.read()
         except FileNotFoundError:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Description file not found at {desc_path}"

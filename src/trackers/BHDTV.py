@@ -1,17 +1,17 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import os
-from typing import Any, Union
-from pymediainfo import MediaInfo
-import requests
 import traceback
+from typing import Any, Union
+
+import requests
+from pymediainfo import MediaInfo
 
 from cogs.redaction import Redaction
 from src.console import console
 from src.trackers.COMMON import COMMON
 
 
-class BHDTV():
+class BHDTV:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -55,11 +55,11 @@ class BHDTV():
 
         if meta['bdinfo'] is not None:
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8').read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
             bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8').read()
         open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
         files = {'file': open_torrent}
 
@@ -205,7 +205,7 @@ class BHDTV():
         return resolution_id
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
             desc.write(base.replace("[img=250]", "[img=250x250]"))
             images = meta['image_list']

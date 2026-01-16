@@ -1,13 +1,14 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiohttp
 import asyncio
-import click
 import io
-from io import BytesIO
 import os
 import sys
-from typing import Any, Mapping, cast
+from collections.abc import Mapping
+from io import BytesIO
+from typing import Any, cast
 
+import aiohttp
+import click
 from PIL import Image
 
 from data.config import config
@@ -72,7 +73,7 @@ async def check_images_concurrently(imagelist, meta):
 
     # Get expected vertical resolution
     expected_resolution_name = meta.get('resolution', None)
-    expected_vertical_resolution = resolution_map.get(expected_resolution_name, None)
+    expected_vertical_resolution = resolution_map.get(expected_resolution_name)
 
     # If no valid resolution is found, skip processing
     if expected_vertical_resolution is None:
@@ -203,7 +204,7 @@ async def check_image_link(url, timeout=None):
                                 image = Image.open(io.BytesIO(image_data))
                                 image.verify()  # This will check if the image is broken
                                 return True
-                            except (IOError, SyntaxError) as e:
+                            except (OSError, SyntaxError) as e:
                                 console.print(f"[red]Image verification failed (corrupt image): {url} {e}[/red]")
                                 return False
                         else:
@@ -412,7 +413,7 @@ async def update_metadata_from_tracker(tracker_name, tracker_instance, meta, sea
                         if not meta.get('skipit'):
                             nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
                             if os.path.exists(nfo_file_path):
-                                with open(nfo_file_path, 'r', encoding='utf-8') as nfo_file:
+                                with open(nfo_file_path, encoding='utf-8') as nfo_file:
                                     nfo_content = nfo_file.read()
                                     console.print("[bold green]Successfully grabbed FraMeSToR description")
                                     console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)

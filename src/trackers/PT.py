@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import os
 import re
+
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -83,7 +83,7 @@ class PT(UNIT3D):
 
             try:
                 if os.path.exists(media_info_path):
-                    with open(media_info_path, 'r', encoding='utf-8') as f:
+                    with open(media_info_path, encoding='utf-8') as f:
                         media_info_text = f.read()
 
                     if not found_portuguese_audio:
@@ -130,7 +130,7 @@ class PT(UNIT3D):
 
             try:
                 if os.path.exists(media_info_path):
-                    with open(media_info_path, 'r', encoding='utf-8') as f:
+                    with open(media_info_path, encoding='utf-8') as f:
                         media_info_text = f.read()
 
                     if not found_portuguese_subtitle:

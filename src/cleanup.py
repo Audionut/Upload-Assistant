@@ -1,16 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import psutil
-import threading
 import multiprocessing
-import sys
 import os
-import subprocess
-import re
 import platform
-from typing import Set, Optional
-from src.console import console
+import re
+import subprocess
+import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, Set
+
+import psutil
+
+from src.console import console
+
 if os.name == "posix":
     import termios
 
@@ -222,7 +225,7 @@ if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty() and not sys.stdin.closed:
         match = re.search(r' erase = (\S+);', output)
         if match:
             erase_key = match.group(1)
-    except (IOError, OSError):
+    except OSError:
         pass
 
 
@@ -245,7 +248,7 @@ def reset_terminal() -> None:
                     if tciflush is not None:
                         termios.tcflush(sys.stdin.fileno(), tciflush)
                 subprocess.run(["stty", "-ixon"], check=False)
-            except (IOError, OSError):
+            except OSError:
                 pass
 
         if not sys.stdout.closed:
@@ -254,7 +257,7 @@ def reset_terminal() -> None:
                 sys.stdout.flush()
                 sys.stdout.write("\033[?25h")
                 sys.stdout.flush()
-            except (IOError, ValueError):
+            except (OSError, ValueError):
                 pass
 
         # Kill background jobs

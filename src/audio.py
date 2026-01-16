@@ -1,9 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
-import langcodes
 import os
-import traceback
 import re
+import traceback
+
+import langcodes
 
 from data.config import config
 from src.console import console
@@ -190,7 +191,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if base_dir and folder_id:
                     mi_path = os.path.join(base_dir, 'tmp', folder_id, 'MediaInfo.json')
                     if os.path.exists(mi_path):
-                        with open(mi_path, 'r', encoding='utf-8') as f:
+                        with open(mi_path, encoding='utf-8') as f:
                             mi = json.load(f)
                         if meta.get('debug'):
                             console.print(f"[yellow]Loaded MediaInfo from file:[/yellow] {mi_path}")

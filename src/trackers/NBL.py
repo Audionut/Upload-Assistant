@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import json
+
 import aiofiles
 import cli_ui
 import httpx
-import json
 
-from src.trackers.COMMON import COMMON
 from src.console import console
+from src.trackers.COMMON import COMMON
 
 
-class NBL():
+class NBL:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -50,10 +50,10 @@ class NBL():
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         if meta['bdinfo'] is not None:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:

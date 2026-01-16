@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
 import itertools
+import os
+
 from bin.MI.get_linux_mi import download_dvd_mediainfo
 from src.discparse import DiscParse
 

@@ -1,8 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import re
+
+import aiofiles
+
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -83,7 +84,7 @@ class LCD(UNIT3D):
         if meta['bdinfo'] is not None:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
                 mediainfo = await f.read()
 
         return {'mediainfo': mediainfo}

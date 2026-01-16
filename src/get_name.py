@@ -1,11 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import anitopy
-import cli_ui
 import os
 import re
 import sys
 from typing import Optional
 
+import anitopy
+import cli_ui
 from guessit import guessit
 
 from data.config import config
@@ -22,7 +22,7 @@ TRACKER_DISC_REQUIREMENTS = {
 
 async def get_name(meta):
     active_trackers = [
-        tracker for tracker in TRACKER_DISC_REQUIREMENTS.keys()
+        tracker for tracker in TRACKER_DISC_REQUIREMENTS
         if tracker in meta.get('trackers', [])
     ]
     if active_trackers:

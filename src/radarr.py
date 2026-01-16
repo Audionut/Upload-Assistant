@@ -1,9 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+from collections.abc import Mapping
+from typing import Any, cast
+
 import httpx
-from typing import Any, Mapping, cast
+
 from data.config import config
 from src.console import console
-
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):

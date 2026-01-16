@@ -1,19 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-from typing import Any, Optional
-import aiofiles
 import asyncio
 import base64
 import datetime
-import httpx
 import re
+from typing import Any, Optional
+
+import aiofiles
+import httpx
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
 
-class RTF():
+class RTF:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -53,10 +54,10 @@ class RTF():
         await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, signature=self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 bd_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
             bd_dump = None
 
@@ -415,7 +416,7 @@ class RTF():
                     self.config['TRACKERS'][self.tracker]['api_key'] = token
 
                     # Now we update the config file on disk using utf-8 encoding
-                    with open(config_path, 'r', encoding='utf-8') as file:
+                    with open(config_path, encoding='utf-8') as file:
                         config_data = file.read()
 
                     # Find the RTF tracker and replace the api_key value

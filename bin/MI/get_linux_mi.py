@@ -2,11 +2,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import platform
-import requests
 import shutil
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import requests
+
 from src.console import console
 
 MEDIAINFO_VERSION = "23.04"

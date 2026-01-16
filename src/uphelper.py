@@ -1,10 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import cli_ui
-import os
 import json
+import os
 import sys
+from collections.abc import Mapping
 from difflib import SequenceMatcher
-from typing import Any, Mapping, cast
+from typing import Any, cast
+
+import cli_ui
 
 from cogs.redaction import Redaction
 from data.config import config
@@ -404,7 +406,7 @@ class UploadHelper:
 
                 # Append to JSON file (as a list of entries)
                 if os.path.exists(json_file_path):
-                    with open(json_file_path, 'r', encoding='utf-8') as f:
+                    with open(json_file_path, encoding='utf-8') as f:
                         try:
                             db_data = json.load(f)
                             if not isinstance(db_data, list):

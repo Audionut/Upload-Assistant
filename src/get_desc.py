@@ -1,23 +1,24 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import asyncio
 import glob
 import json
 import os
 import re
-import requests
 import urllib.parse
+from typing import Any, Union
 from urllib.parse import ParseResult
-from jinja2 import Template
 
+import aiofiles
+import requests
+from jinja2 import Template
 from pymediainfo import MediaInfo
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.languages import process_desc_language
 from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
-from typing import Any, Union
 
 
 def html_to_bbcode(text: str) -> str:
@@ -64,7 +65,7 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
 
         if meta.get("description_template"):
             try:
-                with open(f"{meta['base_dir']}/data/templates/{meta['description_template']}.txt", "r") as f:
+                with open(f"{meta['base_dir']}/data/templates/{meta['description_template']}.txt") as f:
                     template = Template(f.read())
                     template_desc = template.render(meta)
                     cleaned_content = clean_text(template_desc)
@@ -102,14 +103,14 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
             if nfo_files:
                 nfo = nfo_files[0]
                 try:
-                    with open(nfo, "r", encoding="utf-8") as nfo_file:
+                    with open(nfo, encoding="utf-8") as nfo_file:
                         nfo_content = nfo_file.read()
                     if meta["debug"]:
                         console.print("NFO content read with utf-8 encoding.")
                 except UnicodeDecodeError:
                     if meta["debug"]:
                         console.print("utf-8 decoding failed, trying latin1.")
-                    with open(nfo, "r", encoding="latin1") as nfo_file:
+                    with open(nfo, encoding="latin1") as nfo_file:
                         nfo_content = nfo_file.read()
 
                 if not content_written:
@@ -148,7 +149,7 @@ async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
                 console.print(f"[ERROR] Failed to fetch description from link: {e}")
 
         if description_file and os.path.isfile(description_file):
-            with open(description_file, "r", encoding="utf-8") as f:
+            with open(description_file, encoding="utf-8") as f:
                 file_content = f.read()
                 cleaned_content = clean_text(file_content)
                 if cleaned_content:
@@ -306,7 +307,7 @@ class DescriptionBuilder:
         ):
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             if await self.common.path_exists(mi_path):
-                async with aiofiles.open(mi_path, "r", encoding="utf-8") as mi:
+                async with aiofiles.open(mi_path, encoding="utf-8") as mi:
                     return str(await mi.read())
 
         cache_file_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
@@ -317,7 +318,7 @@ class DescriptionBuilder:
 
         if file_exists and file_size > 0:
             try:
-                async with aiofiles.open(cache_file_path, mode="r", encoding="utf-8") as f:
+                async with aiofiles.open(cache_file_path, encoding="utf-8") as f:
                     media_info_content = str(await f.read())
                 return media_info_content
             except Exception:
@@ -353,13 +354,13 @@ class DescriptionBuilder:
             except Exception:
                 cleanpath_exists = await self.common.path_exists(mi_file_path)
                 if cleanpath_exists:
-                    async with aiofiles.open(mi_file_path, "r", encoding="utf-8") as f:
+                    async with aiofiles.open(mi_file_path, encoding="utf-8") as f:
                         return str(await f.read())
 
         else:
             cleanpath_exists = await self.common.path_exists(mi_file_path)
             if cleanpath_exists:
-                async with aiofiles.open(mi_file_path, "r", encoding="utf-8") as f:
+                async with aiofiles.open(mi_file_path, encoding="utf-8") as f:
                     tech_info = str(await f.read())
                     return tech_info
 
@@ -458,7 +459,7 @@ class DescriptionBuilder:
                 and covers
             ):
                 async with aiofiles.open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", "r", encoding="utf-8"
+                    f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json", encoding="utf-8"
                 ) as f:
                     cover_data: list[dict[str, str]] = json.loads(await f.read())
 
@@ -640,7 +641,7 @@ class DescriptionBuilder:
         approved_hosts = set(approved_image_hosts or [])
         if await self.common.path_exists(pack_images_file):
             try:
-                async with aiofiles.open(pack_images_file, "r", encoding="utf-8") as f:
+                async with aiofiles.open(pack_images_file, encoding="utf-8") as f:
                     pack_images_data = json.loads(await f.read())
 
                     # Filter out keys with non-approved image hosts

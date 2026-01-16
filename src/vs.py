@@ -1,10 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import vapoursynth as vs
-from awsmfunc import ScreenGen, DynamicTonemap, zresize
-import random
 import os
+import random
 from functools import partial
 from typing import Any, Dict, Optional
+
+import vapoursynth as vs
+from awsmfunc import DynamicTonemap, ScreenGen, zresize
 
 core = vs.core
 
@@ -49,9 +50,9 @@ def vs_screengn(source: str, encode: Optional[str] = None, num: int = 5, dir: st
 
     # Check if screens.txt already exists and use it if valid
     if os.path.exists(screens_file):
-        with open(screens_file, "r") as txt:
+        with open(screens_file) as txt:
             frames = [int(line.strip()) for line in txt.readlines()]
-        if len(frames) == num and all(isinstance(f, int) and 0 <= f for f in frames):
+        if len(frames) == num and all(isinstance(f, int) and f >= 0 for f in frames):
             print(f"Using existing frame numbers from {screens_file}")
         else:
             frames = []

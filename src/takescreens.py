@@ -1,22 +1,24 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
-import re
-import glob
-import time
-import ffmpeg
-import random
-import json
-import platform
 import asyncio
-import psutil
-import sys
 import gc
+import glob
+import json
+import os
+import platform
+import random
+import re
+import sys
+import time
 import traceback
-from typing import Any, Union, Optional, Tuple, cast
+from typing import Any, Optional, Tuple, Union, cast
+
+import ffmpeg
+import psutil
 from pymediainfo import MediaInfo
-from src.console import console
+
 from data.config import config as _config
 from src.cleanup import cleanup, reset_terminal
+from src.console import console
 
 config: dict[str, Any] = _config
 

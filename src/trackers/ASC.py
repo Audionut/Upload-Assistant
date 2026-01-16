@@ -1,18 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
 import json
-import httpx
 import os
 import platform
 import re
-from bs4 import BeautifulSoup
 from datetime import datetime
-from pymediainfo import MediaInfo
 from typing import Any, Optional, Union, cast
+
+import aiofiles
+import httpx
+from bs4 import BeautifulSoup
+from pymediainfo import MediaInfo
+
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
@@ -71,7 +72,7 @@ class ASC:
         self.episode_tmdb_data = {}
 
         try:
-            async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                 content = await f.read()
                 try:
                     tmdb_data = json.loads(content)
@@ -480,7 +481,7 @@ class ASC:
         desc = ''
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
+            with open(base_desc_path, encoding='utf-8') as f:
                 desc = f.read().strip()
                 desc = desc.replace('[user]', '').replace('[/user]', '')
                 desc = desc.replace('[align=left]', '').replace('[/align]', '')
@@ -677,7 +678,7 @@ class ASC:
         if meta.get('is_disc') == 'BDMV':
             summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(summary_path):
-                with open(summary_path, 'r', encoding='utf-8') as f:
+                with open(summary_path, encoding='utf-8') as f:
                     return f.read()
         if not meta.get('is_disc'):
             video_file = meta['filelist'][0]

@@ -1,8 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from src.console import console
-import httpx
 import json
 from typing import Any, Optional, Union
+
+import httpx
+
+from src.console import console
 
 
 async def search_tvmaze(

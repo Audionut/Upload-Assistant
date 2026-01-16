@@ -1,12 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import cli_ui
 import glob
-import httpx
 import os
 import re
-import requests
 
+import cli_ui
+import httpx
+import requests
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 
@@ -16,7 +16,7 @@ from src.exceptions import *  # noqa F403
 from src.trackers.COMMON import COMMON
 
 
-class FL():
+class FL:
 
     def __init__(self, config):
         self.config = config
@@ -137,12 +137,12 @@ class FL():
                 torrentFileName = meta.get('uuid')
 
         # Download new .torrent from site
-        fl_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', newline='', encoding='utf-8').read()
+        fl_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", newline='', encoding='utf-8').read()
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8').read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
         with open(torrent_path, 'rb') as torrentFile:
             torrentFileName = unidecode(torrentFileName)
             files = {
@@ -336,7 +336,7 @@ class FL():
         return
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', newline='', encoding='utf-8') as descfile:
             from src.bbcode import BBCODE
             bbcode = BBCODE()
@@ -350,7 +350,7 @@ class FL():
             if meta['is_disc'] != 'BDMV':
                 url = "https://up.img4k.net/api/description"
                 data = {
-                    'mediainfo': open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r').read(),
+                    'mediainfo': open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt").read(),
                 }
                 if int(meta['imdb_id']) != 0:
                     data['imdbURL'] = f"tt{meta['imdb_id']}"
@@ -362,7 +362,7 @@ class FL():
                 final_desc = response.text.replace('\r\n', '\n')
             else:
                 # BD Description Generator
-                final_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_EXT.txt", 'r', encoding='utf-8').read()
+                final_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_EXT.txt", encoding='utf-8').read()
                 if final_desc.strip() != "":  # Use BD_SUMMARY_EXT and bbcode format it
                     final_desc = final_desc.replace('[/pre][/quote]', f'[/pre][/quote]\n\n{desc}\n', 1)
                     final_desc = final_desc.replace('DISC INFO:', '[pre][quote=BD_Info][b][color=#FF0000]DISC INFO:[/color][/b]').replace('PLAYLIST REPORT:', '[b][color=#FF0000]PLAYLIST REPORT:[/color][/b]').replace('VIDEO:', '[b][color=#FF0000]VIDEO:[/color][/b]').replace('AUDIO:', '[b][color=#FF0000]AUDIO:[/color][/b]').replace('SUBTITLES:', '[b][color=#FF0000]SUBTITLES:[/color][/b]')

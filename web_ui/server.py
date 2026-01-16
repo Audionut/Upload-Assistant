@@ -1,17 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from flask import Flask, render_template, request, jsonify, Response
-from flask_cors import CORS
-import subprocess
+import hmac
 import json
 import os
-import sys
-import traceback
-import re
-import threading
 import queue
-import hmac
+import re
+import subprocess
+import sys
+import threading
+import traceback
 from pathlib import Path
 from typing import Literal, TypedDict, Union
+
+from flask import Flask, Response, jsonify, render_template, request
+from flask_cors import CORS
 from werkzeug.utils import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))

@@ -1,19 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from src.console import console
-import os
-import pyimgbox
 import asyncio
-import requests
-import glob
 import base64
-import time
-import re
 import gc
+import glob
 import json
-import httpx
+import os
+import re
+import time
+from collections.abc import Sequence
+from typing import Any, Union, cast
+
 import aiofiles
-from typing import Any, Sequence, Union, cast
+import httpx
+import pyimgbox
+import requests
+
 from data.config import config as raw_config
+from src.console import console
 
 config = cast(dict[str, Any], raw_config)
 
@@ -177,25 +180,24 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                     'X-API-Key': config['DEFAULT']['ptscreens_api']
                 }
 
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as file:
-                        files = {
-                            'source': ('file-upload[0]', await file.read())
-                        }
+                async with httpx.AsyncClient() as client, aiofiles.open(image, 'rb') as file:
+                    files = {
+                        'source': ('file-upload[0]', await file.read())
+                    }
 
-                        response = await client.post(url, headers=headers, files=files, timeout=timeout)
-                        response_data = response.json()
+                    response = await client.post(url, headers=headers, files=files, timeout=timeout)
+                    response_data = response.json()
 
-                        if response.status_code != 200:
-                            console.print(f'[yellow]ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")} {(response.status_code)}')
-                            return {'status': 'failed', 'reason': f'ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")}'}
+                    if response.status_code != 200:
+                        console.print(f'[yellow]ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")} {(response.status_code)}')
+                        return {'status': 'failed', 'reason': f'ptscreens upload failed: {response_data.get("error", {}).get("message", "Unknown error")}'}
 
-                        img_url = response_data['image']['medium']['url']
-                        raw_url = response_data['image']['url']
-                        web_url = response_data['image']['url_viewer']
+                    img_url = response_data['image']['medium']['url']
+                    raw_url = response_data['image']['url']
+                    web_url = response_data['image']['url_viewer']
 
-                        if meta['debug']:
-                            console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+                    if meta['debug']:
+                        console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
@@ -253,34 +255,33 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                     'max_th_size': 350
                 }
 
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as file:
-                        files = {
-                            'img': ('file-upload[0]', await file.read())
-                        }
+                async with httpx.AsyncClient() as client, aiofiles.open(image, 'rb') as file:
+                    files = {
+                        'img': ('file-upload[0]', await file.read())
+                    }
 
-                        response = await client.post(url, data=data, files=files, timeout=timeout)
+                    response = await client.post(url, data=data, files=files, timeout=timeout)
 
-                        if response.status_code != 200:
-                            console.print(f"[yellow]pixhost failed with status code {response.status_code}, trying next image host")
-                            return {'status': 'failed', 'reason': f'pixhost upload failed with status code {response.status_code}'}
+                    if response.status_code != 200:
+                        console.print(f"[yellow]pixhost failed with status code {response.status_code}, trying next image host")
+                        return {'status': 'failed', 'reason': f'pixhost upload failed with status code {response.status_code}'}
 
-                        try:
-                            response_data = response.json()
-                            if 'th_url' not in response_data:
-                                console.print("[yellow]pixhost failed: Invalid response format")
-                                return {'status': 'failed', 'reason': 'Invalid response from pixhost'}
+                    try:
+                        response_data = response.json()
+                        if 'th_url' not in response_data:
+                            console.print("[yellow]pixhost failed: Invalid response format")
+                            return {'status': 'failed', 'reason': 'Invalid response from pixhost'}
 
-                            raw_url = response_data['th_url'].replace('https://t', 'https://img').replace('/thumbs/', '/images/')
-                            img_url = response_data['th_url']
-                            web_url = response_data['show_url']
+                        raw_url = response_data['th_url'].replace('https://t', 'https://img').replace('/thumbs/', '/images/')
+                        img_url = response_data['th_url']
+                        web_url = response_data['show_url']
 
-                            if meta['debug']:
-                                console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+                        if meta['debug']:
+                            console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
 
-                        except ValueError as e:
-                            console.print(f"[red]Invalid JSON response from pixhost: {e}")
-                            return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                    except ValueError as e:
+                        console.print(f"[red]Invalid JSON response from pixhost: {e}")
+                        return {'status': 'failed', 'reason': 'Invalid JSON response'}
 
             except httpx.TimeoutException:
                 console.print("[red]Request to pixhost timed out. The server took too long to respond.")
@@ -363,33 +364,32 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                     'X-API-Key': pass_api_key
                 }
 
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as img_file:
-                        files = {'source': (os.path.basename(image), await img_file.read())}
-                        response = await client.post(url, headers=headers, files=files, timeout=timeout)
+                async with httpx.AsyncClient() as client, aiofiles.open(image, 'rb') as img_file:
+                    files = {'source': (os.path.basename(image), await img_file.read())}
+                    response = await client.post(url, headers=headers, files=files, timeout=timeout)
 
-                        if 'application/json' in response.headers.get('Content-Type', ''):
-                            response_data = response.json()
-                        else:
-                            console.print(f"[red]Passtheimage did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}")
-                            return {'status': 'failed', 'reason': f'Non-JSON response from passtheimage: {response.status_code}'}
+                    if 'application/json' in response.headers.get('Content-Type', ''):
+                        response_data = response.json()
+                    else:
+                        console.print(f"[red]Passtheimage did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}")
+                        return {'status': 'failed', 'reason': f'Non-JSON response from passtheimage: {response.status_code}'}
 
-                        if response.status_code != 200 or response_data.get('status_code') != 200:
-                            error_message = response_data.get('error', {}).get('message', 'Unknown error')
-                            error_code = response_data.get('error', {}).get('code', 'Unknown code')
-                            console.print(f"[yellow]Passtheimage failed (code: {error_code}): {error_message}")
-                            return {'status': 'failed', 'reason': f'passtheimage upload failed: {error_message}'}
+                    if response.status_code != 200 or response_data.get('status_code') != 200:
+                        error_message = response_data.get('error', {}).get('message', 'Unknown error')
+                        error_code = response_data.get('error', {}).get('code', 'Unknown code')
+                        console.print(f"[yellow]Passtheimage failed (code: {error_code}): {error_message}")
+                        return {'status': 'failed', 'reason': f'passtheimage upload failed: {error_message}'}
 
-                        if 'image' in response_data:
-                            img_url = response_data['image']['url']
-                            raw_url = response_data['image']['url']
-                            web_url = response_data['image']['url_viewer']
+                    if 'image' in response_data:
+                        img_url = response_data['image']['url']
+                        raw_url = response_data['image']['url']
+                        web_url = response_data['image']['url_viewer']
 
-                        if not img_url or not raw_url or not web_url:
-                            console.print(f"[yellow]Incomplete URL data from passtheimage response: {response_data}")
-                            return {'status': 'failed', 'reason': 'Incomplete URL data from passtheimage'}
+                    if not img_url or not raw_url or not web_url:
+                        console.print(f"[yellow]Incomplete URL data from passtheimage response: {response_data}")
+                        return {'status': 'failed', 'reason': 'Incomplete URL data from passtheimage'}
 
-                        return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
+                    return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
 
             except httpx.TimeoutException:
                 console.print("[red]Request to passtheimage timed out after 60 seconds")
@@ -415,40 +415,39 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
             try:
                 headers = {'Authorization': f'Bearer {api_key}'}
 
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as img_file:
-                        files = {'files[]': (os.path.basename(image), await img_file.read())}
+                async with httpx.AsyncClient() as client, aiofiles.open(image, 'rb') as img_file:
+                    files = {'files[]': (os.path.basename(image), await img_file.read())}
 
-                        response = await client.post(url, headers=headers, files=files, timeout=timeout)
+                    response = await client.post(url, headers=headers, files=files, timeout=timeout)
 
-                        if response.status_code not in (200, 201):
-                            console.print(f"[yellow]Seedpool CDN failed with status code {response.status_code}, trying next image host")
-                            return {'status': 'failed', 'reason': f'Seedpool CDN upload failed with status code {response.status_code}'}
+                    if response.status_code not in (200, 201):
+                        console.print(f"[yellow]Seedpool CDN failed with status code {response.status_code}, trying next image host")
+                        return {'status': 'failed', 'reason': f'Seedpool CDN upload failed with status code {response.status_code}'}
 
-                        response_data = response.json()
+                    response_data = response.json()
 
-                        if 'files' in response_data and len(response_data['files']) > 0:
-                            file_data = response_data['files'][0]
+                    if 'files' in response_data and len(response_data['files']) > 0:
+                        file_data = response_data['files'][0]
 
-                            # Use medium variant as primary, fallback to base URL
-                            img_url = file_data.get('variants', {}).get('medium', file_data['url'])
-                            raw_url = file_data['url']
-                            web_url = file_data['url']
+                        # Use medium variant as primary, fallback to base URL
+                        img_url = file_data.get('variants', {}).get('medium', file_data['url'])
+                        raw_url = file_data['url']
+                        web_url = file_data['url']
 
-                            # Use thumbnail_url if available, otherwise use thumb variant
-                            if 'thumbnail_url' in file_data:
-                                img_url = file_data['thumbnail_url']
-                            elif 'thumb' in file_data.get('variants', {}):
-                                img_url = file_data['variants']['thumb']
+                        # Use thumbnail_url if available, otherwise use thumb variant
+                        if 'thumbnail_url' in file_data:
+                            img_url = file_data['thumbnail_url']
+                        elif 'thumb' in file_data.get('variants', {}):
+                            img_url = file_data['variants']['thumb']
 
-                            if meta['debug']:
-                                console.print(f"[green]Seedpool CDN upload successful: {file_data['cdn_id']}")
-                                console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+                        if meta['debug']:
+                            console.print(f"[green]Seedpool CDN upload successful: {file_data['cdn_id']}")
+                            console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
 
-                            return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
-                        else:
-                            console.print("[yellow]Seedpool CDN returned empty files array")
-                            return {'status': 'failed', 'reason': 'No files in Seedpool CDN response'}
+                        return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
+                    else:
+                        console.print("[yellow]Seedpool CDN returned empty files array")
+                        return {'status': 'failed', 'reason': 'No files in Seedpool CDN response'}
 
             except httpx.TimeoutException:
                 console.print("[red]Request to Seedpool CDN timed out.")
@@ -476,36 +475,35 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                 headers = {'Authorization': f'{api_key}'}
                 data = {'title': 'Upload-Assistant screenshot'}
 
-                async with httpx.AsyncClient() as client:
-                    async with aiofiles.open(image, 'rb') as img_file:
-                        files = {'file': (os.path.basename(image), await img_file.read())}
-                        response = await client.post(url, headers=headers, data=data, files=files, timeout=timeout)
+                async with httpx.AsyncClient() as client, aiofiles.open(image, 'rb') as img_file:
+                    files = {'file': (os.path.basename(image), await img_file.read())}
+                    response = await client.post(url, headers=headers, data=data, files=files, timeout=timeout)
 
-                        content_type = response.headers.get('Content-Type', '')
-                        if 'application/json' in content_type:
-                            response_data = response.json()
-                        else:
-                            console.print(f"[red]ShareX image host did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}[/red]")
-                            return {'status': 'failed', 'reason': f'Non-JSON response from sharex image host: {response.status_code}'}
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        response_data = response.json()
+                    else:
+                        console.print(f"[red]ShareX image host did not return JSON. Status: {response.status_code}, Response: {response.text[:200]}[/red]")
+                        return {'status': 'failed', 'reason': f'Non-JSON response from sharex image host: {response.status_code}'}
 
-                        if response.status_code not in (200, 201):
-                            message = response_data.get('message') or response_data.get('error') or response.text[:200]
-                            console.print(f"[yellow]ShareX image host upload failed ({response.status_code}): {message}[/yellow]")
-                            return {'status': 'failed', 'reason': f'sharex upload failed: {message}'}
+                    if response.status_code not in (200, 201):
+                        message = response_data.get('message') or response_data.get('error') or response.text[:200]
+                        console.print(f"[yellow]ShareX image host upload failed ({response.status_code}): {message}[/yellow]")
+                        return {'status': 'failed', 'reason': f'sharex upload failed: {message}'}
 
-                        link = response_data.get('data', {}).get('link') or response_data.get('link')
-                        if not link:
-                            console.print(f"[yellow]ShareX image host response missing link: {response_data}[/yellow]")
-                            return {'status': 'failed', 'reason': 'No link in sharex response'}
+                    link = response_data.get('data', {}).get('link') or response_data.get('link')
+                    if not link:
+                        console.print(f"[yellow]ShareX image host response missing link: {response_data}[/yellow]")
+                        return {'status': 'failed', 'reason': 'No link in sharex response'}
 
-                        img_url = link
-                        raw_url = link
-                        web_url = link
+                    img_url = link
+                    raw_url = link
+                    web_url = link
 
-                        if meta.get('debug'):
-                            console.print(f"[green]ShareX image host upload successful: {link}[/green]")
+                    if meta.get('debug'):
+                        console.print(f"[green]ShareX image host upload successful: {link}[/green]")
 
-                        return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
+                    return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url, 'local_file_path': image}
 
             except httpx.TimeoutException:
                 console.print("[red]Request to ShareX image host timed out.[/red]")

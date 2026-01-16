@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import os
+from typing import Any
+
 import aiofiles
 import httpx
-import os
 
 from cogs.redaction import Redaction
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import check_hosts
 from src.trackers.COMMON import COMMON
-from typing import Any
 
 
 class DC:
@@ -30,7 +30,7 @@ class DC:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            with open(mi_path, 'r', encoding='utf-8') as f:
+            with open(mi_path, encoding='utf-8') as f:
                 mediainfo = f.read()
 
         return mediainfo

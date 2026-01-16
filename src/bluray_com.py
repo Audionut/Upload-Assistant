@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import httpx
-import random
 import asyncio
-import re
 import json
-import cli_ui
 import os
+import random
+import re
 from typing import Any, Union
+
+import cli_ui
+import httpx
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
 from rich.console import Console
@@ -25,7 +26,7 @@ async def search_bluray(meta):
         if os.path.exists(debug_filename):
             if meta['debug']:
                 console.print(f"[green]Found existing file for {imdb_id}[/green]")
-            with open(debug_filename, "r", encoding="utf-8") as f:
+            with open(debug_filename, encoding="utf-8") as f:
                 response_text = f.read()
 
             if response_text and "No index" not in response_text:
@@ -350,7 +351,7 @@ async def get_bluray_releases(meta):
             if os.path.exists(release_debug_filename):
                 if meta['debug']:
                     console.print(f"[green]Found existing release data for product ID {product_id}[/green]")
-                with open(release_debug_filename, "r", encoding="utf-8") as f:
+                with open(release_debug_filename, encoding="utf-8") as f:
                     response_text = f.read()
 
                 if response_text and "No index" not in response_text:
@@ -720,7 +721,7 @@ async def download_cover_images(meta):
     reuploaded_images_path = os.path.join(meta['base_dir'], "tmp", meta['uuid'], "covers.json")
     if os.path.exists(reuploaded_images_path):
         try:
-            with open(reuploaded_images_path, 'r', encoding='utf-8') as f:
+            with open(reuploaded_images_path, encoding='utf-8') as f:
                 existing_covers = json.load(f)
 
             matching_release = False
@@ -859,7 +860,7 @@ async def fetch_release_details(release, meta):
         if os.path.exists(debug_filename):
             if meta['debug']:
                 console.print(f"[green]Found existing debug file for release ID {release_id}[/green]")
-            with open(debug_filename, "r", encoding="utf-8") as f:
+            with open(debug_filename, encoding="utf-8") as f:
                 response_text = f.read()
 
             if response_text and "No index" not in response_text:
@@ -1017,7 +1018,7 @@ async def process_all_releases(releases, meta):
                 console.print(f"[blue]Opening BD_SUMMARY file: {bd_summary_path}[/blue]")
                 console.print("[dim]Stripping extremely small subtitle tracks from bdinfo[/dim]")
             try:
-                with open(bd_summary_path, "r", encoding="utf-8") as f:
+                with open(bd_summary_path, encoding="utf-8") as f:
                     lines = f.readlines()
 
                 # Parse the subtitles section
@@ -1265,84 +1266,34 @@ async def process_all_releases(releases, meta):
                                 continue
 
                             format_match = False
-                            if 'lpcm' in meta_format and ('pcm' in release_track_lower or 'lpcm' in release_track_lower):
-                                format_match = True
-                                current_match_score += 1
-                                core_match_score += 1
-                            elif 'dts-hd' in meta_format and 'dts-hd' in release_track_lower:
-                                format_match = True
-                                current_match_score += 1
-                                core_match_score += 1
-                            elif 'dts' in meta_format and 'dts' in release_track_lower:
-                                format_match = True
-                                current_match_score += 1
-                                core_match_score += 1
-                            elif 'dolby' in meta_format and 'dolby' in release_track_lower:
-                                format_match = True
-                                current_match_score += 1
-                                core_match_score += 1
-                            elif 'truehd' in meta_format and 'truehd' in release_track_lower:
-                                format_match = True
-                                current_match_score += 1
-                                core_match_score += 1
-                            elif 'atmos' in meta_format and 'atmos' in release_track_lower:
+                            if 'lpcm' in meta_format and ('pcm' in release_track_lower or 'lpcm' in release_track_lower) or 'dts-hd' in meta_format and 'dts-hd' in release_track_lower or 'dts' in meta_format and 'dts' in release_track_lower or 'dolby' in meta_format and 'dolby' in release_track_lower or 'truehd' in meta_format and 'truehd' in release_track_lower or 'atmos' in meta_format and 'atmos' in release_track_lower:
                                 format_match = True
                                 current_match_score += 1
                                 core_match_score += 1
 
                             channel_match = False
                             if meta_channels:
-                                if '5.1' in meta_channels and '5.1' in release_track_lower:
+                                if '5.1' in meta_channels and '5.1' in release_track_lower or '7.1' in meta_channels and '7.1' in release_track_lower or '2.0' in meta_channels and '2.0' in release_track_lower or '2.0' in meta_channels and 'stereo' in release_track_lower or '1.0' in meta_channels and '1.0' in release_track_lower or '1.0' in meta_channels and 'mono' in release_track_lower:
                                     channel_match = True
                                     current_match_score += 1
                                     core_match_score += 1
-                                elif '7.1' in meta_channels and '7.1' in release_track_lower:
-                                    channel_match = True
-                                    current_match_score += 1
-                                    core_match_score += 1
-                                elif '2.0' in meta_channels and '2.0' in release_track_lower:
-                                    channel_match = True
-                                    current_match_score += 1
-                                    core_match_score += 1
-                                elif '2.0' in meta_channels and 'stereo' in release_track_lower:
-                                    channel_match = True
-                                    current_match_score += 1
-                                    core_match_score += 1
-                                elif '1.0' in meta_channels and '1.0' in release_track_lower:
-                                    channel_match = True
-                                    current_match_score += 1
-                                    core_match_score += 1
-                                elif '1.0' in meta_channels and 'mono' in release_track_lower:
-                                    channel_match = True
-                                    current_match_score += 1
-                                    core_match_score += 1
-                                elif '2.0' in meta_channels and 'mono' in release_track_lower:
-                                    channel_match = False
-                                elif '1.0' in meta_channels and ('2.0' in release_track_lower or 'stereo' in release_track_lower):
+                                elif '2.0' in meta_channels and 'mono' in release_track_lower or '1.0' in meta_channels and ('2.0' in release_track_lower or 'stereo' in release_track_lower):
                                     channel_match = False
 
                             # Check sample rate and bit depth in the release track (may be in notes)
                             if meta_sample_rate:
                                 sample_rate_str = meta_sample_rate.replace(' ', '').lower()
-                                if sample_rate_str in release_track_lower.replace(' ', ''):
-                                    current_match_score += 1
-                                elif "note:" in release_track_lower and sample_rate_str in release_track_lower:
+                                if sample_rate_str in release_track_lower.replace(' ', '') or "note:" in release_track_lower and sample_rate_str in release_track_lower:
                                     current_match_score += 1
 
                             if meta_bit_depth and meta_bit_depth != "":
                                 bit_depth_str = meta_bit_depth.lower()
-                                if bit_depth_str in release_track_lower:
-                                    current_match_score += 1
-                                elif bit_depth_str.replace('-', '') in release_track_lower.replace(' ', ''):
-                                    current_match_score += 1
-                                elif "note:" in release_track_lower and bit_depth_str.replace('-', '') in release_track_lower.replace(' ', ''):
+                                if bit_depth_str in release_track_lower or bit_depth_str.replace('-', '') in release_track_lower.replace(' ', '') or "note:" in release_track_lower and bit_depth_str.replace('-', '') in release_track_lower.replace(' ', ''):
                                     current_match_score += 1
 
                             if meta_bitrate and meta_bitrate != "":
                                 bitrate_str = meta_bitrate.lower()
-                                if bitrate_str in release_track_lower:
-                                    current_match_score += 1
-                                elif "note:" in release_track_lower and bitrate_str in release_track_lower:
+                                if bitrate_str in release_track_lower or "note:" in release_track_lower and bitrate_str in release_track_lower:
                                     current_match_score += 1
 
                             if current_match_score > best_match_score:

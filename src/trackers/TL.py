@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
+import os
+import platform
+import re
+
 import aiofiles
 import httpx
-import os
-import re
-import platform
+
 from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
@@ -436,7 +437,7 @@ class TL:
 
     async def cookie_upload(self, meta):
         await self.generate_description(meta)
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as f:
             description_content = await f.read()
         login = await self.login(meta)
         if not login:

@@ -1,15 +1,14 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import cli_ui
-import httpx
 import json
 import sys
-
-from typing import Any, Dict, List, Optional, Tuple, Union
-
-from anitopy import parse as anitopy_parse
 from datetime import datetime
 from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import cli_ui
+import httpx
+from anitopy import parse as anitopy_parse
 from guessit import guessit
 
 from src.cleanup import cleanup, reset_terminal
@@ -687,9 +686,7 @@ async def search_imdb(
             type_matches = False
             if type_info:
                 title_type = type_info.get("text", "").lower()
-                if category and category.lower() == "tv" and "tv series" in title_type:
-                    type_matches = True
-                elif category and category.lower() == "movie" and "tv series" not in title_type:
+                if category and category.lower() == "tv" and "tv series" in title_type or category and category.lower() == "movie" and "tv series" not in title_type:
                     type_matches = True
 
             if imdb_id and type_matches:

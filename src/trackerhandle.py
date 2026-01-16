@@ -1,9 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import cli_ui
 import sys
-import traceback
 import time
+import traceback
+
+import cli_ui
 
 from cogs.redaction import Redaction
 from src.cleanup import cleanup, reset_terminal

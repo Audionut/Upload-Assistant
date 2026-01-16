@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import cli_ui
 
 from src.console import console

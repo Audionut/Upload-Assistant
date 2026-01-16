@@ -1,8 +1,8 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
 from typing import Any
+
 from src.console import console
 from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON

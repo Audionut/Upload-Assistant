@@ -1,20 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
 import os
 import platform
-import httpx
 import re
-import cli_ui
-import aiofiles
 from typing import Union
-from src.trackers.COMMON import COMMON
+
+import aiofiles
+import cli_ui
+import httpx
+
 from src.console import console
 from src.rehostimages import check_hosts
+from src.trackers.COMMON import COMMON
 
 
-class BHD():
+class BHD:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -65,13 +66,13 @@ class BHD():
 
         mi_dump = None
         if meta['is_disc'] == "BDMV":
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as f:
             desc = await f.read()
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
@@ -236,7 +237,7 @@ class BHD():
     async def edit_desc(self, meta):
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        async with aiofiles.open(base_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(base_path, encoding='utf-8') as f:
             base = await f.read()
         async with aiofiles.open(desc_path, 'w', encoding='utf-8') as desc:
             if meta.get('discs', []) != []:

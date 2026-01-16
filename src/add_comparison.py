@@ -1,14 +1,16 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import json
 import os
 import re
-import json
-import cli_ui
 from collections import defaultdict
-from typing import Any, Mapping, MutableMapping, Union, cast
-from src.uploadscreens import upload_screens
+from collections.abc import Mapping, MutableMapping
+from typing import Any, Union, cast
+
+import cli_ui
+
 from data.config import config
 from src.console import console
-
+from src.uploadscreens import upload_screens
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):
@@ -27,12 +29,10 @@ async def add_comparison(meta: MutableMapping[str, Any]) -> Union[ComparisonData
     comparison_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/comparison_data.json"
     if os.path.exists(comparison_data_file):
         try:
-            with open(comparison_data_file, 'r') as f:
+            with open(comparison_data_file) as f:
                 raw_data = json.load(f)
                 saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
-                if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()):
-                    saved_comparison_data = raw_data
-                elif isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
+                if isinstance(raw_data, dict) and all(isinstance(v, dict) for v in raw_data.values()) or isinstance(raw_data, list) and all(isinstance(item, dict) for item in raw_data):
                     saved_comparison_data = raw_data
                 else:
                     raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")

@@ -1,16 +1,17 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import glob
-import httpx
 import os
 import platform
 import re
-from bs4 import BeautifulSoup
 from typing import Union
+
+import aiofiles
+import httpx
+from bs4 import BeautifulSoup
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 
 

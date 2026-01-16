@@ -1,21 +1,23 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import http.cookiejar
-import httpx
+import importlib
 import json
 import os
 import pickle  # nosec B403 - Only used for legacy cookie migration
 import re
 import stat
-import importlib
 import traceback
+from typing import Any, Optional, Union, cast
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
-from src.console import console
-from src.trackers.COMMON import COMMON
 from rich.panel import Panel
 from rich.table import Table
-from typing import Any, Union, Optional, cast
+
+from src.console import console
+from src.trackers.COMMON import COMMON
 
 
 def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
@@ -85,7 +87,7 @@ class CookieValidator:
 
         if os.path.exists(auth_file):
             try:
-                async with aiofiles.open(auth_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(auth_file, encoding='utf-8') as f:
                     auth_key = await f.read()
                     auth_key = str(auth_key).strip()
                     if auth_key:
@@ -271,11 +273,7 @@ class CookieValidator:
                         importlib.import_module(f'src.trackers.{tracker}'),
                         tracker
                     )
-                    setattr(
-                        cls,
-                        "secret_token",
-                        str(match.group(1))
-                    )
+                    cls.secret_token = str(match.group(1))
 
                 # Save cookies only after a confirmed valid login
                 await self.save_session_cookies(tracker, cookie_jar)
@@ -400,7 +398,7 @@ class CookieValidator:
 
                     # Verify the migration was successful by loading the JSON
                     try:
-                        with open(cookiefile, 'r', encoding='utf-8') as f:
+                        with open(cookiefile, encoding='utf-8') as f:
                             json.load(f)  # Just verify it can be loaded
 
                         # Migration verified successful - delete the old pickle file
@@ -427,7 +425,7 @@ class CookieValidator:
 
         # Load cookies from JSON file
         try:
-            with open(cookiefile, 'r', encoding='utf-8') as f:
+            with open(cookiefile, encoding='utf-8') as f:
                 cookie_dict = json.load(f)
 
             # Convert dictionary back to session cookies
@@ -455,7 +453,7 @@ class CookieValidator:
     def _load_cookies_dict_secure(self, cookiefile: str) -> dict[str, Any]:
         """Securely load cookies as dictionary from JSON instead of pickle"""
         try:
-            with open(cookiefile, 'r', encoding='utf-8') as f:
+            with open(cookiefile, encoding='utf-8') as f:
                 cookie_dict = json.load(f)
             return cast(dict[str, Any], cookie_dict)
         except OSError as e:

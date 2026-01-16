@@ -1,16 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import httpx
 import json
 import os
 import re
 import time
 import urllib.parse
+from collections.abc import Mapping
+from typing import Any, Dict, Optional, Tuple, cast
+
+import httpx
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
-from typing import Any, Dict, Mapping, Optional, Tuple, cast
+
 from data.config import config
 from src.console import console
-
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):
@@ -59,7 +61,7 @@ async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None,
             # Try to load from cache
             if os.path.exists(search_cache_file):
                 try:
-                    with open(search_cache_file, 'r', encoding='utf-8') as f:
+                    with open(search_cache_file, encoding='utf-8') as f:
                         response_json = json.load(f)
                     if meta['debug']:
                         console.print(f"[cyan]SRRDB: Using cached search for {base}")
@@ -105,7 +107,7 @@ async def is_scene(video: str, meta: Dict[str, Any], imdb: Optional[int] = None,
 
                             if os.path.exists(details_cache_file):
                                 try:
-                                    with open(details_cache_file, 'r', encoding='utf-8') as f:
+                                    with open(details_cache_file, encoding='utf-8') as f:
                                         release_details_dict = json.load(f)
                                 except Exception:
                                     release_details_dict = None

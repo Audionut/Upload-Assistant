@@ -1,31 +1,32 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiohttp
 import asyncio
 import base64
-import bencode
 import collections
-import defusedxml.xmlrpc
 import errno
 import os
 import platform
-import qbittorrentapi
 import re
 import shutil
 import ssl
 import subprocess
 import time
 import traceback
-import transmission_rpc
 import urllib.parse
 import xmlrpc.client  # nosec B411 - Secured with defusedxml.xmlrpc.monkey_patch() below
-from typing import Any, Dict, DefaultDict, Tuple, Union, Optional, List, Callable, Awaitable
+from collections.abc import Awaitable
+from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Union
+
+import aiohttp
+import bencode
+import defusedxml.xmlrpc
+import qbittorrentapi
+import transmission_rpc
+from deluge_client import DelugeRPCClient
+from torf import Torrent
 
 from cogs.redaction import Redaction
-from deluge_client import DelugeRPCClient
 from src.console import console
 from src.torrentcreate import TorrentCreator
-from torf import Torrent
 
 # Secure XML-RPC client using defusedxml to prevent XML attacks
 defusedxml.xmlrpc.monkey_patch()
@@ -35,7 +36,7 @@ qbittorrent_cached_clients: Dict[Tuple[str, int, str], qbittorrentapi.Client] = 
 qbittorrent_locks: DefaultDict[Tuple[str, int, str], asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
 
 
-class Clients():
+class Clients:
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
 
@@ -507,7 +508,7 @@ class Clients():
                 return valid, torrent_path
 
             # Reuse if disc and basename matches or --keep-folder was specified
-            if meta.get('is_disc', None) is not None or (meta['keep_folder'] and meta['isdir']):
+            if meta.get('is_disc') is not None or (meta['keep_folder'] and meta['isdir']):
                 torrent_name = torrent.metainfo['info']['name']
                 if meta['uuid'] != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")
@@ -854,7 +855,7 @@ class Clients():
             raise ValueError(error_msg)
 
         # Determine linking method
-        linking_method = client.get('linking', None)  # "symlink", "hardlink", or None
+        linking_method = client.get('linking')  # "symlink", "hardlink", or None
         if meta.get('debug', False):
             console.print("Linking method:", linking_method)
         use_symlink = linking_method == "symlink"
@@ -1060,7 +1061,7 @@ class Clients():
             if meta['debug']:
                 console.print(f"[cyan]Using resume path: {resume_path}")
             fast_resume = self.add_fast_resume(metainfo, resume_path, torrent)
-        except EnvironmentError as exc:
+        except OSError as exc:
             console.print("[red]Error making fast-resume data (%s)" % (exc,))
             raise
 
@@ -1097,7 +1098,7 @@ class Clients():
             console.print(f"[green]rTorrent load start for {fr_file} with d.directory_base.set={path}")
         time.sleep(1)
         # Add labels
-        if client.get('rtorrent_label', None) is not None:
+        if client.get('rtorrent_label') is not None:
             if meta['debug']:
                 console.print(f"[cyan]Setting rTorrent label: {client['rtorrent_label']}")
             rtorrent.d.custom1.set(torrent.infohash, client['rtorrent_label'])
@@ -1137,7 +1138,7 @@ class Clients():
             raise ValueError(error_msg)
 
         # Determine linking method
-        linking_method = client.get('linking', None)  # "symlink", "hardlink", or None
+        linking_method = client.get('linking')  # "symlink", "hardlink", or None
         if meta['debug']:
             console.print("Linking method:", linking_method)
         use_symlink = linking_method == "symlink"
@@ -1167,7 +1168,7 @@ class Clients():
             try:
                 # Read mount points from /proc/mounts or use 'mount' command output
                 if os.path.exists('/proc/mounts'):
-                    with open('/proc/mounts', 'r') as f:
+                    with open('/proc/mounts') as f:
                         for line in f:
                             parts = line.split()
                             if len(parts) >= 2:
@@ -1608,7 +1609,7 @@ class Clients():
 
         if meta.get('transmission_label') is not None:
             label = [meta['transmission_label']]
-        elif client.get('transmission_label', None) is not None:
+        elif client.get('transmission_label') is not None:
             label = [client['transmission_label']]
         else:
             label = None
@@ -1788,7 +1789,7 @@ class Clients():
             found = False
 
             folder_id = os.path.basename(meta['path'])
-            if meta.get('uuid', None) is None:
+            if meta.get('uuid') is None:
                 meta['uuid'] = folder_id
 
             extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
@@ -1941,7 +1942,7 @@ class Clients():
 
         # Extract folder ID for use in temporary file path
         folder_id = os.path.basename(meta['path'])
-        if meta.get('uuid', None) is None:
+        if meta.get('uuid') is None:
             meta['uuid'] = folder_id
 
         extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
@@ -2391,9 +2392,7 @@ class Clients():
 
                     if is_disc in ("", None) and len(meta.get('filelist', [])) == 1:
                         file_name = os.path.basename(meta['filelist'][0])
-                        if torrent_name.lower() == file_name.lower():
-                            is_match = True
-                        elif torrent_name.lower() == meta['uuid'].lower():
+                        if torrent_name.lower() == file_name.lower() or torrent_name.lower() == meta['uuid'].lower():
                             is_match = True
                     else:
                         if torrent_name.lower() == meta['uuid'].lower():

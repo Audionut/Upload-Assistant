@@ -1,19 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
 import glob
-import httpx
 import os
 import platform
 import re
+from typing import Any, Optional, Union
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
-from typing import Any, Optional, Union
 
 
 class FF:
@@ -402,7 +403,7 @@ class FF:
         }
 
         src = (self.video_source or "").strip().lower()
-        return mapping.get(src, None)
+        return mapping.get(src)
 
     def tv_source(self, meta: dict[str, Any]) -> Optional[str]:
         # Possible values: "HDTV", "DSR", "PDTV", "TV", "DVD", "DvdScr", "BluRay", "WebRIP"
@@ -420,7 +421,7 @@ class FF:
         }
 
         src = (self.video_source or "").strip().lower()
-        return mapping.get(src, None)
+        return mapping.get(src)
 
     def anime_source(self, meta: dict[str, Any]) -> Optional[str]:
         # Possible values: "DVD", "BluRay", "Anime Series", "HDTV"
@@ -435,7 +436,7 @@ class FF:
         }
 
         src = (self.video_source or "").strip().lower()
-        return mapping.get(src, None)
+        return mapping.get(src)
 
     def anime_v_dar(self, meta: dict[str, Any]) -> str:
         # Possible values: "16_9", "4_3"

@@ -1,9 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import os
 import re
 from typing import Any
+
+import aiofiles
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
@@ -110,7 +111,7 @@ class HUNO(UNIT3D):
         if meta['bdinfo'] is not None:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
                 mediainfo = await f.read()
 
         return {'mediainfo': mediainfo}

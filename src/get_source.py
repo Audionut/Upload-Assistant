@@ -2,7 +2,9 @@
 import json
 import traceback
 from typing import Any, Dict, Tuple
+
 from guessit import guessit
+
 from src.console import console
 from src.exceptions import *  # noqa: F403
 
@@ -10,13 +12,13 @@ from src.exceptions import *  # noqa: F403
 async def get_source(type: str, video: str, path: str, is_disc: str, meta: Dict[str, Any], folder_id: str, base_dir: str) -> Tuple[str, str]:
     if not meta.get('is_disc') == "BDMV":
         try:
-            with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', 'r', encoding='utf-8') as f:
+            with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
                 mi = json.load(f)
         except Exception:
             if meta['debug']:
                 console.print("No mediainfo.json")
     try:
-        if meta.get('manual_source', None):
+        if meta.get('manual_source'):
             source = meta['manual_source']
         else:
             try:

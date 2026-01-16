@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import datetime
 import os
 import re
 import subprocess
-import datetime
 from typing import Any
-from src.console import console
+
 from data.config import config as _config
+from src.console import console
 
 config: dict[str, Any] = _config
 

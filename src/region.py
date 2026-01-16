@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
 from typing import Any, Dict, Optional, Tuple, Union
+
 from guessit import guessit
 
 
@@ -145,9 +146,7 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
     if audio and "DTS-HD MA" in audio:
         video_name = video_name.replace("DTS-HD.MA.", "").replace("DTS-HD MA ", "")
     for key, value in services.items():
-        if (' ' + key + ' ') in video_name and key not in guessit(video, {"excludes": ["country", "language"]}).get('title', ''):
-            service = value
-        elif key == service:
+        if (' ' + key + ' ') in video_name and key not in guessit(video, {"excludes": ["country", "language"]}).get('title', '') or key == service:
             service = value
     service_longname = service
     for key, value in services.items():

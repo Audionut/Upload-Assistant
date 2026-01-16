@@ -1,10 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import cli_ui
 import glob
 import json
 import os
 import re
 import sys
+
+import cli_ui
 
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -19,9 +20,7 @@ async def get_uhd(type, guess, resolution, path):
         source = ""
         other = ""
     uhd = ""
-    if source == 'Blu-ray' and other == "Ultra HD" or source == "Ultra HD Blu-ray":
-        uhd = "UHD"
-    elif "UHD" in path:
+    if source == 'Blu-ray' and other == "Ultra HD" or source == "Ultra HD Blu-ray" or "UHD" in path:
         uhd = "UHD"
     elif type in ("DISC", "REMUX", "ENCODE", "WEBRIP"):
         uhd = ""
@@ -60,9 +59,7 @@ async def get_hdr(mi, bdinfo):
                 hdr_format_string = next((v for v in hdr_fields if isinstance(v, str) and v.strip()), "")
                 if "HDR10+" in hdr_format_string:
                     hdr = "HDR10+"
-                elif "HDR10" in hdr_format_string:
-                    hdr = "HDR"
-                elif "SMPTE ST 2094 App 4" in hdr_format_string:
+                elif "HDR10" in hdr_format_string or "SMPTE ST 2094 App 4" in hdr_format_string:
                     hdr = "HDR"
                 if hdr_format_string and "HLG" in hdr_format_string:
                     hdr = f"{hdr} HLG"
@@ -210,7 +207,7 @@ async def get_video(videoloc, mode, sorted_filelist=False):
 
 async def get_resolution(guess, folder_id, base_dir):
     hfr = False
-    with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', 'r', encoding='utf-8') as f:
+    with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
         mi = json.load(f)
         try:
             width = mi['media']['track'][1]['Width']

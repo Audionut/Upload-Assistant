@@ -1,13 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiohttp
-import cli_ui
 import json
 import os
-import requests
 import sys
 import time
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Mapping, cast
+from typing import Any, cast
+
+import aiohttp
+import cli_ui
+import requests
 
 from data.config import config
 from src.btnid import get_btn_torrents
@@ -37,7 +39,7 @@ async def get_tracker_timestamps(base_dir=None):
     timestamp_file = os.path.join(f"{base_dir}", "data", "banned", "tracker_timestamps.json")
     try:
         if os.path.exists(timestamp_file):
-            with open(timestamp_file, 'r') as f:
+            with open(timestamp_file) as f:
                 return json.load(f)
         return {}
     except Exception as e:
@@ -403,31 +405,7 @@ async def ping_unit3d(meta: dict[str, Any]):
             for comment_data in meta.get('torrent_comments', []):
                 comment = comment_data.get('comment', '')
 
-                if "blutopia.cc" in comment and tracker_name == "BLU":
-                    match = re.search(r'/(\d+)$', comment)
-                    if match:
-                        tracker_id = match.group(1)
-                        meta[tracker_key] = tracker_id
-                        break
-                elif "aither.cc" in comment and tracker_name == "AITHER":
-                    match = re.search(r'/(\d+)$', comment)
-                    if match:
-                        tracker_id = match.group(1)
-                        meta[tracker_key] = tracker_id
-                        break
-                elif "lst.gg" in comment and tracker_name == "LST":
-                    match = re.search(r'/(\d+)$', comment)
-                    if match:
-                        tracker_id = match.group(1)
-                        meta[tracker_key] = tracker_id
-                        break
-                elif "onlyencodes.cc" in comment and tracker_name == "OE":
-                    match = re.search(r'/(\d+)$', comment)
-                    if match:
-                        tracker_id = match.group(1)
-                        meta[tracker_key] = tracker_id
-                        break
-                elif "https://upload.cx" in comment and tracker_name == "ULCX":
+                if "blutopia.cc" in comment and tracker_name == "BLU" or "aither.cc" in comment and tracker_name == "AITHER" or "lst.gg" in comment and tracker_name == "LST" or "onlyencodes.cc" in comment and tracker_name == "OE" or "https://upload.cx" in comment and tracker_name == "ULCX":
                     match = re.search(r'/(\d+)$', comment)
                     if match:
                         tracker_id = match.group(1)

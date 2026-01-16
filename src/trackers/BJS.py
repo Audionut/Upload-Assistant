@@ -1,19 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
-import httpx
 import json
-import langcodes
 import os
 import platform
-import pycountry
 import re
 import unicodedata
-from bs4 import BeautifulSoup, Tag
 from datetime import datetime
-from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
+from typing import Any, Optional, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
+import langcodes
+import pycountry
+from bs4 import BeautifulSoup, Tag
+from langcodes.tag_parser import LanguageTagError
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
@@ -21,8 +24,6 @@ from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Any, Optional, cast
-from urllib.parse import urlparse
 
 
 class BJS:
@@ -85,7 +86,7 @@ class BJS:
 
         if os.path.isfile(localized_data_file):
             try:
-                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:

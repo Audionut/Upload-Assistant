@@ -1,9 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import json
 import os
 import re
-import json
 from typing import Any, Dict
+
 from guessit import guessit
+
 from src.console import console
 
 
@@ -84,7 +86,7 @@ async def get_tag(video: str, meta: Dict[str, Any], season_pack_check: bool = Fa
 
 async def tag_override(meta: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        with open(f"{meta['base_dir']}/data/tags.json", 'r', encoding="utf-8") as f:
+        with open(f"{meta['base_dir']}/data/tags.json", encoding="utf-8") as f:
             tags = json.load(f)
             f.close()
 

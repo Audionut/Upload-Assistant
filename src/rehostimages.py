@@ -1,19 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import glob
-import os
-import json
-import aiofiles
 import asyncio
+import glob
+import json
+import os
 import re
-from typing import Any, Iterable, Mapping, Optional, Union, cast
-from src.console import console
+from collections.abc import Iterable, Mapping
+from typing import Any, Optional, Union, cast
 from urllib.parse import urlparse
-from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
-from src.uploadscreens import upload_screens
-from data.config import config
-from aiofiles import os as aio_os
-from src.type_utils import to_int
 
+import aiofiles
+from aiofiles import os as aio_os
+
+from data.config import config
+from src.console import console
+from src.takescreens import disc_screenshots, dvd_screenshots, screenshots
+from src.type_utils import to_int
+from src.uploadscreens import upload_screens
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 
@@ -102,7 +104,7 @@ async def check_hosts(
 
     if os.path.exists(reuploaded_images_path):
         try:
-            async with aiofiles.open(reuploaded_images_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(reuploaded_images_path, encoding='utf-8') as f:
                 content = await f.read()
                 reuploaded_images = json.loads(content)
         except Exception as e:
@@ -498,7 +500,7 @@ async def handle_image_upload(
                 output_file = os.path.join(screenshots_dir, "reuploaded_images.json")
 
             try:
-                async with aiofiles.open(output_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(output_file, encoding='utf-8') as f:
                     existing_data = await f.read()
                     existing_data = json.loads(existing_data) if existing_data else []
                     if not isinstance(existing_data, list):

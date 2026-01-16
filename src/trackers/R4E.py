@@ -1,8 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
+
 import httpx
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D

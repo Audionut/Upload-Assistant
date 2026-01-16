@@ -1,23 +1,24 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
-import httpx
 import json
-import langcodes
 import os
 import platform
 import re
 import unicodedata
+from typing import Any, Optional
+
+import aiofiles
+import httpx
+import langcodes
 from bs4 import BeautifulSoup
 from langcodes.tag_parser import LanguageTagError
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Any, Optional
 
 
 class BT:
@@ -121,7 +122,7 @@ class BT:
 
         if os.path.isfile(localized_data_file):
             try:
-                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:
@@ -511,7 +512,7 @@ class BT:
 
         if os.path.exists(info_file_path):
             try:
-                with open(info_file_path, 'r', encoding='utf-8') as f:
+                with open(info_file_path, encoding='utf-8') as f:
                     return f.read()
             except Exception as e:
                 console.print(f'[bold red]Erro ao ler o arquivo de info em {info_file_path}: {e}[/bold red]')

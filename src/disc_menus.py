@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 from src.console import console
 from src.uploadscreens import upload_screens
 

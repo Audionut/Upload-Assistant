@@ -1,17 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import shutil
-import requests
-import os
-import json
-import urllib.parse
-import re
-from typing import Any, Mapping, Union, cast
-from torf import Torrent
 import glob
+import json
+import os
+import re
+import shutil
+import urllib.parse
+from collections.abc import Mapping
+from typing import Any, Union, cast
+
+import requests
+from torf import Torrent
+
+from data.config import config
 from src.console import console
 from src.uploadscreens import upload_screens
-from data.config import config
-
 
 DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
 if not isinstance(DEFAULT_CONFIG, dict):
@@ -45,8 +47,8 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
         if "tvmaze_id" in meta and meta['tvmaze_id'] != 0:
             generic.write(f"TVMaze: https://www.tvmaze.com/shows/{meta['tvmaze_id']}\n")
         poster_img = f"{meta['base_dir']}/tmp/{meta['uuid']}/POSTER.png"
-        if meta.get('poster', None) not in ['', None] and not os.path.exists(poster_img):
-            if meta.get('rehosted_poster', None) is None:
+        if meta.get('poster') not in ['', None] and not os.path.exists(poster_img):
+            if meta.get('rehosted_poster') is None:
                 r = requests.get(meta['poster'], stream=True, timeout=30)
                 if r.status_code == 200:
                     console.print("[bold yellow]Rehosting Poster")

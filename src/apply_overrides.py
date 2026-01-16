@@ -1,14 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
 import traceback
-from src.console import console
-from src.args import Args
+
 from data.config import config
+from src.args import Args
+from src.console import console
 
 
 async def get_source_override(meta, other_id=False):
     try:
-        with open(f"{meta['base_dir']}/data/templates/user-args.json", 'r', encoding="utf-8") as f:
+        with open(f"{meta['base_dir']}/data/templates/user-args.json", encoding="utf-8") as f:
             console.print("[green]Found user-args.json")
             user_args = json.load(f)
 

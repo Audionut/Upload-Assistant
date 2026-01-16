@@ -1,13 +1,14 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import httpx
 import os
 import platform
 import re
+
+import httpx
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
+
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.trackers.COMMON import COMMON
 
 
@@ -67,25 +68,25 @@ class PTS:
                     console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
                     mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                     if os.path.exists(mi_file_path):
-                        with open(mi_file_path, 'r', encoding='utf-8') as f:
+                        with open(mi_file_path, encoding='utf-8') as f:
                             tech_info = f.read()
             else:
                 console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
                 mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                 if os.path.exists(mi_file_path):
-                    with open(mi_file_path, 'r', encoding='utf-8') as f:
+                    with open(mi_file_path, encoding='utf-8') as f:
                         tech_info = f.read()
         else:
             bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, 'r', encoding='utf-8') as f:
+                with open(bd_summary_file, encoding='utf-8') as f:
                     tech_info = f.read()
 
         if tech_info:
             description_parts.append(tech_info)
 
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, 'r', encoding='utf-8') as f:
+            with open(base_desc_path, encoding='utf-8') as f:
                 manual_desc = f.read()
             description_parts.append(manual_desc)
 

@@ -1,23 +1,25 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import asyncio
-import bencodepy
-import click
 import hashlib
-import httpx
 import json
-import langcodes
 import os
 import re
 import secrets
 import sys
+from typing import Any, List, Optional, Union
+
+import aiofiles
+import bencodepy
+import click
+import httpx
+import langcodes
 from langcodes import tag_parser
+from torf import Torrent
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
 from src.languages import process_desc_language
-from torf import Torrent
-from typing import Any, List, Optional, Union
 
 
 class COMMON:
@@ -105,12 +107,11 @@ class COMMON:
             path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl:
             try:
-                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session:
-                    async with session.stream("GET", downurl) as r:
-                        r.raise_for_status()
-                        async with aiofiles.open(path, "wb") as f:
-                            async for chunk in r.aiter_bytes():
-                                await f.write(chunk)
+                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
+                    r.raise_for_status()
+                    async with aiofiles.open(path, "wb") as f:
+                        async for chunk in r.aiter_bytes():
+                            await f.write(chunk)
 
                 if cross:
                     return None
@@ -192,7 +193,7 @@ class COMMON:
         existing_data: dict[str, Any] = {}
         if os.path.exists(output_file):
             try:
-                with open(output_file, 'r', encoding='utf-8') as f:
+                with open(output_file, encoding='utf-8') as f:
                     loaded_data = json.load(f)
                     # Validate schema: must have 'keys' as dict and 'total_count' as int
                     if (
@@ -646,7 +647,7 @@ class COMMON:
         compatible with requests."""
 
         cookies = {}
-        with open(cookiefile, 'r') as fp:
+        with open(cookiefile) as fp:
             for line in fp:
                 if not line.startswith(("# ", "\n", "#\n")):
                     lineFields = re.split(' |\t', line.strip())
@@ -869,11 +870,7 @@ class COMMON:
                     property_name = property_name.lower().replace(" ", "_")
 
                     # Add property if it's a recognized field for the current section
-                    if current_section == "general" and property_name in general_fields:
-                        current_track[property_name] = property_value
-                    elif current_section == "video" and property_name in video_fields:
-                        current_track[property_name] = property_value
-                    elif current_section == "audio" and property_name in audio_fields:
+                    if current_section == "general" and property_name in general_fields or current_section == "video" and property_name in video_fields or current_section == "audio" and property_name in audio_fields:
                         current_track[property_name] = property_value
                     elif current_section == "text":
                         # Processing specific properties for text
@@ -1015,7 +1012,7 @@ class COMMON:
                 if not os.path.isfile(mi_path):
                     return ""
 
-                async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(mi_path, encoding='utf-8') as f:
                     lines = await f.readlines()
 
                 if remove:

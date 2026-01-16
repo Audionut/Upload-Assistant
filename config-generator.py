@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 
+import ast
+import json
 import os
 import re
-import json
 from pathlib import Path
-import ast
 from typing import Any, Callable, TypedDict
 
 
@@ -25,7 +25,7 @@ def read_example_config():
         return None, comments
 
     try:
-        with open(example_path, "r", encoding="utf-8") as file:
+        with open(example_path, encoding="utf-8") as file:
             lines = file.readlines()
 
         current_comments: list[str] = []
@@ -62,9 +62,7 @@ def read_example_config():
                     comments[key] = list(current_comments)
                     comments[fq_key] = list(current_comments)
                     current_comments = []
-            elif not stripped:  # Empty line
-                pass  # Keep the comments for the next key
-            elif stripped in ["},", "}"]:
+            elif not stripped or stripped in ["},", "}"]:  # Empty line
                 pass  # Keep the comments for the next key
             else:
                 current_comments = []  # Clear comments on other lines
@@ -96,7 +94,7 @@ def load_existing_config():
     for path in config_paths:
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as file:
+                with open(path, encoding="utf-8") as file:
                     content = file.read()
 
                 # Extract the config dict from the file
@@ -785,9 +783,8 @@ def generate_config_file(config_data, existing_path=None):
         backup_path = Path(f"{existing_path}.bak")
         # Create backup of existing config
         if existing_path.exists():
-            with open(existing_path, "r", encoding="utf-8") as src:
-                with open(backup_path, "w", encoding="utf-8") as dst:
-                    dst.write(src.read())
+            with open(existing_path, encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
+                dst.write(src.read())
             print(f"\n[✓] Created backup of existing config at {backup_path}")
     else:
         config_path = Path("data/config.py")
@@ -795,9 +792,8 @@ def generate_config_file(config_data, existing_path=None):
         if config_path.exists():
             overwrite = input(f"{config_path} already exists. Overwrite? (y/n): ").lower()
             if overwrite != "y":
-                with open(config_path, "r", encoding="utf-8") as src:
-                    with open(backup_path, "w", encoding="utf-8") as dst:
-                        dst.write(src.read())
+                with open(config_path, encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
+                    dst.write(src.read())
                 print(f"\n[✓] Created backup of existing config at {backup_path}")
 
     # Convert boolean values in config to proper Python booleans

@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import platform
 import os
+import platform
 from typing import Any, Dict, List, Optional
+
 from src.console import console
 
 
-class Search():
+class Search:
     """
     Logic for searching
     """

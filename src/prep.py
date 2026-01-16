@@ -1,17 +1,16 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 try:
     import asyncio
-    import cli_ui
     import ntpath
     import os
     import re
     import sys
-    import traceback
     import time
+    import traceback
+    from difflib import SequenceMatcher
     from typing import Any, Dict, Optional, cast
 
-    from difflib import SequenceMatcher
+    import cli_ui
     from guessit import guessit
 
     from data.config import config as raw_config
@@ -22,24 +21,24 @@ try:
     from src.clients import Clients
     from src.console import console
     from src.edition import get_edition
-    from src.exportmi import exportInfo, mi_resolution, validate_mediainfo, get_conformance_error
+    from src.exportmi import exportInfo, get_conformance_error, mi_resolution, validate_mediainfo
     from src.get_disc import get_disc, get_dvd_size
     from src.get_name import extract_title_and_year
-    from src.getseasonep import get_season_episode, check_season_pack_completeness
     from src.get_source import get_source
     from src.get_tracker_data import get_tracker_data, ping_unit3d
-    from src.imdb import get_imdb_info_api, search_imdb, get_imdb_from_episode
+    from src.getseasonep import check_season_pack_completeness, get_season_episode
+    from src.imdb import get_imdb_from_episode, get_imdb_info_api, search_imdb
     from src.is_scene import is_scene
     from src.languages import parsed_mediainfo
-    from src.metadata_searching import all_ids, imdb_tvdb, imdb_tmdb, get_tv_data, imdb_tmdb_tvdb, get_tvmaze_tvdb
+    from src.metadata_searching import all_ids, get_tv_data, get_tvmaze_tvdb, imdb_tmdb, imdb_tmdb_tvdb, imdb_tvdb
     from src.radarr import get_radarr_data
-    from src.region import get_region, get_distributor, get_service
+    from src.region import get_distributor, get_region, get_service
     from src.sonarr import get_sonarr_data
     from src.tags import get_tag, tag_override
-    from src.tmdb import get_tmdb_imdb_from_mediainfo, get_tmdb_from_imdb, get_tmdb_id, set_tmdb_metadata
+    from src.tmdb import get_tmdb_from_imdb, get_tmdb_id, get_tmdb_imdb_from_mediainfo, set_tmdb_metadata
     from src.tvdb import tvdb_data
     from src.tvmaze import search_tvmaze
-    from src.video import get_video_codec, get_video_encode, get_uhd, get_hdr, get_video, get_resolution, get_type, is_3d, is_sd, get_video_duration, get_container
+    from src.video import get_container, get_hdr, get_resolution, get_type, get_uhd, get_video, get_video_codec, get_video_duration, get_video_encode, is_3d, is_sd
 
     config = cast(dict[str, Any], raw_config)
 
@@ -52,7 +51,7 @@ except KeyboardInterrupt:
     exit()
 
 
-class Prep():
+class Prep:
     """
     Prepare for upload:
         Mediainfo/BDInfo
@@ -101,7 +100,7 @@ class Prep():
         meta['aither_trumpable'] = None
 
         folder_id = os.path.basename(meta['path'])
-        if meta.get('uuid', None) is None:
+        if meta.get('uuid') is None:
             meta['uuid'] = folder_id
         if not os.path.exists(f"{base_dir}/tmp/{meta['uuid']}"):
             os.makedirs(f"{base_dir}/tmp/{meta['uuid']}", mode=0o700, exist_ok=True)
@@ -169,7 +168,7 @@ class Prep():
                 except Exception:
                     meta['search_year'] = ""
 
-            if meta.get('resolution', None) is None and not meta.get('emby', False):
+            if meta.get('resolution') is None and not meta.get('emby', False):
                 meta['resolution'] = await mi_resolution(bdinfo['video'][0]['res'], guessit(video), width="OTHER", scan="p", height="OTHER", actual_height=0)
                 try:
                     is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"
@@ -321,7 +320,7 @@ class Prep():
                     else:
                         mi = meta['mediainfo']
 
-                    if meta.get('resolution', None) is None:
+                    if meta.get('resolution') is None:
                         meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
 
                     meta['sd'] = await is_sd(meta['resolution'])
@@ -525,15 +524,15 @@ class Prep():
         except (ValueError, TypeError):
             meta['tvmaze_id'] = 0
 
-        if not meta.get('category', None):
+        if not meta.get('category'):
             meta['category'] = await self.get_cat(video, meta)
         else:
             meta['category'] = meta['category'].upper()
 
         ids = None
         if not meta.get('skip_trackers', False):
-            if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
-                ids = await get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename', None), debug=meta.get('debug', False))
+            if meta.get('category') == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
+                ids = await get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename'), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"TVDB ID: {ids['tvdb_id']}")
@@ -558,7 +557,7 @@ class Prep():
                 else:
                     ids = None
 
-            if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
+            if meta.get('category') == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
                 ids = await get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
@@ -1175,7 +1174,7 @@ class Prep():
             if meta['debug']:
                 console.print(f"[cyan]Parsing NFO file: {nfo_file}[/cyan]")
 
-            with open(nfo_file, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(nfo_file, encoding='utf-8', errors='ignore') as f:
                 nfo_content = f.read()
 
             # Parse Source field

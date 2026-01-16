@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
-import cli_ui
-import langcodes
 import os
 import re
 import sys
 from typing import Any, Optional, Union
+
+import aiofiles
+import cli_ui
+import langcodes
 
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
@@ -18,7 +19,7 @@ async def parse_blu_ray(meta: dict[str, Any]) -> dict[str, Any]:
             console.print(f"[yellow]BD_SUMMARY_00.txt not found at {bd_summary_file}[/yellow]")
             return {}
 
-        async with aiofiles.open(bd_summary_file, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(bd_summary_file, encoding='utf-8') as f:
             content = await f.read()
     except Exception as e:
         console.print(f"[red]Error reading BD_SUMMARY file: {e}[/red]")
@@ -113,7 +114,7 @@ async def parsed_mediainfo(meta: dict[str, Any]) -> dict[str, Any]:
     try:
         mediainfo_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
         if os.path.exists(mediainfo_file):
-            async with aiofiles.open(mediainfo_file, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(mediainfo_file, encoding='utf-8') as f:
                 mediainfo_content = await f.read()
         else:
             return {}

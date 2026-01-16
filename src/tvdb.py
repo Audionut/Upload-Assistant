@@ -6,9 +6,10 @@ import json
 import os
 import re
 import ssl
+from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.error import URLError
-from pathlib import Path
+
 from tvdb_v4_official import TVDB
 
 from src.console import console

@@ -1,18 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
-import anitopy
 import asyncio
-import cli_ui
-import httpx
 import json
 import os
 import re
-import requests
 import sys
-from typing import Any, Dict, List, Optional, Tuple, Union, cast as typing_cast
-
 from datetime import datetime
 from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import cast as typing_cast
+
+import aiofiles
+import anitopy
+import cli_ui
+import httpx
+import requests
 from guessit import guessit
 
 from data.config import config
@@ -321,7 +322,7 @@ async def get_tmdb_id(
                             ):
                                 exact_matches.append(r)
 
-                        summary_exact_matches = set((r['id'] for r in exact_matches))
+                        summary_exact_matches = set(r['id'] for r in exact_matches)
 
                         if len(summary_exact_matches) == 1:
                             tmdb_id = int(summary_exact_matches.pop())
@@ -1204,7 +1205,7 @@ async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> Tuple[int
         if each['id'] == 16:
             animation = True
     if response['original_language'] == 'ja' and animation is True:
-        romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id', None), meta)
+        romaji, mal_id, eng_title, season_year, episodes, demographic = await get_romaji(tmdb_name, meta.get('mal_id'), meta)
         alt_name = f"AKA {romaji}"
 
         anime = True
@@ -1349,7 +1350,7 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
             # Calculate title similarity
             for title in anime['title'].values():
                 if title is not None:
-                    title_clean = re.sub(u'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)
+                    title_clean = re.sub('[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+ (?=[A-Za-z ]+–)', "", title.lower().replace(' ', ''), re.U)
                     diff = SequenceMatcher(None, title_clean, search_name).ratio()
 
                     # Prioritize season match if expected_season is set
@@ -1797,7 +1798,7 @@ async def set_tmdb_metadata(meta: dict[str, Any], filename: Optional[str] = None
 
                 if tmdb_metadata and all(tmdb_metadata.get(field) for field in ['title', 'year']):
                     meta.update(tmdb_metadata)
-                    if meta.get('retrieved_aka', None) is not None:
+                    if meta.get('retrieved_aka') is not None:
                         meta['aka'] = meta['retrieved_aka']
                     break
                 else:
@@ -1818,7 +1819,7 @@ async def set_tmdb_metadata(meta: dict[str, Any], filename: Optional[str] = None
                     await asyncio.sleep(delay_seconds)
                 else:
                     console.print(f"[red]Catastrophic error getting TMDB data using ID {meta['tmdb_id']}[/red]")
-                    console.print(f"[red]Check category is set correctly, UA was using {meta.get('category', None)}[/red]")
+                    console.print(f"[red]Check category is set correctly, UA was using {meta.get('category')}[/red]")
                     raise RuntimeError(error_msg) from e
 
 
@@ -1873,7 +1874,7 @@ async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language
         localized_data: dict[str, Any] = {}
         if os.path.exists(filename):
             try:
-                async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(filename, encoding='utf-8') as f:
                     content = await f.read()
                     try:
                         localized_data = json.loads(content)
@@ -1904,7 +1905,7 @@ async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language
                         async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
                             data_str = json.dumps(localized_data, ensure_ascii=False, indent=4)
                             await f.write(data_str)
-                    except (OSError, IOError, Exception) as e:
+                    except (OSError, Exception) as e:
                         console.print(f'[red]Warning: Failed to write cache to {filename}: {e}[/red]')
 
                     return tmdb_data

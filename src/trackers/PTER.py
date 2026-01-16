@@ -1,21 +1,23 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from bs4 import BeautifulSoup
-import requests
-import re
-import os
-from pathlib import Path
-import json
 import glob
-import httpx
-from unidecode import unidecode
+import json
+import os
+import re
+from pathlib import Path
 from urllib.parse import urlparse
-from src.trackers.COMMON import COMMON
+
+import httpx
+import requests
+from bs4 import BeautifulSoup
+from unidecode import unidecode
+
+from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa E403
-from src.console import console
+from src.trackers.COMMON import COMMON
 
 
-class PTER():
+class PTER:
 
     def __init__(self, config):
         self.config = config
@@ -128,7 +130,7 @@ class PTER():
             "巴西": 8, "加拿大": 4, "瑞士": 4, "智利": 8,
         }
         regions = meta['ptgen'].get("region", [])
-        for area in area_map.keys():
+        for area in area_map:
             if area in regions:
                 return area_map[area]
         return area_id
@@ -164,7 +166,7 @@ class PTER():
         return medium_id
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
             from src.bbcode import BBCODE
             from src.trackers.COMMON import COMMON
@@ -188,7 +190,7 @@ class PTER():
                         descfile.write(f"[hide=mediainfo][{each['vob_mi']}[/hide] [hide=mediainfo][{each['ifo_mi']}[/hide]\n")
                         descfile.write("\n")
             else:
-                mi = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+                mi = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
                 descfile.write(f"[hide=mediainfo]{mi}[/hide]")
                 descfile.write("\n")
             desc = base
@@ -358,11 +360,11 @@ class PTER():
         pter_name = await self.edit_name(meta)
 
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8')
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8')
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8')
 
-        pter_desc = open(desc_file, 'r').read()
+        pter_desc = open(desc_file).read()
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         with open(torrent_path, 'rb') as torrentFile:

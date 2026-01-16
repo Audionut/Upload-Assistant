@@ -1,20 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from bs4 import BeautifulSoup
-import requests
 import asyncio
-import re
 import os
+import re
+from urllib.parse import urlparse
+
 import cli_ui
 import httpx
+import requests
+from bs4 import BeautifulSoup
 from unidecode import unidecode
-from urllib.parse import urlparse
-from src.trackers.COMMON import COMMON
+
+from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
-from src.console import console
+from src.trackers.COMMON import COMMON
 
 
-class TTG():
+class TTG:
 
     def __init__(self, config):
         self.config = config
@@ -122,11 +124,11 @@ class TTG():
             anon = 'yes'
 
         if meta['bdinfo'] is not None:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8')
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8')
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8')
+            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8')
 
-        ttg_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        ttg_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8').read()
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         with open(torrent_path, 'rb') as torrentFile:
             if len(meta['filelist']) == 1:
@@ -302,7 +304,7 @@ class TTG():
         return
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
             from src.bbcode import BBCODE
             from src.trackers.COMMON import COMMON
@@ -328,7 +330,7 @@ class TTG():
                         descfile.write(f"[quote={os.path.basename(each['vob'])}][{each['vob_mi']}[/quote] [quote={os.path.basename(each['ifo'])}][{each['ifo_mi']}[/quote]\n")
                         descfile.write("\n")
             else:
-                mi = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+                mi = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
                 descfile.write(f"[quote=MediaInfo]{mi}[/quote]")
                 descfile.write("\n")
             desc = base

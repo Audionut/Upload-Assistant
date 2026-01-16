@@ -1,13 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import re
-from typing import Any, Awaitable, Optional, Union
+from collections.abc import Awaitable
+from typing import Any, Optional, Union
+
 from data.config import config
 from src.console import console
-from src.tvmaze import search_tvmaze, get_tvmaze_episode_data
 from src.imdb import get_imdb_info_api
-from src.tmdb import tmdb_other_meta, get_tmdb_from_imdb, get_episode_details, get_season_details
+from src.tmdb import get_episode_details, get_season_details, get_tmdb_from_imdb, tmdb_other_meta
 from src.tvdb import tvdb_data
+from src.tvmaze import get_tvmaze_episode_data, search_tvmaze
 
 tvdb_handler = tvdb_data(config)
 

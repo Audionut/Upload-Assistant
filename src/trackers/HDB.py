@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import glob
-import httpx
 import json
 import os
 import re
-import requests
-
 from typing import IO
+from urllib.parse import quote, urlparse
+
+import httpx
+import requests
 from unidecode import unidecode
-from urllib.parse import urlparse, quote
 
 from src.bbcode import BBCODE
 from src.console import console
@@ -18,7 +18,7 @@ from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
 
-class HDB():
+class HDB:
 
     def __init__(self, config):
         self.config = config
@@ -128,7 +128,7 @@ class HDB():
             "CRAV": 80,
             'MAX': 88
         }
-        if meta.get('service') in service_dict.keys():
+        if meta.get('service') in service_dict:
             tags.append(service_dict.get(meta['service']))
 
         # Collections
@@ -142,7 +142,7 @@ class HDB():
             "STUDIO CANAL": 65,
             "ARROW": 64
         }
-        if meta.get('distributor') in distributor_dict.keys():
+        if meta.get('distributor') in distributor_dict:
             tags.append(distributor_dict.get(meta['distributor']))
 
         # 4K Remaster,
@@ -224,7 +224,7 @@ class HDB():
                 console.print("[bold red]Dual-Audio Encodes are not allowed for non-anime and non-disc content")
                 return
 
-        hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        hdb_desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8').read()
 
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -274,7 +274,7 @@ class HDB():
                     data['origin'] = 1
             # If not BDMV fill mediainfo
             if meta.get('is_disc', '') != "BDMV":
-                data['techinfo'] = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+                data['techinfo'] = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
             # If tv, submit tvdb_id/season/episode
             if meta.get('tvdb_id', 0) != 0:
                 data['tvdb'] = meta['tvdb_id']
@@ -486,7 +486,7 @@ class HDB():
         return
 
     async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
             # Add This line for all web-dls
             if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None:
@@ -840,7 +840,7 @@ class HDB():
 
             # Parse the BD_SUMMARY_00.txt file to extract the Disc Title
             try:
-                with open(bd_summary_path, 'r', encoding='utf-8') as file:
+                with open(bd_summary_path, encoding='utf-8') as file:
                     for line in file:
                         if "Disc Title:" in line:
                             bd_summary = line.split("Disc Title:")[1].strip()

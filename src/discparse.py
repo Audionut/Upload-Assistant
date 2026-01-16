@@ -1,21 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
-import sys
 import asyncio
-import shutil
-import traceback
-from glob import glob
-from pymediainfo import MediaInfo
-from collections import OrderedDict
 import json
-from pyparsebluray import mpls
-import defusedxml.ElementTree as ET
+import os
 import re
-from langcodes import Language
-from collections import defaultdict
+import shutil
+import sys
+import traceback
+from collections import OrderedDict, defaultdict
+from glob import glob
 from typing import Any, TypedDict
-from src.console import console
+
+import defusedxml.ElementTree as ET
+from langcodes import Language
+from pymediainfo import MediaInfo
+from pyparsebluray import mpls
+
 from data.config import config
+from src.console import console
 from src.exportmi import setup_mediainfo_library
 
 
@@ -32,7 +33,7 @@ class PlaylistInfo(TypedDict, total=False):
     edition: str
 
 
-class DiscParse():
+class DiscParse:
     def __init__(self):
         self.config: Any = config
         self.mediainfo_config = None
@@ -303,7 +304,7 @@ class DiscParse():
                                 console.print(f"[bold red]No valid BDInfo file found for playlist {playlist_number}.")
                                 break
 
-                            with open(bdinfo_text, 'r', encoding="utf-8", errors="replace") as f:
+                            with open(bdinfo_text, encoding="utf-8", errors="replace") as f:
                                 text = f.read()
                                 result = text.split("QUICK SUMMARY:", 2)
                                 files = result[0].split("FILES:", 2)[1].split("CHAPTERS:", 2)[0].split("-------------")
@@ -311,7 +312,7 @@ class DiscParse():
                                 result = result2.split("********************", 1)
                                 bd_summary = result[0].rstrip(" \n")
 
-                            with open(bdinfo_text, 'r', encoding="utf-8", errors="replace") as f:
+                            with open(bdinfo_text, encoding="utf-8", errors="replace") as f:
                                 text = f.read()
                                 result = text.split("[code]", 3)
                                 result2 = result[2].rstrip(" \n")
@@ -546,7 +547,7 @@ class DiscParse():
             os.chdir(path)
             files = glob("VTS_*.VOB")
             files.sort()
-            filesdict: "OrderedDict[str, list[str]]" = OrderedDict()
+            filesdict: OrderedDict[str, list[str]] = OrderedDict()
             main_set: list[str] = []
             for file in files:
                 trimmed = file[4:]

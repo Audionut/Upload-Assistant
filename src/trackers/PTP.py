@@ -1,18 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import glob
+import json
+import os
+import platform
+import re
+from pathlib import Path
+from typing import Any, Optional, Union
+
 import cli_ui
 import click
-import glob
 import httpx
-import json
-import platform
-import os
-import re
 import requests
-
-from pathlib import Path
 from pymediainfo import MediaInfo
-from typing import Any, Optional, Union
+
 from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
@@ -25,7 +26,7 @@ from src.trackers.COMMON import COMMON
 from src.uploadscreens import upload_screens
 
 
-class PTP():
+class PTP:
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -667,9 +668,7 @@ class PTP():
             remaster_title.append("Director's Cut")
         elif "extended" in meta.get('edition', '').lower():
             remaster_title.append("Extended Edition")
-        elif "theatrical" in meta.get('edition', '').lower():
-            remaster_title.append("Theatrical Cut")
-        elif "rifftrax" in meta.get('edition', '').lower():
+        elif "theatrical" in meta.get('edition', '').lower() or "rifftrax" in meta.get('edition', '').lower():
             remaster_title.append("Theatrical Cut")
         elif "uncut" in meta.get('edition', '').lower():
             remaster_title.append("Uncut")
@@ -749,8 +748,8 @@ class PTP():
         return
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding="utf-8").read()
-        if meta.get('scene_nfo_file', None):
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding="utf-8").read()
+        if meta.get('scene_nfo_file'):
             # Remove NFO from description
             meta_description = re.sub(
                 r"\[center\]\[spoiler=.*? NFO:\]\[code\](.*?)\[/code\]\[/spoiler\]\[/center\]",
@@ -778,7 +777,7 @@ class PTP():
         pack_images_data = {}
         if os.path.exists(pack_images_file):
             try:
-                with open(pack_images_file, 'r', encoding='utf-8') as f:
+                with open(pack_images_file, encoding='utf-8') as f:
                     pack_images_data = json.load(f)
 
                     # Filter out keys with non-approved image hosts
@@ -1098,15 +1097,15 @@ class PTP():
             # Handle single file case
             elif len(filelist) == 1:
                 file = filelist[0]
-                if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None and self.web_source is True:
+                if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
                     desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
-                mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+                mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8').read()
                 desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                 base2ptp = self.convert_bbcode(base)
                 if base2ptp.strip() != "":
                     desc.write(base2ptp)
                     desc.write("\n\n")
-                if meta.get('comparison', None):
+                if meta.get('comparison'):
                     if 'comparison_groups' in meta and meta['comparison_groups']:
                         desc.write("\n")
 
@@ -1149,13 +1148,13 @@ class PTP():
                 for i in range(len(filelist)):
                     file = filelist[i]
                     if i == 0:
-                        if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None and self.web_source is True:
+                        if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
                             desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
                         base2ptp = self.convert_bbcode(base)
                         if base2ptp.strip() != "":
                             desc.write(base2ptp)
                             desc.write("\n\n")
-                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8').read()
+                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8').read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         try:
                             if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
@@ -1173,7 +1172,7 @@ class PTP():
                         mi_dump = MediaInfo.parse(file, output="STRING", full=False)
                         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "w", newline="", encoding="utf-8") as f:
                             f.write(mi_dump.replace(file, os.path.basename(file)))
-                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "r", encoding="utf-8").read()
+                        mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", encoding="utf-8").read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         new_images_key = f'new_images_file_{i}'
                         # Check for saved images first
@@ -1242,7 +1241,7 @@ class PTP():
         existing_data = {}
         if os.path.exists(output_file):
             try:
-                with open(output_file, 'r', encoding='utf-8') as f:
+                with open(output_file, encoding='utf-8') as f:
                     existing_data = json.load(f)
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load existing image data: {str(e)}[/yellow]")
@@ -1367,7 +1366,7 @@ class PTP():
 
         try:
             os.stat(file_path)  # Ensures the file is accessible
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 desc = f.read()
         except OSError as e:
             print(f"File error: {e}")
@@ -1476,7 +1475,7 @@ class PTP():
             else:
                 imdb_value = meta.get("imdb") or "0"
                 tinfo = await self.get_torrent_info(imdb_value, meta)
-            if meta.get('youtube', None) is None or "youtube" not in str(meta.get('youtube', '')):
+            if meta.get('youtube') is None or "youtube" not in str(meta.get('youtube', '')):
                 youtube = "" if meta['unattended'] else cli_ui.ask_string("Unable to find youtube trailer, please link one e.g.(https://www.youtube.com/watch?v=dQw4w9WgXcQ)", default="")
                 meta['youtube'] = youtube
             cover = meta["imdb_info"].get("cover")

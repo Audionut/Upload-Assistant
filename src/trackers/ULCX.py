@@ -1,8 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import re
+
 import aiofiles
 import cli_ui
-import re
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D

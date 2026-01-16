@@ -1,19 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import anitopy
 import asyncio
 import os
 import re
-import requests
 import sys
-
 from difflib import SequenceMatcher
-from guessit import guessit
 from pathlib import Path
+
+import anitopy
+import requests
+from guessit import guessit
 
 from src.console import console
 from src.exceptions import *  # noqa: F403
 from src.tags import get_tag
-from src.tmdb import get_tmdb_id, daily_to_tmdb_season_episode, get_romaji
+from src.tmdb import daily_to_tmdb_season_episode, get_romaji, get_tmdb_id
 
 
 async def get_season_episode(video, meta):

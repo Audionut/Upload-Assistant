@@ -1,9 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 import html
-import urllib.parse
 import os
-from typing import Dict, Any, List, Tuple
+import re
+import urllib.parse
+from typing import Any, Dict, List, Tuple
+
 from src.console import console
 
 # Bold - KEEP

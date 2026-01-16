@@ -1,12 +1,14 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
-import httpx
 import json
 import os
 import re
 import unicodedata
+from typing import Any, Dict, Optional, Union
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
+
 from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
@@ -15,10 +17,9 @@ from src.languages import process_desc_language
 from src.rehostimages import check_hosts
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Any, Dict, Optional, Union
 
 
-class GPW():
+class GPW:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
@@ -61,7 +62,7 @@ class GPW():
 
         if os.path.isfile(localized_data_file):
             try:
-                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:
@@ -448,7 +449,7 @@ class GPW():
 
         if os.path.exists(info_file_path):
             try:
-                with open(info_file_path, 'r', encoding='utf-8') as f:
+                with open(info_file_path, encoding='utf-8') as f:
                     return f.read()
             except Exception as e:
                 console.print(f'[bold red]Error reading info file at {info_file_path}: {e}[/bold red]')

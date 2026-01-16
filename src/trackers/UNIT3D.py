@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
 import glob
-import httpx
 import json
 import os
 import platform
 import re
-from typing import Any, Union, Optional
+from typing import Any, Optional, Union
+
+import aiofiles
+import httpx
 from typing_extensions import TypeAlias
 
 from src.console import console
@@ -196,19 +196,19 @@ class UNIT3D:
         }
 
     async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta.get("bdinfo", None) is not None:
+        if meta.get("bdinfo") is not None:
             mediainfo = ""
         else:
             async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", "r", encoding="utf-8"
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
             ) as f:
                 mediainfo = await f.read()
         return {"mediainfo": mediainfo}
 
     async def get_bdinfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta.get("bdinfo", None) is not None:
+        if meta.get("bdinfo") is not None:
             async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", "r", encoding="utf-8"
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
             ) as f:
                 bdinfo = await f.read()
         else:
@@ -433,9 +433,7 @@ class UNIT3D:
         # Handle exclusive flag centrally for all UNIT3D trackers
         # Priority: meta['exclusive'] > tracker config > default (not set)
         exclusive_flag = None
-        if meta.get("exclusive", False):
-            exclusive_flag = "1"
-        elif self.tracker_config.get("exclusive", False):
+        if meta.get("exclusive", False) or self.tracker_config.get("exclusive", False):
             exclusive_flag = "1"
         if exclusive_flag:
             merged["exclusive"] = exclusive_flag

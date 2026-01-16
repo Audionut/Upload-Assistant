@@ -1,24 +1,25 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import asyncio
-import traceback
-import cli_ui
+import json
 import os
 import re
-from urllib.parse import urlparse
-import tmdbsimple as tmdb
-from src.bbcode import BBCODE
-import json
-import httpx
-import requests
-from src.trackers.COMMON import COMMON
-from src.console import console
-from src.rehostimages import check_hosts
+import traceback
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
+
+import cli_ui
+import httpx
+import requests
+import tmdbsimple as tmdb
+
+from src.bbcode import BBCODE
+from src.console import console
+from src.rehostimages import check_hosts
+from src.trackers.COMMON import COMMON
 
 
-class TVC():
+class TVC:
     def __init__(self, config):
         self.config = config
         self.tracker = 'TVC'
@@ -164,7 +165,7 @@ class TVC():
         Uses a with-block to ensure the file handle is closed.
         """
         def _read():
-            with open(path, "r", encoding=encoding) as f:
+            with open(path, encoding=encoding) as f:
                 return f.read()
         return await asyncio.to_thread(_read)
 

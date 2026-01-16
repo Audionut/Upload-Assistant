@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import re
 import asyncio
+import re
+
 import cloudscraper
+
 from src.console import console
 from src.languages import process_desc_language
-from src.trackers.UNIT3D import UNIT3D
 from src.tmdb import get_tmdb_translations
+from src.trackers.UNIT3D import UNIT3D
 
 
 class EMUW(UNIT3D):

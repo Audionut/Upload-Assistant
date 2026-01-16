@@ -1,24 +1,25 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import asyncio
-import requests
-import json
 import glob
-import cli_ui
+import json
 import os
-import re
 import platform
+import re
+from typing import Any
+
+import cli_ui
 import httpx
+import requests
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
-from typing import Any
 from unidecode import unidecode
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
 
 
-class THR():
+class THR:
     def __init__(self, config):
         self.config = config
         self.tracker = 'THR'
@@ -61,7 +62,7 @@ class THR():
                 mi_file = f.read()
             # bd_file = None
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", encoding='utf-8') as f:
             desc = f.read()
             f.close()
 
@@ -176,7 +177,7 @@ class THR():
         subs: list[int] = []
         sub_langs: list[str] = []
         if meta.get('is_disc', '') != 'BDMV':
-            with open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+            with open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", encoding='utf-8') as f:
                 mi = json.load(f)
             for track in mi['media']['track']:
                 if track['@type'] == "Text":
@@ -204,7 +205,7 @@ class THR():
     async def edit_desc(self, meta):
         pronfo = False
         bbcode = BBCODE()
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
+        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8').read()
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
             if meta['tag'] == "":
                 tag = ""
@@ -292,7 +293,7 @@ class THR():
                 # ProNFO
                 pronfo_url = f"https://www.pronfo.com/api/v1/access/upload/{self.config['TRACKERS']['THR'].get('pronfo_api_key', '')}"
                 data = {
-                    'content': open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r').read(),
+                    'content': open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt").read(),
                     'theme': self.config['TRACKERS']['THR'].get('pronfo_theme', 'gray'),
                     'rapi': self.config['TRACKERS']['THR'].get('pronfo_rapi_id')
                 }

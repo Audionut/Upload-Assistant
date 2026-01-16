@@ -1,17 +1,17 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
-import httpx
 import os
 import platform
 import re
+from typing import Any
+
+import aiofiles
+import httpx
 
 from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
-from typing import Any
 
 
 class ACM:
@@ -211,7 +211,7 @@ class ACM:
             for each in meta['discs']:
                 bd_dump = bd_dump + each['summary'].strip() + "\n\n"
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
             bd_dump = None
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -356,7 +356,7 @@ class ACM:
         return name
 
     async def get_description(self, meta: dict[str, Any]) -> str:
-        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', encoding='utf-8') as f:
             base = await f.read()
 
         output_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt'
@@ -411,7 +411,7 @@ class ACM:
 
             await descfile.write(f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
-        async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(output_path, encoding='utf-8') as f:
             final_desc: str = await f.read()
 
         return final_desc

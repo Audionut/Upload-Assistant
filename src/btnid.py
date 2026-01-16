@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import httpx
 import uuid
+
+import httpx
 
 from src.bbcode import BBCODE
 from src.console import console

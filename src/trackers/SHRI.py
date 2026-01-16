@@ -1,17 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-from typing import Any, Literal, Optional, Union, cast
 import asyncio
+import os
+import random
+import re
+from typing import Any, Literal, Optional, Union, cast
+
 import aiofiles
 import certifi
 import cli_ui
-import os
 import pycountry
-import random
-import re
 import requests
 from babel import Locale
 from babel.core import UnknownLocaleError
+
 from src.audio import get_audio_v2
 from src.languages import process_desc_language
 from src.trackers.COMMON import COMMON

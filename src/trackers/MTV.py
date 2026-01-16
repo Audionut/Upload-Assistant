@@ -1,15 +1,16 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
-import aiofiles.os
 import asyncio
-import cli_ui
-import httpx
 import json
 import os
-import pyotp
 import re
 import traceback
 from typing import Any
+
+import aiofiles
+import aiofiles.os
+import cli_ui
+import httpx
+import pyotp
 from defusedxml import ElementTree as ET
 
 from src.console import console
@@ -18,7 +19,7 @@ from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
 
-class MTV():
+class MTV:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -111,7 +112,7 @@ class MTV():
             anon = 1
 
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(desc_path, encoding='utf-8') as f:
             desc = await f.read()
 
         async with aiofiles.open(torrent_file_path, 'rb') as f:
@@ -143,7 +144,7 @@ class MTV():
 
         if not meta['debug']:
             try:
-                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     cookie_data = await cf.read()
                     cookies = await self.async_json_loads(cookie_data)
 
@@ -208,16 +209,16 @@ class MTV():
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta):
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as f:
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
             if meta['bdinfo'] is not None:
                 mi_dump = None
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                     bd_dump = await f.read()
             else:
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                     mi_dump = (await f.read()).strip()
                 bd_dump = None
 
@@ -509,7 +510,7 @@ class MTV():
         if await aiofiles.os.path.exists(cookiefile):
             try:
 
-                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     data = await cf.read()
                     cookies_dict = await self.async_json_loads(data)
 
@@ -547,7 +548,7 @@ class MTV():
         url = "https://www.morethantv.me/index.php"
         try:
             if await aiofiles.os.path.exists(cookiefile):
-                async with aiofiles.open(cookiefile, 'r', encoding='utf-8') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     data = await cf.read()
                     cookies = await self.async_json_loads(data)
 

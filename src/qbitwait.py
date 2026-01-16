@@ -1,10 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import qbittorrentapi
+import asyncio
 import os
 import traceback
-import aiohttp
-import asyncio
 from typing import Any, Dict, List, Optional, cast
+
+import aiohttp
+import qbittorrentapi
 
 from data.config import config
 from src.console import console
@@ -153,9 +154,7 @@ class Wait:
                 if not tc.get('has_working_tracker', False):
                     continue
 
-                if content_path and isinstance(content_path, str) and os.path.normpath(content_path).lower() == os.path.normpath(target_path).lower():
-                    matching_torrents.append(tc)
-                elif tc.get('name') and meta_name_lower and isinstance(tc.get('name'), str) and tc['name'].lower() == meta_name_lower:
+                if content_path and isinstance(content_path, str) and os.path.normpath(content_path).lower() == os.path.normpath(target_path).lower() or tc.get('name') and meta_name_lower and isinstance(tc.get('name'), str) and tc['name'].lower() == meta_name_lower:
                     matching_torrents.append(tc)
 
             if not matching_torrents:

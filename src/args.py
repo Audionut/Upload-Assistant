@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import argparse
-import urllib.parse
-import os
 import datetime
-import sys
+import os
 import re
-from typing import Dict, Any, List, Tuple, Optional, cast, Sequence
+import sys
+import urllib.parse
+from collections.abc import Sequence
+from typing import Any, Dict, List, Optional, Tuple, cast
+
 from src.console import console
 
 
@@ -65,7 +66,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             short_parser.print_help(file)
 
 
-class Args():
+class Args:
     """
     Parse Args
     """
@@ -240,9 +241,7 @@ class Args():
                         meta['manual_type'] = value2.upper().replace('-', '')
                     elif key == 'tag':
                         meta[key] = f"-{value2}"
-                    elif key == 'description_file':
-                        meta[key] = os.path.abspath(value2)
-                    elif key == 'comparison':
+                    elif key == 'description_file' or key == 'comparison':
                         meta[key] = os.path.abspath(value2)
                     elif key == 'screens':
                         meta[key] = int(value2)
@@ -459,7 +458,7 @@ class Args():
                 else:
                     meta[key] = []
             else:
-                meta[key] = meta.get(key, None)
+                meta[key] = meta.get(key)
             # if key == 'help' and value == True:
                 # parser.print_help()
         return meta, parser, before_args

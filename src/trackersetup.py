@@ -1,19 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import asyncio
-import cli_ui
-import httpx
 import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta
 from typing import Any, Union
 
-from datetime import datetime, timedelta
+import aiofiles
+import cli_ui
+import httpx
+
 from src.cleanup import cleanup, reset_terminal
 from src.console import console
-from src.trackers.COMMON import COMMON
-
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
 from src.trackers.ANT import ANT
@@ -26,9 +25,11 @@ from src.trackers.BJS import BJS
 from src.trackers.BLU import BLU
 from src.trackers.BT import BT
 from src.trackers.CBR import CBR
+from src.trackers.COMMON import COMMON
 from src.trackers.CZ import CZ
 from src.trackers.DC import DC
 from src.trackers.DP import DP
+from src.trackers.EMUW import EMUW
 from src.trackers.FF import FF
 from src.trackers.FL import FL
 from src.trackers.FNP import FNP
@@ -78,7 +79,6 @@ from src.trackers.ULCX import ULCX
 from src.trackers.UTP import UTP
 from src.trackers.YOINK import YOINK
 from src.trackers.YUS import YUS
-from src.trackers.EMUW import EMUW
 
 
 class TRACKER_SETUP:
@@ -235,7 +235,7 @@ class TRACKER_SETUP:
 
     def _read_file(self, file_path):
         """ Helper function to read the file in a blocking thread """
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             return file.read()
 
     async def check_banned_group(self, tracker, banned_group_list, meta):
@@ -456,7 +456,7 @@ class TRACKER_SETUP:
                     console.print(f"[red]No claim data file found for {tracker_name}[/red]")
                     return False
 
-                with open(file_path, 'r') as file:
+                with open(file_path) as file:
                     extracted_data = json.load(file).get('extracted_data', [])
 
                 for item in extracted_data:
@@ -672,7 +672,7 @@ class TRACKER_SETUP:
 
             request_data: list[dict[str, Any]] = []
             try:
-                async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(log_path, encoding='utf-8') as f:
                     content = await f.read()
                     request_data = json.loads(content) if content.strip() else []
             except Exception:
@@ -819,25 +819,17 @@ class TRACKER_SETUP:
                     if not each.get('hdr') and meta_hdr not in ("HDR10", "HDR10+", "HDR"):
                         hdr = True
                     if 'remux' in api_resolution_lower:
-                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p" and meta.get('type') == "REMUX":
-                            resolution = True
-                            type_name = True
-                        elif 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p" and meta.get('type') == "REMUX":
+                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p" and meta.get('type') == "REMUX" or 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p" and meta.get('type') == "REMUX":
                             resolution = True
                             type_name = True
                     elif 'remux' not in api_resolution_lower and meta.get('is_disc') == "BDMV":
-                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p":
-                            resolution = True
-                            type_name = True
-                        elif 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p":
+                        if 'uhd' in api_resolution_lower and meta.get('resolution') == "2160p" or 'uhd' not in api_resolution_lower and meta.get('resolution') == "1080p":
                             resolution = True
                             type_name = True
                     elif api_resolution == meta.get('resolution'):
                         resolution = True
                     meta_type = str(meta.get('type') or '')
-                    if 'Blu-ray' in api_type_str and meta_type == "ENCODE":
-                        type_name = True
-                    elif 'WEB' in api_type_str and 'WEB' in meta_type:
+                    if 'Blu-ray' in api_type_str and meta_type == "ENCODE" or 'WEB' in api_type_str and 'WEB' in meta_type:
                         type_name = True
                     if meta.get('category') == "MOVIE" and type_name and resolution and unclaimed and not internal and dv and hdr:
                         console.print(f"[bold blue]Found exact request match on [bold yellow]{tracker_name}[/bold yellow] with bounty [bold yellow]{api_bounty}[/bold yellow] and with status [bold yellow]{claimed_status}[/bold yellow][/bold blue]")
