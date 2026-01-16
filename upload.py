@@ -160,7 +160,7 @@ from src.cleanup import cleanup, reset_terminal  # noqa: E402
 from src.clients import Clients  # noqa: E402
 from src.console import console  # noqa: E402
 from src.disc_menus import process_disc_menus  # noqa: E402
-from src.dupe_checking import filter_dupes  # noqa: E402
+from src.dupe_checking import DupeChecker  # noqa: E402
 from src.get_desc import gen_desc  # noqa: E402
 from src.get_name import get_name  # noqa: E402
 from src.get_tracker_data import get_tracker_data  # noqa: E402
@@ -175,7 +175,7 @@ from src.trackers.AR import AR  # noqa: E402
 from src.trackers.COMMON import COMMON  # noqa: E402
 from src.trackers.PTP import PTP  # noqa: E402
 from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, other_api_trackers, tracker_class_map  # noqa: E402
-from src.trackerstatus import process_all_trackers  # noqa: E402
+from src.trackerstatus import TrackerStatusManager  # noqa: E402
 from src.uphelper import UploadHelper  # noqa: E402
 from src.uploadscreens import upload_screens  # noqa: E402
 
@@ -506,7 +506,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         except Exception as e:
             console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
 
-        successful_trackers = await process_all_trackers(meta)
+        successful_trackers = await TrackerStatusManager.process_all_trackers(meta)
 
         if meta.get('trackers_pass') is not None:
             meta['skip_uploading'] = meta.get('trackers_pass')
@@ -1401,7 +1401,7 @@ async def do_the_thing(base_dir: str) -> None:
                             continue
 
                     if trackers_list:
-                        successful_trackers = await process_all_trackers(meta)
+                        successful_trackers = await TrackerStatusManager.process_all_trackers(meta)
                     else:
                         successful_trackers = 0
 
@@ -1641,7 +1641,7 @@ async def process_cross_seeds(meta: Meta) -> None:
                     dupes = await ptp.search_existing(group_id, meta, disctype)
 
                 if dupes:
-                    dupes = await filter_dupes(dupes, meta, tracker)
+                    dupes = await DupeChecker.filter_dupes(dupes, meta, tracker)
                     _is_dupe, updated_meta = await helper.dupe_check(dupes, meta, tracker)
                     # Persist any updates from dupe_check (defensive in case it returns a copy)
                     if isinstance(updated_meta, dict) and updated_meta is not meta:
