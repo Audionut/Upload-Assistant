@@ -6,6 +6,7 @@ import shutil
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Optional
 
 import requests
 
@@ -80,7 +81,7 @@ def extract_linux(cli_archive: Path, lib_archive: Path, output_dir: Path) -> Non
         lib_dir.rmdir()
 
 
-def download_dvd_mediainfo(base_dir, debug=False):
+def download_dvd_mediainfo(base_dir: str, debug: bool = False) -> Optional[str]:
     system = platform.system().lower()
     machine = platform.machine().lower()
 
@@ -127,8 +128,9 @@ def download_dvd_mediainfo(base_dir, debug=False):
         console.print(f"[blue]MediaInfo Library filename: {lib_filename}[/blue]")
 
     with TemporaryDirectory() as tmp_dir:
-        cli_archive = Path(tmp_dir) / cli_filename
-        lib_archive = Path(tmp_dir) / lib_filename
+        tmp_dir_path = Path(str(tmp_dir))
+        cli_archive = tmp_dir_path / cli_filename
+        lib_archive = tmp_dir_path / lib_filename
 
         # Download both archives
         download_file(cli_url, cli_archive)

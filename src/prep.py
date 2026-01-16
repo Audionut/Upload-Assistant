@@ -22,7 +22,7 @@ try:
     from src.console import console
     from src.edition import get_edition
     from src.exportmi import exportInfo, get_conformance_error, mi_resolution, validate_mediainfo
-    from src.get_disc import get_disc, get_dvd_size
+    from src.get_disc import disc_info_manager
     from src.get_name import extract_title_and_year
     from src.get_source import get_source
     from src.get_tracker_data import tracker_data_manager
@@ -109,7 +109,7 @@ class Prep:
             console.print(f"[cyan]ID: {meta['uuid']}")
 
         try:
-            meta['is_disc'], videoloc, bdinfo, meta['discs'] = await get_disc(meta)
+            meta['is_disc'], videoloc, bdinfo, meta['discs'] = await disc_info_manager.get_disc(meta)
         except Exception:
             raise
 
@@ -235,7 +235,7 @@ class Prep:
                 else:
                     mi = meta['mediainfo']
 
-                meta['dvd_size'] = await get_dvd_size(meta['discs'], meta.get('manual_dvds'))
+                meta['dvd_size'] = await disc_info_manager.get_dvd_size(meta['discs'], meta.get('manual_dvds'))
                 meta['resolution'], meta['hfr'] = await get_resolution(guessit(video), meta['uuid'], base_dir)
                 meta['sd'] = await is_sd(meta['resolution'])
 
