@@ -50,7 +50,7 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
                     with open(poster_img, 'wb') as f:
                         shutil.copyfileobj(r.raw, f)
                     if not meta.get('skip_imghost_upload', False):
-                        poster, dummy = await upload_screens(meta, 1, 1, 0, 1, [poster_img], {})
+                        poster, _ = await upload_screens(meta, 1, 1, 0, 1, [poster_img], {})
                         poster = poster[0]
                         generic.write(f"TMDB Poster: {poster.get('raw_url', poster.get('img_url'))}\n")
                         meta['rehosted_poster'] = poster.get('raw_url', poster.get('img_url'))
@@ -71,7 +71,7 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
     title = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", meta['title'])
     archive = f"{meta['base_dir']}/tmp/{meta['uuid']}/{title}"
     torrent_files = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", "*.torrent"))]
-    if isinstance(torrent_files, list) and len(torrent_files) > 1:
+    if len(torrent_files) > 1:
         for each in torrent_files:
             if not each.startswith(('BASE', '[RAND')):
                 os.remove(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/{each}"))
@@ -82,7 +82,7 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
             Torrent.copy(base_torrent).write(f"{meta['base_dir']}/tmp/{meta['uuid']}/{manual_name}.torrent", overwrite=True)
             # shutil.copy(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"), os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['name'].replace(' ', '.')}.torrent").replace(' ', '.'))
         manual_tracker_raw = TRACKER_CONFIG.get('MANUAL')
-        manual_tracker_cfg = manual_tracker_raw if isinstance(manual_tracker_raw, dict) else {}
+        manual_tracker_cfg: dict[str, Any] = cast(dict[str, Any], manual_tracker_raw) if isinstance(manual_tracker_raw, dict) else {}
         manual_filebrowser = manual_tracker_cfg.get('filebrowser')
         filebrowser = manual_filebrowser if isinstance(manual_filebrowser, str) else None
         shutil.make_archive(archive, 'tar', f"{meta['base_dir']}/tmp/{meta['uuid']}")
@@ -90,10 +90,11 @@ async def package(meta: dict[str, Any]) -> Union[str, bool]:
             url = '/'.join(s.strip('/') for s in (filebrowser, f"/tmp/{meta['uuid']}"))
             url = urllib.parse.quote(url, safe="https://")
         else:
-            files = {
-                "files[]": (f"{meta['title']}.tar", open(f"{archive}.tar", 'rb'))
-            }
-            response = requests.post("https://uguu.se/upload.php", files=files, timeout=30).json()
+            with open(f"{archive}.tar", 'rb') as tar_file:
+                files = {
+                    "files[]": (f"{meta['title']}.tar", tar_file)
+                }
+                response = requests.post("https://uguu.se/upload.php", files=files, timeout=30).json()
             if meta['debug']:
                 console.print(f"[cyan]{response}")
             url = response['files'][0]['url']
