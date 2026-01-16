@@ -41,12 +41,20 @@ class ANT:
 
     async def get_flags(self, meta: dict[str, Any]) -> list[str]:
         flags: list[str] = []
-        for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']:
-            if each in str(meta.get('edition', '')).replace("'", ""):
-                flags.append(each)
-        for each in ['Dual-Audio', 'Atmos']:
-            if each in meta['audio']:
-                flags.append(each.replace('-', ''))
+        flags.extend(
+            [
+                each
+                for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']
+                if each in str(meta.get('edition', '')).replace("'", "")
+            ]
+        )
+        flags.extend(
+            [
+                each.replace('-', '')
+                for each in ['Dual-Audio', 'Atmos']
+                if each in meta['audio']
+            ]
+        )
         if meta.get('has_commentary', False) or meta.get('manual_commentary', False):
             flags.append('Commentary')
         if meta['3D'] == "3D":
@@ -78,8 +86,7 @@ class ANT:
             if isinstance(genres, str):
                 tags.append(genres.replace(' ', '.').lower())
             else:
-                for genre in genres:
-                    tags.append(genre.replace(' ', '.').lower())
+                tags.extend(genre.replace(' ', '.').lower() for genre in genres)
         else:
             no_tags = True
         if no_tags and meta.get('imdb_info', {}):
@@ -88,13 +95,13 @@ class ANT:
             if isinstance(imdb_genres, str):
                 tags.append(imdb_genres.replace(' ', '.').lower())
             else:
-                for genre in imdb_genres:
-                    tags.append(genre.replace(' ', '.').lower())
-            for tag in tags:
-                if tag.lower() not in ['action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
-                                       'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
-                                       'thriller', 'war', 'western']:
-                    tags.remove(tag)
+                tags.extend(genre.replace(' ', '.').lower() for genre in imdb_genres)
+            allowed_tags = {
+                'action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
+                'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
+                'thriller', 'war', 'western'
+            }
+            tags = [tag for tag in tags if tag.lower() in allowed_tags]
 
         if not tags:
             console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")

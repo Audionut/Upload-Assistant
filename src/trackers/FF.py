@@ -4,7 +4,7 @@ import glob
 import os
 import platform
 import re
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import httpx
@@ -96,8 +96,7 @@ class FF:
             return []
         self.session.cookies = cookie_jar
 
-        if meta['category'] == 'MOVIE':
-            query = meta['title']
+        query = meta['title']
         if meta['category'] == 'TV':
             query = f"{meta['title']} {meta.get('season', '')}{meta.get('episode', '')}"
 
@@ -144,7 +143,7 @@ class FF:
                 soup = BeautifulSoup(response_results_text, "html.parser")
                 request_rows = soup.select("td.mf_content table tr")
 
-                results = []
+                results: list[dict[str, str]] = []
                 for row in request_rows:
                     name_element = row.select_one("td.row3 nobr a b")
                     if not name_element:
@@ -152,10 +151,10 @@ class FF:
 
                     name = name_element.text.strip()
                     link_element = name_element.find_parent("a")
-                    link = link_element["href"] if link_element else None
+                    link = str(link_element["href"]) if link_element and link_element.has_attr("href") else ""
 
                     all_tds = row.find_all("td", class_="row3")
-                    reward = all_tds[2].text.strip() if len(all_tds) > 2 else None
+                    reward = all_tds[2].text.strip() if len(all_tds) > 2 else ""
 
                     results.append({
                         "Name": name,
@@ -179,7 +178,7 @@ class FF:
 
     async def generate_description(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
         desc_parts.append(await builder.get_custom_header())
@@ -216,12 +215,16 @@ class FF:
 
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
-        if menu_images:
+        if isinstance(menu_images, list) and menu_images:
             menu_screenshots_block = ""
-            for image in menu_images:
-                menu_img_url = image.get("img_url")
-                menu_web_url = image.get("web_url")
-                if menu_img_url and menu_web_url:
+            menu_images_list = cast(list[Any], menu_images)
+            for image in menu_images_list:
+                if not isinstance(image, dict):
+                    continue
+                image_dict = cast(dict[str, Any], image)
+                menu_img_url = image_dict.get("img_url")
+                menu_web_url = image_dict.get("web_url")
+                if isinstance(menu_img_url, str) and isinstance(menu_web_url, str) and menu_img_url and menu_web_url:
                     menu_screenshots_block += f'<a href="{menu_web_url}" target="_blank"><img src="{menu_img_url}" width="220"></a> '
             if menu_screenshots_block:
                 desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
@@ -231,15 +234,19 @@ class FF:
 
         # Screenshot Header
         images = meta.get("image_list", [])
-        if images:
+        if isinstance(images, list) and images:
             desc_parts.append(await builder.screenshot_header())
 
             # Screenshots
             screenshots_block = ""
-            for image in images:
-                img_url = image.get("img_url")
-                web_url = image.get("web_url")
-                if img_url and web_url:
+            images_list = cast(list[Any], images)
+            for image in images_list:
+                if not isinstance(image, dict):
+                    continue
+                image_dict = cast(dict[str, Any], image)
+                img_url = image_dict.get("img_url")
+                web_url = image_dict.get("web_url")
+                if isinstance(img_url, str) and isinstance(web_url, str) and img_url and web_url:
                     screenshots_block += (
                         f'<a href="{web_url}" target="_blank"><img src="{img_url}" width="220"></a> '
                     )
@@ -492,16 +499,16 @@ class FF:
             'chinese': 'zh',
         }
 
-        anime_a_codec = []
-        anime_a_ch = []
-        anime_a_lang = []
+        anime_a_codec: list[str] = []
+        anime_a_ch: list[str] = []
+        anime_a_lang: list[str] = []
 
-        anime_s_format = []
-        anime_s_type = []
-        anime_s_lang = []
+        anime_s_format: list[str] = []
+        anime_s_type: list[str] = []
+        anime_s_lang: list[str] = []
 
         audio_languages = meta.get('audio_languages', [])
-        if audio_languages:
+        if isinstance(audio_languages, list) and audio_languages:
             audio_desc = meta.get('audio', '').lower()
             found_codec = '0'
             codec_options = {
@@ -521,20 +528,22 @@ class FF:
             }
             found_channel = channel_map.get(channels_desc, '0')
 
-            for lang_str in audio_languages:
-                lang_code = lang_map.get(lang_str.lower(), '1')
+            audio_languages_list = cast(list[Any], audio_languages)
+            for lang_str in audio_languages_list:
+                lang_code = lang_map.get(str(lang_str).lower(), '1')
 
                 anime_a_codec.append(found_codec)
                 anime_a_ch.append(found_channel)
                 anime_a_lang.append(lang_code)
 
         subtitle_languages = meta.get('subtitle_languages', [])
-        if subtitle_languages:
+        if isinstance(subtitle_languages, list) and subtitle_languages:
             subtitle_format = 'srt'
             subtitle_type = 'sub'
 
-            for lang_str in subtitle_languages:
-                lang_code = lang_map.get(lang_str.lower(), '1')
+            subtitle_languages_list = cast(list[Any], subtitle_languages)
+            for lang_str in subtitle_languages_list:
+                lang_code = lang_map.get(str(lang_str).lower(), '1')
 
                 anime_s_format.append(subtitle_format)
                 anime_s_type.append(subtitle_type)
@@ -585,7 +594,7 @@ class FF:
         languages = await self.languages(meta)
         self.file_information(meta)
 
-        data = {
+        data: dict[str, Any] = {
             'MAX_FILE_SIZE': 10000000,
             'type': self.get_type_id(meta),
             'tags': '',
@@ -634,7 +643,7 @@ class FF:
         self.session.cookies = cookie_jar
         data = await self.get_data(meta)
         torrent_name = await self.edit_name(meta)
-        files = {}
+        files: dict[str, Any] = {}
         poster = await self.get_poster(meta)
         if poster:
             files['poster'] = poster

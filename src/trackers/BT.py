@@ -4,7 +4,7 @@ import os
 import platform
 import re
 import unicodedata
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import aiofiles
 import httpx
@@ -35,6 +35,8 @@ class BT:
         self.base_url = 'https://brasiltracker.org'
         self.torrent_url = f'{self.base_url}/torrents.php?id='
         self.auth_token: Optional[str] = None
+        self.main_tmdb_data: dict[str, Any] = {}
+        self.episode_tmdb_data: dict[str, Any] = {}
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
@@ -116,15 +118,16 @@ class BT:
 
     async def load_localized_data(self, meta: dict[str, Any]) -> None:
         localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
-        main_ptbr_data = {}
-        episode_ptbr_data = {}
-        data = {}
+        main_ptbr_data: dict[str, Any] = {}
+        episode_ptbr_data: dict[str, Any] = {}
+        data: dict[str, Any] = {}
 
         if os.path.isfile(localized_data_file):
             try:
                 async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
-                    data = json.loads(content)
+                    loaded_data = json.loads(content)
+                    data = cast(dict[str, Any], loaded_data) if isinstance(loaded_data, dict) else {}
             except json.JSONDecodeError:
                 print(f'Warning: Could not decode JSON from {localized_data_file}')
                 data = {}
@@ -132,25 +135,31 @@ class BT:
                 print(f'Error reading file {localized_data_file}: {e}')
                 data = {}
 
-        main_ptbr_data = data.get('pt-BR', {}).get('main')
+        ptbr_data = data.get('pt-BR')
+        ptbr_dict: dict[str, Any] = {}
+        if isinstance(ptbr_data, dict):
+            ptbr_dict = cast(dict[str, Any], ptbr_data)
+        main_ptbr_data = cast(dict[str, Any], ptbr_dict.get('main') or {})
 
         if not main_ptbr_data:
-            main_ptbr_data = await tmdb_manager.get_tmdb_localized_data(
+            localized_main = await tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
                 append_to_response='credits,videos,content_ratings'
             )
+            main_ptbr_data = localized_main or {}
 
         if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
-            episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+            episode_ptbr_data = cast(dict[str, Any], ptbr_dict.get('episode') or {})
             if not episode_ptbr_data:
-                episode_ptbr_data = await tmdb_manager.get_tmdb_localized_data(
+                localized_episode = await tmdb_manager.get_tmdb_localized_data(
                     meta,
                     data_type='episode',
                     language='pt-BR',
                     append_to_response=''
                 )
+                episode_ptbr_data = localized_episode or {}
 
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
@@ -179,7 +188,7 @@ class BT:
     async def get_languages(self, meta: dict[str, Any]) -> Optional[str]:
         lang_code = self.main_tmdb_data.get('original_language')
 
-        if not lang_code:
+        if not isinstance(lang_code, str) or not lang_code:
             return None
 
         try:
@@ -192,13 +201,21 @@ class BT:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        audio_languages = set(meta.get('audio_languages', []))
+        raw_audio_languages = meta.get('audio_languages')
+        audio_languages_raw: list[Any] = []
+        if isinstance(raw_audio_languages, list):
+            audio_languages_raw = cast(list[Any], raw_audio_languages)
+        audio_languages: set[str] = set()
+        for lang in audio_languages_raw:
+            if isinstance(lang, str):
+                audio_languages.add(lang)
+        audio_languages_lower = {lang.lower() for lang in audio_languages}
 
-        portuguese_languages = ['Portuguese', 'Português', 'pt']
+        portuguese_languages = {'portuguese', 'português', 'pt'}
 
-        has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
+        has_pt_audio = bool(audio_languages_lower.intersection(portuguese_languages))
 
-        original_lang = meta.get('original_language', '').lower()
+        original_lang = str(meta.get('original_language', '')).lower()
         is_original_pt = original_lang in portuguese_languages
 
         if has_pt_audio:
@@ -215,7 +232,11 @@ class BT:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        found_language_strings = meta.get('subtitle_languages', [])
+        raw_subtitle_languages = meta.get('subtitle_languages')
+        subtitle_languages_raw: list[Any] = []
+        if isinstance(raw_subtitle_languages, list):
+            subtitle_languages_raw = cast(list[Any], raw_subtitle_languages)
+        found_language_strings = [lang for lang in subtitle_languages_raw if isinstance(lang, str)]
 
         subtitle_ids: set[str] = set()
         for lang_str in found_language_strings:
@@ -327,16 +348,18 @@ class BT:
         return 'Outro'
 
     async def get_title(self, meta: dict[str, Any]) -> str:
-        title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
+        title_value = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
+        title = title_value if isinstance(title_value, str) else ''
 
         return title if title and title != meta.get('title') else ''
 
     async def get_description(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        custom_header = await builder.get_custom_header()
+        desc_parts.append(custom_header)
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -344,9 +367,14 @@ class BT:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title = self.episode_tmdb_data.get('name', '')
-        episode_image = self.episode_tmdb_data.get('still_path', '')
-        episode_overview = self.episode_tmdb_data.get('overview', '')
+        title_value = self.episode_tmdb_data.get('name')
+        title = title_value if isinstance(title_value, str) else ''
+
+        episode_image_value = self.episode_tmdb_data.get('still_path')
+        episode_image = episode_image_value if isinstance(episode_image_value, str) else ''
+
+        episode_overview_value = self.episode_tmdb_data.get('overview')
+        episode_overview = episode_overview_value if isinstance(episode_overview_value, str) else ''
 
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
@@ -357,10 +385,12 @@ class BT:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        user_description = await builder.get_user_description(meta)
+        desc_parts.append(user_description)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        tonemapped_header = await builder.get_tonemapped_header(meta)
+        desc_parts.append(tonemapped_header)
 
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/center]")
@@ -378,12 +408,23 @@ class BT:
         return description
 
     async def get_trailer(self, meta: dict[str, Any]) -> str:
-        video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
+        video_results: list[dict[str, Any]] = []
+        videos = self.main_tmdb_data.get('videos')
+        if isinstance(videos, dict):
+            videos_dict = cast(dict[str, Any], videos)
+            results = videos_dict.get('results')
+            if isinstance(results, list):
+                results_list = cast(list[Any], results)
+                video_results.extend(
+                    [cast(dict[str, Any], result) for result in results_list if isinstance(result, dict)]
+                )
 
         youtube = ''
 
         if video_results:
-            youtube = video_results[-1].get('key', '')
+            last_result = video_results[-1]
+            youtube_value = last_result.get('key', '')
+            youtube = youtube_value if isinstance(youtube_value, str) else ''
 
         if not youtube:
             meta_trailer = meta.get('youtube', '')
@@ -395,11 +436,19 @@ class BT:
     async def get_tags(self, meta: dict[str, Any]) -> str:
         tags = ''
 
-        if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
-            genre_names = [
-                g.get('name', '') for g in self.main_tmdb_data['genres']
-                if isinstance(g.get('name'), str) and g.get('name').strip()
+        genres = self.main_tmdb_data.get('genres')
+        if isinstance(genres, list):
+            genre_names: list[str] = []
+            genres_list_raw = cast(list[Any], genres)
+            genres_list: list[dict[str, Any]] = [
+                cast(dict[str, Any], genre)
+                for genre in genres_list_raw
+                if isinstance(genre, dict)
             ]
+            for genre in genres_list:
+                name = genre.get('name')
+                if isinstance(name, str) and name.strip():
+                    genre_names.append(name)
 
             if genre_names:
                 tags = ', '.join(
@@ -421,7 +470,7 @@ class BT:
 
         search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
 
-        found_items = []
+        found_items: list[str] = []
         try:
             cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
             if cookie_jar is None:
@@ -436,7 +485,7 @@ class BT:
             if not torrent_table:
                 return []
 
-            group_links = set()
+            group_links: set[str] = set()
             for group_row in torrent_table.find_all('tr'):
                 link = group_row.find('a', href=re.compile(r'torrents\.php\?id=\d+'))
                 href_value = link.get('href') if link else None
@@ -594,20 +643,49 @@ class BT:
         return keyword_map.get(source_type.lower(), 'Outro')
 
     async def get_screens(self, meta: dict[str, Any]) -> list[str]:
-        urls = []
-        for image in meta.get('menu_images', []) + meta.get('image_list', []):
-            if image.get('raw_url'):
-                urls.append(image['raw_url'])
+        menu_images = meta.get('menu_images')
+        image_list = meta.get('image_list')
+
+        combined_images: list[dict[str, Any]] = []
+        if isinstance(menu_images, list):
+            menu_images_list = cast(list[Any], menu_images)
+            combined_images.extend(
+                [cast(dict[str, Any], img) for img in menu_images_list if isinstance(img, dict)]
+            )
+        if isinstance(image_list, list):
+            image_list_items = cast(list[Any], image_list)
+            combined_images.extend(
+                [cast(dict[str, Any], img) for img in image_list_items if isinstance(img, dict)]
+            )
+
+        urls: list[str] = []
+        for image in combined_images:
+            raw_url = image.get('raw_url')
+            if isinstance(raw_url, str) and raw_url:
+                urls.append(raw_url)
 
         return urls
 
     async def get_credits(self, meta: dict[str, Any]) -> str:
-        director = (meta.get('imdb_info', {}).get('directors') or []) + (meta.get('tmdb_directors') or [])
-        if director:
-            unique_names = list(dict.fromkeys(director))[:5]
+        director_entries: list[str] = []
+
+        imdb_directors = meta.get('imdb_info', {}).get('directors')
+        imdb_directors_list: list[Any] = []
+        if isinstance(imdb_directors, list):
+            imdb_directors_list = cast(list[Any], imdb_directors)
+        director_entries.extend([name for name in imdb_directors_list if isinstance(name, str)])
+
+        tmdb_directors = meta.get('tmdb_directors')
+        tmdb_directors_list: list[Any] = []
+        if isinstance(tmdb_directors, list):
+            tmdb_directors_list = cast(list[Any], tmdb_directors)
+        director_entries.extend([name for name in tmdb_directors_list if isinstance(name, str)])
+
+        if director_entries:
+            unique_names = list(dict.fromkeys(director_entries))[:5]
             return ', '.join(unique_names)
-        else:
-            return 'N/A'
+
+        return 'N/A'
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
@@ -685,11 +763,14 @@ class BT:
             data['anonymous'] = '1'
 
         # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internal': 1,
-                })
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', []))
+        ):
+            data.update({
+                'internal': 1,
+            })
 
         return data
 

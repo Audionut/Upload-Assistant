@@ -230,9 +230,12 @@ class ACM:
             'doubleup': 0,
             'sticky': 0,
         }
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ""
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data['internal'] = 1
         if region_id:
             data['region_id'] = region_id
         if distributor_id:

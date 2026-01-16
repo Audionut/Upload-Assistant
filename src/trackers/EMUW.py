@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import re
+from typing import Any, Optional, cast
 
 import cloudscraper
 
@@ -16,7 +17,7 @@ class EMUW(UNIT3D):
     Handles torrents with Spanish titles, audio, and subtitle requirements
     """
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='EMUW')
         self.base_url = 'https://emuwarez.com'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -25,7 +26,7 @@ class EMUW(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         """
         Generate EMUW-compliant torrent name format
         Format: [Spanish Title] [Season] [Year] [Resolution] [Format] [Codec] [Audio] [SUBS] - [Group]
@@ -43,7 +44,7 @@ class EMUW(UNIT3D):
             season = f"S{meta['season_int']:02d}"
 
         year = meta.get('year', '')
-        resolution = self._map_resolution(meta.get('resolution', ''))
+        resolution = self._map_resolution(str(meta.get('resolution', '')))
         video_format = self._map_format(meta)
         video_codec = self._map_codec(meta)
 
@@ -69,8 +70,11 @@ class EMUW(UNIT3D):
             tag = 'EMUWAREZ'
 
         # Build final name
-        name_parts = [part for part in [title, season, str(year), resolution, video_format, video_codec, audio_str] if
-                      part]
+        name_parts = [
+            part
+            for part in [title, season, str(year), resolution, video_format, video_codec, audio_str]
+            if part
+        ]
         base_name = ' '.join(name_parts)
 
         # Clean up spaces and build final name
@@ -79,44 +83,49 @@ class EMUW(UNIT3D):
 
         return {'name': emuwarez_name}
 
-    async def _get_title(self, meta):
+    async def _get_title(self, meta: dict[str, Any]) -> str:
         """Get Spanish title if available and configured"""
         spanish_title = None
 
         # Try to get from IMDb with priority: country match, then language match
-        imdb_info = meta.get('imdb_info') or {}
-        akas = imdb_info.get('akas', [])
+        imdb_info_raw = meta.get('imdb_info')
+        imdb_info: dict[str, Any] = cast(dict[str, Any], imdb_info_raw) if isinstance(imdb_info_raw, dict) else {}
+        akas_raw = imdb_info.get('akas', [])
+        akas: list[Any] = cast(list[Any], akas_raw) if isinstance(akas_raw, list) else []
 
         country_match = None
         language_match = None
 
         for aka in akas:
             if isinstance(aka, dict):
-                if aka.get("country") in ["Spain", "ES"]:
-                    country_match = aka.get("title")
+                aka_dict = cast(dict[str, Any], aka)
+                if aka_dict.get("country") in ["Spain", "ES"]:
+                    country_match = aka_dict.get("title")
                     break  # Country match takes priority
-                elif aka.get("language") in ["Spain", "Spanish", "ES"] and not language_match:
-                    language_match = aka.get("title")
+                elif aka_dict.get("language") in ["Spain", "Spanish", "ES"] and not language_match:
+                    language_match = aka_dict.get("title")
 
         spanish_title = country_match or language_match
 
         # Try TMDb if not found
-        if not spanish_title and meta.get('tmdb'):
+        tmdb_id_raw = meta.get('tmdb')
+        tmdb_id = int(tmdb_id_raw) if isinstance(tmdb_id_raw, (int, str)) and str(tmdb_id_raw).isdigit() else 0
+        if not spanish_title and tmdb_id:
             spanish_title = await tmdb_manager.get_tmdb_translations(
-                tmdb_id=meta.get('tmdb'),
-                category=meta.get('category', 'MOVIE'),
+                tmdb_id=tmdb_id,
+                category=str(meta.get('category', 'MOVIE')),
                 target_language='es',
-                debug=meta.get('debug', False)
+                debug=bool(meta.get('debug', False))
             )
 
         # Use Spanish title if configured
         use_spanish_title = self.config['TRACKERS'][self.tracker].get('use_spanish_title', False)
-        if spanish_title and use_spanish_title:
+        if isinstance(spanish_title, str) and spanish_title and use_spanish_title:
             return spanish_title
 
         return meta.get('title', '')
 
-    def _map_resolution(self, resolution):
+    def _map_resolution(self, resolution: str) -> str:
         """Map resolution to EMUW nomenclature"""
         resolution_map = {
             '4320p': '4320p FUHD',
@@ -129,10 +138,10 @@ class EMUW(UNIT3D):
         }
         return resolution_map.get(resolution, resolution)
 
-    def _map_format(self, meta):
+    def _map_format(self, meta: dict[str, Any]) -> str:
         """Map source format to EMUW nomenclature"""
-        source = meta.get('source', '')
-        type_name = meta.get('type', '')
+        source = str(meta.get('source', ''))
+        type_name = str(meta.get('type', ''))
 
         format_map = {
             'BDMV': 'FBD',
@@ -140,8 +149,9 @@ class EMUW(UNIT3D):
             'REMUX': 'BDRemux',
         }
 
-        if meta.get('is_disc') in format_map:
-            return format_map[meta.get('is_disc')]
+        is_disc = meta.get('is_disc')
+        if isinstance(is_disc, str) and is_disc in format_map:
+            return format_map[is_disc]
         if type_name in format_map:
             return format_map[type_name]
 
@@ -156,7 +166,7 @@ class EMUW(UNIT3D):
 
         return ''
 
-    def _map_codec(self, meta):
+    def _map_codec(self, meta: dict[str, Any]) -> str:
         """Map video codec to EMUW nomenclature with HDR/DV prefix"""
         codec_map = {
             'H.264': 'AVC', 'H.265': 'HEVC', 'HEVC': 'HEVC', 'AVC': 'AVC',
@@ -166,41 +176,50 @@ class EMUW(UNIT3D):
 
         hdr_prefix = ''
         if meta.get('hdr'):
-            hdr = meta.get('hdr', '')
+            hdr = str(meta.get('hdr', ''))
             if 'DV' in hdr:
                 hdr_prefix = 'DV '
             if 'HDR' in hdr:
                 hdr_prefix += 'HDR '
 
-        video_codec = meta.get('video_codec', '')
-        video_encode = meta.get('video_encode', '')
+        video_codec = str(meta.get('video_codec', ''))
+        video_encode = str(meta.get('video_encode', ''))
         codec = codec_map.get(video_codec) or codec_map.get(video_encode, video_codec)
 
         return f"{hdr_prefix}{codec}".strip()
 
-    async def _get_original_language(self, meta):
+    async def _get_original_language(self, meta: dict[str, Any]) -> Optional[str]:
         """Get the original language from existing metadata"""
         original_lang = None
 
         if meta.get('original_language'):
-            original_lang = meta['original_language']
+            original_lang = str(meta['original_language'])
 
         if not original_lang:
-            imdb_info = meta.get('imdb_info') or {}
-            imdb_lang = imdb_info.get('language', '')
+            imdb_info_raw = meta.get('imdb_info')
+            imdb_info: dict[str, Any] = cast(dict[str, Any], imdb_info_raw) if isinstance(imdb_info_raw, dict) else {}
+            imdb_lang: Any = imdb_info.get('language')
 
-            if isinstance(imdb_lang, list) and imdb_lang:
-                imdb_lang = imdb_lang[0]
+            if isinstance(imdb_lang, list):
+                imdb_lang_list = cast(list[Any], imdb_lang)
+                imdb_lang = imdb_lang_list[0] if imdb_lang_list else ''
 
             if imdb_lang:
-                original_lang = imdb_lang.get('text', '') if isinstance(imdb_lang, dict) else str(imdb_lang).strip()
+                if isinstance(imdb_lang, dict):
+                    imdb_lang_dict = cast(dict[str, Any], imdb_lang)
+                    imdb_lang_text = imdb_lang_dict.get('text', '')
+                    original_lang = str(imdb_lang_text).strip()
+                elif isinstance(imdb_lang, str):
+                    original_lang = imdb_lang.strip()
+                else:
+                    original_lang = str(imdb_lang).strip()
 
         if original_lang:
-            return self._map_language(original_lang)
+            return self._map_language(str(original_lang))
 
         return None
 
-    async def _build_audio_string(self, meta):
+    async def _build_audio_string(self, meta: dict[str, Any]) -> str:
         """
         Build audio string in EMUW format with proper priority order
 
@@ -253,7 +272,7 @@ class EMUW(UNIT3D):
             return f"V.O. {original_lang} {codec} {channels}"
 
         # Normal listing
-        audio_parts = []
+        audio_parts: list[str] = []
         for i, track in enumerate(audio_tracks):
             if i < len(audio_langs):
                 lang = audio_langs[i]
@@ -263,34 +282,56 @@ class EMUW(UNIT3D):
 
         return ' '.join(audio_parts)
 
-    def _get_audio_tracks(self, meta):
+    def _get_audio_tracks(self, meta: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract audio tracks from mediainfo"""
         if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
             return []
 
-        tracks = meta['mediainfo']['media'].get('track', [])
-        return [t for t in tracks if t.get('@type') == 'Audio']
+        media_info = meta['mediainfo']
+        if not isinstance(media_info, dict):
+            return []
+        media_info_dict = cast(dict[str, Any], media_info)
+        media = media_info_dict.get('media')
+        if not isinstance(media, dict):
+            return []
 
-    def _extract_audio_languages(self, audio_tracks, meta):
+        media_dict = cast(dict[str, Any], media)
+        tracks = media_dict.get('track', [])
+        if not isinstance(tracks, list):
+            return []
+
+        audio_tracks: list[dict[str, Any]] = []
+        tracks_list = cast(list[Any], tracks)
+        for track in tracks_list:
+            if isinstance(track, dict):
+                track_dict = cast(dict[str, Any], track)
+                if track_dict.get('@type') == 'Audio':
+                    audio_tracks.append(track_dict)
+
+        return audio_tracks
+
+    def _extract_audio_languages(self, audio_tracks: list[dict[str, Any]], meta: dict[str, Any]) -> list[str]:
         """Extract and normalize audio languages"""
-        audio_langs = []
+        audio_langs: list[str] = []
 
         for track in audio_tracks:
             lang = track.get('Language', '')
             if lang:
-                lang_code = self._map_language(lang)
+                lang_code = self._map_language(str(lang))
                 if lang_code and lang_code not in audio_langs:
                     audio_langs.append(lang_code)
 
         if not audio_langs and meta.get('audio_languages'):
-            for lang in meta['audio_languages']:
-                lang_code = self._map_language(lang)
+            audio_languages = meta.get('audio_languages')
+            audio_languages_list: list[Any] = cast(list[Any], audio_languages) if isinstance(audio_languages, list) else []
+            for lang in audio_languages_list:
+                lang_code = self._map_language(str(lang))
                 if lang_code and lang_code not in audio_langs:
                     audio_langs.append(lang_code)
 
         return audio_langs
 
-    def _map_language(self, lang):
+    def _map_language(self, lang: str) -> str:
         """Map language codes and names to EMUW nomenclature"""
         if not lang:
             return ''
@@ -321,9 +362,9 @@ class EMUW(UNIT3D):
 
         return lang.upper()[:3] if len(lang) >= 3 else lang.upper()
 
-    def _map_audio_codec(self, audio_track):
+    def _map_audio_codec(self, audio_track: dict[str, Any]) -> str:
         """Map audio codec to EMUW nomenclature"""
-        codec = audio_track.get('Format', '').upper()
+        codec = str(audio_track.get('Format', '')).upper()
 
         if 'atmos' in str(audio_track.get('Format_AdditionalFeatures', '')).lower():
             return 'Atmos'
@@ -338,7 +379,7 @@ class EMUW(UNIT3D):
 
         return codec_map.get(codec, codec)
 
-    def _get_audio_channels(self, audio_track):
+    def _get_audio_channels(self, audio_track: dict[str, Any]) -> str:
         """Get audio channel configuration"""
         channels = audio_track.get('Channels', '')
         channel_map = {
@@ -347,19 +388,32 @@ class EMUW(UNIT3D):
         }
         return channel_map.get(str(channels), '5.1')
 
-    def _has_spanish_subs(self, meta):
+    def _has_spanish_subs(self, meta: dict[str, Any]) -> bool:
         """Check if torrent has Spanish subtitles"""
         if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
             return False
+        media_info = meta['mediainfo']
+        if not isinstance(media_info, dict):
+            return False
+        media_info_dict = cast(dict[str, Any], media_info)
+        media = media_info_dict.get('media')
+        if not isinstance(media, dict):
+            return False
+        media_dict = cast(dict[str, Any], media)
+        tracks = media_dict.get('track', [])
+        if not isinstance(tracks, list):
+            return False
 
-        tracks = meta['mediainfo']['media'].get('track', [])
-
-        for track in tracks:
-            if track.get('@type') == 'Text':
-                lang = track.get('Language', '')
+        tracks_list = cast(list[Any], tracks)
+        for track in tracks_list:
+            if not isinstance(track, dict):
+                continue
+            track_dict = cast(dict[str, Any], track)
+            if track_dict.get('@type') == 'Text':
+                lang = track_dict.get('Language', '')
                 lang = lang.lower() if isinstance(lang, str) else ''
 
-                title = track.get('Title', '')
+                title = track_dict.get('Title', '')
                 title = title.lower() if isinstance(title, str) else ''
 
                 if lang in ['es', 'spa', 'spanish', 'es-es', 'español']:
@@ -369,7 +423,7 @@ class EMUW(UNIT3D):
 
         return False
 
-    async def get_cat_id(self, category_name):
+    async def get_cat_id(self, category_name: str) -> str:
         """Categories: Movies(1), Series(2), Documentales(4), Musica(5), Juegos(6), Software(7)"""
         category_map = {
             'MOVIE': '1',
@@ -378,17 +432,23 @@ class EMUW(UNIT3D):
         }
         return category_map.get(category_name, '1')
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: dict[str, Any],
+        type: Any = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         """Types: Full Disc(1), Remux(2), Encode(3), WEB-DL(4), WEBRIP(5), HDTV(6), SD(7)"""
         type_map = {
             'DISC': '1', 'REMUX': '2', 'ENCODE': '3',
             'WEBDL': '4', 'WEBRIP': '5', 'HDTV': '6', 'SD': '7'
         }
-        meta_type = meta.get('type', '') if isinstance(meta, dict) else meta
-        type_id = type_map.get(meta_type, '3')
-        return {'type_id': type_id} if isinstance(meta, dict) else type_id
+        meta_type = meta.get('type', '')
+        type_id = type_map.get(str(meta_type), '3')
+        return {'type_id': type_id}
 
-    async def get_res_id(self, resolution):
+    async def get_res_id(self, resolution: str) -> str:
         """Resolutions: 4320p(1), 2160p(2), 1080p(3), 1080i(4), 720p(5), 576p(6), 540p(7), 480p(8), Otras(10)"""
         resolution_map = {
             '4320p': '1', '2160p': '2', '1080p': '3', '1080i': '4',
@@ -397,12 +457,12 @@ class EMUW(UNIT3D):
         }
         return resolution_map.get(resolution, '10')
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
         """Search for duplicate torrents using cloudscraper for Cloudflare bypass"""
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
         # Build search name using meta['name'] like UNIT3D
-        search_name = meta['name']
+        search_name = str(meta.get('name', ''))
 
         # Add season for TV shows
         if meta['category'] == 'TV' and meta.get('season'):
@@ -412,14 +472,15 @@ class EMUW(UNIT3D):
         if meta.get('edition'):
             search_name = f"{search_name} {meta['edition']}"
 
-        params = {
+        params: dict[str, Any] = {
             'tmdbId': meta.get('tmdb', ''),
-            'categories[]': await self.get_cat_id(meta['category']),
+            'categories[]': await self.get_cat_id(str(meta['category'])),
             'name': search_name
         }
 
+        api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         headers = {
-            'Authorization': f"Bearer {self.config['TRACKERS'][self.tracker]['api_key'].strip()}",
+            'Authorization': f"Bearer {api_key}",
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -427,7 +488,9 @@ class EMUW(UNIT3D):
             'Origin': self.base_url
         }
 
-        scraper = cloudscraper.create_scraper(
+        cloudscraper_module = cast(Any, cloudscraper)
+        create_scraper = cloudscraper_module.create_scraper
+        scraper = create_scraper(
             browser={
                 'browser': 'chrome',
                 'platform': 'windows',
@@ -447,30 +510,51 @@ class EMUW(UNIT3D):
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    if 'data' in data and isinstance(data['data'], list):
-                        for torrent in data['data']:
-                            if 'attributes' in torrent:
-                                attributes = torrent['attributes']
-                                if 'name' in attributes:
-                                    if not meta['is_disc']:
-                                        result = {
-                                            'name': attributes['name'],
-                                            'size': attributes.get('size'),
-                                            'files': [file['name'] for file in attributes.get('files', []) if
-                                                      isinstance(file, dict) and 'name' in file],
-                                            'file_count': len(attributes.get('files', [])) if isinstance(
-                                                attributes.get('files'), list) else 0,
-                                            'trumpable': attributes.get('trumpable', False),
-                                            'link': attributes.get('details_link', None)
-                                        }
-                                    else:
-                                        result = {
-                                            'name': attributes['name'],
-                                            'size': attributes.get('size'),
-                                            'trumpable': attributes.get('trumpable', False),
-                                            'link': attributes.get('details_link', None)
-                                        }
-                                    dupes.append(result)
+                    if isinstance(data, dict):
+                        data_dict = cast(dict[str, Any], data)
+                        data_items_raw = data_dict.get('data')
+                        if not isinstance(data_items_raw, list):
+                            return dupes
+                        data_items = cast(list[Any], data_items_raw)
+                        for torrent in data_items:
+                            if not isinstance(torrent, dict):
+                                continue
+                            torrent_dict = cast(dict[str, Any], torrent)
+                            attributes = torrent_dict.get('attributes')
+                            if not isinstance(attributes, dict):
+                                continue
+                            attributes_dict = cast(dict[str, Any], attributes)
+                            if 'name' not in attributes_dict:
+                                continue
+
+                            files_value = attributes_dict.get('files', [])
+                            files_list: list[Any] = cast(list[Any], files_value) if isinstance(files_value, list) else []
+                            file_names: list[str] = []
+                            for file in files_list:
+                                if not isinstance(file, dict):
+                                    continue
+                                file_dict = cast(dict[str, Any], file)
+                                name = file_dict.get('name')
+                                if isinstance(name, str):
+                                    file_names.append(name)
+
+                            if not meta['is_disc']:
+                                result = {
+                                    'name': attributes_dict['name'],
+                                    'size': attributes_dict.get('size'),
+                                    'files': file_names,
+                                    'file_count': len(files_list),
+                                    'trumpable': attributes_dict.get('trumpable', False),
+                                    'link': attributes_dict.get('details_link', None)
+                                }
+                            else:
+                                result = {
+                                    'name': attributes_dict['name'],
+                                    'size': attributes_dict.get('size'),
+                                    'trumpable': attributes_dict.get('trumpable', False),
+                                    'link': attributes_dict.get('details_link', None)
+                                }
+                            dupes.append(result)
                 except Exception as json_error:
                     console.print(f"[red]Failed to parse JSON: {json_error}")
 
@@ -487,7 +571,7 @@ class EMUW(UNIT3D):
 
         return dupes
 
-    async def get_upload_data(self, meta):
+    async def get_upload_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Get upload data with EMUW-specific options"""
         upload_data = await super().get_data(meta)
 

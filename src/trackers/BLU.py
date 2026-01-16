@@ -1,4 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+from typing import Any, Optional
+
 import cli_ui
 
 from src.console import console
@@ -7,7 +9,7 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class BLU(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name='BLU')
         self.config = config
         self.common = COMMON(config)
@@ -30,18 +32,20 @@ class BLU(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
-        if meta['type'] in ['ENCODE', 'REMUX'] and 'HDR' in meta.get('hdr', '') and 'DV' in meta.get('hdr', ''):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print('[bold red]Releases using a Dolby Vision layer from a different source have specific description requirements.[/bold red]')
-                console.print('[bold red]See rule 12.5. You must have a correct pre-formatted description if this release has a derived layer[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-                if cli_ui.ask_yes_no("Is this a derived layer release?", default=False):
-                    meta['tracker_status'][self.tracker]['other'] = True
+        if (
+            meta['type'] in ['ENCODE', 'REMUX']
+            and 'HDR' in meta.get('hdr', '')
+            and 'DV' in meta.get('hdr', '')
+            and (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)))
+        ):
+            console.print('[bold red]Releases using a Dolby Vision layer from a different source have specific description requirements.[/bold red]')
+            console.print('[bold red]See rule 12.5. You must have a correct pre-formatted description if this release has a derived layer[/bold red]')
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+            if cli_ui.ask_yes_no("Is this a derived layer release?", default=False):
+                meta['tracker_status'][self.tracker]['other'] = True
 
         if meta['type'] not in ['WEBDL'] and not meta['is_disc'] and meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -59,7 +63,7 @@ class BLU(UNIT3D):
 
         return should_continue
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         blu_name = meta['name']
         if meta['category'] == 'TV' and meta.get('episode_title', "") != "":
             blu_name = blu_name.replace(f"{meta['episode_title']} {meta['resolution']}", f"{meta['resolution']}", 1)
@@ -88,14 +92,20 @@ class BLU(UNIT3D):
 
         return {'name': blu_name}
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
             'modq': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+    async def get_category_id(
+        self,
+        meta: dict[str, Any],
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         edition = meta.get('edition', '')
         category_name = meta['category']
         category_id = {
@@ -126,7 +136,13 @@ class BLU(UNIT3D):
             resolved_id = category_id.get(meta_category, '0')
             return {'category_id': resolved_id}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: dict[str, Any],
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '1',
             'REMUX': '3',
@@ -147,7 +163,13 @@ class BLU(UNIT3D):
             resolved_id = type_id.get(meta_type, '0')
             return {'type_id': resolved_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: dict[str, Any],
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         resolution_id = {
             '8640p': '10',
             '4320p': '11',

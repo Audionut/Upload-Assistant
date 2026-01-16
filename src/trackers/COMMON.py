@@ -6,7 +6,7 @@ import os
 import re
 import secrets
 import sys
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
 import bencodepy
@@ -71,8 +71,8 @@ class COMMON:
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
                 new_torrent.metainfo['announce'] = str(raw_announce).strip() if raw_announce else "https://fake.tracker"
             new_torrent.metainfo['info']['source'] = source_flag
-            if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
-                created_by = new_torrent.metainfo['created by']
+            if 'created by' in new_torrent.metainfo:
+                created_by = str(new_torrent.metainfo['created by'])
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Upload Assistant"
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
@@ -154,7 +154,10 @@ class COMMON:
             # Calculate hash only when hash_is_id is True
             torrent_hash: Optional[str] = None
             if hash_is_id:
-                info_bytes = bencodepy.encode(new_torrent.metainfo["info"])
+                info_data = new_torrent.metainfo.get("info", {})
+                bencode_module = cast(Any, bencodepy)
+                encode = cast(Callable[[Any], bytes], bencode_module.encode)
+                info_bytes = encode(info_data)
                 torrent_hash = hashlib.sha1(
                     info_bytes, usedforsecurity=False
                 ).hexdigest()  # SHA1 required for torrent info hash
@@ -172,8 +175,18 @@ class COMMON:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         async with aiofiles.open(torrent_path, 'rb') as torrent_file:
             torrent_content = await torrent_file.read()
-            torrent_data = bencodepy.decode(torrent_content)
-            info = bencodepy.encode(torrent_data[b'info'])
+            bencode_module = cast(Any, bencodepy)
+            decode = cast(Callable[[bytes], Any], bencode_module.decode)
+            torrent_data = decode(torrent_content)
+            if not isinstance(torrent_data, dict):
+                return ''
+            torrent_dict = cast(dict[bytes, Any], torrent_data)
+            info_value = torrent_dict.get(b'info')
+            if not isinstance(info_value, dict):
+                return ''
+            bencode_module = cast(Any, bencodepy)
+            encode = cast(Callable[[Any], bytes], bencode_module.encode)
+            info = encode(info_value)
             info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
@@ -193,12 +206,13 @@ class COMMON:
                 with open(output_file, encoding='utf-8') as f:
                     loaded_data = json.load(f)
                     # Validate schema: must have 'keys' as dict and 'total_count' as int
-                    if (
-                        isinstance(loaded_data, dict)
-                        and isinstance(loaded_data.get('keys'), dict)
-                        and isinstance(loaded_data.get('total_count'), int)
-                    ):
-                        existing_data = loaded_data
+                    if isinstance(loaded_data, dict):
+                        loaded_dict = cast(dict[str, Any], loaded_data)
+                        if (
+                            isinstance(loaded_dict.get('keys'), dict)
+                            and isinstance(loaded_dict.get('total_count'), int)
+                        ):
+                            existing_data = loaded_dict
                     else:
                         console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
             except (json.JSONDecodeError, OSError) as e:
@@ -212,32 +226,41 @@ class COMMON:
             }
 
         # Ensure 'keys' is a dict (extra safety)
-        if not isinstance(existing_data.get('keys'), dict):
-            existing_data['keys'] = {}
+        keys_data: dict[str, dict[str, Any]] = {}
+        keys_raw = existing_data.get('keys')
+        if isinstance(keys_raw, dict):
+            keys_data = cast(dict[str, dict[str, Any]], keys_raw)
+        else:
+            existing_data['keys'] = keys_data
 
-        # Update the data with the new images under the specific key
-        if image_key not in existing_data["keys"] or not isinstance(existing_data["keys"].get(image_key), dict):
-            existing_data["keys"][image_key] = {
+        if image_key not in keys_data or not isinstance(keys_data.get(image_key), dict):
+            keys_data[image_key] = {
                 "count": 0,
                 "images": []
             }
+        key_entry = keys_data[image_key]
+        images_list: list[dict[str, Any]] = []
+        if isinstance(key_entry.get("images"), list):
+            images_list = cast(list[dict[str, Any]], key_entry["images"])
+        else:
+            key_entry["images"] = images_list
 
         # Add new images to the specific key
         for idx, img in enumerate(image_list):
-            image_entry = {
-                "index": existing_data["keys"][image_key]["count"] + idx,
+            image_entry: dict[str, Any] = {
+                "index": key_entry["count"] + idx,
                 "raw_url": img.get("raw_url", ""),
                 "web_url": img.get("web_url", ""),
                 "img_url": img.get("img_url", ""),
             }
-            existing_data["keys"][image_key]["images"].append(image_entry)
+            images_list.append(image_entry)
 
         # Update counts
-        existing_data["keys"][image_key]["count"] = len(existing_data["keys"][image_key]["images"])
+        key_entry["count"] = len(images_list)
         # Safely compute total_count, handling any malformed per-key entries
         total = 0
-        for key_data in existing_data["keys"].values():
-            if isinstance(key_data, dict) and isinstance(key_data.get("count"), int):
+        for key_data in keys_data.values():
+            if isinstance(key_data.get("count"), int):
                 total += key_data["count"]
         existing_data["total_count"] = total
 
@@ -580,10 +603,7 @@ class COMMON:
                     # Handle file name extraction
                     files = attributes.get('files', [])
                     if files:
-                        if len(files) == 1:
-                            file_name = files[0]['name']
-                        else:
-                            file_name = [file['name'] for file in files[:5]]  # Return up to 5 filenames
+                        file_name = files[0]['name'] if len(files) == 1 else [file['name'] for file in files[:5]]
 
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
@@ -637,7 +657,7 @@ class COMMON:
         """Parse a cookies.txt file and return a dictionary of key value pairs
         compatible with requests."""
 
-        cookies = {}
+        cookies: dict[str, str] = {}
         with open(cookiefile) as fp:
             for line in fp:
                 if not line.startswith(("# ", "\n", "#\n")):
@@ -946,9 +966,7 @@ class COMMON:
 
                     # Other properties to concatenate (language already handled above)
                     properties = ["codec", "format", "channels", "bit_rate", "format_profile", "stream_size"]
-                    for prop in properties:
-                        if prop in track and track[prop]:  # Only add non-empty properties
-                            parts.append(track[prop])
+                    parts.extend([track[prop] for prop in properties if prop in track and track[prop]])
 
                     # Join parts (starting from index 1, after the track number) with slashes and add to bbcode_output
                     bbcode_output += f"{parts[0]} " + " / ".join(parts[1:]) + "\n"

@@ -1034,10 +1034,7 @@ class BJS:
         ]
         available_tags = self.find_remaster_tags(meta)
 
-        ordered_tags: list[str] = []
-        for tag in tag_priority:
-            if tag in available_tags:
-                ordered_tags.append(tag)
+        ordered_tags = [tag for tag in tag_priority if tag in available_tags]
 
         return ' / '.join(ordered_tags)
 
@@ -1277,11 +1274,14 @@ class BJS:
                 })
 
         # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internalrel': 1,
-                })
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data.update({
+                'internalrel': 1,
+            })
 
         # Only upload images if not debugging
         if not meta.get('debug', False):
