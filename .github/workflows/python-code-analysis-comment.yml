@@ -170,9 +170,9 @@ jobs:
             return output;
           }
 
-          let banditResults = readMergedResult('bandit-results');
-          let vultureResults = readMergedResult('vulture-results');
-          let safetyResults = readMergedResult('safety-results');
+          let banditResults = collectDedupedResults('bandit-results');
+          let vultureResults = collectDedupedResults('vulture-results');
+          let safetyResults = collectDedupedResults('safety-results');
           let pyrightResults = collectDedupedResults('pyright-results');
           let ruffResults = collectDedupedResults('ruff-results');
           let deprecationResults = collectDedupedResults('deprecation-warnings');
@@ -193,7 +193,7 @@ jobs:
 
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
-          const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
+          const hasSafetyIssues = safetyResults && !/\b0\s+vulnerab/i.test(safetyResults);
           const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
           const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
           const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
