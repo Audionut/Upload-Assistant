@@ -8,12 +8,13 @@ import subprocess
 import sys
 import threading
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict, Union
 
 from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import CORS
-from werkzeug.utils import safe_join
+from werkzeug.security import safe_join
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -39,8 +40,12 @@ if cors_origins:
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
+class ProcessInfo(TypedDict):
+    process: subprocess.Popen[str]
+
+
 # Store active processes
-active_processes = {}
+active_processes: dict[str, ProcessInfo] = {}
 
 
 class BrowseItem(TypedDict):
@@ -83,7 +88,7 @@ def _auth_required_response():
 
 
 @app.before_request
-def _require_basic_auth_for_webui():
+def _require_basic_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     # Health endpoint can be used for orchestration checks.
     if request.path == '/api/health':
         return None
@@ -96,7 +101,7 @@ def _require_basic_auth_for_webui():
     return None
 
 
-def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
+def _validate_upload_assistant_args(tokens: Sequence[Any]) -> list[str]:
     # These are passed to upload.py (not the Python interpreter) and are executed
     # with shell=False. Still validate to avoid control characters and abuse.
     safe: list[str] = []
@@ -129,7 +134,7 @@ def _get_browse_roots() -> list[str]:
 
 
 def _resolve_user_path(
-    user_path: Union[str, None],
+    user_path: Optional[Any],
     *,
     require_exists: bool = True,
     require_dir: bool = False,
@@ -236,7 +241,7 @@ def _resolve_browse_path(user_path: Union[str, None]) -> str:
     return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 
-def strip_ansi(text):
+def strip_ansi(text: str) -> str:
     """Remove ANSI escape codes from text"""
     return ANSI_ESCAPE.sub('', text)
 
@@ -421,13 +426,20 @@ def execute_command():
                 stdout_thread.start()
                 stderr_thread.start()
 
+                def _read_output(q: queue.Queue[tuple[str, str]]) -> tuple[bool, Union[tuple[str, str], None]]:
+                    try:
+                        return True, q.get(timeout=0.1)
+                    except queue.Empty:
+                        return False, None
+
                 # Stream output as raw characters
                 while process.poll() is None or not output_queue.empty():
-                    try:
-                        output_type, char = output_queue.get(timeout=0.1)
+                    has_output, output = _read_output(output_queue)
+                    if has_output and output is not None:
+                        output_type, char = output
                         # Send raw character data (preserves ANSI codes)
                         yield f"data: {json.dumps({'type': output_type, 'data': char})}\n\n"
-                    except queue.Empty:
+                    else:
                         # Send keepalive
                         yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
 
@@ -539,12 +551,12 @@ def kill_process():
 
 
 @app.errorhandler(404)
-def not_found(e):
+def not_found(e: Exception):
     return jsonify({'error': 'Not found', 'success': False}), 404
 
 
 @app.errorhandler(500)
-def internal_error(e):
+def internal_error(e: Exception):
     print(f"500 error: {str(e)}")
     print(traceback.format_exc())
     return jsonify({'error': 'Internal server error', 'success': False}), 500

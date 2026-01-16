@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Optional, cast
 
 import cli_ui
+from typing_extensions import TypeAlias
 
 from cogs.redaction import Redaction
 from src.cleanup import cleanup_manager
@@ -16,8 +17,8 @@ from src.trackers.PTP import PTP
 from src.trackers.THR import THR
 from src.trackersetup import TRACKER_SETUP
 
-Meta = dict[str, Any]
-StatusDict = dict[str, Any]
+Meta: TypeAlias = dict[str, Any]
+StatusDict: TypeAlias = dict[str, Any]
 
 
 async def check_mod_q_and_draft(
