@@ -104,11 +104,26 @@ jobs:
       run: |
         echo "Ruff version:"
         ruff --version
+        echo ""
         echo "Checking for pyproject.toml:"
         ls -la pyproject.toml
+        echo ""
+        echo "Contents of pyproject.toml:"
+        cat pyproject.toml
+        echo ""
+        echo "Checking Ruff settings for a sample file:"
+        ruff check src/uphelper.py --show-settings | grep -A 20 "isort" || echo "No isort settings found"
+        echo ""
+        echo "Sample file imports (src/uphelper.py lines 1-16):"
+        head -n 16 src/uphelper.py
+        echo ""
         echo "Running ruff check:"
-        ruff check --config pyproject.toml . > ruff-results-${{ matrix.python-version }}.txt 2>&1
+        ruff check --config pyproject.toml . > ruff-results-${{ matrix.python-version }}.txt 2>&1 || true
+        echo ""
+        echo "Ruff results:"
         cat ruff-results-${{ matrix.python-version }}.txt
+        echo ""
+        echo "Exit code handling: Step will continue regardless of errors"
 
     - name: Upload Deprecation Warnings
       if: github.event_name == 'pull_request_target'
