@@ -3,12 +3,12 @@ import os
 import re
 from typing import Any, Optional, Union, cast
 
-from guessit import guessit as _guessit  # type: ignore[reportUnknownVariableType]
+import guessit
 
 from src.console import console
 from src.region import get_distributor
 
-guessit_fn: Any = cast(Any, _guessit)
+guessit_fn: Any = cast(Any, guessit).guessit
 
 
 async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: list[str], manual_edition: Union[str, list[str]], meta: dict[str, Any]) -> tuple[str, str, bool]:
