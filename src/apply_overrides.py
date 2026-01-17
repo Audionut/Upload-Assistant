@@ -44,7 +44,7 @@ class ApplyOverrides:
 
                     # Parse the entry's TMDB ID from the user-args.json file
                     entry_category, entry_normalized_id = await self.parse_tmdb_id(entry_tmdb_id)
-                    if entry_category != meta['category']:
+                    if entry_category and entry_category != meta['category']:
                         if meta['debug']:
                             console.print(f"Skipping user entry because override category {entry_category} does not match UA category {meta['category']}:")
                         continue

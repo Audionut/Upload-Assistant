@@ -109,6 +109,8 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
         all_tasks.append(tvdb_episodes_task)
 
     # Add episode-specific tasks if this is a TV show with episodes
+    tvmaze_task_idx: Optional[int] = None
+    tmdb_task_idx: Optional[int] = None
     if (meta['category'] == 'TV' and not meta.get('tv_pack', False) and
             'season_int' in meta and 'episode_int' in meta and meta.get('episode_int') != 0):
 
@@ -117,6 +119,7 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
         season_int = _coerce_int(meta.get('season_int'))
         episode_int = _coerce_int(meta.get('episode_int'))
         if tvmaze_id is not None and season_int is not None and episode_int is not None:
+            tvmaze_task_idx = len(all_tasks)
             all_tasks.append(
                 tvmaze_manager.get_tvmaze_episode_data(
                     tvmaze_id,
@@ -129,6 +132,7 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
         season_int = _coerce_int(meta.get('season_int'))
         episode_int = _coerce_int(meta.get('episode_int'))
         if tmdb_id is not None and season_int is not None and episode_int is not None:
+            tmdb_task_idx = len(all_tasks)
             all_tasks.append(
                 tmdb_manager.get_episode_details(
                     tmdb_id,
@@ -210,24 +214,22 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
     # Process episode data if this is a TV show
     if meta['category'] == 'TV' and not meta.get('tv_pack', False) and meta.get('episode_int', 0) != 0:
         # Process TVMaze episode data
-        tvmaze_episode_data = results[result_index]
-        result_index += 1
-
-        if not isinstance(tvmaze_episode_data, Exception) and tvmaze_episode_data:
-            meta['tvmaze_episode_data'] = tvmaze_episode_data
-            meta['we_asked_tvmaze'] = True
-        elif isinstance(tvmaze_episode_data, Exception):
-            console.print(f"[yellow]TVMaze episode data retrieval failed: {tvmaze_episode_data}")
+        if tvmaze_task_idx is not None:
+            tvmaze_episode_data = results[tvmaze_task_idx]
+            if not isinstance(tvmaze_episode_data, Exception) and tvmaze_episode_data:
+                meta['tvmaze_episode_data'] = tvmaze_episode_data
+                meta['we_asked_tvmaze'] = True
+            elif isinstance(tvmaze_episode_data, Exception):
+                console.print(f"[yellow]TVMaze episode data retrieval failed: {tvmaze_episode_data}")
 
         # Process TMDb episode data
-        tmdb_episode_data = results[result_index]
-        result_index += 1
-
-        if not isinstance(tmdb_episode_data, Exception) and tmdb_episode_data:
-            meta['tmdb_episode_data'] = tmdb_episode_data
-            meta['we_checked_tmdb'] = True
-        elif isinstance(tmdb_episode_data, Exception):
-            console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}")
+        if tmdb_task_idx is not None:
+            tmdb_episode_data = results[tmdb_task_idx]
+            if not isinstance(tmdb_episode_data, Exception) and tmdb_episode_data:
+                meta['tmdb_episode_data'] = tmdb_episode_data
+                meta['we_checked_tmdb'] = True
+            elif isinstance(tmdb_episode_data, Exception):
+                console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}")
 
     elif meta['category'] == 'TV' and meta.get('tv_pack', False) and 'season_int' in meta:
         # Process TMDb season data for TV packs

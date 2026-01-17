@@ -209,17 +209,7 @@ class Args:
         if parsed_args.get('site_upload') and not parsed_args.get('path'):
             parsed_args['path'] = ['dummy_path_for_site_upload']
 
-        if meta.get('manual_frames') is not None:
-            try:
-                # Join the list into a single string, split by commas, and convert to integers
-                meta['manual_frames'] = [int(time.strip()) for time in meta['manual_frames'].split(',')]
-                # console.print(f"Processed manual_frames: {meta['manual_frames']}")
-            except ValueError:
-                console.print("[red]Invalid format for manual_frames. Please provide a comma-separated list of integers.")
-                console.print(f"Processed manual_frames: {meta['manual_frames']}")
-                sys.exit(1)
-        else:
-            meta['manual_frames'] = None  # Explicitly set it to None if not provided
+        # manual_frames parsing happens after parsed_args are merged into meta
         if len(before_args) >= 1 and not os.path.exists(' '.join(parsed_args['path'])):
             for each in before_args:
                 parsed_args['path'].append(each)
@@ -485,6 +475,18 @@ class Args:
                 meta[key] = meta.get(key)
             # if key == 'help' and value == True:
                 # parser.print_help()
+
+        manual_frames_value = meta.get('manual_frames')
+        if manual_frames_value is not None:
+            try:
+                frames_str = str(manual_frames_value)
+                meta['manual_frames'] = [int(t.strip()) for t in frames_str.split(',') if t.strip()]
+            except ValueError:
+                console.print("[red]Invalid format for manual_frames. Please provide a comma-separated list of integers.")
+                console.print(f"Processed manual_frames: {manual_frames_value}")
+                sys.exit(1)
+        else:
+            meta['manual_frames'] = None
         return meta, parser, before_args
 
     def list_to_string(self, list: list[str]) -> str:
