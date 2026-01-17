@@ -67,7 +67,10 @@ class MkbrrBinaryManager:
 
         wrong_version = False
         version_path = bin_dir / version
-        if version_path.exists() and version_path.is_file():
+        binary_exists = binary_path.exists() and binary_path.is_file()
+        binary_executable = system == "windows" or os.access(binary_path, os.X_OK)
+        binary_valid = binary_exists and binary_executable
+        if version_path.exists() and version_path.is_file() and binary_valid:
             if debug:
                 console.print("[blue]mkbrr version is up to date[/blue]")
             return str(binary_path)
