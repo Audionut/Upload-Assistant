@@ -86,8 +86,8 @@ class SeasonEpisodeManager:
                             season_guess = str(guess_data.get("season") or "")
                             if season_guess == guess_year:
                                 if f"s{season_guess}" in video.lower():
-                                    season_int = season_guess
-                                    season = "S" + season_int.zfill(2)
+                                    season_int = int(season_guess)
+                                    season = "S" + str(season_int).zfill(2)
                                 else:
                                     season_int = 1
                                     season = "S01"

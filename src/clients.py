@@ -102,7 +102,7 @@ class Clients:
                 match = re.search(r"/details/(\d+)", path)
                 if match:
                     tracker_ids["bhd"] = match.group(1)
-            elif _is_host(host, "hawke.uno") or "/torrents/" in path:
+            elif _is_host(host, "hawke.uno"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["huno"] = tracker_id
@@ -578,7 +578,7 @@ class Clients:
                 return valid, torrent_path
 
             # Reuse if disc and basename matches or --keep-folder was specified
-            if meta.get('is_disc') is not None or (meta['keep_folder'] and meta['isdir']):
+            if meta.get('is_disc') is True or (meta['keep_folder'] and meta['isdir']):
                 torrent_name = torrent.metainfo['info']['name']
                 if meta['uuid'] != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")
@@ -2521,20 +2521,20 @@ class Clients:
 
                         if torrent.tracker and 'hawke.uno' in torrent.tracker and has_working_tracker:
                             # Try to extract torrent ID from the comment first
-                                huno_id = None
-                                if "/torrents/" in torrent.comment:
-                                    match = re.search(r'/torrents/(\d+)', torrent.comment)
-                                    if match:
-                                        huno_id = match.group(1)
+                            huno_id = None
+                            if "/torrents/" in torrent.comment:
+                                match = re.search(r'/torrents/(\d+)', torrent.comment)
+                                if match:
+                                    huno_id = match.group(1)
 
-                                # If we found an ID, use it
-                                if huno_id:
-                                    tracker_id_matches.append({
-                                        'id': 'huno',
-                                        'tracker_id': huno_id,
-                                    })
-                                    meta['huno'] = huno_id
-                                    tracker_found = True
+                            # If we found an ID, use it
+                            if huno_id:
+                                tracker_id_matches.append({
+                                    'id': 'huno',
+                                    'tracker_id': huno_id,
+                                })
+                                meta['huno'] = huno_id
+                                tracker_found = True
 
                         if torrent.tracker and 'tracker.anthelion.me' in torrent.tracker:
                             ant_id = 1

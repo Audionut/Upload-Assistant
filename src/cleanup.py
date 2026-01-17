@@ -115,14 +115,18 @@ class CleanupManager:
         self.kill_all_threads()
 
         if IS_MACOS:
-            try:
-                # Ensure any multiprocessing resources are properly released
-                resource_tracker = getattr(multiprocessing, 'resource_tracker', None)
-                if resource_tracker:
-                    resource_tracker._resource_tracker = None
-            except Exception:
-                console.print("[red]Error releasing multiprocessing resources.[/red]")
-                pass
+            # If you add shared memory or semaphore usage, append their (name, kind)
+            # pairs below so unregister can release them.
+            resource_tracker = getattr(multiprocessing, 'resource_tracker', None)
+            if resource_tracker and hasattr(resource_tracker, 'unregister'):
+                resources_to_release: list[tuple[str, str]] = []
+                for name, kind in resources_to_release:  # noqa: PERF203 - per-item logging is required here
+                    try:
+                        resource_tracker.unregister(name, kind)
+                    except Exception as exc:  # noqa: PERF203 - per-item logging is required here
+                        console.print(
+                            f"[red]Error unregistering multiprocessing resource {name} ({kind}): {exc}[/red]"
+                        )
 
         # console.print("[green]Cleanup completed. Exiting safely.[/green]")
 
@@ -230,7 +234,10 @@ class CleanupManager:
 
             # Kill background jobs
             with contextlib.suppress(Exception):
-                subprocess.run(["sh", "-c", "jobs -p | xargs -r kill 2>/dev/null"], check=False)
+                if IS_MACOS:
+                    subprocess.run(["sh", "-c", "jobs -p | xargs kill 2>/dev/null"], check=False)
+                else:
+                    subprocess.run(["sh", "-c", "jobs -p | xargs -r kill 2>/dev/null"], check=False)
 
             if not sys.stderr.closed:
                 sys.stderr.flush()

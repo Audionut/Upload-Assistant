@@ -450,9 +450,13 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb
     results: list[Any] = await asyncio.gather(*tasks, return_exceptions=True)
     tmdb_result, tvmaze_id, imdb_info_result = results[:3]
     if isinstance(tmdb_result, tuple):
-        tmdb_tuple = cast(tuple[Any, Any, Any], tmdb_result)
-        if len(tmdb_tuple) == 3:
-            meta['category'], meta['tmdb_id'], meta['original_language'] = tmdb_tuple
+        tmdb_tuple = cast(tuple[Any, Any, Any, Any], tmdb_result)
+        if len(tmdb_tuple) == 4:
+            category, tmdb_id, original_language, filename_search = tmdb_tuple
+            meta['category'] = category
+            meta['tmdb_id'] = tmdb_id
+            meta['original_language'] = original_language
+            meta['no_ids'] = filename_search
 
     meta['tvmaze_id'] = tvmaze_id if isinstance(tvmaze_id, int) else 0
 
