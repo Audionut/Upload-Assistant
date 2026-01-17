@@ -188,9 +188,7 @@ class BtnIdManager:
         raw_tmdb_id = first_result.get("tmdb_id", "")
         if raw_tmdb_id and raw_tmdb_id != "0":
             meta["category"], parsed_tmdb_id = await BtnIdManager.parse_tmdb_id(raw_tmdb_id, meta.get("category"))
-            parsed_tmdb_id_str = str(parsed_tmdb_id or "")
-            if parsed_tmdb_id_str.isdigit():
-                tmdb = int(parsed_tmdb_id_str)
+            tmdb = int(parsed_tmdb_id)
 
         if only_id and not meta.get('keep_images'):
             return imdb, tmdb
@@ -217,18 +215,19 @@ class BtnIdManager:
         return imdb, tmdb
 
     @staticmethod
-    async def parse_tmdb_id(tmdb_id: str, category: Optional[str]) -> tuple[Optional[str], str]:
+    async def parse_tmdb_id(tmdb_id: str, category: Optional[str]) -> tuple[Optional[str], int]:
         """Parses TMDb ID, ensures correct formatting, and assigns category."""
-        tmdb_id = str(tmdb_id).strip().lower()
+        tmdb_id_str = str(tmdb_id).strip().lower()
 
-        if tmdb_id.startswith('tv/') and '/' in tmdb_id:
-            tmdb_id = tmdb_id.split('/')[1].split('-')[0]
+        if tmdb_id_str.startswith('tv/'):
+            tmdb_id_str = tmdb_id_str.split('/')[1].split('-')[0]
             category = 'TV'
-        elif tmdb_id.startswith('movie/') and '/' in tmdb_id:
-            tmdb_id = tmdb_id.split('/')[1].split('-')[0]
+        elif tmdb_id_str.startswith('movie/'):
+            tmdb_id_str = tmdb_id_str.split('/')[1].split('-')[0]
             category = 'MOVIE'
 
-        return category, tmdb_id
+        parsed_id = int(tmdb_id_str) if tmdb_id_str.isdigit() else 0
+        return category, parsed_id
 
 
 async def generate_guid() -> str:
@@ -261,5 +260,5 @@ async def get_bhd_torrents(
     )
 
 
-async def parse_tmdb_id(tmdb_id: str, category: Optional[str] = None) -> tuple[Optional[str], str]:
+async def parse_tmdb_id(tmdb_id: str, category: Optional[str] = None) -> tuple[Optional[str], int]:
     return await BtnIdManager.parse_tmdb_id(tmdb_id, category)
