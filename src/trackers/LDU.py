@@ -35,6 +35,7 @@ class LDU(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         sound_mixes_value = meta.get('imdb_info', {}).get('sound_mixes', [])
@@ -100,6 +101,7 @@ class LDU(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = str(meta.get('type', ''))
         type_id = {
             'DISC': '1',

@@ -10,7 +10,7 @@ from typing import Any, Optional, cast
 
 import anitopy
 import guessit
-import requests
+import httpx
 
 from src.console import console
 from src.exceptions import *  # noqa: F403
@@ -219,7 +219,8 @@ class SeasonEpisodeManager:
                                     'absolute': str(episode_int),
                                 }
                                 url = "https://thexem.info/map/single"
-                                response = requests.post(url, params=params, timeout=30).json()
+                                async with httpx.AsyncClient(timeout=30.0) as client:
+                                    response = (await client.post(url, params=params)).json()
                                 if response['result'] == "failure":
                                     raise XEMNotFound  # noqa: F405
                                 if meta['debug']:
@@ -233,7 +234,8 @@ class SeasonEpisodeManager:
                                 season_int = 1  # Default to 1 if error occurs
                                 season = "S01"
                                 names_url = f"https://thexem.info/map/names?origin=tvdb&id={str(meta['tvdb_id'])}"
-                                names_response = requests.get(names_url, timeout=30).json()
+                                async with httpx.AsyncClient(timeout=30.0) as client:
+                                    names_response = (await client.get(names_url)).json()
                                 if meta['debug']:
                                     console.log(f'[cyan]Matching Season Number from TheXEM\n{names_response}')
                                 difference: float = 0.0

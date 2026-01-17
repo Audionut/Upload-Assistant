@@ -148,46 +148,45 @@ class AR:
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         base = re.sub(r'\[center\]\[spoiler=FraMeSToR NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         description = ""
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
-            if meta['is_disc'] == "BDMV":
-                description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "BDINFO" + heading_end + "\n"
+        if meta['is_disc'] == "BDMV":
+            description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "BDINFO" + heading_end + "\n"
+        else:
+            description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "MEDIAINFO" + heading_end + "\n"
+        discs = cast(list[dict[str, Any]], meta.get('discs') or [])
+        if discs:
+            if len(discs) >= 2:
+                for each in discs[1:]:
+                    if each['type'] == "BDMV":
+                        description += f"[hide={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/hide]\n\n"
+                    if each['type'] == "DVD":
+                        description += f"{each['name']}:\n"
+                        description += f"[hide={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/hide] [hide={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/hide]\n\n"
+        # description += common.get_links(movie, "[COLOR=red][size=4]", "[/size][/color]")
+            elif discs[0]['type'] == "DVD":
+                description += f"[hide][code]{discs[0]['vob_mi']}[/code][/hide]\n\n"
+            elif meta['is_disc'] == "BDMV":
+                description += f"[hide][code]{discs[0]['summary']}[/code][/hide]\n\n"
+        else:
+            # Beautify MediaInfo for AR using custom template
+            filelist = cast(list[str], meta.get('filelist') or [])
+            video = filelist[0] if filelist else str(meta.get('path') or "")
+            # using custom mediainfo template.
+            # can not use full media info as sometimes its more than max chars per post.
+            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/summary-mediainfo.csv")
+            if os.path.exists(mi_template):
+                media_info = await self.parse_mediainfo_async(video, mi_template)
+                description += (f"""[code]\n{media_info}\n[/code]\n""")
+                # adding full mediainfo as spoiler
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
+                    full_mediainfo = await mi_file.read()
+                description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
             else:
-                description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "MEDIAINFO" + heading_end + "\n"
-            discs = cast(list[dict[str, Any]], meta.get('discs') or [])
-            if discs:
-                if len(discs) >= 2:
-                    for each in discs[1:]:
-                        if each['type'] == "BDMV":
-                            description += f"[hide={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/hide]\n\n"
-                        if each['type'] == "DVD":
-                            description += f"{each['name']}:\n"
-                            description += f"[hide={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/hide] [hide={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/hide]\n\n"
-            # description += common.get_links(movie, "[COLOR=red][size=4]", "[/size][/color]")
-                elif discs[0]['type'] == "DVD":
-                    description += f"[hide][code]{discs[0]['vob_mi']}[/code][/hide]\n\n"
-                elif meta['is_disc'] == "BDMV":
-                    description += f"[hide][code]{discs[0]['summary']}[/code][/hide]\n\n"
-            else:
-                # Beautify MediaInfo for AR using custom template
-                filelist = cast(list[str], meta.get('filelist') or [])
-                video = filelist[0] if filelist else str(meta.get('path') or "")
-                # using custom mediainfo template.
-                # can not use full media info as sometimes its more than max chars per post.
-                mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/summary-mediainfo.csv")
-                if os.path.exists(mi_template):
-                    media_info = await self.parse_mediainfo_async(video, mi_template)
-                    description += (f"""[code]\n{media_info}\n[/code]\n""")
-                    # adding full mediainfo as spoiler
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
-                        full_mediainfo = await mi_file.read()
-                    description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
-                else:
-                    console.print("[bold red]Couldn't find the MediaInfo template")
-                    console.print("[green]Using normal MediaInfo for the description.")
+                console.print("[bold red]Couldn't find the MediaInfo template")
+                console.print("[green]Using normal MediaInfo for the description.")
 
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
-                        cleaned_mediainfo = await mi_file.read()
-                        description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
+                    cleaned_mediainfo = await mi_file.read()
+                    description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
 
             description += "\n\n" + subheading + "PLOT" + heading_end + "\n" + str(meta['overview'])
             if meta['genres']:
@@ -244,7 +243,7 @@ class AR:
         path = filelist[0] if filelist else str(meta.get('path') or "")
         return os.path.basename(path)
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, str]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
         dupes: list[dict[str, str]] = []
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not cookie_jar:
@@ -348,7 +347,7 @@ class AR:
 
         return None
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         """Upload torrent to AR using centralized cookie_upload."""
         # Prepare the data for the upload
         common = COMMON(config=self.config)

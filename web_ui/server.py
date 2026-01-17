@@ -560,7 +560,7 @@ def kill_process():
 
 
 @app.errorhandler(404)
-def not_found(e: Exception):
+def not_found(_e: Exception):
     return jsonify({'error': 'Not found', 'success': False}), 404
 
 

@@ -1,10 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
 import time
 import urllib.parse
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import httpx
@@ -61,8 +63,8 @@ class SceneManager:
                 # Try to load from cache
                 if os.path.exists(search_cache_file):
                     try:
-                        with open(search_cache_file, encoding='utf-8') as f:
-                            response_json = json.load(f)
+                        search_text = await asyncio.to_thread(Path(search_cache_file).read_text, encoding='utf-8')
+                        response_json = json.loads(search_text)
                         if meta['debug']:
                             console.print(f"[cyan]SRRDB: Using cached search for {base}")
                     except Exception:
@@ -77,8 +79,8 @@ class SceneManager:
                         if response.status_code == 200:
                             response_json = response.json()
                             # Save to cache
-                            with open(search_cache_file, 'w', encoding='utf-8') as f:
-                                json.dump(response_json, f)
+                            search_text = json.dumps(response_json)
+                            await asyncio.to_thread(Path(search_cache_file).write_text, search_text, encoding='utf-8')
                     except Exception as e:
                         console.print(f"[yellow]SRRDB: Search request failed: {e}")
 
@@ -106,8 +108,8 @@ class SceneManager:
 
                             if os.path.exists(details_cache_file):
                                 try:
-                                    with open(details_cache_file, encoding='utf-8') as f:
-                                        release_details_dict = json.load(f)
+                                    details_text = await asyncio.to_thread(Path(details_cache_file).read_text, encoding='utf-8')
+                                    release_details_dict = json.loads(details_text)
                                 except Exception:
                                     release_details_dict = None
 
@@ -116,8 +118,8 @@ class SceneManager:
                                 release_details_response = await client.get(release_details_url, timeout=30.0)
                                 if release_details_response.status_code == 200:
                                     release_details_dict = release_details_response.json()
-                                    with open(details_cache_file, 'w', encoding='utf-8') as f:
-                                        json.dump(release_details_dict, f)
+                                    details_text = json.dumps(release_details_dict)
+                                    await asyncio.to_thread(Path(details_cache_file).write_text, details_text, encoding='utf-8')
 
                             if release_details_dict:
                                 try:
@@ -140,10 +142,9 @@ class SceneManager:
                             else:
                                 nfo_response = await client.get(nfo_url, timeout=30.0)
                                 if nfo_response.status_code == 200:
-                                    with open(nfo_file_path, 'wb') as f:
-                                        f.write(nfo_response.content)
-                                        meta['nfo'] = True
-                                        meta['auto_nfo'] = True
+                                    await asyncio.to_thread(Path(nfo_file_path).write_bytes, nfo_response.content)
+                                    meta['nfo'] = True
+                                    meta['auto_nfo'] = True
                                     if meta['debug']:
                                         console.print(f"[green]NFO downloaded to {nfo_file_path}")
                                 else:
@@ -189,10 +190,9 @@ class SceneManager:
                                         if not os.path.exists(nfo_file_path):
                                             nfo_response = await client.get(nfo_url, timeout=30.0)
                                             if nfo_response.status_code == 200:
-                                                with open(nfo_file_path, 'wb') as f:
-                                                    f.write(nfo_response.content)
-                                                    meta['nfo'] = True
-                                                    meta['auto_nfo'] = True
+                                                await asyncio.to_thread(Path(nfo_file_path).write_bytes, nfo_response.content)
+                                                meta['nfo'] = True
+                                                meta['auto_nfo'] = True
                                                 console.print(f"[green]NFO downloaded to {nfo_file_path}")
                                         else:
                                             meta['nfo'] = True

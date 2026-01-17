@@ -1,6 +1,8 @@
+import asyncio
 import json
 import os
 from collections.abc import MutableMapping, Sequence
+from pathlib import Path
 from typing import Any, cast
 
 from typing_extensions import TypeAlias
@@ -78,8 +80,8 @@ class DiscMenus:
         json_path = os.path.join(base_dir, 'tmp', uuid_value, 'menu_images.json')
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
 
-        with open(json_path, 'w') as f:
-            json.dump(menu_images, f, indent=4)
+        menu_json = json.dumps(menu_images, indent=4)
+        await asyncio.to_thread(Path(json_path).write_text, menu_json)
 
         console.print(f"[green]Saved {len(image_list)} menu images to {json_path}[/green]")
 

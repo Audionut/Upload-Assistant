@@ -40,7 +40,7 @@ class UNIT3D:
         self.upload_url = ""
         pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    async def get_additional_checks(self, _meta: dict[str, Any]) -> bool:
         should_continue = True
         return should_continue
 
@@ -284,7 +284,7 @@ class UNIT3D:
         anonymous = "0" if meta["anon"] == 0 and not self.tracker_config.get("anon", False) else "1"
         return {"anonymous": anonymous}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_additional_data(self, _meta: dict[str, Any]) -> dict[str, str]:
         # Used to add additional data if needed
         """
         data = {
@@ -333,7 +333,7 @@ class UNIT3D:
     async def get_mal(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"mal": f"{meta['mal_id']}"}
 
-    async def get_igdb(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_igdb(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"igdb": "0"}
 
     async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -372,7 +372,7 @@ class UNIT3D:
 
         return data
 
-    async def get_featured(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"featured": "0"}
 
     async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -382,10 +382,10 @@ class UNIT3D:
 
         return {"free": free}
 
-    async def get_doubleup(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"doubleup": "0"}
 
-    async def get_sticky(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:

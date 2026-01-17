@@ -37,6 +37,7 @@ class STC(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = str(meta.get('type', ''))
         type_id = {
             'DISC': '1',

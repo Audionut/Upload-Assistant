@@ -78,7 +78,7 @@ class MTV:
         )
         return
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
@@ -660,7 +660,7 @@ class MTV:
             console.print(f"[dim red]{traceback.format_exc()}[/dim red]")
         return False
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
         if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')

@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import platform
@@ -85,8 +86,8 @@ async def mi_resolution(
     guess: dict[str, Any],
     width: Union[str, int],
     scan: str,
-    height: Union[str, int],
-    actual_height: Union[str, int],
+    _height: Union[str, int],
+    _actual_height: Union[str, int],
 ) -> str:
     res_map = {
         "3840x2160p": "2160p",
@@ -435,7 +436,7 @@ async def exportInfo(
             safe_video_path = validate_file_path(video)
             safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
             cmd = [safe_mediainfo_cmd, safe_video_path]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0 and result.stdout:
                 media_info = result.stdout
@@ -476,7 +477,7 @@ async def exportInfo(
             safe_video_path = validate_file_path(video)
             safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
             cmd = [safe_mediainfo_cmd, "--Output=JSON", safe_video_path]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0 and result.stdout:
                 media_info_json = result.stdout

@@ -248,7 +248,7 @@ class TL:
 
         return name
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
         login = await self.login(meta, force=True)
         if not login:
             meta['skipping'] = "TL"
@@ -345,7 +345,7 @@ class TL:
             media = cast(dict[str, Any], data.get('data', {})).get('Media')
             return media['id'] if media else None
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         if self.api_upload:
@@ -358,65 +358,66 @@ class TL:
     async def upload_api(self, meta: Meta) -> bool:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-        with open(torrent_path, 'rb') as open_torrent:
-            files: dict[str, tuple[Any, Any, str]] = {
-                'torrent': (self.get_name(meta) + '.torrent', open_torrent, 'application/x-bittorrent')
-            }
+        async with aiofiles.open(torrent_path, 'rb') as open_torrent:
+            torrent_bytes = await open_torrent.read()
+        files: dict[str, tuple[Any, Any, str]] = {
+            'torrent': (self.get_name(meta) + '.torrent', torrent_bytes, 'application/x-bittorrent')
+        }
 
-            data: dict[str, Any] = {
-                'announcekey': self.passkey,
-                'category': self.get_category(meta),
-                'description': await self.generate_description(meta),
-                'name': self.get_name(meta),
-                'nonscene': 'on' if not meta.get('scene') else 'off',
-            }
+        data: dict[str, Any] = {
+            'announcekey': self.passkey,
+            'category': self.get_category(meta),
+            'description': await self.generate_description(meta),
+            'name': self.get_name(meta),
+            'nonscene': 'on' if not meta.get('scene') else 'off',
+        }
 
-            if meta.get('anime', False):
-                anilist_id = await self.get_anilist_id(meta)
-                if anilist_id:
-                    data.update({'animeid': f"https://anilist.co/anime/{anilist_id}"})
+        if meta.get('anime', False):
+            anilist_id = await self.get_anilist_id(meta)
+            if anilist_id:
+                data.update({'animeid': f"https://anilist.co/anime/{anilist_id}"})
 
-            else:
-                if meta.get('category') == 'MOVIE':
-                    imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
-                    data.update({'imdb': imdb_info.get('imdbID', '')})
+        else:
+            if meta.get('category') == 'MOVIE':
+                imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+                data.update({'imdb': imdb_info.get('imdbID', '')})
 
-                if meta.get('category') == 'TV':
-                    data.update({
-                        'tvmazeid': meta.get('tvmaze_id', ''),
-                        'tvmazetype': meta.get('tv_pack', ''),
-                    })
+            if meta.get('category') == 'TV':
+                data.update({
+                    'tvmazeid': meta.get('tvmaze_id', ''),
+                    'tvmazetype': meta.get('tv_pack', ''),
+                })
 
-            anon = not (meta.get('anon') == 0 and not self.tracker_config.get('anon', False))
-            if anon:
-                data.update({'is_anonymous_upload': 'on'})
+        anon = not (meta.get('anon') == 0 and not self.tracker_config.get('anon', False))
+        if anon:
+            data.update({'is_anonymous_upload': 'on'})
 
-            if not meta.get('debug'):
-                response = await self.session.post(
-                    url=self.api_upload_url,
-                    files=files,
-                    data=data
-                )
+        if not meta.get('debug'):
+            response = await self.session.post(
+                url=self.api_upload_url,
+                files=files,
+                data=data
+            )
 
-                if not response.text.isnumeric():
-                    tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
-                    tracker_status.setdefault(self.tracker, {})
-                    tracker_status[self.tracker]['status_message'] = 'data error: ' + response.text
+            if not response.text.isnumeric():
+                tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
+                tracker_status.setdefault(self.tracker, {})
+                tracker_status[self.tracker]['status_message'] = 'data error: ' + response.text
 
-                if response.text.isnumeric():
-                    torrent_id = str(response.text)
-                    tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
-                    tracker_status.setdefault(self.tracker, {})
-                    tracker_status[self.tracker]['status_message'] = 'Torrent uploaded successfully.'
-                    tracker_status[self.tracker]['torrent_id'] = torrent_id
-                    await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
-                    return True
+            if response.text.isnumeric():
+                torrent_id = str(response.text)
+                tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
+                tracker_status.setdefault(self.tracker, {})
+                tracker_status[self.tracker]['status_message'] = 'Torrent uploaded successfully.'
+                tracker_status[self.tracker]['torrent_id'] = torrent_id
+                await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_list, self.torrent_url + torrent_id)
+                return True
 
-            else:
-                console.print("[cyan]TL Request Data:")
-                console.print(Redaction.redact_private_info(data))
-                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
-                return True  # Debug mode - simulated success
+        else:
+            console.print("[cyan]TL Request Data:")
+            console.print(Redaction.redact_private_info(data))
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
         return False
 
     async def get_cookie_upload_data(self, meta: Meta) -> dict[str, Any]:

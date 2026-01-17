@@ -93,18 +93,18 @@ class SPD:
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}"
 
         if meta.get('bdinfo'):
-            with open(
+            async with aiofiles.open(
                 f"{base_path}/BD_SUMMARY_00.txt",
                 encoding='utf-8',
             ) as bd_file:
-                bd_info = bd_file.read()
+                bd_info = await bd_file.read()
             return None, bd_info
         else:
-            with open(
+            async with aiofiles.open(
                 f"{base_path}/MEDIAINFO_CLEANPATH.txt",
                 encoding='utf-8',
             ) as mi_file:
-                media_info = mi_file.read()
+                media_info = await mi_file.read()
             return media_info, None
 
     async def get_screenshots(self, meta: Meta) -> list[str]:
@@ -113,7 +113,7 @@ class SPD:
         )
         return [image['raw_url'] for image in images if image.get('raw_url')]
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         search_url = 'https://speedapp.io/api/torrent'
 
@@ -257,8 +257,8 @@ class SPD:
         return re.sub(r"\s{2,}", " ", name)
 
     async def encode_to_base64(self, file_path: str) -> str:
-        with open(file_path, 'rb') as binary_file:
-            binary_file_data = binary_file.read()
+        async with aiofiles.open(file_path, 'rb') as binary_file:
+            binary_file_data = await binary_file.read()
             base64_encoded_data = base64.b64encode(binary_file_data)
             return base64_encoded_data.decode('utf-8')
 
@@ -298,7 +298,7 @@ class SPD:
 
         return data
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         data = await self.fetch_data(meta)
         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
         tracker_status.setdefault(self.tracker, {})

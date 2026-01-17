@@ -1,9 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
+import contextlib
 import glob
 import json
 import os
 import re
 from collections.abc import Mapping, MutableMapping, Sequence
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import click
@@ -15,6 +18,21 @@ from src.console import console
 
 QueueItem: TypeAlias = dict[str, Any]
 QueueList: TypeAlias = Union[list[str], list[QueueItem]]
+
+
+async def _read_json_file(path: str) -> Any:
+    content = await asyncio.to_thread(Path(path).read_text, encoding="utf-8")
+    return json.loads(content)
+
+
+async def _write_json_file(path: str, data: Any, indent: int = 4) -> None:
+    content = json.dumps(data, indent=indent)
+    await asyncio.to_thread(Path(path).write_text, content, encoding="utf-8")
+
+
+async def _read_text_lines(path: str) -> list[str]:
+    content = await asyncio.to_thread(Path(path).read_text, encoding="utf-8")
+    return content.splitlines()
 
 
 class QueueManager:
@@ -32,8 +50,7 @@ class QueueManager:
             return [], None
 
         try:
-            with open(search_results_file, encoding='utf-8') as f:
-                search_results = cast(list[QueueItem], json.load(f))
+            search_results = cast(list[QueueItem], await _read_json_file(search_results_file))
         except (json.JSONDecodeError, OSError) as e:
             console.print(f"[red]Error loading search results file: {e}[/red]")
             return [], None
@@ -44,8 +61,7 @@ class QueueManager:
 
         if os.path.exists(processed_files_log):
             try:
-                with open(processed_files_log, encoding='utf-8') as f:
-                    processed_paths = set(cast(list[str], json.load(f)))
+                processed_paths = set(cast(list[str], await _read_json_file(processed_files_log)))
             except (json.JSONDecodeError, OSError) as e:
                 console.print(f"[yellow]Warning: Could not load processed files log: {e}[/yellow]")
 
@@ -99,11 +115,8 @@ class QueueManager:
 
         # Load existing processed paths
         if os.path.exists(processed_files_log):
-            try:
-                with open(processed_files_log, encoding='utf-8') as f:
-                    processed_paths = set(cast(list[str], json.load(f)))
-            except (json.JSONDecodeError, OSError):
-                pass
+            with contextlib.suppress(json.JSONDecodeError, OSError):
+                processed_paths = set(cast(list[str], await _read_json_file(processed_files_log)))
 
         # Add the new path
         processed_paths.add(path)
@@ -111,8 +124,7 @@ class QueueManager:
         # Save back to file
         try:
             os.makedirs(os.path.dirname(processed_files_log), exist_ok=True)
-            with open(processed_files_log, 'w', encoding='utf-8') as f:
-                json.dump(list(processed_paths), f, indent=4)
+            await _write_json_file(processed_files_log, list(processed_paths), indent=4)
         except OSError as e:
             console.print(f"[red]Error saving processed path: {e}[/red]")
 
@@ -130,8 +142,7 @@ class QueueManager:
         Loads the list of processed files from the log file.
         """
         if os.path.exists(log_file):
-            with open(log_file, encoding='utf-8') as f:
-                return set(cast(list[str], json.load(f)))
+            return set(cast(list[str], await _read_json_file(log_file)))
         return set()
 
     @staticmethod
@@ -321,8 +332,7 @@ class QueueManager:
         safe_section = False
         safe_file_locations: list[str] = []
 
-        with open(log_file, encoding='utf-8') as f:
-            for line in f:
+        for line in await _read_text_lines(log_file):
                 line = line.strip()
 
                 # Detect the start and end of 'safe' sections
@@ -366,8 +376,7 @@ class QueueManager:
             log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
             try:
-                with open(log_file, 'w', encoding='utf-8') as f:
-                    json.dump(queue, f, indent=4)
+                await _write_json_file(log_file, list(queue), indent=4)
                 console.print(f"[bold green]Queue successfully saved to log file: {log_file}")
             except Exception as e:
                 console.print(f"[bold red]Failed to save queue to log file: {e}")
@@ -409,8 +418,7 @@ class QueueManager:
 
                     # Save the queue to the log file
                     try:
-                        with open(log_file, 'w', encoding='utf-8') as f:
-                            json.dump(queue, f, indent=4)
+                        await _write_json_file(log_file, queue, indent=4)
                         console.print(f"[bold green]Queue log file saved successfully: {log_file}[/bold green]")
                     except OSError as e:
                         console.print(f"[bold red]Failed to save the queue log file: {e}[/bold red]")
@@ -426,9 +434,8 @@ class QueueManager:
             console.print(f"[bold yellow]Processing debugging queue:[/bold yellow] [bold green{path}[/bold green]")
             if os.path.exists(path):
                 log_file = path
-                with open(path) as f:
-                    queue = cast(list[str], json.load(f))
-                    meta['queue'] = "debugging"
+                queue = cast(list[str], await _read_json_file(path))
+                meta['queue'] = "debugging"
 
             else:
                 console.print(f"[bold red]Log file not found: {path}. Exiting.[/bold red]")
@@ -436,8 +443,7 @@ class QueueManager:
 
         elif meta.get('queue'):
             if os.path.exists(log_file):
-                with open(log_file, encoding='utf-8') as f:
-                    existing_queue = cast(list[str], json.load(f))
+                existing_queue = cast(list[str], await _read_json_file(log_file))
 
                 if os.path.exists(path):
                     current_files = await QueueManager.gather_files_recursive(path, allowed_extensions=allowed_extensions)
@@ -473,8 +479,7 @@ class QueueManager:
                         if edit_choice == 'u':
                             queue = current_files
                             console.print(f"[bold green]Queue updated with current files ({len(queue)} items).")
-                            with open(log_file, 'w', encoding='utf-8') as f:
-                                json.dump(queue, f, indent=4)
+                            await _write_json_file(log_file, queue, indent=4)
                             console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
                         elif edit_choice == 'a':
                             console.print("[yellow]Select which new files to add (comma-separated numbers):[/yellow]")
@@ -486,8 +491,7 @@ class QueueManager:
                                 selected_files = [file for i, file in enumerate(sorted(new_files), 1) if i in indices]
                                 queue = list(existing_queue) + selected_files
                                 console.print(f"[bold green]Queue updated with selected new files ({len(queue)} items).")
-                                with open(log_file, 'w', encoding='utf-8') as f:
-                                    json.dump(queue, f, indent=4)
+                                await _write_json_file(log_file, queue, indent=4)
                                 console.print(f"[bold green]Queue log file updated: {log_file}[/bold green]")
                             except Exception as e:
                                 console.print(f"[bold red]Failed to update queue with selected files: {e}. Using the existing queue.")
@@ -498,8 +502,7 @@ class QueueManager:
                                 try:
                                     queue = json.loads(edited_content.strip())
                                     console.print("[bold green]Successfully updated the queue from the editor.")
-                                    with open(log_file, 'w', encoding='utf-8') as f:
-                                        json.dump(queue, f, indent=4)
+                                    await _write_json_file(log_file, queue, indent=4)
                                 except json.JSONDecodeError as e:
                                     console.print(f"[bold red]Failed to parse the edited content: {e}. Using the current files.")
                                     queue = current_files
@@ -509,8 +512,7 @@ class QueueManager:
                         elif edit_choice == 'd':
                             console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
                             queue = current_files
-                            with open(log_file, 'w', encoding='utf-8') as f:
-                                json.dump(queue, f, indent=4)
+                            await _write_json_file(log_file, queue, indent=4)
                             console.print(f"[bold green]New queue log file created: {log_file}[/bold green]")
                         else:
                             console.print("[bold green]Keeping the existing queue as is.")
@@ -532,8 +534,7 @@ class QueueManager:
                                 try:
                                     queue = json.loads(edited_content.strip())
                                     console.print("[bold green]Successfully updated the queue from the editor.")
-                                    with open(log_file, 'w', encoding='utf-8') as f:
-                                        json.dump(queue, f, indent=4)
+                                    await _write_json_file(log_file, queue, indent=4)
                                 except json.JSONDecodeError as e:
                                     console.print(f"[bold red]Failed to parse the edited content: {e}. Using the original queue.")
                                     queue = existing_queue
@@ -543,8 +544,7 @@ class QueueManager:
                         elif edit_choice == 'd':
                             console.print("[bold yellow]Discarding the existing queue log. Creating a new queue.")
                             queue = current_files
-                            with open(log_file, 'w', encoding='utf-8') as f:
-                                json.dump(queue, f, indent=4)
+                            await _write_json_file(log_file, queue, indent=4)
                             console.print(f"[bold green]New queue log file created: {log_file}[/bold green]")
                         else:
                             console.print("[bold green]Keeping the existing queue as is.")
@@ -575,8 +575,7 @@ class QueueManager:
                         console.print("[bold red]No changes were made. Using the original queue.")
 
                 # Save the queue to the log file
-                with open(log_file, 'w', encoding='utf-8') as f:
-                    json.dump(queue, f, indent=4)
+                await _write_json_file(log_file, queue, indent=4)
                 console.print(f"[bold green]Queue log file created: {log_file}[/bold green]")
 
         elif os.path.exists(path):

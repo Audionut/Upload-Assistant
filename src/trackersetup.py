@@ -4,7 +4,8 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import aiofiles
@@ -210,7 +211,7 @@ class TRACKER_SETUP:
             names: list[str] = [str(item['name']) for item in json_data if 'name' in item]
             names_csv = ', '.join(names)
             file_content = {
-                "last_updated": datetime.now().strftime("%Y-%m-%d"),
+                "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                 "banned_groups": names_csv,
                 "raw_data": json_data
             }
@@ -230,8 +231,8 @@ class TRACKER_SETUP:
         try:
             content = await asyncio.to_thread(self._read_file, file_path)
             data = cast(JsonDict, json.loads(content))
-            last_updated = datetime.strptime(str(data['last_updated']), "%Y-%m-%d")
-            return datetime.now() >= last_updated + timedelta(days=1)
+            last_updated = datetime.strptime(str(data['last_updated']), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) >= last_updated + timedelta(days=1)
         except FileNotFoundError:
             return True
         except Exception as e:
@@ -336,7 +337,7 @@ class TRACKER_SETUP:
             titles_csv = ', '.join([str(entry.get('title', '')) for entry in extracted_data])
 
             file_content = {
-                "last_updated": datetime.now().strftime("%Y-%m-%d"),
+                "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                 "titles_csv": titles_csv,
                 "extracted_data": extracted_data,
                 "raw_data": data
@@ -464,8 +465,8 @@ class TRACKER_SETUP:
                     console.print(f"[red]No claim data file found for {tracker_name}[/red]")
                     return False
 
-                with open(file_path) as file:
-                    extracted_data = cast(JsonDict, json.load(file)).get('extracted_data', [])
+                file_content = await asyncio.to_thread(Path(file_path).read_text, encoding="utf-8")
+                extracted_data = cast(JsonDict, json.loads(file_content)).get('extracted_data', [])
                 extracted_data = cast(list[JsonDict], extracted_data)
 
                 for item in extracted_data:

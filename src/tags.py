@@ -1,7 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
 import guessit
@@ -83,9 +85,8 @@ async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = Fa
 
 async def tag_override(meta: dict[str, Any]) -> dict[str, Any]:
     try:
-        with open(f"{meta['base_dir']}/data/tags.json", encoding="utf-8") as f:
-            tags = json.load(f)
-            f.close()
+        tags_text = await asyncio.to_thread(Path(f"{meta['base_dir']}/data/tags.json").read_text, encoding="utf-8")
+        tags = json.loads(tags_text)
 
         for tag in tags:
             value = tags.get(tag)

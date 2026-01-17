@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import glob
+import io
 import json
 import os
 import platform
@@ -9,10 +10,10 @@ from pathlib import Path
 from typing import Any, Optional, Union, cast
 from urllib.parse import urlparse
 
+import aiofiles
 import cli_ui
 import click
 import httpx
-import requests
 from pymediainfo import MediaInfo
 
 from cogs.redaction import Redaction
@@ -106,80 +107,65 @@ class PTP:
     async def get_ptp_id_imdb(
         self,
         search_term: str,
-        search_file_folder: str,
-        meta: dict[str, Any],
+        _search_file_folder: str,
+        _meta: dict[str, Any],
     ) -> tuple[Optional[int], Optional[Union[int, str]], Optional[str]]:
-        imdb_id = ptp_torrent_id = None
-        filename = str(os.path.basename(search_term))
-        params = {
-            'filelist': filename
-        }
         headers = {
             'ApiUser': self.api_user,
             'ApiKey': self.api_key,
-            'User-Agent': self.user_agent
+            "User-Agent": self.user_agent,
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers, timeout=30)
-        await asyncio.sleep(1)
-        console.print(f"[green]Searching PTP for: [bold yellow]{filename}[/bold yellow]")
+        search_value = search_term or _search_file_folder
+        params = {
+            'searchstr': search_value,
+        }
 
         try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url=url, headers=headers, params=params)
+            await asyncio.sleep(1)
+
             if response.status_code == 200:
-                response = response.json()
-                # console.print(f"[blue]Raw API Response: {response}[/blue]")
+                data = response.json()
+                movies = cast(list[dict[str, Any]], data.get('Movies', []))
+                for movie in movies:
+                    imdb_value = movie.get('ImdbId')
+                    torrents = cast(list[dict[str, Any]], movie.get('Torrents', []) or [])
+                    ptp_torrent_id: Optional[Union[int, str]] = None
+                    ptp_torrent_hash: Optional[str] = None
 
-                if int(response['TotalResults']) >= 1:
-                    for movie in response['Movies']:
-                        if len(movie['Torrents']) >= 1:
-                            for torrent in movie['Torrents']:
-                                # First, try matching in filelist > path
-                                for file in torrent['FileList']:
-                                    if file.get('Path') == filename:
-                                        imdb_id = int(movie.get('ImdbId', 0) or 0)
-                                        imdb = f"tt{str(imdb_id).zfill(7)}"
-                                        ptp_torrent_id = torrent['Id']
-                                        _, ptp_torrent_hash, *_ = await self.get_imdb_from_torrent_id(ptp_torrent_id)
-                                        console.print(f'[bold green]Matched release with PTP ID: [yellow]{ptp_torrent_id}[/yellow][/bold green]')
+                    normalized_search = str(search_value or '').lower()
+                    if normalized_search:
+                        for torrent in torrents:
+                            release_name = str(torrent.get('ReleaseName', '')).lower()
+                            if normalized_search in release_name:
+                                ptp_torrent_id = torrent.get('Id')
+                                ptp_torrent_hash = torrent.get('InfoHash')
+                                break
 
-                                        # Call get_torrent_info and print the results
-                                        tinfo = await self.get_torrent_info(imdb, meta)
-                                        console.print(f"[cyan]Torrent Info: {tinfo}[/cyan]")
+                    if ptp_torrent_id is None and torrents:
+                        first = torrents[0]
+                        ptp_torrent_id = first.get('Id')
+                        ptp_torrent_hash = first.get('InfoHash')
 
-                                        return imdb_id, ptp_torrent_id, ptp_torrent_hash
+                    if imdb_value:
+                        return int(imdb_value or 0), ptp_torrent_id, ptp_torrent_hash
 
-                                # If no match in filelist > path, check directly in filepath
-                                if torrent.get('FilePath') == filename:
-                                    imdb_id = int(movie.get('ImdbId', 0) or 0)
-                                    ptp_torrent_id = torrent['Id']
-                                    _, ptp_torrent_hash, *_ = await self.get_imdb_from_torrent_id(ptp_torrent_id)
-                                    console.print(f'[bold green]Matched release with PTP ID: [yellow]{ptp_torrent_id}[/yellow][/bold green]')
-
-                                    # Call get_torrent_info and print the results
-                                    tinfo = await self.get_torrent_info(imdb_id, meta)
-                                    console.print(f"[cyan]Torrent Info: {tinfo}[/cyan]")
-
-                                    return imdb_id, ptp_torrent_id, ptp_torrent_hash
-
-                console.print(f'[yellow]Could not find any release matching [bold yellow]{filename}[/bold yellow] on PTP')
+                console.print(f'[yellow]Could not find any release matching [bold yellow]{search_value}[/bold yellow] on PTP')
                 return None, None, None
 
             elif response.status_code in [400, 401, 403]:
                 console.print("[bold red]PTP Error: 400/401/403 - Invalid request or authentication failed[/bold red]")
                 return None, None, None
-
             elif response.status_code == 503:
                 console.print("[bold yellow]PTP Unavailable (503)")
                 return None, None, None
-
             else:
                 return None, None, None
-
         except Exception as e:
             console.print(f'[red]An error occurred: {str(e)}[/red]')
-
-        console.print(f'[yellow]Could not find any release matching [bold yellow]{filename}[/bold yellow] on PTP')
-        return None, None, None
+            return None, None, None
 
     async def get_imdb_from_torrent_id(self, ptp_torrent_id: Union[int, str]) -> tuple[Optional[int], Optional[str]]:
         params = {
@@ -191,7 +177,8 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url, params=params, headers=headers, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params, headers=headers)
         await asyncio.sleep(1)
         try:
             if response.status_code == 200:
@@ -225,7 +212,8 @@ class PTP:
         }
         url = 'https://passthepopcorn.me/torrents.php'
         console.print(f"[yellow]Requesting description from {url} with ID {ptp_torrent_id}")
-        response = requests.get(url, params=params, headers=headers, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params, headers=headers)
         await asyncio.sleep(1)
 
         ptp_desc = response.text
@@ -275,7 +263,8 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = 'https://passthepopcorn.me/torrents.php'
-        response = requests.get(url=url, headers=headers, params=params, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url=url, headers=headers, params=params)
         await asyncio.sleep(1)
         try:
             response = response.json()
@@ -355,7 +344,8 @@ class PTP:
             'User-Agent': self.user_agent
         }
         url = "https://passthepopcorn.me/ajax.php"
-        response = requests.get(url=url, params=params, headers=headers, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url=url, params=params, headers=headers)
         await asyncio.sleep(1)
         tinfo = {}
         try:
@@ -400,7 +390,7 @@ class PTP:
 
         return tags
 
-    async def search_existing(self, groupID: Union[int, str], meta: dict[str, Any], disctype: str) -> list[str]:
+    async def search_existing(self, groupID: Union[int, str], meta: dict[str, Any], _disctype: str) -> list[str]:
         # Map resolutions to SD / HD / UHD
         quality = None
         if meta.get('sd', 0) == 1:  # 1 is SD
@@ -459,7 +449,8 @@ class PTP:
         headers = {'referer': 'https://ptpimg.me/index.php'}
         url = "https://ptpimg.me/upload.php"
 
-        response = requests.post(url, headers=headers, data=payload, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, data=payload)
         try:
             response = response.json()
             ptpimg_code = response[0]['code']
@@ -746,8 +737,8 @@ class PTP:
         return
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding="utf-8") as base_file:
-            base = base_file.read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding="utf-8") as base_file:
+            base = await base_file.read()
         if meta.get('scene_nfo_file'):
             # Remove NFO from description
             meta_description = re.sub(
@@ -771,8 +762,9 @@ class PTP:
         pack_images_data: dict[str, Any] = {}
         if os.path.exists(pack_images_file):
             try:
-                with open(pack_images_file, encoding='utf-8') as f:
-                    pack_images_data = cast(dict[str, Any], json.load(f))
+                async with aiofiles.open(pack_images_file, encoding='utf-8') as f:
+                    content = await f.read()
+                    pack_images_data = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
 
                     # Filter out keys with non-approved image hosts
                     keys = cast(dict[str, Any], pack_images_data.get('keys', {}))
@@ -828,7 +820,8 @@ class PTP:
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding="utf-8") as desc:
+        desc = io.StringIO()
+        if True:
             discs = cast(list[dict[str, Any]], meta.get('discs', []))
             filelist = cast(list[str], meta.get('filelist', []))
 
@@ -940,8 +933,8 @@ class PTP:
                                     desc.write(f"[img]{raw_url}[/img]\n")
 
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            with open(meta_filename, 'w') as f:
-                                json.dump(meta, f, indent=4)
+                            async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                                await f.write(json.dumps(meta, indent=4))
 
             # Handle multiple discs case
             elif len(discs) > 1:
@@ -1020,8 +1013,8 @@ class PTP:
                                     desc.write("\n")
 
                                 meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                                with open(meta_filename, 'w') as f:
-                                    json.dump(meta, f, indent=4)
+                                async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                                    await f.write(json.dumps(meta, indent=4))
 
                     elif each['type'] == "DVD":
                         if i == 0:
@@ -1089,16 +1082,16 @@ class PTP:
                                     desc.write("\n")
 
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            with open(meta_filename, 'w') as f:
-                                json.dump(meta, f, indent=4)
+                            async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                                await f.write(json.dumps(meta, indent=4))
 
             # Handle single file case
             elif len(filelist) == 1:
                 file = filelist[0]
                 if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
                     desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
-                    mi_dump = mi_file.read()
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
+                    mi_dump = await mi_file.read()
                 desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                 base2ptp = self.convert_bbcode(base)
                 if base2ptp.strip() != "":
@@ -1152,8 +1145,8 @@ class PTP:
                         if base2ptp.strip() != "":
                             desc.write(base2ptp)
                             desc.write("\n\n")
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
-                            mi_dump = mi_file.read()
+                        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
+                            mi_dump = await mi_file.read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         try:
                             if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
@@ -1169,10 +1162,11 @@ class PTP:
                         desc.write("\n")
                     else:
                         mi_dump = MediaInfo.parse(file, output="STRING", full=False)
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", "w", newline="", encoding="utf-8") as f:
-                            f.write(mi_dump.replace(file, os.path.basename(file)))
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt", encoding="utf-8") as mi_file:
-                            mi_dump = mi_file.read()
+                        temp_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt"
+                        async with aiofiles.open(temp_mi_path, "w", encoding="utf-8") as f:
+                            await f.write(mi_dump.replace(file, os.path.basename(file)))
+                        async with aiofiles.open(temp_mi_path, encoding="utf-8") as mi_file:
+                            mi_dump = await mi_file.read()
                         desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
                         new_images_key = f'new_images_file_{i}'
                         # Check for saved images first
@@ -1220,8 +1214,15 @@ class PTP:
                                 desc.write("\n")
 
                         meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                        with open(meta_filename, 'w') as f:
-                            json.dump(meta, f, indent=4)
+                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                            await f.write(json.dumps(meta, indent=4))
+
+        async with aiofiles.open(
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
+            'w',
+            encoding="utf-8",
+        ) as desc_file:
+            await desc_file.write(desc.getvalue())
 
     async def save_image_links(
         self,
@@ -1241,8 +1242,9 @@ class PTP:
         existing_data: dict[str, Any] = {}
         if os.path.exists(output_file):
             try:
-                with open(output_file, encoding='utf-8') as f:
-                    existing_data = cast(dict[str, Any], json.load(f))
+                async with aiofiles.open(output_file, encoding='utf-8') as f:
+                    content = await f.read()
+                    existing_data = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load existing image data: {str(e)}[/yellow]")
 
@@ -1278,8 +1280,8 @@ class PTP:
         existing_data["total_count"] = sum(cast(dict[str, Any], key_data).get("count", 0) for key_data in keys.values())
 
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, indent=2)
+            async with aiofiles.open(output_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(existing_data, indent=2))
 
             if meta['debug']:
                 console.print(f"[green]Saved {len(image_list)} new images for key '{image_key}' (total: {existing_data['total_count']}):[/green]")
@@ -1294,57 +1296,51 @@ class PTP:
         if not os.path.exists(f"{meta['base_dir']}/data/cookies"):
             Path(f"{meta['base_dir']}/data/cookies").mkdir(parents=True, exist_ok=True)
         cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
-        with requests.Session() as session:
-            loggedIn = False
-            uploadresponse: Optional[requests.Response] = None
-            if os.path.exists(cookiefile):
-                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # pyright: ignore[reportPrivateUsage]
-                uploadresponse = session.get("https://passthepopcorn.me/upload.php", timeout=30)
+        loggedIn = False
+        uploadresponse: Optional[httpx.Response] = None
+        cookies: dict[str, str] = {}
+        if os.path.exists(cookiefile):
+            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # pyright: ignore[reportPrivateUsage]
+            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
+                uploadresponse = await client.get("https://passthepopcorn.me/upload.php")
                 loggedIn = await self.validate_login(uploadresponse)
-            else:
-                console.print("[yellow]PTP Cookies not found. Creating new session.")
-            if loggedIn is True:
-                if uploadresponse is None:
-                    raise LoginException("Failed to load upload page for AntiCsrfToken.")  # noqa F405
-                token_match = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text)
-                if not token_match:
-                    raise LoginException("Failed to find AntiCsrfToken on upload page.")  # noqa F405
-                AntiCsrfToken = token_match.group(1)
-            else:
-                passkey_match = re.match(r"https?://please\.passthepopcorn\.me:?\d*/(.+)/announce", self.announce_url)
-                if not passkey_match:
-                    raise LoginException("Failed to extract passkey from PTP announce URL.")  # noqa F405
-                passKey = passkey_match.group(1)
-                data = {
-                    "username": self.username,
-                    "password": self.password,
-                    "passkey": passKey,
-                    "keeplogged": "1",
-                }
-                headers = {"User-Agent": self.user_agent}
-                loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
-                await asyncio.sleep(2)
-                try:
+                if loggedIn is True:
+                    token_match = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text)
+                    if not token_match:
+                        raise LoginException("Failed to find AntiCsrfToken on upload page.")  # noqa F405
+                    AntiCsrfToken = token_match.group(1)
+                    return AntiCsrfToken
+        else:
+            console.print("[yellow]PTP Cookies not found. Creating new session.")
+
+        passkey_match = re.match(r"https?://please\.passthepopcorn\.me:?\d*/(.+)/announce", self.announce_url)
+        if not passkey_match:
+            raise LoginException("Failed to extract passkey from PTP announce URL.")  # noqa F405
+        passKey = passkey_match.group(1)
+        data = {
+            "username": self.username,
+            "password": self.password,
+            "passkey": passKey,
+            "keeplogged": "1",
+        }
+        headers = {"User-Agent": self.user_agent}
+        async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
+            loginresponse = await client.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
+            await asyncio.sleep(2)
+            try:
+                resp = loginresponse.json()
+                if resp['Result'] == "TfaRequired":
+                    data['TfaType'] = "normal"
+                    data['TfaCode'] = cli_ui.ask_string("2FA Required: Please enter PTP 2FA code")
+                    loginresponse = await client.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
+                    await asyncio.sleep(2)
                     resp = loginresponse.json()
-                    if resp['Result'] == "TfaRequired":
-                        data['TfaType'] = "normal"
-                        data['TfaCode'] = cli_ui.ask_string("2FA Required: Please enter PTP 2FA code")
-                        loginresponse = session.post("https://passthepopcorn.me/ajax.php?action=login", data=data, headers=headers)
-                        await asyncio.sleep(2)
-                        resp = loginresponse.json()
-                    try:
-                        if resp["Result"] != "Ok":
-                            raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
-                        AntiCsrfToken = resp["AntiCsrfToken"]
-                        self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)  # pyright: ignore[reportPrivateUsage]
-                    except Exception:
-                        try:
-                            parsed = json.loads(loginresponse.text)
-                            redacted = Redaction.redact_private_info(parsed)
-                            redacted_text = json.dumps(redacted)
-                        except json.JSONDecodeError:
-                            redacted_text = Redaction.redact_private_info(loginresponse.text)
-                        raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
+                try:
+                    if resp["Result"] != "Ok":
+                        raise LoginException("Failed to login to PTP. Probably due to the bad user name, password, announce url, or 2FA code.")  # noqa F405
+                    AntiCsrfToken = resp["AntiCsrfToken"]
+                    self.cookie_validator._save_cookies_secure(client.cookies.jar, cookiefile)  # pyright: ignore[reportPrivateUsage]
                 except Exception:
                     try:
                         parsed = json.loads(loginresponse.text)
@@ -1353,9 +1349,17 @@ class PTP:
                     except json.JSONDecodeError:
                         redacted_text = Redaction.redact_private_info(loginresponse.text)
                     raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
+            except Exception:
+                try:
+                    parsed = json.loads(loginresponse.text)
+                    redacted = Redaction.redact_private_info(parsed)
+                    redacted_text = json.dumps(redacted)
+                except json.JSONDecodeError:
+                    redacted_text = Redaction.redact_private_info(loginresponse.text)
+                raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
-    async def validate_login(self, response: requests.Response) -> bool:
+    async def validate_login(self, response: httpx.Response) -> bool:
         loggedIn = False
         if response.text.find("""<a href="login.php?act=recover">""") != -1:
             console.print("Looks like you are not logged in to PTP. Probably due to the bad user name, password, or expired session.")
@@ -1372,8 +1376,8 @@ class PTP:
         desc = ""
         try:
             os.stat(file_path)  # Ensures the file is accessible
-            with open(file_path, encoding="utf-8") as f:
-                desc = f.read()
+            async with aiofiles.open(file_path, encoding="utf-8") as f:
+                desc = await f.read()
         except OSError as e:
             print(f"File error: {e}")
         ptp_subtitles = self.get_subtitles(meta)
@@ -1525,7 +1529,7 @@ class PTP:
 
         return url, data
 
-    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -1549,56 +1553,58 @@ class PTP:
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         # Proceed with the upload process
-        with open(torrent_file_path, 'rb') as torrentFile:
-            files = {
-                "file_input": ("placeholder.torrent", torrentFile, "application/x-bittorent")
-            }
-            headers = {
-                # 'ApiUser' : self.api_user,
-                # 'ApiKey' : self.api_key,
-                "User-Agent": self.user_agent
-            }
-            if meta['debug']:
-                debug_data = data.copy()
-                # Redact the AntiCsrfToken
-                if 'AntiCsrfToken' in debug_data:
-                    debug_data['AntiCsrfToken'] = '[REDACTED]'
-                console.log(url)
-                console.log(Redaction.redact_private_info(debug_data))
-                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
-                return True  # Debug mode - simulated success
-            else:
-                failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
-                with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
-                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # pyright: ignore[reportPrivateUsage]
-                    response = session.post(url=url, data=data, headers=headers, files=files, timeout=60)
-                console.print(f"[cyan]{response.url}")
-                responsetext = response.text
-                # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.
-                if responsetext.find(self.announce_url) != -1:
-                    # Get the error message.
-                    errorMessage = ""
-                    match = re.search(r"""<div class="alert alert--error.*?>(.+?)</div>""", responsetext)
-                    if match is not None:
-                        errorMessage = match.group(1)
+        async with aiofiles.open(torrent_file_path, 'rb') as torrentFile:
+            torrent_bytes = await torrentFile.read()
+        files = {
+            "file_input": ("placeholder.torrent", torrent_bytes, "application/x-bittorent")
+        }
+        headers = {
+            # 'ApiUser' : self.api_user,
+            # 'ApiKey' : self.api_key,
+            "User-Agent": self.user_agent
+        }
+        if meta['debug']:
+            debug_data = data.copy()
+            # Redact the AntiCsrfToken
+            if 'AntiCsrfToken' in debug_data:
+                debug_data['AntiCsrfToken'] = '[REDACTED]'
+            console.log(url)
+            console.log(Redaction.redact_private_info(debug_data))
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
+        else:
+            failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"
+            cookiefile = f"{meta['base_dir']}/data/cookies/PTP.json"
+            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # pyright: ignore[reportPrivateUsage]
+            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            async with httpx.AsyncClient(cookies=cookies, timeout=60.0, follow_redirects=True) as client:
+                response = await client.post(url=url, data=data, headers=headers, files=files)
+            console.print(f"[cyan]{response.url}")
+            responsetext = response.text
+            # If the response contains our announce URL, then we are on the upload page and the upload wasn't successful.
+            if responsetext.find(self.announce_url) != -1:
+                # Get the error message.
+                errorMessage = ""
+                match = re.search(r"""<div class="alert alert--error.*?>(.+?)</div>""", responsetext)
+                if match is not None:
+                    errorMessage = match.group(1)
 
-                    with open(failure_path, 'w', encoding='utf-8') as f:
-                        f.write(responsetext)
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path} | {errorMessage}"
+                async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                    await f.write(responsetext)
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path} | {errorMessage}"
 
-                # URL format in case of successful upload: https://passthepopcorn.me/torrents.php?id=9329&torrentid=91868
-                match = re.match(r".*?passthepopcorn\.me/torrents\.php\?id=(\d+)&torrentid=(\d+)", response.url)
-                if match is None:
-                    with open(failure_path, 'w', encoding='utf-8') as f:
-                        f.write(responsetext)
-                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path}"
-                    return False
+            # URL format in case of successful upload: https://passthepopcorn.me/torrents.php?id=9329&torrentid=91868
+            match = re.match(r".*?passthepopcorn\.me/torrents\.php\?id=(\d+)&torrentid=(\d+)", str(response.url))
+            if match is None:
+                async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                    await f.write(responsetext)
+                meta['tracker_status'][self.tracker]['status_message'] = f"data error: see {failure_path}"
+                return False
 
-                # having UA add the torrent link as a comment.
-                if match:
-                    meta['tracker_status'][self.tracker]['status_message'] = response.url
-                    await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_url, response.url)
-                    return True
-            return False
+            # having UA add the torrent link as a comment.
+            if match:
+                meta['tracker_status'][self.tracker]['status_message'] = str(response.url)
+                await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce_url, str(response.url))
+                return True
+        return False

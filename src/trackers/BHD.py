@@ -58,7 +58,7 @@ class BHD:
         )
         return None
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(str(meta['category']))
@@ -323,7 +323,7 @@ class BHD:
             await desc.close()
             return None
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
         bhd_name = await self.edit_name(meta)
         if any(phrase in bhd_name.lower() for phrase in (
             "-framestor", "-bhdstudio", "-bmf", "-decibel", "-d-zone", "-hifi",

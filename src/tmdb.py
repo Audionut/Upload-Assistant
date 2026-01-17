@@ -5,7 +5,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Optional, Union
 from typing import cast as typing_cast
@@ -15,7 +15,6 @@ import anitopy
 import cli_ui
 import guessit
 import httpx
-import requests
 
 from src.args import Args
 from src.cleanup import cleanup_manager
@@ -232,6 +231,7 @@ class TmdbManager:
         TMDB_BASE_URL: Optional[str] = None,
         logo_json: Optional[dict[str, Any]] = None,
     ) -> str:
+        _ = TMDB_API_KEY
         return await get_logo(
             tmdb_id=tmdb_id,
             category=category,
@@ -440,6 +440,8 @@ async def get_tmdb_id(
         new_category: Optional[str] = None,
         unattended: bool = False,
     ) -> tuple[int, str]:
+        _ = untouched_filename
+        _ = path
         search_results: dict[str, Any] = {"results": []}
         original_category = category
         category = new_category or original_category
@@ -986,6 +988,7 @@ async def tmdb_other_meta(
     Fetch metadata from TMDB for a movie or TV show.
     Returns a dictionary containing metadata that can be used to update the meta object.
     """
+    _ = aka
     tmdb_metadata = {}
 
     # Initialize variables that might not be set in all code paths
@@ -1078,7 +1081,11 @@ async def tmdb_other_meta(
         if category == "MOVIE":
             title = media_data['title']
             original_title = media_data.get('original_title', title)
-            year = datetime.strptime(media_data['release_date'], '%Y-%m-%d').year if media_data['release_date'] else search_year
+            year = (
+                datetime.strptime(media_data['release_date'], '%Y-%m-%d').replace(tzinfo=timezone.utc).year
+                if media_data['release_date']
+                else search_year
+            )
             runtime = media_data.get('runtime', 60)
             if media_data.get('release_date'):
                 release_date = media_data['release_date']
@@ -1096,14 +1103,22 @@ async def tmdb_other_meta(
         else:  # TV show
             title = media_data['name']
             original_title = media_data.get('original_name', title)
-            year = datetime.strptime(media_data['first_air_date'], '%Y-%m-%d').year if media_data['first_air_date'] else search_year
+            year = (
+                datetime.strptime(media_data['first_air_date'], '%Y-%m-%d').replace(tzinfo=timezone.utc).year
+                if media_data['first_air_date']
+                else search_year
+            )
             if not year:
                 year_pattern = r'(18|19|20)\d{2}'
                 year_match = re.search(year_pattern, title)
                 if year_match:
                     year = int(year_match.group(0))
             if not year:
-                year = datetime.strptime(media_data['last_air_date'], '%Y-%m-%d').year if media_data['last_air_date'] else 0
+                year = (
+                    datetime.strptime(media_data['last_air_date'], '%Y-%m-%d').replace(tzinfo=timezone.utc).year
+                    if media_data['last_air_date']
+                    else 0
+                )
             first_air_date = media_data.get('first_air_date', None)
             last_air_date = media_data.get('last_air_date', None)
             runtime_list = media_data.get('episode_run_time', [60])
@@ -1507,7 +1522,8 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
 
         url = 'https://graphql.anilist.co'
         try:
-            response = requests.post(url, json={'query': query, 'variables': variables}, timeout=30)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json={'query': query, 'variables': variables})
             json_data = typing_cast(dict[str, Any], response.json())
 
             demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]

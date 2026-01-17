@@ -1,6 +1,8 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import traceback
+from pathlib import Path
 from typing import Any, Optional, cast
 
 from src.args import Args
@@ -16,9 +18,10 @@ class ApplyOverrides:
 
     async def get_source_override(self, meta: Meta, other_id: bool = False) -> Meta:
         try:
-            with open(f"{meta['base_dir']}/data/templates/user-args.json", encoding="utf-8") as f:
-                console.print("[green]Found user-args.json")
-                user_args = cast(dict[str, Any], json.load(f))
+            user_args_path = Path(meta['base_dir']) / "data" / "templates" / "user-args.json"
+            user_args_text = await asyncio.to_thread(user_args_path.read_text, encoding="utf-8")
+            console.print("[green]Found user-args.json")
+            user_args = cast(dict[str, Any], json.loads(user_args_text))
 
             current_tmdb_id = meta.get('tmdb_id', 0)
             current_imdb_id = meta.get('imdb_id', 0)

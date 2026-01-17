@@ -8,9 +8,9 @@ import platform
 import re
 from typing import Any, Optional, cast
 
+import aiofiles
 import cli_ui
 import httpx
-import requests
 from bs4 import BeautifulSoup
 from bs4.element import AttributeValueList
 from unidecode import unidecode
@@ -33,7 +33,7 @@ class THR:
         self.banned_groups = [""]
         pass
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         cat_id = await self.get_cat_id(meta)
@@ -62,19 +62,19 @@ class THR:
             # bd_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8'
         else:
             mi_file_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt")
-            with open(mi_file_path, 'rb') as f:
-                mi_file = f.read()
+            async with aiofiles.open(mi_file_path, 'rb') as f:
+                mi_file = await f.read()
             # bd_file = None
 
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt",
             encoding='utf-8',
         ) as f:
-            desc = f.read()
+            desc = await f.read()
 
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR].torrent")
-        with open(torrent_path, 'rb') as f:
-            tfile = f.read()
+        async with aiofiles.open(torrent_path, 'rb') as f:
+            tfile = await f.read()
 
         # Upload Form
         url = 'https://www.torrenthr.org/takeupload.php'
@@ -212,52 +212,54 @@ class THR:
     async def edit_desc(self, meta: Meta) -> bool:
         pronfo = False
         bbcode = BBCODE()
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
             encoding='utf-8',
         ) as base_file:
-            base = base_file.read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
-            tag_value = str(meta.get('tag', ''))
-            tag = "" if tag_value == "" else f" / {tag_value[1:]}"
-            res = str(meta.get('source', '')) if str(meta.get('is_disc', '')) == "DVD" else str(meta.get('resolution', ''))
-            desc.write("[quote=Info]")
-            name_aka = f"{meta.get('title', '')} {meta.get('aka', '')} {meta.get('year', '')}"
-            name_aka = unidecode(name_aka)
-            # name_aka = re.sub("[^0-9a-zA-Z. '\-\[\]]+", " ", name_aka)
-            desc.write(f"Name: {' '.join(name_aka.split())}\n\n")
-            desc.write(f"Overview: {meta.get('overview', '')}\n\n")
-            desc.write(f"{res} / {meta.get('type', '')}{tag}\n\n")
-            category = str(meta.get('category', ''))
-            desc.write(f"Category: {category}\n")
-            desc.write(f"TMDB: https://www.themoviedb.org/{category.lower()}/{meta.get('tmdb', '')}\n")
-            if int(meta.get('imdb_id', 0) or 0) != 0:
-                imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
-                desc.write(f"IMDb: {str(imdb_info.get('imdb_url', ''))}\n")
-            if int(meta.get('tvdb_id', 0) or 0) != 0:
-                desc.write(f"TVDB: https://www.thetvdb.com/?id={meta.get('tvdb_id', '')}&tab=series\n")
-            if int(meta.get('tvmaze_id', 0) or 0) != 0:
-                desc.write(f"TVMaze: https://www.tvmaze.com/shows/{meta.get('tvmaze_id', '')}\n")
-            if int(meta.get('mal_id', 0) or 0) != 0:
-                desc.write(f"MAL: https://myanimelist.net/anime/{meta.get('mal_id', '')}\n")
-            desc.write("[/quote]")
+            base = await base_file.read()
 
-            if base:
-                # replace unsupported bbcode tags
-                base = bbcode.convert_named_spoiler_to_named_hide(base)
-                base = bbcode.convert_spoiler_to_hide(base)
-                base = bbcode.convert_code_to_pre(base)
-                # fix alignment for NFO content inherited from centering the spoiler
-                base = re.sub(r'(?P<open>\[hide=(Scene|FraMeSToR) NFO:\]\[pre\])(?P<content>.*?)(?P<close>\[/pre\]\[/hide\])',
-                              r'\g<open>[align=left]\g<content>[/align]\g<close>',
-                              base,
-                              flags=re.DOTALL)
-                desc.write("\n\n" + base)
+        desc_parts: list[str] = []
+        tag_value = str(meta.get('tag', ''))
+        tag = "" if tag_value == "" else f" / {tag_value[1:]}"
+        res = str(meta.get('source', '')) if str(meta.get('is_disc', '')) == "DVD" else str(meta.get('resolution', ''))
+        desc_parts.append("[quote=Info]")
+        name_aka = f"{meta.get('title', '')} {meta.get('aka', '')} {meta.get('year', '')}"
+        name_aka = unidecode(name_aka)
+        # name_aka = re.sub("[^0-9a-zA-Z. '\-\[\]]+", " ", name_aka)
+        desc_parts.append(f"Name: {' '.join(name_aka.split())}\n\n")
+        desc_parts.append(f"Overview: {meta.get('overview', '')}\n\n")
+        desc_parts.append(f"{res} / {meta.get('type', '')}{tag}\n\n")
+        category = str(meta.get('category', ''))
+        desc_parts.append(f"Category: {category}\n")
+        desc_parts.append(f"TMDB: https://www.themoviedb.org/{category.lower()}/{meta.get('tmdb', '')}\n")
+        if int(meta.get('imdb_id', 0) or 0) != 0:
+            imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+            desc_parts.append(f"IMDb: {str(imdb_info.get('imdb_url', ''))}\n")
+        if int(meta.get('tvdb_id', 0) or 0) != 0:
+            desc_parts.append(f"TVDB: https://www.thetvdb.com/?id={meta.get('tvdb_id', '')}&tab=series\n")
+        if int(meta.get('tvmaze_id', 0) or 0) != 0:
+            desc_parts.append(f"TVMaze: https://www.tvmaze.com/shows/{meta.get('tvmaze_id', '')}\n")
+        if int(meta.get('mal_id', 0) or 0) != 0:
+            desc_parts.append(f"MAL: https://myanimelist.net/anime/{meta.get('mal_id', '')}\n")
+        desc_parts.append("[/quote]")
+
+        image_glob: list[str] = []
+
+        if base:
+            # replace unsupported bbcode tags
+            base = bbcode.convert_named_spoiler_to_named_hide(base)
+            base = bbcode.convert_spoiler_to_hide(base)
+            base = bbcode.convert_code_to_pre(base)
+            # fix alignment for NFO content inherited from centering the spoiler
+            base = re.sub(r'(?P<open>\[hide=(Scene|FraMeSToR) NFO:\]\[pre\])(?P<content>.*?)(?P<close>\[/pre\]\[/hide\])',
+                          r'\g<open>[align=left]\g<content>[/align]\g<close>',
+                          base,
+                          flags=re.DOTALL)
+            desc_parts.append("\n\n" + base)
 
             # REHOST IMAGES
             os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
             image_patterns: list[str] = ["*.png", ".[!.]*.png"]
-            image_glob: list[str] = []
             for pattern in image_patterns:
                 image_glob.extend(glob.glob(pattern))
 
@@ -271,71 +273,84 @@ class THR:
 
             image_glob = [file for file in image_glob if file not in unwanted_files]
             image_glob = list(set(image_glob))
-            image_list: list[str] = []
+        image_list: list[str] = []
+        async with httpx.AsyncClient(timeout=30.0) as image_client:
             for image in image_glob:
                 url = "https://img2.torrenthr.org/api/1/upload"
                 data: dict[str, Any] = {
                     'key': str(self.config['TRACKERS']['THR'].get('img_api', '')),
                     # 'source' : base64.b64encode(open(image, "rb").read()).decode('utf8')
                 }
-                with open(image, 'rb') as image_file:
-                    files = {'source': image_file}
-                    response = requests.post(url, data=data, files=files, timeout=30)
+                async with aiofiles.open(image, 'rb') as image_file:
+                    file_bytes = await image_file.read()
+                response: Optional[httpx.Response] = None
+                response_data: dict[str, Any] = {}
                 try:
-                    response = response.json()
-                    # med_url = response['image']['medium']['url']
-                    img_url = response['image']['url']
+                    response = await image_client.post(
+                        url,
+                        data=data,
+                        files={'source': (os.path.basename(image), file_bytes)},
+                    )
+                    response_data = response.json()
+                    img_url = response_data['image']['url']
                     image_list.append(img_url)
                 except json.decoder.JSONDecodeError:
                     console.print("[yellow]Failed to upload image")
-                    console.print(response.text)
+                    if response is not None:
+                        console.print(response.text)
                 except KeyError:
                     console.print("[yellow]Failed to upload image")
-                    console.print(response)
+                    console.print(response_data)
                 await asyncio.sleep(1)
-            desc.write("[align=center]")
-            if str(meta.get('is_disc', '')) == 'BDMV':
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt") as bd_file:
-                    desc.write(f"[nfo]{bd_file.read()}[/nfo]")
-            elif self.config['TRACKERS']['THR'].get('pronfo_api_key'):
-                # ProNFO
-                pronfo_url = f"https://www.pronfo.com/api/v1/access/upload/{self.config['TRACKERS']['THR'].get('pronfo_api_key', '')}"
-                with open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-                ) as mi_file:
-                    data: dict[str, Any] = {
-                        'content': mi_file.read(),
-                        'theme': self.config['TRACKERS']['THR'].get('pronfo_theme', 'gray'),
-                        'rapi': self.config['TRACKERS']['THR'].get('pronfo_rapi_id')
-                    }
-                response = requests.post(pronfo_url, data=data, timeout=30)
-                try:
-                    response = response.json()
-                    if response.get('error', True) is False:
-                        mi_img = response.get('url')
-                        desc.write(f"\n[img]{mi_img}[/img]\n")
-                        pronfo = True
-                except Exception:
-                    console.print('[bold red]Error parsing pronfo response, using THR parser instead')
-                    if meta['debug']:
-                        console.print(f"[red]{response}")
-                        console.print(response.text)
 
-            screens = int(meta.get('screens', 0) or 0)
-            for each in image_list[:screens]:
-                desc.write(f"\n[img]{each}[/img]\n")
+        desc_parts.append("[align=center]")
+        if str(meta.get('is_disc', '')) == 'BDMV':
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt") as bd_file:
+                desc_parts.append(f"[nfo]{await bd_file.read()}[/nfo]")
+        elif self.config['TRACKERS']['THR'].get('pronfo_api_key'):
+            # ProNFO
+            pronfo_url = f"https://www.pronfo.com/api/v1/access/upload/{self.config['TRACKERS']['THR'].get('pronfo_api_key', '')}"
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+            ) as mi_file:
+                data = {
+                    'content': await mi_file.read(),
+                    'theme': self.config['TRACKERS']['THR'].get('pronfo_theme', 'gray'),
+                    'rapi': self.config['TRACKERS']['THR'].get('pronfo_rapi_id')
+                }
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(pronfo_url, data=data)
+            try:
+                response_data = response.json()
+                if response_data.get('error', True) is False:
+                    mi_img = response_data.get('url')
+                    desc_parts.append(f"\n[img]{mi_img}[/img]\n")
+                    pronfo = True
+            except Exception:
+                console.print('[bold red]Error parsing pronfo response, using THR parser instead')
+                if meta['debug']:
+                    console.print(f"[red]{response}")
+                    console.print(response.text)
+
+        screens = int(meta.get('screens', 0) or 0)
+        desc_parts.extend([f"\n[img]{each}[/img]\n" for each in image_list[:screens]])
             # if pronfo:
             #     with open(os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"), 'r') as mi_file:
             #         full_mi = mi_file.read()
             #         desc.write(f"[/align]\n[hide=FULL MEDIAINFO]{full_mi}[/hide][align=center]")
             #         mi_file.close()
-            desc.write(
-                f"\n\n[size=2][url=https://www.torrenthr.org/forums.php?action=viewtopic&topicid=8977]{meta.get('ua_signature', '')}[/url][/size][/align]"
-            )
-            desc.close()
+        desc_parts.append(
+            f"\n\n[size=2][url=https://www.torrenthr.org/forums.php?action=viewtopic&topicid=8977]{meta.get('ua_signature', '')}[/url][/size][/align]"
+        )
+        async with aiofiles.open(
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[THR]DESCRIPTION.txt",
+            'w',
+            encoding='utf-8',
+        ) as desc:
+            await desc.write("".join(desc_parts))
         return pronfo
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[str]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         imdb_id = str(meta.get('imdb', ''))
         base_search_url = f"https://www.torrenthr.org/browse.php?search={imdb_id}&blah=2&incldead=1"
         dupes: list[str] = []

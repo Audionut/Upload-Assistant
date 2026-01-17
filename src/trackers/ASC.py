@@ -4,7 +4,7 @@ import json
 import os
 import platform
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
 import aiofiles
@@ -497,8 +497,8 @@ class ASC:
         desc = ''
         base_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, encoding='utf-8') as f:
-                desc = f.read().strip()
+            async with aiofiles.open(base_desc_path, encoding='utf-8') as f:
+                desc = (await f.read()).strip()
                 desc = desc.replace('[user]', '').replace('[/user]', '')
                 desc = desc.replace('[align=left]', '').replace('[/align]', '')
                 desc = desc.replace('[align=right]', '').replace('[/align]', '')
@@ -517,9 +517,9 @@ class ASC:
         description_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/center]")
 
         final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(final_desc_path, 'w', encoding='utf-8') as descfile:
+        async with aiofiles.open(final_desc_path, 'w', encoding='utf-8') as descfile:
             final_description = '\n'.join(filter(None, description_parts))
-            descfile.write(final_description)
+            await descfile.write(final_description)
 
         return final_description
 
@@ -568,7 +568,7 @@ class ASC:
             'link': torrent_link
         }
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, str]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is not None:
             self.session.cookies = cast(Any, cookie_jar)
@@ -687,7 +687,7 @@ class ASC:
             return 'N/A'
         def _try_format(fmt: str) -> Optional[str]:
             try:
-                return datetime.strptime(str(date_str), fmt).strftime('%d/%m/%Y')
+                return datetime.strptime(str(date_str), fmt).replace(tzinfo=timezone.utc).strftime('%d/%m/%Y')
             except (ValueError, TypeError):
                 return None
 
@@ -701,8 +701,8 @@ class ASC:
         if meta.get('is_disc') == 'BDMV':
             summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(summary_path):
-                with open(summary_path, encoding='utf-8') as f:
-                    return f.read()
+                async with aiofiles.open(summary_path, encoding='utf-8') as f:
+                    return await f.read()
         if not meta.get('is_disc'):
             filelist = cast(list[str], meta.get('filelist') or [])
             video_file = filelist[0] if filelist else str(meta.get('path') or '')
@@ -896,7 +896,7 @@ class ASC:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is not None:
             self.session.cookies = cast(Any, cookie_jar)

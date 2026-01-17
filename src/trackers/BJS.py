@@ -5,7 +5,7 @@ import os
 import platform
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
@@ -893,8 +893,8 @@ class BJS:
         ]
 
         async def upload_local_file(path: Path):
-            with open(path, "rb") as f:
-                image_bytes = f.read()
+            async with aiofiles.open(path, "rb") as f:
+                image_bytes = await f.read()
             return await self.img_host(image_bytes, os.path.basename(path))
 
         async def upload_remote_file(url: str):
@@ -962,7 +962,7 @@ class BJS:
             return ''
 
         try:
-            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d')
+            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             formatted_date = date_object.strftime('%d %b %Y')
 
             return formatted_date

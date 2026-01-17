@@ -2,13 +2,13 @@
 import asyncio
 import glob
 import os
+import pickle  # nosec B403 - legacy cookie migration
 import re
-from contextlib import ExitStack
 from typing import Any, Optional, cast
 
+import aiofiles
 import cli_ui
 import httpx
-import requests
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 
@@ -119,6 +119,22 @@ class FL:
     def _is_true(self, value: Any) -> bool:
         return str(value).strip().lower() in {"true", "1", "yes"}
 
+    def _load_cookie_dict(self, cookiefile_json: str, cookiefile_pkl: str) -> dict[str, str]:
+        if os.path.exists(cookiefile_json):
+            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile_json)  # pyright: ignore[reportPrivateUsage]
+            return {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+
+        if os.path.exists(cookiefile_pkl):
+            try:
+                with open(cookiefile_pkl, 'rb') as f:
+                    session_cookies = pickle.load(f)  # nosec B301 - legacy migration only
+                self.cookie_validator._save_cookies_secure(session_cookies, cookiefile_json)  # pyright: ignore[reportPrivateUsage]
+                return {cookie.name: cookie.value for cookie in session_cookies}
+            except Exception as e:
+                console.print(f"[red]Failed to migrate legacy cookies: {e}[/red]")
+
+        return {}
+
     async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
@@ -153,80 +169,79 @@ class FL:
 
         # Download new .torrent from site
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        with open(desc_path, newline='', encoding='utf-8') as desc_file:
-            fl_desc = desc_file.read()
+        async with aiofiles.open(desc_path, newline='', encoding='utf-8') as desc_file:
+            fl_desc = await desc_file.read()
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         mi_path = (
             f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if meta['bdinfo'] is not None
             else f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
         )
-        with open(mi_path, encoding='utf-8') as mi_file:
-            mi_dump = mi_file.read()
-        with open(torrent_path, 'rb') as torrentFile:
-            torrentFileName = unidecode(str(torrentFileName))
-            files = {
-                'file': (f"{torrentFileName}.torrent", torrentFile, "application/x-bittorent")
-            }
-            data = {
-                'name': fl_name,
-                'type': cat_id,
-                'descr': fl_desc.strip(),
-                'nfo': mi_dump
-            }
+        async with aiofiles.open(mi_path, encoding='utf-8') as mi_file:
+            mi_dump = await mi_file.read()
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_bytes = await torrent_file.read()
+        torrentFileName = unidecode(str(torrentFileName))
+        files = {
+            'file': (f"{torrentFileName}.torrent", torrent_bytes, "application/x-bittorent")
+        }
+        data = {
+            'name': fl_name,
+            'type': cat_id,
+            'descr': fl_desc.strip(),
+            'nfo': mi_dump
+        }
 
-            imdb_id_value = str(meta.get('imdb_id', '0'))
-            if imdb_id_value.isdigit() and int(imdb_id_value) != 0:
-                data['imdbid'] = meta.get('imdb')
-                imdb_info = meta.get('imdb_info')
-                imdb_info_dict = cast(dict[str, Any], imdb_info) if isinstance(imdb_info, dict) else {}
-                data['description'] = imdb_info_dict.get('genres', '')
-            if self.uploader_name not in ("", None) and not self._is_true(self.config['TRACKERS'][self.tracker].get('anon', "False")):
-                data['epenis'] = self.uploader_name
-            if has_ro_audio:
-                data['materialro'] = 'on'
-            if meta['is_disc'] == "BDMV" or meta['type'] == "REMUX":
-                data['freeleech'] = 'on'
-            if int(meta.get('tv_pack', '0')) != 0:
-                data['freeleech'] = 'on'
-            if int(meta.get('freeleech', '0')) != 0:
-                data['freeleech'] = 'on'
+        imdb_id_value = str(meta.get('imdb_id', '0'))
+        if imdb_id_value.isdigit() and int(imdb_id_value) != 0:
+            data['imdbid'] = meta.get('imdb')
+            imdb_info = meta.get('imdb_info')
+            imdb_info_dict = cast(dict[str, Any], imdb_info) if isinstance(imdb_info, dict) else {}
+            data['description'] = imdb_info_dict.get('genres', '')
+        if self.uploader_name not in ("", None) and not self._is_true(self.config['TRACKERS'][self.tracker].get('anon', "False")):
+            data['epenis'] = self.uploader_name
+        if has_ro_audio:
+            data['materialro'] = 'on'
+        if meta['is_disc'] == "BDMV" or meta['type'] == "REMUX":
+            data['freeleech'] = 'on'
+        if int(meta.get('tv_pack', '0')) != 0:
+            data['freeleech'] = 'on'
+        if int(meta.get('freeleech', '0')) != 0:
+            data['freeleech'] = 'on'
 
-            url = "https://filelist.io/takeupload.php"
-            # Submit
-            if meta['debug']:
-                console.print(url)
-                console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
-                return True  # Debug mode - simulated success
+        url = "https://filelist.io/takeupload.php"
+        # Submit
+        if meta['debug']:
+            console.print(url)
+            console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
+        else:
+            cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
+            cookiefile_pkl = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+            cookies = self._load_cookie_dict(cookiefile_json, cookiefile_pkl)
+            async with httpx.AsyncClient(cookies=cookies, timeout=60.0, follow_redirects=True) as client:
+                up = await client.post(url=url, data=data, files=files)
+
+            # Match url to verify successful upload
+            match = re.match(r".*?filelist\.io/details\.php\?id=(\d+)&uploaded=(\d+)", str(up.url))
+            if match:
+                meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
+                torrent_id = match.group(1)
+                await self.download_new_torrent(cookies, torrent_id, torrent_path)
+                return True
             else:
-                with requests.Session() as session:
-                    cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
-                    self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # pyright: ignore[reportPrivateUsage]
-                    up = session.post(url=url, data=data, files=files, timeout=60)
-
-                    # Match url to verify successful upload
-                    match = re.match(r".*?filelist\.io/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
-                    if match:
-                        meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                        torrent_id = match.group(1)
-                        await self.download_new_torrent(session, torrent_id, torrent_path)
-                        return True
-                    else:
-                        console.print(data)
-                        console.print("\n\n")
-                        console.print(up.text)
-                        raise UploadException(f"Upload to FL Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
+                console.print(data)
+                console.print("\n\n")
+                console.print(up.text)
+                raise UploadException(f"Upload to FL Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
         dupes: list[str] = []
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
-
-        # Create a session and load cookies securely
-        with requests.Session() as session:
-            self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # pyright: ignore[reportPrivateUsage]
-            cookies = session.cookies
+        cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
+        cookiefile_pkl = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+        cookies = self._load_cookie_dict(cookiefile_json, cookiefile_pkl)
 
         search_url = "https://filelist.io/browse.php"
 
@@ -301,21 +316,22 @@ class FL:
                 return False
         return True
 
-    async def validate_cookies(self, meta: dict[str, Any], cookiefile: str) -> bool:
+    async def validate_cookies(self, meta: dict[str, Any], _cookiefile: str) -> bool:
         url = "https://filelist.io/index.php"
-        if os.path.exists(cookiefile):
-            with requests.Session() as session:
-                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # pyright: ignore[reportPrivateUsage]
-                resp = session.get(url=url, timeout=30)
-                if meta['debug']:
-                    console.print(resp.url)
-                return resp.text.find("Logout") != -1
-        else:
-            return False
+        cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
+        cookiefile_pkl = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.pkl")
+        cookies = self._load_cookie_dict(cookiefile_json, cookiefile_pkl)
+        if cookies:
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
+                resp = await client.get(url=url)
+            if meta['debug']:
+                console.print(resp.url)
+            return resp.text.find("Logout") != -1
+        return False
 
     async def login(self, cookiefile: str) -> None:
-        with requests.Session() as session:
-            r = session.get("https://filelist.io/login.php", timeout=30)
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            r = await client.get("https://filelist.io/login.php")
             await asyncio.sleep(0.5)
             soup = BeautifulSoup(r.text, 'html.parser')
             validator_input = soup.find('input', {'name': 'validator'})
@@ -331,25 +347,26 @@ class FL:
                 'password': self.password,
                 'unlock': '1',
             }
-            response = session.post('https://filelist.io/takelogin.php', data=data, timeout=30)
+            await client.post('https://filelist.io/takelogin.php', data=data)
             await asyncio.sleep(0.5)
             index = 'https://filelist.io/index.php'
-            response = session.get(index)
+            response = await client.get(index)
             if response.text.find("Logout") != -1:
                 console.print('[green]Successfully logged into FL')
-                self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)  # pyright: ignore[reportPrivateUsage]
+                self.cookie_validator._save_cookies_secure(client.cookies.jar, cookiefile)  # pyright: ignore[reportPrivateUsage]
             else:
                 console.print('[bold red]Something went wrong while trying to log into FL')
                 await asyncio.sleep(1)
                 console.print(response.url)
         return
 
-    async def download_new_torrent(self, session: requests.Session, id: str, torrent_path: str) -> None:
+    async def download_new_torrent(self, cookies: dict[str, str], id: str, torrent_path: str) -> None:
         download_url = f"https://filelist.io/download.php?id={id}"
-        r = session.get(url=download_url)
+        async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
+            r = await client.get(url=download_url)
         if r.status_code == 200:
-            with open(torrent_path, "wb") as tor:
-                tor.write(r.content)
+            async with aiofiles.open(torrent_path, "wb") as tor:
+                await tor.write(r.content)
         else:
             console.print("[red]There was an issue downloading the new .torrent from FL")
             console.print(r.text)
@@ -357,9 +374,9 @@ class FL:
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        with open(base_path, encoding='utf-8') as base_file:
-            base = base_file.read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', newline='', encoding='utf-8') as descfile:
+        async with aiofiles.open(base_path, encoding='utf-8') as base_file:
+            base = await base_file.read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', newline='', encoding='utf-8') as descfile:
             from src.bbcode import BBCODE
             bbcode = BBCODE()
 
@@ -372,25 +389,27 @@ class FL:
             if meta['is_disc'] != 'BDMV':
                 url = "https://up.img4k.net/api/description"
                 mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                with open(mediainfo_path, encoding='utf-8') as mi_file:
+                async with aiofiles.open(mediainfo_path, encoding='utf-8') as mi_file:
                     data = {
-                        'mediainfo': mi_file.read(),
+                        'mediainfo': await mi_file.read(),
                     }
                 if int(meta['imdb_id']) != 0:
                     data['imdbURL'] = f"tt{meta['imdb_id']}"
                 screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png"))]
-                with ExitStack() as stack:
-                    files = [
-                        ('images', (os.path.basename(screen), stack.enter_context(open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb')), 'image/png'))
-                        for screen in screen_glob
-                    ]
-                    response = requests.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
-                    final_desc = response.text.replace('\r\n', '\n')
+                files: list[tuple[str, tuple[str, bytes, str]]] = []
+                for screen in screen_glob:
+                    screen_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}"
+                    async with aiofiles.open(screen_path, 'rb') as image_file:
+                        image_bytes = await image_file.read()
+                    files.append(('images', (os.path.basename(screen), image_bytes, 'image/png')))
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                final_desc = response.text.replace('\r\n', '\n')
             else:
                 # BD Description Generator
                 bd_summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_EXT.txt"
-                with open(bd_summary_path, encoding='utf-8') as bd_file:
-                    final_desc = bd_file.read()
+                async with aiofiles.open(bd_summary_path, encoding='utf-8') as bd_file:
+                    final_desc = await bd_file.read()
                 if final_desc.strip() != "":  # Use BD_SUMMARY_EXT and bbcode format it
                     final_desc = final_desc.replace('[/pre][/quote]', f'[/pre][/quote]\n\n{desc}\n', 1)
                     final_desc = final_desc.replace('DISC INFO:', '[pre][quote=BD_Info][b][color=#FF0000]DISC INFO:[/color][/b]').replace('PLAYLIST REPORT:', '[b][color=#FF0000]PLAYLIST REPORT:[/color][/b]').replace('VIDEO:', '[b][color=#FF0000]VIDEO:[/color][/b]').replace('AUDIO:', '[b][color=#FF0000]AUDIO:[/color][/b]').replace('SUBTITLES:', '[b][color=#FF0000]SUBTITLES:[/color][/b]')
@@ -398,18 +417,19 @@ class FL:
                     # Upload screens and append to the end of the description
                     url = "https://up.img4k.net/api/description"
                     screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png"))]
-                    with ExitStack() as stack:
-                        files = [
-                            ('images', (os.path.basename(screen), stack.enter_context(open(f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}", 'rb')), 'image/png'))
-                            for screen in screen_glob
-                        ]
-                        response = requests.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']), timeout=30)
-                        final_desc += response.text.replace('\r\n', '\n')
-            descfile.write(final_desc)
+                    files: list[tuple[str, tuple[str, bytes, str]]] = []
+                    for screen in screen_glob:
+                        screen_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}"
+                        async with aiofiles.open(screen_path, 'rb') as image_file:
+                            image_bytes = await image_file.read()
+                        files.append(('images', (os.path.basename(screen), image_bytes, 'image/png')))
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        response = await client.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']))
+                    final_desc += response.text.replace('\r\n', '\n')
+            await descfile.write(final_desc)
 
             if self.signature is not None:
-                descfile.write(self.signature)
-            descfile.close()
+                await descfile.write(self.signature)
 
     async def get_ro_tracks(self, meta: dict[str, Any]) -> tuple[bool, bool]:
         has_ro_audio = has_ro_sub = False

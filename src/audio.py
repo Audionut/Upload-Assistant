@@ -1,9 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
 import traceback
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import langcodes
@@ -227,8 +229,8 @@ async def _get_audio_v2(
                 if base_dir and folder_id:
                     mi_path = os.path.join(base_dir, 'tmp', folder_id, 'MediaInfo.json')
                     if os.path.exists(mi_path):
-                        with open(mi_path, encoding='utf-8') as f:
-                            mi = json.load(f)
+                        mi_text = await asyncio.to_thread(Path(mi_path).read_text, encoding='utf-8')
+                        mi = json.loads(mi_text)
                         if meta.get('debug'):
                             console.print(f"[yellow]Loaded MediaInfo from file:[/yellow] {mi_path}")
             except Exception:

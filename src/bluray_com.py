@@ -5,6 +5,7 @@ import os
 import random
 import re
 from collections.abc import Mapping, MutableMapping, Sequence
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import cli_ui
@@ -50,8 +51,7 @@ async def search_bluray(meta: Meta) -> Optional[str]:
         if os.path.exists(debug_filename):
             if meta['debug']:
                 console.print(f"[green]Found existing file for {imdb_id}[/green]")
-            with open(debug_filename, encoding="utf-8") as f:
-                response_text = f.read()
+            response_text = await asyncio.to_thread(Path(debug_filename).read_text, encoding="utf-8")
 
             if response_text and "No index" not in response_text:
                 return response_text
@@ -99,8 +99,8 @@ async def search_bluray(meta: Meta) -> Optional[str]:
                     response_text = response.text
 
                     try:
-                        with open(f"{base_dir}/tmp/{uuid}/debug_bluray_search_{imdb_id}.html", "w", encoding="utf-8") as f:
-                            f.write(response_text)
+                        debug_path = Path(base_dir) / "tmp" / uuid / f"debug_bluray_search_{imdb_id}.html"
+                        await asyncio.to_thread(debug_path.write_text, response_text, encoding="utf-8")
                         if meta.get('debug'):
                             console.print(f"[dim]Saved search response to debug_bluray_search_{imdb_id}.html[/dim]")
                     except Exception as e:
@@ -222,8 +222,8 @@ async def extract_bluray_release_info(html_content: str, meta: Meta) -> list[Rel
     try:
         base_dir = str(meta.get('base_dir', ''))
         uuid = str(meta.get('uuid', ''))
-        with open(f"{base_dir}/tmp/{uuid}/debug_bluray_{release_type}.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+        debug_path = Path(base_dir) / "tmp" / uuid / f"debug_bluray_{release_type}.html"
+        await asyncio.to_thread(debug_path.write_text, html_content, encoding="utf-8")
         if meta.get('debug'):
             console.print(f"[dim]Saved releases response to debug_bluray_{release_type}.html[/dim]")
     except Exception as e:
@@ -376,8 +376,7 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
             if os.path.exists(release_debug_filename):
                 if meta.get('debug'):
                     console.print(f"[green]Found existing release data for product ID {product_id}[/green]")
-                with open(release_debug_filename, encoding="utf-8") as f:
-                    response_text = f.read()
+                response_text = await asyncio.to_thread(Path(release_debug_filename).read_text, encoding="utf-8")
 
                 if response_text and "No index" not in response_text:
                     movie_releases = await extract_bluray_release_info(response_text, meta)
@@ -538,14 +537,15 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
 
     # always save a file in case the existing results are invalid
     try:
-        with open(debug_filename, "w", encoding="utf-8") as f:
-            json.dump({
-                "movie": {
-                    "title": meta.get("title", "Unknown"),
-                    "imdb_id": f"tt{meta.get('imdb_id', '0000000'):07d}"
-                },
-                "matching_releases": matching_releases
-            }, f, indent=2)
+        debug_payload = {
+            "movie": {
+                "title": meta.get("title", "Unknown"),
+                "imdb_id": f"tt{meta.get('imdb_id', '0000000'):07d}"
+            },
+            "matching_releases": matching_releases
+        }
+        debug_text = json.dumps(debug_payload, indent=2)
+        await asyncio.to_thread(Path(debug_filename).write_text, debug_text, encoding="utf-8")
         if meta.get('debug'):
             console.print(f"[dim]Saved results to {debug_filename}[/dim]")
     except Exception as e:
@@ -747,8 +747,8 @@ async def download_cover_images(meta: Meta) -> bool:
     reuploaded_images_path = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')), "covers.json")
     if os.path.exists(reuploaded_images_path):
         try:
-            with open(reuploaded_images_path, encoding='utf-8') as f:
-                existing_covers = json.load(f)
+            covers_text = await asyncio.to_thread(Path(reuploaded_images_path).read_text, encoding='utf-8')
+            existing_covers = json.loads(covers_text)
 
             matching_release = False
             if isinstance(existing_covers, list):
@@ -790,8 +790,7 @@ async def download_cover_images(meta: Meta) -> bool:
                 response = await client.get(url)
 
                 if response.status_code == 200:
-                    with open(local_filename, "wb") as f:
-                        f.write(response.content)
+                    await asyncio.to_thread(Path(local_filename).write_bytes, response.content)
                     downloaded_images[img_type] = local_filename
                     console.print(f"[green]✓[/green] Downloaded {img_type} cover to {local_filename}")
                 else:
@@ -893,8 +892,7 @@ async def fetch_release_details(release: Release, meta: Meta) -> Release:
         if os.path.exists(debug_filename):
             if meta.get('debug'):
                 console.print(f"[green]Found existing debug file for release ID {release_id}[/green]")
-            with open(debug_filename, encoding="utf-8") as f:
-                response_text = f.read()
+            response_text = await asyncio.to_thread(Path(debug_filename).read_text, encoding="utf-8")
 
             if response_text and "No index" not in response_text:
                 return await parse_release_details(response_text, release, meta)
@@ -938,8 +936,8 @@ async def fetch_release_details(release: Release, meta: Meta) -> Release:
 
                     try:
                         release_id = release.get('release_id', '0000000')
-                        with open(f"{meta.get('base_dir', '')}/tmp/{meta.get('uuid', '')}/debug_release_{release_id}.html", "w", encoding="utf-8") as f:
-                            f.write(response_text)
+                        debug_path = Path(str(meta.get('base_dir', ''))) / "tmp" / str(meta.get('uuid', '')) / f"debug_release_{release_id}.html"
+                        await asyncio.to_thread(debug_path.write_text, response_text, encoding="utf-8")
                         if meta.get('debug'):
                             console.print(f"[dim]Saved release page to debug_release_{release_id}.html[/dim]")
                     except Exception as e:
@@ -1052,8 +1050,8 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                 console.print(f"[blue]Opening BD_SUMMARY file: {bd_summary_path}[/blue]")
                 console.print("[dim]Stripping extremely small subtitle tracks from bdinfo[/dim]")
             try:
-                with open(bd_summary_path, encoding="utf-8") as f:
-                    lines = f.readlines()
+                summary_text = await asyncio.to_thread(Path(bd_summary_path).read_text, encoding="utf-8")
+                lines = summary_text.splitlines()
 
                 # Parse the subtitles section
                 for line in lines:

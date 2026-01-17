@@ -5,6 +5,7 @@ import os
 import sys
 from collections.abc import Mapping, MutableMapping, Sequence
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import aiohttp
@@ -177,8 +178,7 @@ async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) 
                                         # Save image
                                         os.makedirs(save_directory, exist_ok=True)
                                         image_filename = os.path.join(save_directory, os.path.basename(img_url))
-                                        with open(image_filename, "wb") as f:
-                                            f.write(image_content)
+                                        await asyncio.to_thread(Path(image_filename).write_bytes, image_content)
 
                                         console.print(f"Saved {img_url} as {image_filename}")
 
@@ -298,9 +298,9 @@ async def update_meta_with_unit3d_data(meta: Meta, tracker_data: Sequence[Any], 
     if desc and not only_id:
         meta['description'] = desc
         meta['saved_description'] = True
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
-            if len(desc) > 0:
-                description.write((desc or "") + "\n")
+        description_path = Path(meta['base_dir']) / "tmp" / meta['uuid'] / "DESCRIPTION.txt"
+        if len(desc) > 0:
+            await asyncio.to_thread(description_path.write_text, (desc or "") + "\n", encoding="utf8")
     if category and not meta.get('manual_category', None):
         cat_upper = category.upper()
         if "MOVIE" in cat_upper:
@@ -500,41 +500,38 @@ async def update_metadata_from_tracker(
                         if not meta.get('skipit'):
                             nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
                             if os.path.exists(nfo_file_path):
-                                with open(nfo_file_path, encoding='utf-8') as nfo_file:
-                                    nfo_content = nfo_file.read()
-                                    console.print("[bold green]Successfully grabbed FraMeSToR description")
-                                    console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)
-                                    console.print("[cyan]Do you want to discard or keep the description?[/cyan]")
-                                    edit_choice = input("Enter 'd' to discard, or press Enter to keep it as is: ")
+                                nfo_content = await asyncio.to_thread(Path(nfo_file_path).read_text, encoding="utf-8")
+                                console.print("[bold green]Successfully grabbed FraMeSToR description")
+                                console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)
+                                console.print("[cyan]Do you want to discard or keep the description?[/cyan]")
+                                edit_choice = input("Enter 'd' to discard, or press Enter to keep it as is: ")
 
-                                    if edit_choice.lower() == 'd':
-                                        meta['description'] = ""
-                                        meta['image_list'] = []
-                                        nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
-                                        nfo_file.close()
+                                if edit_choice.lower() == 'd':
+                                    meta['description'] = ""
+                                    meta['image_list'] = []
+                                    nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
 
-                                        try:
-                                            import gc
-                                            gc.collect()  # Force garbage collection to close any lingering handles
-                                            for attempt in range(3):
-                                                try:
-                                                    os.remove(nfo_file_path)
-                                                    console.print("[yellow]NFO file successfully deleted.[/yellow]")
-                                                    break
-                                                except Exception as e:
-                                                    if attempt < 2:
-                                                        console.print(f"[yellow]Attempt {attempt+1}: Could not delete file, retrying in 1 second...[/yellow]")
-                                                        import time
-                                                        time.sleep(1)
-                                                    else:
-                                                        console.print(f"[red]Failed to delete BHD NFO file after 3 attempts: {e}[/red]")
-                                        except Exception as e:
-                                            console.print(f"[red]Error during file cleanup: {e}[/red]")
-                                        meta['nfo'] = False
-                                        meta['bhd_nfo'] = False
-                                        console.print("[yellow]Description discarded.[/yellow]")
-                                    else:
-                                        console.print("[green]Keeping the original description.[/green]")
+                                    try:
+                                        import gc
+                                        gc.collect()  # Force garbage collection to close any lingering handles
+                                        for attempt in range(3):
+                                            try:
+                                                os.remove(nfo_file_path)
+                                                console.print("[yellow]NFO file successfully deleted.[/yellow]")
+                                                break
+                                            except Exception as e:
+                                                if attempt < 2:
+                                                    console.print(f"[yellow]Attempt {attempt+1}: Could not delete file, retrying in 1 second...[/yellow]")
+                                                    await asyncio.sleep(1)
+                                                else:
+                                                    console.print(f"[red]Failed to delete BHD NFO file after 3 attempts: {e}[/red]")
+                                    except Exception as e:
+                                        console.print(f"[red]Error during file cleanup: {e}[/red]")
+                                    meta['nfo'] = False
+                                    meta['bhd_nfo'] = False
+                                    console.print("[yellow]Description discarded.[/yellow]")
+                                else:
+                                    console.print("[green]Keeping the original description.[/green]")
 
                     image_list = cast(Optional[Sequence[ImageDict]], meta.get('image_list'))
                     if image_list:

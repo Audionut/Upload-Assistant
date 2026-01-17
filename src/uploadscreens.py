@@ -14,7 +14,6 @@ from typing import Any, Optional, Union, cast
 import aiofiles
 import httpx
 import pyimgbox
-import requests
 from typing_extensions import TypeAlias
 
 from src.console import console
@@ -63,7 +62,7 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
         if img_host == "imgbox":
             try:
-                image_list = await imgbox_upload(os.getcwd(), [image], meta, return_dict={})
+                image_list = await imgbox_upload(os.getcwd(), [image], return_dict={})
                 if image_list and all(
                     'img_url' in img and 'raw_url' in img and 'web_url' in img for img in image_list
                 ):
@@ -172,30 +171,30 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
         elif img_host == "dalexni":
             url = "https://dalexni.com/1/upload"
             try:
-                with open(image, "rb") as img_file:
-                    encoded_image = base64.b64encode(img_file.read()).decode('utf8')
+                async with aiofiles.open(image, "rb") as img_file:
+                    encoded_image = base64.b64encode(await img_file.read()).decode('utf8')
 
                 data = {
                     'key': config['DEFAULT']['dalexni_api'],
                     'image': encoded_image,
                 }
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, data=data, timeout=timeout)
+                    response_data = response.json()
+                    if response.status_code != 200 or not response_data.get('success'):
+                        console.print("[yellow]DALEXNI failed, trying next image host")
+                        return {'status': 'failed', 'reason': 'DALEXNI upload failed'}
 
-                response = requests.post(url, data=data, timeout=timeout)
-                response_data = response.json()
-                if response.status_code != 200 or not response_data.get('success'):
-                    console.print("[yellow]DALEXNI failed, trying next image host")
-                    return {'status': 'failed', 'reason': 'DALEXNI upload failed'}
+                    img_url = response_data['data'].get('medium', {}).get('url') or response_data['data']['thumb']['url']
+                    raw_url = response_data['data']['image']['url']
+                    web_url = response_data['data']['url_viewer']
 
-                img_url = response_data['data'].get('medium', {}).get('url') or response_data['data']['thumb']['url']
-                raw_url = response_data['data']['image']['url']
-                web_url = response_data['data']['url_viewer']
+                    if meta['debug']:
+                        console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
 
-                if meta['debug']:
-                    console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+                    return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
 
-                return {'status': 'success', 'img_url': img_url, 'raw_url': raw_url, 'web_url': web_url}
-
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
                 return {'status': 'failed', 'reason': 'Request timed out'}
 
@@ -203,7 +202,7 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                 console.print(f"[red]Invalid JSON response: {e}")
                 return {'status': 'failed', 'reason': 'Invalid JSON response'}
 
-            except requests.exceptions.RequestException as e:
+            except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
 
@@ -327,19 +326,30 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
         elif img_host == "lensdump":
             url = "https://lensdump.com/api/1/upload"
-            with open(image, "rb") as img_file:
-                data = {
-                    'image': base64.b64encode(img_file.read()).decode('utf8')
+            try:
+                async with aiofiles.open(image, "rb") as img_file:
+                    data = {
+                        'image': base64.b64encode(await img_file.read()).decode('utf8')
+                    }
+                headers = {
+                    'X-API-Key': config['DEFAULT']['lensdump_api']
                 }
-            headers = {
-                'X-API-Key': config['DEFAULT']['lensdump_api']
-            }
-            response = requests.post(url, data=data, headers=headers, timeout=timeout)
-            response_data = response.json()
-            if response_data.get('status_code') == 200:
-                img_url = response_data['data']['image']['url']
-                raw_url = response_data['data']['image']['url']
-                web_url = response_data['data']['url_viewer']
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, data=data, headers=headers, timeout=timeout)
+                    response_data = response.json()
+                    if response_data.get('status_code') == 200:
+                        img_url = response_data['data']['image']['url']
+                        raw_url = response_data['data']['image']['url']
+                        web_url = response_data['data']['url_viewer']
+            except httpx.TimeoutException:
+                console.print("[red]Request timed out. The server took too long to respond.")
+                return {'status': 'failed', 'reason': 'Request timed out'}
+            except ValueError as e:
+                console.print(f"[red]Invalid JSON response: {e}")
+                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+            except httpx.RequestError as e:
+                console.print(f"[red]Request failed with error: {e}")
+                return {'status': 'failed', 'reason': str(e)}
 
         elif img_host == "zipline":
             url = config['DEFAULT'].get('zipline_url')
@@ -350,14 +360,15 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                 return {'status': 'failed', 'reason': 'Missing Zipline URL or API key'}
 
             try:
-                with open(image, "rb") as img_file:
+                async with aiofiles.open(image, "rb") as img_file:
                     filename = os.path.basename(image)
-                    files = {'file': (filename, img_file)}
-                    headers = {
-                        'Authorization': f'{api_key}',
-                    }
+                    file_bytes = await img_file.read()
+                headers = {
+                    'Authorization': f'{api_key}',
+                }
 
-                    response = requests.post(url, files=files, headers=headers, timeout=timeout)
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, files={'file': (filename, file_bytes)}, headers=headers, timeout=timeout)
                     if response.status_code == 200:
                         response_data = response.json()
                         if 'files' in response_data:
@@ -375,7 +386,7 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
                     else:
                         return {'status': 'failed', 'reason': f"Zipline upload failed: {response.text}"}
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
                 return {'status': 'failed', 'reason': 'Request timed out'}
 
@@ -383,7 +394,7 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                 console.print(f"[red]Invalid JSON response: {e}")
                 return {'status': 'failed', 'reason': 'Invalid JSON response'}
 
-            except requests.exceptions.RequestException as e:
+            except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
 
@@ -845,7 +856,6 @@ async def _upload_screens(
 async def imgbox_upload(
     chdir: str,
     image_glob: list[str],
-    meta: dict[str, Any],
     return_dict: dict[str, Any],
 ) -> list[dict[str, str]]:
     try:

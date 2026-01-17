@@ -438,8 +438,9 @@ class EMUW(UNIT3D):
         meta: dict[str, Any],
         type: Any = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         """Types: Full Disc(1), Remux(2), Encode(3), WEB-DL(4), WEBRIP(5), HDTV(6), SD(7)"""
         type_map = {
             'DISC': '1', 'REMUX': '2', 'ENCODE': '3',

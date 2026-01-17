@@ -4,12 +4,11 @@ import glob
 import json
 import os
 import re
-from contextlib import ExitStack
-from typing import IO, Any, Optional, cast
+from typing import Any, Optional, cast
 from urllib.parse import quote, urlparse
 
+import aiofiles
 import httpx
-import requests
 from unidecode import unidecode
 
 from src.bbcode import BBCODE
@@ -223,7 +222,7 @@ class HDB:
 
         return hdb_name
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         await self.edit_desc(meta)
         hdb_name = await self.edit_name(meta)
@@ -240,8 +239,8 @@ class HDB:
             console.print("[bold red]Dual-Audio Encodes are not allowed for non-anime and non-disc content")
             return
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as desc_file:
-            hdb_desc = desc_file.read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as desc_file:
+            hdb_desc = await desc_file.read()
 
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -267,80 +266,79 @@ class HDB:
             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         # Proceed with the upload process
-        with open(torrent_file_path, 'rb') as torrentFile:
-            if len(meta['filelist']) == 1:
-                torrentFileName = unidecode(os.path.basename(meta['video']).replace(' ', '.'))
-            else:
-                torrentFileName = unidecode(os.path.basename(meta['path']).replace(' ', '.'))
-            files = {
-                'file': (f"{torrentFileName}.torrent", torrentFile, "application/x-bittorrent")
-            }
-            data: dict[str, Any] = {
-                'name': hdb_name,
-                'category': cat_id,
-                'codec': codec_id,
-                'medium': medium_id,
-                'origin': 0,
-                'descr': hdb_desc.rstrip(),
-                'techinfo': '',
-                'tags[]': hdb_tags,
-            }
+        async with aiofiles.open(torrent_file_path, 'rb') as torrent_file:
+            torrent_bytes = await torrent_file.read()
+        if len(meta['filelist']) == 1:
+            torrentFileName = unidecode(os.path.basename(meta['video']).replace(' ', '.'))
+        else:
+            torrentFileName = unidecode(os.path.basename(meta['path']).replace(' ', '.'))
+        files = {
+            'file': (f"{torrentFileName}.torrent", torrent_bytes, "application/x-bittorrent")
+        }
+        data: dict[str, Any] = {
+            'name': hdb_name,
+            'category': cat_id,
+            'codec': codec_id,
+            'medium': medium_id,
+            'origin': 0,
+            'descr': hdb_desc.rstrip(),
+            'techinfo': '',
+            'tags[]': hdb_tags,
+        }
 
-            # If internal, set 1
-            if (
-                self.config['TRACKERS'][self.tracker].get('internal', False) is True
-                and meta['tag'] != ""
-                and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', []))
-            ):
-                data['origin'] = 1
-            # If not BDMV fill mediainfo
-            if meta.get('is_disc', '') != "BDMV":
-                mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                with open(mediainfo_path, encoding='utf-8') as mediainfo_file:
-                    data['techinfo'] = mediainfo_file.read()
-            # If tv, submit tvdb_id/season/episode
-            if meta.get('tvdb_id', 0) != 0:
-                data['tvdb'] = meta['tvdb_id']
-            if meta.get('imdb_id') != 0:
-                data['imdb'] = str(meta.get('imdb_info', {}).get('imdb_url', '')) + '/'
-            else:
-                data['imdb'] = 0
-            if meta.get('category') == 'TV':
-                data['tvdb_season'] = int(meta.get('season_int', 1))
-                data['tvdb_episode'] = int(meta.get('episode_int', 1))
-            # aniDB
+        # If internal, set 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ""
+            and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', []))
+        ):
+            data['origin'] = 1
+        # If not BDMV fill mediainfo
+        if meta.get('is_disc', '') != "BDMV":
+            mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            async with aiofiles.open(mediainfo_path, encoding='utf-8') as mediainfo_file:
+                data['techinfo'] = await mediainfo_file.read()
+        # If tv, submit tvdb_id/season/episode
+        if meta.get('tvdb_id', 0) != 0:
+            data['tvdb'] = meta['tvdb_id']
+        if meta.get('imdb_id') != 0:
+            data['imdb'] = str(meta.get('imdb_info', {}).get('imdb_url', '')) + '/'
+        else:
+            data['imdb'] = 0
+        if meta.get('category') == 'TV':
+            data['tvdb_season'] = int(meta.get('season_int', 1))
+            data['tvdb_episode'] = int(meta.get('episode_int', 1))
+        # aniDB
 
-            url = "https://hdbits.org/upload/upload"
-            # Submit
-            if meta['debug']:
-                console.print(url)
+        url = "https://hdbits.org/upload/upload"
+        # Submit
+        if meta['debug']:
+            console.print(url)
+            console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
+        else:
+            cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
+            cookies = await common.parseCookieFile(cookiefile)
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
+                up = await client.post(url=url, data=data, files=files)
+
+            # Match url to verify successful upload
+            match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", str(up.url))
+            if match:
+                meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
+                if id_match := re.search(r"(id=)(\d+)", urlparse(str(up.url)).query):
+                    id = id_match.group(2)
+                    await self.download_new_torrent(id, torrent_file_path)
+                return True
+            else:
                 console.print(data)
-                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
-                return True  # Debug mode - simulated success
-            else:
-                with requests.Session() as session:
-                    cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
-                    cookies = await common.parseCookieFile(cookiefile)
-                    session.cookies.update(cookies)  # pyright: ignore[reportUnknownMemberType]
-                    up = session.post(url=url, data=data, files=files, timeout=30)
-                    torrentFile.close()
+                console.print("\n\n")
+                console.print(up.text)
+                raise UploadException(f"Upload to HDB Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
 
-                    # Match url to verify successful upload
-                    match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", up.url)
-                    if match:
-                        meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                        if id_match := re.search(r"(id=)(\d+)", urlparse(up.url).query):
-                            id = id_match.group(2)
-                            await self.download_new_torrent(id, torrent_file_path)
-                        return True
-                    else:
-                        console.print(data)
-                        console.print("\n\n")
-                        console.print(up.text)
-                        raise UploadException(f"Upload to HDB Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa F405
-
-    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
 
         url = "https://hdbits.org/api/torrents"
@@ -452,11 +450,10 @@ class HDB:
         url = "https://hdbits.org"
         cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
         if os.path.exists(cookiefile):
-            with requests.Session() as session:
-                cookies = await common.parseCookieFile(cookiefile)
-                session.cookies.update(cookies)  # pyright: ignore[reportUnknownMemberType]
-                resp = session.get(url=url, timeout=30)
-                return resp.text.find('''<a href="/logout.php">Logout</a>''') != -1
+            cookies = await common.parseCookieFile(cookiefile)
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
+                resp = await client.get(url=url)
+            return resp.text.find('''<a href="/logout.php">Logout</a>''') != -1
         else:
             console.print("[bold red]Missing Cookie File. (data/cookies/HDB.txt)")
             return False
@@ -469,7 +466,8 @@ class HDB:
             'passkey': self.passkey,
             'id': id
         }
-        r = requests.post(url=api_url, data=json.dumps(data), timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(url=api_url, json=data)
         r.raise_for_status()
         try:
             r_json = r.json()
@@ -495,7 +493,8 @@ class HDB:
             'id': id
         }
 
-        r = requests.get(url=download_url, params=params, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(url=download_url, params=params)
         r.raise_for_status()
 
         # Validate content-type
@@ -507,117 +506,123 @@ class HDB:
         if not r.content.startswith(b'd'):
             raise Exception(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
 
-        with open(torrent_path, "wb") as tor:
-            tor.write(r.content)
+        async with aiofiles.open(torrent_path, "wb") as tor:
+            await tor.write(r.content)
         return
 
     async def edit_desc(self, meta: Meta) -> None:
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:
-            base = base_file.read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
-            # Add This line for all web-dls
-            if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None:
-                descfile.write(f"[center][quote]This release is sourced from {meta['service_longname']}[/quote][/center]")
-            bbcode = BBCODE()
-            if meta.get('discs', []) != []:
-                discs = meta['discs']
-                if discs[0]['type'] == "DVD":
-                    descfile.write(f"[quote=VOB MediaInfo]{discs[0]['vob_mi']}[/quote]\n")
-                    descfile.write("\n")
-                if discs[0]['type'] == "BDMV":
-                    descfile.write(f"[quote]{discs[0]['summary'].strip()}[/quote]\n")
-                    descfile.write("\n")
-                if len(discs) >= 2:
-                    for each in discs[1:]:
-                        if each['type'] == "BDMV":
-                            descfile.write(f"[quote={each.get('name', 'BDINFO')}]{each['summary']}[/quote]\n")
-                            descfile.write("\n")
-                            pass
-                        if each['type'] == "DVD":
-                            descfile.write(f"{each['name']}:\n")
-                            descfile.write(f"[quote={os.path.basename(each['vob'])}][{each['vob_mi']}[/quote] [quote={os.path.basename(each['ifo'])}][{each['ifo_mi']}[/quote]\n")
-                            descfile.write("\n")
-            desc = base
-            # desc = bbcode.convert_code_to_quote(desc)
-            desc = desc.replace("[code]", "[font=monospace]").replace("[/code]", "[/font]")
-            desc = desc.replace("[user]", "").replace("[/user]", "")
-            desc = desc.replace("[left]", "").replace("[/left]", "")
-            desc = desc.replace("[align=left]", "").replace("[/align]", "")
-            desc = desc.replace("[right]", "").replace("[/right]", "")
-            desc = desc.replace("[align=right]", "").replace("[/align]", "")
-            desc = desc.replace("[sup]", "").replace("[/sup]", "")
-            desc = desc.replace("[sub]", "").replace("[/sub]", "")
-            desc = desc.replace("[alert]", "").replace("[/alert]", "")
-            desc = desc.replace("[note]", "").replace("[/note]", "")
-            desc = desc.replace("[hr]", "").replace("[/hr]", "")
-            desc = desc.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
-            desc = desc.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
-            desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
-            desc = desc.replace("[ul]", "").replace("[/ul]", "")
-            desc = desc.replace("[ol]", "").replace("[/ol]", "")
-            desc = desc.replace("[*]", "* ")
-            desc = bbcode.convert_spoiler_to_hide(desc)
-            desc = bbcode.convert_comparison_to_centered(desc, 1000)
-            desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
-            desc = re.sub(r"\[/size\]|\[size=\d+\]", "", desc, flags=re.IGNORECASE)
-            descfile.write(desc)
-            if self.rehost_images is True:
-                console.print("[green]Rehosting Images...")
-                hdbimg_bbcode = await self.hdbimg_upload(meta)
-                if hdbimg_bbcode is not None:
-                    if meta.get('comparison', False):
-                        descfile.write("[center]")
-                        descfile.write("[b]")
-                        comparison_groups = meta.get('comparison_groups')
-                        if isinstance(comparison_groups, dict):
-                            comparison_groups_dict = cast(dict[str, Any], comparison_groups)
-                            group_names: list[str] = []
-                            sorted_group_indices = sorted(comparison_groups_dict.keys(), key=lambda x: int(x))
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:
+            base = await base_file.read()
 
-                            for group_idx in sorted_group_indices:
-                                group_data = comparison_groups_dict.get(group_idx, {})
-                                group_data_dict = cast(dict[str, Any], group_data) if isinstance(group_data, dict) else {}
-                                group_name = str(group_data_dict.get('name', f'Group {group_idx}'))
-                                group_names.append(group_name)
+        desc_parts: list[str] = []
+        # Add This line for all web-dls
+        if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None:
+            desc_parts.append(f"[center][quote]This release is sourced from {meta['service_longname']}[/quote][/center]")
 
-                            comparison_header = " vs ".join(group_names)
-                            descfile.write(f"Screenshot comparison[/b]\n\n{comparison_header}")
-                        else:
-                            descfile.write("Screenshot comparison")
+        bbcode = BBCODE()
+        if meta.get('discs', []) != []:
+            discs = meta['discs']
+            if discs[0]['type'] == "DVD":
+                desc_parts.append(f"[quote=VOB MediaInfo]{discs[0]['vob_mi']}[/quote]\n\n")
+            if discs[0]['type'] == "BDMV":
+                desc_parts.append(f"[quote]{discs[0]['summary'].strip()}[/quote]\n\n")
+            if len(discs) >= 2:
+                for each in discs[1:]:
+                    if each['type'] == "BDMV":
+                        desc_parts.append(f"[quote={each.get('name', 'BDINFO')}]{each['summary']}[/quote]\n\n")
+                    if each['type'] == "DVD":
+                        desc_parts.append(f"{each['name']}:\n")
+                        desc_parts.append(
+                            f"[quote={os.path.basename(each['vob'])}][{each['vob_mi']}[/quote] "
+                            f"[quote={os.path.basename(each['ifo'])}][{each['ifo_mi']}[/quote]\n\n"
+                        )
 
-                        descfile.write("\n\n")
-                        descfile.write(f"{hdbimg_bbcode}")
-                        descfile.write("[/center]")
+        desc = base
+        # desc = bbcode.convert_code_to_quote(desc)
+        desc = desc.replace("[code]", "[font=monospace]").replace("[/code]", "[/font]")
+        desc = desc.replace("[user]", "").replace("[/user]", "")
+        desc = desc.replace("[left]", "").replace("[/left]", "")
+        desc = desc.replace("[align=left]", "").replace("[/align]", "")
+        desc = desc.replace("[right]", "").replace("[/right]", "")
+        desc = desc.replace("[align=right]", "").replace("[/align]", "")
+        desc = desc.replace("[sup]", "").replace("[/sup]", "")
+        desc = desc.replace("[sub]", "").replace("[/sub]", "")
+        desc = desc.replace("[alert]", "").replace("[/alert]", "")
+        desc = desc.replace("[note]", "").replace("[/note]", "")
+        desc = desc.replace("[hr]", "").replace("[/hr]", "")
+        desc = desc.replace("[h1]", "[u][b]").replace("[/h1]", "[/b][/u]")
+        desc = desc.replace("[h2]", "[u][b]").replace("[/h2]", "[/b][/u]")
+        desc = desc.replace("[h3]", "[u][b]").replace("[/h3]", "[/b][/u]")
+        desc = desc.replace("[ul]", "").replace("[/ul]", "")
+        desc = desc.replace("[ol]", "").replace("[/ol]", "")
+        desc = desc.replace("[*]", "* ")
+        desc = bbcode.convert_spoiler_to_hide(desc)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+        desc = re.sub(r"\[/size\]|\[size=\d+\]", "", desc, flags=re.IGNORECASE)
+        desc_parts.append(desc)
+
+        if self.rehost_images is True:
+            console.print("[green]Rehosting Images...")
+            hdbimg_bbcode = await self.hdbimg_upload(meta)
+            if hdbimg_bbcode is not None:
+                if meta.get('comparison', False):
+                    desc_parts.append("[center]")
+                    desc_parts.append("[b]")
+                    comparison_groups = meta.get('comparison_groups')
+                    if isinstance(comparison_groups, dict):
+                        comparison_groups_dict = cast(dict[str, Any], comparison_groups)
+                        group_names: list[str] = []
+                        sorted_group_indices = sorted(comparison_groups_dict.keys(), key=lambda x: int(x))
+
+                        for group_idx in sorted_group_indices:
+                            group_data = comparison_groups_dict.get(group_idx, {})
+                            group_data_dict = cast(dict[str, Any], group_data) if isinstance(group_data, dict) else {}
+                            group_name = str(group_data_dict.get('name', f'Group {group_idx}'))
+                            group_names.append(group_name)
+
+                        comparison_header = " vs ".join(group_names)
+                        desc_parts.append(f"Screenshot comparison[/b]\n\n{comparison_header}")
                     else:
-                        descfile.write(f"[center]{hdbimg_bbcode}[/center]")
-            else:
-                images_value = meta.get('image_list', [])
-                images_list: list[dict[str, Any]] = []
-                if isinstance(images_value, list):
-                    images_value_list = cast(list[Any], images_value)
-                    images_list.extend(
-                        [
-                            cast(dict[str, Any], item)
-                            for item in images_value_list
-                            if isinstance(item, dict)
-                        ]
-                    )
-                if images_list:
-                    descfile.write("[center]")
-                    screen_limit = int(meta.get('screens', 0) or 0)
-                    for each in range(len(images_list[:screen_limit])):
-                        img_url = str(images_list[each].get('img_url', ''))
-                        web_url = str(images_list[each].get('web_url', ''))
-                        descfile.write(f"[url={web_url}][img]{img_url}[/img][/url]")
-                    descfile.write("[/center]")
-            if self.signature is not None:
-                descfile.write(self.signature)
+                        desc_parts.append("Screenshot comparison")
+
+                    desc_parts.append("\n\n")
+                    desc_parts.append(f"{hdbimg_bbcode}")
+                    desc_parts.append("[/center]")
+                else:
+                    desc_parts.append(f"[center]{hdbimg_bbcode}[/center]")
+        else:
+            images_value = meta.get('image_list', [])
+            images_list: list[dict[str, Any]] = []
+            if isinstance(images_value, list):
+                images_value_list = cast(list[Any], images_value)
+                images_list.extend(
+                    [
+                        cast(dict[str, Any], item)
+                        for item in images_value_list
+                        if isinstance(item, dict)
+                    ]
+                )
+            if images_list:
+                desc_parts.append("[center]")
+                screen_limit = int(meta.get('screens', 0) or 0)
+                for each in range(len(images_list[:screen_limit])):
+                    img_url = str(images_list[each].get('img_url', ''))
+                    web_url = str(images_list[each].get('web_url', ''))
+                    desc_parts.append(f"[url={web_url}][img]{img_url}[/img][/url]")
+                desc_parts.append("[/center]")
+
+        if self.signature is not None:
+            desc_parts.append(self.signature)
+
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
+            await descfile.write("".join(desc_parts))
 
         return
 
     async def hdbimg_upload(self, meta: Meta) -> Optional[str]:
         bbcode = ""
-        response: Optional[requests.Response] = None
+        response: Optional[httpx.Response] = None
         uploadSuccess = False
         sorted_group_indices: list[str] = []
         if meta.get('comparison', False):
@@ -746,112 +751,114 @@ class HDB:
         if meta['debug']:
             console.print(f"[cyan]Uploading {upload_count} images to HDB Image Host")
 
-        with ExitStack() as stack:
-            upload_files: dict[str, tuple[str, IO[bytes], str]] = {}
-            for i in range(upload_count):
-                file_path = all_image_files[i]
-                try:
-                    filename = os.path.basename(file_path)
-                    file_handle = stack.enter_context(open(file_path, 'rb'))
-                    upload_files[f'images_files[{i}]'] = (filename, file_handle, 'image/png')
-                    if meta['debug']:
-                        console.print(f"[cyan]Added file {filename} as images_files[{i}]")
-                except (OSError, ValueError) as e:
-                    console.print(f"[red]Failed to open {file_path}: {e}")
-                    continue
-
+        upload_files: dict[str, tuple[str, bytes, str]] = {}
+        for i in range(upload_count):
+            file_path = all_image_files[i]
             try:
-                if not upload_files:
-                    console.print("[red]No files to upload")
-                    return None
+                filename = os.path.basename(file_path)
+                async with aiofiles.open(file_path, 'rb') as file_handle:
+                    file_bytes = await file_handle.read()
+                upload_files[f'images_files[{i}]'] = (filename, file_bytes, 'image/png')
+                if meta['debug']:
+                    console.print(f"[cyan]Added file {filename} as images_files[{i}]")
+            except (OSError, ValueError) as e:
+                console.print(f"[red]Failed to open {file_path}: {e}")
+                continue
+
+        try:
+            if not upload_files:
+                console.print("[red]No files to upload")
+                return None
+
+            if meta['debug']:
+                console.print(f"[green]Uploading {len(upload_files)} images to HDB...")
+
+            uploadSuccess = True
+            if meta.get('comparison', False):
+                num_groups = len(sorted_group_indices) if sorted_group_indices else 3
+                max_chunk_size = 100 * 1024 * 1024  # 100 MiB in bytes
+                bbcode = ""
+
+                chunks: list[list[tuple[str, tuple[str, bytes, str]]]] = []
+                current_chunk: list[tuple[str, tuple[str, bytes, str]]] = []
+                current_chunk_size = 0
+
+                files_list = list(upload_files.items())
+                for i in range(0, len(files_list), num_groups):
+                    row_items = files_list[i:i+num_groups]
+                    row_size = sum(os.path.getsize(all_image_files[i+j]) for j in range(len(row_items)))
+
+                    # If adding this row would exceed chunk size and we already have items, start new chunk
+                    if current_chunk and current_chunk_size + row_size > max_chunk_size:
+                        chunks.append(current_chunk)
+                        current_chunk = []
+                        current_chunk_size = 0
+
+                    current_chunk.extend(row_items)
+                    current_chunk_size += row_size
+
+                if current_chunk:
+                    chunks.append(current_chunk)
 
                 if meta['debug']:
-                    console.print(f"[green]Uploading {len(upload_files)} images to HDB...")
+                    console.print(f"[cyan]Split into {len(chunks)} chunks based on 100 MiB limit")
 
-                uploadSuccess = True
-                if meta.get('comparison', False):
-                    num_groups = len(sorted_group_indices) if sorted_group_indices else 3
-                    max_chunk_size = 100 * 1024 * 1024  # 100 MiB in bytes
-                    bbcode = ""
-
-                    chunks: list[list[tuple[str, tuple[str, IO[bytes], str]]]] = []
-                    current_chunk: list[tuple[str, tuple[str, IO[bytes], str]]] = []
-                    current_chunk_size = 0
-
-                    files_list = list(upload_files.items())
-                    for i in range(0, len(files_list), num_groups):
-                        row_items = files_list[i:i+num_groups]
-                        row_size = sum(os.path.getsize(all_image_files[i+j]) for j in range(len(row_items)))
-
-                        # If adding this row would exceed chunk size and we already have items, start new chunk
-                        if current_chunk and current_chunk_size + row_size > max_chunk_size:
-                            chunks.append(current_chunk)
-                            current_chunk = []
-                            current_chunk_size = 0
-
-                        current_chunk.extend(row_items)
-                        current_chunk_size += row_size
-
-                    if current_chunk:
-                        chunks.append(current_chunk)
+                # Upload each chunk
+                for chunk_idx, chunk in enumerate(chunks):
+                    fileList: dict[str, tuple[str, bytes, str]] = {}
+                    for j, (_key, value) in enumerate(chunk):
+                        fileList[f'images_files[{j}]'] = value
 
                     if meta['debug']:
-                        console.print(f"[cyan]Split into {len(chunks)} chunks based on 100 MiB limit")
+                        chunk_size_mb = sum(os.path.getsize(all_image_files[int(key.split('[')[1].split(']')[0])]) for key, _ in chunk) / (1024 * 1024)
+                        console.print(f"[cyan]Uploading chunk {chunk_idx + 1}/{len(chunks)} ({len(fileList)} images, {chunk_size_mb:.2f} MiB)")
 
-                    # Upload each chunk
-                    for chunk_idx, chunk in enumerate(chunks):
-                        fileList: dict[str, tuple[str, IO[bytes], str]] = {}
-                        for j, (_key, value) in enumerate(chunk):
-                            fileList[f'images_files[{j}]'] = value
-
-                        if meta['debug']:
-                            chunk_size_mb = sum(os.path.getsize(all_image_files[int(key.split('[')[1].split(']')[0])]) for key, _ in chunk) / (1024 * 1024)
-                            console.print(f"[cyan]Uploading chunk {chunk_idx + 1}/{len(chunks)} ({len(fileList)} images, {chunk_size_mb:.2f} MiB)")
-
-                        response = requests.post(url, data=data, files=fileList, timeout=30)
-                        if response.status_code == 200:
-                            console.print(f"[green]Chunk {chunk_idx + 1}/{len(chunks)} upload successful!")
-                            bbcode += response.text
-                        else:
-                            console.print(f"[red]Chunk {chunk_idx + 1}/{len(chunks)} upload failed with status code {response.status_code}")
-                            uploadSuccess = False
-                            break
-                else:
-                    response = requests.post(url, data=data, files=upload_files, timeout=30)
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        response = await client.post(url, data=data, files=fileList)
                     if response.status_code == 200:
-                        console.print("[green]Upload successful!")
-                        bbcode = response.text
+                        console.print(f"[green]Chunk {chunk_idx + 1}/{len(chunks)} upload successful!")
+                        bbcode += response.text
                     else:
+                        console.print(f"[red]Chunk {chunk_idx + 1}/{len(chunks)} upload failed with status code {response.status_code}")
                         uploadSuccess = False
-
-                if uploadSuccess is True:
-                    if meta.get('comparison', False):
-                        matches = re.findall(r'\[url=.*?\]\[img\].*?\[/img\]\[/url\]', bbcode)
-                        formatted_bbcode = ""
-                        num_groups = len(sorted_group_indices) if sorted_group_indices else 3
-
-                        for i in range(0, len(matches), num_groups):
-                            line = " ".join(matches[i:i+num_groups])
-                            if i + num_groups < len(matches):
-                                formatted_bbcode += line + "\n"
-                            else:
-                                formatted_bbcode += line
-
-                        bbcode = formatted_bbcode
-
-                        if meta['debug']:
-                            console.print(f"[cyan]Response formatted with {num_groups} images per line")
-
-                    return bbcode
+                        break
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(url, data=data, files=upload_files)
+                if response.status_code == 200:
+                    console.print("[green]Upload successful!")
+                    bbcode = response.text
                 else:
-                    if response is None:
-                        console.print("[red]Upload failed without a response")
-                    else:
-                        console.print(f"[red]Upload failed with status code {response.status_code}")
-                    return None
-            except requests.RequestException as e:
-                console.print(f"[red]HTTP Request failed: {e}")
+                    uploadSuccess = False
+
+            if uploadSuccess is True:
+                if meta.get('comparison', False):
+                    matches = re.findall(r'\[url=.*?\]\[img\].*?\[/img\]\[/url\]', bbcode)
+                    formatted_bbcode = ""
+                    num_groups = len(sorted_group_indices) if sorted_group_indices else 3
+
+                    for i in range(0, len(matches), num_groups):
+                        line = " ".join(matches[i:i+num_groups])
+                        if i + num_groups < len(matches):
+                            formatted_bbcode += line + "\n"
+                        else:
+                            formatted_bbcode += line
+
+                    bbcode = formatted_bbcode
+
+                    if meta['debug']:
+                        console.print(f"[cyan]Response formatted with {num_groups} images per line")
+
+                return bbcode
+            else:
+                if response is None:
+                    console.print("[red]Upload failed without a response")
+                else:
+                    console.print(f"[red]Upload failed with status code {response.status_code}")
                 return None
+        except httpx.RequestError as e:
+            console.print(f"[red]HTTP Request failed: {e}")
+            return None
 
     async def get_info_from_torrent_id(self, hdb_id: int) -> tuple[Optional[int], Optional[int], Optional[str], Optional[str], Optional[str]]:
         hdb_imdb = hdb_tvdb = hdb_name = hdb_torrenthash = hdb_description = None
@@ -863,8 +870,9 @@ class HDB:
         }
 
         try:
-            response = requests.post(url, json=data, timeout=30)
-            if response.ok:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=data)
+            if response.is_success:
                 response_json = response.json()
 
                 if response_json.get('status') == 0 and response_json.get('data'):
@@ -881,7 +889,7 @@ class HDB:
                     message = response_json.get('message', 'No error message provided')
                     console.print(f"[red]API returned error status {status_code}: {message}[/red]")
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             console.print(f"[red]Request error: {e}[/red]")
         except Exception as e:
             console.print(f"[red]Unexpected error: {e}[/red]")
@@ -900,8 +908,8 @@ class HDB:
 
             # Parse the BD_SUMMARY_00.txt file to extract the Disc Title
             try:
-                with open(bd_summary_path, encoding='utf-8') as file:
-                    for line in file:
+                async with aiofiles.open(bd_summary_path, encoding='utf-8') as file:
+                    for line in await file.readlines():
                         if "Disc Title:" in line:
                             bd_summary = line.split("Disc Title:")[1].strip()
                             break
@@ -936,8 +944,9 @@ class HDB:
             # console.print(f"[yellow]Using this data: {data}")
 
         try:
-            response = requests.post(url, json=data, timeout=30)
-            if response.ok:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=data)
+            if response.is_success:
                 try:
                     response_json = response.json()
                     # console.print(f"[green]HDB API response: {response_json}[/green]")
@@ -964,9 +973,9 @@ class HDB:
                     console.print_exception()
                     console.print(f"[red]Failed to parse HDB API response. Error: {str(e)}[/red]")
             else:
-                console.print(f"[red]Failed to get info from HDB. Status code: {response.status_code}, Reason: {response.reason}[/red]")
+                console.print(f"[red]Failed to get info from HDB. Status code: {response.status_code}, Reason: {response.reason_phrase}[/red]")
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             console.print(f"[red]Request error: {str(e)}[/red]")
 
         console.print('[yellow]Could not find a matching release on HDB[/yellow]')

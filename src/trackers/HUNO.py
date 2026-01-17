@@ -120,7 +120,7 @@ class HUNO(UNIT3D):
 
         return {'mediainfo': mediainfo}
 
-    async def get_featured(self, meta: dict[str, Any]) -> dict[str, Any]:
+    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -129,10 +129,10 @@ class HUNO(UNIT3D):
             return {'free': str(free)}
         return {}
 
-    async def get_doubleup(self, meta: dict[str, Any]) -> dict[str, Any]:
+    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_sticky(self, meta: dict[str, Any]) -> dict[str, Any]:
+    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     async def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -141,9 +141,11 @@ class HUNO(UNIT3D):
         return {}
 
     async def get_episode_number(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
     async def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
     async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -158,6 +160,7 @@ class HUNO(UNIT3D):
         return {'internal': str(internal)}
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
     async def get_audio(self, meta: dict[str, Any]) -> str:
@@ -285,6 +288,7 @@ class HUNO(UNIT3D):
         return {'name': name}
 
     async def get_type_id(self, meta: dict[str, Any], type: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = (meta.get('type') or '').lower()
         video_encode = (meta.get('video_encode') or '').lower()
 
@@ -302,6 +306,7 @@ class HUNO(UNIT3D):
         return {'type_id': type_id}
 
     async def get_resolution_id(self, meta: dict[str, Any], resolution: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             'Other': '10',
             '4320p': '1',

@@ -194,18 +194,19 @@ class OE(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (reverse, mapping_only)
         video_codec = str(meta.get('video_codec', 'N/A'))
+        type = str(meta.get('type', '')).upper()
 
-        meta_type = str(meta['type'])
-        if meta_type == "DVDRIP":
-            meta_type = "ENCODE"
+        if type == "DVDRIP":
+            type = "ENCODE"
 
         type_id = {
             'DISC': '19',
             'REMUX': '20',
             'WEBDL': '21',
-        }.get(meta_type, '0')
-        if meta_type == "WEBRIP":
+        }.get(type, '0')
+        if type == "WEBRIP":
             if video_codec == "HEVC":
                 # x265 Encode
                 type_id = '10'
@@ -215,7 +216,7 @@ class OE(UNIT3D):
             if video_codec == 'AVC':
                 # x264 Encode
                 type_id = '15'
-        if meta_type == "ENCODE":
+        if type == "ENCODE":
             if video_codec == "HEVC":
                 # x265 Encode
                 type_id = '10'

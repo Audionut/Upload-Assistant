@@ -3,7 +3,7 @@ import glob
 import os
 import platform
 import re
-from typing import IO, Any, Optional, Union, cast
+from typing import Any, Optional, Union, cast
 from urllib.parse import urlparse
 
 import aiofiles
@@ -225,7 +225,7 @@ class HDT:
 
         return description
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[dict[str, Optional[str]]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Optional[str]]]:
         if str(meta.get('resolution', '')) not in ['2160p', '1080p', '1080i', '720p']:
             console.print('[bold red]Resolution must be at least 720p resolution for HDT.')
             meta['skipping'] = f'{self.tracker}'
@@ -343,16 +343,18 @@ class HDT:
 
         return data
 
-    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, IO[bytes], str]]:
+    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
         nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
         if nfo_files:
             nfo_path = nfo_files[0]
-            return {'nfos': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+            async with aiofiles.open(nfo_path, "rb") as nfo_file:
+                nfo_bytes = await nfo_file.read()
+            return {'nfos': (os.path.basename(nfo_path), nfo_bytes, "application/octet-stream")}
         return {}
 
-    async def upload(self, meta: Meta, disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies.clear()
         if cookies is not None:

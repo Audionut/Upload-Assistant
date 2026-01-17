@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import glob
 import json
 import os
@@ -6,9 +7,11 @@ import re
 import shutil
 import urllib.parse
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Union, cast
 
-import requests
+import aiofiles
+import httpx
 from torf import Torrent
 
 from src.console import console
@@ -31,46 +34,46 @@ class ManualPackageManager:
         tag = "" if meta['tag'] == "" else f" / {meta['tag'][1:]}"
         res = meta['source'] if meta['is_disc'] == "DVD" else meta['resolution']
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/GENERIC_INFO.txt", 'w', encoding="utf-8") as generic:
-            generic.write(f"Name: {meta['name']}\n\n")
-            generic.write(f"Overview: {meta['overview']}\n\n")
-            generic.write(f"{res} / {meta['type']}{tag}\n\n")
-            generic.write(f"Category: {meta['category']}\n")
-            generic.write(f"TMDB: https://www.themoviedb.org/{meta['category'].lower()}/{meta['tmdb']}\n")
+        generic_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/GENERIC_INFO.txt"
+        async with aiofiles.open(generic_path, 'w', encoding="utf-8") as generic:
+            await generic.write(f"Name: {meta['name']}\n\n")
+            await generic.write(f"Overview: {meta['overview']}\n\n")
+            await generic.write(f"{res} / {meta['type']}{tag}\n\n")
+            await generic.write(f"Category: {meta['category']}\n")
+            await generic.write(f"TMDB: https://www.themoviedb.org/{meta['category'].lower()}/{meta['tmdb']}\n")
             if meta['imdb_id'] != 0:
-                generic.write(f"IMDb: https://www.imdb.com/title/tt{meta['imdb_id']}\n")
+                await generic.write(f"IMDb: https://www.imdb.com/title/tt{meta['imdb_id']}\n")
             if meta['tvdb_id'] != 0:
-                generic.write(f"TVDB: https://www.thetvdb.com/?id={meta['tvdb_id']}&tab=series\n")
+                await generic.write(f"TVDB: https://www.thetvdb.com/?id={meta['tvdb_id']}&tab=series\n")
             if "tvmaze_id" in meta and meta['tvmaze_id'] != 0:
-                generic.write(f"TVMaze: https://www.tvmaze.com/shows/{meta['tvmaze_id']}\n")
+                await generic.write(f"TVMaze: https://www.tvmaze.com/shows/{meta['tvmaze_id']}\n")
             poster_img = f"{meta['base_dir']}/tmp/{meta['uuid']}/POSTER.png"
             if meta.get('poster') not in ['', None] and not os.path.exists(poster_img):
                 if meta.get('rehosted_poster') is None:
-                    r = requests.get(meta['poster'], stream=True, timeout=30)
-                    if r.status_code == 200:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        response = await client.get(meta['poster'])
+                    if response.status_code == 200:
                         console.print("[bold yellow]Rehosting Poster")
-                        r.raw.decode_content = True
-                        with open(poster_img, 'wb') as f:
-                            shutil.copyfileobj(r.raw, f)
+                        await asyncio.to_thread(Path(poster_img).write_bytes, response.content)
                         if not meta.get('skip_imghost_upload', False):
                             poster, _ = await self.uploadscreens_manager.upload_screens(meta, 1, 1, 0, 1, [poster_img], {})
                             poster = poster[0]
-                            generic.write(f"TMDB Poster: {poster.get('raw_url', poster.get('img_url'))}\n")
+                            await generic.write(f"TMDB Poster: {poster.get('raw_url', poster.get('img_url'))}\n")
                             meta['rehosted_poster'] = poster.get('raw_url', poster.get('img_url'))
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as metafile:
-                            json.dump(meta, metafile, indent=4)
-                            metafile.close()
+                        meta_text = json.dumps(meta, indent=4)
+                        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as metafile:
+                            await metafile.write(meta_text)
                     else:
                         console.print("[bold yellow]Poster could not be retrieved")
             elif os.path.exists(poster_img) and meta.get('rehosted_poster') is not None:
-                generic.write(f"TMDB Poster: {meta.get('rehosted_poster')}\n")
+                await generic.write(f"TMDB Poster: {meta.get('rehosted_poster')}\n")
             if len(meta['image_list']) > 0:
-                generic.write("\nImage Webpage:\n")
+                await generic.write("\nImage Webpage:\n")
                 for each in meta['image_list']:
-                    generic.write(f"{each['web_url']}\n")
-                generic.write("\nThumbnail Image:\n")
+                    await generic.write(f"{each['web_url']}\n")
+                await generic.write("\nThumbnail Image:\n")
                 for each in meta['image_list']:
-                    generic.write(f"{each['img_url']}\n")
+                    await generic.write(f"{each['img_url']}\n")
         title = re.sub(r"[^0-9a-zA-Z\[\\]]+", "", meta['title'])
         archive = f"{meta['base_dir']}/tmp/{meta['uuid']}/{title}"
         torrent_files = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", "*.torrent"))]
@@ -94,11 +97,12 @@ class ManualPackageManager:
                 path = f"/tmp/{meta['uuid']}"
                 url = base_url + urllib.parse.quote(path, safe="/")
             else:
-                with open(f"{archive}.tar", 'rb') as tar_file:
-                    files = {
-                        "files[]": (f"{meta['title']}.tar", tar_file)
-                    }
-                    response = requests.post("https://uguu.se/upload.php", files=files, timeout=30).json()
+                tar_bytes = await asyncio.to_thread(Path(f"{archive}.tar").read_bytes)
+                files = {
+                    "files[]": (f"{meta['title']}.tar", tar_bytes)
+                }
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = (await client.post("https://uguu.se/upload.php", files=files)).json()
                 if meta['debug']:
                     console.print(f"[cyan]{response}")
                 url = response['files'][0]['url']

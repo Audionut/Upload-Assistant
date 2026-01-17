@@ -1,9 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import datetime
 import os
 import re
 import subprocess
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, Optional, cast
 
 from src.console import console
@@ -27,7 +29,7 @@ class NfoLinkManager:
         outline: str,
     ) -> str:
         """Create a season.nfo file in the given season folder."""
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         nfo_content = f'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <season>
   <plot><![CDATA[{plot}]]></plot>
@@ -44,8 +46,7 @@ class NfoLinkManager:
   <seasonnumber>{season_number}</seasonnumber>
 </season>'''
         nfo_path = os.path.join(season_folder, "season.nfo")
-        with open(nfo_path, "w", encoding="utf-8") as f:
-            f.write(nfo_content)
+        await asyncio.to_thread(Path(nfo_path).write_text, nfo_content, encoding="utf-8")
         return nfo_path
 
     async def nfo_link(self, meta: Meta) -> Optional[str]:
@@ -234,8 +235,7 @@ class NfoLinkManager:
                 nfo_dir = os.path.join(f"{meta['base_dir']}/data/nfos/{meta['uuid']}/")
                 os.makedirs(nfo_dir, exist_ok=True)
                 nfo_file_path = os.path.join(nfo_dir, f"{filename}.nfo")
-            with open(nfo_file_path, 'w', encoding='utf-8') as f:
-                f.write(nfo_content)
+            await asyncio.to_thread(Path(nfo_file_path).write_text, nfo_content, encoding="utf-8")
 
             if meta['debug']:
                 console.print(f"[green]Emby NFO created at {nfo_file_path}")
@@ -305,7 +305,13 @@ class NfoLinkManager:
 
                 try:
                     cmd = ['cmd', '/c', 'mklink', target_file, src_file] if os.name == 'nt' else ['ln', '-s', src_file, target_file]
-                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    await asyncio.to_thread(
+                        subprocess.run,
+                        cmd,
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
 
                     if meta.get('debug'):
                         console.print(f"[green]Created symlink: {target_file}")
@@ -331,7 +337,13 @@ class NfoLinkManager:
 
                         try:
                             cmd = ['cmd', '/c', 'mklink', target_file, src_file] if os.name == 'nt' else ['ln', '-s', src_file, target_file]
-                            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            await asyncio.to_thread(
+                                subprocess.run,
+                                cmd,
+                                check=True,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
 
                             if meta.get('debug'):
                                 console.print(f"[green]Created symlink: {file}")

@@ -12,6 +12,7 @@ import sys
 import time
 import traceback
 from collections.abc import Awaitable, Mapping
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import ffmpeg
@@ -541,7 +542,7 @@ async def dvd_screenshots(
         w_sar = sar
         h_sar = 1.0
 
-    async def _is_vob_good(n: int, loops: int, num_screens: int) -> tuple[float, float]:
+    async def _is_vob_good(n: int, loops: int, _num_screens: int) -> tuple[float, float]:
         max_loops = 6
         fallback_duration = 300
         valid_tracks: list[dict[str, Any]] = []
@@ -896,51 +897,51 @@ async def screenshots(
         return None
 
     try:
-        with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", encoding='utf-8') as f:
-            mi = json.load(f)
-            video_track = mi['media']['track'][1]
+        mi_text = await asyncio.to_thread(Path(f"{base_dir}/tmp/{folder_id}/MediaInfo.json").read_text, encoding='utf-8')
+        mi = json.loads(mi_text)
+        video_track = mi['media']['track'][1]
 
-            def safe_float(value: Any, default: float = 0.0, field_name: str = "") -> float:
-                if isinstance(value, (int, float)):
+        def safe_float(value: Any, default: float = 0.0, field_name: str = "") -> float:
+            if isinstance(value, (int, float)):
+                return float(value)
+            elif isinstance(value, str):
+                try:
                     return float(value)
-                elif isinstance(value, str):
-                    try:
-                        return float(value)
-                    except ValueError:
-                        console.print(f"[yellow]Warning: Could not convert string '{value}' to float for {field_name}, using default {default}[/yellow]")
-                        return default
-                elif isinstance(value, dict):
-                    for key in ['#value', 'value', 'duration', 'Duration']:
-                        if key in value:
-                            return safe_float(value[key], default, field_name)
-                    console.print(f"[yellow]Warning: {field_name} is a dict but no usable value found: {value}, using default {default}[/yellow]")
+                except ValueError:
+                    console.print(f"[yellow]Warning: Could not convert string '{value}' to float for {field_name}, using default {default}[/yellow]")
                     return default
-                else:
-                    console.print(f"[yellow]Warning: Unable to convert to float: {type(value)} {value} for {field_name}, using default {default}[/yellow]")
-                    return default
-
-            length = safe_float(
-                video_track.get('Duration'),
-                safe_float(mi['media']['track'][0].get('Duration'), 3600.0, "General Duration"),
-                "Video Duration"
-            )
-
-            width = safe_float(video_track.get('Width'), 1920.0, "Width")
-            height = safe_float(video_track.get('Height'), 1080.0, "Height")
-            par = safe_float(video_track.get('PixelAspectRatio'), 1.0, "PixelAspectRatio")
-            dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
-            frame_rate = safe_float(video_track.get('FrameRate'), 24.0, "FrameRate")
-
-            if par == 1:
-                sar = w_sar = h_sar = 1.0
-            elif par < 1:
-                new_height = dar * height
-                sar = width / new_height
-                w_sar = 1.0
-                h_sar = sar
+            elif isinstance(value, dict):
+                for key in ['#value', 'value', 'duration', 'Duration']:
+                    if key in value:
+                        return safe_float(value[key], default, field_name)
+                console.print(f"[yellow]Warning: {field_name} is a dict but no usable value found: {value}, using default {default}[/yellow]")
+                return default
             else:
-                sar = w_sar = par
-                h_sar = 1
+                console.print(f"[yellow]Warning: Unable to convert to float: {type(value)} {value} for {field_name}, using default {default}[/yellow]")
+                return default
+
+        length = safe_float(
+            video_track.get('Duration'),
+            safe_float(mi['media']['track'][0].get('Duration'), 3600.0, "General Duration"),
+            "Video Duration"
+        )
+
+        width = safe_float(video_track.get('Width'), 1920.0, "Width")
+        height = safe_float(video_track.get('Height'), 1080.0, "Height")
+        par = safe_float(video_track.get('PixelAspectRatio'), 1.0, "PixelAspectRatio")
+        dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
+        frame_rate = safe_float(video_track.get('FrameRate'), 24.0, "FrameRate")
+
+        if par == 1:
+            sar = w_sar = h_sar = 1.0
+        elif par < 1:
+            new_height = dar * height
+            sar = width / new_height
+            w_sar = 1.0
+            h_sar = sar
+        else:
+            sar = w_sar = par
+            h_sar = 1
     except Exception as e:
         console.print(f"[red]Error processing MediaInfo.json: {e}")
         if meta.get('debug', False):
@@ -1725,7 +1726,7 @@ async def get_frame_info(path: str, ss_time: Union[str, float], meta: dict[str, 
 async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any]) -> tuple[bool, bool]:
     test_image_path = image_path.replace('.png', '_test.png')
 
-    async def run_check(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any], try_libplacebo: bool = False, test_image_path: str = "") -> bool:
+    async def run_check(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, _image_path: str, loglevel: str, meta: dict[str, Any], try_libplacebo: bool = False, test_image_path: str = "") -> bool:
         filter_parts: list[str] = []
         input_label = "[0:v]"
         output_map = "0:v"  # Default output mapping

@@ -31,6 +31,7 @@ class PT(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -48,6 +49,7 @@ class PT(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -175,10 +177,11 @@ class PT(UNIT3D):
 
         return 1 if found_portuguese_subtitle else 0
 
-    async def get_distributor_ids(self, meta: Meta) -> dict[str, str]:
+    async def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
         return {}
 
     async def get_region_id(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
     async def get_additional_data(self, meta: Meta) -> dict[str, str]:

@@ -90,7 +90,7 @@ class FF:
         else:
             print(f"{self.tracker}: Login failed. Status code: {response.status_code}")
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[str]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return []
@@ -341,7 +341,7 @@ class FF:
         if vt:
             self.video_type = vt.strip().lower()
 
-    def movie_type(self, meta: dict[str, Any]) -> str:
+    def movie_type(self, _meta: dict[str, Any]) -> str:
         # Possible values: "XviD", "DVDR", "x264", "x265", "MP4", "VCD"
         if self.video_source == 'dvd':
             return "DVDR"
@@ -391,7 +391,7 @@ class FF:
 
         return "TVSeries"
 
-    def movie_source(self, meta: dict[str, Any]) -> Optional[str]:
+    def movie_source(self, _meta: dict[str, Any]) -> Optional[str]:
         # Possible values: "DVD", "DVDSCR", "Workprint", "TeleCine", "TeleSync", "CAM", "BluRay", "HD-DVD", "HDTV", "R5", "WebRIP"
         mapping = {
             "dvd": "DVD",
@@ -412,7 +412,7 @@ class FF:
         src = (self.video_source or "").strip().lower()
         return mapping.get(src)
 
-    def tv_source(self, meta: dict[str, Any]) -> Optional[str]:
+    def tv_source(self, _meta: dict[str, Any]) -> Optional[str]:
         # Possible values: "HDTV", "DSR", "PDTV", "TV", "DVD", "DvdScr", "BluRay", "WebRIP"
         mapping = {
             "hdtv": "HDTV",
@@ -430,7 +430,7 @@ class FF:
         src = (self.video_source or "").strip().lower()
         return mapping.get(src)
 
-    def anime_source(self, meta: dict[str, Any]) -> Optional[str]:
+    def anime_source(self, _meta: dict[str, Any]) -> Optional[str]:
         # Possible values: "DVD", "BluRay", "Anime Series", "HDTV"
         mapping = {
             "hdtv": "HDTV",
@@ -463,7 +463,7 @@ class FF:
         else:
             return "16_9"
 
-    def anime_v_codec(self, meta: dict[str, Any]) -> str:
+    def anime_v_codec(self, _meta: dict[str, Any]) -> str:
         # Possible values: "x264", "h264", "XviD", "DivX", "WMV", "VC1"
         if self.video_codec == 'vc-1':
             return "VC1"
@@ -636,7 +636,7 @@ class FF:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False

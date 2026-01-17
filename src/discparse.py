@@ -8,6 +8,7 @@ import sys
 import traceback
 from collections import OrderedDict, defaultdict
 from glob import glob
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import defusedxml.ElementTree as ET
@@ -72,60 +73,63 @@ class DiscParse:
                     console.print(f"[bold red]PLAYLIST directory not found for disc {path}")
                     continue
 
+                def _load_mpls(mpls_path: str) -> tuple[Any, Any]:
+                    with open(mpls_path, "rb") as mpls_file:
+                        header = mpls.load_movie_playlist(mpls_file)
+                        mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
+                        playlist_data = mpls.load_playlist(mpls_file)
+                    return header, playlist_data
+
                 # Parse playlists
                 valid_playlists: list[PlaylistInfo] = []
                 for file_name in os.listdir(playlists_path):
                     if file_name.endswith(".mpls"):
                         mpls_path = os.path.join(playlists_path, file_name)
                         try:
-                            with open(mpls_path, "rb") as mpls_file:
-                                header = mpls.load_movie_playlist(mpls_file)
-                                mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                                playlist_data = mpls.load_playlist(mpls_file)
+                            _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                            duration: float = 0.0
+                            items: list[PlaylistItem] = []  # Collect .m2ts file paths and sizes
+                            stream_directory = os.path.join(path, "STREAM")
+                            file_counts: defaultdict[str, int] = defaultdict(int)  # Tracks the count of each .m2ts file
+                            file_sizes: dict[str, int] = {}  # Stores the size of each unique .m2ts file
 
-                                duration: float = 0.0
-                                items: list[PlaylistItem] = []  # Collect .m2ts file paths and sizes
-                                stream_directory = os.path.join(path, "STREAM")
-                                file_counts: defaultdict[str, int] = defaultdict(int)  # Tracks the count of each .m2ts file
-                                file_sizes: dict[str, int] = {}  # Stores the size of each unique .m2ts file
+                            play_items = getattr(playlist_data, "play_items", None)
+                            if not play_items:
+                                continue
 
-                                play_items = getattr(playlist_data, "play_items", None)
-                                if not play_items:
+                            for item in play_items:
+                                intime = getattr(item, "intime", None)
+                                outtime = getattr(item, "outtime", None)
+                                if intime is None or outtime is None:
                                     continue
-
-                                for item in play_items:
-                                    intime = getattr(item, "intime", None)
-                                    outtime = getattr(item, "outtime", None)
-                                    if intime is None or outtime is None:
+                                duration += (outtime - intime) / 45000.0
+                                try:
+                                    clip_name = getattr(item, "clip_information_filename", None)
+                                    if not isinstance(clip_name, str):
                                         continue
-                                    duration += (outtime - intime) / 45000.0
-                                    try:
-                                        clip_name = getattr(item, "clip_information_filename", None)
-                                        if not isinstance(clip_name, str):
-                                            continue
-                                        clip_name = clip_name.strip()
-                                        if not clip_name:
-                                            continue
-                                        m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
-                                        if os.path.exists(m2ts_file):
-                                            size = os.path.getsize(m2ts_file)
-                                            file_counts[m2ts_file] += 1  # Increment the count
-                                            file_sizes[m2ts_file] = size  # Store individual file size
-                                    except AttributeError as e:
-                                        console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
+                                    clip_name = clip_name.strip()
+                                    if not clip_name:
+                                        continue
+                                    m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
+                                    if os.path.exists(m2ts_file):
+                                        size = os.path.getsize(m2ts_file)
+                                        file_counts[m2ts_file] += 1  # Increment the count
+                                        file_sizes[m2ts_file] = size  # Store individual file size
+                                except AttributeError as e:
+                                    console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
 
-                                # Process unique playlists with only one instance of each file
-                                if all(count == 1 for count in file_counts.values()):
-                                    items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
+                            # Process unique playlists with only one instance of each file
+                            if all(count == 1 for count in file_counts.values()):
+                                items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
 
-                                    # Save playlists with duration >= 10 minutes
-                                    if duration >= 600:
-                                        valid_playlists.append({
-                                            "file": file_name,
-                                            "duration": duration,
-                                            "path": mpls_path,
-                                            "items": items
-                                        })
+                                # Save playlists with duration >= 10 minutes
+                                if duration >= 600:
+                                    valid_playlists.append({
+                                        "file": file_name,
+                                        "duration": duration,
+                                        "path": mpls_path,
+                                        "items": items
+                                    })
                         except Exception as e:
                             console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
@@ -136,50 +140,46 @@ class DiscParse:
                         if file_name.endswith(".mpls"):
                             mpls_path = os.path.join(playlists_path, file_name)
                             try:
-                                with open(mpls_path, "rb") as mpls_file:
-                                    header = mpls.load_movie_playlist(mpls_file)
-                                    mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                                    playlist_data = mpls.load_playlist(mpls_file)
+                                _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                                duration_all: float = 0.0
+                                items_all: list[PlaylistItem] = []
+                                stream_directory = os.path.join(path, "STREAM")
+                                file_counts_all: defaultdict[str, int] = defaultdict(int)
+                                file_sizes_all: dict[str, int] = {}
 
-                                    duration_all: float = 0.0
-                                    items_all: list[PlaylistItem] = []
-                                    stream_directory = os.path.join(path, "STREAM")
-                                    file_counts_all: defaultdict[str, int] = defaultdict(int)
-                                    file_sizes_all: dict[str, int] = {}
+                                play_items = getattr(playlist_data, "play_items", None)
+                                if not play_items:
+                                    continue
 
-                                    play_items = getattr(playlist_data, "play_items", None)
-                                    if not play_items:
+                                for item in play_items:
+                                    intime = getattr(item, "intime", None)
+                                    outtime = getattr(item, "outtime", None)
+                                    if intime is None or outtime is None:
                                         continue
-
-                                    for item in play_items:
-                                        intime = getattr(item, "intime", None)
-                                        outtime = getattr(item, "outtime", None)
-                                        if intime is None or outtime is None:
+                                    duration_all += (outtime - intime) / 45000.0
+                                    try:
+                                        clip_name = getattr(item, "clip_information_filename", None)
+                                        if not isinstance(clip_name, str):
                                             continue
-                                        duration_all += (outtime - intime) / 45000.0
-                                        try:
-                                            clip_name = getattr(item, "clip_information_filename", None)
-                                            if not isinstance(clip_name, str):
-                                                continue
-                                            clip_name = clip_name.strip()
-                                            if not clip_name:
-                                                continue
-                                            m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
-                                            if os.path.exists(m2ts_file):
-                                                size = os.path.getsize(m2ts_file)
-                                                file_counts_all[m2ts_file] += 1
-                                                file_sizes_all[m2ts_file] = size
-                                        except AttributeError as e:
-                                            console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
+                                        clip_name = clip_name.strip()
+                                        if not clip_name:
+                                            continue
+                                        m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
+                                        if os.path.exists(m2ts_file):
+                                            size = os.path.getsize(m2ts_file)
+                                            file_counts_all[m2ts_file] += 1
+                                            file_sizes_all[m2ts_file] = size
+                                    except AttributeError as e:
+                                        console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
 
-                                    if all(count == 1 for count in file_counts_all.values()):
-                                        items_all = [{"file": file, "size": file_sizes_all[file]} for file in file_counts_all]
-                                        all_playlists.append({
-                                            "file": file_name,
-                                            "duration": duration_all,
-                                            "path": mpls_path,
-                                            "items": items_all
-                                        })
+                                if all(count == 1 for count in file_counts_all.values()):
+                                    items_all = [{"file": file, "size": file_sizes_all[file]} for file in file_counts_all]
+                                    all_playlists.append({
+                                        "file": file_name,
+                                        "duration": duration_all,
+                                        "path": mpls_path,
+                                        "items": items_all
+                                    })
                             except Exception as e:
                                 console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
@@ -294,20 +294,17 @@ class DiscParse:
                                 console.print(f"[bold red]No valid BDInfo file found for playlist {playlist_number}.")
                                 break
 
-                            with open(bdinfo_text, encoding="utf-8", errors="replace") as f:
-                                text = f.read()
-                                result = text.split("QUICK SUMMARY:", 2)
-                                files = result[0].split("FILES:", 2)[1].split("CHAPTERS:", 2)[0].split("-------------")
-                                result2 = result[1].rstrip(" \n")
-                                result = result2.split("********************", 1)
-                                bd_summary = result[0].rstrip(" \n")
+                            text = await asyncio.to_thread(Path(bdinfo_text).read_text, encoding="utf-8", errors="replace")
+                            result = text.split("QUICK SUMMARY:", 2)
+                            files = result[0].split("FILES:", 2)[1].split("CHAPTERS:", 2)[0].split("-------------")
+                            result2 = result[1].rstrip(" \n")
+                            result = result2.split("********************", 1)
+                            bd_summary = result[0].rstrip(" \n")
 
-                            with open(bdinfo_text, encoding="utf-8", errors="replace") as f:
-                                text = f.read()
-                                result = text.split("[code]", 3)
-                                result2 = result[2].rstrip(" \n")
-                                result = result2.split("FILES:", 1)
-                                ext_bd_summary = result[0].rstrip(" \n")
+                            result = text.split("[code]", 3)
+                            result2 = result[2].rstrip(" \n")
+                            result = result2.split("FILES:", 1)
+                            ext_bd_summary = result[0].rstrip(" \n")
 
                             # Save summaries and bdinfo for each playlist
                             if idx == 0:
@@ -321,10 +318,8 @@ class DiscParse:
                             bd_summary_cleaned = re.sub(r' +', ' ', bd_summary.strip())
                             ext_bd_summary_cleaned = re.sub(r' +', ' ', ext_bd_summary.strip())
 
-                            with open(summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(bd_summary_cleaned)
-                            with open(extended_summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(ext_bd_summary_cleaned)
+                            await asyncio.to_thread(Path(summary_file).write_text, bd_summary_cleaned, encoding="utf-8", errors="replace")
+                            await asyncio.to_thread(Path(extended_summary_file).write_text, ext_bd_summary_cleaned, encoding="utf-8", errors="replace")
 
                             bdinfo = self.parse_bdinfo(bd_summary_cleaned, files[1], path)
 

@@ -28,8 +28,9 @@ class TLZ(UNIT3D):
         meta: Meta,
         category: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_value = str(meta.get('category', ''))
         category_id = {
             'MOVIE': '1',
@@ -42,8 +43,9 @@ class TLZ(UNIT3D):
         meta: Meta,
         type: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = str(meta.get('type', ''))
         type_id = {
             'FILM': '1',

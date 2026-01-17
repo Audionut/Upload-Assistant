@@ -33,6 +33,7 @@ class R4E(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_id = '24'
         # Use stored genre IDs if available
         if meta and meta.get('genre_ids'):
@@ -59,6 +60,7 @@ class R4E(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             '8640p': '2160p',
             '4320p': '2160p',
@@ -75,21 +77,24 @@ class R4E(UNIT3D):
         return {'type_id': type_id}
 
     async def get_personal_release(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
     async def get_internal(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
-    async def get_featured(self, meta: Meta) -> dict[str, str]:
+    async def get_featured(self, _meta: Meta) -> dict[str, str]:
         return {}
 
     async def get_free(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
-    async def get_doubleup(self, meta: Meta) -> dict[str, str]:
+    async def get_doubleup(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_sticky(self, meta: Meta) -> dict[str, str]:
+    async def get_sticky(self, _meta: Meta) -> dict[str, str]:
         return {}
 
     async def get_resolution_id(
@@ -99,6 +104,7 @@ class R4E(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (meta, resolution, reverse, mapping_only)
         return {}
 
     async def search_existing(self, meta: Meta, _: str) -> list[dict[str, Any]]:

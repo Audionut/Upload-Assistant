@@ -186,7 +186,7 @@ class BT:
 
         return category_map.get(meta['category'])
 
-    async def get_languages(self, meta: dict[str, Any]) -> Optional[str]:
+    async def get_languages(self, _meta: dict[str, Any]) -> Optional[str]:
         lang_code = self.main_tmdb_data.get('original_language')
 
         if not isinstance(lang_code, str) or not lang_code:
@@ -434,7 +434,7 @@ class BT:
 
         return youtube
 
-    async def get_tags(self, meta: dict[str, Any]) -> str:
+    async def get_tags(self, _meta: dict[str, Any]) -> str:
         tags = ''
 
         genres = self.main_tmdb_data.get('genres')
@@ -466,7 +466,7 @@ class BT:
 
         return tags
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[str]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
         is_tv_pack = bool(meta.get('tv_pack'))
 
         search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
@@ -561,8 +561,8 @@ class BT:
 
         if os.path.exists(info_file_path):
             try:
-                with open(info_file_path, encoding='utf-8') as f:
-                    return f.read()
+                async with aiofiles.open(info_file_path, encoding='utf-8') as f:
+                    return await f.read()
             except Exception as e:
                 console.print(f'[bold red]Erro ao ler o arquivo de info em {info_file_path}: {e}[/bold red]')
                 return ''
@@ -775,7 +775,7 @@ class BT:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False

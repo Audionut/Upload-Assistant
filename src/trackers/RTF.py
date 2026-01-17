@@ -39,7 +39,7 @@ class RTF:
         self.banned_groups: list[str] = []
         pass
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         """Upload a torrent to RetroFlix tracker.
 
         Args:
@@ -186,7 +186,7 @@ class RTF:
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
         """Search for existing torrents on RetroFlix tracker.
 
         Validates content eligibility (age requirements, no adult content) and searches
@@ -231,7 +231,7 @@ class RTF:
                 aired_date = str(episode.get('aired', ''))
                 if aired_date and '-' in aired_date:
                     try:
-                        episode_date = datetime.datetime.strptime(aired_date, '%Y-%m-%d').date()
+                        episode_date = datetime.datetime.strptime(aired_date, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).date()
                         if most_recent_aired_date is None or episode_date > most_recent_aired_date:
                             most_recent_aired_date = episode_date
                     except (ValueError, AttributeError):
@@ -256,10 +256,10 @@ class RTF:
         # Check if content is at least 10 years old using actual date comparison
         if meta.get('category') == "MOVIE" and meta.get('release_date'):
             try:
-                release_date = datetime.datetime.strptime(meta['release_date'], '%Y-%m-%d').date()
+                release_date = datetime.datetime.strptime(meta['release_date'], '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).date()
                 year = release_date.year
                 # Calculate date exactly 10 years ago from today
-                ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+                ten_years_ago = datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=365*10 + 3)  # add leeway
                 if release_date > ten_years_ago:
                     if not meta.get('unattended', False):
                         console.print("[red]Content must be older than 10 Years to upload at RTF")
@@ -270,7 +270,7 @@ class RTF:
                 release_year = meta['release_date'].split('-')[0]
                 if release_year.isdigit():
                     year = int(release_year)
-                    if datetime.date.today().year - year <= 9:
+                    if datetime.datetime.now(datetime.timezone.utc).date().year - year <= 9:
                         if not meta.get('unattended', False):
                             console.print("[red]Content must be older than 10 Years to upload at RTF")
                         meta['skipping'] = "RTF"
@@ -278,7 +278,7 @@ class RTF:
 
         elif meta.get('category') == "TV" and most_recent_aired_date:
             # For TV shows, use the most recent aired date for comparison if available
-            ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+            ten_years_ago = datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=365*10 + 3)  # add leeway
             if most_recent_aired_date > ten_years_ago:
                 if not meta.get('unattended', False):
                     console.print("[red]Content must be older than 10 Years to upload at RTF")
@@ -286,7 +286,7 @@ class RTF:
                 return []
 
         else:
-            if year is not None and datetime.date.today().year - int(year) <= 9:
+            if year is not None and datetime.datetime.now(datetime.timezone.utc).date().year - int(year) <= 9:
                 if not meta.get('unattended', False):
                     console.print("[red]Content must be older than 10 Years to upload at RTF")
                 meta['skipping'] = "RTF"
@@ -422,8 +422,8 @@ class RTF:
                     self.config['TRACKERS'][self.tracker]['api_key'] = token
 
                     # Now we update the config file on disk using utf-8 encoding
-                    with open(config_path, encoding='utf-8') as file:
-                        config_data = file.read()
+                    async with aiofiles.open(config_path, encoding='utf-8') as file:
+                        config_data = await file.read()
 
                     # Find the RTF tracker and replace the api_key value
                     new_config_data = re.sub(
@@ -433,8 +433,8 @@ class RTF:
                     )
 
                     # Write the updated config back to the file
-                    with open(config_path, 'w', encoding='utf-8') as file:
-                        file.write(new_config_data)
+                    async with aiofiles.open(config_path, 'w', encoding='utf-8') as file:
+                        await file.write(new_config_data)
 
                     console.print(f'[bold green]API Key successfully saved to {config_path}')
                     return True

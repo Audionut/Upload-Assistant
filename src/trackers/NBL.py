@@ -42,11 +42,11 @@ class NBL:
         cat_id = 3 if meta.get('tv_pack', 0) == 1 else 1
         return cat_id
 
-    async def edit_desc(self, meta: Meta) -> None:
+    async def edit_desc(self, _meta: Meta) -> None:
         # Leave this in so manual works
         return
 
-    async def upload(self, meta: Meta, disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
@@ -99,7 +99,7 @@ class NBL:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
             return False
 
-    async def search_existing(self, meta: Meta, disctype: str) -> Union[list[dict[str, Any]], bool]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> Union[list[dict[str, Any]], bool]:
         if meta['category'] != 'TV':
             if meta['tvmaze_id'] != 0:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):

@@ -4,6 +4,7 @@ import platform
 import re
 from typing import Any, Optional, cast
 
+import aiofiles
 import httpx
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
@@ -74,26 +75,26 @@ class PTS:
                     console.print("[bold red]Couldn't find the MediaInfo template[/bold red]")
                     mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                     if os.path.exists(mi_file_path):
-                        with open(mi_file_path, encoding='utf-8') as f:
-                            tech_info = f.read()
+                        async with aiofiles.open(mi_file_path, encoding='utf-8') as f:
+                            tech_info = await f.read()
             else:
                 console.print("[bold yellow]Using normal MediaInfo for the description.[/bold yellow]")
                 mi_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                 if os.path.exists(mi_file_path):
-                    with open(mi_file_path, encoding='utf-8') as f:
-                        tech_info = f.read()
+                    async with aiofiles.open(mi_file_path, encoding='utf-8') as f:
+                        tech_info = await f.read()
         else:
             bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
             if os.path.exists(bd_summary_file):
-                with open(bd_summary_file, encoding='utf-8') as f:
-                    tech_info = f.read()
+                async with aiofiles.open(bd_summary_file, encoding='utf-8') as f:
+                    tech_info = await f.read()
 
         if tech_info:
             description_parts.append(tech_info)
 
         if os.path.exists(base_desc_path):
-            with open(base_desc_path, encoding='utf-8') as f:
-                manual_desc = f.read()
+            async with aiofiles.open(base_desc_path, encoding='utf-8') as f:
+                manual_desc = await f.read()
             description_parts.append(manual_desc)
 
         # Screenshots
@@ -138,12 +139,12 @@ class PTS:
         desc = bbcode.remove_spoiler(desc)
         desc = re.sub(r'\n{3,}', '\n\n', desc)
 
-        with open(final_desc_path, 'w', encoding='utf-8') as f:
-            f.write(desc)
+        async with aiofiles.open(final_desc_path, 'w', encoding='utf-8') as f:
+            await f.write(desc)
 
         return desc
 
-    async def search_existing(self, meta: Meta, disctype: str) -> Optional[list[str]]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> Optional[list[str]]:
         mandarin = await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=['mandarin', 'chinese'], check_audio=True, check_subtitle=True
         )
@@ -195,7 +196,7 @@ class PTS:
 
         return data
 
-    async def upload(self, meta: Meta, disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies = cast(Any, cookies)
         data = await self.get_data(meta)

@@ -494,7 +494,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb
     return meta
 
 
-async def imdb_tmdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
+async def imdb_tmdb(meta: dict[str, Any], filename: str, _tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     # Create a list of coroutines to run concurrently
     coroutines: list[Awaitable[Any]] = [
         tmdb_manager.tmdb_other_meta(

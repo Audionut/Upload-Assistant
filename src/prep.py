@@ -12,6 +12,7 @@ try:
     import time
     from difflib import SequenceMatcher
 
+    import aiofiles
     import cli_ui
     import guessit
 
@@ -208,7 +209,14 @@ class Prep:
                     meta['search_year'] = ""
 
             if meta.get('resolution') is None and not meta.get('emby', False):
-                meta['resolution'] = await mi_resolution(bdinfo['video'][0]['res'], guessit_fn(video), width="OTHER", scan="p", height="OTHER", actual_height=0)
+                meta['resolution'] = await mi_resolution(
+                    bdinfo['video'][0]['res'],
+                    guessit_fn(video),
+                    width="OTHER",
+                    scan="p",
+                    _height="OTHER",
+                    _actual_height=0,
+                )
                 try:
                     is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"
                     if int(float(is_hfr)) > 30:
@@ -220,7 +228,7 @@ class Prep:
             else:
                 meta['resolution'] = "1080p"
 
-            meta['sd'] = await video_manager.is_sd(meta['resolution'])
+            meta['sd'] = await video_manager.is_sd(str(meta.get('resolution', '')))
 
             mi = None
 
@@ -490,9 +498,14 @@ class Prep:
             description_text = meta.get('description', '')
             if description_text is None:
                 description_text = ""
-            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'w', newline="", encoding='utf8') as description:
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
+                "w",
+                newline="",
+                encoding="utf8",
+            ) as description:
                 if len(description_text):
-                    description.write(description_text)
+                    await description.write(description_text)
 
         meta['skip_trackers'] = False
         if meta.get('emby', False):
@@ -756,8 +769,31 @@ class Prep:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
             year_value = _normalize_search_year(year)
             category_pref = meta.get('category') or ''
-            tmdb_task = self.tmdb_manager.get_tmdb_id(filename, year_value, category_pref, untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
-            imdb_task = imdb_manager.search_imdb(filename, year_value, quickie=True, category=category_pref, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
+            tmdb_task: asyncio.Task[tuple[int, str]] = asyncio.create_task(
+                self.tmdb_manager.get_tmdb_id(
+                    filename,
+                    year_value,
+                    category_pref,
+                    untouched_filename,
+                    attempted=0,
+                    debug=debug,
+                    secondary_title=meta.get('secondary_title', None),
+                    unattended=unattended,
+                )
+            )
+            imdb_task: asyncio.Task[int] = asyncio.create_task(
+                imdb_manager.search_imdb(
+                    filename,
+                    year_value,
+                    quickie=True,
+                    category=category_pref,
+                    debug=debug,
+                    secondary_title=meta.get('secondary_title', None),
+                    untouched_filename=untouched_filename,
+                    duration=duration,
+                    unattended=unattended,
+                )
+            )
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
             meta['category'] = category
@@ -819,7 +855,18 @@ class Prep:
         if meta.get('imdb_id') == 0:
             try:
                 search_year_value = _normalize_search_year(meta.get('search_year'))
-                meta['imdb_id'] = await imdb_manager.search_imdb(filename, search_year_value, quickie=False, category=meta.get('category', None), debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, attempted=0, duration=duration, unattended=unattended)
+                meta['imdb_id'] = await imdb_manager.search_imdb(
+                    filename,
+                    search_year_value,
+                    quickie=False,
+                    category=meta.get('category', None),
+                    debug=debug,
+                    secondary_title=meta.get('secondary_title', None),
+                    untouched_filename=untouched_filename,
+                    attempted=0,
+                    duration=duration,
+                    unattended=unattended,
+                )
             except Exception as e:
                 console.print(f"[red]Error searching IMDb: {e}[/red]")
                 raise Exception(f"Error searching IMDb: {e}") from e
@@ -1052,12 +1099,17 @@ class Prep:
 
             meta['audio'], meta['channels'], meta['has_commentary'] = await self.audio_manager.get_audio_v2(mi_data, meta, bdinfo)
 
-            meta['3D'] = await video_manager.is_3d(mi_data, bdinfo)
+            meta['3D'] = await video_manager.is_3d(bdinfo)
 
             is_disc_value = str(meta.get('is_disc') or "")
             meta['source'], meta['type'] = await get_source(meta['type'], video, str(meta.get('path') or ""), is_disc_value, meta, folder_id, base_dir)
 
-            meta['uhd'] = await video_manager.get_uhd(meta['type'], guessit_fn(str(meta.get('path') or "")), meta['resolution'], str(meta.get('path') or ""))
+            meta['uhd'] = await video_manager.get_uhd(
+                meta['type'],
+                guessit_fn(str(meta.get('path') or "")),
+                str(meta.get('resolution', '')),
+                str(meta.get('path') or ""),
+            )
             meta['hdr'] = await video_manager.get_hdr(mi_data, bdinfo)
 
             meta['distributor'] = await get_distributor(meta['distributor'])
@@ -1189,7 +1241,7 @@ class Prep:
 
         return meta
 
-    async def get_cat(self, video: str, meta: dict[str, Any]) -> Optional[str]:
+    async def get_cat(self, _video: str, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('manual_category'):
             manual_category = meta.get('manual_category')
             return manual_category.upper() if isinstance(manual_category, str) else None
@@ -1244,8 +1296,8 @@ class Prep:
             if meta['debug']:
                 console.print(f"[cyan]Parsing NFO file: {nfo_file}[/cyan]")
 
-            with open(nfo_file, encoding='utf-8', errors='ignore') as f:
-                nfo_content = f.read()
+            async with aiofiles.open(nfo_file, encoding='utf-8', errors='ignore') as f:
+                nfo_content = await f.read()
 
             # Parse Source field
             source_match = re.search(r'^Source\s*:\s*(.+?)$', nfo_content, re.MULTILINE | re.IGNORECASE)

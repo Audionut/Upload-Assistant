@@ -1,9 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
 from collections import defaultdict
 from collections.abc import Mapping, MutableMapping
+from pathlib import Path
 from typing import Any, Union, cast
 
 import cli_ui
@@ -32,66 +34,66 @@ class ComparisonManager:
         comparison_data_file = f"{self.meta['base_dir']}/tmp/{self.meta['uuid']}/comparison_data.json"
         if os.path.exists(comparison_data_file):
             try:
-                with open(comparison_data_file) as f:
-                    raw_data: Any = json.load(f)
-                    saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
-                    if isinstance(raw_data, dict):
-                        raw_dict = cast(dict[str, Any], raw_data)
-                        if not all(isinstance(v, dict) for v in raw_dict.values()):
-                            raise ValueError("Invalid comparison data format: must be a dict of dicts")
-                        saved_comparison_data = cast(ComparisonData, raw_dict)
-                    elif isinstance(raw_data, list):
-                        raw_list = cast(list[Any], raw_data)
-                        if not all(isinstance(item, dict) for item in raw_list):
-                            raise ValueError("Invalid comparison data format: must be a list of dicts")
-                        saved_comparison_data = cast(list[ComparisonGroup], raw_list)
+                raw_text = await asyncio.to_thread(Path(comparison_data_file).read_text)
+                raw_data: Any = json.loads(raw_text)
+                saved_comparison_data: Union[ComparisonData, list[ComparisonGroup]]
+                if isinstance(raw_data, dict):
+                    raw_dict = cast(dict[str, Any], raw_data)
+                    if not all(isinstance(v, dict) for v in raw_dict.values()):
+                        raise ValueError("Invalid comparison data format: must be a dict of dicts")
+                    saved_comparison_data = cast(ComparisonData, raw_dict)
+                elif isinstance(raw_data, list):
+                    raw_list = cast(list[Any], raw_data)
+                    if not all(isinstance(item, dict) for item in raw_list):
+                        raise ValueError("Invalid comparison data format: must be a list of dicts")
+                    saved_comparison_data = cast(list[ComparisonGroup], raw_list)
+                else:
+                    raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
+                if self.meta.get('debug'):
+                    console.print(f"[cyan]Loading previously saved comparison data from {comparison_data_file}")
+                self.meta["comparison_groups"] = saved_comparison_data
+
+                comparison_index = self.meta.get('comparison_index')
+                if comparison_index is not None:
+                    # Normalize comparison_index to string once
+                    comparison_index_str = str(comparison_index).strip()
+
+                    # Initialize image_list once if needed
+                    if 'image_list' not in self.meta:
+                        self.meta['image_list'] = []
+
+                    urls_to_add: list[dict[str, Any]] = []
+                    found = False
+
+                    if isinstance(saved_comparison_data, dict):
+                        if comparison_index_str in saved_comparison_data:
+                            group_data = saved_comparison_data[comparison_index_str]
+                            urls_to_add = cast(list[dict[str, Any]], group_data.get('urls', []))
+                            found = True
+                        else:
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
                     else:
-                        raise ValueError("Invalid comparison data format: must be a dict of dicts or a list of dicts")
-                    if self.meta.get('debug'):
-                        console.print(f"[cyan]Loading previously saved comparison data from {comparison_data_file}")
-                    self.meta["comparison_groups"] = saved_comparison_data
-
-                    comparison_index = self.meta.get('comparison_index')
-                    if comparison_index is not None:
-                        # Normalize comparison_index to string once
-                        comparison_index_str = str(comparison_index).strip()
-
-                        # Initialize image_list once if needed
-                        if 'image_list' not in self.meta:
-                            self.meta['image_list'] = []
-
-                        urls_to_add: list[dict[str, Any]] = []
-                        found = False
-
-                        if isinstance(saved_comparison_data, dict):
-                            if comparison_index_str in saved_comparison_data:
-                                group_data = saved_comparison_data[comparison_index_str]
-                                urls_to_add = cast(list[dict[str, Any]], group_data.get('urls', []))
+                        try:
+                            idx = int(comparison_index_str)
+                            if 0 <= idx < len(saved_comparison_data):
+                                list_item = saved_comparison_data[idx]
+                                urls_to_add = cast(list[dict[str, Any]], list_item.get('urls', []))
                                 found = True
                             else:
-                                console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
-                        else:
-                            try:
-                                idx = int(comparison_index_str)
-                                if 0 <= idx < len(saved_comparison_data):
-                                    list_item = saved_comparison_data[idx]
-                                    urls_to_add = cast(list[dict[str, Any]], list_item.get('urls', []))
-                                    found = True
-                                else:
-                                    console.print(f"[yellow]Comparison index '{comparison_index_str}' out of range; valid range: 0-{len(saved_comparison_data) - 1}[/yellow]")
-                            except ValueError:
-                                console.print(f"[yellow]Comparison index '{comparison_index_str}' is not a valid integer for list data[/yellow]")
+                                console.print(f"[yellow]Comparison index '{comparison_index_str}' out of range; valid range: 0-{len(saved_comparison_data) - 1}[/yellow]")
+                        except ValueError:
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' is not a valid integer for list data[/yellow]")
 
-                        if found and urls_to_add:
-                            if self.meta.get('debug'):
-                                console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
-                            image_list = cast(list[dict[str, Any]], self.meta.get('image_list', []))
-                            self.meta['image_list'] = image_list
-                            for url_info in urls_to_add:
-                                if url_info not in image_list:
-                                    image_list.append(url_info)
+                    if found and urls_to_add:
+                        if self.meta.get('debug'):
+                            console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
+                        image_list = cast(list[dict[str, Any]], self.meta.get('image_list', []))
+                        self.meta['image_list'] = image_list
+                        for url_info in urls_to_add:
+                            if url_info not in image_list:
+                                image_list.append(url_info)
 
-                    return saved_comparison_data
+                return saved_comparison_data
             except Exception as e:
                 console.print(f"[yellow]Error loading saved comparison data: {e}")
 
@@ -177,8 +179,8 @@ class ComparisonManager:
         self.meta["comparison_groups"] = meta_comparisons
 
         try:
-            with open(comparison_data_file, 'w') as f:
-                json.dump(meta_comparisons, f, indent=4)
+            comparison_json = json.dumps(meta_comparisons, indent=4)
+            await asyncio.to_thread(Path(comparison_data_file).write_text, comparison_json)
             if self.meta.get('debug'):
                 console.print(f"[cyan]Saved comparison data to {comparison_data_file}")
         except Exception as e:

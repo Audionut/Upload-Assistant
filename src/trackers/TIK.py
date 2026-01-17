@@ -100,8 +100,9 @@ class TIK(UNIT3D):
         meta: Meta,
         category: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_name = str(meta.get('category', ''))
         foreign = bool(meta.get('foreign', False))
         opera = bool(meta.get('opera', False))
@@ -139,8 +140,9 @@ class TIK(UNIT3D):
         meta: Meta,
         type: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         disctype = meta.get('disctype', None)
         type_id_map = {
             'Custom': '1',
@@ -174,8 +176,9 @@ class TIK(UNIT3D):
         meta: Meta,
         resolution: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             'Other': '10',
             '4320p': '1',

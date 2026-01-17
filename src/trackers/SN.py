@@ -2,8 +2,8 @@
 import asyncio
 from typing import Any, Optional, cast
 
+import aiofiles
 import httpx
-import requests
 
 from cogs.redaction import Redaction
 from src.console import console
@@ -34,7 +34,7 @@ class SN:
         }.get(type, '0')
         return type_id
 
-    async def upload(self, meta: Meta, disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         # await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
@@ -74,26 +74,26 @@ class SN:
         bd_dump: Optional[str]
         if meta.get('bdinfo') is not None:
             mi_dump = None
-            with open(
+            async with aiofiles.open(
                 f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt",
                 encoding='utf-8',
             ) as bd_file:
-                bd_dump = bd_file.read()
+                bd_dump = await bd_file.read()
         else:
-            with open(
+            async with aiofiles.open(
                 f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt",
                 encoding='utf-8',
             ) as mi_file:
-                mi_dump = mi_file.read()
+                mi_dump = await mi_file.read()
             bd_dump = None
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
             encoding='utf-8',
         ) as desc_file:
-            desc = desc_file.read()
+            desc = await desc_file.read()
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as f:
-            tfile = f.read()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb') as f:
+            tfile = await f.read()
 
         # uploading torrent file.
         files = {
@@ -118,7 +118,12 @@ class SN:
         }
 
         if not bool(meta.get('debug')):
-            response = requests.request("POST", url=self.upload_url, data=data, files=files, timeout=30)
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(self.upload_url, data=data, files=files)
+            except httpx.RequestError as e:
+                console.print(f"[red]Request failed with error: {e}")
+                return False
 
             try:
                 if response.json().get('success'):
@@ -159,28 +164,34 @@ class SN:
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta: Meta) -> None:
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
             encoding='utf-8',
         ) as base_file:
-            base = base_file.read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
-            desc.write(base)
-            images = cast(list[dict[str, Any]], meta.get('image_list', []))
-            if images:
-                desc.write("[center]")
-                for image in images:
-                    web_url = image.get('web_url')
-                    img_url = image.get('img_url')
-                    if not web_url or not img_url:
-                        continue
-                    desc.write(f"[url={web_url}][img=720]{img_url}[/img][/url]")
-                desc.write("[/center]")
-            desc.write(f"\n[center][url={self.forum_link}]Simplicity, Socializing and Sharing![/url][/center]")
-            desc.close()
+            base = await base_file.read()
+
+        parts: list[str] = [base]
+        images = cast(list[dict[str, Any]], meta.get('image_list', []))
+        if images:
+            parts.append("[center]")
+            for image in images:
+                web_url = image.get('web_url')
+                img_url = image.get('img_url')
+                if not web_url or not img_url:
+                    continue
+                parts.append(f"[url={web_url}][img=720]{img_url}[/img][/url]")
+            parts.append("[/center]")
+        parts.append(f"\n[center][url={self.forum_link}]Simplicity, Socializing and Sharing![/url][/center]")
+
+        async with aiofiles.open(
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
+            'w',
+            encoding='utf-8',
+        ) as desc:
+            await desc.write("".join(parts))
         return
 
-    async def search_existing(self, meta: Meta, disctype: str) -> list[str]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         dupes: list[str] = []
         api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         params: dict[str, str] = {

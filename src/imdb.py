@@ -3,7 +3,7 @@ import asyncio
 import json
 import sys
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Optional, Union, cast
 
@@ -451,7 +451,7 @@ class ImdbManager:
         imdb_info['sound_mixes'] = [sm.get('text', '') for sm in sound_mixes if 'text' in sm]
 
         episodes = cast(list[dict[str, Any]], imdb_info.get('episodes', []))
-        current_year = datetime.now().year
+        current_year = datetime.now(timezone.utc).year
         release_years = [
             episode['release_year']
             for episode in episodes
@@ -478,7 +478,7 @@ class ImdbManager:
         category: Optional[str] = None,
         debug: bool = False,
         secondary_title: Optional[str] = None,
-        path: Optional[str] = None,
+        _path: Optional[str] = None,
         untouched_filename: Optional[str] = None,
         attempted: Optional[int] = 0,
         duration: Optional[Union[str, int]] = None,

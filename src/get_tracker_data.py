@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
@@ -41,8 +42,8 @@ class TrackerDataManager:
         timestamp_file = os.path.join(f"{base_dir}", "data", "banned", "tracker_timestamps.json")
         try:
             if os.path.exists(timestamp_file):
-                with open(timestamp_file) as f:
-                    return cast(dict[str, float], json.load(f))
+                timestamps_text = await asyncio.to_thread(Path(timestamp_file).read_text)
+                return cast(dict[str, float], json.loads(timestamps_text))
             return {}
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load tracker timestamps: {e}[/yellow]")
@@ -57,8 +58,8 @@ class TrackerDataManager:
             timestamps = await self.get_tracker_timestamps(base_dir)
             timestamps[tracker_name] = time.time()
 
-            with open(timestamp_file, 'w') as f:
-                json.dump(timestamps, f, indent=2)
+            timestamps_text = json.dumps(timestamps, indent=2)
+            await asyncio.to_thread(Path(timestamp_file).write_text, timestamps_text)
 
             if debug:
                 console.print(f"[yellow]Saved timestamp for {tracker_name} - will be available again in 60 seconds[/yellow]")
@@ -73,6 +74,7 @@ class TrackerDataManager:
         debug: bool = False,
     ) -> tuple[list[str], list[tuple[str, float]]]:
         """Get trackers that are available (60+ seconds since last processed)"""
+        _ = debug
         timestamps = await self.get_tracker_timestamps(base_dir)
         current_time = time.time()
         available: list[str] = []
@@ -93,7 +95,7 @@ class TrackerDataManager:
 
     async def get_tracker_data(
         self,
-        video: Any,
+        _video: Any,
         meta: dict[str, Any],
         search_term: Optional[str] = None,
         search_file_folder: Optional[str] = None,

@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import asyncio
-from typing import Any
+from typing import Any, Optional
 
 from src.console import console
 from src.torrentcreate import TorrentCreator
@@ -35,10 +35,11 @@ class TOS(UNIT3D):
     async def get_category_id(
         self,
         meta: dict[str, Any],
-        category: str = "",
+        category: Optional[str] = None,
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         tags_lower = meta["tag"].lower()
         if "vostfr" in tags_lower or "subfrench" in tags_lower:
             category_id = "9" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "6", "TV": "7"}.get(meta["category"], "0")
@@ -49,10 +50,11 @@ class TOS(UNIT3D):
     async def get_type_id(
         self,
         meta: dict[str, Any],
-        type: str = "",
+        type: Optional[str] = None,
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         if meta["is_disc"] == "DVD":
             type_id = "7"
         elif meta.get("3D") == "3D":

@@ -1005,7 +1005,7 @@ if __name__ == "__main__":
                 missing_discord_keys: list[str] = []
                 missing_default_keys: list[str] = []
                 if "DEFAULT" in example_config and "DEFAULT" in config_data:
-                    def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, path: str = "") -> None:
+                    def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, _path: str = "") -> None:
                         for key in example_section:
                             if key not in existing_section:
                                 missing_default_keys.append(key)
@@ -1056,7 +1056,7 @@ if __name__ == "__main__":
             config_data = existing_config.copy()
             missing_default_keys: list[str] = []
             if "DEFAULT" in example_config and "DEFAULT" in config_data:
-                def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, path: str = "") -> None:
+                def find_missing_default_keys(example_section: ConfigDict, existing_section: ConfigDict, _path: str = "") -> None:
                     for key in example_section:
                         if key not in existing_section:
                             missing_default_keys.append(key)

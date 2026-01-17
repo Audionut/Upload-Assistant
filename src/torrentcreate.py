@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping, MutableMapping, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, Union
 
 import cli_ui
@@ -62,6 +62,7 @@ class CustomTorrent(torf.Torrent):
 
     @piece_size_min.setter
     def piece_size_min(self, piece_size_min: Optional[int]) -> None:
+        _ = piece_size_min
         return None
 
     @property
@@ -70,6 +71,7 @@ class CustomTorrent(torf.Torrent):
 
     @piece_size_max.setter
     def piece_size_max(self, piece_size_max: Optional[int]) -> None:
+        _ = piece_size_max
         return None
 
     @property
@@ -86,7 +88,7 @@ class CustomTorrent(torf.Torrent):
         self._piece_size = value
         self.metainfo['info']['piece length'] = value
 
-    def validate_piece_size(self, meta: Optional[Mapping[str, Any]] = None) -> None:
+    def validate_piece_size(self, _meta: Optional[Mapping[str, Any]] = None) -> None:
         if self._precalculated_piece_size is not None:
             self._piece_size = self._precalculated_piece_size
             self.metainfo['info']['piece length'] = self._precalculated_piece_size
@@ -404,7 +406,7 @@ class TorrentCreator:
                     private=True,
                     exclude_globs=exclude or [],
                     include_globs=include or [],
-                    creation_date=datetime.now(),
+                    creation_date=datetime.now(timezone.utc),
                     comment="Created by Upload Assistant",
                     created_by="Upload Assistant",
                     piece_size=piece_size
@@ -434,7 +436,7 @@ class TorrentCreator:
                     console.print(f"[cyan]create_torrent end | in-flight={cls._create_torrent_inflight}[/cyan]")
 
     @staticmethod
-    def torf_cb(torrent: Torrent, filepath: str, pieces_done: int, pieces_total: int) -> None:
+    def torf_cb(torrent: Torrent, _filepath: str, pieces_done: int, pieces_total: int) -> None:
         if pieces_done == 0:
             TorrentCreator._torf_start_time = time.time()  # Reset start time when hashing starts
 

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from difflib import SequenceMatcher
 from typing import Any, Callable, Optional, Union, cast
 
+import aiofiles
 import cli_ui
 
 from cogs.redaction import Redaction
@@ -418,22 +419,21 @@ class UploadHelper:
                 }
 
                 # Append to JSON file (as a list of entries)
+                db_data_list: list[dict[str, Any]] = []
                 if os.path.exists(json_file_path):
-                    with open(json_file_path, encoding='utf-8') as f:
+                    async with aiofiles.open(json_file_path, encoding='utf-8') as f:
                         try:
-                            db_data = json.load(f)
-                            if not isinstance(db_data, list):
-                                db_data = []
+                            file_contents = await f.read()
+                            if file_contents:
+                                parsed_data = json.loads(file_contents)
+                                if isinstance(parsed_data, list):
+                                    db_data_list = cast(list[dict[str, Any]], parsed_data)
                         except Exception:
-                            db_data = []
-                else:
-                    db_data = []
-
-                db_data_list: list[dict[str, Any]] = cast(list[dict[str, Any]], db_data)
+                            db_data_list = []
                 db_data_list.append(db_check_entry)
 
-                with open(json_file_path, 'w', encoding='utf-8') as f:
-                    json.dump(db_data_list, f, indent=2, ensure_ascii=False)
+                async with aiofiles.open(json_file_path, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(db_data_list, indent=2, ensure_ascii=False))
                 return True
 
         return confirm

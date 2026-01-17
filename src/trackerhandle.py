@@ -24,8 +24,6 @@ StatusDict: TypeAlias = dict[str, Any]
 async def check_mod_q_and_draft(
     tracker_class: Any,
     meta: Meta,
-    debug: str,
-    disctype: Optional[str],
 ) -> tuple[Optional[str], Optional[str], dict[str, Any]]:
     tracker_capabilities = {
         'AITHER': {'mod_q': True, 'draft': False},
@@ -121,7 +119,6 @@ async def process_trackers(
         if str(meta.get('name', '')).endswith('DUPE?'):
             meta['name'] = str(meta.get('name', '')).replace(' DUPE?', '')
 
-        debug = "(DEBUG)" if meta['debug'] else ""
         disctype = cast(Optional[str], meta.get('disctype'))
         disctype_value = str(disctype) if disctype is not None else ""
         tracker = tracker.replace(" ", "").upper().strip()
@@ -131,7 +128,7 @@ async def process_trackers(
             upload_status = cast(Mapping[str, Any], tracker_status.get(tracker, {})).get('upload', False)
             if upload_status:
                 try:
-                    modq, draft, tracker_caps = await check_mod_q_and_draft(tracker_class, meta, debug, disctype)
+                    modq, draft, tracker_caps = await check_mod_q_and_draft(tracker_class, meta)
                     if tracker_caps.get('mod_q') and modq == "Yes":
                         console.print(f"{tracker} (modq: {modq})")
                     if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:

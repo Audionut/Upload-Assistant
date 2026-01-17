@@ -1,6 +1,8 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import traceback
+from pathlib import Path
 from typing import Any, cast
 
 import guessit
@@ -17,8 +19,8 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
     mi: dict[str, Any] = {}
     if meta.get('is_disc') != "BDMV":
         try:
-            with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
-                mi = json.load(f)
+            mi_text = await asyncio.to_thread(Path(f"{base_dir}/tmp/{folder_id}/MediaInfo.json").read_text, encoding="utf-8")
+            mi = json.loads(mi_text)
         except Exception:
             if meta['debug']:
                 console.print("No mediainfo.json")

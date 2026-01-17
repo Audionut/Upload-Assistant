@@ -29,6 +29,7 @@ class UTP(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_name = meta['category']
         edition = meta.get('edition', '')
         category_id = {
@@ -47,6 +48,7 @@ class UTP(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             '4320p': '1',
             '2160p': '2',

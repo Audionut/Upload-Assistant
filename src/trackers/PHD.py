@@ -1,5 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
@@ -60,7 +60,7 @@ class PHD(AZTrackerBase):
             warnings.append("Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
         year_value = meta.get('year')
-        current_year = datetime.now().year
+        current_year = datetime.now(timezone.utc).year
         year = int(year_value) if year_value and str(year_value).isdigit() else None
         if year is not None:
             is_older_than_50_years = (current_year - year) >= 50

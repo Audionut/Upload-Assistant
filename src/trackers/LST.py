@@ -39,6 +39,8 @@ class LST(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (reverse, mapping_only)
+        type = str(meta.get('type', '')).upper()
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -47,7 +49,7 @@ class LST(UNIT3D):
             'HDTV': '6',
             'ENCODE': '3',
             'DVDRIP': '3'
-        }.get(meta['type'], '0')
+        }.get(type, '0')
         return {'type_id': type_id}
 
     async def get_additional_data(self, meta: Meta) -> dict[str, Any]:

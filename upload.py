@@ -373,9 +373,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         if meta['debug']:
             console.print(f"Trackers list before editing: {meta['trackers']}")
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-            json.dump(meta, f, indent=4)
-            f.close()
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(meta, indent=4))
 
     if meta.get('emby_debug', False):
         meta['original_imdb'] = meta.get('imdb_id', None)
@@ -506,8 +505,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         meta['tracker_status'][tracker]['skip_upload'] = False
 
         await asyncio.sleep(0.2)
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-            json.dump(meta, f, indent=4)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(meta, indent=4))
         await asyncio.sleep(0.2)
 
         try:
@@ -618,8 +617,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
                 if os.path.exists(image_data_file) and not meta.get('image_list'):
                     try:
-                        with open(image_data_file) as img_file:
-                            image_data = json.load(img_file)
+                        async with aiofiles.open(image_data_file, encoding='utf-8') as img_file:
+                            content = await img_file.read()
+                            image_data = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
 
                             if 'image_list' in image_data and not meta.get('image_list'):
                                 meta['image_list'] = image_data['image_list']
@@ -643,8 +643,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                     menus_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/menu_images.json"
                     if os.path.exists(menus_data_file):
                         try:
-                            with open(menus_data_file) as menus_file:
-                                menu_image_file = json.load(menus_file)
+                            async with aiofiles.open(menus_data_file, encoding='utf-8') as menus_file:
+                                content = await menus_file.read()
+                                menu_image_file = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
 
                                 if 'menu_images' in menu_image_file and not meta.get('menu_images'):
                                     meta['menu_images'] = menu_image_file['menu_images']
@@ -913,8 +914,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 elif meta.get('skip_imghost_upload', False) is True and meta.get('image_list', False) is False:
                     meta['image_list'] = []
 
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-                    json.dump(meta, f, indent=4)
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(meta, indent=4))
 
                 if 'image_list' in meta and meta['image_list']:
                     try:
@@ -925,8 +926,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                             "tonemapped": meta.get('tonemapped', False)
                         }
 
-                        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json", 'w') as img_file:
-                            json.dump(image_data, img_file, indent=4)
+                        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json", 'w', encoding='utf-8') as img_file:
+                            await img_file.write(json.dumps(image_data, indent=4))
 
                         if meta.get('debug'):
                             console.print(f"[cyan]Saved {len(image_list)} images to image_data.json")
@@ -995,8 +996,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         meta = await gen_desc(meta, takescreens_manager, uploadscreens_manager)
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-            json.dump(meta, f, indent=4)
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(meta, indent=4))
 
 
 async def cleanup_screenshot_temp_files(meta: Meta) -> None:
@@ -1019,9 +1020,10 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
     Adds a processed file to the log, deduplicating and always appending to the end.
     """
     if os.path.exists(log_file):
-        with open(log_file) as f:
+        async with aiofiles.open(log_file, encoding='utf-8') as f:
             try:
-                loaded: Any = json.load(f)
+                content = await f.read()
+                loaded: Any = json.loads(content) if content.strip() else []
                 processed_files = cast(list[Any], loaded) if isinstance(loaded, list) else []
             except Exception:
                 processed_files = []
@@ -1031,8 +1033,8 @@ async def save_processed_file(log_file: str, file_path: str) -> None:
     processed_files_clean: list[str] = [str(entry) for entry in processed_files if entry != file_path]
     processed_files_clean.append(file_path)
 
-    with open(log_file, "w") as f:
-        json.dump(processed_files_clean, f, indent=4)
+    async with aiofiles.open(log_file, "w", encoding='utf-8') as f:
+        await f.write(json.dumps(processed_files_clean, indent=4))
 
 
 def get_local_version(version_file: str) -> Optional[str]:
@@ -1313,8 +1315,9 @@ async def do_the_thing(base_dir: str) -> None:
                             console.print(f"[yellow]No metadata file found at {meta_file}")
 
                 if keep_meta and os.path.exists(meta_file):
-                    with open(meta_file) as f:
-                        saved_meta = json.load(f)
+                    async with aiofiles.open(meta_file, encoding='utf-8') as f:
+                        content = await f.read()
+                        saved_meta = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
                         console.print("[yellow]Existing metadata file found, it holds cached values")
                         await merge_meta(meta, saved_meta)
 

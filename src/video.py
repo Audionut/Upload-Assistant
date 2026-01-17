@@ -6,6 +6,7 @@ import re
 import sys
 from typing import Any, Optional, cast
 
+import aiofiles
 import cli_ui
 
 from src.cleanup import cleanup_manager
@@ -204,8 +205,8 @@ class VideoManager:
 
     async def get_resolution(self, guess: Any, folder_id: str, base_dir: str) -> tuple[str, bool]:
         hfr = False
-        with open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
-            mi = cast(dict[str, Any], json.load(f))
+        async with aiofiles.open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
+            mi = cast(dict[str, Any], json.loads(await f.read()))
             try:
                 width = mi['media']['track'][1]['Width']
                 height = mi['media']['track'][1]['Height']
@@ -263,7 +264,7 @@ class VideoManager:
                 break
         return res
 
-    async def get_type(self, video: str, scene: bool, is_disc: Optional[str], meta: dict[str, Any]) -> str:
+    async def get_type(self, video: str, _scene: bool, is_disc: Optional[str], meta: dict[str, Any]) -> str:
         if meta.get('manual_type'):
             type = cast(str, meta.get('manual_type'))
         else:
@@ -287,7 +288,7 @@ class VideoManager:
                 type = "ENCODE"
         return type
 
-    async def is_3d(self, mi: Any, bdinfo: Optional[Any]) -> str:
+    async def is_3d(self, bdinfo: Optional[Any]) -> str:
         if bdinfo is not None:
             if bdinfo['video'][0]['3d'] != "":
                 return "3D"

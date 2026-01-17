@@ -36,6 +36,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -50,6 +51,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -68,6 +70,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -86,7 +89,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # If there are tracker specific checks to be done before upload, add them here
     # Is it a movie only tracker? Are concerts banned? Etc.
     # If no checks are necessary, remove this function
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    async def get_additional_checks(self, _meta: Meta) -> bool:
         should_continue = True
         return should_continue
 

@@ -203,18 +203,22 @@ class COMMON:
         existing_data: dict[str, Any] = {}
         if os.path.exists(output_file):
             try:
-                with open(output_file, encoding='utf-8') as f:
-                    loaded_data = json.load(f)
+                async with aiofiles.open(output_file, encoding='utf-8') as f:
+                    content = await f.read()
+                    loaded_data: dict[str, Any] = {}
+                    if content.strip():
+                        parsed = json.loads(content)
+                        if isinstance(parsed, dict):
+                            loaded_data = cast(dict[str, Any], parsed)
+                        else:
+                            console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
+
                     # Validate schema: must have 'keys' as dict and 'total_count' as int
-                    if isinstance(loaded_data, dict):
-                        loaded_dict = cast(dict[str, Any], loaded_data)
-                        if (
-                            isinstance(loaded_dict.get('keys'), dict)
-                            and isinstance(loaded_dict.get('total_count'), int)
-                        ):
-                            existing_data = loaded_dict
-                    else:
-                        console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
+                    if (
+                        isinstance(loaded_data.get('keys'), dict)
+                        and isinstance(loaded_data.get('total_count'), int)
+                    ):
+                        existing_data = loaded_data
             except (json.JSONDecodeError, OSError) as e:
                 console.print(f"[yellow]Warning: Could not load existing image data: {str(e)}[/yellow]")
 
@@ -265,8 +269,8 @@ class COMMON:
         existing_data["total_count"] = total
 
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, indent=2)
+            async with aiofiles.open(output_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(existing_data, indent=2))
 
             if meta['debug']:
                 console.print(f"[green]Saved {len(image_list)} new images for key '{image_key}' (total: {existing_data['total_count']}):[/green]")
@@ -658,12 +662,14 @@ class COMMON:
         compatible with requests."""
 
         cookies: dict[str, str] = {}
-        with open(cookiefile) as fp:
-            for line in fp:
-                if not line.startswith(("# ", "\n", "#\n")):
+        async with aiofiles.open(cookiefile) as fp:
+            content = await fp.read()
+            for line in content.splitlines():
+                if line.strip() and not line.startswith(("# ", "#")):
                     lineFields = re.split(' |\t', line.strip())
                     lineFields = [x for x in lineFields if x != ""]
-                    cookies[lineFields[5]] = lineFields[6]
+                    if len(lineFields) >= 7:
+                        cookies[lineFields[5]] = lineFields[6]
         return cookies
 
     async def ptgen(self, meta: dict[str, Any], ptgen_site: str = "", ptgen_retry: int = 3) -> str:
@@ -723,8 +729,8 @@ class COMMON:
                     return ""
 
                 meta['ptgen'] = ptgen_json
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-                    json.dump(meta, f, indent=4)
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(meta, indent=4))
 
                 ptgen_text = ptgen_json.get('format', '')
                 if "[/img]" in ptgen_text:

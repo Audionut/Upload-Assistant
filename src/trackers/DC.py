@@ -31,8 +31,8 @@ class DC:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            with open(mi_path, encoding='utf-8') as f:
-                mediainfo = f.read()
+            async with aiofiles.open(mi_path, encoding='utf-8') as f:
+                mediainfo = await f.read()
 
         return mediainfo
 
@@ -269,30 +269,31 @@ class DC:
                 await self.common.create_torrent_for_upload(meta, self.tracker, 'DigitalCore.club')
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-                with open(torrent_path, 'rb') as torrent_file:
-                    files = {'file': (torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
+                async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+                    torrent_bytes = await torrent_file.read()
+                files = {'file': (torrent_title + '.torrent', torrent_bytes, 'application/x-bittorrent')}
 
-                    response = await self.session.post(upload_url, data=data, files=files, headers=dict(self.session.headers), timeout=90)
-                    response.raise_for_status()
-                    response_json = response.json()
-                    response_data: dict[str, Any] = cast(dict[str, Any], response_json) if isinstance(response_json, dict) else {}
+                response = await self.session.post(upload_url, data=data, files=files, headers=dict(self.session.headers), timeout=90)
+                response.raise_for_status()
+                response_json = response.json()
+                response_data: dict[str, Any] = cast(dict[str, Any], response_json) if isinstance(response_json, dict) else {}
 
-                    if response.status_code == 200 and response_data.get('id'):
-                        torrent_id = str(response_data['id'])
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
-                        meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
+                if response.status_code == 200 and response_data.get('id'):
+                    torrent_id = str(response_data['id'])
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
+                    meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
 
-                        await self.common.download_tracker_torrent(
-                            meta,
-                            self.tracker,
-                            headers=dict(self.session.headers),
-                            downurl=f'{self.api_base_url}/download/{torrent_id}'
-                        )
-                        return True
+                    await self.common.download_tracker_torrent(
+                        meta,
+                        self.tracker,
+                        headers=dict(self.session.headers),
+                        downurl=f'{self.api_base_url}/download/{torrent_id}'
+                    )
+                    return True
 
-                    else:
-                        meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data.get('message', 'Unknown API error.')}"
-                        return False
+                else:
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data.get('message', 'Unknown API error.')}"
+                    return False
 
             except httpx.HTTPStatusError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'

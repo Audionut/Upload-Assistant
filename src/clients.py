@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import urllib.parse
+from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import aiohttp
@@ -322,8 +323,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                         os.makedirs(extracted_torrent_dir, exist_ok=True)
                         torrent_path = os.path.join(extracted_torrent_dir, f"{hash_value_str}.torrent")
 
-                        with open(torrent_path, "wb") as f:
-                            f.write(torrent_file_content)
+                        await asyncio.to_thread(Path(torrent_path).write_bytes, torrent_file_content)
 
                         console.print(f"[green]Successfully saved .torrent file: {torrent_path}")
 
@@ -437,8 +437,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                                     found_hash = None
                                 else:
                                     os.makedirs(extracted_torrent_dir, exist_ok=True)
-                                    with open(found_torrent_path, "wb") as f:
-                                        f.write(torrent_file_content)
+                                    await asyncio.to_thread(Path(found_torrent_path).write_bytes, torrent_file_content)
                                     console.print(f"[green]Successfully saved .torrent file: {found_torrent_path}")
                         except Exception as e:
                             console.print(f"[bold red]Unexpected error fetching .torrent from qBittorrent: {e}")

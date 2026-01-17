@@ -4,6 +4,8 @@ import os
 from collections.abc import Iterable
 from typing import Any, Optional, cast
 
+import aiofiles
+
 from bin.MI.get_linux_mi import download_dvd_mediainfo
 from src.discparse import DiscParse
 
@@ -67,8 +69,13 @@ class DiscInfoManager:
             discs = cast(list[Disc], await cast(Any, self._parser).get_dvdinfo(discs, base_dir=meta['base_dir'], debug=meta['debug']))
         elif is_disc == "HDDVD":
             discs = await self._parser.get_hddvd_info(discs, meta)
-            with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'w', newline="", encoding='utf-8') as export:
-                export.write(discs[0]['evo_mi'])
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt",
+                "w",
+                newline="",
+                encoding="utf-8",
+            ) as export:
+                await export.write(discs[0]['evo_mi'])
 
         discs = sorted(discs, key=lambda d: d['name'])
         return is_disc, videoloc, bdinfo, discs

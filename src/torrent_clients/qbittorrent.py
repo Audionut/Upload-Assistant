@@ -9,6 +9,7 @@ import subprocess
 import traceback
 import urllib.parse
 from collections.abc import Awaitable
+from pathlib import Path
 from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 import aiohttp
@@ -195,8 +196,7 @@ class QbittorrentClientMixin:
                                     )
                                 torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
-                                with open(torrent_file_path, "wb") as f:
-                                    f.write(torrent_file_content)
+                                await asyncio.to_thread(Path(torrent_file_path).write_bytes, torrent_file_content)
 
                                 # Validate the .torrent file before saving as BASE.torrent
                                 valid, _ = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
@@ -497,8 +497,7 @@ class QbittorrentClientMixin:
                     if torrent_file_content is not None:
                         torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
-                        with open(torrent_file_path, "wb") as f:
-                            f.write(torrent_file_content)
+                        await asyncio.to_thread(Path(torrent_file_path).write_bytes, torrent_file_content)
                         if meta['debug']:
                             console.print(f"[green]Successfully saved .torrent file: {torrent_file_path}")
                     else:
@@ -553,7 +552,7 @@ class QbittorrentClientMixin:
             if created_session and qbt_session is not None:
                 await qbt_session.close()
 
-    async def qbittorrent(self, path: str, torrent: Torrent, local_path: str, remote_path: str, client: dict[str, Any], is_disc: bool, filelist: list[str], meta: dict[str, Any], tracker: str, cross: bool = False) -> None:
+    async def qbittorrent(self, path: str, torrent: Torrent, local_path: str, remote_path: str, client: dict[str, Any], _is_disc: bool, filelist: list[str], meta: dict[str, Any], tracker: str, cross: bool = False) -> None:
         qbt_proxy_url = ""
         if meta.get('keep_folder'):
             path = os.path.dirname(path)
@@ -599,15 +598,15 @@ class QbittorrentClientMixin:
             try:
                 # Read mount points from /proc/mounts or use 'mount' command output
                 if os.path.exists('/proc/mounts'):
-                    with open('/proc/mounts') as f:
-                        for line in f:
-                            parts = line.split()
-                            if len(parts) >= 2:
-                                mount_point = parts[1]
-                                mounted_volumes.append(mount_point)
+                    mounts_text = await asyncio.to_thread(Path('/proc/mounts').read_text)
+                    for line in mounts_text.splitlines():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            mount_point = parts[1]
+                            mounted_volumes.append(mount_point)
                 else:
                     # Fall back to mount command if /proc/mounts doesn't exist
-                    output = subprocess.check_output(['mount'], text=True)
+                    output = await asyncio.to_thread(subprocess.check_output, ['mount'], text=True)
                     for line in output.splitlines():
                         parts = line.split()
                         if len(parts) >= 3:
@@ -1232,7 +1231,7 @@ class QbittorrentClientMixin:
 
         matching_torrents.sort(key=get_priority_score)
 
-    async def _search_single_qbit_client(self, client_config: dict[str, Any], content_path: str, meta: dict[str, Any], client_name: str) -> list[dict[str, Any]]:
+    async def _search_single_qbit_client(self, client_config: dict[str, Any], _content_path: str, meta: dict[str, Any], client_name: str) -> list[dict[str, Any]]:
         """Search a single qBittorrent client for matching torrents."""
         qbt_session: Optional[aiohttp.ClientSession] = None
         qbt_client: Optional[qbittorrentapi.Client] = None
@@ -1565,8 +1564,7 @@ class QbittorrentClientMixin:
                             if torrent_file_content is not None:
                                 torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
 
-                                with open(torrent_file_path, "wb") as f:
-                                    f.write(torrent_file_content)
+                                await asyncio.to_thread(Path(torrent_file_path).write_bytes, torrent_file_content)
 
                                 if meta.get('debug', False):
                                     console.print(f"[green]Exported .torrent file to: {torrent_file_path}")
@@ -1675,8 +1673,7 @@ class QbittorrentClientMixin:
                                     if alt_torrent_file_content is not None:
                                         alt_torrent_file_path = os.path.join(extracted_torrent_dir, f"{alt_torrent_hash}.torrent")
 
-                                        with open(alt_torrent_file_path, "wb") as f:
-                                            f.write(alt_torrent_file_content)
+                                        await asyncio.to_thread(Path(alt_torrent_file_path).write_bytes, alt_torrent_file_content)
 
                                         if meta.get('debug', False):
                                             console.print(f"[green]Exported alternative .torrent file to: {alt_torrent_file_path}")

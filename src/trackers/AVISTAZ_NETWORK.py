@@ -44,7 +44,7 @@ class AZTrackerBase:
         self.media_code = ''
         self.upload_url_step2 = ''
 
-    async def rules(self, meta: dict[str, Any]) -> str:
+    async def rules(self, _meta: dict[str, Any]) -> str:
         return ''
 
     def get_resolution(self, meta: dict[str, Any]) -> str:
@@ -191,8 +191,8 @@ class AZTrackerBase:
                 console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Failed_DB_attempt.html"
                 os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
+                async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                    await f.write(response.text)
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
@@ -343,8 +343,8 @@ class AZTrackerBase:
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
 
         if os.path.exists(info_file_path):
-            with open(info_file_path, encoding='utf-8') as f:
-                file_info = f.read()
+            async with aiofiles.open(info_file_path, encoding='utf-8') as f:
+                file_info = await f.read()
 
         return file_info
 
@@ -371,8 +371,8 @@ class AZTrackerBase:
         else:
             try:
                 media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
-                with open(media_info_path, encoding='utf-8') as f:
-                    data = json.load(f)
+                async with aiofiles.open(media_info_path, encoding='utf-8') as f:
+                    data = json.loads(await f.read())
 
                 tracks = data.get('media', {}).get('track', [])
 
@@ -426,7 +426,7 @@ class AZTrackerBase:
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta: dict[str, Any], referer: str, image_bytes: bytes, filename: str) -> Optional[str]:
+    async def img_host(self, _meta: dict[str, Any], referer: str, image_bytes: bytes, filename: str) -> Optional[str]:
         upload_url = f'{self.base_url}/ajax/image/upload'
 
         headers = {
@@ -479,8 +479,8 @@ class AZTrackerBase:
         ][:12]  # minimum number of screenshots is 3, so we can allow up to 12 menu images
 
         async def upload_local_file(path: Path):
-            with open(path, 'rb') as f:
-                image_bytes = f.read()
+            async with aiofiles.open(path, 'rb') as f:
+                image_bytes = await f.read()
             return await self.img_host(meta, self.tracker, image_bytes, path.name)
 
         async def upload_remote_file(url: str):
@@ -719,35 +719,36 @@ class AZTrackerBase:
                 upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-                with open(torrent_path, 'rb') as torrent_file:
-                    files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                    task_response = await self.session.post(upload_url_step1, data=data, files=files)
+                async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+                    torrent_bytes = await torrent_file.read()
+                files = {'torrent_file': (os.path.basename(torrent_path), torrent_bytes, 'application/x-bittorrent')}
+                task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
-                    if task_response.status_code == 302 and 'Location' in task_response.headers:
-                        redirect_url = task_response.headers['Location']
+                if task_response.status_code == 302 and 'Location' in task_response.headers:
+                    redirect_url = task_response.headers['Location']
 
-                        match = re.search(r'/(\d+)$', redirect_url)
-                        if not match:
-                            console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
-                            meta['skipping'] = f'{self.tracker}'
-                            return {}
+                    match = re.search(r'/(\d+)$', redirect_url)
+                    if not match:
+                        console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
+                        console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
+                        meta['skipping'] = f'{self.tracker}'
+                        return {}
 
-                        task_id = match.group(1)
+                    task_id = match.group(1)
 
-                        task: dict[str, Any] = {
-                            'task_id': task_id,
-                            'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
-                            'redirect_url': redirect_url,
-                        }
+                    task: dict[str, Any] = {
+                        'task_id': task_id,
+                        'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
+                        'redirect_url': redirect_url,
+                    }
 
-                        return task
+                    return task
 
-                    else:
-                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
-                        with open(failure_path, 'w', encoding='utf-8') as f:
-                            f.write(task_response.text)
-                        status_message = f'''[red]Step 1 of upload failed to {self.tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
+                else:
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
+                    async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                        await f.write(task_response.text)
+                    status_message = f'''[red]Step 1 of upload failed to {self.tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
                                             [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]'''
 
             except Exception as e:
@@ -1015,8 +1016,8 @@ class AZTrackerBase:
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
-                    with open(failure_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
+                    async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                        await f.write(response.text)
 
                     status_message = (
                         f"data error - It may have uploaded, go check\n"

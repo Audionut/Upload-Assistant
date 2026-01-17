@@ -30,6 +30,7 @@ class LT(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -146,8 +147,9 @@ class LT(UNIT3D):
 
         return data
 
-    async def get_distributor_ids(self, meta: Meta) -> dict[str, str]:
+    async def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
         return {}
 
     async def get_region_id(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}

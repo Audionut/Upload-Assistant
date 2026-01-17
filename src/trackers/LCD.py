@@ -98,6 +98,7 @@ class LCD(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -114,6 +115,7 @@ class LCD(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -131,6 +133,7 @@ class LCD(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             # '8640p':'10',
             '4320p': '1',

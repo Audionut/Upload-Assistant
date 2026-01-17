@@ -5,9 +5,9 @@ import re
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
+import aiofiles
 import cli_ui
 import httpx
-import requests
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 
@@ -113,7 +113,7 @@ class TTG:
             # 60 = TV Shows
         return type_id
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
@@ -141,73 +141,76 @@ class TTG:
             else f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
         )
 
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
             encoding='utf-8',
         ) as desc_file:
-            ttg_desc = desc_file.read()
+            ttg_desc = await desc_file.read()
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         filelist = cast(list[Any], meta.get('filelist', []))
-        with open(torrent_path, 'rb') as torrentFile:
-            if len(filelist) == 1:
-                torrentFileName = unidecode(os.path.basename(str(meta.get('video', ''))).replace(' ', '.'))
+        async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+            torrent_bytes = await torrent_file.read()
+        if len(filelist) == 1:
+            torrentFileName = unidecode(os.path.basename(str(meta.get('video', ''))).replace(' ', '.'))
+        else:
+            torrentFileName = unidecode(os.path.basename(str(meta.get('path', ''))).replace(' ', '.'))
+        async with aiofiles.open(mi_path, encoding='utf-8') as mi_dump:
+            mi_text = await mi_dump.read()
+        files = {
+            'file': (f"{torrentFileName}.torrent", torrent_bytes, "application/x-bittorent"),
+            'nfo': ("torrent.nfo", mi_text)
+        }
+        data: dict[str, Any] = {
+            'MAX_FILE_SIZE': '4000000',
+            'team': '',
+            'hr': 'no',
+            'name': ttg_name,
+            'type': await self.get_type_id(meta),
+            'descr': ttg_desc.rstrip(),
+
+            'anonymity': anon,
+            'nodistr': 'no',
+
+        }
+        url = "https://totheglory.im/takeupload.php"
+        if int(meta.get('imdb_id', 0) or 0) != 0:
+            data['imdb_c'] = f"tt{meta.get('imdb')}"
+
+        # Submit
+        if meta.get('debug'):
+            console.print(url)
+            console.print(data)
+            tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
+            tracker_status.setdefault(self.tracker, {})
+            tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
+        else:
+            cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
+            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # type: ignore[reportPrivateUsage]
+            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            async with httpx.AsyncClient(cookies=cookies, follow_redirects=True, timeout=60.0) as client:
+                up = await client.post(url=url, data=data, files=files)
+
+            if str(up.url).startswith("https://totheglory.im/details.php?id="):
+                tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
+                tracker_status.setdefault(self.tracker, {})
+                tracker_status[self.tracker]['status_message'] = str(up.url)
+                id_match = re.search(r"(id=)(\d+)", urlparse(str(up.url)).query)
+                if not id_match:
+                    raise UploadException(  # noqa #F405
+                        f"Upload to TTG succeeded but torrent id missing from URL {up.url}",
+                        'red',
+                    )
+                torrent_id = id_match.group(2)
+                await self.download_new_torrent(torrent_id, torrent_path)
+                return True
             else:
-                torrentFileName = unidecode(os.path.basename(str(meta.get('path', ''))).replace(' ', '.'))
-            with open(mi_path, encoding='utf-8') as mi_dump:
-                files = {
-                    'file': (f"{torrentFileName}.torrent", torrentFile, "application/x-bittorent"),
-                    'nfo': ("torrent.nfo", mi_dump)
-                }
-                data: dict[str, Any] = {
-                    'MAX_FILE_SIZE': '4000000',
-                    'team': '',
-                    'hr': 'no',
-                    'name': ttg_name,
-                    'type': await self.get_type_id(meta),
-                    'descr': ttg_desc.rstrip(),
+                console.print(data)
+                console.print("\n\n")
+                raise UploadException(f"Upload to TTG Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa #F405
 
-                    'anonymity': anon,
-                    'nodistr': 'no',
-
-                }
-                url = "https://totheglory.im/takeupload.php"
-                if int(meta.get('imdb_id', 0) or 0) != 0:
-                    data['imdb_c'] = f"tt{meta.get('imdb')}"
-
-                # Submit
-                if meta.get('debug'):
-                    console.print(url)
-                    console.print(data)
-                    tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
-                    tracker_status.setdefault(self.tracker, {})
-                    tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                    await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
-                    return True  # Debug mode - simulated success
-                else:
-                    with requests.Session() as session:
-                        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
-                        self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # type: ignore[reportPrivateUsage]
-                        up = session.post(url=url, data=data, files=files, timeout=60)
-
-                        if up.url.startswith("https://totheglory.im/details.php?id="):
-                            tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
-                            tracker_status.setdefault(self.tracker, {})
-                            tracker_status[self.tracker]['status_message'] = up.url
-                            id_match = re.search(r"(id=)(\d+)", urlparse(up.url).query)
-                            if not id_match:
-                                raise UploadException(  # noqa #F405
-                                    f"Upload to TTG succeeded but torrent id missing from URL {up.url}",
-                                    'red',
-                                )
-                            torrent_id = id_match.group(2)
-                            await self.download_new_torrent(torrent_id, torrent_path)
-                            return True
-                        else:
-                            console.print(data)
-                            console.print("\n\n")
-                            raise UploadException(f"Upload to TTG Failed: result URL {up.url} ({up.status_code}) was not expected", 'red')  # noqa #F405
-
-    async def search_existing(self, meta: Meta, disctype: str) -> list[str]:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         dupes: list[str] = []
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
         if not os.path.exists(cookiefile):
@@ -273,9 +276,10 @@ class TTG:
     async def validate_cookies(self, meta: Meta, cookiefile: str) -> bool:
         url = "https://totheglory.im"
         if os.path.exists(cookiefile):
-            with requests.Session() as session:
-                self.cookie_validator._load_cookies_secure(session, cookiefile, self.tracker)  # type: ignore[reportPrivateUsage]
-                resp = session.get(url=url, timeout=30)
+            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # type: ignore[reportPrivateUsage]
+            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
+                resp = await client.get(url=url)
                 if meta.get('debug'):
                     console.print('[cyan]Cookies:')
                     console.print(resp.url)
@@ -291,10 +295,10 @@ class TTG:
             'passid': self.passid,
             'passan': self.passan
         }
-        with requests.Session() as session:
-            response = session.post(url, data=data, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.post(url, data=data)
             await asyncio.sleep(0.5)
-            if response.url.endswith('2fa.php'):
+            if str(response.url).endswith('2fa.php'):
                 soup = BeautifulSoup(response.text, 'html.parser')
                 token_input = soup.find('input', {'name': 'authenticity_token'})
                 auth_token = token_input.get('value') if token_input else None
@@ -306,11 +310,11 @@ class TTG:
                     'uid': self.uid
                 }
                 two_factor_url = "https://totheglory.im/take2fa.php"
-                response = session.post(two_factor_url, data=two_factor_data)
+                response = await client.post(two_factor_url, data=two_factor_data)
                 await asyncio.sleep(0.5)
-            if response.url.endswith('my.php'):
+            if str(response.url).endswith('my.php'):
                 console.print('[green]Successfully logged into TTG')
-                self.cookie_validator._save_cookies_secure(session.cookies, cookiefile)  # type: ignore[reportPrivateUsage]
+                self.cookie_validator._save_cookies_secure(client.cookies.jar, cookiefile)  # type: ignore[reportPrivateUsage]
             else:
                 console.print('[bold red]Something went wrong')
                 await asyncio.sleep(1)
@@ -319,75 +323,85 @@ class TTG:
         return
 
     async def edit_desc(self, meta: Meta) -> None:
-        with open(
+        async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt",
             encoding='utf-8',
         ) as base_file:
-            base = base_file.read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
-            from src.bbcode import BBCODE
-            from src.trackers.COMMON import COMMON
-            common = COMMON(config=self.config)
-            if int(meta.get('imdb_id', 0) or 0) != 0:
-                ptgen = await common.ptgen(meta)
-                if ptgen.strip() != '':
-                    descfile.write(ptgen)
+            base = await base_file.read()
 
-            # Add This line for all web-dls
-            if meta.get('type') == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None:
-                descfile.write(f"[center][b][color=#ff00ff][size=3]{meta['service_longname']}的无损REMUX片源，没有转码/This release is sourced from {meta['service_longname']} and is not transcoded, just remuxed from the direct {meta['service_longname']} stream[/size][/color][/b][/center]")
-            bbcode = BBCODE()
-            if meta.get('discs', []) != []:
-                discs = cast(list[dict[str, Any]], meta.get('discs', []))
-                for each in discs:
-                    if each['type'] == "BDMV":
-                        descfile.write(f"[quote={each.get('name', 'BDINFO')}]{each['summary']}[/quote]\n")
-                        descfile.write("\n")
-                        pass
-                    if each['type'] == "DVD":
-                        descfile.write(f"{each.get('name', '')}:\n")
-                        descfile.write(
-                            f"[quote={os.path.basename(str(each.get('vob', '')))}][{each.get('vob_mi', '')}[/quote] "
-                            f"[quote={os.path.basename(str(each.get('ifo', '')))}][{each.get('ifo_mi', '')}[/quote]\n"
-                        )
-                        descfile.write("\n")
-            else:
-                with open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt",
-                    encoding='utf-8',
-                ) as mi_file:
-                    mi = mi_file.read()
-                descfile.write(f"[quote=MediaInfo]{mi}[/quote]")
-                descfile.write("\n")
-            desc = base
-            desc = bbcode.convert_code_to_quote(desc)
-            desc = bbcode.convert_spoiler_to_hide(desc)
-            desc = bbcode.convert_comparison_to_centered(desc, 1000)
-            desc = desc.replace('[img]', '[img]')
-            desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
-            descfile.write(desc)
-            images = cast(list[dict[str, Any]], meta.get('image_list', []))
-            if images:
-                descfile.write("[center]")
-                screens = int(meta.get('screens', 0) or 0)
-                for each in range(len(images[:screens])):
-                    web_url = images[each].get('web_url')
-                    img_url = images[each].get('img_url')
-                    if not web_url or not img_url:
-                        continue
-                    descfile.write(f"[url={web_url}][img]{img_url}[/img][/url]")
-                descfile.write("[/center]")
-            if self.signature is not None:
-                descfile.write("\n\n")
-                descfile.write(self.signature)
-            descfile.close()
+        from src.bbcode import BBCODE
+        from src.trackers.COMMON import COMMON
+        common = COMMON(config=self.config)
+
+        parts: list[str] = []
+        if int(meta.get('imdb_id', 0) or 0) != 0:
+            ptgen = await common.ptgen(meta)
+            if ptgen.strip() != '':
+                parts.append(ptgen)
+
+        # Add This line for all web-dls
+        if meta.get('type') == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description', None) is None:
+            parts.append(
+                f"[center][b][color=#ff00ff][size=3]{meta['service_longname']}的无损REMUX片源，没有转码/This release is sourced from {meta['service_longname']} and is not transcoded, just remuxed from the direct {meta['service_longname']} stream[/size][/color][/b][/center]"
+            )
+        bbcode = BBCODE()
+        if meta.get('discs', []) != []:
+            discs = cast(list[dict[str, Any]], meta.get('discs', []))
+            for each in discs:
+                if each['type'] == "BDMV":
+                    parts.append(f"[quote={each.get('name', 'BDINFO')}]{each['summary']}[/quote]\n")
+                    parts.append("\n")
+                if each['type'] == "DVD":
+                    parts.append(f"{each.get('name', '')}:\n")
+                    parts.append(
+                        f"[quote={os.path.basename(str(each.get('vob', '')))}][{each.get('vob_mi', '')}[/quote] "
+                        f"[quote={os.path.basename(str(each.get('ifo', '')))}][{each.get('ifo_mi', '')}[/quote]\n"
+                    )
+                    parts.append("\n")
+        else:
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt",
+                encoding='utf-8',
+            ) as mi_file:
+                mi = await mi_file.read()
+            parts.append(f"[quote=MediaInfo]{mi}[/quote]")
+            parts.append("\n")
+        desc = base
+        desc = bbcode.convert_code_to_quote(desc)
+        desc = bbcode.convert_spoiler_to_hide(desc)
+        desc = bbcode.convert_comparison_to_centered(desc, 1000)
+        desc = desc.replace('[img]', '[img]')
+        desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
+        parts.append(desc)
+        images = cast(list[dict[str, Any]], meta.get('image_list', []))
+        if images:
+            parts.append("[center]")
+            screens = int(meta.get('screens', 0) or 0)
+            for each in range(len(images[:screens])):
+                web_url = images[each].get('web_url')
+                img_url = images[each].get('img_url')
+                if not web_url or not img_url:
+                    continue
+                parts.append(f"[url={web_url}][img]{img_url}[/img][/url]")
+            parts.append("[/center]")
+        if self.signature is not None:
+            parts.append("\n\n")
+            parts.append(self.signature)
+
+        async with aiofiles.open(
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
+            'w',
+            encoding='utf-8',
+        ) as descfile:
+            await descfile.write("".join(parts))
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
         download_url = f"https://totheglory.im/dl/{id}/{self.passkey}"
-        r = requests.get(url=download_url, timeout=30)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(url=download_url)
         if r.status_code == 200:
-            with open(torrent_path, "wb") as tor:
-                tor.write(r.content)
+            async with aiofiles.open(torrent_path, "wb") as tor:
+                await tor.write(r.content)
         else:
             console.print("[red]There was an issue downloading the new .torrent from TTG")
             console.print(r.text)

@@ -4,10 +4,11 @@ import json
 import os
 import re
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
+import aiofiles
 import cli_ui
 import httpx
 import requests
@@ -66,7 +67,7 @@ class TVC:
             str: Reformatted date string, or the original if parsing fails.
         """
         try:
-            return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc).strftime("%d-%m-%Y")
         except (ValueError, TypeError):
             return date_str
 
@@ -192,7 +193,7 @@ class TVC:
         )
         return
 
-    async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
 
         raw_images = meta.get('TVC_images_key', meta.get('image_list', []))
@@ -348,15 +349,16 @@ class TVC:
             response = None
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
-                    with open(torrent_path, "rb") as open_torrent:
-                        files = {'torrent': open_torrent}
-                        response = await client.post(
-                            self.upload_url,
-                            files=files,
-                            data=data,
-                            headers={'User-Agent': 'Mozilla/5.0'},
-                            params={'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()}
-                        )
+                    async with aiofiles.open(torrent_path, "rb") as open_torrent:
+                        torrent_bytes = await open_torrent.read()
+                    files = {'torrent': (os.path.basename(torrent_path), torrent_bytes)}
+                    response = await client.post(
+                        self.upload_url,
+                        files=files,
+                        data=data,
+                        headers={'User-Agent': 'Mozilla/5.0'},
+                        params={'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip()}
+                    )
 
                 if response.status_code != 200:
                     if response.status_code == 403:

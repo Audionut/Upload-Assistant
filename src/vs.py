@@ -21,7 +21,7 @@ zresize: Any = awsmfunc.zresize
 # core.std.LoadPlugin(path="/usr/local/lib/vapoursynth/libimwri.so")
 
 
-def CustomFrameInfo(clip: Any, text: str) -> Any:
+def CustomFrameInfo(clip: Any, _text: str) -> Any:
     def FrameProps(n: int, f: Any, clip: Any) -> Any:
         # Modify the frame properties extraction here to avoid the decode issue
         info = f"Frame {n} of {clip.num_frames}\nPicture type: {f.props['_PictType']}"

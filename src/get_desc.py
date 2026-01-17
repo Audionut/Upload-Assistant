@@ -9,7 +9,7 @@ from typing import Any, Union, cast
 from urllib.parse import ParseResult
 
 import aiofiles
-import requests
+import httpx
 from jinja2 import Template
 from pymediainfo import MediaInfo
 
@@ -50,134 +50,142 @@ def html_to_bbcode(text: str) -> str:
 
 async def gen_desc(
     meta: dict[str, Any],
-    takescreens_manager: TakeScreensManager,
-    uploadscreens_manager: UploadScreensManager,
+    _takescreens_manager: TakeScreensManager,
+    _uploadscreens_manager: UploadScreensManager,
 ) -> dict[str, Any]:
     def clean_text(text: str) -> str:
         return text.replace("\r\n", "\n").strip()
+
+    async def write_description_file(description_path: str, lines: list[str]) -> None:
+        os.makedirs(os.path.dirname(description_path), exist_ok=True)
+        content = "\n".join(lines)
+        async with aiofiles.open(description_path, "w", newline="", encoding="utf8") as description:
+            await description.write(content)
 
     description_link = meta.get("description_link")
     description_file = meta.get("description_file")
     scene_nfo = False
     bhd_nfo = False
 
-    with open(
-        f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", "w", newline="", encoding="utf8"
-    ) as description:
-        description.seek(0)
-        content_written = False
+    description_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
+    description_lines: list[str] = []
+    content_written = False
 
-        if meta.get("description_template"):
+    base_dir = meta["base_dir"]
+    uuid = meta["uuid"]
+    path = meta["path"]
+    specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
+    source_dir_path = os.path.join(path, "*.nfo")
+
+    if meta.get("description_template"):
+        try:
+            template_path = f"{meta['base_dir']}/data/templates/{meta['description_template']}.txt"
+            async with aiofiles.open(template_path, encoding="utf-8") as f:
+                template = Template(await f.read())
+            template_desc = template.render(meta)
+            cleaned_content = clean_text(template_desc)
+            if cleaned_content:
+                if len(template_desc) > 0:
+                    description_lines.append(cleaned_content)
+                    meta["description_template_content"] = cleaned_content
+                content_written = True
+        except FileNotFoundError:
+            console.print(f"[ERROR] Template '{meta['description_template']}' not found.")
+    if meta.get("nfo"):
+        if meta["debug"]:
+            console.print(f"specified_dir_path: {specified_dir_path}")
+            console.print(f"sourcedir_path: {source_dir_path}")
+        if "auto_nfo" in meta and meta["auto_nfo"] is True:
+            nfo_files = glob.glob(specified_dir_path)
+            scene_nfo = True
+        elif "bhd_nfo" in meta and meta["bhd_nfo"] is True:
+            nfo_files = glob.glob(specified_dir_path)
+            bhd_nfo = True
+        else:
+            nfo_files = glob.glob(source_dir_path)
+        if not nfo_files:
+            console.print("NFO was set but no nfo file was found")
+            if not content_written:
+                description_lines.append("")
+            await write_description_file(description_path, description_lines)
+            return meta
+
+        if nfo_files:
+            nfo = nfo_files[0]
             try:
-                with open(f"{meta['base_dir']}/data/templates/{meta['description_template']}.txt") as f:
-                    template = Template(f.read())
-                    template_desc = template.render(meta)
-                    cleaned_content = clean_text(template_desc)
-                    if cleaned_content:
-                        if len(template_desc) > 0:
-                            description.write(cleaned_content + "\n")
-                            meta["description_template_content"] = cleaned_content
-                        content_written = True
-            except FileNotFoundError:
-                console.print(f"[ERROR] Template '{meta['description_template']}' not found.")
+                async with aiofiles.open(nfo, encoding="utf-8") as nfo_file:
+                    nfo_content = await nfo_file.read()
+                if meta["debug"]:
+                    console.print("NFO content read with utf-8 encoding.")
+            except UnicodeDecodeError:
+                if meta["debug"]:
+                    console.print("utf-8 decoding failed, trying latin1.")
+                async with aiofiles.open(nfo, encoding="latin1") as nfo_file:
+                    nfo_content = await nfo_file.read()
 
-        base_dir = meta["base_dir"]
-        uuid = meta["uuid"]
-        path = meta["path"]
-        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        source_dir_path = os.path.join(path, "*.nfo")
-        if meta.get("nfo"):
-            if meta["debug"]:
-                console.print(f"specified_dir_path: {specified_dir_path}")
-                console.print(f"sourcedir_path: {source_dir_path}")
-            if "auto_nfo" in meta and meta["auto_nfo"] is True:
-                nfo_files = glob.glob(specified_dir_path)
-                scene_nfo = True
-            elif "bhd_nfo" in meta and meta["bhd_nfo"] is True:
-                nfo_files = glob.glob(specified_dir_path)
-                bhd_nfo = True
-            else:
-                nfo_files = glob.glob(source_dir_path)
-            if not nfo_files:
-                console.print("NFO was set but no nfo file was found")
+            if not content_written:
+                if scene_nfo is True:
+                    description_lines.append(
+                        f"[center][spoiler=Scene NFO:][code]{nfo_content}[/code][/spoiler][/center]"
+                    )
+                elif bhd_nfo is True:
+                    description_lines.append(
+                        f"[center][spoiler=FraMeSToR NFO:][code]{nfo_content}[/code][/spoiler][/center]"
+                    )
+                else:
+                    description_lines.append(f"[code]{nfo_content}[/code]")
+
+                content_written = True
+
+            nfo_content_utf8 = nfo_content.encode("utf-8", "ignore").decode("utf-8")
+            meta["description_nfo_content"] = nfo_content_utf8
+
+    if description_link:
+        try:
+            parsed: ParseResult = urllib.parse.urlparse(description_link.replace("/raw/", "/") or "")
+            split = os.path.split(parsed.path)
+            raw = parsed._replace(
+                path=f"{split[0]}/raw/{split[1]}" if split[0] != "/" else f"/raw{parsed.path}"
+            )
+            raw_url = urllib.parse.urlunparse(raw)
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.get(raw_url)
+            description_link_content = response.text
+            cleaned_content = clean_text(description_link_content)
+            if cleaned_content:
                 if not content_written:
-                    description.write("\n")
-                return meta
+                    description_lines.append(cleaned_content)
+                meta["description_link_content"] = cleaned_content
+                content_written = True
+        except Exception as e:
+            console.print(f"[ERROR] Failed to fetch description from link: {e}")
 
-            if nfo_files:
-                nfo = nfo_files[0]
-                try:
-                    with open(nfo, encoding="utf-8") as nfo_file:
-                        nfo_content = nfo_file.read()
-                    if meta["debug"]:
-                        console.print("NFO content read with utf-8 encoding.")
-                except UnicodeDecodeError:
-                    if meta["debug"]:
-                        console.print("utf-8 decoding failed, trying latin1.")
-                    with open(nfo, encoding="latin1") as nfo_file:
-                        nfo_content = nfo_file.read()
+    if description_file and os.path.isfile(description_file):
+        async with aiofiles.open(description_file, encoding="utf-8") as f:
+            file_content = await f.read()
+        cleaned_content = clean_text(file_content)
+        if cleaned_content:
+            if not content_written:
+                description_lines.append(cleaned_content)
+            meta["description_file_content"] = cleaned_content
+            content_written = True
 
-                if not content_written:
-                    if scene_nfo is True:
-                        description.write(
-                            f"[center][spoiler=Scene NFO:][code]{nfo_content}[/code][/spoiler][/center]\n"
-                        )
-                    elif bhd_nfo is True:
-                        description.write(
-                            f"[center][spoiler=FraMeSToR NFO:][code]{nfo_content}[/code][/spoiler][/center]\n"
-                        )
-                    else:
-                        description.write(f"[code]{nfo_content}[/code]\n")
+    if not content_written:
+        description_text = meta.get("description", "").strip() if meta.get("description") else ""
+        if description_text:
+            description_lines.append(description_text)
+            content_written = True
 
-                    content_written = True
-
-                nfo_content_utf8 = nfo_content.encode("utf-8", "ignore").decode("utf-8")
-                meta["description_nfo_content"] = nfo_content_utf8
-
-        if description_link:
-            try:
-                parsed: ParseResult = urllib.parse.urlparse(description_link.replace("/raw/", "/") or "")
-                split = os.path.split(parsed.path)
-                raw = parsed._replace(
-                    path=f"{split[0]}/raw/{split[1]}" if split[0] != "/" else f"/raw{parsed.path}"
-                )
-                raw_url = urllib.parse.urlunparse(raw)
-                description_link_content = requests.get(raw_url, timeout=20).text
-                cleaned_content = clean_text(description_link_content)
-                if cleaned_content:
-                    if not content_written:
-                        description.write(cleaned_content + "\n")
-                    meta["description_link_content"] = cleaned_content
-                    content_written = True
-            except Exception as e:
-                console.print(f"[ERROR] Failed to fetch description from link: {e}")
-
-        if description_file and os.path.isfile(description_file):
-            with open(description_file, encoding="utf-8") as f:
-                file_content = f.read()
-                cleaned_content = clean_text(file_content)
-                if cleaned_content:
-                    if not content_written:
-                        description.write(cleaned_content + "\n")
-                    meta["description_file_content"] = cleaned_content
-                    content_written = True
-
-        if not content_written:
-            description_text = meta.get("description", "").strip() if meta.get("description") else ""
-            if description_text:
-                description.write(description_text + "\n")
-
-        if description.tell() != 0:
-            description.write("\n")
-
-    # Fallback if no description is provided
     if not meta.get("skip_gen_desc", False) and not content_written:
-        description_text = meta["description"] if meta.get("description", "") else ""
-        with open(
-            f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", "w", newline="", encoding="utf8"
-        ) as description:
-            if len(description_text) > 0:
-                description.write(description_text + "\n")
+        description_text = meta.get("description", "").strip() if meta.get("description") else ""
+        if description_text:
+            description_lines = [description_text]
+            content_written = True
+
+    if description_lines:
+        description_lines.append("")
+
+    await write_description_file(description_path, description_lines)
 
     if meta.get("description") in ("None", "", " "):
         meta["description"] = None

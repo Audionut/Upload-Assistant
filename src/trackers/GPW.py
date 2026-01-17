@@ -336,7 +336,7 @@ class GPW:
 
         return tags
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> Optional[list[Any]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> Optional[list[Any]]:
         if meta['category'] != 'MOVIE':
             console.print(f'{self.tracker}: Only feature films, short films, and live performances are permitted on {self.tracker}')
             meta['skipping'] = f'{self.tracker}'
@@ -502,8 +502,8 @@ class GPW:
 
         if os.path.exists(info_file_path):
             try:
-                with open(info_file_path, encoding='utf-8') as f:
-                    return f.read()
+                async with aiofiles.open(info_file_path, encoding='utf-8') as f:
+                    return await f.read()
             except Exception as e:
                 console.print(f'[bold red]Error reading info file at {info_file_path}: {e}[/bold red]')
                 return ''
@@ -811,7 +811,7 @@ class GPW:
 
         return flags
 
-    async def fetch_data(self, meta: dict[str, Any], disctype: str) -> dict[str, Any]:
+    async def fetch_data(self, meta: dict[str, Any], _disctype: str) -> dict[str, Any]:
         await self.load_localized_data(meta)
         remaster_title = await self.get_remaster_title(meta)
         codec = await self.get_codec(meta)
@@ -882,29 +882,30 @@ class GPW:
             upload_url = f'{self.base_url}/api.php?api_key={self.api_key}&action=upload'
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-            with open(torrent_path, 'rb') as torrent_file:
-                files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_file, 'application/x-bittorrent')}
+            async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+                torrent_bytes = await torrent_file.read()
+            files = {'file_input': (f'{self.tracker}.placeholder.torrent', torrent_bytes, 'application/x-bittorrent')}
 
-                try:
-                    async with httpx.AsyncClient(timeout=30) as client:
-                        response = await client.post(url=upload_url, files=files, data=data)
-                        response_data = response.json()
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.post(url=upload_url, files=files, data=data)
+                    response_data = response.json()
 
-                        torrent_id = str(response_data['response']['torrent_id'])
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                        meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
-                        await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-                        return True
+                    torrent_id = str(response_data['response']['torrent_id'])
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                    meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
+                    await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                    return True
 
-                except httpx.TimeoutException:
-                    meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
-                    return False
-                except httpx.RequestError as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
-                    return False
-                except Exception as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
-                    return False
+            except httpx.TimeoutException:
+                meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
+                return False
+            except httpx.RequestError as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                return False
+            except Exception as e:
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
+                return False
 
         else:
             console.print("[cyan]GPW Request Data:")

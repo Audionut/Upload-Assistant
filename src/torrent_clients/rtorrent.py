@@ -316,7 +316,7 @@ class RtorrentClientMixin:
             console.print(f"[cyan]Path: {path}")
         return
 
-    def add_fast_resume(self, metainfo: dict[str, Any], datapath: str, torrent: Torrent) -> dict[str, Any]:
+    def add_fast_resume(self, metainfo: dict[str, Any], datapath: str, _torrent: Torrent) -> dict[str, Any]:
         """ Add fast resume data to a metafile dict.
         """
         # Get list of files

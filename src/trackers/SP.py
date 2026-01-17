@@ -32,8 +32,9 @@ class SP(UNIT3D):
         meta: Meta,
         category: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_name = str(meta.get('category', '')).upper()
         release_title = str(meta.get('name', ''))
         mal_id = int(meta.get('mal_id', 0) or 0)
@@ -70,8 +71,9 @@ class SP(UNIT3D):
         meta: Meta,
         type: Optional[str] = None,
         reverse: bool = False,
-        mapping_only: bool = False,
+        mapping_only: bool = False
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = str(meta.get('type', ''))
         type_id = {
             'DISC': '1',
