@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import sys
@@ -276,7 +277,7 @@ class TrackerDataManager:
                                     f"Cooldowns: {cooldown_info}[/yellow]"
                                 )
                                 console.print(msg, end='\r')
-                                time.sleep(1)
+                                await asyncio.sleep(1)
                             console.print()
 
                         else:
