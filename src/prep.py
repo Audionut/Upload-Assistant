@@ -15,7 +15,6 @@ try:
     import cli_ui
     import guessit
 
-    from data.config import config as raw_config  # pyright: ignore[reportMissingImports]
     from src.apply_overrides import ApplyOverrides
     from src.audio import AudioManager
     from src.bluray_com import get_bluray_releases
@@ -43,7 +42,6 @@ try:
     from src.tvmaze import tvmaze_manager
     from src.video import video_manager
 
-    config = cast(dict[str, Any], raw_config)
     guessit_module: Any = cast(Any, guessit)
     GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
 
@@ -117,19 +115,19 @@ class Prep:
         meta['isdir'] = os.path.isdir(meta['path'])
         base_dir = meta['base_dir']
         meta['saved_description'] = False
-        client = Clients(config=config)
-        meta['skip_auto_torrent'] = meta.get('skip_auto_torrent', False) or config['DEFAULT'].get('skip_auto_torrent', False)
+        client = Clients(config=self.config)
+        meta['skip_auto_torrent'] = meta.get('skip_auto_torrent', False) or self.config['DEFAULT'].get('skip_auto_torrent', False)
         hash_ids = ['infohash', 'torrent_hash', 'skip_auto_torrent']
         tracker_ids = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
-        use_sonarr = config['DEFAULT'].get('use_sonarr', False)
-        use_radarr = config['DEFAULT'].get('use_radarr', False)
-        meta['print_tracker_messages'] = config['DEFAULT'].get('print_tracker_messages', False)
-        meta['print_tracker_links'] = config['DEFAULT'].get('print_tracker_links', True)
+        use_sonarr = self.config['DEFAULT'].get('use_sonarr', False)
+        use_radarr = self.config['DEFAULT'].get('use_radarr', False)
+        meta['print_tracker_messages'] = self.config['DEFAULT'].get('print_tracker_messages', False)
+        meta['print_tracker_links'] = self.config['DEFAULT'].get('print_tracker_links', True)
         only_id_val = meta.get('onlyID')
-        only_id = bool(config['DEFAULT'].get('only_id', False) if only_id_val is None else only_id_val)
+        only_id = bool(self.config['DEFAULT'].get('only_id', False) if only_id_val is None else only_id_val)
         meta['only_id'] = only_id
-        meta['keep_images'] = bool(config['DEFAULT'].get('keep_images', True) if not meta.get('keep_images') else True)
-        mkbrr_threads = config['DEFAULT'].get('mkbrr_threads', "0")
+        meta['keep_images'] = bool(self.config['DEFAULT'].get('keep_images', True) if not meta.get('keep_images') else True)
+        mkbrr_threads = self.config['DEFAULT'].get('mkbrr_threads', "0")
         meta['mkbrr_threads'] = mkbrr_threads
 
         # make sure these are set in meta
@@ -512,7 +510,7 @@ class Prep:
         if not meta.get('emby') and meta.get('trackers'):
             trackers = meta['trackers']
         else:
-            default_trackers = config['TRACKERS'].get('default_trackers', '')
+            default_trackers = self.config['TRACKERS'].get('default_trackers', '')
             trackers = [tracker.strip() for tracker in default_trackers.split(',')]
 
         if isinstance(trackers, str):
@@ -688,7 +686,7 @@ class Prep:
 
         # the first user override check that allows to set metadata ids.
         # it relies on imdb or tvdb already being set.
-        user_overrides = config['DEFAULT'].get('user_overrides', False)
+        user_overrides = self.config['DEFAULT'].get('user_overrides', False)
         if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0) and not meta.get('emby', False):
             meta = await self.overrides.get_source_override(meta, other_id=True)
             category = meta.get('category')
