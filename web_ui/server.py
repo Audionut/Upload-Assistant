@@ -10,15 +10,23 @@ import threading
 import traceback
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, Optional, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict, Union, cast
 
-from flask import Flask, Response, jsonify, render_template, request
-from flask_cors import CORS
-from werkzeug.security import safe_join
+from flask import Flask, Response, jsonify, render_template, request  # pyright: ignore[reportMissingImports]
+from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
+from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-app = Flask(__name__)
+Flask = cast(Any, Flask)
+Response = cast(Any, Response)
+jsonify = cast(Any, jsonify)
+render_template = cast(Any, render_template)
+request = cast(Any, request)
+CORS_fn = cast(Any, CORS)
+safe_join = cast(Any, safe_join)
+
+app: Any = Flask(__name__)
 
 
 def _parse_cors_origins() -> list[str]:
@@ -35,7 +43,7 @@ def _parse_cors_origins() -> list[str]:
 
 cors_origins = _parse_cors_origins()
 if cors_origins:
-    CORS(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
+    CORS_fn(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
 
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')

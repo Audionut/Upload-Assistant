@@ -1802,6 +1802,8 @@ class Clients:
                     qbt_client = potential_qbt_client
 
             info_hash_v1 = meta.get('infohash')
+            if not isinstance(info_hash_v1, str) or not info_hash_v1:
+                return meta
             if meta['debug']:
                 console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
 

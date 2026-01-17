@@ -230,7 +230,7 @@ class CleanupManager:
 
             # Kill background jobs
             with contextlib.suppress(Exception):
-                os.system("jobs -p | xargs -r kill 2>/dev/null")
+                subprocess.run(["sh", "-c", "jobs -p | xargs -r kill 2>/dev/null"], check=False)
 
             if not sys.stderr.closed:
                 sys.stderr.flush()
