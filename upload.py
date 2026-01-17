@@ -1,13 +1,62 @@
 #!/usr/bin/env python3
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# Pre-check config.py for syntax and common errors before any imports that depend on it
+import asyncio
 import contextlib
+import gc
+import json
 import os
+import platform
+import re
+import shutil
 import sys
+import time
+import traceback
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any, Optional, cast
 
+import aiofiles
+import cli_ui
+import discord
+import requests
+from packaging import version
+from torf import Torrent
 from typing_extensions import TypeAlias
+
+from bin.get_mkbrr import MkbrrBinaryManager
+from cogs.redaction import Redaction
+from discordbot import DiscordNotifier
+from src.add_comparison import ComparisonManager
+from src.args import Args
+from src.cleanup import cleanup_manager
+from src.clients import Clients
+from src.console import console
+from src.disc_menus import process_disc_menus
+from src.dupe_checking import DupeChecker
+from src.get_desc import gen_desc
+from src.get_name import NameManager
+from src.get_tracker_data import TrackerDataManager
+from src.languages import languages_manager
+from src.nfo_link import NfoLinkManager
+from src.qbitwait import Wait
+from src.queuemanage import QueueManager
+from src.takescreens import TakeScreensManager
+from src.torrentcreate import TorrentCreator
+from src.trackerhandle import process_trackers
+from src.trackers.AR import AR
+from src.trackers.COMMON import COMMON
+from src.trackers.PTP import PTP
+from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, other_api_trackers, tracker_class_map
+from src.trackerstatus import TrackerStatusManager
+from src.uphelper import UploadHelper
+from src.uploadscreens import UploadScreensManager
+
+cli_ui.setup(color='always', title="Upload Assistant")
+base_dir = os.path.abspath(os.path.dirname(__file__))
+
+Meta: TypeAlias = dict[str, Any]
+
+from src.prep import Prep  # noqa: E402
 
 _base_dir = os.path.abspath(os.path.dirname(__file__))
 _config_path = os.path.join(_base_dir, "data", "config.py")
@@ -52,7 +101,7 @@ config: dict[str, Any]
 
 if os.path.exists(_config_path):
     try:
-        from data.config import config as _imported_config  # noqa: E402
+        from data.config import config as _imported_config
         config = cast(dict[str, Any], _imported_config)
     except SyntaxError as e:
         _print_config_error(
@@ -133,58 +182,6 @@ else:
     print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}")
     print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
     sys.exit(1)
-
-import asyncio  # noqa: E402
-import gc  # noqa: E402
-import json  # noqa: E402
-import platform  # noqa: E402
-import re  # noqa: E402
-import shutil  # noqa: E402
-import time  # noqa: E402
-import traceback  # noqa: E402
-from pathlib import Path  # noqa: E402
-
-import aiofiles  # noqa: E402
-import cli_ui  # noqa: E402
-import discord  # noqa: E402
-import requests  # noqa: E402
-from packaging import version  # noqa: E402
-from torf import Torrent  # noqa: E402
-
-from bin.get_mkbrr import MkbrrBinaryManager  # noqa: E402
-from cogs.redaction import Redaction  # noqa: E402
-from discordbot import DiscordNotifier  # noqa: E402
-from src.add_comparison import ComparisonManager  # noqa: E402
-from src.args import Args  # noqa: E402
-from src.cleanup import cleanup_manager  # noqa: E402
-from src.clients import Clients  # noqa: E402
-from src.console import console  # noqa: E402
-from src.disc_menus import process_disc_menus  # noqa: E402
-from src.dupe_checking import DupeChecker  # noqa: E402
-from src.get_desc import gen_desc  # noqa: E402
-from src.get_name import NameManager  # noqa: E402
-from src.get_tracker_data import TrackerDataManager  # noqa: E402
-from src.languages import languages_manager  # noqa: E402
-from src.nfo_link import NfoLinkManager  # noqa: E402
-from src.qbitwait import Wait  # noqa: E402
-from src.queuemanage import QueueManager  # noqa: E402
-from src.takescreens import TakeScreensManager  # noqa: E402
-from src.torrentcreate import TorrentCreator  # noqa: E402
-from src.trackerhandle import process_trackers  # noqa: E402
-from src.trackers.AR import AR  # noqa: E402
-from src.trackers.COMMON import COMMON  # noqa: E402
-from src.trackers.PTP import PTP  # noqa: E402
-from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, other_api_trackers, tracker_class_map  # noqa: E402
-from src.trackerstatus import TrackerStatusManager  # noqa: E402
-from src.uphelper import UploadHelper  # noqa: E402
-from src.uploadscreens import UploadScreensManager  # noqa: E402
-
-cli_ui.setup(color='always', title="Upload Assistant")
-base_dir = os.path.abspath(os.path.dirname(__file__))
-
-Meta: TypeAlias = dict[str, Any]
-
-from src.prep import Prep  # noqa: E402
 
 client = Clients(config=config)
 parser = Args(config)
