@@ -184,10 +184,13 @@ class BtnIdManager:
         imdb_id = first_result.get("imdb_id", "").replace("tt", "") if first_result.get("imdb_id") else 0
         imdb = int(imdb_id or 0)
 
+        tmdb = 0
         raw_tmdb_id = first_result.get("tmdb_id", "")
         if raw_tmdb_id and raw_tmdb_id != "0":
             meta["category"], parsed_tmdb_id = await BtnIdManager.parse_tmdb_id(raw_tmdb_id, meta.get("category"))
-            tmdb = int(parsed_tmdb_id or 0)
+            parsed_tmdb_id_str = str(parsed_tmdb_id or "")
+            if parsed_tmdb_id_str.isdigit():
+                tmdb = int(parsed_tmdb_id_str)
 
         if only_id and not meta.get('keep_images'):
             return imdb, tmdb
