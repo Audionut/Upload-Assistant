@@ -150,7 +150,7 @@ class ComparisonManager:
             }
 
         comparison_index = self.meta.get('comparison_index')
-        if not comparison_index:
+        if comparison_index is None:
             console.print("[red]No comparison index provided. Please specify a comparison index matching the input file.")
             while True:
                 cli_input = cli_ui.ask_string("Enter comparison index number: ") or ""
@@ -159,13 +159,14 @@ class ComparisonManager:
                     break
                 except Exception:
                     console.print(f"[red]Invalid comparison index: {cli_input.strip()}")
-        if comparison_index and comparison_index in meta_comparisons:
+        comparison_index_str = str(comparison_index).strip() if comparison_index is not None else ""
+        if comparison_index_str and comparison_index_str in meta_comparisons:
             if 'image_list' not in self.meta:
                 self.meta['image_list'] = []
 
-            urls_to_add = cast(list[dict[str, Any]], meta_comparisons[comparison_index].get('urls', []))
+            urls_to_add = cast(list[dict[str, Any]], meta_comparisons[comparison_index_str].get('urls', []))
             if self.meta.get('debug'):
-                console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index} to image_list")
+                console.print(f"[cyan]Adding {len(urls_to_add)} images from comparison group {comparison_index_str} to image_list")
 
             image_list = cast(list[dict[str, Any]], self.meta.get('image_list', []))
             self.meta['image_list'] = image_list
