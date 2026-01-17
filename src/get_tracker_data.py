@@ -6,6 +6,7 @@ import time
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Optional, cast
+from urllib.parse import urlparse
 
 import aiohttp
 import cli_ui
@@ -447,9 +448,25 @@ class TrackerDataManager:
                 tracker_key = tracker_name.lower()
                 # Check each stored comment for matching tracker URL
                 for comment_data in meta.get('torrent_comments', []):
-                    comment = comment_data.get('comment', '')
+                    comment = str(comment_data.get('comment', ''))
+                    is_tracker_comment = False
+                    tracker_hosts = {
+                        "BLU": "blutopia.cc",
+                        "AITHER": "aither.cc",
+                        "LST": "lst.gg",
+                        "OE": "onlyencodes.cc",
+                        "ULCX": "upload.cx",
+                    }
+                    expected_host = tracker_hosts.get(tracker_name)
+                    if expected_host and expected_host in comment:
+                        candidate_urls: list[str] = re.findall(r"https?://[^\s\"'<>]+", comment)
+                        for url in candidate_urls:
+                            parsed = urlparse(url)
+                            if parsed.scheme in ("http", "https") and parsed.hostname == expected_host:
+                                is_tracker_comment = True
+                                break
 
-                    if "blutopia.cc" in comment and tracker_name == "BLU" or "aither.cc" in comment and tracker_name == "AITHER" or "lst.gg" in comment and tracker_name == "LST" or "onlyencodes.cc" in comment and tracker_name == "OE" or "https://upload.cx" in comment and tracker_name == "ULCX":
+                    if is_tracker_comment:
                         match = re.search(r'/(\d+)$', comment)
                         if match:
                             tracker_id = match.group(1)
