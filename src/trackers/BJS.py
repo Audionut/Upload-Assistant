@@ -49,6 +49,7 @@ class BJS:
         }, timeout=60.0)
         self.main_tmdb_data: dict[str, Any] = {}
         self.episode_tmdb_data: dict[str, Any] = {}
+        self.semaphore = asyncio.Semaphore(1)
 
     def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
@@ -551,9 +552,13 @@ class BJS:
         ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
 
         try:
-            ajax_response = await self.session.get(ajax_url)
-            ajax_response.raise_for_status()
-            ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
+            async with self.semaphore:
+                ajax_response = await self.session.get(ajax_url)
+                if ajax_response.status_code == 503:
+                    await asyncio.sleep(5)
+                    ajax_response = await self.session.get(ajax_url)
+                ajax_response.raise_for_status()
+                ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
 
             return {
                 'success': True,
@@ -1433,7 +1438,5 @@ class BJS:
 
         if not is_uploaded:
             return False
-
-        return True
 
         return True
