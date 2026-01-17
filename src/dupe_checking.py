@@ -673,7 +673,7 @@ class DupeChecker:
             simplified: set[str] = set()
             if any(h in hdr_set for h in {"HDR", "HDR10", "HDR10+"}):
                 simplified.add("HDR")
-            if ".DV." in hdr_set or " DV " in hdr_set or "DOVI" in hdr_set:
+            if any(h == "DV" or "DV" in h for h in hdr_set):
                 simplified.add("DV")
                 meta_type = str(meta.get('type', '')).lower()
                 if 'web' not in meta_type:
