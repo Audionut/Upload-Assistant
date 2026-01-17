@@ -8,7 +8,7 @@ import httpx
 from cogs.redaction import Redaction
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 
 
@@ -16,6 +16,7 @@ class DC:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.common = COMMON(config)
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'DC'
         self.base_url = 'https://digitalcore.club'
         self.api_base_url = f'{self.base_url}/api/v1/torrents'
@@ -230,7 +231,13 @@ class DC:
             'digitalcore.club': 'sharex',
             'img.digitalcore.club': 'sharex'
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
     async def fetch_data(self, meta: dict[str, Any]) -> dict[str, Any]:

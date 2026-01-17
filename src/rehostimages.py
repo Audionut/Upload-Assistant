@@ -11,13 +11,10 @@ from urllib.parse import urlparse
 import aiofiles
 from aiofiles import os as aio_os
 
-from data.config import config
 from src.console import console
-from src.takescreens import takescreens_manager
+from src.takescreens import TakeScreensManager
 from src.type_utils import to_int
-from src.uploadscreens import upload_screens
-
-DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+from src.uploadscreens import UploadScreensManager
 
 
 def _as_str(value: Any) -> Union[str, None]:
@@ -46,13 +43,70 @@ async def sanitize_filename(filename: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def check_hosts(
+class RehostImagesManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.default_config = cast(dict[str, Any], config.get('DEFAULT', {}))
+        self.takescreens_manager = TakeScreensManager(config)
+        self.uploadscreens_manager = UploadScreensManager(config)
+
+    async def check_hosts(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        url_host_mapping: dict[str, str],
+        img_host_index: int = 1,
+        approved_image_hosts: Optional[list[str]] = None,
+    ) -> tuple[list[dict[str, str]], bool, bool]:
+        return await _check_hosts(
+            meta,
+            tracker,
+            url_host_mapping,
+            img_host_index=img_host_index,
+            approved_image_hosts=approved_image_hosts,
+            default_config=self.default_config,
+            takescreens_manager=self.takescreens_manager,
+            uploadscreens_manager=self.uploadscreens_manager,
+        )
+
+    async def handle_image_upload(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        url_host_mapping: dict[str, str],
+        approved_image_hosts: Optional[list[str]] = None,
+        img_host_index: int = 1,
+        file: Optional[str] = None,
+    ) -> tuple[list[dict[str, str]], bool, bool]:
+        return await _handle_image_upload(
+            meta,
+            tracker,
+            url_host_mapping,
+            approved_image_hosts=approved_image_hosts,
+            img_host_index=img_host_index,
+            file=file,
+            default_config=self.default_config,
+            takescreens_manager=self.takescreens_manager,
+            uploadscreens_manager=self.uploadscreens_manager,
+        )
+
+
+async def _check_hosts(
     meta: dict[str, Any],
     tracker: str,
     url_host_mapping: dict[str, str],
     img_host_index: int = 1,
     approved_image_hosts: Optional[list[str]] = None,
+    default_config: Optional[Mapping[str, Any]] = None,
+    takescreens_manager: Optional[TakeScreensManager] = None,
+    uploadscreens_manager: Optional[UploadScreensManager] = None,
 ) -> tuple[list[dict[str, str]], bool, bool]:
+    if default_config is None:
+        raise ValueError("default_config is required")
+    if takescreens_manager is None:
+        raise ValueError("takescreens_manager is required")
+    if uploadscreens_manager is None:
+        raise ValueError("uploadscreens_manager is required")
     if approved_image_hosts is None:
         approved_image_hosts = []
     new_images_key = f'{tracker}_images_key'
@@ -184,8 +238,15 @@ async def check_hosts(
     max_retries = len(approved_image_hosts)
 
     while img_host_index <= max_retries:
-        image_list, retry_mode, images_reuploaded = await handle_image_upload(
-            meta, tracker, url_host_mapping, approved_image_hosts, img_host_index=img_host_index
+        image_list, retry_mode, images_reuploaded = await _handle_image_upload(
+            meta,
+            tracker,
+            url_host_mapping,
+            approved_image_hosts,
+            img_host_index=img_host_index,
+            default_config=default_config,
+            takescreens_manager=takescreens_manager,
+            uploadscreens_manager=uploadscreens_manager,
         )
 
         if image_list:
@@ -209,14 +270,23 @@ async def check_hosts(
     return meta.get(new_images_key, []), False, images_reuploaded
 
 
-async def handle_image_upload(
+async def _handle_image_upload(
     meta: dict[str, Any],
     tracker: str,
     url_host_mapping: dict[str, str],
     approved_image_hosts: Optional[list[str]] = None,
     img_host_index: int = 1,
     file: Optional[str] = None,
+    default_config: Optional[Mapping[str, Any]] = None,
+    takescreens_manager: Optional[TakeScreensManager] = None,
+    uploadscreens_manager: Optional[UploadScreensManager] = None,
 ) -> tuple[list[dict[str, str]], bool, bool]:
+    if default_config is None:
+        raise ValueError("default_config is required")
+    if takescreens_manager is None:
+        raise ValueError("takescreens_manager is required")
+    if uploadscreens_manager is None:
+        raise ValueError("uploadscreens_manager is required")
     if approved_image_hosts is None:
         approved_image_hosts = []
     original_imghost = meta.get('imghost')
@@ -236,7 +306,7 @@ async def handle_image_upload(
         path_list = meta.get('filelist', [])
         path = str(path_list[0]) if path_list else ""
 
-    default_screens = to_int(DEFAULT_CONFIG.get('screens', 6), 6)
+    default_screens = to_int(default_config.get('screens', 6), 6)
     multi_screens = to_int(meta.get('screens'), default_screens)
     base_dir = meta['base_dir']
     folder_id = meta['uuid']
@@ -472,7 +542,7 @@ async def handle_image_upload(
         max_retries = len(approved_image_hosts)
         while img_host_index <= max_retries:
             current_img_host_key = f'img_host_{img_host_index}'
-            current_img_host = _as_str(DEFAULT_CONFIG.get(current_img_host_key))
+            current_img_host = _as_str(default_config.get(current_img_host_key))
 
             if not current_img_host:
                 console.print("[red]No more image hosts left to try.")
@@ -490,7 +560,7 @@ async def handle_image_upload(
                     console.print(f"[green]Uploading to approved host '{current_img_host}'.")
                 break
 
-        uploaded_images, _ = await upload_screens(
+        uploaded_images, _ = await uploadscreens_manager.upload_screens(
             meta, multi_screens, img_host_index, 0, multi_screens,
             all_screenshots, {new_images_key: meta[new_images_key]}, retry_mode
         )

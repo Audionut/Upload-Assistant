@@ -154,7 +154,7 @@ from torf import Torrent  # noqa: E402
 from bin.get_mkbrr import MkbrrBinaryManager  # noqa: E402
 from cogs.redaction import Redaction  # noqa: E402
 from discordbot import DiscordNotifier  # noqa: E402
-from src.add_comparison import add_comparison  # noqa: E402
+from src.add_comparison import ComparisonManager  # noqa: E402
 from src.args import Args  # noqa: E402
 from src.cleanup import cleanup_manager  # noqa: E402
 from src.clients import Clients  # noqa: E402
@@ -162,13 +162,13 @@ from src.console import console  # noqa: E402
 from src.disc_menus import process_disc_menus  # noqa: E402
 from src.dupe_checking import DupeChecker  # noqa: E402
 from src.get_desc import gen_desc  # noqa: E402
-from src.get_name import get_name  # noqa: E402
-from src.get_tracker_data import tracker_data_manager  # noqa: E402
+from src.get_name import NameManager  # noqa: E402
+from src.get_tracker_data import TrackerDataManager  # noqa: E402
 from src.languages import languages_manager  # noqa: E402
-from src.nfo_link import nfo_link  # noqa: E402
+from src.nfo_link import NfoLinkManager  # noqa: E402
 from src.qbitwait import Wait  # noqa: E402
 from src.queuemanage import QueueManager  # noqa: E402
-from src.takescreens import takescreens_manager  # noqa: E402
+from src.takescreens import TakeScreensManager  # noqa: E402
 from src.torrentcreate import TorrentCreator  # noqa: E402
 from src.trackerhandle import process_trackers  # noqa: E402
 from src.trackers.AR import AR  # noqa: E402
@@ -177,7 +177,7 @@ from src.trackers.PTP import PTP  # noqa: E402
 from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, other_api_trackers, tracker_class_map  # noqa: E402
 from src.trackerstatus import TrackerStatusManager  # noqa: E402
 from src.uphelper import UploadHelper  # noqa: E402
-from src.uploadscreens import upload_screens  # noqa: E402
+from src.uploadscreens import UploadScreensManager  # noqa: E402
 
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -188,6 +188,11 @@ from src.prep import Prep  # noqa: E402
 
 client = Clients(config=config)
 parser = Args(config)
+name_manager = NameManager(config)
+tracker_data_manager = TrackerDataManager(config)
+nfo_link_manager = NfoLinkManager(config)
+takescreens_manager = TakeScreensManager(config)
+uploadscreens_manager = UploadScreensManager(config)
 use_discord = False
 discord_cfg_obj = config.get('DISCORD')
 discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
@@ -342,12 +347,12 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
     # If unattended confirm and we had to get metadata ids from filename searching, skip the quick return so we can prompt about database information
     if meta.get('emby', False) and not meta.get('no_ids', False) and not meta.get('unattended_confirm', False) and meta.get('unattended', False):
-        await nfo_link(meta)
+        await nfo_link_manager.nfo_link(meta)
         meta['we_are_uploading'] = False
         return
 
     parser = Args(config)
-    helper = UploadHelper()
+    helper = UploadHelper(config)
 
     raw_trackers = meta.get('trackers')
     trackers: list[str]
@@ -367,7 +372,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 if tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
 
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await name_manager.get_name(meta)
 
         if meta['debug']:
             console.print(f"Trackers list before editing: {meta['trackers']}")
@@ -445,7 +450,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             console.print(f"Trackers list during edit process: {meta['trackers']}")
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await get_name(meta)
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await name_manager.get_name(meta)
         try:
             confirm = await helper.get_confirmation(meta)
         except EOFError:
@@ -456,7 +461,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
     if meta.get('emby', False):
         if not meta['debug']:
-            await nfo_link(meta)
+            await nfo_link_manager.nfo_link(meta)
         meta['we_are_uploading'] = False
         return
 
@@ -514,7 +519,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         except Exception as e:
             console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
 
-        successful_trackers = await TrackerStatusManager.process_all_trackers(meta)
+        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta)
 
         if meta.get('trackers_pass') is not None:
             meta['skip_uploading'] = meta.get('trackers_pass')
@@ -610,7 +615,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             manual_frames = meta['manual_frames']
 
             if meta.get('comparison', False):
-                await add_comparison(meta)
+                await ComparisonManager(meta, config).add_comparison()
 
             else:
                 image_data_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/image_data.json"
@@ -875,7 +880,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                     return_dict: dict[str, Any] = {}
                     try:
-                        await upload_screens(
+                        await uploadscreens_manager.upload_screens(
                             meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict, allowed_hosts=allowed_hosts
                         )
                         if meta.get('debug'):
@@ -937,7 +942,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         torrent_path = os.path.abspath(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         if meta.get('force_recheck', False):
-            waiter = Wait()
+            waiter = Wait(config)
             await waiter.select_and_recheck_best_torrent(meta, meta['path'], check_interval=5)
         if not os.path.exists(torrent_path):
             reuse_torrent = None
@@ -991,7 +996,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         if int(meta.get('randomized', 0)) >= 1 and not meta['mkbrr']:
             TorrentCreator.create_random_torrents(meta['base_dir'], meta['uuid'], meta['randomized'], meta['path'])
 
-        meta = await gen_desc(meta)
+        meta = await gen_desc(meta, takescreens_manager, uploadscreens_manager)
 
         with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
             json.dump(meta, f, indent=4)
@@ -1442,7 +1447,7 @@ async def do_the_thing(base_dir: str) -> None:
                             continue
 
                     if trackers_list:
-                        successful_trackers = await TrackerStatusManager.process_all_trackers(meta)
+                        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta)
                     else:
                         successful_trackers = 0
 
@@ -1673,7 +1678,8 @@ async def process_cross_seeds(meta: Meta) -> None:
         original_unattended = meta.get('unattended', False)
         meta['unattended'] = True
 
-        helper = UploadHelper()
+        helper = UploadHelper(config)
+        dupe_checker = DupeChecker(config)
 
         async def check_tracker_for_dupes(tracker: str) -> None:
             try:
@@ -1694,7 +1700,7 @@ async def process_cross_seeds(meta: Meta) -> None:
                     dupes = await ptp.search_existing(group_id, meta, disctype)
 
                 if dupes:
-                    dupes = await DupeChecker.filter_dupes(dupes, meta, tracker)
+                    dupes = await dupe_checker.filter_dupes(dupes, meta, tracker)
                     _is_dupe, updated_meta = await helper.dupe_check(cast(list[Any], dupes), meta, tracker)
                     # Persist any updates from dupe_check (defensive in case it returns a copy)
                     if updated_meta is not meta:

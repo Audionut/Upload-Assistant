@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from datetime import datetime
+from typing import Any
 
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 from src.trackers.COMMON import COMMON
 
 
 class CZ(AZTrackerBase):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name='CZ')
         self.config = config
         self.common = COMMON(config)
@@ -17,8 +18,8 @@ class CZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta):
-        warnings = []
+    async def rules(self, meta: dict[str, Any]) -> str:
+        warnings: list[str] = []
 
         # This also checks the rule 'FANRES content is not allowed'
         if meta['category'] not in ('MOVIE', 'TV'):
@@ -126,4 +127,4 @@ class CZ(AZTrackerBase):
             all_warnings = '\n\n'.join(filter(None, warnings))
             return all_warnings
 
-        return
+        return ""

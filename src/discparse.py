@@ -15,7 +15,6 @@ from langcodes import Language
 from pymediainfo import MediaInfo
 from pyparsebluray import mpls
 
-from data.config import config
 from src.console import console
 from src.exportmi import setup_mediainfo_library
 
@@ -24,10 +23,9 @@ PlaylistInfo = dict[str, Any]
 
 
 class DiscParse:
-    def __init__(self):
-        self.config: Any = config
-        self.mediainfo_config = None
-        pass
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.mediainfo_config: Optional[dict[str, Any]] = None
 
     def setup_mediainfo_for_dvd(self, base_dir: Optional[str], debug: bool = False) -> Optional[str]:
         """Setup MediaInfo binary for DVD processing using the complete setup from exportmi"""

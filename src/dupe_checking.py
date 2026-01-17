@@ -7,7 +7,6 @@ from typing import Any, Callable, Optional, TypedDict, Union, cast
 from typing_extensions import TypeAlias
 
 from cogs.redaction import Redaction
-from data.config import config
 from src.console import console
 from src.trackers.HUNO import HUNO
 
@@ -40,8 +39,10 @@ class AttributeCheck(TypedDict):
 
 
 class DupeChecker:
-    @staticmethod
-    async def filter_dupes(dupes: Sequence[DupeInput], meta: Meta, tracker_name: str) -> list[DupeEntry]:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+
+    async def filter_dupes(self, dupes: Sequence[DupeInput], meta: Meta, tracker_name: str) -> list[DupeEntry]:
         """
         Filter duplicates by applying exclusion rules. Only non-excluded entries are returned.
         Everything is a dupe, until it matches a criteria to be excluded.
@@ -371,7 +372,7 @@ class DupeChecker:
                     return False
 
             if tracker_name == "HUNO":
-                huno = HUNO(config=config)
+                huno = HUNO(config=self.config)
                 huno_name_result: Any = await huno.get_name(cast(dict[str, Any], meta))
                 huno_name_map = cast(dict[str, Any], huno_name_result)
                 huno_name = str(huno_name_map.get('name', huno_name_result)) if isinstance(huno_name_result, dict) else str(huno_name_result)
@@ -481,7 +482,7 @@ class DupeChecker:
 
                             is_internal = False
                             if entry.get('internal', 0) == 1:
-                                trackers_section: dict[str, Any] = cast(dict[str, Any], config.get('TRACKERS', {}))
+                                trackers_section: dict[str, Any] = cast(dict[str, Any], self.config.get('TRACKERS', {}))
                                 aither_settings: dict[str, Any] = trackers_section.get('AITHER', {})
                                 if aither_settings.get('internal') is True:
                                     internal_groups = aither_settings.get('internal_groups', [])
@@ -692,8 +693,8 @@ class DupeChecker:
         return file_hdr_simple == target_hdr_simple
 
 
-async def filter_dupes(dupes: Sequence[DupeInput], meta: Meta, tracker_name: str) -> list[DupeEntry]:
-    return await DupeChecker.filter_dupes(dupes, meta, tracker_name)
+async def filter_dupes(dupes: Sequence[DupeInput], meta: Meta, tracker_name: str, config: dict[str, Any]) -> list[DupeEntry]:
+    return await DupeChecker(config).filter_dupes(dupes, meta, tracker_name)
 
 
 async def normalize_filename(filename: Union[str, MutableMapping[str, Any]]) -> str:

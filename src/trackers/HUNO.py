@@ -8,7 +8,7 @@ import aiofiles
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -18,6 +18,7 @@ class HUNO(UNIT3D):
         super().__init__(config, tracker_name='HUNO')
         self.config = config
         self.common = COMMON(config)
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'HUNO'
         self.base_url = 'https://hawke.uno'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -97,7 +98,13 @@ class HUNO(UNIT3D):
             "imgbox.com": "imgbox",
             "imagebam.com": "bam",
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
         image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']

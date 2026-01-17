@@ -4,14 +4,11 @@ import re
 from collections.abc import Awaitable
 from typing import Any, Optional, Union, cast
 
-from data.config import config
 from src.console import console
 from src.imdb import imdb_manager
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 from src.tvdb import tvdb_data
 from src.tvmaze import tvmaze_manager
-
-tvdb_handler = tvdb_data(config)
 
 
 def _coerce_int(value: Any) -> Optional[int]:
@@ -22,17 +19,21 @@ def _coerce_int(value: Any) -> Optional[int]:
 
 
 class MetadataSearchingManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.tvdb_handler = tvdb_data(config)
+        self.tmdb_manager = TmdbManager(config)
+
     async def all_ids(self, meta: dict[str, Any]) -> dict[str, Any]:
-        return await all_ids(meta)
+        return await all_ids(meta, self.tvdb_handler, self.tmdb_manager)
 
     async def imdb_tmdb_tvdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
-        return await imdb_tmdb_tvdb(meta, filename)
+        return await imdb_tmdb_tvdb(meta, filename, self.tvdb_handler, self.tmdb_manager)
 
     async def imdb_tvdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
-        return await imdb_tvdb(meta, filename)
+        return await imdb_tvdb(meta, filename, self.tvdb_handler, self.tmdb_manager)
 
     async def imdb_tmdb(self, meta: dict[str, Any], filename: str) -> dict[str, Any]:
-        return await imdb_tmdb(meta, filename)
+        return await imdb_tmdb(meta, filename, self.tvdb_handler, self.tmdb_manager)
 
     async def get_tvmaze_tvdb(
         self,
@@ -51,6 +52,7 @@ class MetadataSearchingManager:
             search_year,
             imdb,
             tmdb,
+            self.tvdb_handler,
             manual_date=manual_date,
             tvmaze_manual=tvmaze_manual,
             year=year,
@@ -59,13 +61,13 @@ class MetadataSearchingManager:
         )
 
     async def get_tv_data(self, meta: dict[str, Any]) -> dict[str, Any]:
-        return await get_tv_data(meta)
+        return await get_tv_data(meta, self.tvdb_handler, self.tmdb_manager)
 
     async def get_tvdb_tvmaze_tmdb_episode_data(self, meta: dict[str, Any]) -> dict[str, Any]:
-        return await get_tvdb_tvmaze_tmdb_episode_data(meta)
+        return await get_tvdb_tvmaze_tmdb_episode_data(meta, self.tvdb_handler, self.tmdb_manager)
 
 
-async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
+async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     if meta['debug']:
         console.print("[yellow]Starting metadata retrieval with all IDs present[/yellow]")
     # Create a list of all tasks to run in parallel
@@ -241,7 +243,7 @@ async def all_ids(meta: dict[str, Any]) -> dict[str, Any]:
     return meta
 
 
-async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
+async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     if meta['debug']:
         console.print("[yellow]IMDb, TMDb, and TVDb IDs are all present[/yellow]")
     # Core metadata tasks that run in parallel
@@ -405,7 +407,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     return meta
 
 
-async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
+async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     if meta['debug']:
         console.print("[yellow]Both IMDb and TVDB IDs are present[/yellow]")
     tasks: list[Awaitable[Any]] = [
@@ -486,7 +488,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
     return meta
 
 
-async def imdb_tmdb(meta: dict[str, Any], filename: str) -> dict[str, Any]:
+async def imdb_tmdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     # Create a list of coroutines to run concurrently
     coroutines: list[Awaitable[Any]] = [
         tmdb_manager.tmdb_other_meta(
@@ -644,6 +646,7 @@ async def get_tvmaze_tvdb(
     search_year: str,
     imdb: Optional[Union[int, str]],
     tmdb: Optional[Union[int, str]],
+    tvdb_handler: Any,
     manual_date: Optional[str] = None,
     tvmaze_manual: Optional[str] = None,
     year: str = '',
@@ -737,11 +740,11 @@ async def get_tvmaze_tvdb(
     return tvmaze, tvdb, tvdb_data
 
 
-async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
+async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     meta['tvdb_series_name'] = None
     if not meta.get('tv_pack', False) and meta.get('episode_int') != 0:
         if (not meta.get('we_checked_tvdb', False) and not meta.get('we_asked_tvmaze', False)) and meta.get('tvmaze_id') != 0 and meta['tvmaze_id'] != 0 and not meta.get('anime', False):
-            meta = await get_tvdb_tvmaze_tmdb_episode_data(meta)
+            meta = await get_tvdb_tvmaze_tmdb_episode_data(meta, tvdb_handler, tmdb_manager)
         elif meta.get('tvdb_id', 0) and not meta.get('we_checked_tvdb', False):
             tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(
                 meta['tvdb_id'],
@@ -898,7 +901,7 @@ async def get_tv_data(meta: dict[str, Any]) -> dict[str, Any]:
     return meta
 
 
-async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, Any]:
+async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbManager) -> dict[str, Any]:
     if meta['debug']:
         console.print("[yellow]Gathering TVDb and TVMaze episode data[/yellow]")
 
@@ -1011,4 +1014,3 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any]) -> dict[str, A
     return meta
 
 
-metadata_searching_manager = MetadataSearchingManager()

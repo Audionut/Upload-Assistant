@@ -7,6 +7,7 @@ import cli_ui
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
+from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -14,6 +15,7 @@ class DP(UNIT3D):
     def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='DP')
         self.config = config
+        self.tmdb_manager = TmdbManager(config)
         self.tracker = 'DP'
         self.base_url = 'https://darkpeers.org'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -68,7 +70,6 @@ class DP(UNIT3D):
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta.get('logo', "") == "":
-            from src.tmdb import tmdb_manager
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api')
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
             tmdb_id_raw = meta.get('tmdb')
@@ -78,7 +79,7 @@ class DP(UNIT3D):
             logo_languages = ['da', 'sv', 'no', 'fi', 'is', 'en']
             tmdb_api_key = str(TMDB_API_KEY) if TMDB_API_KEY else ''
             if tmdb_id and category:
-                logo_path = await tmdb_manager.get_logo(
+                logo_path = await self.tmdb_manager.get_logo(
                     tmdb_id,
                     category,
                     debug,

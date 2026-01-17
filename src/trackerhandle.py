@@ -12,7 +12,7 @@ from typing_extensions import TypeAlias
 from cogs.redaction import Redaction
 from src.cleanup import cleanup_manager
 from src.get_desc import DescriptionBuilder
-from src.manualpackage import package
+from src.manualpackage import ManualPackageManager
 from src.trackers.PTP import PTP
 from src.trackers.THR import THR
 from src.trackersetup import TRACKER_SETUP
@@ -67,6 +67,7 @@ async def process_trackers(
     tracker_setup = TRACKER_SETUP(config=config)
     tracker_setup_any = cast(Any, tracker_setup)
     enabled_trackers = list(cast(Sequence[str], tracker_setup_any.trackers_enabled(meta)))
+    manual_packager = ManualPackageManager(config)
 
     def print_tracker_result(
         tracker: str,
@@ -248,7 +249,7 @@ async def process_trackers(
                             await DescriptionBuilder(manual_tracker, config).unit3d_edit_desc(meta, manual_tracker)
                         else:
                             await tracker_class.edit_desc(meta)
-                url = await package(meta)
+                url = await manual_packager.package(meta)
                 if url is False:
                     console.print(f"[yellow]Unable to upload prep files, they can be found at `tmp/{meta['uuid']}")
                 else:

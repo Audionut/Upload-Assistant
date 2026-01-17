@@ -6,7 +6,7 @@ from typing import Any, cast
 from typing_extensions import TypeAlias
 
 from src.console import console
-from src.uploadscreens import upload_screens
+from src.uploadscreens import UploadScreensManager
 
 Meta: TypeAlias = MutableMapping[str, Any]
 
@@ -19,6 +19,7 @@ class DiscMenus:
     def __init__(self, meta: Meta, config: MutableMapping[str, Any]):
         self.config = config
         self.path_to_menu_screenshots = str(meta.get('path_to_menu_screenshots', '') or '')
+        self.uploadscreens_manager = UploadScreensManager(cast(dict[str, Any], config))
 
     async def get_disc_menu_images(self, meta: Meta) -> None:
         """
@@ -46,7 +47,7 @@ class DiscMenus:
             console.print("[yellow]No local menu images found to upload.[/yellow]")
             return
 
-        uploaded_images, _ = await upload_screens(
+        uploaded_images, _ = await self.uploadscreens_manager.upload_screens(
             cast(dict[str, Any], meta),
             screens=len(image_paths),
             img_host_num=1,

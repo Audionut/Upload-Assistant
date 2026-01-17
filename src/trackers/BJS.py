@@ -22,7 +22,7 @@ from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
 
@@ -33,6 +33,7 @@ class BJS:
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
+        self.tmdb_manager = TmdbManager(config)
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
@@ -99,7 +100,7 @@ class BJS:
         main_ptbr_data = dict(data.get('pt-BR', {})).get('main', {})
 
         if not main_ptbr_data:
-            main_ptbr_data = await tmdb_manager.get_tmdb_localized_data(
+            main_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
@@ -109,7 +110,7 @@ class BJS:
         if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
             episode_ptbr_data = data.get('pt-BR', {}).get('episode')
             if not episode_ptbr_data:
-                episode_ptbr_data = await tmdb_manager.get_tmdb_localized_data(
+                episode_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
                     meta,
                     data_type='episode',
                     language='pt-BR',

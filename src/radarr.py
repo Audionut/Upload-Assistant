@@ -4,19 +4,17 @@ from typing import Any, Optional, cast
 
 import httpx
 
-from data.config import config
 from src.console import console
 
 MovieInfo = dict[str, Any]
 
-DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
-if not isinstance(DEFAULT_CONFIG, dict):
-    raise ValueError("'DEFAULT' config section must be a dict")
-
-
 class RadarrManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.default_config = cast(dict[str, Any], config.get('DEFAULT', {}))
+
     async def get_radarr_data(self, tmdb_id: Optional[int] = None, filename: Optional[str] = None, debug: bool = False) -> Optional[MovieInfo]:
-        if not any(key.startswith('radarr_api_key') for key in DEFAULT_CONFIG):
+        if not any(key.startswith('radarr_api_key') for key in self.default_config):
             console.print("[red]No Radarr API keys are configured.[/red]")
             return None
 
@@ -31,14 +29,14 @@ class RadarrManager:
             url_name = f"radarr_url{suffix}"
 
             # Check if this instance exists in config
-            api_key_value = DEFAULT_CONFIG.get(api_key_name)
+            api_key_value = self.default_config.get(api_key_name)
             if not isinstance(api_key_value, str) or not api_key_value.strip():
                 # This slot isn't configured; try the next suffix (supports configs starting at _1)
                 instance_index += 1
                 continue
 
             # Get instance-specific configuration
-            base_url_value = DEFAULT_CONFIG.get(url_name)
+            base_url_value = self.default_config.get(url_name)
             if not isinstance(base_url_value, str) or not base_url_value.strip():
                 instance_index += 1
                 continue
@@ -146,12 +144,3 @@ class RadarrManager:
         }
 
 
-radarr_manager = RadarrManager()
-
-
-async def get_radarr_data(tmdb_id: Optional[int] = None, filename: Optional[str] = None, debug: bool = False) -> Optional[MovieInfo]:
-    return await radarr_manager.get_radarr_data(tmdb_id=tmdb_id, filename=filename, debug=debug)
-
-
-async def extract_movie_data(radarr_data: Any, filename: Optional[str] = None) -> Optional[MovieInfo]:
-    return await radarr_manager.extract_movie_data(radarr_data, filename=filename)

@@ -11,34 +11,59 @@ import re
 import sys
 import time
 import traceback
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Mapping
 from typing import Any, Optional, Union, cast
 
 import ffmpeg
 import psutil
 from pymediainfo import MediaInfo
 
-from data.config import config as _config
 from src.cleanup import cleanup_manager
 from src.console import console
 
-config: dict[str, Any] = _config
+default_config: dict[str, Any] = {}
+task_limit = 1
+threads = "1"
+cutoff = 1
+ffmpeg_limit = False
+ffmpeg_is_good = False
+use_libplacebo = True
+tone_map = False
+ffmpeg_compression = "6"
+algorithm = "mobius"
+desat = 10.0
 
-task_limit = int(config['DEFAULT'].get('process_limit', 1))
-threads = str(config['DEFAULT'].get('threads', '1'))
-cutoff = int(config['DEFAULT'].get('cutoff_screens', 1))
-ffmpeg_limit = config['DEFAULT'].get('ffmpeg_limit', False)
-ffmpeg_is_good = config['DEFAULT'].get('ffmpeg_is_good', False)
-use_libplacebo = config['DEFAULT'].get('use_libplacebo', True)
 
-try:
-    task_limit = int(task_limit)  # Convert to integer
-except ValueError:
-    task_limit = 1
-tone_map = config['DEFAULT'].get('tone_map', False)
-ffmpeg_compression = str(config['DEFAULT'].get('ffmpeg_compression', '6'))
-algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
-desat = float(config['DEFAULT'].get('desat', 10.0))
+def _apply_config(config: Mapping[str, Any]) -> None:
+    global default_config, task_limit, threads, cutoff
+    global ffmpeg_limit, ffmpeg_is_good, use_libplacebo
+    global tone_map, ffmpeg_compression, algorithm, desat
+
+    default_section = config.get('DEFAULT', {})
+    default_config = cast(dict[str, Any], default_section) if isinstance(default_section, Mapping) else {}
+
+    try:
+        task_limit = int(default_config.get('process_limit', 1) or 1)
+    except (TypeError, ValueError):
+        task_limit = 1
+
+    threads = str(default_config.get('threads', '1'))
+
+    try:
+        cutoff = int(default_config.get('cutoff_screens', 1) or 1)
+    except (TypeError, ValueError):
+        cutoff = 1
+
+    ffmpeg_limit = default_config.get('ffmpeg_limit', False)
+    ffmpeg_is_good = default_config.get('ffmpeg_is_good', False)
+    use_libplacebo = default_config.get('use_libplacebo', True)
+    tone_map = default_config.get('tone_map', False)
+    ffmpeg_compression = str(default_config.get('ffmpeg_compression', '6'))
+    algorithm = str(default_config.get('algorithm', 'mobius')).strip()
+    try:
+        desat = float(default_config.get('desat', 10.0))
+    except (TypeError, ValueError):
+        desat = 10.0
 
 
 async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
@@ -330,7 +355,7 @@ async def disc_screenshots(
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -372,7 +397,7 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '1080p'))))
             font_size = round(text_size*resol/1080)
@@ -713,7 +738,7 @@ async def dvd_screenshots(
     if not retry_cap and meta['debug']:
         console.print(f"[green]Successfully captured {len(valid_results)} screenshots.")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -771,7 +796,7 @@ async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any],
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '576p'))))
             font_size = round(text_size*resol/576)
@@ -1230,7 +1255,7 @@ async def screenshots(
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -1290,7 +1315,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         if not meta.get('frame_overlay', False):
             # Warm-up (only for first screenshot index or if not warmed)
             if use_libplacebo:
-                warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
+                warm_up = default_config.get('ffmpeg_warmup', False)
                 if warm_up:
                     meta['_libplacebo_warmed'] = False
                 else:
@@ -1465,7 +1490,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '1080p'))))
             font_size = round(text_size*resol/1080)
@@ -1846,8 +1871,8 @@ async def get_image_host(meta: dict[str, Any]) -> Optional[str]:
                     return item.lower().strip()
     else:
         img_host_config: list[str] = [
-            str(config["DEFAULT"][key]).lower()
-            for key in sorted(config["DEFAULT"].keys())
+            str(default_config[key]).lower()
+            for key in sorted(default_config.keys())
             if key.startswith("img_host_1") and not key.endswith("0")
         ]
         if img_host_config:
@@ -1856,6 +1881,10 @@ async def get_image_host(meta: dict[str, Any]) -> Optional[str]:
 
 
 class TakeScreensManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        _apply_config(config)
+
     async def run_ffmpeg(self, command: Any) -> tuple[Optional[int], bytes, bytes]:
         return await run_ffmpeg(command)
 
@@ -1981,6 +2010,3 @@ class TakeScreensManager:
 
     async def get_image_host(self, meta: dict[str, Any]) -> Optional[str]:
         return await get_image_host(meta)
-
-
-takescreens_manager = TakeScreensManager()

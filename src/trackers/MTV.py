@@ -14,7 +14,7 @@ import pyotp
 from defusedxml import ElementTree as ET
 
 from src.console import console
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
@@ -33,6 +33,7 @@ class MTV:
 
     def __init__(self, config: Config) -> None:
         self.config: Config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'MTV'
         self.source_flag = 'MTV'
         self.upload_url = 'https://www.morethantv.me/upload.php'
@@ -68,7 +69,13 @@ class MTV:
             "imgbox.com": "imgbox",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
     async def upload(self, meta: Meta, disctype: str) -> Optional[bool]:

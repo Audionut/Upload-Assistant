@@ -7,13 +7,13 @@ from typing import Any, Optional, Union, cast
 import aiohttp
 import qbittorrentapi
 
-from data.config import config
 from src.console import console
 
 
 class Wait:
 
-    def __init__(self):
+    def __init__(self, config: dict[str, Any]):
+        self.config = config
         self.proxy_url: Optional[str] = None
         self.qbt_proxy_url: Optional[str] = None
         self.qbt_session: Optional[aiohttp.ClientSession] = None
@@ -21,7 +21,7 @@ class Wait:
         self.qbt_client = self._connect_qbittorrent()
 
     def _connect_qbittorrent(self) -> Optional[qbittorrentapi.Client]:
-        config_map = cast(dict[str, Any], config)
+        config_map = self.config
         default_section = cast(dict[str, Any], config_map.get('DEFAULT', {}))
         clients_section = cast(dict[str, Any], config_map.get('TORRENT_CLIENTS', {}))
 

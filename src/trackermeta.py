@@ -12,22 +12,72 @@ import click
 from PIL import Image
 from typing_extensions import TypeAlias
 
-from data.config import config
 from src.bbcode import BBCODE
 from src.btnid import BtnIdManager
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.type_utils import to_int
 
-# Define expected amount of screenshots from the config
-DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('DEFAULT', {}))
-TRACKER_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config.get('TRACKERS', {}))
+config: dict[str, Any] = {}
+default_config: Mapping[str, Any] = {}
+trackers_config: Mapping[str, Any] = {}
 
 Meta: TypeAlias = MutableMapping[str, Any]
 ImageDict: TypeAlias = dict[str, Any]
 
 
-expected_images = to_int(DEFAULT_CONFIG.get('screens', 0))
+expected_images = 0
+
+
+def _apply_config(next_config: dict[str, Any]) -> None:
+    global config, default_config, trackers_config, expected_images
+    config = next_config
+    default_config = cast(Mapping[str, Any], next_config.get('DEFAULT', {}))
+    trackers_config = cast(Mapping[str, Any], next_config.get('TRACKERS', {}))
+    expected_images = to_int(default_config.get('screens', 0))
+
+
+class TrackerMetaManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        _apply_config(config)
+
+    async def prompt_user_for_confirmation(self, message: str) -> bool:
+        return await prompt_user_for_confirmation(message)
+
+    async def check_images_concurrently(self, imagelist: Sequence[ImageDict], meta: Meta) -> list[ImageDict]:
+        return await check_images_concurrently(imagelist, meta)
+
+    async def check_image_link(self, url: str, timeout: Optional[aiohttp.ClientTimeout] = None) -> bool:
+        return await check_image_link(url, timeout)
+
+    async def update_meta_with_unit3d_data(
+        self, meta: Meta, tracker_data: Sequence[Any], tracker_name: str, only_id: bool = False
+    ) -> bool:
+        return await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
+
+    async def update_metadata_from_tracker(
+        self,
+        tracker_name: str,
+        tracker_instance: Any,
+        meta: Meta,
+        search_term: str,
+        search_file_folder: str,
+        only_id: bool = False,
+    ) -> tuple[Meta, bool]:
+        return await update_metadata_from_tracker(
+            tracker_name,
+            tracker_instance,
+            meta,
+            search_term,
+            search_file_folder,
+            only_id,
+        )
+
+    async def handle_image_list(
+        self, meta: Meta, tracker_name: str, valid_images: Optional[Sequence[ImageDict]] = None
+    ) -> None:
+        await handle_image_list(meta, tracker_name, valid_images)
 
 
 async def prompt_user_for_confirmation(message: str) -> bool:

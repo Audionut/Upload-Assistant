@@ -11,7 +11,7 @@ import cli_ui
 import httpx
 
 from src.console import console
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 
 
@@ -26,6 +26,7 @@ class BHD:
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'BHD'
         self.source_flag = 'BHD'
         self.upload_url = 'https://beyond-hd.me/api/upload/'
@@ -48,7 +49,13 @@ class BHD:
             "imagebam.com": "bam",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return None
 
     async def upload(self, meta: dict[str, Any], disctype: str) -> bool:

@@ -8,7 +8,7 @@ import aiofiles
 from src.bbcode import BBCODE
 from src.console import console
 from src.languages import languages_manager
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -21,6 +21,7 @@ class OE(UNIT3D):
         super().__init__(config, tracker_name='OE')
         self.config: Config = config
         self.common = COMMON(config)
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'OE'
         self.base_url = 'https://onlyencodes.cc'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -66,7 +67,13 @@ class OE(UNIT3D):
             "img.passtheima.ge": "passtheimage",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
     async def get_description(self, meta: Meta) -> dict[str, str]:

@@ -11,11 +11,10 @@ import aiohttp
 import cli_ui
 import requests
 
-from data.config import config
 from src.btnid import BtnIdManager
 from src.cleanup import cleanup_manager
 from src.console import console
-from src.trackermeta import update_metadata_from_tracker
+from src.trackermeta import TrackerMetaManager
 from src.trackersetup import tracker_class_map
 
 
@@ -30,6 +29,7 @@ class TrackerDataManager:
             raise ValueError("'DEFAULT' config section must be a dict")
         self.trackers_config = trackers_cfg
         self.default_config = default_cfg
+        self.tracker_meta_manager = TrackerMetaManager(config)
 
     def get_tracker_config(self, tracker_name: str) -> Mapping[str, Any]:
         return self.trackers_config.get(tracker_name, MappingProxyType({}))
@@ -219,7 +219,7 @@ class TrackerDataManager:
 
                     tracker_instance = tracker_factory(config=self.config)
                     try:
-                        updated_meta, match = await update_metadata_from_tracker(
+                        updated_meta, match = await self.tracker_meta_manager.update_metadata_from_tracker(
                             tracker_name,
                             tracker_instance,
                             meta,
@@ -385,7 +385,7 @@ class TrackerDataManager:
 
                     tracker_instance = tracker_factory(config=self.config)
                     try:
-                        updated_meta, match = await update_metadata_from_tracker(
+                        updated_meta, match = await self.tracker_meta_manager.update_metadata_from_tracker(
                             tracker_name,
                             tracker_instance,
                             meta,
@@ -481,19 +481,3 @@ class TrackerDataManager:
                         console.print(f"[green]Found distributor '{meta['distributor']}' from {tracker_name}[/green]")
 
 
-tracker_data_manager = TrackerDataManager(cast(dict[str, Any], config))
-
-
-async def get_tracker_data(
-    video: Any,
-    meta: dict[str, Any],
-    search_term: Optional[str] = None,
-    search_file_folder: Optional[str] = None,
-    cat: Optional[str] = None,
-    only_id: bool = False,
-) -> dict[str, Any]:
-    return await tracker_data_manager.get_tracker_data(video, meta, search_term, search_file_folder, cat, only_id)
-
-
-async def ping_unit3d(meta: dict[str, Any]) -> None:
-    await tracker_data_manager.ping_unit3d(meta)

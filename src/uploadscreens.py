@@ -17,13 +17,42 @@ import pyimgbox
 import requests
 from typing_extensions import TypeAlias
 
-from data.config import config as raw_config
 from src.console import console
-
-config = cast(dict[str, Any], raw_config)
 
 Meta: TypeAlias = dict[str, Any]
 ImageDict: TypeAlias = dict[str, Any]
+
+
+class UploadScreensManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+
+    async def upload_screens(
+        self,
+        meta: Meta,
+        screens: int,
+        img_host_num: int,
+        i: int,
+        total_screens: int,
+        custom_img_list: list[str],
+        return_dict: dict[str, Any],
+        retry_mode: bool = False,
+        max_retries: int = 3,
+        allowed_hosts: Union[list[str], None] = None,
+    ) -> tuple[list[ImageDict], int]:
+        return await _upload_screens(
+            self.config,
+            meta,
+            screens,
+            img_host_num,
+            i,
+            total_screens,
+            custom_img_list,
+            return_dict,
+            retry_mode=retry_mode,
+            max_retries=max_retries,
+            allowed_hosts=allowed_hosts,
+        )
 
 
 async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
@@ -545,17 +574,18 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
         }
 
 
-async def upload_screens(
-        meta: Meta,
-        screens: int,
-        img_host_num: int,
-        i: int,
-        total_screens: int,
-        custom_img_list: list[str],
-        return_dict: dict[str, Any],
-        retry_mode: bool = False,
-        max_retries: int = 3,
-        allowed_hosts: Union[list[str], None] = None
+async def _upload_screens(
+    config: dict[str, Any],
+    meta: Meta,
+    screens: int,
+    img_host_num: int,
+    i: int,
+    total_screens: int,
+    custom_img_list: list[str],
+    return_dict: dict[str, Any],
+    retry_mode: bool = False,
+    max_retries: int = 3,
+    allowed_hosts: Union[list[str], None] = None
 ) -> tuple[list[ImageDict], int]:
     default_config = config.get('DEFAULT', {})
     if 'image_list' not in meta:
@@ -761,7 +791,7 @@ async def upload_screens(
                 console.print(f"[cyan]Switching to the next image host: {meta['imghost']}[/cyan]")
 
                 gc.collect()
-                return await upload_screens(meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
+                return await _upload_screens(config, meta, screens, img_host_num, i, total_screens, custom_img_list, return_dict, retry_mode=True)
             else:
                 console.print("[red]No more image hosts available. Aborting upload process.")
                 return image_list, len(image_list)

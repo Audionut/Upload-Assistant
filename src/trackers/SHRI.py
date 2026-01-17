@@ -13,7 +13,7 @@ import requests
 from babel import Locale
 from babel.core import UnknownLocaleError
 
-from src.audio import get_audio_v2
+from src.audio import AudioManager
 from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -38,6 +38,7 @@ class SHRI(UNIT3D):
         super().__init__(config, tracker_name="SHRI")
         self.config = config
         self.common = COMMON(config)
+        self.audio_manager = AudioManager(config)
         self.tracker = "SHRI"
         self.base_url = "https://shareisland.org"
         self.id_url = f"{self.base_url}/api/torrents/"
@@ -715,7 +716,7 @@ class SHRI(UNIT3D):
                 audio_value = meta.get("audio", "")
                 return clean(audio_value if isinstance(audio_value, str) else "")
             best = max(italian, key=lambda t: extract_quality(t, True))
-            audio_str, _, _ = await get_audio_v2({}, meta, {"audio": [best]})
+            audio_str, _, _ = await self.audio_manager.get_audio_v2({}, meta, {"audio": [best]})
         else:
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             italian = [
@@ -728,7 +729,7 @@ class SHRI(UNIT3D):
                 audio_value = meta.get("audio", "")
                 return clean(audio_value if isinstance(audio_value, str) else "")
             best = max(italian, key=lambda t: extract_quality(t, False))
-            audio_str, _, _ = await get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
+            audio_str, _, _ = await self.audio_manager.get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
 
         return clean(str(audio_str))
 

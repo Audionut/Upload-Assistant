@@ -20,17 +20,20 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
-from src.rehostimages import check_hosts
-from src.takescreens import takescreens_manager
+from src.rehostimages import RehostImagesManager
+from src.takescreens import TakeScreensManager
 from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
-from src.uploadscreens import upload_screens
+from src.uploadscreens import UploadScreensManager
 
 
 class PTP:
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        self.rehost_images_manager = RehostImagesManager(config)
+        self.takescreens_manager = TakeScreensManager(config)
+        self.uploadscreens_manager = UploadScreensManager(config)
         self.tracker = 'PTP'
         self.source_flag = 'PTP'
         self.api_user = config['TRACKERS']['PTP'].get('ApiUser', '').strip()
@@ -733,7 +736,13 @@ class PTP:
             "pixhost.to": "pixhost",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
@@ -910,13 +919,13 @@ class PTP:
                             if not new_screens:
                                 use_vs = meta.get('vapoursynth', False)
                                 try:
-                                    await takescreens_manager.disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                    await self.takescreens_manager.disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
                                 except Exception as e:
                                     print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
                             uploaded_images: list[dict[str, Any]] = []
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                                uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
@@ -990,14 +999,14 @@ class PTP:
                                 new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                                 if not new_screens:
                                     try:
-                                        await takescreens_manager.disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
+                                        await self.takescreens_manager.disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during BDMV screenshot capture: {e}")
                                 new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                                 uploaded_images: list[dict[str, Any]] = []
                                 uploaded_images: list[dict[str, Any]] = []
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                                    uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -1060,15 +1069,13 @@ class PTP:
                                 new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
                                 if not new_screens:
                                     try:
-                                        await takescreens_manager.dvd_screenshots(
-                                            meta, i, multi_screens, True
-                                        )
+                                        await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during DVD screenshot capture: {e}")
                                 new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
                                 uploaded_images: list[dict[str, Any]] = []
                                 if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                                    uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                     for img in uploaded_images:
@@ -1193,13 +1200,13 @@ class PTP:
                             new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                             if not new_screens:
                                 try:
-                                    await takescreens_manager.screenshots(
+                                    await self.takescreens_manager.screenshots(
                                         file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
                                 except Exception as e:
                                     print(f"Error during generic screenshot capture: {e}")
                             new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                             if new_screens and not meta.get('skip_imghost_upload', False):
-                                uploaded_images, _ = await upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                                uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
                                 if uploaded_images and not meta.get('skip_imghost_upload', False):
                                     await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:

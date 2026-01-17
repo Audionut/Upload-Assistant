@@ -8,12 +8,24 @@ from typing import Any, Optional, Union, cast
 
 import langcodes
 
-from data.config import config
 from src.console import console
 from src.trackers.COMMON import COMMON
 
 Meta = dict[str, Any]
 TrackDict = dict[str, Any]
+
+
+class AudioManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+
+    async def get_audio_v2(
+        self,
+        mi: Mapping[str, Any],
+        meta: Meta,
+        bdinfo: Optional[Mapping[str, Any]],
+    ) -> tuple[str, str, bool]:
+        return await _get_audio_v2(self.config, mi, meta, bdinfo)
 
 
 def determine_channel_count(
@@ -181,7 +193,8 @@ def fallback_channel_count(channels: int) -> str:
         return f"{channels - 1}.1"
 
 
-async def get_audio_v2(
+async def _get_audio_v2(
+    config: dict[str, Any],
     mi: Mapping[str, Any],
     meta: Meta,
     bdinfo: Optional[Mapping[str, Any]],

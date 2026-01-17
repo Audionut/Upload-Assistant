@@ -9,7 +9,6 @@ from typing import Any, Callable, Optional, Union, cast
 import cli_ui
 
 from cogs.redaction import Redaction
-from data.config import config
 from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackersetup import tracker_class_map
@@ -17,14 +16,14 @@ from src.trackersetup import tracker_class_map
 Meta = dict[str, Any]
 DupeEntry = dict[str, Any]
 
-CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], config)
-DEFAULT_CONFIG: Mapping[str, Any] = cast(Mapping[str, Any], CONFIG.get('DEFAULT', {}))
-TRACKER_CLASS_MAP: Mapping[str, Any] = cast(Mapping[str, Any], tracker_class_map)
-if not isinstance(DEFAULT_CONFIG, dict):
-    raise ValueError("'DEFAULT' config section must be a dict")
-
-
 class UploadHelper:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.default_config = cast(Mapping[str, Any], config.get('DEFAULT', {}))
+        if not isinstance(self.default_config, dict):
+            raise ValueError("'DEFAULT' config section must be a dict")
+        self.tracker_class_map = cast(Mapping[str, Any], tracker_class_map)
+
     async def dupe_check(self, dupes: list[Union[DupeEntry, str]], meta: Meta, tracker_name: str) -> tuple[bool, Meta]:
         def _format_dupe(entry: Union[DupeEntry, str]) -> str:
             if isinstance(entry, dict):
@@ -43,8 +42,8 @@ class UploadHelper:
                 console.print(f"[green]No dupes found at[/green] [yellow]{tracker_name}[/yellow]")
             return False,  meta
         else:
-            tracker_class_factory = cast(Callable[..., Any], TRACKER_CLASS_MAP[tracker_name])
-            tracker_class = tracker_class_factory(config=CONFIG)
+            tracker_class_factory = cast(Callable[..., Any], self.tracker_class_map[tracker_name])
+            tracker_class = tracker_class_factory(config=self.config)
             try:
                 tracker_rename = await tracker_class.get_name(meta)
             except Exception:
@@ -325,7 +324,7 @@ class UploadHelper:
         else:
             if not meta.get('emby', False):
                 await self.get_missing(meta)
-                ring_the_bell = "\a" if bool(DEFAULT_CONFIG.get("sfx_on_prompt", True)) else ""
+                ring_the_bell = "\a" if bool(self.default_config.get("sfx_on_prompt", True)) else ""
                 if ring_the_bell:
                     console.print(ring_the_bell)
 

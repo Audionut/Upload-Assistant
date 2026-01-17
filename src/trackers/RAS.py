@@ -2,7 +2,7 @@
 from typing import Any
 
 from src.get_desc import DescriptionBuilder
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
 Meta = dict[str, Any]
@@ -13,6 +13,7 @@ class RAS(UNIT3D):
     def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='RAS')
         self.config: Config = config
+        self.tmdb_manager = TmdbManager(config)
         self.tracker = 'RAS'
         self.base_url = 'https://rastastugan.org'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -42,7 +43,7 @@ class RAS(UNIT3D):
             category = str(meta.get('category', ''))
             debug = bool(meta.get('debug', False))
             logo_languages = ['da', 'sv', 'no', 'fi', 'is', 'en']
-            logo_path = await tmdb_manager.get_logo(
+            logo_path = await self.tmdb_manager.get_logo(
                 tmdb_id,
                 category,
                 debug,

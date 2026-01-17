@@ -14,15 +14,17 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
-from src.rehostimages import check_hosts
-from src.tmdb import tmdb_manager
+from src.rehostimages import RehostImagesManager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
 
 class GPW:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.common = COMMON(config)
+        self.tmdb_manager = TmdbManager(config)
         self.tracker = 'GPW'
         self.source_flag = 'GreatPosterWall'
         self.base_url = 'https://greatposterwall.com'
@@ -81,7 +83,7 @@ class GPW:
             main_ch_data = cast(dict[str, Any], main_value) if isinstance(main_value, dict) else {}
 
         if not main_ch_data:
-            localized_main = await tmdb_manager.get_tmdb_localized_data(
+            localized_main = await self.tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='zh-cn',
@@ -196,7 +198,13 @@ class GPW:
 
     async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         # Rule: 2.2.1. Screenshots: They have to be saved at kshare.club, pixhost.to, ptpimg.me, img.pterclub.com, yes.ilikeshots.club, imgbox.com, s3.pterclub.com
-        await check_hosts(meta, self.tracker, url_host_mapping=self.url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=self.url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
     async def get_release_desc(self, meta: dict[str, Any]) -> str:

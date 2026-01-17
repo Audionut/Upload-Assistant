@@ -12,7 +12,7 @@ import click
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
-from src.uploadscreens import upload_screens
+from src.uploadscreens import UploadScreensManager
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
@@ -22,6 +22,7 @@ class TIK(UNIT3D):
     def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='TIK')
         self.config: Config = config
+        self.uploadscreens_manager = UploadScreensManager(config)
         self.tracker = 'TIK'
         self.base_url = 'https://cinematik.net'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -239,7 +240,7 @@ class TIK(UNIT3D):
         if os.path.exists(poster_path):
             try:
                 console.print("Uploading standard poster to image host....")
-                new_poster_url, _ = await upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
+                new_poster_url, _ = await self.uploadscreens_manager.upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
 
                 # Ensure that the new poster URL is assigned only once
                 poster_urls = new_poster_url

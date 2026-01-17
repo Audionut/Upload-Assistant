@@ -17,7 +17,7 @@ from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
 from src.languages import languages_manager
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
 
@@ -26,6 +26,7 @@ class BT:
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config: dict[str, Any] = config
+        self.tmdb_manager = TmdbManager(config)
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
@@ -142,7 +143,7 @@ class BT:
         main_ptbr_data = cast(dict[str, Any], ptbr_dict.get('main') or {})
 
         if not main_ptbr_data:
-            localized_main = await tmdb_manager.get_tmdb_localized_data(
+            localized_main = await self.tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
@@ -153,7 +154,7 @@ class BT:
         if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
             episode_ptbr_data = cast(dict[str, Any], ptbr_dict.get('episode') or {})
             if not episode_ptbr_data:
-                localized_episode = await tmdb_manager.get_tmdb_localized_data(
+                localized_episode = await self.tmdb_manager.get_tmdb_localized_data(
                     meta,
                     data_type='episode',
                     language='pt-BR',

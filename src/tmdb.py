@@ -17,21 +17,32 @@ import guessit
 import httpx
 import requests
 
-from data.config import config
 from src.args import Args
 from src.cleanup import cleanup_manager
 from src.console import console
 from src.imdb import imdb_manager
 
-DEFAULT_CFG: dict[str, Any] = typing_cast(dict[str, Any], config["DEFAULT"])
-TMDB_API_KEY = DEFAULT_CFG.get('tmdb_api', False)
-
-# Validate TMDB API key at import time
-if not TMDB_API_KEY or not isinstance(TMDB_API_KEY, str) or not TMDB_API_KEY.strip():
-    raise ValueError("TMDB API key is missing or invalid. Please set 'tmdb_api' in your config under DEFAULT section.")
-
+default_config: dict[str, Any] = {}
+tmdb_api_key: Optional[str] = None
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
-parser = Args(config=config)
+parser: Optional[Args] = None
+
+
+def _apply_config(config: dict[str, Any]) -> None:
+    global tmdb_api_key, parser, default_config
+    default_cfg = typing_cast(dict[str, Any], config.get("DEFAULT", {}))
+    default_config = default_cfg
+    api_key_value = default_cfg.get('tmdb_api', False)
+    if not api_key_value or not isinstance(api_key_value, str) or not api_key_value.strip():
+        raise ValueError("TMDB API key is missing or invalid. Please set 'tmdb_api' in your config under DEFAULT section.")
+    tmdb_api_key = api_key_value
+    parser = Args(config=config)
+
+
+def _get_parser() -> Args:
+    if parser is None:
+        raise RuntimeError("TMDb parser is not initialized. Create TmdbManager with config first.")
+    return parser
 
 anitopy_parse_fn: Any = typing_cast(Any, anitopy).parse
 guessit_fn: Any = typing_cast(Any, guessit).guessit
@@ -41,6 +52,10 @@ _cache_locks: dict[str, asyncio.Lock] = {}
 
 
 class TmdbManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        _apply_config(config)
+
     async def normalize_title(self, title: str) -> str:
         return await normalize_title(title)
 
@@ -222,7 +237,7 @@ class TmdbManager:
             category=category,
             debug=debug,
             logo_languages=logo_languages,
-            TMDB_API_KEY=TMDB_API_KEY,
+            TMDB_API_KEY=tmdb_api_key,
             TMDB_BASE_URL=TMDB_BASE_URL,
             logo_json=logo_json,
         )
@@ -259,7 +274,6 @@ class TmdbManager:
         )
 
 
-tmdb_manager = TmdbManager()
 
 
 async def normalize_title(title: str) -> str:
@@ -291,7 +305,7 @@ async def get_tmdb_from_imdb(
     async def _tmdb_find_by_external_source(external_id: Union[str, int], source: str) -> dict[str, Any]:
         """Helper function to find a movie or TV show on TMDb by external ID."""
         url = f"{TMDB_BASE_URL}/find/{external_id}"
-        params = {"api_key": TMDB_API_KEY, "external_source": source}
+        params = {"api_key": tmdb_api_key, "external_source": source}
 
         async with httpx.AsyncClient() as client:
             response: Optional[httpx.Response] = None
@@ -385,7 +399,7 @@ async def get_tmdb_from_imdb(
     if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
         console.print('[yellow]Unable to find a matching TMDb entry[/yellow]')
         tmdb_input = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ") or ""
-        category, tmdb_id = parser.parse_tmdb_id(tmdb_input, category)
+        category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
 
     return category, tmdb_id, original_language, filename_search
 
@@ -441,14 +455,14 @@ async def get_tmdb_id(
                         console.print(f"[green]Searching TMDb for movie:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
                     params = {
-                        "api_key": TMDB_API_KEY,
+                        "api_key": tmdb_api_key,
                         "query": filename,
                         "language": "en-US",
                         "include_adult": "true"
                     }
 
                     if search_year:
-                        params["year"] = search_year
+                        params["year"] = str(search_year)
 
                     response = await client.get(f"{TMDB_BASE_URL}/search/movie", params=params)
                     try:
@@ -462,14 +476,14 @@ async def get_tmdb_id(
                         console.print(f"[green]Searching TMDb for TV show:[/] [cyan]{filename}[/cyan] (Year: {search_year})")
 
                     params = {
-                        "api_key": TMDB_API_KEY,
+                        "api_key": tmdb_api_key,
                         "query": filename,
                         "language": "en-US",
                         "include_adult": "true"
                     }
 
                     if search_year:
-                        params["first_air_date_year"] = search_year
+                        params["first_air_date_year"] = str(search_year)
 
                     response = await client.get(f"{TMDB_BASE_URL}/search/tv", params=params)
                     try:
@@ -753,7 +767,7 @@ async def get_tmdb_id(
                                 # Check if it's a manual TMDb ID entry
                                 if '/' in selection and (selection.lower().startswith('tv/') or selection.lower().startswith('movie/')):
                                     try:
-                                        parsed_category, parsed_tmdb_id = parser.parse_tmdb_id(selection, category)
+                                        parsed_category, parsed_tmdb_id = _get_parser().parse_tmdb_id(selection, category)
                                         if parsed_tmdb_id and parsed_tmdb_id != 0:
                                             console.print(f"[green]Using manual TMDb ID: {parsed_tmdb_id} and category: {parsed_category}[/green]")
                                             return int(parsed_tmdb_id), parsed_category
@@ -945,7 +959,7 @@ async def get_tmdb_id(
         sys.exit(1)
     if tmdb_input is None:
         tmdb_input = ""
-    category, tmdb_id = parser.parse_tmdb_id(tmdb_input, category)
+    category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
 
     return tmdb_id, category
 
@@ -1049,7 +1063,7 @@ async def tmdb_other_meta(
         main_url = f"{TMDB_BASE_URL}/{('movie' if category == 'MOVIE' else 'tv')}/{tmdb_id}"
 
         # Make the main API call to get basic data
-        response = await client.get(main_url, params={"api_key": TMDB_API_KEY})
+        response = await client.get(main_url, params={"api_key": tmdb_api_key})
         try:
             response.raise_for_status()
             media_data = typing_cast(dict[str, Any], response.json())
@@ -1114,20 +1128,20 @@ async def tmdb_other_meta(
         # Prepare all API endpoints for concurrent requests
         endpoints = [
             # External IDs
-            client.get(f"{main_url}/external_ids", params={"api_key": TMDB_API_KEY}),
+            client.get(f"{main_url}/external_ids", params={"api_key": tmdb_api_key}),
             # Videos
-            client.get(f"{main_url}/videos", params={"api_key": TMDB_API_KEY}),
+            client.get(f"{main_url}/videos", params={"api_key": tmdb_api_key}),
             # Keywords
-            client.get(f"{main_url}/keywords", params={"api_key": TMDB_API_KEY}),
+            client.get(f"{main_url}/keywords", params={"api_key": tmdb_api_key}),
             # Credits
-            client.get(f"{main_url}/credits", params={"api_key": TMDB_API_KEY})
+            client.get(f"{main_url}/credits", params={"api_key": tmdb_api_key})
         ]
 
         # Add logo request if needed
-        if DEFAULT_CFG.get('add_logo', False):
+        if default_config.get('add_logo', False):
             endpoints.append(
                 client.get(f"{TMDB_BASE_URL}/{('movie' if category == 'MOVIE' else 'tv')}/{tmdb_id}/images",
-                           params={"api_key": TMDB_API_KEY})
+                           params={"api_key": tmdb_api_key})
             )
 
         # Make all requests concurrently
@@ -1139,7 +1153,7 @@ async def tmdb_other_meta(
         logo_data = None
 
         # Get logo data if it was requested
-        if DEFAULT_CFG.get('add_logo', False):
+        if default_config.get('add_logo', False):
             logo_data = rest[idx]
             idx += 1
 
@@ -1250,10 +1264,10 @@ async def tmdb_other_meta(
         genre_ids = genres_data['genre_ids']
 
         # Process logo if needed
-        if DEFAULT_CFG.get('add_logo', False) and logo_data and not isinstance(logo_data, Exception):
+        if default_config.get('add_logo', False) and logo_data and not isinstance(logo_data, Exception):
             try:
                 logo_json = typing_cast(dict[str, Any], logo_data.json())  # type: ignore
-                logo_path = await get_logo(tmdb_id, category or "MOVIE", debug, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
+                logo_path = await get_logo(tmdb_id, category or "MOVIE", debug, TMDB_API_KEY=tmdb_api_key, TMDB_BASE_URL=TMDB_BASE_URL, logo_json=logo_json)
                 tmdb_logo = logo_path.split('/')[-1]
             except Exception:
                 console.print("[yellow]Failed to process logo[/yellow]")
@@ -1330,7 +1344,7 @@ async def get_keywords(tmdb_id: int, category: str) -> str:
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(url, params={"api_key": TMDB_API_KEY})
+            response = await client.get(url, params={"api_key": tmdb_api_key})
             try:
                 response.raise_for_status()
                 data = response.json()
@@ -1379,7 +1393,7 @@ async def get_directors(tmdb_id: int, category: str) -> list[str]:
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(url, params={"api_key": TMDB_API_KEY})
+            response = await client.get(url, params={"api_key": tmdb_api_key})
             try:
                 response.raise_for_status()
                 data = response.json()
@@ -1615,7 +1629,7 @@ async def get_tmdb_imdb_from_mediainfo(
         for each in extra:
             if each.lower().startswith('tmdb') and not tmdbid:
                 with contextlib.suppress(Exception):
-                    category, tmdbid = parser.parse_tmdb_id(extra[each], category)
+                    category, tmdbid = _get_parser().parse_tmdb_id(extra[each], category)
             if each.lower().startswith('imdb') and not imdbid:
                 with contextlib.suppress(Exception):
                     imdb_id = extract_imdb_id(extra[each])
@@ -1656,7 +1670,7 @@ async def daily_to_tmdb_season_episode(tmdbid: int, date: Union[str, datetime]) 
         # Get TV show information to get seasons
         response = await client.get(
             f"{TMDB_BASE_URL}/tv/{tmdbid}",
-            params={"api_key": TMDB_API_KEY}
+            params={"api_key": tmdb_api_key}
         )
         try:
             response.raise_for_status()
@@ -1679,7 +1693,7 @@ async def daily_to_tmdb_season_episode(tmdbid: int, date: Union[str, datetime]) 
         # Get the specific season information
         season_response = await client.get(
             f"{TMDB_BASE_URL}/tv/{tmdbid}/season/{season}",
-            params={"api_key": TMDB_API_KEY}
+            params={"api_key": tmdb_api_key}
         )
         try:
             season_response.raise_for_status()
@@ -1714,7 +1728,7 @@ async def get_episode_details(
             # Get episode details
             response = await client.get(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}/episode/{episode_number}",
-                params={"api_key": TMDB_API_KEY, "append_to_response": "images,credits,external_ids"}
+                params={"api_key": tmdb_api_key, "append_to_response": "images,credits,external_ids"}
             )
             try:
                 response.raise_for_status()
@@ -1793,7 +1807,7 @@ async def get_season_details(
             # Get season details
             response = await client.get(
                 f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}",
-                params={"api_key": TMDB_API_KEY, "append_to_response": "images,credits"}
+                params={"api_key": tmdb_api_key, "append_to_response": "images,credits"}
             )
             try:
                 response.raise_for_status()
@@ -1875,7 +1889,7 @@ async def get_logo(
 
     elif logo_languages is None:
         # Get preferred languages in order (from config, then 'en' as fallback)
-        logo_languages = [DEFAULT_CFG.get('logo_language', 'en'), 'en']
+        logo_languages = [default_config.get('logo_language', 'en'), 'en']
     elif isinstance(logo_languages, str):
         logo_languages = [logo_languages, 'en']
 
@@ -1951,7 +1965,7 @@ async def get_tmdb_translations(
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(url, params={"api_key": TMDB_API_KEY})
+            response = await client.get(url, params={"api_key": tmdb_api_key})
             response.raise_for_status()
             data = response.json()
 
@@ -2056,7 +2070,7 @@ async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language
 
     url = f'{TMDB_BASE_URL}{endpoint}'
     params = {
-        'api_key': TMDB_API_KEY,
+        'api_key': tmdb_api_key,
         'language': language
     }
     if append_to_response:

@@ -7,7 +7,7 @@ import cloudscraper
 
 from src.console import console
 from src.languages import languages_manager
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -19,6 +19,7 @@ class EMUW(UNIT3D):
 
     def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='EMUW')
+        self.tmdb_manager = TmdbManager(config)
         self.base_url = 'https://emuwarez.com'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
@@ -111,7 +112,7 @@ class EMUW(UNIT3D):
         tmdb_id_raw = meta.get('tmdb')
         tmdb_id = int(tmdb_id_raw) if isinstance(tmdb_id_raw, (int, str)) and str(tmdb_id_raw).isdigit() else 0
         if not spanish_title and tmdb_id:
-            spanish_title = await tmdb_manager.get_tmdb_translations(
+            spanish_title = await self.tmdb_manager.get_tmdb_translations(
                 tmdb_id=tmdb_id,
                 category=str(meta.get('category', 'MOVIE')),
                 target_language='es',

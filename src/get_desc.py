@@ -16,9 +16,9 @@ from pymediainfo import MediaInfo
 from src.bbcode import BBCODE
 from src.console import console
 from src.languages import languages_manager
-from src.takescreens import takescreens_manager
+from src.takescreens import TakeScreensManager
 from src.trackers.COMMON import COMMON
-from src.uploadscreens import upload_screens
+from src.uploadscreens import UploadScreensManager
 
 
 def html_to_bbcode(text: str) -> str:
@@ -48,7 +48,11 @@ def html_to_bbcode(text: str) -> str:
     return converted_text
 
 
-async def gen_desc(meta: dict[str, Any]) -> dict[str, Any]:
+async def gen_desc(
+    meta: dict[str, Any],
+    takescreens_manager: TakeScreensManager,
+    uploadscreens_manager: UploadScreensManager,
+) -> dict[str, Any]:
     def clean_text(text: str) -> str:
         return text.replace("\r\n", "\n").strip()
 
@@ -186,6 +190,8 @@ class DescriptionBuilder:
         self.config: dict[str, Any] = config
         self.common = COMMON(config)
         self.tracker: str = tracker
+        self.takescreens_manager = TakeScreensManager(config)
+        self.uploadscreens_manager = UploadScreensManager(config)
 
         trackers_config = self.config.get('TRACKERS')
         if not isinstance(trackers_config, dict):
@@ -819,7 +825,7 @@ class DescriptionBuilder:
                             if not new_screens:
                                 use_vs = meta.get("vapoursynth", False)
                                 try:
-                                    await takescreens_manager.disc_screenshots(
+                                    await self.takescreens_manager.disc_screenshots(
                                         meta,
                                         f"PLAYLIST_{i}",
                                         bdinfo,
@@ -837,7 +843,7 @@ class DescriptionBuilder:
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                                 )]
                             if new_screens and not meta.get("skip_imghost_upload", False):
-                                uploaded_images, _ = await upload_screens(
+                                uploaded_images, _ = await self.uploadscreens_manager.upload_screens(
                                     meta,
                                     multi_screens,
                                     1,
@@ -1007,7 +1013,7 @@ class DescriptionBuilder:
                                 if each["type"] == "BDMV":
                                     use_vs = meta.get("vapoursynth", False)
                                     try:
-                                        await takescreens_manager.disc_screenshots(
+                                        await self.takescreens_manager.disc_screenshots(
                                             meta,
                                             f"FILE_{i}",
                                             each["bdinfo"],
@@ -1026,7 +1032,7 @@ class DescriptionBuilder:
                                     )]
                                 if each["type"] == "DVD":
                                     try:
-                                        await takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
+                                        await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
                                         print(f"Error during DVD screenshot capture: {e}")
                                     new_screens = [os.path.basename(f) for f in glob.glob(
@@ -1034,7 +1040,7 @@ class DescriptionBuilder:
                                     )]
 
                             if new_screens and not meta.get("skip_imghost_upload", False):
-                                uploaded_images, _ = await upload_screens(
+                                uploaded_images, _ = await self.uploadscreens_manager.upload_screens(
                                     meta,
                                     multi_screens,
                                     1,
@@ -1176,7 +1182,7 @@ class DescriptionBuilder:
                                 f"[yellow]No existing screenshots for {new_images_key}; generating new ones."
                             )
                         try:
-                            await takescreens_manager.screenshots(
+                            await self.takescreens_manager.screenshots(
                                 file,
                                 f"FILE_{i}",
                                 meta["uuid"],
@@ -1193,7 +1199,7 @@ class DescriptionBuilder:
 
                         # Upload generated screenshots
                         if new_screens and not meta.get("skip_imghost_upload", False):
-                            uploaded_images, _ = await upload_screens(
+                            uploaded_images, _ = await self.uploadscreens_manager.upload_screens(
                                 meta,
                                 multi_screens,
                                 1,

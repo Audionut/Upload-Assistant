@@ -15,7 +15,7 @@ import requests
 from src.console import console
 from src.exceptions import *  # noqa: F403
 from src.tags import get_tag
-from src.tmdb import tmdb_manager
+from src.tmdb import TmdbManager
 
 guessit_fn: Any = cast(Any, guessit).guessit
 
@@ -39,6 +39,9 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 
 class SeasonEpisodeManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.tmdb_manager = TmdbManager(config)
+
     async def get_season_episode(self, video: str, meta: Meta) -> Meta:
         if meta['category'] == 'TV':
             filelist = cast(list[str], meta.get('filelist', []))
@@ -65,7 +68,7 @@ class SeasonEpisodeManager:
                         guess_date_raw = meta.get('manual_date') or guess_data.get('date')
                         guess_date = str(guess_date_raw) if guess_date_raw else ""
                         tmdb_id_value = _safe_int(meta.get('tmdb_id', 0), 0)
-                        season_int, episode_int = await tmdb_manager.daily_to_tmdb_season_episode(tmdb_id_value, guess_date)
+                        season_int, episode_int = await self.tmdb_manager.daily_to_tmdb_season_episode(tmdb_id_value, guess_date)
 
                         season = f"S{str(season_int).zfill(2)}"
                         episode = f"E{str(episode_int).zfill(2)}"
@@ -131,7 +134,7 @@ class SeasonEpisodeManager:
                 # if the mal id is set, then we've already run get_romaji in tmdb.py
                 if meta.get('mal_id') == 0 and meta['category'] == "TV":
                     parsed = _anitopy_parse(Path(video).name)
-                    romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta['demographic'] = await tmdb_manager.get_romaji(
+                    romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta['demographic'] = await self.tmdb_manager.get_romaji(
                         str(parsed.get('anime_title', '')),
                         _safe_int(meta.get('mal_id', 0), 0),
                         meta,
@@ -143,7 +146,7 @@ class SeasonEpisodeManager:
                     if meta.get('tmdb_id') == 0:
                         year = str(parsed.get('anime_year', str(seasonYear)))
                         guess_title = _guessit_data(str(parsed.get('anime_title', '')), {"excludes": ["country", "language"]}).get('title', '')
-                        tmdb_id_value, category_value = await tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'])
+                        tmdb_id_value, category_value = await self.tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'])
                         meta['tmdb_id'] = tmdb_id_value
                         meta['category'] = category_value
                     # meta = await tmdb_other_meta(meta)
@@ -515,4 +518,3 @@ class SeasonEpisodeManager:
         return result
 
 
-season_episode_manager = SeasonEpisodeManager()

@@ -16,28 +16,29 @@ try:
     import guessit
 
     from data.config import config as raw_config
-    from src.apply_overrides import get_source_override
-    from src.audio import get_audio_v2
+    from src.apply_overrides import ApplyOverrides
+    from src.audio import AudioManager
     from src.bluray_com import get_bluray_releases
     from src.cleanup import cleanup_manager
     from src.clients import Clients
     from src.console import console
     from src.edition import get_edition
     from src.exportmi import exportInfo, get_conformance_error, mi_resolution, validate_mediainfo
-    from src.get_disc import disc_info_manager
-    from src.get_name import extract_title_and_year
+    from src.get_disc import DiscInfoManager
+    from src.get_name import NameManager
     from src.get_source import get_source
-    from src.get_tracker_data import tracker_data_manager
-    from src.getseasonep import season_episode_manager
+    from src.get_tracker_data import TrackerDataManager
+    from src.getseasonep import SeasonEpisodeManager
     from src.imdb import imdb_manager
-    from src.is_scene import is_scene
+    from src.is_scene import SceneManager
     from src.languages import languages_manager
-    from src.metadata_searching import metadata_searching_manager
-    from src.radarr import radarr_manager
+    from src.metadata_searching import MetadataSearchingManager
+    from src.radarr import RadarrManager
     from src.region import get_distributor, get_region, get_service
-    from src.sonarr import sonarr_manager
+    from src.rehostimages import RehostImagesManager
+    from src.sonarr import SonarrManager
     from src.tags import get_tag, tag_override
-    from src.tmdb import tmdb_manager
+    from src.tmdb import TmdbManager
     from src.tvdb import tvdb_data
     from src.tvmaze import tvmaze_manager
     from src.video import video_manager
@@ -85,6 +86,18 @@ class Prep:
         self.config = config
         self.img_host = img_host.lower()
         self.tvdb_handler = tvdb_data(config)
+        self.overrides = ApplyOverrides(config)
+        self.audio_manager = AudioManager(config)
+        self.disc_info_manager = DiscInfoManager(config)
+        self.name_manager = NameManager(config)
+        self.tracker_data_manager = TrackerDataManager(config)
+        self.scene_manager = SceneManager(config)
+        self.metadata_searching_manager = MetadataSearchingManager(config)
+        self.tmdb_manager = TmdbManager(config)
+        self.season_episode_manager = SeasonEpisodeManager(config)
+        self.radarr_manager = RadarrManager(config)
+        self.sonarr_manager = SonarrManager(config)
+        self.rehost_images_manager = RehostImagesManager(config)
 
     async def gather_prep(self, meta: dict[str, Any], mode: str) -> dict[str, Any]:
         # set a timer to check speed
@@ -137,7 +150,7 @@ class Prep:
             console.print(f"[cyan]ID: {meta['uuid']}")
 
         try:
-            meta['is_disc'], videoloc, bdinfo, meta['discs'] = await disc_info_manager.get_disc(meta)
+            meta['is_disc'], videoloc, bdinfo, meta['discs'] = await self.disc_info_manager.get_disc(meta)
         except Exception:
             raise
 
@@ -145,13 +158,13 @@ class Prep:
         # console.print(f"Debug: meta['filelist'] before population: {meta.get('filelist', 'Not Set')}")
 
         if meta['is_disc'] == "BDMV":
-            video, meta['scene'], meta['imdb_id'] = await is_scene(meta['path'], meta, meta.get('imdb_id', 0))
+            video, meta['scene'], meta['imdb_id'] = await self.scene_manager.is_scene(meta['path'], meta, meta.get('imdb_id', 0))
             meta['filelist'] = []  # No filelist for discs, use path
             search_term = os.path.basename(meta['path'])
             search_file_folder = 'folder'
             try:
                 if meta.get('emby', False):
-                    title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                    title, secondary_title, extracted_year = await self.name_manager.extract_title_and_year(meta, video)
                     if meta['debug']:
                         console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
                     if secondary_title:
@@ -169,7 +182,7 @@ class Prep:
                         untouched_filename = search_term
                         filename = str(guessit_fn(guess_name, {"excludes": ["country", "language"]}).get('title', ''))
                 else:
-                    title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                    title, secondary_title, extracted_year = await self.name_manager.extract_title_and_year(meta, video)
                     if meta['debug']:
                         console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
                     if secondary_title:
@@ -214,12 +227,12 @@ class Prep:
             mi = None
 
         elif meta['is_disc'] == "DVD":
-            video, meta['scene'], meta['imdb_id'] = await is_scene(meta['path'], meta, meta.get('imdb_id', 0))
+            video, meta['scene'], meta['imdb_id'] = await self.scene_manager.is_scene(meta['path'], meta, meta.get('imdb_id', 0))
             meta['filelist'] = []
             search_term = os.path.basename(meta['path'])
             search_file_folder = 'folder'
             if meta.get('emby', False):
-                title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                title, secondary_title, extracted_year = await self.name_manager.extract_title_and_year(meta, video)
                 if meta['debug']:
                     console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
                 if secondary_title:
@@ -239,7 +252,7 @@ class Prep:
                 meta['resolution'] = "480p"
                 meta['search_year'] = ""
             else:
-                title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                title, secondary_title, extracted_year = await self.name_manager.extract_title_and_year(meta, video)
                 if meta['debug']:
                     console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
                 if secondary_title:
@@ -263,12 +276,12 @@ class Prep:
                 else:
                     mi = meta['mediainfo']
 
-                meta['dvd_size'] = await disc_info_manager.get_dvd_size(meta['discs'], meta.get('manual_dvds'))
+                meta['dvd_size'] = await self.disc_info_manager.get_dvd_size(meta['discs'], meta.get('manual_dvds'))
                 meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir)
                 meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         elif meta['is_disc'] == "HDDVD":
-            video, meta['scene'], meta['imdb_id'] = await is_scene(meta['path'], meta, meta.get('imdb_id', 0))
+            video, meta['scene'], meta['imdb_id'] = await self.scene_manager.is_scene(meta['path'], meta, meta.get('imdb_id', 0))
             meta['filelist'] = []
             search_term = os.path.basename(meta['path'])
             search_file_folder = 'folder'
@@ -295,10 +308,10 @@ class Prep:
             search_term = os.path.basename(filelist[0]) if filelist else ""
             search_file_folder = 'file'
 
-            video, meta['scene'], meta['imdb_id'] = await is_scene(videopath, meta, meta.get('imdb_id', 0))
+            video, meta['scene'], meta['imdb_id'] = await self.scene_manager.is_scene(videopath, meta, meta.get('imdb_id', 0))
 
             try:
-                title, secondary_title, extracted_year = await extract_title_and_year(meta, video)
+                title, secondary_title, extracted_year = await self.name_manager.extract_title_and_year(meta, video)
                 if meta['debug']:
                     console.print(f"Title: {title}, Secondary Title: {secondary_title}, Year: {extracted_year}")
                 if secondary_title:
@@ -569,7 +582,7 @@ class Prep:
         ids = None
         if not meta.get('skip_trackers', False):
             if meta.get('category') == "TV" and use_sonarr and meta.get('tvdb_id', 0) == 0:
-                ids = await sonarr_manager.get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename'), debug=meta.get('debug', False))
+                ids = await self.sonarr_manager.get_sonarr_data(filename=meta.get('path', ''), title=meta.get('filename'), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"TVDB ID: {ids['tvdb_id']}")
@@ -595,7 +608,7 @@ class Prep:
                     ids = None
 
             if meta.get('category') == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) == 0:
-                ids = await radarr_manager.get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
+                ids = await self.radarr_manager.get_radarr_data(filename=meta.get('uuid', ''), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"IMDB ID: {ids['imdb_id']}")
@@ -624,10 +637,10 @@ class Prep:
 
             if not meta.get('edit', False) and not ids:
                 # Reuse information from trackers with fallback
-                await tracker_data_manager.get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
+                await self.tracker_data_manager.get_tracker_data(video, meta, search_term, search_file_folder, meta['category'], only_id=only_id)
 
             if meta.get('category', None) == "TV" and use_sonarr and meta.get('tvdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-                ids = await sonarr_manager.get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
+                ids = await self.sonarr_manager.get_sonarr_data(tvdb_id=meta.get('tvdb_id', 0), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"TVDB ID: {ids['tvdb_id']}")
@@ -651,7 +664,7 @@ class Prep:
                     ids = None
 
             if meta.get('category', None) == "MOVIE" and use_radarr and meta.get('tmdb_id', 0) != 0 and ids is None and not meta.get('matched_tracker', None):
-                ids = await radarr_manager.get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
+                ids = await self.radarr_manager.get_radarr_data(tmdb_id=meta.get('tmdb_id', 0), debug=meta.get('debug', False))
                 if ids:
                     if meta['debug']:
                         console.print(f"IMDB ID: {ids['imdb_id']}")
@@ -671,13 +684,13 @@ class Prep:
         # if there's no region/distributor info, lets ping some unit3d trackers and see if we get it
         ping_unit3d_config = self.config['DEFAULT'].get('ping_unit3d', False)
         if (not meta.get('region') or not meta.get('distributor')) and meta['is_disc'] == "BDMV" and ping_unit3d_config and not meta.get('edit', False) and not meta.get('emby', False) and not meta.get('site_check', False):
-            await tracker_data_manager.ping_unit3d(meta)
+            await self.tracker_data_manager.ping_unit3d(meta)
 
         # the first user override check that allows to set metadata ids.
         # it relies on imdb or tvdb already being set.
         user_overrides = config['DEFAULT'].get('user_overrides', False)
         if user_overrides and (meta.get('imdb_id') != 0 or meta.get('tvdb_id') != 0) and not meta.get('emby', False):
-            meta = await get_source_override(meta, other_id=True)
+            meta = await self.overrides.get_source_override(meta, other_id=True)
             category = meta.get('category')
             meta['category'] = str(category).upper() if category is not None else ''
             # set a flag so that the other check later doesn't run
@@ -715,13 +728,13 @@ class Prep:
 
         # if it's not an anime, we can run season/episode checks now to speed the process
         if meta.get("not_anime", False) and meta.get("category") == "TV":
-            meta = await season_episode_manager.get_season_episode(video, meta)
+            meta = await self.season_episode_manager.get_season_episode(video, meta)
 
         mi_data: dict[str, Any] = mi or {}
 
         # Run a check against mediainfo to see if it has tmdb/imdb
         if (meta.get('tmdb_id') == 0 or meta.get('imdb_id') == 0) and not meta.get('emby', False):
-            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await tmdb_manager.get_tmdb_imdb_from_mediainfo(
+            meta['category'], meta['tmdb_id'], meta['imdb_id'], meta['tvdb_id'] = await self.tmdb_manager.get_tmdb_imdb_from_mediainfo(
                 mi_data, meta
             )
 
@@ -745,7 +758,7 @@ class Prep:
                 year = meta.get('manual_year', '') or meta.get('year', '') or meta.get('search_year', '')
             year_value = _normalize_search_year(year)
             category_pref = meta.get('category') or ''
-            tmdb_task = tmdb_manager.get_tmdb_id(filename, year_value, category_pref, untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
+            tmdb_task = self.tmdb_manager.get_tmdb_id(filename, year_value, category_pref, untouched_filename, attempted=0, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), unattended=unattended)
             imdb_task = imdb_manager.search_imdb(filename, year_value, quickie=True, category=category_pref, debug=debug, secondary_title=meta.get('secondary_title', None), path=meta.get('path', None), untouched_filename=untouched_filename, duration=duration, unattended=unattended)
             tmdb_result, imdb_result = await asyncio.gather(tmdb_task, imdb_task)
             tmdb_id, category = tmdb_result
@@ -760,7 +773,7 @@ class Prep:
             imdb_id_value = _to_int(meta.get('imdb_id'))
             tvdb_id_value = _to_int(meta.get('tvdb_id'))
             search_year_value = _normalize_search_year(meta.get('search_year'))
-            category, tmdb_id, original_language, filename_search = await tmdb_manager.get_tmdb_from_imdb(
+            category, tmdb_id, original_language, filename_search = await self.tmdb_manager.get_tmdb_from_imdb(
                 imdb_id_value,
                 tvdb_id_value if tvdb_id_value else None,
                 search_year_value,
@@ -778,23 +791,23 @@ class Prep:
 
         # if we have all of the ids, search everything all at once
         if int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and int(meta.get('tvmaze_id') or 0) != 0:
-            meta = await metadata_searching_manager.all_ids(meta)
+            meta = await self.metadata_searching_manager.all_ids(meta)
 
         # Check if IMDb, TMDb, and TVDb IDs are all present
         elif int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and not meta.get('quickie_search', False):
-            meta = await metadata_searching_manager.imdb_tmdb_tvdb(meta, filename)
+            meta = await self.metadata_searching_manager.imdb_tmdb_tvdb(meta, filename)
 
         # Check if both IMDb and TVDB IDs are present
         elif int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and not meta.get('quickie_search', False):
-            meta = await metadata_searching_manager.imdb_tvdb(meta, filename)
+            meta = await self.metadata_searching_manager.imdb_tvdb(meta, filename)
 
         # Check if both IMDb and TMDb IDs are present
         elif int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and not meta.get('quickie_search', False):
-            meta = await metadata_searching_manager.imdb_tmdb(meta, filename)
+            meta = await self.metadata_searching_manager.imdb_tmdb(meta, filename)
 
         # we should have tmdb id one way or another, so lets get data if needed
         if int(meta.get('tmdb_id') or 0) != 0:
-            await tmdb_manager.set_tmdb_metadata(meta, filename)
+            await self.tmdb_manager.set_tmdb_metadata(meta, filename)
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
@@ -819,7 +832,7 @@ class Prep:
             imdb_id_value = _to_int(meta.get('imdb_id'))
             tvdb_id_value = _to_int(meta.get('tvdb_id'))
             search_year_value = _normalize_search_year(meta.get('search_year'))
-            category, tmdb_id, original_language, filename_search = await tmdb_manager.get_tmdb_from_imdb(
+            category, tmdb_id, original_language, filename_search = await self.tmdb_manager.get_tmdb_from_imdb(
                 imdb_id_value,
                 tvdb_id_value if tvdb_id_value else None,
                 search_year_value,
@@ -837,7 +850,7 @@ class Prep:
 
         tmdb_id_value = _to_int(meta.get('tmdb_id'))
         if tmdb_id_value != 0:
-            await tmdb_manager.set_tmdb_metadata(meta, filename)
+            await self.tmdb_manager.set_tmdb_metadata(meta, filename)
 
         # Ensure IMDb info is retrieved if it wasn't already fetched
         imdb_id_value = _to_int(meta.get('imdb_id'))
@@ -886,10 +899,10 @@ class Prep:
 
         # if it was skipped earlier, make sure we have the season/episode data
         if not meta.get('not_anime', False) and meta.get('category') == "TV":
-            meta = await season_episode_manager.get_season_episode(video, meta)
+            meta = await self.season_episode_manager.get_season_episode(video, meta)
 
         if meta['category'] == "TV" and meta.get('tv_pack'):
-            await season_episode_manager.check_season_pack_completeness(meta)
+            await self.season_episode_manager.check_season_pack_completeness(meta)
 
         # lets check for tv movies
         meta['tv_movie'] = False
@@ -904,7 +917,7 @@ class Prep:
             both_ids_searched = False
             search_year_value = _normalize_search_year(meta.get('search_year'))
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
-                tvmaze, tvdb, tvdb_data = await metadata_searching_manager.get_tvmaze_tvdb(
+                tvmaze, tvdb, tvdb_data = await self.metadata_searching_manager.get_tvmaze_tvdb(
                     filename,
                     search_year_value or "",
                     meta.get('imdb_id', 0),
@@ -952,7 +965,7 @@ class Prep:
                     console.print(f"[red]Error searching TVDB: {e}[/red]")
 
             # all your episode data belongs to us
-            meta = await metadata_searching_manager.get_tv_data(meta)
+            meta = await self.metadata_searching_manager.get_tv_data(meta)
 
             if meta.get('tvdb_imdb_id', None):
                 imdb = meta['tvdb_imdb_id'].replace('tt', '')
@@ -1015,7 +1028,6 @@ class Prep:
 
             if releases and meta.get('is_disc') in ("BDMV", "DVD") and meta.get('use_bluray_images', False):
                 # and if we getting bluray/dvd images, we'll rehost them
-                    from src.rehostimages import check_hosts
                     url_host_mapping = {
                         "ibb.co": "imgbb",
                         "pixhost.to": "pixhost",
@@ -1023,18 +1035,24 @@ class Prep:
                     }
 
                     approved_image_hosts = ['imgbox', 'imgbb', 'pixhost']
-                    await check_hosts(meta, "covers", url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+                    await self.rehost_images_manager.check_hosts(
+                        meta,
+                        "covers",
+                        url_host_mapping=url_host_mapping,
+                        img_host_index=1,
+                        approved_image_hosts=approved_image_hosts,
+                    )
 
         # user override check that only sets data after metadata setting
         if user_overrides and not meta.get('no_override', False) and not meta.get('emby', False):
-            meta = await get_source_override(meta)
+            meta = await self.overrides.get_source_override(meta)
 
         meta['video'] = video
 
         if not meta.get('emby', False):
             meta['container'] = await video_manager.get_container(meta)
 
-            meta['audio'], meta['channels'], meta['has_commentary'] = await get_audio_v2(mi_data, meta, bdinfo)
+            meta['audio'], meta['channels'], meta['has_commentary'] = await self.audio_manager.get_audio_v2(mi_data, meta, bdinfo)
 
             meta['3D'] = await video_manager.is_3d(mi_data, bdinfo)
 
@@ -1088,7 +1106,7 @@ class Prep:
                             base = match.group(1)
                             is_all_lowercase = base.islower()
                             if is_all_lowercase:
-                                release_name, _, _ = await is_scene(videopath, meta, meta.get('imdb_id', 0), lower=True)
+                                release_name, _, _ = await self.scene_manager.is_scene(videopath, meta, meta.get('imdb_id', 0), lower=True)
                                 if release_name:
                                     try:
                                         meta['scene_name'] = release_name

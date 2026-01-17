@@ -15,7 +15,7 @@ import tmdbsimple as tmdb
 
 from src.bbcode import BBCODE
 from src.console import console
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 
 Meta = dict[str, Any]
@@ -25,6 +25,7 @@ Config = dict[str, Any]
 class TVC:
     def __init__(self, config: Config) -> None:
         self.config: Config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'TVC'
         self.source_flag = 'TVCHAOS'
         self.upload_url = 'https://tvchaosuk.com/api/torrents/upload'
@@ -182,7 +183,7 @@ class TVC:
             "onlyimage.org": "onlyimage",
         }
 
-        await check_hosts(
+        await self.rehost_images_manager.check_hosts(
             meta,
             self.tracker,
             url_host_mapping=url_host_mapping,

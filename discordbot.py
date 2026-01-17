@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import datetime
-import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -232,10 +231,3 @@ async def send_upload_status_notification(
     meta: Mapping[str, Any],
 ) -> bool:
     return await DiscordNotifier.send_upload_status_notification(config, bot, meta)
-
-
-if __name__ == '__main__':
-    # Only used when running discordbot.py directly
-    from data.config import config
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(run(config))

@@ -10,7 +10,6 @@ import cli_ui
 from torf import Torrent
 from typing_extensions import TypeAlias
 
-from data.config import config
 from src.cleanup import cleanup_manager
 from src.clients import Clients
 from src.console import console
@@ -21,18 +20,21 @@ from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP, tracker_class_map
 from src.uphelper import UploadHelper
 
-TRACKERS_CONFIG: Mapping[str, Mapping[str, Any]] = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
 Meta: TypeAlias = MutableMapping[str, Any]
 
 
 class TrackerStatusManager:
-    @classmethod
-    async def process_all_trackers(cls, meta: Meta) -> int:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.trackers_config = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
+
+    async def process_all_trackers(self, meta: Meta) -> int:
         tracker_status: dict[str, dict[str, bool]] = {}
         successful_trackers = 0
-        client: Any = Clients(config=config)
-        tracker_setup: Any = TRACKER_SETUP(config=config)
-        helper: Any = UploadHelper()
+        client: Any = Clients(config=self.config)
+        tracker_setup: Any = TRACKER_SETUP(config=self.config)
+        helper: Any = UploadHelper(self.config)
+        dupe_checker = DupeChecker(self.config)
         meta_lock = asyncio.Lock()
         for tracker in meta['trackers']:
             if 'tracker_status' not in meta:
@@ -55,7 +57,7 @@ class TrackerStatusManager:
                 successful_trackers += 1
 
             if tracker_name in tracker_class_map:
-                tracker_class: Any = tracker_class_map[tracker_name](config=config)
+                tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
                 if tracker_name in {"THR", "PTP"} and local_meta.get('imdb_id', 0) == 0:
                     while True:
                         if local_meta.get('unattended', False):
@@ -109,7 +111,7 @@ class TrackerStatusManager:
                         if local_meta['tracker_status'][tracker_name].get('other', False):
                             local_tracker_status['other'] = True
                     elif tracker_name == "PTP":
-                        ptp: Any = PTP(config=config)
+                        ptp: Any = PTP(config=self.config)
                         groupID = await ptp.get_group_by_imdb(local_meta['imdb'])
                         async with meta_lock:
                             meta['ptp_groupID'] = groupID
@@ -122,7 +124,7 @@ class TrackerStatusManager:
                         console.print("EN: [yellow]Warning: You requested an anonymous upload, but ASC does not support this option.[/yellow][red] The upload will not be anonymous.[/red]")
 
                     if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
-                        dupes = cast(list[Any], await DupeChecker.filter_dupes(dupes, local_meta, tracker_name))
+                        dupes = cast(list[Any], await dupe_checker.filter_dupes(dupes, local_meta, tracker_name))
 
                         matched_episode_ids = local_meta.get('matched_episode_ids', [])
                         trumpable_id = local_meta.get('trumpable_id')
@@ -158,7 +160,7 @@ class TrackerStatusManager:
                         local_tracker_status['skipped'] = True
 
                     if tracker_name == "MTV" and not local_tracker_status['banned'] and not local_tracker_status['skipped'] and not local_tracker_status['dupe']:
-                        tracker_config = TRACKERS_CONFIG.get(tracker_name, {})
+                        tracker_config = self.trackers_config.get(tracker_name, {})
                         if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "true":
                             torrent_path = os.path.abspath(f"{local_meta['base_dir']}/tmp/{local_meta['uuid']}/BASE.torrent")
                             if not os.path.exists(torrent_path):
@@ -277,5 +279,5 @@ class TrackerStatusManager:
         return successful_trackers
 
 
-async def process_all_trackers(meta: Meta) -> int:
-    return await TrackerStatusManager.process_all_trackers(meta)
+async def process_all_trackers(meta: Meta, config: dict[str, Any]) -> int:
+    return await TrackerStatusManager(config=config).process_all_trackers(meta)
