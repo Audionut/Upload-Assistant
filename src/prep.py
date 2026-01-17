@@ -15,7 +15,7 @@ try:
     import cli_ui
     import guessit
 
-    from data.config import config as raw_config
+    from data.config import config as raw_config  # pyright: ignore[reportMissingImports]
     from src.apply_overrides import ApplyOverrides
     from src.audio import AudioManager
     from src.bluray_com import get_bluray_releases
