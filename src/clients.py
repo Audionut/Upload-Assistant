@@ -41,6 +41,69 @@ class Clients:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
+    @staticmethod
+    def _extract_tracker_ids_from_comment(comment: str) -> dict[str, str]:
+        if not comment:
+            return {}
+
+        def _last_path_id(path: str) -> Optional[str]:
+            match = re.search(r"/(\d+)$", path)
+            return match.group(1) if match else None
+
+        def _query_id(query: str, key: str) -> Optional[str]:
+            values = urllib.parse.parse_qs(query).get(key)
+            return values[0] if values else None
+
+        tracker_ids: dict[str, str] = {}
+        urls = re.findall(r"https?://[^\s\"'<>]+", comment)
+        for url in urls:
+            parsed = urllib.parse.urlparse(url)
+            host = parsed.hostname or ""
+            path = parsed.path
+
+            if host.endswith("passthepopcorn.me"):
+                ptp_id = _query_id(parsed.query, "torrentid")
+                if ptp_id:
+                    tracker_ids["ptp"] = ptp_id
+            elif host.endswith("aither.cc"):
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["aither"] = tracker_id
+            elif host.endswith("lst.gg"):
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["lst"] = tracker_id
+            elif host.endswith("onlyencodes.cc"):
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["oe"] = tracker_id
+            elif host.endswith("blutopia.cc"):
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["blu"] = tracker_id
+            elif host.endswith("upload.cx"):
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["ulcx"] = tracker_id
+            elif host.endswith("hdbits.org"):
+                hdb_id = _query_id(parsed.query, "id")
+                if hdb_id:
+                    tracker_ids["hdb"] = hdb_id
+            elif host.endswith("broadcasthe.net"):
+                btn_id = _query_id(parsed.query, "id")
+                if btn_id:
+                    tracker_ids["btn"] = btn_id
+            elif host.endswith("beyond-hd.me"):
+                match = re.search(r"/details/(\d+)", path)
+                if match:
+                    tracker_ids["bhd"] = match.group(1)
+            elif host.endswith("hawke.uno") or "/torrents/" in path:
+                tracker_id = _last_path_id(path)
+                if tracker_id:
+                    tracker_ids["huno"] = tracker_id
+
+        return tracker_ids
+
     def create_ssl_context_for_client(self, client_config: dict[str, Any]) -> ssl.SSLContext:
         """Create SSL context for qBittorrent client based on VERIFY_WEBUI_CERTIFICATE setting."""
         ssl_context = ssl.create_default_context()
@@ -1800,7 +1863,6 @@ class Clients:
                 try:
                     if getattr(torrent, 'infohash_v1', '') == info_hash_v1:
                         comment = getattr(torrent, 'comment', "")
-                        match = None
 
                         if 'torrent_comments' not in meta:
                             meta['torrent_comments'] = []
@@ -1815,48 +1877,10 @@ class Clients:
                         if meta.get('debug', False):
                             console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
 
-                        if "passthepopcorn.me" in comment:
-                            match = re.search(r'torrentid=(\d+)', comment)
-                            if match:
-                                meta['ptp'] = match.group(1)
-                        elif "https://aither.cc" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['aither'] = match.group(1)
-                        elif "https://lst.gg" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['lst'] = match.group(1)
-                        elif "https://onlyencodes.cc" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['oe'] = match.group(1)
-                        elif "https://blutopia.cc" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['blu'] = match.group(1)
-                        elif "https://upload.cx" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['ulcx'] = match.group(1)
-                        elif "https://hdbits.org" in comment:
-                            match = re.search(r'id=(\d+)', comment)
-                            if match:
-                                meta['hdb'] = match.group(1)
-                        elif "https://broadcasthe.net" in comment:
-                            match = re.search(r'id=(\d+)', comment)
-                            if match:
-                                meta['btn'] = match.group(1)
-                        elif "https://beyond-hd.me" in comment:
-                            match = re.search(r'details/(\d+)', comment)
-                            if match:
-                                meta['bhd'] = match.group(1)
-                        elif "/torrents/" in comment:
-                            match = re.search(r'/(\d+)$', comment)
-                            if match:
-                                meta['huno'] = match.group(1)
+                        tracker_ids = self._extract_tracker_ids_from_comment(comment)
+                        meta.update(tracker_ids)
 
-                        if match:
+                        if tracker_ids:
                             for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
                                 if meta.get(tracker):
                                     console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
@@ -1996,38 +2020,8 @@ class Clients:
                 console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
 
             # Handle various tracker URL formats in the comment
-            if "passthepopcorn.me" in comment:
-                match = re.search(r'torrentid=(\d+)', comment)
-                if match:
-                    meta['ptp'] = match.group(1)
-            elif "https://aither.cc" in comment:
-                match = re.search(r'/(\d+)$', comment)
-                if match:
-                    meta['aither'] = match.group(1)
-            elif "https://lst.gg" in comment:
-                match = re.search(r'/(\d+)$', comment)
-                if match:
-                    meta['lst'] = match.group(1)
-            elif "https://onlyencodes.cc" in comment:
-                match = re.search(r'/(\d+)$', comment)
-                if match:
-                    meta['oe'] = match.group(1)
-            elif "https://blutopia.cc" in comment:
-                match = re.search(r'/(\d+)$', comment)
-                if match:
-                    meta['blu'] = match.group(1)
-            elif "https://hdbits.org" in comment:
-                match = re.search(r'id=(\d+)', comment)
-                if match:
-                    meta['hdb'] = match.group(1)
-            elif "https://broadcasthe.net" in comment:
-                match = re.search(r'id=(\d+)', comment)
-                if match:
-                    meta['btn'] = match.group(1)
-            elif "https://beyond-hd.me" in comment:
-                match = re.search(r'details/(\d+)', comment)
-                if match:
-                    meta['bhd'] = match.group(1)
+            tracker_ids = self._extract_tracker_ids_from_comment(comment)
+            meta.update(tracker_ids)
 
             # If we found a tracker ID, log it
             for tracker in ['ptp', 'bhd', 'btn', 'blu', 'aither', 'lst', 'oe', 'hdb']:
