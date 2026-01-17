@@ -146,6 +146,7 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
         tmdb_id = _coerce_int(meta.get('tmdb_id'))
         season_int = _coerce_int(meta.get('season_int'))
         if tmdb_id is not None and season_int is not None:
+            tmdb_task_idx = len(all_tasks)
             all_tasks.append(
                 tmdb_manager.get_season_details(
                     tmdb_id,
@@ -233,14 +234,13 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
 
     elif meta['category'] == 'TV' and meta.get('tv_pack', False) and 'season_int' in meta:
         # Process TMDb season data for TV packs
-        tmdb_season_data = results[result_index]
-        result_index += 1
-
-        if not isinstance(tmdb_season_data, Exception) and tmdb_season_data:
-            meta['tmdb_season_data'] = tmdb_season_data
-            meta['we_checked_tmdb'] = True
-        elif isinstance(tmdb_season_data, Exception):
-            console.print(f"[yellow]TMDb season data retrieval failed: {tmdb_season_data}[/yellow]")
+        if tmdb_task_idx is not None:
+            tmdb_season_data = results[tmdb_task_idx]
+            if not isinstance(tmdb_season_data, Exception) and tmdb_season_data:
+                meta['tmdb_season_data'] = tmdb_season_data
+                meta['we_checked_tmdb'] = True
+            elif isinstance(tmdb_season_data, Exception):
+                console.print(f"[yellow]TMDb season data retrieval failed: {tmdb_season_data}[/yellow]")
 
     return meta
 
@@ -790,6 +790,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
         if meta.get('tvdb_overview', None):
             meta['overview_meta'] = meta['tvdb_overview']
         tvdb_season_int = _coerce_int(meta.get('tvdb_season'))
+        meta['tvdb_season_int'] = tvdb_season_int
         if tvdb_season_int is not None and tvdb_season_int != meta.get('season_int', None) and not meta.get('season', None) and not meta.get('no_season', False) and not meta.get('manual_date', None):
             meta['season_int'] = tvdb_season_int
             meta['season'] = f"S{tvdb_season_int:02d}"

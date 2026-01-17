@@ -46,6 +46,11 @@ class Clients:
         if not comment:
             return {}
 
+        def _is_host(host: str, domain: str) -> bool:
+            host = host.lower()
+            domain = domain.lower()
+            return host == domain or host.endswith(f".{domain}")
+
         def _last_path_id(path: str) -> Optional[str]:
             match = re.search(r"/(\d+)$", path)
             return match.group(1) if match else None
@@ -58,46 +63,46 @@ class Clients:
         urls = re.findall(r"https?://[^\s\"'<>]+", comment)
         for url in urls:
             parsed = urllib.parse.urlparse(url)
-            host = parsed.hostname or ""
+            host = (parsed.hostname or "").lower()
             path = parsed.path
 
-            if host.endswith("passthepopcorn.me"):
+            if _is_host(host, "passthepopcorn.me"):
                 ptp_id = _query_id(parsed.query, "torrentid")
                 if ptp_id:
                     tracker_ids["ptp"] = ptp_id
-            elif host.endswith("aither.cc"):
+            elif _is_host(host, "aither.cc"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["aither"] = tracker_id
-            elif host.endswith("lst.gg"):
+            elif _is_host(host, "lst.gg"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["lst"] = tracker_id
-            elif host.endswith("onlyencodes.cc"):
+            elif _is_host(host, "onlyencodes.cc"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["oe"] = tracker_id
-            elif host.endswith("blutopia.cc"):
+            elif _is_host(host, "blutopia.cc"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["blu"] = tracker_id
-            elif host.endswith("upload.cx"):
+            elif _is_host(host, "upload.cx"):
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["ulcx"] = tracker_id
-            elif host.endswith("hdbits.org"):
+            elif _is_host(host, "hdbits.org"):
                 hdb_id = _query_id(parsed.query, "id")
                 if hdb_id:
                     tracker_ids["hdb"] = hdb_id
-            elif host.endswith("broadcasthe.net"):
+            elif _is_host(host, "broadcasthe.net"):
                 btn_id = _query_id(parsed.query, "id")
                 if btn_id:
                     tracker_ids["btn"] = btn_id
-            elif host.endswith("beyond-hd.me"):
+            elif _is_host(host, "beyond-hd.me"):
                 match = re.search(r"/details/(\d+)", path)
                 if match:
                     tracker_ids["bhd"] = match.group(1)
-            elif host.endswith("hawke.uno") or "/torrents/" in path:
+            elif _is_host(host, "hawke.uno") or "/torrents/" in path:
                 tracker_id = _last_path_id(path)
                 if tracker_id:
                     tracker_ids["huno"] = tracker_id
@@ -1701,6 +1706,8 @@ class Clients:
         resume["files"] = []
         piece_length_value = metainfo["info"]["piece length"]
         piece_length = int(piece_length_value) if isinstance(piece_length_value, (int, float, str)) else 0
+        if piece_length <= 0:
+            raise ValueError(f"Invalid piece length: {piece_length_value!r}")
         offset = 0
 
         for fileinfo in files:

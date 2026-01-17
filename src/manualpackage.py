@@ -90,8 +90,9 @@ class ManualPackageManager:
             filebrowser = manual_filebrowser if isinstance(manual_filebrowser, str) else None
             shutil.make_archive(archive, 'tar', f"{meta['base_dir']}/tmp/{meta['uuid']}")
             if filebrowser is not None:
-                url = '/'.join(s.strip('/') for s in (filebrowser, f"/tmp/{meta['uuid']}"))
-                url = urllib.parse.quote(url, safe="https://")
+                base_url = filebrowser.rstrip('/')
+                path = f"/tmp/{meta['uuid']}"
+                url = base_url + urllib.parse.quote(path, safe="/")
             else:
                 with open(f"{archive}.tar", 'rb') as tar_file:
                     files = {

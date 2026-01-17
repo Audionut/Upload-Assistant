@@ -298,7 +298,7 @@ class SeasonEpisodeManager:
             meta['episode_int'] = episode_int
 
             # Manual episode title
-            if 'manual_episode_title' in meta and meta['manual_episode_title'] == "":
+            if 'manual_episode_title' in meta and meta['manual_episode_title']:
                 meta['episode_title'] = meta.get('manual_episode_title')
 
             # Guess the part of the episode (if available)

@@ -468,7 +468,7 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
     console.print("[yellow]===== BluRay.com search results summary =====[/yellow]")
 
     if matching_releases:
-        if not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False)):
+        if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False))):
             for idx, release in enumerate(matching_releases, 1):
                 console.print(f"[green]{idx}. {release['movie_title']} ({release['movie_year']}):[/green]")
                 console.print(f"   [blue]Title: {release['title']}[/blue]")
@@ -477,7 +477,7 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
                 console.print(f"   [blue]Price: {release['price']}[/blue]")
                 console.print(f"   [dim]URL: {release['url']}[/dim]")
 
-            if not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False)):
+            if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False))):
                 console.print()
                 console.print("[green]Release Selection")
                 console.print("[green]=======================================")
@@ -1501,7 +1501,7 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                 console.print(f"[yellow]Set region code to: {region_code}, distributor to: {best_release['publisher'].upper()}")
 
             elif len(scored_releases) == 1:
-                if not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False)):
+                if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False))):
                     cli_ui.info(f"Single match found: {close_matches[0]['title']} ({close_matches[0]['country']}) with score {best_score:.1f}/100")
                     while True:
                         user_input = input("Do you want to use this release? (y/n): ").strip().lower()
@@ -1617,7 +1617,7 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                     detailed_releases = []
 
             else:
-                if not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended-confirm', False)):
+                if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended-confirm', False))):
                     console.print("[red]This is the probably the best match, but it is not a perfect match.[/red]")
                     console.print("[yellow]All other releases have a score at least 40 points lower.")
                     for logged_release, release_logs in logs:
