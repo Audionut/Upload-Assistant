@@ -206,7 +206,7 @@ class TL:
                 return categories['MovieBlurayRip']
             elif meta['is_disc'] == 'DVD' or (meta['type'] == 'REMUX' and 'DVD' in meta['source']):
                 return categories['MovieDvd']
-            elif meta['type'] == 'ENCODE' and 'DVD' in meta['source']:
+            elif (meta['type'] == 'ENCODE' and 'DVD' in meta['source']) or meta['type'] == 'DVDRIP':
                 return categories['MovieDvdRip']
             elif 'WEB' in meta['type']:
                 return categories['MovieWebrip']
