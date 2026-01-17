@@ -353,7 +353,6 @@ class ASC:
             return '[center]Erro: Não foi possível carregar o layout da descrição.[/center]'
 
         layout_image = {k: v for k, v in user_layout.items() if k.startswith('BARRINHA_')}
-        description_parts = ['[center]']
 
         async def append_section(key: str, content: Union[str, None]):
             if content and (img := layout_image.get(key)):
@@ -467,7 +466,6 @@ class ASC:
         # Custom Bar
         for i in range(1, 4):
             description_parts.append(await self.format_image(layout_image.get(f'BARRINHA_CUSTOM_B_{i}')))
-        description_parts.append('[/center]')
 
         # External description
         desc = ''
