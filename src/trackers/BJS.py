@@ -556,11 +556,10 @@ class BJS:
         try:
             async with self.semaphore:
                 ajax_response = await self.session.get(ajax_url)
-                ajax_response.raise_for_status()
                 if ajax_response.status_code == 503:
                     await asyncio.sleep(5)
                     ajax_response = await self.session.get(ajax_url)
-                    ajax_response.raise_for_status()
+                ajax_response.raise_for_status()
                 ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
 
                 return {"success": True, "soup": ajax_soup, "task_info": task_info}
