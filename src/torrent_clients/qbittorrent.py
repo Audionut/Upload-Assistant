@@ -39,8 +39,193 @@ class _TorrentFileEntry(TypedDict):
 class QbittorrentClientMixin:
     config: dict[str, Any]
 
+    @staticmethod
+    def _extract_tracker_ids_from_comment(comment: str) -> dict[str, str]:
+        raise NotImplementedError
+
     async def is_valid_torrent(self, meta: dict[str, Any], torrent_path: str, torrenthash: str, torrent_client: str, client: dict[str, Any]) -> tuple[bool, str]:
         raise NotImplementedError
+
+    async def get_ptp_from_hash_qbit(self, meta: dict[str, Any], client: dict[str, Any], pathed: bool = False) -> dict[str, Any]:
+        proxy_url = client.get('qui_proxy_url')
+        qbt_proxy_url = ""
+        qbt_client: Optional[qbittorrentapi.Client] = None
+        qbt_session: Optional[aiohttp.ClientSession] = None
+
+        if proxy_url:
+            qbt_proxy_url = proxy_url.rstrip('/')
+            ssl_context = self.create_ssl_context_for_client(client)
+            qbt_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=aiohttp.TCPConnector(ssl=ssl_context)
+            )
+            qbt_proxy_url = proxy_url.rstrip('/')
+        else:
+            potential_qbt_client = await self.init_qbittorrent_client(client)
+            if not potential_qbt_client:
+                return meta
+            else:
+                qbt_client = potential_qbt_client
+
+        info_hash_v1 = meta.get('infohash')
+        if not isinstance(info_hash_v1, str) or not info_hash_v1:
+            return meta
+        if meta['debug']:
+            console.print(f"[cyan]Searching for infohash: {info_hash_v1}")
+
+        class TorrentInfo:
+            def __init__(self, properties_data: dict[str, Any]) -> None:
+                self.hash = properties_data.get('hash', info_hash_v1)
+                self.infohash_v1 = properties_data.get('infohash_v1', info_hash_v1)
+                self.name = properties_data.get('name', '')
+                self.comment = properties_data.get('comment', '')
+                self.tracker = ''
+                self.files: list[Any] = []
+
+        try:
+            if proxy_url:
+                if qbt_session is None:
+                    raise RuntimeError("qbt_session should not be None")
+                async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties",
+                                           params={'hash': info_hash_v1}) as response:
+                    if response.status == 200:
+                        torrent_properties = await response.json()
+                        if meta['debug']:
+                            console.print(f"[cyan]Retrieved torrent properties via proxy for hash: {info_hash_v1}")
+
+                        torrents = [TorrentInfo(torrent_properties)]
+                    else:
+                        console.print(f"[bold red]Failed to get torrent properties via proxy: {response.status}")
+                        if qbt_session:
+                            await qbt_session.close()
+                        return meta
+            else:
+                try:
+                    if qbt_client is None:
+                        raise RuntimeError("qbt_client should not be None")
+                    torrent_properties = await self.retry_qbt_operation(
+                        lambda: asyncio.to_thread(qbt_client.torrents_properties, torrent_hash=info_hash_v1),
+                        f"Get torrent properties for hash {info_hash_v1}",
+                        initial_timeout=14.0
+                    )
+                    if meta['debug']:
+                        console.print(f"[cyan]Retrieved torrent properties via client for hash: {info_hash_v1}")
+
+                    torrents = [TorrentInfo(torrent_properties)]
+                except Exception as e:
+                    console.print(f"[yellow]Failed to get properties: {e}")
+                    return meta
+        except asyncio.TimeoutError:
+            console.print("[bold red]Getting torrents list timed out after retries")
+            if qbt_session:
+                await qbt_session.close()
+            return meta
+        except Exception as e:
+            console.print(f"[bold red]Error getting torrents list: {e}")
+            if qbt_session:
+                await qbt_session.close()
+            return meta
+        found = False
+
+        folder_id = os.path.basename(meta['path'])
+        if meta.get('uuid') is None:
+            meta['uuid'] = folder_id
+
+        extracted_torrent_dir = os.path.join(meta.get('base_dir', ''), "tmp", meta.get('uuid', ''))
+        os.makedirs(extracted_torrent_dir, exist_ok=True)
+
+        for torrent in torrents:
+            try:
+                if getattr(torrent, 'infohash_v1', '') == info_hash_v1:
+                    comment = getattr(torrent, 'comment', "")
+
+                    torrent_comments = meta.get('torrent_comments')
+                    if not isinstance(torrent_comments, list):
+                        torrent_comments = []
+                        meta['torrent_comments'] = torrent_comments
+
+                    comment_data = {
+                        'hash': getattr(torrent, 'infohash_v1', ''),
+                        'name': getattr(torrent, 'name', ''),
+                        'comment': comment,
+                    }
+                    cast(list[dict[str, Any]], torrent_comments).append(comment_data)
+
+                    if meta.get('debug', False):
+                        console.print(f"[cyan]Stored comment for torrent: {comment[:100]}...")
+
+                    tracker_ids: dict[str, str] = self._extract_tracker_ids_from_comment(comment)
+                    meta.update(tracker_ids)
+
+                    if tracker_ids:
+                        for tracker in ['ptp', 'bhd', 'btn', 'huno', 'blu', 'aither', 'ulcx', 'lst', 'oe', 'hdb']:
+                            if meta.get(tracker):
+                                console.print(f"[bold cyan]meta updated with {tracker.upper()} ID: {meta[tracker]}")
+
+                    if meta.get('torrent_comments') and meta['debug']:
+                        console.print(f"[green]Stored {len(cast(list[Any], meta['torrent_comments']))} torrent comments for later use")
+
+                    if not pathed:
+                        torrent_storage_dir = client.get('torrent_storage_dir')
+                        if not torrent_storage_dir:
+                            # Export .torrent file
+                            torrent_hash = getattr(torrent, 'infohash_v1', '')
+                            if meta.get('debug', False):
+                                console.print(f"[cyan]Exporting .torrent file for hash: {torrent_hash}")
+
+                            try:
+                                if proxy_url:
+                                    if qbt_session is None:
+                                        raise RuntimeError("qbt_session should not be None")
+                                    async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/export",
+                                                                data={'hash': torrent_hash}) as response:
+                                        if response.status == 200:
+                                            torrent_file_content = await response.read()
+                                        else:
+                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                            continue
+                                else:
+                                    if qbt_client is None:
+                                        raise RuntimeError("qbt_client should not be None")
+                                    torrent_file_content = await self.retry_qbt_operation(
+                                        lambda qbt_client=qbt_client, torrent_hash=torrent_hash: asyncio.to_thread(
+                                            qbt_client.torrents_export, torrent_hash=torrent_hash
+                                        ),
+                                        f"Export torrent {torrent_hash}"
+                                    )
+                                torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+
+                                with open(torrent_file_path, "wb") as f:
+                                    f.write(torrent_file_content)
+
+                                # Validate the .torrent file before saving as BASE.torrent
+                                valid, _ = await self.is_valid_torrent(meta, torrent_file_path, torrent_hash, 'qbit', client)
+                                if not valid:
+                                    if meta['debug']:
+                                        console.print(f"[bold red]Validation failed for {torrent_file_path}")
+                                    os.remove(torrent_file_path)  # Remove invalid file
+                                else:
+                                    await TorrentCreator.create_base_from_existing_torrent(torrent_file_path, meta['base_dir'], meta['uuid'])
+                            except asyncio.TimeoutError:
+                                console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
+
+                        found = True
+                        break
+            except Exception as e:
+                if qbt_session:
+                    await qbt_session.close()
+                console.print(f"[bold red]Error processing torrent {getattr(torrent, 'name', 'Unknown')}: {e}")
+                if meta.get('debug', False):
+                    console.print(f"[bold red]Traceback: {traceback.format_exc()}")
+                continue
+
+        if not found:
+            console.print("[bold red]Matching site torrent with the specified infohash_v1 not found.")
+
+        if qbt_session:
+            await qbt_session.close()
+
+        return meta
 
     @staticmethod
     def _coerce_str_list(value: Any) -> list[str]:
@@ -166,31 +351,50 @@ class QbittorrentClientMixin:
                         console.print("[bold red]Proxy session not initialized")
                         return None
                     qbt_proxy_url = proxy_url.rstrip('/')
-                    async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/info") as response:
+                    search_term = str(meta.get('uuid', '')).replace('[', '.').replace(']', '.')
+                    # status is irrelevant here, since we only want an infohash to build from
+                    qui_filters: dict[str, list[str]] = {
+                        "status": [],
+                        "excludeStatus": [],
+                        "categories": [],
+                        "excludeCategories": [],
+                        "tags": [],
+                        "excludeTags": [],
+                        "trackers": [],
+                        "excludeTrackers": [],
+                    }
+                    url = self._build_proxy_search_url(qbt_proxy_url, search_term, qui_filters)
+
+                    if meta.get('debug'):
+                        console.print(f"[cyan]Searching qBittorrent via proxy: {Redaction.redact_private_info(url)}...")
+
+                    async with qbt_session.get(url) as response:
                         if response.status == 200:
-                            torrents_data = await response.json()
+                            response_data = await response.json()
 
-                            class MockTorrent:
-                                def __init__(self, data: dict[str, Any]):
-                                    for key, value in data.items():
-                                        setattr(self, key, value)
-                                    # For proxy API, we need to fetch files separately or use num_files from torrents/info
-                                    # The torrents/info endpoint doesn't include files array but has 'num_files' field
-                                    if not hasattr(self, 'tracker'):
-                                        self.tracker = ''
-                                    if not hasattr(self, 'comment'):
-                                        self.comment = ''
-                                    # Create a files list based on num_files to make len() work
-                                    if hasattr(self, 'num_files'):
-                                        self.files = [None] * self.num_files  # Dummy list with correct length
-                                    elif not hasattr(self, 'files'):
-                                        self.files = []
+                            torrents_data: list[dict[str, Any]]
+                            if isinstance(response_data, dict) and 'torrents' in response_data:
+                                response_data_dict = cast(dict[str, Any], response_data)
+                                torrents_value = response_data_dict.get('torrents', [])
+                                torrents_data = cast(list[dict[str, Any]], torrents_value) if isinstance(torrents_value, list) else []
+                            elif isinstance(response_data, list):
+                                torrents_data = cast(list[dict[str, Any]], response_data)
+                            else:
+                                torrents_data = []
 
-                                def __getattr__(self, name: str) -> Any:
-                                    return None
-                            torrents = [MockTorrent(torrent) for torrent in torrents_data]
+                            if meta.get('debug'):
+                                if torrents_data:
+                                    console.print(f"[cyan]qBittorrent proxy search returned {len(torrents_data)} torrents for '{search_term}'")
+                                else:
+                                    console.print("[cyan]No matching torrents found via proxy search")
+
+                            torrents = self._build_mock_torrents(torrents_data)
                         else:
-                            console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
+                            if response.status == 404:
+                                if meta.get('debug'):
+                                    console.print(f"[yellow]No torrents found via proxy search for '[green]{search_term}' [yellow]Maybe tracker errors?")
+                            else:
+                                console.print(f"[bold red]Failed to get torrents list via proxy: {response.status}")
                             return None
                 else:
                     if qbt_client is None:

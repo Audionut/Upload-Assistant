@@ -137,7 +137,8 @@ class DiscordNotifier:
             bool: True if message was sent successfully, False otherwise
         """
         only_unattended = config.get('DISCORD', {}).get('only_unattended', False)
-        if only_unattended and meta and not meta.get('unattended', False):
+        unattended = bool(meta and meta.get('unattended', False))
+        if only_unattended and not unattended:
             return False
         if not bot or not hasattr(bot, 'is_ready') or not bot.is_ready():
             if debug:
@@ -167,7 +168,8 @@ class DiscordNotifier:
     ) -> bool:
         """Send Discord notification with upload status including failed trackers."""
         only_unattended = config.get('DISCORD', {}).get('only_unattended', False)
-        if only_unattended and meta and not meta.get('unattended', False):
+        unattended = bool(meta and meta.get('unattended', False))
+        if only_unattended and not unattended:
             return False
         if not bot or not hasattr(bot, 'is_ready') or not bot.is_ready():
             return False
