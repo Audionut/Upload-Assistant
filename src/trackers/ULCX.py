@@ -3,6 +3,8 @@
 import aiofiles
 import cli_ui
 import re
+import os.path
+import aiofiles.os
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
@@ -66,6 +68,50 @@ class ULCX(UNIT3D):
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
+
+        mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
+        if len([track for track in mediainfo_tracks if track["@type"] == "Audio" and track["Default"] == "Yes"]) > 1:
+            console.print(f"[bold red]Multiple default audio tracks detected, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        if len([track for track in mediainfo_tracks if track["@type"] == "Text" and track["Default"] == "Yes"]) > 1:
+            console.print(f"[bold red]Multiple default subtitle tracks detected, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        if meta["type"] != "DISC" and any(track for track in mediainfo_tracks if track["@type"] == "Audio" and track["Format"] == "PCM"):
+            console.print(f"[bold red]PCM audio track detected in non-disc, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        if meta["type"] == "DISC":
+            discs = meta.get("discs", [])
+            for disc in discs:
+                if disc["type"] == "BDMV":
+                    disc_parent_dir = os.path.dirname(disc["path"])
+                    if not await aiofiles.os.path.exists(f"{disc_parent_dir}/CERTIFICATE"):
+                        console.print(f"[bold red]BDMV disc missing CERTIFICATE folder, skipping {self.tracker} upload.[/bold red]")
+                        return False
+
+        if mediainfo_tracks:
+            warned_once = False
+            audio_tracks = [track for track in mediainfo_tracks if track["@type"] == "Audio"]
+            for track_one in audio_tracks:
+                # This is technically O(n^2) but the number of audio tracks is usually very small
+                for track_two in audio_tracks:
+                    track_one_is_dts_hd_ma = track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+                    track_two_is_lossy_dts = track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two["Format"] == "DTS"
+                    track_one_properties = (track_one.get("Duration"), track_one.get("FrameRate"), track_one.get("FrameCount"), track_one.get("Language"))
+                    track_two_properties = (track_two.get("Duration"), track_two.get("FrameRate"), track_two.get("FrameCount"), track_two.get("Language"))
+                    if track_one_is_dts_hd_ma and track_two_is_lossy_dts and track_one_properties == track_two_properties:
+                        if not warned_once:
+                            warned_once = True
+                            console.print("[bold red]DTS audio track appears to be a lossy duplicate of DTS-HD MA track.[/bold red]")
+                            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                                    pass
+                                else:
+                                    return False
+                            else:
+                                return False
 
         return should_continue
 
