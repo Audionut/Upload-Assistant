@@ -1478,6 +1478,7 @@ class Clients:
                                             data=data) as response:
                     if response.status != 200:
                         console.print(f"[bold red]Failed to add torrent via proxy: {response.status}")
+                        await qbt_session.close()
                         return
             else:
                 if qbt_client is None:
@@ -3107,12 +3108,16 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
                 await asyncio.to_thread(os.makedirs, dst, exist_ok=True)
 
                 # Get all files in the source directory
-                all_items = []
-                for root, _dirs, files in await asyncio.to_thread(os.walk, src):
-                    for file in files:
-                        src_path = os.path.join(root, file)
-                        rel_path = os.path.relpath(src_path, src)
-                        all_items.append((src_path, os.path.join(dst, rel_path), rel_path))
+                def _collect_files(src: str, dst: str) -> list[tuple[str, str, str]]:
+                    items = []
+                    for root, _dirs, files in os.walk(src):
+                        for file in files:
+                            src_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(src_path, src)
+                            items.append((src_path, os.path.join(dst, rel_path), rel_path))
+                    return items
+
+                all_items = await asyncio.to_thread(_collect_files, src, dst)
 
                 # Create subdirectories first (to avoid race conditions)
                 subdirs = set()

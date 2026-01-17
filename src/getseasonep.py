@@ -283,13 +283,15 @@ class SeasonEpisodeManager:
             if meta.get('manual_season', None) is None:
                 meta['season'] = season
             else:
-                season_int = _safe_int(str(meta['manual_season']).lower().replace('s', ''), 1)
-                meta['season'] = f"S{meta['manual_season'].lower().replace('s', '').zfill(2)}"
+                manual_season_str = str(meta['manual_season']).lower().replace('s', '')
+                season_int = _safe_int(manual_season_str, 1)
+                meta['season'] = f"S{manual_season_str.zfill(2)}"
             if meta.get('manual_episode', None) is None:
                 meta['episode'] = episode
             else:
-                episode_int = _safe_int(str(meta['manual_episode']).lower().replace('e', ''), 0)
-                meta['episode'] = f"E{meta['manual_episode'].lower().replace('e', '').zfill(2)}"
+                manual_episode_str = str(meta['manual_episode']).lower().replace('e', '')
+                episode_int = _safe_int(manual_episode_str, 0)
+                meta['episode'] = f"E{manual_episode_str.zfill(2)}"
                 meta['tv_pack'] = 0
 
             # if " COMPLETE " in Path(video).name.replace('.', ' '):
@@ -348,9 +350,9 @@ class SeasonEpisodeManager:
                     console.print(f"[yellow]... and {remaining_files} more files")
 
                     if remaining_files > batch_size:
-                        response = input(f"Show (n)ext {batch_size} files, (a)ll remaining files, (c)ontinue with incomplete pack, or (q)uit? (n/a/c/Q): ")
+                        response = await asyncio.to_thread(input, f"Show (n)ext {batch_size} files, (a)ll remaining files, (c)ontinue with incomplete pack, or (q)uit? (n/a/c/Q): ")
                     else:
-                        response = input(f"Show (a)ll remaining {remaining_files} files, (c)ontinue with incomplete pack, or (q)uit? (a/c/Q): ")
+                        response = await asyncio.to_thread(input, f"Show (a)ll remaining {remaining_files} files, (c)ontinue with incomplete pack, or (q)uit? (a/c/Q): ")
 
                     if response.lower() == 'n' and remaining_files > batch_size:
                         # Show next batch of files
@@ -373,7 +375,7 @@ class SeasonEpisodeManager:
 
                 # Final confirmation if not in unattended mode
                 if (not unattended or unattended_confirm) and not just_go:
-                    response = input("Continue with incomplete season pack? (y/N): ")
+                    response = await asyncio.to_thread(input, "Continue with incomplete season pack? (y/N): ")
                     if response.lower() != 'y':
                         console.print("[red]Aborting torrent creation due to incomplete season pack")
                         sys.exit(1)
