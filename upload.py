@@ -101,7 +101,7 @@ config: dict[str, Any]
 
 if os.path.exists(_config_path):
     try:
-        from data.config import config as _imported_config  # pyright: ignore[reportMissingModuleSource]
+        from data.config import config as _imported_config  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
         config = cast(dict[str, Any], _imported_config)
     except SyntaxError as e:
         _print_config_error(
