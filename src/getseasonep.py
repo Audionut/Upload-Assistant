@@ -89,19 +89,19 @@ class SeasonEpisodeManager:
                                     season_int = season_guess
                                     season = "S" + season_int.zfill(2)
                                 else:
-                                    season_int = "1"
+                                    season_int = 1
                                     season = "S01"
                             else:
-                                season_int = str(guess_data.get("season") or "1")
-                                season = "S" + season_int.zfill(2)
+                                season_int = int(guess_data.get("season") or 1)
+                                season = "S" + str(season_int).zfill(2)
                         except Exception:
                             console.print("[bold yellow]There was an error guessing the season number. Guessing S01. Use [bold green]--season #[/bold green] to correct if needed")
-                            season_int = "1"
+                            season_int = 1
                             season = "S01"
 
                 except Exception:
                     console.print_exception()
-                    season_int = "1"
+                    season_int = 1
                     season = "S01"
 
                 try:
