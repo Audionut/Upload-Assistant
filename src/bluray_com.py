@@ -1542,7 +1542,7 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                     detailed_releases = []
 
             elif len(close_matches) > 1:
-                if not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended-confirm', False)):
+                if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended-confirm', False))):
                     console.print("[yellow]Multiple releases are within 40 points of the best match. Please confirm which release to use:[/yellow]")
                     # Check if any close match has generic format or missing specs
                     any_generic_format = any(r.get('_generic_format', False) for r in close_matches)
