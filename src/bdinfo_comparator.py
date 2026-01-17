@@ -1,7 +1,8 @@
 import difflib
 import re
 from pathlib import Path
-from typing import Any, Tuple, List, Dict
+from typing import Any
+
 from src.console import console
 
 PLAYLIST_VARIATION_PATTERN = re.compile(r"/\s*DN\s*-\d+dB", re.IGNORECASE)
@@ -9,7 +10,7 @@ BITRATE_VARIATION_PATTERN = re.compile(r"\d+([.,]\d+)?(?=\s*kbps)", re.IGNORECAS
 BBCODE_PATTERN = re.compile(r"\[[^\]]*\]")
 
 
-def get_relevant_lines(meta: Dict[str, Any], duplicate_content: str) -> Tuple[List[str], List[str]]:
+def get_relevant_lines(meta: dict[str, Any], duplicate_content: str) -> tuple[list[str], list[str]]:
     """
     Extracts and normalizes relevant BDInfo lines for comparison between source and duplicate content.
     """
@@ -28,11 +29,11 @@ def get_relevant_lines(meta: Dict[str, Any], duplicate_content: str) -> Tuple[Li
     return source_lines, target_lines
 
 
-def normalize_and_filter(content: str, strict_mode: bool = False) -> List[str]:
+def normalize_and_filter(content: str, strict_mode: bool = False) -> list[str]:
     """
     Filters content to keep only relevant technical lines and normalizes whitespace.
     """
-    results: List[str] = []
+    results: list[str] = []
     keywords = ("Video:", "Audio:", "Subtitle:")
 
     for line in content.splitlines():
@@ -47,28 +48,29 @@ def normalize_and_filter(content: str, strict_mode: bool = False) -> List[str]:
     return results
 
 
-def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> Tuple[str, str, str]:
+def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> tuple[str, str, str]:
     """
     Removes technical variations that differ between playlists but represent the same media content.
     """
+
     def process_content(text: str) -> str:
         if not text:
             return ""
 
         text = re.sub(PLAYLIST_VARIATION_PATTERN, "", text)
-        cleaned_lines: List[str] = []
+        cleaned_lines: list[str] = []
 
         for line in text.splitlines():
             line_lower = line.lower()
 
             if "presentation graphics" in line_lower or "subtitle:" in line_lower:
                 line = re.sub(BITRATE_VARIATION_PATTERN, "", line).rstrip()
-                if line.endswith('kbps'):
+                if line.endswith("kbps"):
                     line = line[:-4].rstrip()
-                if line.endswith('/'):
+                if line.endswith("/"):
                     line = line[:-1].rstrip()
 
-            if line.startswith('*'):
+            if line.startswith("*"):
                 line = line[:1].rstrip()
 
             cleaned_lines.append(line)
@@ -78,7 +80,7 @@ def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> T
     return process_content(summary), process_content(extended), process_content(duplicate)
 
 
-def compare_bdinfo(meta: Dict[str, Any], entry: Dict[str, Any]) -> Tuple[str, str]:
+def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, str]:
     """
     Performs a visual comparison between local BDInfo and a duplicate entry, returning status messages.
     """
@@ -91,7 +93,7 @@ def compare_bdinfo(meta: Dict[str, Any], entry: Dict[str, Any]) -> Tuple[str, st
     console.print(f"\n[bold yellow]RELEASE:[/bold yellow] {release_name}")
     console.print("[dim]Comparison Details:[/dim]\n")
 
-    comparison_results: List[Dict[str, str]] = []
+    comparison_results: list[dict[str, str]] = []
     stats = {"+ ": 0, "- ": 0}
 
     for line in diff_generator:
@@ -126,7 +128,7 @@ def compare_bdinfo(meta: Dict[str, Any], entry: Dict[str, Any]) -> Tuple[str, st
     rem_val = f"-{stats['- ']}".ljust(3)
     diff_summary = f"[bold green]{add_val}[/bold green] [bold red]{rem_val}[/bold red]"
 
-    status_icon = "[yellow]⚠  [/yellow]" if not (stats['+ '] or stats['- ']) else " "
+    status_icon = "[yellow]⚠  [/yellow]" if not (stats["+ "] or stats["- "]) else " "
     results = f"{diff_summary} | {status_icon}{release_name}"
 
     return warning_message, results
@@ -143,11 +145,11 @@ def generate_warning(release_name: str, has_content: str, has_changes: bool) -> 
     return ""
 
 
-def load_bdinfo_file(meta: Dict[str, Any]) -> Tuple[str, str]:
+def load_bdinfo_file(meta: dict[str, Any]) -> tuple[str, str]:
     """
     Reads summary and extended summary files from the temporary metadata directory.
     """
-    base_path = Path(meta.get('base_dir', '')) / 'tmp' / str(meta.get('uuid', ''))
+    base_path = Path(meta.get("base_dir", "")) / "tmp" / str(meta.get("uuid", ""))
 
     def read_file(name: str) -> str:
         file_path = base_path / name
@@ -156,7 +158,7 @@ def load_bdinfo_file(meta: Dict[str, Any]) -> Tuple[str, str]:
     return read_file("BD_SUMMARY_00.txt"), read_file("BD_SUMMARY_EXT_00.txt")
 
 
-def has_bdinfo_content(entry: Dict[str, Any]) -> str:
+def has_bdinfo_content(entry: dict[str, Any]) -> str:
     """
     Attempts to locate BDInfo content within an entry's fields.
     """
@@ -176,7 +178,7 @@ def remove_bbcode(content: str) -> str:
     return re.sub(BBCODE_PATTERN, "", content)
 
 
-def sorting_priority(item: Dict[str, str]) -> Tuple[int, str]:
+def sorting_priority(item: dict[str, str]) -> tuple[int, str]:
     """
     Determines the display order of differences (Video first, then General, then Subtitles).
     """

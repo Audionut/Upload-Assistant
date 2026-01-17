@@ -251,7 +251,11 @@ class UploadHelper:
         if not possible:
             return
 
-        if cli_ui.ask_yes_no("Do you want to compare the BDinfo?", default=True):
+        question = (
+            "\033[1;35mFound BDInfo content in potential duplicates."
+            "\033[0m Perform comparison?"
+        )
+        if cli_ui.ask_yes_no(question, default=True):
             warnings: list[str] = []
             results: list[str] = []
 

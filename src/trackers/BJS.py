@@ -1,19 +1,23 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
-import httpx
 import json
-import langcodes
 import os
 import platform
-import pycountry
 import re
 import unicodedata
-from bs4 import BeautifulSoup, Tag
 from datetime import datetime
-from langcodes.tag_parser import LanguageTagError
 from pathlib import Path
+from typing import Any, Optional, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
+import langcodes
+import pycountry
+from bs4 import BeautifulSoup, Tag
+from langcodes.tag_parser import LanguageTagError
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
@@ -21,8 +25,6 @@ from src.get_desc import DescriptionBuilder
 from src.languages import process_desc_language
 from src.tmdb import get_tmdb_localized_data
 from src.trackers.COMMON import COMMON
-from typing import Any, Optional, cast
-from urllib.parse import urlparse
 
 
 class BJS:
@@ -610,7 +612,7 @@ class BJS:
 
         for result in ajax_results:
             if isinstance(result, Exception):
-                console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
+                console.print(f'[yellow]Error in AJAX call: {result}[/yellow]')
                 continue
 
             fetch_result = cast(dict[str, Any], result)
@@ -619,12 +621,14 @@ class BJS:
 
             task_info = fetch_result.get('task_info', {})
             soup_obj = fetch_result.get('soup')
+
             if not isinstance(task_info, dict) or not isinstance(soup_obj, BeautifulSoup):
                 continue
 
             task_info = cast(dict[str, Any], task_info)
             description_text = str(task_info.get('description_text', ''))
             process_folder_name = bool(task_info.get('process_folder_name'))
+
             item_name = self._extract_item_name(
                 soup_obj,
                 description_text,
@@ -632,11 +636,20 @@ class BJS:
                 process_folder_name
             )
 
+            torrent_description = ""
+            desc_block = soup_obj.find(
+                lambda tag: tag.name == "blockquote" and "Informações Adicionais:" in tag.get_text()
+            )
+
+            if desc_block:
+                torrent_description = str(desc_block)
+
             if item_name:
                 found_items.append({
                     'name': item_name,
                     'size': str(task_info.get('size') or ''),
-                    'link': str(task_info.get('link') or '')
+                    'link': str(task_info.get('link') or ''),
+                    'description': torrent_description,
                 })
 
         return found_items
@@ -1420,5 +1433,7 @@ class BJS:
 
         if not is_uploaded:
             return False
+
+        return True
 
         return True
