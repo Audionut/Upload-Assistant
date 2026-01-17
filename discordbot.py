@@ -1,9 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+# ruff: noqa: E402
 import asyncio
 import datetime
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord.player")
 
 import discord
 from discord.ext import commands
