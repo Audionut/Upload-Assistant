@@ -8,6 +8,7 @@ from src.console import console
 PLAYLIST_VARIATION_PATTERN = re.compile(r"/\s*DN\s*-\d+dB", re.IGNORECASE)
 BITRATE_VARIATION_PATTERN = re.compile(r"\d+([.,]\d+)?(?=\s*kbps)", re.IGNORECASE)
 BBCODE_PATTERN = re.compile(r"\[[^\]]*\]")
+HTML_PATTERN = re.compile(r"<[^>]*>")
 
 
 def get_relevant_lines(meta: dict[str, Any], duplicate_content: str) -> tuple[list[str], list[str]]:
@@ -15,7 +16,7 @@ def get_relevant_lines(meta: dict[str, Any], duplicate_content: str) -> tuple[li
     Extracts and normalizes relevant BDInfo lines for comparison between source and duplicate content.
     """
     summary, extended_summary = load_bdinfo_file(meta)
-    clean_duplicate = remove_bbcode(duplicate_content)
+    clean_duplicate = remove_formatting(duplicate_content)
 
     clean_sum, clean_ext, clean_dup = remove_playlist_variations(summary, extended_summary, clean_duplicate)
 
@@ -81,17 +82,11 @@ def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> t
 
 
 def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, str]:
-    """
-    Performs a visual comparison between local BDInfo and a duplicate entry, returning status messages.
-    """
     release_name = str(entry.get("name", "") or "")
     duplicate_content = has_bdinfo_content(entry)
     source_lines, target_lines = get_relevant_lines(meta, duplicate_content)
 
     diff_generator = difflib.ndiff(source_lines, target_lines)
-
-    console.print(f"\n[bold yellow]RELEASE:[/bold yellow] {release_name}")
-    console.print("[dim]Comparison Details:[/dim]\n")
 
     comparison_results: list[dict[str, str]] = []
     stats = {"+ ": 0, "- ": 0}
@@ -108,6 +103,10 @@ def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, st
         if prefix in stats:
             stats[prefix] += 1
 
+
+    console.print(f"\n[bold yellow]RELEASE:[/bold yellow] {release_name}", soft_wrap=True)
+    console.print("[dim]Comparison Details:[/dim]\n", soft_wrap=True)
+
     comparison_results.sort(key=sorting_priority)
 
     has_detected_changes = False
@@ -120,7 +119,7 @@ def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, st
         label = "YOURS" if prefix == "- " else "DUPLICATE" if prefix == "+ " else "MATCH"
         symbol = prefix.strip() or " "
 
-        console.print(f"[{style}][{symbol}] {label.ljust(10)}: {content}[/{style}]")
+        console.print(f"[{style}][{symbol}] {label.ljust(10)}: {content}[/{style}]", soft_wrap=True)
 
     warning_message = generate_warning(release_name, duplicate_content, has_detected_changes)
 
@@ -171,11 +170,13 @@ def has_bdinfo_content(entry: dict[str, Any]) -> str:
     return content
 
 
-def remove_bbcode(content: str) -> str:
+def remove_formatting(content: str) -> str:
     """
-    Strips BBCode tags from the provided string.
+    Strips BBCode and HTML tags from the provided string.
     """
-    return re.sub(BBCODE_PATTERN, "", content)
+    content = re.sub(BBCODE_PATTERN, "", content)
+    content = re.sub(HTML_PATTERN, "", content)
+    return content
 
 
 def sorting_priority(item: dict[str, str]) -> tuple[int, str]:
