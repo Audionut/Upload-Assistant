@@ -4,7 +4,7 @@ from typing import Any, Optional, Union, cast
 
 import guessit
 
-guessit_fn = cast(Any, guessit)
+guessit_fn = cast(Any, guessit).guessit
 
 
 async def get_region(bdinfo: dict[str, Any], region: Optional[str] = None) -> str:
