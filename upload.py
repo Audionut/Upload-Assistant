@@ -771,7 +771,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 cutoff = int(meta.get('cutoff') or 1)
                 if len(meta.get('image_list', [])) < cutoff and meta.get('skip_imghost_upload', False) is False:
                     # Validate and (if needed) rehost images to tracker-approved hosts before uploading any new screenshots.
-                    trackers_with_image_host_requirements = {'BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC'}
+                    trackers_with_image_host_requirements = {'A4K', 'BHD', 'DC', 'GPW', 'HUNO', 'MTV', 'OE', 'PTP', 'STC', 'TVC'}
 
                     relevant_trackers = [
                         t for t in cast(list[Any], meta.get('trackers', []))
