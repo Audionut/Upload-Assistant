@@ -54,6 +54,9 @@ config = {
         # Number of screenshots to capture
         "screens": "4",
 
+        # Minimum successful image uploads required to continue
+        "min_successful_image_uploads": "3",
+
         # Number of cutoff screenshots
         # If there are at least this many screenshots already, perhaps pulled from existing
         # description, skip creating and uploading any further screenshots.

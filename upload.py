@@ -883,12 +883,56 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
                     return_dict: dict[str, Any] = {}
                     try:
-                        await uploadscreens_manager.upload_screens(
-                            meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict, allowed_hosts=allowed_hosts
-                        )
-                        if meta.get('debug'):
-                            console.print(
-                                f"[cyan]Image host debug: post-upload_screens image_list={len(meta.get('image_list', []) or [])}[/cyan]"
+                        default_cfg_obj = config.get('DEFAULT', {})
+                        default_cfg = cast(dict[str, Any], default_cfg_obj) if isinstance(default_cfg_obj, dict) else {}
+                        min_successful_uploads = int(default_cfg.get('min_successful_image_uploads', 3))
+                        host_order: list[str] = []
+                        for host_index in range(1, 10):
+                            host_key = f'img_host_{host_index}'
+                            host = default_cfg.get(host_key)
+                            if host and host not in host_order:
+                                host_str = str(host)
+                                if allowed_hosts is None or host_str in allowed_hosts:
+                                    host_order.append(host_str)
+
+                        current_img_host = str(meta.get('imghost') or default_cfg.get('img_host_1') or '')
+                        if (
+                            current_img_host
+                            and current_img_host not in host_order
+                            and (allowed_hosts is None or current_img_host in allowed_hosts)
+                        ):
+                            host_order.insert(0, current_img_host)
+
+                        if not host_order and allowed_hosts:
+                            host_order = list(allowed_hosts)
+
+                        start_index = host_order.index(current_img_host) if current_img_host in host_order else 0
+                        image_list_count = 0
+
+                        for idx in range(start_index, len(host_order)):
+                            meta['imghost'] = host_order[idx]
+                            await uploadscreens_manager.upload_screens(
+                                meta, meta['screens'], 1, 0, meta['screens'], [], return_dict=return_dict, allowed_hosts=allowed_hosts
+                            )
+                            image_list_count = len(meta.get('image_list', []) or [])
+                            if meta.get('debug'):
+                                console.print(
+                                    f"[cyan]Image host debug: post-upload_screens image_list={image_list_count}[/cyan]"
+                                )
+
+                            if image_list_count >= min_successful_uploads:
+                                break
+
+                            if idx + 1 < len(host_order):
+                                console.print(
+                                    f"[yellow]Only {image_list_count} images uploaded; minimum is {min_successful_uploads}. "
+                                    f"Switching to next host: {host_order[idx + 1]}[/yellow]"
+                                )
+
+                        if image_list_count < min_successful_uploads:
+                            raise Exception(
+                                f"Minimum of {min_successful_uploads} successful image uploads required, but only "
+                                f"{image_list_count} were uploaded."
                             )
 
                         # Now that image_list exists, populate tracker-specific keys (and only reupload if required)
