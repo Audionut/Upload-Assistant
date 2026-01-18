@@ -253,7 +253,7 @@ class UploadHelper:
 
                 return False, meta
 
-    def ask_bdinfo_comparison(self, meta, dupes) -> None:
+    def ask_bdinfo_comparison(self, meta: Meta, dupes: list[Union[DupeEntry, str]]) -> None:
         """
         Check if any duplicate has BDInfo content and ask the user
         if they want to perform a comparison.
@@ -275,6 +275,9 @@ class UploadHelper:
             results: list[str] = []
 
             for entry in dupes:
+                if not isinstance(entry, dict):
+                    continue
+
                 warning_message, results_message = compare_bdinfo(meta, entry)
 
                 if warning_message:
@@ -284,11 +287,11 @@ class UploadHelper:
 
             if warnings:
                 console.print()
-                console.print("\n\n".join(warnings))
+                console.print("\n\n".join(warnings), soft_wrap=True)
 
             if results:
                 console.print()
-                console.print("\n".join(results))
+                console.print("\n".join(results), soft_wrap=True)
                 console.print()
 
     async def get_confirmation(self, meta: Meta) -> bool:
