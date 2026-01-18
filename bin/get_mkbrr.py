@@ -251,7 +251,10 @@ class MkbrrBinaryManager:
         binary_path = bin_dir / "mkbrr"
         version_path = bin_dir / version
 
-        if version_path.exists():
+        binary_exists = binary_path.exists() and binary_path.is_file()
+        binary_executable = os.access(binary_path, os.X_OK)
+        binary_valid = binary_exists and binary_executable
+        if version_path.exists() and version_path.is_file() and binary_valid:
             print(f"mkbrr {version} already exists, skipping download")
             return str(binary_path)
 

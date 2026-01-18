@@ -245,10 +245,9 @@ class VideoManager:
             width_list = [3840, 2560, 1920, 1280, 1024, 854, 720, 15360, 7680, 0]
             height_list = [2160, 1440, 1080, 720, 576, 540, 480, 8640, 4320, 0]
             width = await self.closest(width_list, int(width))
-            actual_height = int(height)
             height = await self.closest(height_list, int(height))
             res = f"{width}x{height}{scan}"
-            resolution = await mi_resolution(res, guess, width, scan, height, actual_height)
+            resolution = await mi_resolution(res, guess, width, scan)
         return resolution, hfr
 
     async def closest(self, lst: list[int], K: int) -> int:

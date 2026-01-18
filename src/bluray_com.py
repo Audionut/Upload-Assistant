@@ -1162,12 +1162,12 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                         expected_format = "bd-100"
 
                     format_match = False
-                    if "bd" in release_format:
-                        generic_format = True
-                        log_and_print(f"[yellow]⚠[/yellow] Generic BD format found: {specs['discs']['format']} for size {disc_size_gb:.2f} GB", release_logs)
-                    elif expected_format and expected_format in release_format:
+                    if expected_format and expected_format in release_format:
                         format_match = True
                         log_and_print(f"[green]✓[/green] Disc format match: {specs['discs']['format']} matches size {disc_size_gb:.2f} GB", release_logs)
+                    elif "bd" in release_format and not any(char.isdigit() for char in release_format):
+                        generic_format = True
+                        log_and_print(f"[yellow]⚠[/yellow] Generic BD format found: {specs['discs']['format']} for size {disc_size_gb:.2f} GB", release_logs)
                     elif expected_format:
                         score -= 50
                         log_and_print(f"[yellow]⚠[/yellow] Disc format mismatch: {specs['discs']['format']} vs expected {expected_format.upper()} (size: {disc_size_gb:.2f} GB)", release_logs)

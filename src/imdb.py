@@ -319,7 +319,7 @@ class ImdbManager:
 
         imdb_info['rating'] = self.safe_get(title_data, ['ratingsSummary', 'aggregateRating'], 'N/A')
 
-        async def get_credits(title_data: dict[str, Any], category_keyword: str) -> tuple[list[str], list[str]]:
+        def get_credits(title_data: dict[str, Any], category_keyword: str) -> tuple[list[str], list[str]]:
             people_list: list[str] = []
             people_id_list: list[str] = []
             principal_credits = cast(list[Mapping[str, Any]], self.safe_get(title_data, ['principalCredits'], []))
@@ -341,10 +341,10 @@ class ImdbManager:
 
             return people_list, people_id_list
 
-        imdb_info['directors'], imdb_info['directors_id'] = await get_credits(title_data, 'Direct')
-        imdb_info['creators'], imdb_info['creators_id'] = await get_credits(title_data, 'Creat')
-        imdb_info['writers'], imdb_info['writers_id'] = await get_credits(title_data, 'Writ')
-        imdb_info['stars'], imdb_info['stars_id'] = await get_credits(title_data, 'Star')
+        imdb_info['directors'], imdb_info['directors_id'] = get_credits(title_data, 'Direct')
+        imdb_info['creators'], imdb_info['creators_id'] = get_credits(title_data, 'Creat')
+        imdb_info['writers'], imdb_info['writers_id'] = get_credits(title_data, 'Writ')
+        imdb_info['stars'], imdb_info['stars_id'] = get_credits(title_data, 'Star')
 
         editions = cast(list[Mapping[str, Any]], self.safe_get(title_data, ['runtimes', 'edges'], []))
         if editions:
@@ -956,7 +956,7 @@ class ImdbManager:
                 data = response.json()
             except Exception as e:
                 if debug:
-                    print(f"[red]IMDb API error: {e}[/red]")
+                    console.print(f"[red]IMDb API error: {e}[/red]")
                 return None
 
         title_data = self.safe_get(data, ["data", "title"], {})
