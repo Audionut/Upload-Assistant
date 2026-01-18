@@ -1,22 +1,28 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
-import click
 import os
 import re
 import urllib.request
+from typing import Any, Optional, cast
 from urllib.parse import urlparse
+
+import aiofiles
+import click
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
-from src.uploadscreens import upload_screens
+from src.uploadscreens import UploadScreensManager
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class TIK(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='TIK')
-        self.config = config
+        self.config: Config = config
+        self.uploadscreens_manager = UploadScreensManager(config)
         self.tracker = 'TIK'
         self.base_url = 'https://cinematik.net'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -26,51 +32,50 @@ class TIK(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
-        if not meta['is_disc']:
+        if not meta.get('is_disc'):
             console.print("[red]Only disc-based content allowed at TIK")
             return False
 
         return should_continue
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'modq': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         disctype = meta.get('disctype', None)
-        basename = os.path.basename(next(iter(meta['filelist']), meta['path']))
-        type = meta.get('type', "")
-        title = meta.get('title', "").replace('AKA', '/').strip()
-        alt_title = meta.get('aka', "").replace('AKA', '/').strip()
-        year = meta.get('year', "")
-        resolution = meta.get('resolution', "")
-        season = meta.get('season', "")
-        repack = meta.get('repack', "")
+        filelist = cast(list[Any], meta.get('filelist', []))
+        basename = os.path.basename(next(iter(filelist), str(meta.get('path', ''))))
+        type_value = str(meta.get('type', ""))
+        title = str(meta.get('title', "")).replace('AKA', '/').strip()
+        alt_title = str(meta.get('aka', "")).replace('AKA', '/').strip()
+        year = str(meta.get('year', ""))
+        resolution = str(meta.get('resolution', ""))
+        season = str(meta.get('season', ""))
+        repack = str(meta.get('repack', ""))
         if repack.strip():
             repack = f"[{repack}]"
-        three_d = meta.get('3D', "")
+        three_d = str(meta.get('3D', ""))
         three_d_tag = f"[{three_d}]" if three_d else ""
-        tag = meta.get('tag', "").replace("-", "- ")
+        tag = str(meta.get('tag', "")).replace("-", "- ")
         if tag == "":
             tag = "- NOGRP"
-        source = meta.get('source', "")
-        uhd = meta.get('uhd', "")  # noqa #841
-        hdr = meta.get('hdr', "")
+        source = str(meta.get('source', ""))
+        hdr = str(meta.get('hdr', ""))
         if not hdr.strip():
             hdr = "SDR"
-        distributor = meta.get('distributor', "")  # noqa F841
-        video_codec = meta.get('video_codec', "")
-        video_encode = meta.get('video_encode', "").replace(".", "")
+        video_codec = str(meta.get('video_codec', ""))
+        video_encode = str(meta.get('video_encode', "")).replace(".", "")
         if 'x265' in basename:
             video_encode = video_encode.replace('H', 'x')
-        dvd_size = meta.get('dvd_size', "")
-        search_year = meta.get('search_year', "")
+        dvd_size = str(meta.get('dvd_size', ""))
+        search_year = str(meta.get('search_year', ""))
         if not str(search_year).strip():
             search_year = year
         meta['category_id'] = (await self.get_category_id(meta))['category_id']
@@ -78,24 +83,30 @@ class TIK(UNIT3D):
         name = ""
         alt_title_part = f" {alt_title}" if alt_title else ""
         if meta['category_id'] in ("1", "3", "5", "6"):
-            if meta['is_disc'] == 'BDMV':
+            if meta.get('is_disc') == 'BDMV':
                 name = f"{title}{alt_title_part} ({year}) {disctype} {resolution} {video_codec} {three_d_tag}"
-            elif meta['is_disc'] == 'DVD':
+            elif meta.get('is_disc') == 'DVD':
                 name = f"{title}{alt_title_part} ({year}) {source} {dvd_size}"
-        elif meta['category'] == "TV":  # TV SPECIFIC
-            if type == "DISC":  # Disk
-                if meta['is_disc'] == 'BDMV':
-                    name = f"{title}{alt_title_part} ({search_year}) {season} {disctype} {resolution} {video_codec}"
-                if meta['is_disc'] == 'DVD':
-                    name = f"{title}{alt_title_part} ({search_year}) {season} {source} {dvd_size}"
+        elif meta.get('category') == "TV" and type_value == "DISC":  # TV SPECIFIC - Disk
+            if meta.get('is_disc') == 'BDMV':
+                name = f"{title}{alt_title_part} ({search_year}) {season} {disctype} {resolution} {video_codec}"
+            if meta.get('is_disc') == 'DVD':
+                name = f"{title}{alt_title_part} ({search_year}) {season} {source} {dvd_size}"
 
         return {'name': name}
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
-        category_name = meta['category']
-        foreign = meta.get('foreign', False)
-        opera = meta.get('opera', False)
-        asian = meta.get('asian', False)
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
+        category_name = str(meta.get('category', ''))
+        foreign = bool(meta.get('foreign', False))
+        opera = bool(meta.get('opera', False))
+        asian = bool(meta.get('asian', False))
         category_id = {
             'FILM': '1',
             'TV': '2',
@@ -124,7 +135,14 @@ class TIK(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         disctype = meta.get('disctype', None)
         type_id_map = {
             'Custom': '1',
@@ -144,12 +162,23 @@ class TIK(UNIT3D):
             # Raise an exception since we can't proceed without disctype
             raise ValueError("disctype is required for TIK tracker but was not provided")
 
-        disctype_value = disctype[0] if isinstance(disctype, list) else disctype
+        disctype_value = (
+            str(cast(Any, disctype[0]))
+            if isinstance(disctype, list) and disctype
+            else str(cast(Any, disctype))
+        )
         type_id = type_id_map.get(disctype_value, '1')  # '1' is the default fallback
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             'Other': '10',
             '4320p': '1',
@@ -162,32 +191,27 @@ class TIK(UNIT3D):
             '576i': '7',
             '480p': '8',
             '480i': '9'
-        }.get(meta['resolution'], '10')
+        }.get(str(meta.get('resolution', '')), '10')
         return {'resolution_id': resolution_id}
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: Meta) -> dict[str, str]:
         if meta.get('description_link') or meta.get('description_file'):
             desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
             print(f'Custom Description Link/File Path: {desc}')
             return {'description': desc}
 
-        if len(meta.get('discs', [])) > 0:
-            summary = meta['discs'][0].get('summary', '')
-        else:
-            summary = None
+        discs = cast(list[dict[str, Any]], meta.get('discs', []))
+        summary = discs[0].get('summary', '') if len(discs) > 0 else None
 
         # Proceed with matching Total Bitrate if the summary exists
         if summary:
             match = re.search(r"Total Bitrate: ([\d.]+ Mbps)", summary)
-            if match:
-                total_bitrate = match.group(1)
-            else:
-                total_bitrate = "Unknown"
+            total_bitrate = match.group(1) if match else "Unknown"
         else:
             total_bitrate = "Unknown"
 
-        country_name = self.country_code_to_name(meta.get('region'))
+        country_name = self.country_code_to_name(str(meta.get('region', '')))
 
         # Rehost poster if tmdb_poster is available
         poster_url = f"https://image.tmdb.org/t/p/original{meta.get('tmdb_poster', '')}"
@@ -219,21 +243,21 @@ class TIK(UNIT3D):
         if os.path.exists(poster_path):
             try:
                 console.print("Uploading standard poster to image host....")
-                new_poster_url, _ = await upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
+                new_poster_url, _ = await self.uploadscreens_manager.upload_screens(meta, 1, 1, 0, 1, [poster_path], {})
 
                 # Ensure that the new poster URL is assigned only once
-                if len(new_poster_url) > 0:
-                    poster_url = new_poster_url[0]['raw_url']
+                poster_urls = new_poster_url
+                if len(poster_urls) > 0:
+                    poster_url = str(poster_urls[0].get('raw_url', poster_url))
             except Exception as e:
                 console.print(f"[red]Error uploading poster: {e}[/red]")
         else:
             console.print("[red]Poster file not found, cannot upload.[/red]")
 
         # Generate the description text
-        desc_text = []
+        desc_text: list[str] = []
 
-        images = meta['image_list']
-        discs = meta.get('discs', [])  # noqa #F841
+        images = cast(list[dict[str, Any]], meta.get('image_list', []))
 
         if len(images) >= 6:
             image_link_1 = images[0]['raw_url']
@@ -272,27 +296,36 @@ class TIK(UNIT3D):
         # Write technical info section
         desc_text.append("[h3]Technical Info[/h3]\n")
         desc_text.append("[code]\n")
-        if meta['is_disc'] == 'BDMV':
-            desc_text.append(f"  Disc Label.........:{meta.get('bdinfo', {}).get('label', '')}\n")
-        desc_text.append(f"  IMDb...............: [url]{str(meta.get('imdb_info', {}).get('imdb_url', ''))}{str(meta.get('imdb_rating', ''))}[/url]\n")
+        bdinfo = cast(dict[str, Any], meta.get('bdinfo', {}))
+        if meta.get('is_disc') == 'BDMV':
+            desc_text.append(f"  Disc Label.........:{bdinfo.get('label', '')}\n")
+        imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+        desc_text.append(f"  IMDb...............: [url]{str(imdb_info.get('imdb_url', ''))}{str(meta.get('imdb_rating', ''))}[/url]\n")
         desc_text.append(f"  Year...............: {meta.get('year', '')}\n")
         desc_text.append(f"  Country............: {country_name}\n")
-        if meta['is_disc'] == 'BDMV':
-            desc_text.append(f"  Runtime............: {meta.get('bdinfo', {}).get('length', '')} hrs [color=red](double check this is actual runtime)[/color]\n")
+        if meta.get('is_disc') == 'BDMV':
+            desc_text.append(f"  Runtime............: {bdinfo.get('length', '')} hrs [color=red](double check this is actual runtime)[/color]\n")
         else:
             desc_text.append("  Runtime............:  [color=red]Insert the actual runtime[/color]\n")
 
-        if meta['is_disc'] == 'BDMV':
-            audio_languages = ', '.join([f"{track.get('language', 'Unknown')} {track.get('codec', 'Unknown')} {track.get('channels', 'Unknown')}" for track in meta.get('bdinfo', {}).get('audio', [])])
+        if meta.get('is_disc') == 'BDMV':
+            audio_tracks = cast(list[dict[str, Any]], bdinfo.get('audio', []))
+            audio_languages = ', '.join(
+                [
+                    f"{track.get('language', 'Unknown')} {track.get('codec', 'Unknown')} {track.get('channels', 'Unknown')}"
+                    for track in audio_tracks
+                ]
+            )
             desc_text.append(f"  Audio..............: {audio_languages}\n")
-            desc_text.append(f"  Subtitles..........: {', '.join(meta.get('bdinfo', {}).get('subtitles', []))}\n")
+            subtitles = cast(list[Any], bdinfo.get('subtitles', []))
+            desc_text.append(f"  Subtitles..........: {', '.join([str(sub) for sub in subtitles])}\n")
         else:
             # Process each disc's `vob_mi` or `ifo_mi` to extract audio and subtitles separately
-            for disc in meta.get('discs', []):
-                vob_mi = disc.get('vob_mi', '')
-                ifo_mi = disc.get('ifo_mi', '')
+            for disc in discs:
+                vob_mi = str(disc.get('vob_mi', ''))
+                ifo_mi = str(disc.get('ifo_mi', ''))
 
-                unique_audio = set()  # Store unique audio strings
+                unique_audio: set[str] = set()  # Store unique audio strings
 
                 audio_section = vob_mi.split('\n\nAudio\n')[1].split('\n\n')[0] if 'Audio\n' in vob_mi else None
                 if audio_section:
@@ -312,7 +345,8 @@ class TIK(UNIT3D):
                     channels = audio_section.split("Channel(s)")[1].split(":")[1].strip().split(" ")[0] if "Channel(s)" in audio_section else "Unknown"
                     # Convert 6 channels to 5.1, otherwise leave as is
                     channels = "5.1" if channels == "6" else channels
-                    language = disc.get('ifo_mi_full', '').split('Language')[1].split(":")[1].strip().split('\n')[0] if "Language" in disc.get('ifo_mi_full', '') else "Unknown"
+                    ifo_full = str(disc.get('ifo_mi_full', ''))
+                    language = ifo_full.split('Language')[1].split(":")[1].strip().split('\n')[0] if "Language" in ifo_full else "Unknown"
                     audio_info = f"{language} {codec} {channels}"
                     unique_audio.add(audio_info)
 
@@ -327,18 +361,20 @@ class TIK(UNIT3D):
                 if unique_subtitles:
                     desc_text.append(f"  Subtitles..........: {', '.join(sorted(unique_subtitles))}\n")
 
-        if meta['is_disc'] == 'BDMV':
-            video_info = meta.get('bdinfo', {}).get('video', [])
-            video_resolution = video_info[0].get('resolution', 'Unknown')
+        if meta.get('is_disc') == 'BDMV':
+            video_info = cast(list[dict[str, Any]], bdinfo.get('video', []))
+            video_resolution = video_info[0].get('resolution', 'Unknown') if video_info else 'Unknown'
             desc_text.append(f"  Video Format.......: {video_resolution}\n")
         else:
             desc_text.append(f"  DVD Format.........: {meta.get('source', 'Unknown')}\n")
         desc_text.append("  Film Aspect Ratio..: [color=red]The actual aspect ratio of the content, not including the black bars[/color]\n")
-        if meta['is_disc'] == 'BDMV':
+        if meta.get('is_disc') == 'BDMV':
             desc_text.append(f"  Source.............: {meta.get('disctype', 'Unknown')}\n")
         else:
             desc_text.append(f"  Source.............: {meta.get('dvd_size', 'Unknown')}\n")
-        desc_text.append(f"  Film Distributor...: [url={meta.get('distributor_link', '')}]{meta.get('distributor', 'Unknown')}[/url] [color=red]Don't forget the actual distributor link\n")
+        desc_text.append(
+            f"  Film Distributor...: [url={meta.get('distributor_link', '')}]{meta.get('distributor', 'Unknown')}[/url] [color=red]Don't forget the actual distributor link\n"
+        )
         desc_text.append(f"  Average Bitrate....: {total_bitrate}\n")
         desc_text.append("  Ripping Program....:  [color=red]Specify - if it's your rip or custom version, otherwise 'Not my rip'[/color]\n")
         desc_text.append("\n")
@@ -388,13 +424,17 @@ class TIK(UNIT3D):
             console.print("[green]Keeping the original description.[/green]")
 
         # Write the final description to the file
-        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt', 'w', encoding='utf-8') as desc_file:
+        async with aiofiles.open(
+            f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt',
+            'w',
+            encoding='utf-8'
+        ) as desc_file:
             await desc_file.write(description)
 
         return {'description': description}
 
-    def parse_subtitles(self, disc_mi):
-        unique_subtitles = set()  # Store unique subtitle strings
+    def parse_subtitles(self, disc_mi: str) -> set[str]:
+        unique_subtitles: set[str] = set()  # Store unique subtitle strings
         lines = disc_mi.splitlines()  # Split the multiline text into individual lines
         current_block = None
 
@@ -411,7 +451,7 @@ class TIK(UNIT3D):
 
         return unique_subtitles
 
-    def country_code_to_name(self, code):
+    def country_code_to_name(self, code: str) -> str:
         country_mapping = {
             'AFG': 'Afghanistan', 'ALB': 'Albania', 'DZA': 'Algeria', 'AND': 'Andorra', 'AGO': 'Angola',
             'ARG': 'Argentina', 'ARM': 'Armenia', 'AUS': 'Australia', 'AUT': 'Austria', 'AZE': 'Azerbaijan',

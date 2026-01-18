@@ -1,22 +1,33 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from flask import Flask, render_template, request, jsonify, Response
-from flask_cors import CORS
-import subprocess
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
+import hmac
 import json
 import os
-import sys
-import traceback
-import re
-import threading
 import queue
-import hmac
+import re
+import subprocess
+import sys
+import threading
+import traceback
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, TypedDict, Union
-from werkzeug.utils import safe_join
+from typing import Any, Literal, Optional, TypedDict, Union, cast
+
+from flask import Flask, Response, jsonify, render_template, request  # pyright: ignore[reportMissingImports]
+from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
+from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-app = Flask(__name__)
+Flask = cast(Any, Flask)
+Response = cast(Any, Response)
+jsonify = cast(Any, jsonify)
+render_template = cast(Any, render_template)
+request = cast(Any, request)
+CORS_fn = cast(Any, CORS)
+safe_join = cast(Any, safe_join)
+
+app: Any = Flask(__name__)
 
 
 def _parse_cors_origins() -> list[str]:
@@ -33,13 +44,17 @@ def _parse_cors_origins() -> list[str]:
 
 cors_origins = _parse_cors_origins()
 if cors_origins:
-    CORS(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
+    CORS_fn(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
 
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
+class ProcessInfo(TypedDict):
+    process: subprocess.Popen[str]
+
+
 # Store active processes
-active_processes = {}
+active_processes: dict[str, ProcessInfo] = {}
 
 
 class BrowseItem(TypedDict):
@@ -70,10 +85,7 @@ def _webui_auth_ok() -> bool:
     # Constant-time compare to avoid leaking timing info.
     if not hmac.compare_digest(auth.username or '', expected_username):
         return False
-    if not hmac.compare_digest(auth.password or '', expected_password):
-        return False
-
-    return True
+    return hmac.compare_digest(auth.password or '', expected_password)
 
 
 def _auth_required_response():
@@ -85,7 +97,7 @@ def _auth_required_response():
 
 
 @app.before_request
-def _require_basic_auth_for_webui():
+def _require_basic_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     # Health endpoint can be used for orchestration checks.
     if request.path == '/api/health':
         return None
@@ -98,7 +110,7 @@ def _require_basic_auth_for_webui():
     return None
 
 
-def _validate_upload_assistant_args(tokens: list[str]) -> list[str]:
+def _validate_upload_assistant_args(tokens: Sequence[Any]) -> list[str]:
     # These are passed to upload.py (not the Python interpreter) and are executed
     # with shell=False. Still validate to avoid control characters and abuse.
     safe: list[str] = []
@@ -131,7 +143,7 @@ def _get_browse_roots() -> list[str]:
 
 
 def _resolve_user_path(
-    user_path: Union[str, None],
+    user_path: Optional[Any],
     *,
     require_exists: bool = True,
     require_dir: bool = False,
@@ -238,7 +250,7 @@ def _resolve_browse_path(user_path: Union[str, None]) -> str:
     return _resolve_user_path(user_path, require_exists=True, require_dir=True)
 
 
-def strip_ansi(text):
+def strip_ansi(text: str) -> str:
     """Remove ANSI escape codes from text"""
     return ANSI_ESCAPE.sub('', text)
 
@@ -423,13 +435,20 @@ def execute_command():
                 stdout_thread.start()
                 stderr_thread.start()
 
+                def _read_output(q: queue.Queue[tuple[str, str]]) -> tuple[bool, Union[tuple[str, str], None]]:
+                    try:
+                        return True, q.get(timeout=0.1)
+                    except queue.Empty:
+                        return False, None
+
                 # Stream output as raw characters
                 while process.poll() is None or not output_queue.empty():
-                    try:
-                        output_type, char = output_queue.get(timeout=0.1)
+                    has_output, output = _read_output(output_queue)
+                    if has_output and output is not None:
+                        output_type, char = output
                         # Send raw character data (preserves ANSI codes)
                         yield f"data: {json.dumps({'type': output_type, 'data': char})}\n\n"
-                    except queue.Empty:
+                    else:
                         # Send keepalive
                         yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
 
@@ -541,12 +560,12 @@ def kill_process():
 
 
 @app.errorhandler(404)
-def not_found(e):
+def not_found(_e: Exception):
     return jsonify({'error': 'Not found', 'success': False}), 404
 
 
 @app.errorhandler(500)
-def internal_error(e):
+def internal_error(e: Exception):
     print(f"500 error: {str(e)}")
     print(traceback.format_exc())
     return jsonify({'error': 'Internal server error', 'success': False}), 500

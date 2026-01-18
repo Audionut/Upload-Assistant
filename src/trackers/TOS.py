@@ -1,10 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
-from typing import Any
+from typing import Any, Optional
+
 from src.console import console
-from src.torrentcreate import create_torrent
+from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -35,36 +35,26 @@ class TOS(UNIT3D):
     async def get_category_id(
         self,
         meta: dict[str, Any],
-        category: str = "",
+        category: Optional[str] = None,
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         tags_lower = meta["tag"].lower()
         if "vostfr" in tags_lower or "subfrench" in tags_lower:
-            if meta["category"] == "TV" and meta.get("tv_pack"):
-                category_id = "9"
-            else:
-                category_id = {
-                    "MOVIE": "6",
-                    "TV": "7",
-                }.get(meta["category"], "0")
+            category_id = "9" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "6", "TV": "7"}.get(meta["category"], "0")
         else:
-            if meta["category"] == "TV" and meta.get("tv_pack"):
-                category_id = "8"
-            else:
-                category_id = {
-                    "MOVIE": "1",
-                    "TV": "2",
-                }.get(meta["category"], "0")
+            category_id = "8" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "1", "TV": "2"}.get(meta["category"], "0")
         return {"category_id": category_id}
 
     async def get_type_id(
         self,
         meta: dict[str, Any],
-        type: str = "",
+        type: Optional[str] = None,
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         if meta["is_disc"] == "DVD":
             type_id = "7"
         elif meta.get("3D") == "3D":
@@ -107,7 +97,7 @@ class TOS(UNIT3D):
             if cooldown > 0:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
-            await create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)
+            await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)
 
         return {"name": base_name}
 

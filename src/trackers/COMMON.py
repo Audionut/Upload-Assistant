@@ -1,27 +1,29 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import asyncio
-import bencodepy
-import click
 import hashlib
-import httpx
 import json
-import langcodes
 import os
 import re
 import secrets
 import sys
+from typing import Any, Callable, Optional, Union, cast
+
+import aiofiles
+import bencodepy
+import click
+import httpx
+import langcodes
 from langcodes import tag_parser
+from torf import Torrent
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
-from src.languages import process_desc_language
-from torf import Torrent
-from typing import Any, List, Optional, Union
+from src.languages import languages_manager
 
 
-class COMMON():
-    def __init__(self, config):
+class COMMON:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.parser = self.MediaInfoParser()
         pass
@@ -31,7 +33,7 @@ class COMMON():
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.path.exists, path)
 
-    async def remove_file(self, path):
+    async def remove_file(self, path: str) -> None:
         """Async wrapper for os.remove"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, os.remove, path)
@@ -48,7 +50,14 @@ class COMMON():
         user_input = await asyncio.to_thread(input)
         return user_input.strip()
 
-    async def create_torrent_for_upload(self, meta: dict[str, Any], tracker: str, source_flag: str, torrent_filename: str = "BASE", announce_url: str = ""):
+    async def create_torrent_for_upload(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        source_flag: str,
+        torrent_filename: str = "BASE",
+        announce_url: str = "",
+    ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
@@ -62,8 +71,8 @@ class COMMON():
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
                 new_torrent.metainfo['announce'] = str(raw_announce).strip() if raw_announce else "https://fake.tracker"
             new_torrent.metainfo['info']['source'] = source_flag
-            if 'created by' in new_torrent.metainfo and isinstance(new_torrent.metainfo['created by'], str):
-                created_by = new_torrent.metainfo['created by']
+            if 'created by' in new_torrent.metainfo:
+                created_by = str(new_torrent.metainfo['created by'])
                 if "mkbrr" in created_by.lower():
                     new_torrent.metainfo['created by'] = f"{created_by} using Upload Assistant"
             # setting comment as blank as if BASE.torrent is manually created then it can result in private info such as download link being exposed.
@@ -83,26 +92,23 @@ class COMMON():
             await loop.run_in_executor(None, lambda: Torrent.copy(new_torrent).write(out_path, overwrite=True))
 
     async def download_tracker_torrent(
-            self,
-            meta: dict[str, Any],
-            tracker: str,
-            headers: Any = None,
-            params: Any = None,
-            downurl: str = "",
-            hash_is_id: bool = False,
-            cross: bool = False):
-        if cross:
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
-        else:
-            path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        headers: Optional[dict[str, str]] = None,
+        params: Optional[dict[str, str]] = None,
+        downurl: str = "",
+        hash_is_id: bool = False,
+        cross: bool = False,
+    ) -> Optional[str]:
+        path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent" if cross else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl:
             try:
-                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session:
-                    async with session.stream("GET", downurl) as r:
-                        r.raise_for_status()
-                        async with aiofiles.open(path, "wb") as f:
-                            async for chunk in r.aiter_bytes():
-                                await f.write(chunk)
+                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
+                    r.raise_for_status()
+                    async with aiofiles.open(path, "wb") as f:
+                        async for chunk in r.aiter_bytes():
+                            await f.write(chunk)
 
                 if cross:
                     return None
@@ -117,6 +123,8 @@ class COMMON():
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
 
+        return None
+
     async def create_torrent_ready_to_seed(
         self,
         meta: dict[str, Any],
@@ -125,7 +133,7 @@ class COMMON():
         new_tracker: Union[str, list[str]],
         comment: str = "",
         hash_is_id: bool = False,
-    ):
+    ) -> Optional[str]:
         """
         Modifies the torrent file to include the tracker's announce URL, a comment, and a source flag.
         """
@@ -146,7 +154,10 @@ class COMMON():
             # Calculate hash only when hash_is_id is True
             torrent_hash: Optional[str] = None
             if hash_is_id:
-                info_bytes = bencodepy.encode(new_torrent.metainfo["info"])
+                info_data = new_torrent.metainfo.get("info", {})
+                bencode_module = cast(Any, bencodepy)
+                encode = cast(Callable[[Any], bytes], bencode_module.encode)
+                info_bytes = encode(info_data)
                 torrent_hash = hashlib.sha1(
                     info_bytes, usedforsecurity=False
                 ).hexdigest()  # SHA1 required for torrent info hash
@@ -160,16 +171,26 @@ class COMMON():
 
         return None
 
-    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str):
+    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str) -> str:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         async with aiofiles.open(torrent_path, 'rb') as torrent_file:
             torrent_content = await torrent_file.read()
-            torrent_data = bencodepy.decode(torrent_content)
-            info = bencodepy.encode(torrent_data[b'info'])
+            bencode_module = cast(Any, bencodepy)
+            decode = cast(Callable[[bytes], Any], bencode_module.decode)
+            torrent_data = decode(torrent_content)
+            if not isinstance(torrent_data, dict):
+                return ''
+            torrent_dict = cast(dict[bytes, Any], torrent_data)
+            info_value = torrent_dict.get(b'info')
+            if not isinstance(info_value, dict):
+                return ''
+            bencode_module = cast(Any, bencodepy)
+            encode = cast(Callable[[Any], bytes], bencode_module.encode)
+            info = encode(info_value)
             info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
-    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[List[dict[str, str]]]) -> Optional[str]:
+    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -182,17 +203,22 @@ class COMMON():
         existing_data: dict[str, Any] = {}
         if os.path.exists(output_file):
             try:
-                with open(output_file, 'r', encoding='utf-8') as f:
-                    loaded_data = json.load(f)
+                async with aiofiles.open(output_file, encoding='utf-8') as f:
+                    content = await f.read()
+                    loaded_data: dict[str, Any] = {}
+                    if content.strip():
+                        parsed = json.loads(content)
+                        if isinstance(parsed, dict):
+                            loaded_data = cast(dict[str, Any], parsed)
+                        else:
+                            console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
+
                     # Validate schema: must have 'keys' as dict and 'total_count' as int
                     if (
-                        isinstance(loaded_data, dict)
-                        and isinstance(loaded_data.get('keys'), dict)
+                        isinstance(loaded_data.get('keys'), dict)
                         and isinstance(loaded_data.get('total_count'), int)
                     ):
                         existing_data = loaded_data
-                    else:
-                        console.print("[yellow]Warning: Existing image data has invalid schema, reinitializing.[/yellow]")
             except (json.JSONDecodeError, OSError) as e:
                 console.print(f"[yellow]Warning: Could not load existing image data: {str(e)}[/yellow]")
 
@@ -204,38 +230,47 @@ class COMMON():
             }
 
         # Ensure 'keys' is a dict (extra safety)
-        if not isinstance(existing_data.get('keys'), dict):
-            existing_data['keys'] = {}
+        keys_data: dict[str, dict[str, Any]] = {}
+        keys_raw = existing_data.get('keys')
+        if isinstance(keys_raw, dict):
+            keys_data = cast(dict[str, dict[str, Any]], keys_raw)
+        else:
+            existing_data['keys'] = keys_data
 
-        # Update the data with the new images under the specific key
-        if image_key not in existing_data["keys"] or not isinstance(existing_data["keys"].get(image_key), dict):
-            existing_data["keys"][image_key] = {
+        if image_key not in keys_data or not isinstance(keys_data.get(image_key), dict):
+            keys_data[image_key] = {
                 "count": 0,
                 "images": []
             }
+        key_entry = keys_data[image_key]
+        images_list: list[dict[str, Any]] = []
+        if isinstance(key_entry.get("images"), list):
+            images_list = cast(list[dict[str, Any]], key_entry["images"])
+        else:
+            key_entry["images"] = images_list
 
         # Add new images to the specific key
         for idx, img in enumerate(image_list):
-            image_entry = {
-                "index": existing_data["keys"][image_key]["count"] + idx,
+            image_entry: dict[str, Any] = {
+                "index": key_entry["count"] + idx,
                 "raw_url": img.get("raw_url", ""),
                 "web_url": img.get("web_url", ""),
                 "img_url": img.get("img_url", ""),
             }
-            existing_data["keys"][image_key]["images"].append(image_entry)
+            images_list.append(image_entry)
 
         # Update counts
-        existing_data["keys"][image_key]["count"] = len(existing_data["keys"][image_key]["images"])
+        key_entry["count"] = len(images_list)
         # Safely compute total_count, handling any malformed per-key entries
         total = 0
-        for key_data in existing_data["keys"].values():
-            if isinstance(key_data, dict) and isinstance(key_data.get("count"), int):
+        for key_data in keys_data.values():
+            if isinstance(key_data.get("count"), int):
                 total += key_data["count"]
         existing_data["total_count"] = total
 
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, indent=2)
+            async with aiofiles.open(output_file, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(existing_data, indent=2))
 
             if meta['debug']:
                 console.print(f"[green]Saved {len(image_list)} new images for key '{image_key}' (total: {existing_data['total_count']}):[/green]")
@@ -336,7 +371,16 @@ class COMMON():
             distributor_id_value = distributor_map.get(distributor)
             return str(distributor_id_value) if distributor_id_value else ""
 
-    async def prompt_user_for_id_selection(self, meta: dict[str, Any], tmdb=None, imdb=None, tvdb=None, mal=None, filename=None, tracker_name=None):
+    async def prompt_user_for_id_selection(
+        self,
+        meta: dict[str, Any],
+        tmdb: Optional[Union[str, int]] = None,
+        imdb: Optional[Union[str, int]] = None,
+        tvdb: Optional[Union[str, int]] = None,
+        mal: Optional[Union[str, int]] = None,
+        filename: Optional[Union[str, list[str]]] = None,
+        tracker_name: Optional[str] = None,
+    ) -> bool:
         if not tracker_name:
             tracker_name = "Tracker"  # Fallback if tracker_name is not provided
 
@@ -361,22 +405,17 @@ class COMMON():
         if not meta['unattended']:
             selection = input(f"Do you want to use these IDs from {tracker_name}? (Y/n): ").strip().lower()
             try:
-                if selection == '' or selection == 'y' or selection == 'yes':
-                    return True
-                else:
-                    return False
+                return bool(selection == '' or selection == 'y' or selection == 'yes')
             except (KeyboardInterrupt, EOFError):
                 sys.exit(1)
         else:
             return True
 
-    async def prompt_user_for_confirmation(self, message):
+    async def prompt_user_for_confirmation(self, message: str) -> bool:
         response = input(f"{message} (Y/n): ").strip().lower()
-        if response == '' or response == 'y':
-            return True
-        return False
+        return bool(response == '' or response == 'y')
 
-    async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = ""):
+    async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
         api_key = str(raw_api_key).strip() if raw_api_key else ''
@@ -452,9 +491,28 @@ class COMMON():
             console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
             return
 
-    async def unit3d_torrent_info(self, tracker, torrent_url, search_url, meta: dict[str, Any], id=None, file_name=None, only_id=False):
+    async def unit3d_torrent_info(
+        self,
+        tracker: str,
+        torrent_url: str,
+        search_url: str,
+        meta: dict[str, Any],
+        id: Optional[Union[str, int]] = None,
+        file_name: Optional[Union[str, list[str]]] = None,
+        only_id: bool = False,
+    ) -> tuple[
+        Optional[int],
+        Optional[int],
+        Optional[int],
+        Optional[int],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        list[dict[str, str]],
+        Optional[Union[str, list[str]]],
+    ]:
         tmdb = imdb = tvdb = description = category = infohash = mal = files = None  # noqa F841
-        imagelist = []
+        imagelist: list[dict[str, str]] = []
 
         # Build the params for the API request
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
@@ -474,7 +532,7 @@ class COMMON():
         else:
             if meta.get('debug'):
                 console.print("[red]No ID or file name provided for search.[/red]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
         # Make the GET request with proper encoding handled by 'params'
         try:
@@ -483,16 +541,16 @@ class COMMON():
                 json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_torrent_info: {e}[/yellow]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
         except ValueError:
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
         try:
             # Handle response when searching by file name (which might return a 'data' array)
             data: Union[list[dict[str, Any]], str] = json_response.get('data', [])
             if data == "404":
                 console.print("[yellow]No data found (404). Returning None.[/yellow]")
-                return None, None, None, None, None, None, None, None, None
+                return None, None, None, None, None, None, None, [], None
 
             if data and isinstance(data, list):  # Ensure data is a list before accessing it
                 attributes = data[0].get('attributes', {})
@@ -549,23 +607,19 @@ class COMMON():
                     # Handle file name extraction
                     files = attributes.get('files', [])
                     if files:
-                        if len(files) == 1:
-                            file_name = files[0]['name']
-                        else:
-                            file_name = [file['name'] for file in files[:5]]  # Return up to 5 filenames
+                        file_name = files[0]['name'] if len(files) == 1 else [file['name'] for file in files[:5]]
 
                     if meta.get('debug'):
                         console.print(f"[blue]Extracted filename(s): {file_name}[/blue]")  # Print the extracted filename(s)
 
-            if tmdb or imdb or tvdb:
-                if not id:
-                    # Only prompt the user for ID selection if not searching by ID
-                    try:
-                        if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
-                            console.print("[yellow]User chose to skip based on IDs.[/yellow]")
-                            return None, None, None, None, None, None, None, None, None
-                    except (KeyboardInterrupt, EOFError):
-                        sys.exit(1)
+            if (tmdb or imdb or tvdb) and not id:
+                # Only prompt the user for ID selection if not searching by ID
+                try:
+                    if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
+                        console.print("[yellow]User chose to skip based on IDs.[/yellow]")
+                        return None, None, None, None, None, None, None, [], None
+                except (KeyboardInterrupt, EOFError):
+                    sys.exit(1)
 
             if description:
                 bbcode = BBCODE()
@@ -601,22 +655,24 @@ class COMMON():
         except Exception as e:
             console.print_exception()
             console.print(f"[yellow]Invalid Response from {tracker} API. Error: {str(e)}[/yellow]")
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, [], None
 
-    async def parseCookieFile(self, cookiefile):
+    async def parseCookieFile(self, cookiefile: str) -> dict[str, str]:
         """Parse a cookies.txt file and return a dictionary of key value pairs
         compatible with requests."""
 
-        cookies = {}
-        with open(cookiefile, 'r') as fp:
-            for line in fp:
-                if not line.startswith(("# ", "\n", "#\n")):
+        cookies: dict[str, str] = {}
+        async with aiofiles.open(cookiefile) as fp:
+            content = await fp.read()
+            for line in content.splitlines():
+                if line.strip() and not line.startswith(("# ", "#")):
                     lineFields = re.split(' |\t', line.strip())
                     lineFields = [x for x in lineFields if x != ""]
-                    cookies[lineFields[5]] = lineFields[6]
+                    if len(lineFields) >= 7:
+                        cookies[lineFields[5]] = lineFields[6]
         return cookies
 
-    async def ptgen(self, meta: dict[str, Any], ptgen_site="", ptgen_retry=3):
+    async def ptgen(self, meta: dict[str, Any], ptgen_site: str = "", ptgen_retry: int = 3) -> str:
         ptgen_text = ""
         url = 'https://ptgen.zhenzhen.workers.dev'
         if ptgen_site != '':
@@ -673,8 +729,8 @@ class COMMON():
                     return ""
 
                 meta['ptgen'] = ptgen_json
-                with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as f:
-                    json.dump(meta, f, indent=4)
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(meta, indent=4))
 
                 ptgen_text = ptgen_json.get('format', '')
                 if "[/img]" in ptgen_text:
@@ -831,11 +887,7 @@ class COMMON():
                     property_name = property_name.lower().replace(" ", "_")
 
                     # Add property if it's a recognized field for the current section
-                    if current_section == "general" and property_name in general_fields:
-                        current_track[property_name] = property_value
-                    elif current_section == "video" and property_name in video_fields:
-                        current_track[property_name] = property_value
-                    elif current_section == "audio" and property_name in audio_fields:
+                    if current_section == "general" and property_name in general_fields or current_section == "video" and property_name in video_fields or current_section == "audio" and property_name in audio_fields:
                         current_track[property_name] = property_value
                     elif current_section == "text":
                         # Processing specific properties for text
@@ -920,9 +972,7 @@ class COMMON():
 
                     # Other properties to concatenate (language already handled above)
                     properties = ["codec", "format", "channels", "bit_rate", "format_profile", "stream_size"]
-                    for prop in properties:
-                        if prop in track and track[prop]:  # Only add non-empty properties
-                            parts.append(track[prop])
+                    parts.extend([track[prop] for prop in properties if prop in track and track[prop]])
 
                     # Join parts (starting from index 1, after the track number) with slashes and add to bbcode_output
                     bbcode_output += f"{parts[0]} " + " / ".join(parts[1:]) + "\n"
@@ -939,7 +989,7 @@ class COMMON():
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[List[str]] = None, char_limit: int = 0):
+    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[list[str]] = None, char_limit: int = 0) -> str:
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
@@ -973,11 +1023,11 @@ class COMMON():
                 )
 
             # Helper to read and filter lines from the export file
-            async def read_and_clean():
+            async def read_and_clean() -> str:
                 if not os.path.isfile(mi_path):
                     return ""
 
-                async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(mi_path, encoding='utf-8') as f:
                     lines = await f.readlines()
 
                 if remove:
@@ -1022,7 +1072,7 @@ class COMMON():
         self,
         meta: dict[str, Any],
         tracker: str,
-        languages_to_check: List[str],
+        languages_to_check: list[str],
         check_audio: bool = False,
         check_subtitle: bool = False,
         require_both: bool = False,
@@ -1056,7 +1106,7 @@ class COMMON():
         """
         try:
             if not meta.get("language_checked", False):
-                await process_desc_language(meta, tracker=tracker)
+                await languages_manager.process_desc_language(meta, tracker=tracker)
 
             meta_audio_languages: list[str] = meta.get("audio_languages", [])
             meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])

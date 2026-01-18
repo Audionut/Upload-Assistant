@@ -392,7 +392,7 @@ config = {
             "bhd_rss_key": "",
             "announce_url": "https://beyond-hd.me/announce/customannounceurl",
             # Send uploads to BHD drafts
-            "draft_default": "False",
+            "draft_default": False,
             "anon": False,
         },
         "BHDTV": {

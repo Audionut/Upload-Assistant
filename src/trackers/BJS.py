@@ -1,28 +1,29 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
-import httpx
 import json
-import langcodes
 import os
 import platform
-import pycountry
 import re
 import unicodedata
-from bs4 import BeautifulSoup, Tag
-from datetime import datetime
-from langcodes.tag_parser import LanguageTagError
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
+import langcodes
+import pycountry
+from bs4 import BeautifulSoup, Tag
+from langcodes.tag_parser import LanguageTagError
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
-from src.tmdb import get_tmdb_localized_data
+from src.languages import languages_manager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
-from typing import Any, Optional, cast
-from urllib.parse import urlparse
 
 
 class BJS:
@@ -32,6 +33,7 @@ class BJS:
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
+        self.tmdb_manager = TmdbManager(config)
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
@@ -86,7 +88,7 @@ class BJS:
 
         if os.path.isfile(localized_data_file):
             try:
-                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:
@@ -99,23 +101,22 @@ class BJS:
         main_ptbr_data = dict(data.get('pt-BR', {})).get('main', {})
 
         if not main_ptbr_data:
-            main_ptbr_data = await get_tmdb_localized_data(
+            main_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
                 append_to_response='credits,videos,content_ratings'
             )
 
-        if self.config['DEFAULT']['episode_overview']:
-            if meta['category'] == 'TV' and not meta.get('tv_pack'):
-                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
-                if not episode_ptbr_data:
-                    episode_ptbr_data = await get_tmdb_localized_data(
-                        meta,
-                        data_type='episode',
-                        language='pt-BR',
-                        append_to_response=''
-                    )
+        if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
+            episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+            if not episode_ptbr_data:
+                episode_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
+                    meta,
+                    data_type='episode',
+                    language='pt-BR',
+                    append_to_response=''
+                )
 
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
@@ -160,10 +161,7 @@ class BJS:
         language_name = None
 
         if lang_code == 'pt':
-            if 'PT' in origin_countries:
-                language_name = 'Português (pt)'
-            else:
-                language_name = 'Português'
+            language_name = 'Português (pt)' if 'PT' in origin_countries else 'Português'
         else:
             try:
                 language_name = langcodes.Language.make(lang_code).display_name('pt').capitalize()
@@ -177,7 +175,7 @@ class BJS:
 
     async def get_audio(self, meta: dict[str, Any]) -> str:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -200,7 +198,7 @@ class BJS:
 
     async def get_subtitle(self, meta: dict[str, Any]) -> str:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
         subtitle_type = 'Nenhuma'
@@ -379,10 +377,7 @@ class BJS:
     def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results: list[dict[str, Any]] = dict(self.main_tmdb_data.get('videos', {})).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
-        if youtube_code:
-            youtube = f'http://www.youtube.com/watch?v={youtube_code}'
-        else:
-            youtube = meta.get('youtube') or ''
+        youtube = f'http://www.youtube.com/watch?v={youtube_code}' if youtube_code else meta.get('youtube') or ''
 
         return youtube
 
@@ -400,10 +395,7 @@ class BJS:
         for item in ratings:
             if item.get('iso_3166_1') == 'BR' and item.get('rating') in valid_br_ratings:
                 br_rating = item['rating']
-                if br_rating == 'L':
-                    br_rating = 'Livre'
-                else:
-                    br_rating = f'{br_rating} anos'
+                br_rating = 'Livre' if br_rating == 'L' else f'{br_rating} anos'
                 break
 
             # Use US rating as fallback
@@ -506,9 +498,8 @@ class BJS:
                         return is_current_row_a_pack, True
 
         # Movie Logic
-        elif meta['category'] == 'MOVIE':
-            if params['upload_resolution'] and current_resolution == params['upload_resolution']:
-                return True, False
+        elif meta['category'] == 'MOVIE' and params['upload_resolution'] and current_resolution == params['upload_resolution']:
+            return True, False
 
         return False, False
 
@@ -743,9 +734,8 @@ class BJS:
                         continue
 
                     row_id = row.get('id')
-                    if isinstance(row_id, str):
-                        if not row_id.startswith('torrent'):
-                            continue
+                    if isinstance(row_id, str) and not row_id.startswith('torrent'):
+                        continue
 
                     id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
                     if not id_link:
@@ -842,9 +832,7 @@ class BJS:
             'dvdscr': 'DVDScr',
             'hdrip': 'HDRip',
             'hdtc': 'HDTC',
-            'hdtv': 'HDTV',
             'pdtv': 'PDTV',
-            'sdtv': 'SDTV',
             'tc': 'TC',
             'uhdtv': 'UHDTV',
             'vhsrip': 'VHSRip',
@@ -910,8 +898,8 @@ class BJS:
         ]
 
         async def upload_local_file(path: Path):
-            with open(path, "rb") as f:
-                image_bytes = f.read()
+            async with aiofiles.open(path, "rb") as f:
+                image_bytes = await f.read()
             return await self.img_host(image_bytes, os.path.basename(path))
 
         async def upload_remote_file(url: str):
@@ -979,7 +967,7 @@ class BJS:
             return ''
 
         try:
-            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d')
+            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             formatted_date = date_object.strftime('%d %b %Y')
 
             return formatted_date
@@ -1052,10 +1040,7 @@ class BJS:
         ]
         available_tags = self.find_remaster_tags(meta)
 
-        ordered_tags: list[str] = []
-        for tag in tag_priority:
-            if tag in available_tags:
-                ordered_tags.append(tag)
+        ordered_tags = [tag for tag in tag_priority if tag in available_tags]
 
         return ' / '.join(ordered_tags)
 
@@ -1295,11 +1280,14 @@ class BJS:
                 })
 
         # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internalrel': 1,
-                })
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data.update({
+                'internalrel': 1,
+            })
 
         # Only upload images if not debugging
         if not meta.get('debug', False):
@@ -1315,10 +1303,7 @@ class BJS:
         imdb_info = dict(meta.get("imdb_info", {}))
         end_year = imdb_info.get("end_year")
 
-        if end_year:
-            year_label = f"{start_year}-{end_year}"
-        else:
-            year_label = f"{start_year}-"
+        year_label = f"{start_year}-{end_year}" if end_year else f"{start_year}-"
 
         return year_label
 
@@ -1388,9 +1373,8 @@ class BJS:
         return 'N/A'
 
     def check_data(self, meta: dict[str, Any], data: dict[str, Any]) -> str:
-        if not meta.get("debug", False):
-            if len(data["screenshots[]"]) < 2:
-                return "The number of successful screenshots uploaded is less than 2."
+        if not meta.get("debug", False) and len(data["screenshots[]"]) < 2:
+            return "The number of successful screenshots uploaded is less than 2."
 
         if any(
             value == "skipped" for value in (data.get("diretor"), data.get("elenco"), data.get("creators"))
@@ -1423,7 +1407,4 @@ class BJS:
                 success_text="action=download&id=",
             )
 
-        if not is_uploaded:
-            return False
-
-        return True
+        return is_uploaded
