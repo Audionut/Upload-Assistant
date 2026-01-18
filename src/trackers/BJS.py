@@ -749,8 +749,8 @@ class BJS:
                     if should_process:
                         rows_to_process.append((row, process_folder_name))
 
-                ajax_tasks = self._extract_torrent_ids(rows_to_process)
-                dupes = await self._process_ajax_responses(ajax_tasks, params)
+            ajax_tasks = self._extract_torrent_ids(rows_to_process)
+            dupes = await self._process_ajax_responses(ajax_tasks, params)
 
             return dupes
 
