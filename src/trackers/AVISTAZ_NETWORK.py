@@ -312,7 +312,7 @@ class AZTrackerBase:
                     }
 
                     if meta.get('is_disc') == "BDMV":
-                        bd_info = await self.get_dupe_bdinfo(meta, torrent_link)
+                        bd_info = await self.get_dupe_bdinfo(torrent_link)
                         if bd_info:
                             dupe_entry.update({
                                 'bd_info': bd_info
@@ -333,7 +333,7 @@ class AZTrackerBase:
 
         return duplicates
 
-    async def get_dupe_bdinfo(self, meta: dict[str, Any], torrent_link: str) -> str:
+    async def get_dupe_bdinfo(self, torrent_link: str) -> str:
         """
         Fetch the BDInfo/MediaInfo content from the torrent page.
         """
@@ -346,7 +346,7 @@ class AZTrackerBase:
             if mediainfo_container:
                 pre_tag = mediainfo_container.find('pre')
                 if pre_tag:
-                    return pre_tag.get_text(strip=True)
+                    return pre_tag.get_text("\n", strip=True)
 
             console.print(f'[yellow]{self.tracker}: MediaInfo/BDInfo block not found at {torrent_link}[/yellow]')
             return ''

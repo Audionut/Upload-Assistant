@@ -174,6 +174,8 @@ def remove_formatting(content: str) -> str:
     """
     Strips BBCode and HTML tags from the provided string.
     """
+    content = re.sub(r"(?i)<br\s*/?>", "\n", content)
+    content = re.sub(r"(?i)</p\s*>", "\n", content)
     content = re.sub(BBCODE_PATTERN, "", content)
     content = re.sub(HTML_PATTERN, "", content)
     return content

@@ -648,7 +648,7 @@ class BJS:
             )
 
             if desc_block:
-                torrent_description = str(desc_block)
+                torrent_description = desc_block.get_text("\n", strip=True)
 
             if item_name:
                 found_items.append({

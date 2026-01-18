@@ -174,7 +174,7 @@ class UploadHelper:
                         if meta.get('dupe', False) is False:
                             try:
                                 if meta.get('is_disc') == "BDMV":
-                                    self.ask_bdinfo_comparison(meta, dupes)
+                                    self.ask_bdinfo_comparison(meta, dupes_list)
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
                             except EOFError:
