@@ -30,7 +30,6 @@ class DupeEntry(TypedDict, total=False):
     description: Optional[str]
 
 
-
 DupeInput: TypeAlias = Union[str, DupeEntry, MutableMapping[str, Any]]
 
 
@@ -587,7 +586,7 @@ class DupeChecker:
 
         new_dupes = [each for each in processed_dupes if not await process_exclusion(each)]
 
-        if new_dupes and not meta.get('unattended', False) and meta['debug']:
+        if new_dupes and not meta.get('unattended', False) and meta.get('debug'):
             console.log(f"[yellow]Filtered dupes on {tracker_name}: ")
             # Limit filtered dupe output for readability
             filtered_dupes_to_print: list[dict[str, Any]] = []

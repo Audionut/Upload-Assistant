@@ -87,11 +87,63 @@ jobs:
 
           const workflowRun = context.payload.workflow_run;
           const prs = workflowRun.pull_requests || [];
-          if (prs.length === 0) {
+
+          async function resolvePrNumber() {
+            if (prs.length > 0) {
+              return { number: prs[0].number, source: 'workflow_run.pull_requests[0]' };
+            }
+
+            const headRepo = workflowRun.head_repository && workflowRun.head_repository.owner
+              ? workflowRun.head_repository.owner.login
+              : null;
+            const headBranch = workflowRun.head_branch || null;
+            const headSha = workflowRun.head_sha || null;
+
+            if (headRepo && headBranch) {
+              const headRef = `${headRepo}:${headBranch}`;
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: headRef,
+                per_page: 100
+              });
+              if (candidates.length === 1) {
+                return { number: candidates[0].number, source: `head=${headRef}` };
+              }
+              if (candidates.length > 1) {
+                console.log(`Multiple PRs matched head ref ${headRef}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            if (headSha) {
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100
+              });
+              const matches = candidates.filter(pr => pr.head && pr.head.sha === headSha);
+              if (matches.length === 1) {
+                return { number: matches[0].number, source: `head_sha=${headSha}` };
+              }
+              if (matches.length > 1) {
+                console.log(`Multiple PRs matched head SHA ${headSha}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            return null;
+          }
+
+          const prInfo = await resolvePrNumber();
+          if (!prInfo) {
             console.log('No pull request associated with this workflow run.');
             return;
           }
-          const prNumber = prs[0].number;
+          const prNumber = prInfo.number;
+          console.log(`Resolved PR #${prNumber} (${prInfo.source}).`);
 
           const artifactsDir = path.resolve('artifacts');
           if (!fs.existsSync(artifactsDir)) {
@@ -170,9 +222,9 @@ jobs:
             return output;
           }
 
-          let banditResults = readMergedResult('bandit-results');
-          let vultureResults = readMergedResult('vulture-results');
-          let safetyResults = readMergedResult('safety-results');
+          let banditResults = collectDedupedResults('bandit-results');
+          let vultureResults = collectDedupedResults('vulture-results');
+          let safetyResults = collectDedupedResults('safety-results');
           let pyrightResults = collectDedupedResults('pyright-results');
           let ruffResults = collectDedupedResults('ruff-results');
           let deprecationResults = collectDedupedResults('deprecation-warnings');
@@ -191,9 +243,35 @@ jobs:
             cleanBanditResults = filteredLines.join('\n').trim();
           }
 
+          function normalizeSafetyOutput(raw) {
+            if (!raw) {
+              return '';
+            }
+            const reportIndex = raw.indexOf('REPORT');
+            if (reportIndex !== -1) {
+              return raw.slice(reportIndex).trim();
+            }
+            return raw.trim();
+          }
+
+          function safetyHasIssues(raw) {
+            const normalized = normalizeSafetyOutput(raw);
+            if (!normalized) {
+              return false;
+            }
+            if (/No known security vulnerabilities found/i.test(normalized)) {
+              return false;
+            }
+            const match = normalized.match(/\b(\d+)\s+vulnerab/i);
+            if (match) {
+              return parseInt(match[1], 10) > 0;
+            }
+            return true;
+          }
+
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
           const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
-          const hasSafetyIssues = safetyResults && safetyResults.includes('Dependency vulnerabilities detected:');
+          const hasSafetyIssues = safetyHasIssues(safetyResults);
           const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
           const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
           const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
@@ -226,7 +304,8 @@ jobs:
           }
 
           if (hasSafetyIssues) {
-            body += '### 📦 Dependency Security Analysis (Safety)\n\n```\n' + safetyResults + '\n```\n\n';
+            const safetyBody = normalizeSafetyOutput(safetyResults);
+            body += '### 📦 Dependency Security Analysis (Safety)\n\n```\n' + safetyBody + '\n```\n\n';
           }
 
           body += '*This comment was automatically generated by the CI pipeline.*';

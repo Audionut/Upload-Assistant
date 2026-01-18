@@ -58,6 +58,7 @@ jobs:
       continue-on-error: true
       run: |
         python - <<'PY'
+        import os
         import re
         import warnings
         from pathlib import Path
@@ -95,14 +96,17 @@ jobs:
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
-            except Exception:
+            except BaseException:
                 # Ignore import/runtime errors during deprecation scanning
                 continue
 
-        with open('deprecation-warnings.txt', 'w', encoding='utf-8') as f:
+        output_path = os.environ.get('DEPRECATION_OUTPUT', 'deprecation-warnings.txt')
+        with open(output_path, 'w', encoding='utf-8') as f:
             if captured:
                 f.write('\n'.join(captured))
         PY
+      env:
+        DEPRECATION_OUTPUT: deprecation-warnings-${{ matrix.python-version }}.txt
 
     - name: Ruff Lint
       continue-on-error: true
@@ -135,7 +139,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: deprecation-warnings-${{ matrix.python-version }}
-        path: deprecation-warnings.txt
+        path: deprecation-warnings-${{ matrix.python-version }}.txt
 
     - name: Upload Ruff Results
       if: github.event_name == 'pull_request'
@@ -150,7 +154,7 @@ jobs:
         echo "Running type checking for Python ${{ matrix.python-version }}..."
         # Override pythonVersion in Pyright to match the matrix version
         pyright --pythonversion ${{ matrix.python-version }} . > pyright-results-${{ matrix.python-version }}.txt 2>&1 || echo "Pyright scan completed with results saved"
-        
+
         # Display results
         cat pyright-results-${{ matrix.python-version }}.txt
 
@@ -172,73 +176,73 @@ jobs:
         echo "   ✅ Bandit B108 warnings suppressed via bandit.yaml config file"
         echo ""
         echo "📊 Using bandit.yaml configuration file to skip resolved security issues"
-        
+
         # Check if bandit.yaml config file exists and use it
         if [ -f "bandit.yaml" ]; then
           echo "✅ Found bandit.yaml configuration file"
           cat bandit.yaml
           echo ""
           echo "Running bandit with YAML configuration..."
-          bandit -r . -f txt -c bandit.yaml > bandit-results.txt 2>&1 || echo "Bandit scan completed with configuration"
+          bandit -r . -f txt -c bandit.yaml > bandit-results-${{ matrix.python-version }}.txt 2>&1 || echo "Bandit scan completed with configuration"
         elif [ -f ".bandit" ]; then
           echo "✅ Found legacy .bandit configuration file"
           cat .bandit
           echo ""
           echo "Running bandit with legacy configuration..."
-          bandit -r . -f txt -c .bandit > bandit-results.txt 2>&1 || echo "Bandit scan completed with configuration"
+          bandit -r . -f txt -c .bandit > bandit-results-${{ matrix.python-version }}.txt 2>&1 || echo "Bandit scan completed with configuration"
         else
           echo "⚠️  No bandit config file found, running with basic exclusions"
-          bandit -r . -f txt --exclude ./tmp,./venv,./.venv,./env,./.git,./__pycache__ > bandit-results.txt 2>&1 || echo "Bandit scan completed"
+          bandit -r . -f txt --exclude ./tmp,./venv,./.venv,./env,./.git,./__pycache__ > bandit-results-${{ matrix.python-version }}.txt 2>&1 || echo "Bandit scan completed"
         fi
-        
+
         # Display results
-        cat bandit-results.txt
+        cat bandit-results-${{ matrix.python-version }}.txt
 
     - name: Upload Bandit Results
       if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: bandit-results-${{ matrix.python-version }}
-        path: bandit-results.txt
+        path: bandit-results-${{ matrix.python-version }}.txt
 
     - name: Dependency Security Check with Safety
       continue-on-error: true
       run: |
         echo "Running dependency security check with Safety..."
-        pip install safety
-        safety check > safety-results.txt 2>&1 || echo "Safety scan completed with results saved"
-        
+        pip install "safety==2.3.5"
+        safety check -r requirements.txt --full-report > safety-results-${{ matrix.python-version }}.txt 2>&1 || echo "Safety scan completed with results saved"
+
         # Display results
-        cat safety-results.txt
+        cat safety-results-${{ matrix.python-version }}.txt
 
     - name: Upload Safety Results
       if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: safety-results-${{ matrix.python-version }}
-        path: safety-results.txt
+        path: safety-results-${{ matrix.python-version }}.txt
 
     - name: Dead Code Analysis
       continue-on-error: true
       run: |
         echo "Checking for unused code..."
-        vulture . --exclude=venv,env,.venv,.git --min-confidence=80 > vulture-results.txt 2>&1 || echo "Vulture analysis completed"
-        
+        vulture . --exclude=venv,env,.venv,.git --min-confidence=80 > vulture-results-${{ matrix.python-version }}.txt 2>&1 || echo "Vulture analysis completed"
+
         # Display results
-        cat vulture-results.txt
+        cat vulture-results-${{ matrix.python-version }}.txt
 
     - name: Upload Vulture Results
       if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: vulture-results-${{ matrix.python-version }}
-        path: vulture-results.txt
+        path: vulture-results-${{ matrix.python-version }}.txt
 
   summary:
     runs-on: ubuntu-latest
     needs: code-analysis
     if: always()
-    
+
     steps:
     - name: Analysis Summary
       run: |
